@@ -1,0 +1,21 @@
+{
+  "name": "colaberry-ai-accelerator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Colaberry Enterprise AI Leadership Accelerator",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run start --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

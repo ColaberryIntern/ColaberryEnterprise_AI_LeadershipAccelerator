@@ -1,0 +1,28 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+
+export const env = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT || '3001', 10),
+  databaseUrl: process.env.DATABASE_URL || 'postgres://accelerator:accelerator@localhost:5432/accelerator_dev',
+
+  // Stripe
+  stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+
+  // JWT
+  jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '4h',
+
+  // Email (SMTP)
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  emailFrom: process.env.EMAIL_FROM || 'enrollment@colaberry.com',
+
+  // App
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+};

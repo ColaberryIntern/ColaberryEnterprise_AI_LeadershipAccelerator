@@ -1,0 +1,15 @@
+node_modules
+backend/node_modules
+frontend/node_modules
+backend/dist
+frontend/build
+.env
+.env.local
+.env.production
+.env.production.example
+pgdata
+.git
+.vscode
+.idea
+*.log
+coverage

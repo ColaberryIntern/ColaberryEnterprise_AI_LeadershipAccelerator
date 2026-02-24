@@ -1,0 +1,112 @@
+/* ===== Responsive Breakpoints ===== */
+
+/* Mobile: up to 576px */
+@media (max-width: 575.98px) {
+  .display-4 {
+    font-size: 2rem;
+  }
+
+  .display-5 {
+    font-size: 1.75rem;
+  }
+
+  .lead {
+    font-size: 1rem;
+  }
+
+  .section,
+  .section-alt {
+    padding: 2.5rem 0;
+  }
+
+  .card-body {
+    padding: 1.25rem !important;
+  }
+
+  .btn-lg {
+    font-size: 1rem;
+    padding: 0.5rem 1.25rem;
+  }
+
+  .navbar-brand {
+    font-size: 1rem;
+  }
+}
+
+/* Tablet: 576px to 991px */
+@media (min-width: 576px) and (max-width: 991.98px) {
+  .display-4 {
+    font-size: 2.5rem;
+  }
+
+  .section,
+  .section-alt {
+    padding: 3rem 0;
+  }
+}
+
+/* Ensure images are responsive */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Improve touch targets on mobile */
+@media (max-width: 991.98px) {
+  .nav-link {
+    padding: 0.75rem 1rem !important;
+  }
+
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .form-control,
+  .form-select {
+    min-height: 44px;
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+}
+
+/* Focus indicators for keyboard navigation */
+:focus-visible {
+  outline: 3px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .card {
+    border: 2px solid var(--color-text) !important;
+  }
+
+  .text-muted {
+    color: var(--color-text) !important;
+  }
+
+  .btn-outline-primary {
+    border-width: 2px;
+  }
+}

@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: accelerator-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-accelerator}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-accelerator}
+      POSTGRES_DB: ${DB_NAME:-accelerator_prod}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accelerator}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: accelerator-backend
+    restart: always
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "3001"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    container_name: accelerator-nginx
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
