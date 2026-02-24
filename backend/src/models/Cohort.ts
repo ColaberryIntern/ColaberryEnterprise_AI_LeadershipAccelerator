@@ -15,16 +15,16 @@ export interface CohortAttributes {
 }
 
 class Cohort extends Model<CohortAttributes> implements CohortAttributes {
-  public id!: string;
-  public name!: string;
-  public start_date!: string;
-  public core_day!: string;
-  public core_time!: string;
-  public optional_lab_day!: string;
-  public max_seats!: number;
-  public seats_taken!: number;
-  public status!: 'open' | 'closed' | 'completed';
-  public created_at!: Date;
+  declare id: string;
+  declare name: string;
+  declare start_date: string;
+  declare core_day: string;
+  declare core_time: string;
+  declare optional_lab_day: string;
+  declare max_seats: number;
+  declare seats_taken: number;
+  declare status: 'open' | 'closed' | 'completed';
+  declare created_at: Date;
 }
 
 Cohort.init(

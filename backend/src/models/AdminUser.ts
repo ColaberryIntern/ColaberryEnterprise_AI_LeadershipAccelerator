@@ -10,11 +10,11 @@ export interface AdminUserAttributes {
 }
 
 class AdminUser extends Model<AdminUserAttributes> implements AdminUserAttributes {
-  public id!: string;
-  public email!: string;
-  public password_hash!: string;
-  public role!: string;
-  public created_at!: Date;
+  declare id: string;
+  declare email: string;
+  declare password_hash: string;
+  declare role: string;
+  declare created_at: Date;
 }
 
 AdminUser.init(

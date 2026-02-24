@@ -17,18 +17,18 @@ export interface EnrollmentAttributes {
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
-  public id!: string;
-  public full_name!: string;
-  public email!: string;
-  public company!: string;
-  public title!: string;
-  public phone!: string;
-  public company_size!: string;
-  public cohort_id!: string;
-  public stripe_session_id!: string;
-  public payment_status!: 'paid' | 'pending_invoice' | 'failed';
-  public payment_method!: 'credit_card' | 'invoice';
-  public created_at!: Date;
+  declare id: string;
+  declare full_name: string;
+  declare email: string;
+  declare company: string;
+  declare title: string;
+  declare phone: string;
+  declare company_size: string;
+  declare cohort_id: string;
+  declare stripe_session_id: string;
+  declare payment_status: 'paid' | 'pending_invoice' | 'failed';
+  declare payment_method: 'credit_card' | 'invoice';
+  declare created_at: Date;
 }
 
 Enrollment.init(

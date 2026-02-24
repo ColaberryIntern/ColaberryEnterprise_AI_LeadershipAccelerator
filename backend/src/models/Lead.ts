@@ -15,16 +15,16 @@ interface LeadAttributes {
 }
 
 class Lead extends Model<LeadAttributes> implements LeadAttributes {
-  public id!: number;
-  public name!: string;
-  public email!: string;
-  public company!: string;
-  public role!: string;
-  public interest_area!: string;
-  public message!: string;
-  public source!: string;
-  public form_type!: string;
-  public created_at!: Date;
+  declare id: number;
+  declare name: string;
+  declare email: string;
+  declare company: string;
+  declare role: string;
+  declare interest_area: string;
+  declare message: string;
+  declare source: string;
+  declare form_type: string;
+  declare created_at: Date;
 }
 
 Lead.init(
