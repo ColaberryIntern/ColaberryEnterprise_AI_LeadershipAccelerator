@@ -23,6 +23,15 @@ export const env = {
   smtpPass: process.env.SMTP_PASS || '',
   emailFrom: process.env.EMAIL_FROM || 'enrollment@colaberry.com',
 
+  // Synthflow Voice AI
+  synthflowApiKey: process.env.SYNTHFLOW_API_KEY || '',
+  synthflowWelcomeAgentId: process.env.SYNTHFLOW_WELCOME_AGENT_ID || '',
+  synthflowInterestAgentId: process.env.SYNTHFLOW_INTEREST_AGENT_ID || '',
+
+  // Feature Flags
+  enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
+  enableAutoEmail: process.env.ENABLE_AUTO_EMAIL !== 'false', // default on
+
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 };

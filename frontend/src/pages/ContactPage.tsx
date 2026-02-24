@@ -13,9 +13,11 @@ function ContactPage() {
     email: '',
     company: '',
     role: '',
+    phone: '',
     interest_area: '',
     message: '',
   });
+  const [consentChecked, setConsentChecked] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -28,6 +30,9 @@ function ContactPage() {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
+    }
+    if (!consentChecked) {
+      newErrors.consent = 'You must agree to be contacted';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -51,7 +56,7 @@ function ContactPage() {
 
     setSubmitting(true);
     try {
-      await api.post('/api/leads', { ...formData, form_type: 'contact' });
+      await api.post('/api/leads', { ...formData, form_type: 'contact', consent_contact: consentChecked });
       setSubmitted(true);
     } catch (err: any) {
       if (err.response?.status === 400 && err.response?.data?.details) {
@@ -181,7 +186,21 @@ function ContactPage() {
                     <option value="other">Other Technical Leader</option>
                   </select>
                 </div>
-                <div className="col-12">
+                <div className="col-md-6">
+                  <label htmlFor="phone" className="form-label">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+                <div className="col-md-6">
                   <label htmlFor="interest_area" className="form-label">
                     What brings you here?
                   </label>
@@ -214,6 +233,28 @@ function ContactPage() {
                     value={formData.message}
                     onChange={handleChange}
                   ></textarea>
+                </div>
+                <div className="col-12">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className={`form-check-input ${errors.consent ? 'is-invalid' : ''}`}
+                      id="consent"
+                      checked={consentChecked}
+                      onChange={(e) => {
+                        setConsentChecked(e.target.checked);
+                        if (errors.consent) {
+                          setErrors({ ...errors, consent: '' });
+                        }
+                      }}
+                    />
+                    <label className="form-check-label small" htmlFor="consent">
+                      I agree to be contacted by Colaberry about the Enterprise AI Leadership Accelerator <span className="text-danger">*</span>
+                    </label>
+                    {errors.consent && (
+                      <div className="invalid-feedback">{errors.consent}</div>
+                    )}
+                  </div>
                 </div>
                 <div className="col-12">
                   <button

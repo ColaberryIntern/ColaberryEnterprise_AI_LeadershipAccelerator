@@ -29,6 +29,9 @@ function AdminLayout() {
             <Link to="/admin/dashboard" className="text-light text-decoration-none small">
               Dashboard
             </Link>
+            <Link to="/admin/leads" className="text-light text-decoration-none small">
+              Leads
+            </Link>
             <button
               className="btn btn-outline-light btn-sm"
               onClick={handleLogout}

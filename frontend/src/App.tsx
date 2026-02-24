@@ -18,6 +18,8 @@ import EnrollCancelPage from './pages/EnrollCancelPage';
 import AdminLoginPage from './pages/admin/AdminLoginPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminCohortDetailPage from './pages/admin/AdminCohortDetailPage';
+import AdminLeadsPage from './pages/admin/AdminLeadsPage';
+import AdminLeadDetailPage from './pages/admin/AdminLeadDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -44,6 +46,8 @@ function App() {
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
+            <Route path="/admin/leads" element={<AdminLeadsPage />} />
+            <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
           </Route>
         </Route>
       </Routes>

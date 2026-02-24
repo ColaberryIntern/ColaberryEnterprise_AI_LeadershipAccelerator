@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { constructWebhookEvent } from '../services/stripeService';
 import { markEnrollmentPaid } from '../services/enrollmentService';
-import { sendEnrollmentConfirmation } from '../services/emailService';
 import { Cohort } from '../models';
+import { runEnrollmentAutomation } from '../services/automationService';
 
 export async function handleStripeWebhook(req: Request, res: Response): Promise<void> {
   const sig = req.headers['stripe-signature'] as string;
@@ -21,23 +21,22 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
       const enrollment = await markEnrollmentPaid(session.id);
 
       if (enrollment) {
-        // Send confirmation email
         const cohort = await Cohort.findByPk(enrollment.cohort_id);
         if (cohort) {
-          try {
-            await sendEnrollmentConfirmation({
-              to: enrollment.email,
-              fullName: enrollment.full_name,
-              cohortName: cohort.name,
-              startDate: cohort.start_date,
-              coreDay: cohort.core_day,
-              coreTime: cohort.core_time,
-              optionalLabDay: cohort.optional_lab_day || undefined,
-            });
-          } catch (emailError) {
-            // Log but don't fail the webhook — payment was successful
-            console.error('[Webhook] Email send failed:', emailError);
-          }
+          // Run all enrollment automation (email + voice call)
+          runEnrollmentAutomation({
+            id: enrollment.id,
+            email: enrollment.email,
+            full_name: enrollment.full_name,
+            phone: enrollment.phone || undefined,
+            cohort: {
+              name: cohort.name,
+              start_date: cohort.start_date,
+              core_day: cohort.core_day,
+              core_time: cohort.core_time,
+              optional_lab_day: cohort.optional_lab_day || undefined,
+            },
+          }).catch((err) => console.error('[Webhook] Automation error:', err));
         }
       }
     }

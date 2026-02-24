@@ -5,7 +5,7 @@ interface FormErrors {
   [key: string]: string;
 }
 
-type FieldName = 'name' | 'email' | 'company' | 'role' | 'message';
+type FieldName = 'name' | 'email' | 'company' | 'role' | 'phone' | 'message';
 
 interface LeadCaptureFormProps {
   formType: string;
@@ -13,22 +13,26 @@ interface LeadCaptureFormProps {
   submitLabel?: string;
   successMessage?: string;
   className?: string;
+  showConsent?: boolean;
 }
 
 function LeadCaptureForm({
   formType,
   fields = ['name', 'email', 'company'],
   submitLabel = 'Submit',
-  successMessage = '✅ Thank you! We\'ll be in touch shortly.',
+  successMessage = 'Thank you! We\'ll be in touch shortly.',
   className = '',
+  showConsent = true,
 }: LeadCaptureFormProps) {
   const [formData, setFormData] = useState<Record<string, string>>({
     name: '',
     email: '',
     company: '',
     role: '',
+    phone: '',
     message: '',
   });
+  const [consentChecked, setConsentChecked] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -45,6 +49,9 @@ function LeadCaptureForm({
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
         newErrors.email = 'Please enter a valid email address';
       }
+    }
+    if (showConsent && !consentChecked) {
+      newErrors.consent = 'You must agree to be contacted';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -68,10 +75,13 @@ function LeadCaptureForm({
 
     setSubmitting(true);
     try {
-      const payload: Record<string, string> = { form_type: formType };
+      const payload: Record<string, any> = { form_type: formType };
       fields.forEach((field) => {
         payload[field] = formData[field];
       });
+      if (showConsent) {
+        payload.consent_contact = consentChecked;
+      }
       await api.post('/api/leads', payload);
       setSubmitted(true);
     } catch (err: any) {
@@ -162,6 +172,37 @@ function LeadCaptureForm({
             />
           </div>
         )}
+        {fields.includes('phone') && (
+          <div className="col-md-6">
+            <label htmlFor={`${formType}-phone`} className="form-label">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              className="form-control"
+              id={`${formType}-phone`}
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              placeholder="+1 (555) 123-4567"
+            />
+          </div>
+        )}
+        {fields.includes('role') && (
+          <div className="col-md-6">
+            <label htmlFor={`${formType}-role`} className="form-label">
+              Job Title / Role
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              id={`${formType}-role`}
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+            />
+          </div>
+        )}
         {fields.includes('message') && (
           <div className="col-12">
             <label htmlFor={`${formType}-message`} className="form-label">
@@ -175,6 +216,30 @@ function LeadCaptureForm({
               value={formData.message}
               onChange={handleChange}
             ></textarea>
+          </div>
+        )}
+        {showConsent && (
+          <div className="col-12">
+            <div className="form-check">
+              <input
+                type="checkbox"
+                className={`form-check-input ${errors.consent ? 'is-invalid' : ''}`}
+                id={`${formType}-consent`}
+                checked={consentChecked}
+                onChange={(e) => {
+                  setConsentChecked(e.target.checked);
+                  if (errors.consent) {
+                    setErrors({ ...errors, consent: '' });
+                  }
+                }}
+              />
+              <label className="form-check-label small" htmlFor={`${formType}-consent`}>
+                I agree to be contacted by Colaberry about the Enterprise AI Leadership Accelerator <span className="text-danger">*</span>
+              </label>
+              {errors.consent && (
+                <div className="invalid-feedback">{errors.consent}</div>
+              )}
+            </div>
           </div>
         )}
         <div className="col-12">
