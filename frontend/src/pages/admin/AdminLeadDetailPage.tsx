@@ -8,7 +8,11 @@ interface LeadDetail {
   email: string;
   company: string;
   role: string;
+  title: string;
   phone: string;
+  company_size: string;
+  evaluating_90_days: boolean;
+  lead_score: number;
   status: string;
   interest_area: string;
   interest_level: string;
@@ -17,6 +21,9 @@ interface LeadDetail {
   form_type: string;
   message: string;
   consent_contact: boolean;
+  utm_source: string;
+  utm_campaign: string;
+  page_url: string;
   assigned_admin: string;
   assignedAdmin?: { id: string; email: string };
   created_at: string;
@@ -88,6 +95,25 @@ function AdminLeadDetailPage() {
     });
   };
 
+  const getScoreBadge = (score: number) => {
+    if (score > 80) return 'bg-danger';
+    if (score > 60) return 'bg-warning text-dark';
+    if (score > 30) return 'bg-info';
+    return 'bg-secondary';
+  };
+
+  const getTypeBadge = (type: string) => {
+    if (type === 'email') return 'bg-info';
+    if (type === 'alert') return 'bg-danger';
+    return 'bg-warning text-dark';
+  };
+
+  const getTypeLabel = (type: string) => {
+    if (type === 'email') return 'Email';
+    if (type === 'alert') return 'Alert';
+    return 'Voice Call';
+  };
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -112,9 +138,17 @@ function AdminLeadDetailPage() {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <Link to="/admin/leads" className="text-decoration-none small">&larr; Back to Leads</Link>
-          <h1 className="h3 fw-bold mt-1 mb-0" style={{ color: 'var(--color-primary)' }}>
-            {lead.name}
-          </h1>
+          <div className="d-flex align-items-center gap-3 mt-1">
+            <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
+              {lead.name}
+            </h1>
+            {lead.lead_score > 0 && (
+              <span className={`badge ${getScoreBadge(lead.lead_score)} fs-6`}>
+                Score: {lead.lead_score}
+              </span>
+            )}
+          </div>
+          {lead.title && <div className="text-muted small mt-1">{lead.title}{lead.company ? ` at ${lead.company}` : ''}</div>}
         </div>
       </div>
 
@@ -139,8 +173,16 @@ function AdminLeadDetailPage() {
                   <div>{lead.company || '-'}</div>
                 </div>
                 <div className="col-md-6">
-                  <div className="text-muted small">Role</div>
-                  <div>{lead.role || '-'}</div>
+                  <div className="text-muted small">Title</div>
+                  <div>{lead.title || lead.role || '-'}</div>
+                </div>
+                <div className="col-md-6">
+                  <div className="text-muted small">Company Size</div>
+                  <div>{lead.company_size || '-'}</div>
+                </div>
+                <div className="col-md-6">
+                  <div className="text-muted small">Evaluating (90 Days)</div>
+                  <div>{lead.evaluating_90_days ? 'Yes' : 'No'}</div>
                 </div>
                 <div className="col-md-6">
                   <div className="text-muted small">Interest Area</div>
@@ -167,6 +209,35 @@ function AdminLeadDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* UTM / Tracking Data */}
+          {(lead.utm_source || lead.utm_campaign || lead.page_url) && (
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-header bg-white fw-bold py-3">Tracking Data</div>
+              <div className="card-body">
+                <div className="row g-3">
+                  {lead.utm_source && (
+                    <div className="col-md-6">
+                      <div className="text-muted small">UTM Source</div>
+                      <div><code>{lead.utm_source}</code></div>
+                    </div>
+                  )}
+                  {lead.utm_campaign && (
+                    <div className="col-md-6">
+                      <div className="text-muted small">UTM Campaign</div>
+                      <div><code>{lead.utm_campaign}</code></div>
+                    </div>
+                  )}
+                  {lead.page_url && (
+                    <div className="col-12">
+                      <div className="text-muted small">Page URL</div>
+                      <div className="text-break small"><code>{lead.page_url}</code></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Status + Notes */}
           <div className="card border-0 shadow-sm mb-4">
@@ -212,8 +283,22 @@ function AdminLeadDetailPage() {
           </div>
         </div>
 
-        {/* Right: Automation History */}
+        {/* Right: Lead Score + Automation History */}
         <div className="col-lg-4">
+          {/* Lead Score Card */}
+          {lead.lead_score > 0 && (
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-header bg-white fw-bold py-3">Lead Score</div>
+              <div className="card-body text-center">
+                <div className={`badge ${getScoreBadge(lead.lead_score)} fs-3 px-4 py-2 mb-2`}>
+                  {lead.lead_score}
+                </div>
+                <div className="text-muted small">out of 105 possible</div>
+              </div>
+            </div>
+          )}
+
+          {/* Automation History */}
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-white fw-bold py-3">Automation History</div>
             <div className="card-body">
@@ -225,8 +310,8 @@ function AdminLeadDetailPage() {
                     <div key={entry.id} className="mb-3 pb-3 border-bottom">
                       <div className="d-flex justify-content-between align-items-start">
                         <div>
-                          <span className={`badge ${entry.type === 'email' ? 'bg-info' : 'bg-warning text-dark'} me-2`}>
-                            {entry.type === 'email' ? 'Email' : 'Voice Call'}
+                          <span className={`badge ${getTypeBadge(entry.type)} me-2`}>
+                            {getTypeLabel(entry.type)}
                           </span>
                           <span className={`badge ${entry.status === 'success' ? 'bg-success' : 'bg-danger'}`}>
                             {entry.status}

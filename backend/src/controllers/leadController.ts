@@ -20,6 +20,12 @@ export async function submitLead(req: Request, res: Response, next: NextFunction
         name: lead.name,
         email: lead.email,
         phone: lead.phone || undefined,
+        title: lead.title || undefined,
+        company: lead.company || undefined,
+        company_size: lead.company_size || undefined,
+        lead_score: lead.lead_score || undefined,
+        source: lead.source || undefined,
+        form_type: lead.form_type || undefined,
       }).catch((err) => console.error('[LeadController] Automation error:', err));
     }
   } catch (error) {

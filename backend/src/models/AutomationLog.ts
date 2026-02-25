@@ -3,7 +3,7 @@ import { sequelize } from '../config/database';
 
 export interface AutomationLogAttributes {
   id?: string;
-  type: 'email' | 'voice_call';
+  type: 'email' | 'voice_call' | 'alert';
   related_type: string;
   related_id: string;
   status: 'success' | 'failed';
@@ -13,7 +13,7 @@ export interface AutomationLogAttributes {
 
 class AutomationLog extends Model<AutomationLogAttributes> implements AutomationLogAttributes {
   declare id: string;
-  declare type: 'email' | 'voice_call';
+  declare type: 'email' | 'voice_call' | 'alert';
   declare related_type: string;
   declare related_id: string;
   declare status: 'success' | 'failed';
@@ -29,7 +29,7 @@ AutomationLog.init(
       primaryKey: true,
     },
     type: {
-      type: DataTypes.ENUM('email', 'voice_call'),
+      type: DataTypes.ENUM('email', 'voice_call', 'alert'),
       allowNull: false,
     },
     related_type: {

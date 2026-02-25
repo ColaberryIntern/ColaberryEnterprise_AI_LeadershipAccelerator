@@ -6,6 +6,8 @@ interface LeadStats {
   total: number;
   byStatus: Record<string, number>;
   conversionRate: string;
+  highIntent: number;
+  thisMonth: number;
 }
 
 interface Lead {
@@ -13,8 +15,10 @@ interface Lead {
   name: string;
   email: string;
   company: string;
+  title: string;
   phone: string;
   status: string;
+  lead_score: number;
   source: string;
   form_type: string;
   created_at: string;
@@ -23,13 +27,13 @@ interface Lead {
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
 
-const STATUS_COLORS: Record<string, string> = {
-  new: 'bg-info',
-  contacted: 'bg-primary',
-  qualified: 'bg-warning text-dark',
-  enrolled: 'bg-success',
-  lost: 'bg-secondary',
-};
+const SOURCE_OPTIONS = [
+  { value: '', label: 'All Sources' },
+  { value: 'executive_overview_download', label: 'Executive Overview' },
+  { value: 'contact', label: 'Contact Form' },
+  { value: 'interest', label: 'Interest Form' },
+  { value: 'sponsorship_inquiry', label: 'Sponsorship' },
+];
 
 function AdminLeadsPage() {
   const [stats, setStats] = useState<LeadStats | null>(null);
@@ -39,6 +43,11 @@ function AdminLeadsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [scoreMin, setScoreMin] = useState('');
+  const [scoreMax, setScoreMax] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
 
@@ -46,6 +55,11 @@ function AdminLeadsPage() {
     try {
       const params: Record<string, string> = { page: String(page), limit: '25' };
       if (statusFilter) params.status = statusFilter;
+      if (sourceFilter) params.source = sourceFilter;
+      if (scoreMin) params.scoreMin = scoreMin;
+      if (scoreMax) params.scoreMax = scoreMax;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
       if (search) params.search = search;
       const res = await api.get('/api/admin/leads', { params });
       setLeads(res.data.leads);
@@ -54,7 +68,7 @@ function AdminLeadsPage() {
     } catch (err) {
       console.error('Failed to fetch leads:', err);
     }
-  }, [page, statusFilter, search]);
+  }, [page, statusFilter, sourceFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
 
   const fetchStats = async () => {
     try {
@@ -99,6 +113,20 @@ function AdminLeadsPage() {
     }
   };
 
+  const clearFilters = () => {
+    setSearch('');
+    setSearchInput('');
+    setStatusFilter('');
+    setSourceFilter('');
+    setScoreMin('');
+    setScoreMax('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  };
+
+  const hasFilters = search || statusFilter || sourceFilter || scoreMin || scoreMax || dateFrom || dateTo;
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -106,6 +134,13 @@ function AdminLeadsPage() {
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  const getScoreBadge = (score: number) => {
+    if (score > 80) return 'bg-danger';
+    if (score > 60) return 'bg-warning text-dark';
+    if (score > 30) return 'bg-info';
+    return 'bg-light text-dark';
   };
 
   if (loading) {
@@ -132,24 +167,36 @@ function AdminLeadsPage() {
       {/* Stats Cards */}
       {stats && (
         <div className="row g-3 mb-4">
-          <div className="col-md-2">
+          <div className="col-6 col-md">
             <div className="card border-0 shadow-sm p-3 text-center">
               <div className="text-muted small mb-1">Total</div>
               <div className="h4 fw-bold mb-0">{stats.total}</div>
             </div>
           </div>
-          {STATUS_OPTIONS.map((s) => (
-            <div key={s} className="col-md-2">
-              <div
-                className="card border-0 shadow-sm p-3 text-center"
-                style={{ cursor: 'pointer' }}
-                onClick={() => { setStatusFilter(statusFilter === s ? '' : s); setPage(1); }}
-              >
-                <div className="text-muted small mb-1 text-capitalize">{s}</div>
-                <div className="h4 fw-bold mb-0">{stats.byStatus[s] || 0}</div>
-              </div>
+          <div className="col-6 col-md">
+            <div className="card border-0 shadow-sm p-3 text-center">
+              <div className="text-muted small mb-1">New</div>
+              <div className="h4 fw-bold mb-0 text-info">{stats.byStatus.new || 0}</div>
             </div>
-          ))}
+          </div>
+          <div className="col-6 col-md">
+            <div className="card border-0 shadow-sm p-3 text-center" style={{ borderLeft: '3px solid #dc3545' }}>
+              <div className="text-muted small mb-1">High-Intent</div>
+              <div className="h4 fw-bold mb-0 text-danger">{stats.highIntent}</div>
+            </div>
+          </div>
+          <div className="col-6 col-md">
+            <div className="card border-0 shadow-sm p-3 text-center">
+              <div className="text-muted small mb-1">This Month</div>
+              <div className="h4 fw-bold mb-0">{stats.thisMonth}</div>
+            </div>
+          </div>
+          <div className="col-6 col-md">
+            <div className="card border-0 shadow-sm p-3 text-center">
+              <div className="text-muted small mb-1">Conversion</div>
+              <div className="h4 fw-bold mb-0 text-success">{stats.conversionRate}%</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -157,14 +204,14 @@ function AdminLeadsPage() {
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body">
           <div className="row g-3 align-items-end">
-            <div className="col-md-4">
+            <div className="col-md-3">
               <form onSubmit={handleSearch}>
                 <label className="form-label small text-muted">Search</label>
                 <div className="input-group">
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="Name, email, or company..."
+                    placeholder="Name, email, company..."
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                   />
@@ -172,7 +219,7 @@ function AdminLeadsPage() {
                 </div>
               </form>
             </div>
-            <div className="col-md-3">
+            <div className="col-md-2">
               <label className="form-label small text-muted">Status</label>
               <select
                 className="form-select"
@@ -185,13 +232,62 @@ function AdminLeadsPage() {
                 ))}
               </select>
             </div>
-            {(search || statusFilter) && (
-              <div className="col-md-2">
+            <div className="col-md-2">
+              <label className="form-label small text-muted">Source</label>
+              <select
+                className="form-select"
+                value={sourceFilter}
+                onChange={(e) => { setSourceFilter(e.target.value); setPage(1); }}
+              >
+                {SOURCE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-2">
+              <label className="form-label small text-muted">Score Range</label>
+              <div className="input-group input-group-sm">
+                <input
+                  type="number"
+                  className="form-control"
+                  placeholder="Min"
+                  value={scoreMin}
+                  min="0"
+                  onChange={(e) => { setScoreMin(e.target.value); setPage(1); }}
+                />
+                <span className="input-group-text">-</span>
+                <input
+                  type="number"
+                  className="form-control"
+                  placeholder="Max"
+                  value={scoreMax}
+                  max="200"
+                  onChange={(e) => { setScoreMax(e.target.value); setPage(1); }}
+                />
+              </div>
+            </div>
+            <div className="col-md-2">
+              <label className="form-label small text-muted">Date Range</label>
+              <input
+                type="date"
+                className="form-control form-control-sm mb-1"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+              />
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+              />
+            </div>
+            {hasFilters && (
+              <div className="col-md-1">
                 <button
-                  className="btn btn-outline-secondary"
-                  onClick={() => { setSearch(''); setSearchInput(''); setStatusFilter(''); setPage(1); }}
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={clearFilters}
                 >
-                  Clear Filters
+                  Clear
                 </button>
               </div>
             )}
@@ -212,7 +308,8 @@ function AdminLeadsPage() {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Company</th>
-                  <th>Phone</th>
+                  <th>Title</th>
+                  <th>Score</th>
                   <th>Status</th>
                   <th>Source</th>
                   <th>Date</th>
@@ -222,7 +319,7 @@ function AdminLeadsPage() {
               <tbody>
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center text-muted py-4">
+                    <td colSpan={9} className="text-center text-muted py-4">
                       No leads found
                     </td>
                   </tr>
@@ -230,12 +327,17 @@ function AdminLeadsPage() {
                   leads.map((lead) => (
                     <tr key={lead.id}>
                       <td className="fw-medium">{lead.name}</td>
-                      <td>{lead.email}</td>
+                      <td className="small">{lead.email}</td>
                       <td>{lead.company || '-'}</td>
-                      <td>{lead.phone || '-'}</td>
+                      <td className="small">{lead.title || '-'}</td>
+                      <td>
+                        <span className={`badge ${getScoreBadge(lead.lead_score || 0)}`}>
+                          {lead.lead_score || 0}
+                        </span>
+                      </td>
                       <td>
                         <select
-                          className={`form-select form-select-sm border-0 fw-medium`}
+                          className="form-select form-select-sm border-0 fw-medium"
                           style={{ width: 'auto', minWidth: '120px' }}
                           value={lead.status}
                           onChange={(e) => handleStatusChange(lead.id, e.target.value)}
@@ -246,9 +348,9 @@ function AdminLeadsPage() {
                         </select>
                       </td>
                       <td>
-                        <span className="badge bg-light text-dark">{lead.source || lead.form_type}</span>
+                        <span className="badge bg-light text-dark">{lead.form_type || lead.source}</span>
                       </td>
-                      <td className="text-nowrap">{formatDate(lead.created_at)}</td>
+                      <td className="text-nowrap small">{formatDate(lead.created_at)}</td>
                       <td>
                         <Link
                           to={`/admin/leads/${lead.id}`}

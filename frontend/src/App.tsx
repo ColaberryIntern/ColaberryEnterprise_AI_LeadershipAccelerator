@@ -20,6 +20,7 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminCohortDetailPage from './pages/admin/AdminCohortDetailPage';
 import AdminLeadsPage from './pages/admin/AdminLeadsPage';
 import AdminLeadDetailPage from './pages/admin/AdminLeadDetailPage';
+import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
           <Route path="/enroll/success" element={<EnrollSuccessPage />} />
           <Route path="/enroll/cancel" element={<EnrollCancelPage />} />
           <Route path="/contact" element={<ContactPage />} />
+          <Route path="/executive-overview/thank-you" element={<ExecOverviewThankYouPage />} />
           <Route path="/about" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

@@ -1,9 +1,11 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import LeadCaptureForm from '../components/LeadCaptureForm';
 
 function HomePage() {
+  const navigate = useNavigate();
+
   const industries = [
     { icon: '💻', name: 'Technology' },
     { icon: '🏦', name: 'Finance & Banking' },
@@ -177,19 +179,21 @@ function HomePage() {
 
       {/* Executive Overview Download */}
       <section className="section-alt" id="download-overview" aria-label="Download Executive Overview">
-        <div className="container text-center" style={{ maxWidth: '700px' }}>
-          <h2 className="mb-3">📥 Download the Executive Overview</h2>
-          <p className="text-muted mb-4">
-            Get the full program overview, pricing details, and ROI framework.
-            Sent immediately to your inbox.
-          </p>
+        <div className="container" style={{ maxWidth: '750px' }}>
+          <div className="text-center mb-4">
+            <h2 className="mb-3">📥 Download the Executive Overview</h2>
+            <p className="text-muted mb-0">
+              Get the full program overview, pricing details, and ROI framework.
+              Sent immediately to your inbox.
+            </p>
+          </div>
           <LeadCaptureForm
             formType="executive_overview_download"
-            fields={['name', 'email', 'company']}
-            submitLabel="📥 Download Now"
-            successMessage="✅ Check your inbox — your Executive Overview is on its way."
+            fields={['name', 'email', 'company', 'title', 'phone', 'company_size', 'evaluating_90_days']}
+            submitLabel="📥 Download Executive Overview"
+            captureUtm={true}
+            onSuccess={() => navigate('/executive-overview/thank-you')}
           />
-          {/* TODO: Trigger email automation via CRM integration (future) */}
         </div>
       </section>
 

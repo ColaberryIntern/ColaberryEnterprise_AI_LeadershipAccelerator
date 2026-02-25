@@ -30,7 +30,9 @@ export const env = {
 
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
+  enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',
   enableAutoEmail: process.env.ENABLE_AUTO_EMAIL !== 'false', // default on
+  enableHighIntentAlert: process.env.ENABLE_HIGH_INTENT_ALERT === 'true',
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',

@@ -1,10 +1,10 @@
 import { env } from '../config/env';
 import { AutomationLog } from '../models';
 import { triggerVoiceCall } from './synthflowService';
-import { sendEnrollmentConfirmation, sendInterestEmail } from './emailService';
+import { sendEnrollmentConfirmation, sendInterestEmail, sendExecutiveOverviewEmail, sendHighIntentAlert } from './emailService';
 
 interface LogParams {
-  type: 'email' | 'voice_call';
+  type: 'email' | 'voice_call' | 'alert';
   related_type: string;
   related_id: string;
   status: 'success' | 'failed';
@@ -103,15 +103,26 @@ interface LeadData {
   name: string;
   email: string;
   phone?: string;
+  title?: string;
+  company?: string;
+  company_size?: string;
+  lead_score?: number;
+  source?: string;
+  form_type?: string;
 }
 
 export async function runLeadAutomation(lead: LeadData): Promise<void> {
   const relatedId = String(lead.id);
+  const isOverviewForm = lead.form_type === 'executive_overview_download';
 
-  // Email
+  // Email — route by form_type
   if (env.enableAutoEmail) {
     try {
-      await sendInterestEmail({ to: lead.email, fullName: lead.name });
+      if (isOverviewForm) {
+        await sendExecutiveOverviewEmail({ to: lead.email, fullName: lead.name });
+      } else {
+        await sendInterestEmail({ to: lead.email, fullName: lead.name });
+      }
       await logAutomation({
         type: 'email',
         related_type: 'lead',
@@ -119,7 +130,7 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
         status: 'success',
       });
     } catch (error: any) {
-      console.error('[Automation] Lead interest email failed:', error.message);
+      console.error('[Automation] Lead email failed:', error.message);
       await logAutomation({
         type: 'email',
         related_type: 'lead',
@@ -130,8 +141,12 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
     }
   }
 
-  // Voice call
-  if (lead.phone) {
+  // Voice call — use form-specific flag for overview form
+  const shouldCall = isOverviewForm
+    ? env.enableVoiceCallForOverview && lead.phone
+    : env.enableVoiceCalls && lead.phone;
+
+  if (shouldCall && lead.phone) {
     try {
       const result = await triggerVoiceCall({
         name: lead.name,
@@ -149,6 +164,36 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
       console.error('[Automation] Lead voice call failed:', error.message);
       await logAutomation({
         type: 'voice_call',
+        related_type: 'lead',
+        related_id: relatedId,
+        status: 'failed',
+        provider_response: error.message,
+      });
+    }
+  }
+
+  // High-intent alert — send internal notification if score > 60
+  if (env.enableHighIntentAlert && lead.lead_score && lead.lead_score > 60) {
+    try {
+      await sendHighIntentAlert({
+        name: lead.name,
+        company: lead.company || '',
+        title: lead.title || '',
+        email: lead.email,
+        phone: lead.phone || '',
+        score: lead.lead_score,
+        source: lead.form_type || lead.source || '',
+      });
+      await logAutomation({
+        type: 'alert',
+        related_type: 'lead',
+        related_id: relatedId,
+        status: 'success',
+      });
+    } catch (error: any) {
+      console.error('[Automation] High-intent alert failed:', error.message);
+      await logAutomation({
+        type: 'alert',
         related_type: 'lead',
         related_id: relatedId,
         status: 'failed',

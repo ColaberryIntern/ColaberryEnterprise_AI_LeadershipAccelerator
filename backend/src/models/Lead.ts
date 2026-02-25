@@ -8,6 +8,14 @@ interface LeadAttributes {
   company?: string;
   role?: string;
   phone?: string;
+  title?: string;
+  company_size?: string;
+  evaluating_90_days?: boolean;
+  lead_score?: number;
+  last_contacted_at?: Date;
+  utm_source?: string;
+  utm_campaign?: string;
+  page_url?: string;
   interest_area?: string;
   message?: string;
   source?: string;
@@ -28,6 +36,14 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare company: string;
   declare role: string;
   declare phone: string;
+  declare title: string;
+  declare company_size: string;
+  declare evaluating_90_days: boolean;
+  declare lead_score: number;
+  declare last_contacted_at: Date;
+  declare utm_source: string;
+  declare utm_campaign: string;
+  declare page_url: string;
   declare interest_area: string;
   declare message: string;
   declare source: string;
@@ -66,6 +82,40 @@ Lead.init(
     },
     phone: {
       type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    title: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    company_size: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    evaluating_90_days: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    lead_score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    last_contacted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    utm_source: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    utm_campaign: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    page_url: {
+      type: DataTypes.STRING(500),
       allowNull: true,
     },
     interest_area: {
