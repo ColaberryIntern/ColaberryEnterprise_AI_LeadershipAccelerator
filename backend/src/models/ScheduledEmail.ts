@@ -1,17 +1,26 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
+export type CampaignChannel = 'email' | 'voice' | 'sms';
+
 interface ScheduledEmailAttributes {
   id?: string;
   lead_id: number;
   sequence_id?: string;
   step_index: number;
+  channel: CampaignChannel;
   subject: string;
   body: string;
   to_email: string;
+  to_phone?: string;
+  voice_agent_type?: string;
+  max_attempts: number;
+  attempts_made: number;
+  fallback_channel?: CampaignChannel | null;
   scheduled_for: Date;
   sent_at?: Date;
   status?: string;
+  metadata?: Record<string, any>;
   created_at?: Date;
 }
 
@@ -20,12 +29,19 @@ class ScheduledEmail extends Model<ScheduledEmailAttributes> implements Schedule
   declare lead_id: number;
   declare sequence_id: string;
   declare step_index: number;
+  declare channel: CampaignChannel;
   declare subject: string;
   declare body: string;
   declare to_email: string;
+  declare to_phone: string;
+  declare voice_agent_type: string;
+  declare max_attempts: number;
+  declare attempts_made: number;
+  declare fallback_channel: CampaignChannel | null;
   declare scheduled_for: Date;
   declare sent_at: Date;
   declare status: string;
+  declare metadata: Record<string, any>;
   declare created_at: Date;
 }
 
@@ -51,6 +67,11 @@ ScheduledEmail.init(
       allowNull: false,
       defaultValue: 0,
     },
+    channel: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'email',
+    },
     subject: {
       type: DataTypes.STRING(255),
       allowNull: false,
@@ -63,6 +84,28 @@ ScheduledEmail.init(
       type: DataTypes.STRING(255),
       allowNull: false,
     },
+    to_phone: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    voice_agent_type: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    max_attempts: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    attempts_made: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    fallback_channel: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
     scheduled_for: {
       type: DataTypes.DATE,
       allowNull: false,
@@ -72,9 +115,13 @@ ScheduledEmail.init(
       allowNull: true,
     },
     status: {
-      type: DataTypes.ENUM('pending', 'sent', 'failed', 'cancelled'),
+      type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: 'pending',
+    },
+    metadata: {
+      type: DataTypes.JSONB,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,

@@ -4,11 +4,22 @@ import { FollowUpSequence } from '../models';
 
 const DEFAULT_SEQUENCE = {
   name: 'New Lead Nurture Campaign',
-  description: 'Automated 5-step email sequence for all incoming leads. Drives toward enrollment.',
+  description: 'Multi-channel 6-step campaign: voice + email + SMS. Follows spec cadence (Day 0 Voice, Day 1 Email, Day 3 Email, Day 6 Voice, Day 9 Email, Day 14 Email).',
   is_active: true,
   steps: [
     {
+      delay_days: 0,
+      channel: 'voice' as const,
+      subject: 'Intro call — identify pain, book strategy session',
+      body_template: `Hi {{name}}, this is Alex from Colaberry. I noticed you expressed interest in our Enterprise AI Leadership Accelerator. I'm reaching out because most executives I speak with are trying to build internal AI capability rather than depending on consultants. Is that something you're exploring at {{company}}?`,
+      voice_agent_type: 'welcome' as const,
+      max_attempts: 2,
+      fallback_channel: 'email' as const,
+      step_goal: 'Intro call — identify pain points, qualify interest, book 15-min strategy session',
+    },
+    {
       delay_days: 1,
+      channel: 'email' as const,
       subject: 'Quick question about your AI goals, {{name}}',
       body_template: `<p>Hi {{name}},</p>
 
@@ -26,9 +37,13 @@ const DEFAULT_SEQUENCE = {
 <p>Best,<br>
 Ali Merchant<br>
 Colaberry Enterprise AI Division</p>`,
+      max_attempts: 1,
+      fallback_channel: null,
+      step_goal: 'Cold email — pain recognition, invite reply to start conversation',
     },
     {
       delay_days: 3,
+      channel: 'email' as const,
       subject: 'What our graduates built in 5 days',
       body_template: `<p>Hi {{name}},</p>
 
@@ -47,9 +62,23 @@ Colaberry Enterprise AI Division</p>`,
 <p>Best,<br>
 Ali Merchant<br>
 Colaberry Enterprise AI Division</p>`,
+      max_attempts: 1,
+      fallback_channel: null,
+      step_goal: 'Value-add email — social proof with real outcomes, soft CTA for call',
     },
     {
-      delay_days: 7,
+      delay_days: 6,
+      channel: 'voice' as const,
+      subject: 'Follow-up call — reference prior touchpoints, close on meeting',
+      body_template: `Hi {{name}}, this is Alex from Colaberry again. I sent you some information about our Enterprise AI Leadership Accelerator. I'm checking in to see if you had a chance to review it. Our recent graduates have built AI proofs of concept that saved their organizations significant time and budget. Would you have 15 minutes this week for a quick strategy call?`,
+      voice_agent_type: 'interest' as const,
+      max_attempts: 2,
+      fallback_channel: 'sms' as const,
+      step_goal: 'Follow-up call — reference prior emails, push for strategy call booking',
+    },
+    {
+      delay_days: 9,
+      channel: 'email' as const,
       subject: 'The ROI case for AI leadership training',
       body_template: `<p>Hi {{name}},</p>
 
@@ -71,45 +100,27 @@ Colaberry Enterprise AI Division</p>`,
 <p>Best,<br>
 Ali Merchant<br>
 Colaberry Enterprise AI Division</p>`,
+      max_attempts: 1,
+      fallback_channel: null,
+      step_goal: 'ROI email — justify investment, case study proof, CTA for call',
     },
     {
       delay_days: 14,
-      subject: 'Last few seats — {{name}}, are you in?',
+      channel: 'email' as const,
+      subject: 'Closing the file — {{name}}, one last thought',
       body_template: `<p>Hi {{name}},</p>
 
-<p>Quick update: the next cohort of the Enterprise AI Leadership Accelerator is almost full. We keep it to <strong>15 participants max</strong> so everyone gets hands-on attention.</p>
+<p>I've reached out a few times and I respect your time, so this will be my last note unless I hear back.</p>
 
-<p><strong>What you'll walk away with:</strong></p>
-<ol>
-  <li>A working AI Proof of Concept scoped to your organization's top use case</li>
-  <li>An executive-ready presentation deck for stakeholder buy-in</li>
-  <li>A 90-Day AI expansion roadmap with measurable milestones</li>
-  <li>Access to ongoing Enterprise AI Advisory Labs</li>
-</ol>
+<p>If AI leadership is still on your radar, here's what I'd leave you with:</p>
 
-<p>If you've been considering this, now's the time to lock in your seat: <a href="https://colaberry.com/enroll"><strong>Enroll Now</strong></a></p>
-
-<p>Still have questions? Reply to this email or <a href="https://colaberry.com/contact">book a call</a>.</p>
-
-<p>Best,<br>
-Ali Merchant<br>
-Colaberry Enterprise AI Division</p>`,
-    },
-    {
-      delay_days: 21,
-      subject: 'Final follow-up: your AI leadership journey',
-      body_template: `<p>Hi {{name}},</p>
-
-<p>This is my final follow-up. I don't want to crowd your inbox, but I also don't want you to miss this opportunity.</p>
-
-<p>The executives who get the most from this program are the ones who:</p>
 <ul>
-  <li>Know AI is critical to their organization's future</li>
-  <li>Want to lead the initiative rather than delegate it</li>
-  <li>Are ready to build something real — not just attend another lecture</li>
+  <li>The executives who move fastest on AI capability-building are the ones who <strong>build, not just plan</strong></li>
+  <li>Our program produces a working proof of concept, executive deck, and 90-day roadmap — all in 5 days</li>
+  <li>The next cohort is limited to 15 participants</li>
 </ul>
 
-<p>If that sounds like you, I'm here when you're ready:</p>
+<p>If and when you're ready:</p>
 <ul>
   <li><a href="https://colaberry.com/enroll"><strong>Enroll directly</strong></a> ($4,500)</li>
   <li><a href="https://colaberry.com/contact"><strong>Schedule a call</strong></a> to discuss fit</li>
@@ -121,6 +132,9 @@ Colaberry Enterprise AI Division</p>`,
 <p>Best,<br>
 Ali Merchant<br>
 Colaberry Enterprise AI Division</p>`,
+      max_attempts: 1,
+      fallback_channel: null,
+      step_goal: 'Breakup email — last chance CTA, warm close',
     },
   ],
 };
@@ -129,22 +143,23 @@ async function seed() {
   await connectDatabase();
   await sequelize.sync();
 
-  // Check if default sequence already exists
   const existing = await FollowUpSequence.findOne({
     where: { name: DEFAULT_SEQUENCE.name },
   });
 
   if (existing) {
-    console.log('Default nurture sequence already exists. Updating steps...');
+    console.log('Default nurture sequence already exists. Updating to multi-channel...');
     await existing.update({
       steps: DEFAULT_SEQUENCE.steps,
       description: DEFAULT_SEQUENCE.description,
       is_active: true,
     });
     console.log('Updated sequence ID:', existing.id);
+    console.log('Steps:', DEFAULT_SEQUENCE.steps.map((s, i) => `  ${i + 1}. Day ${s.delay_days} [${s.channel}] ${s.subject}`).join('\n'));
   } else {
     const seq = await FollowUpSequence.create(DEFAULT_SEQUENCE as any);
-    console.log('Created default nurture sequence. ID:', seq.id);
+    console.log('Created default multi-channel nurture sequence. ID:', seq.id);
+    console.log('Steps:', DEFAULT_SEQUENCE.steps.map((s, i) => `  ${i + 1}. Day ${s.delay_days} [${s.channel}] ${s.subject}`).join('\n'));
   }
 
   process.exit(0);

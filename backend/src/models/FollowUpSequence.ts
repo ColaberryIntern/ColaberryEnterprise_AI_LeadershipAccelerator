@@ -1,10 +1,17 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import type { CampaignChannel } from './ScheduledEmail';
 
-interface SequenceStep {
+export interface SequenceStep {
   delay_days: number;
+  channel: CampaignChannel;
   subject: string;
   body_template: string;
+  voice_agent_type?: 'welcome' | 'interest';
+  sms_template?: string;
+  max_attempts?: number;
+  fallback_channel?: CampaignChannel | null;
+  step_goal?: string;
 }
 
 interface FollowUpSequenceAttributes {

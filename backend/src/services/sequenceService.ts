@@ -1,16 +1,26 @@
 import { FollowUpSequence, ScheduledEmail, Lead } from '../models';
+import type { SequenceStep } from '../models/FollowUpSequence';
+import type { CampaignChannel } from '../models/ScheduledEmail';
 
 interface CreateSequenceParams {
   name: string;
   description?: string;
-  steps: { delay_days: number; subject: string; body_template: string }[];
+  steps: SequenceStep[];
 }
 
 export async function createSequence(params: CreateSequenceParams) {
+  // Normalize steps: ensure channel defaults to 'email'
+  const normalizedSteps = params.steps.map((s) => ({
+    ...s,
+    channel: s.channel || 'email' as CampaignChannel,
+    max_attempts: s.max_attempts || (s.channel === 'voice' ? 2 : 1),
+    fallback_channel: s.fallback_channel || null,
+  }));
+
   return FollowUpSequence.create({
     name: params.name,
     description: params.description || '',
-    steps: params.steps,
+    steps: normalizedSteps,
     is_active: true,
   } as any);
 }
@@ -46,7 +56,6 @@ export async function deleteSequence(id: string) {
   const seq = await FollowUpSequence.findByPk(id);
   if (!seq) return false;
 
-  // Cancel any pending scheduled emails for this sequence
   await ScheduledEmail.update(
     { status: 'cancelled' } as any,
     { where: { sequence_id: id, status: 'pending' } }
@@ -63,46 +72,58 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string) {
   const sequence = await FollowUpSequence.findByPk(sequenceId);
   if (!sequence || !sequence.is_active) throw new Error('Sequence not found or inactive');
 
-  // Cancel any existing pending emails for this lead from any sequence
+  // Cancel any existing pending actions for this lead from any sequence
   await ScheduledEmail.update(
     { status: 'cancelled' } as any,
     { where: { lead_id: leadId, status: 'pending' } }
   );
 
-  // Create scheduled emails for each step
   const now = new Date();
-  const scheduledEmails = [];
+  const scheduledActions = [];
 
   for (let i = 0; i < sequence.steps.length; i++) {
     const step = sequence.steps[i];
+    const channel: CampaignChannel = step.channel || 'email';
     const scheduledFor = new Date(now.getTime() + step.delay_days * 24 * 60 * 60 * 1000);
 
-    // Replace template variables
-    const body = step.body_template
-      .replace(/\{\{name\}\}/g, lead.name)
-      .replace(/\{\{company\}\}/g, lead.company || '')
-      .replace(/\{\{title\}\}/g, lead.title || '')
-      .replace(/\{\{email\}\}/g, lead.email);
+    // Replace template variables in text content
+    const replaceVars = (text: string) =>
+      text
+        .replace(/\{\{name\}\}/g, lead.name)
+        .replace(/\{\{company\}\}/g, lead.company || '')
+        .replace(/\{\{title\}\}/g, lead.title || '')
+        .replace(/\{\{email\}\}/g, lead.email)
+        .replace(/\{\{phone\}\}/g, lead.phone || '');
 
-    const subject = step.subject
-      .replace(/\{\{name\}\}/g, lead.name)
-      .replace(/\{\{company\}\}/g, lead.company || '');
+    const subject = replaceVars(step.subject || '');
+    const body = replaceVars(
+      channel === 'sms' && step.sms_template
+        ? step.sms_template
+        : step.body_template || ''
+    );
 
-    const email = await ScheduledEmail.create({
+    const action = await ScheduledEmail.create({
       lead_id: leadId,
       sequence_id: sequenceId,
       step_index: i,
+      channel,
       subject,
       body,
       to_email: lead.email,
+      to_phone: lead.phone || null,
+      voice_agent_type: channel === 'voice' ? (step.voice_agent_type || 'interest') : null,
+      max_attempts: step.max_attempts || (channel === 'voice' ? 2 : 1),
+      attempts_made: 0,
+      fallback_channel: step.fallback_channel || null,
       scheduled_for: scheduledFor,
       status: 'pending',
+      metadata: { step_goal: step.step_goal || null },
     } as any);
 
-    scheduledEmails.push(email);
+    scheduledActions.push(action);
   }
 
-  return scheduledEmails;
+  return scheduledActions;
 }
 
 export async function cancelSequenceForLead(leadId: number) {
