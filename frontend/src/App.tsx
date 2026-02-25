@@ -20,6 +20,12 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminCohortDetailPage from './pages/admin/AdminCohortDetailPage';
 import AdminLeadsPage from './pages/admin/AdminLeadsPage';
 import AdminLeadDetailPage from './pages/admin/AdminLeadDetailPage';
+import AdminPipelinePage from './pages/admin/AdminPipelinePage';
+import AdminSequencesPage from './pages/admin/AdminSequencesPage';
+import AdminImportPage from './pages/admin/AdminImportPage';
+import AdminRevenueDashboardPage from './pages/admin/AdminRevenueDashboardPage';
+import AdminSettingsPage from './pages/admin/AdminSettingsPage';
+import AdminEventLedgerPage from './pages/admin/AdminEventLedgerPage';
 import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -48,8 +54,14 @@ function App() {
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
             <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
+            <Route path="/admin/pipeline" element={<AdminPipelinePage />} />
             <Route path="/admin/leads" element={<AdminLeadsPage />} />
             <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
+            <Route path="/admin/sequences" element={<AdminSequencesPage />} />
+            <Route path="/admin/import" element={<AdminImportPage />} />
+            <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/events" element={<AdminEventLedgerPage />} />
           </Route>
         </Route>
       </Routes>

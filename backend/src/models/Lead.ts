@@ -24,6 +24,7 @@ interface LeadAttributes {
   interest_level?: string;
   notes?: string;
   assigned_admin?: string;
+  pipeline_stage?: string;
   consent_contact?: boolean;
   created_at?: Date;
   updated_at?: Date;
@@ -52,6 +53,7 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare interest_level: string;
   declare notes: string;
   declare assigned_admin: string;
+  declare pipeline_stage: string;
   declare consent_contact: boolean;
   declare created_at: Date;
   declare updated_at: Date;
@@ -152,6 +154,11 @@ Lead.init(
     assigned_admin: {
       type: DataTypes.UUID,
       allowNull: true,
+    },
+    pipeline_stage: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'new_lead',
     },
     consent_contact: {
       type: DataTypes.BOOLEAN,

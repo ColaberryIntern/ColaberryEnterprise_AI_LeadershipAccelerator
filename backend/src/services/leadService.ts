@@ -201,7 +201,7 @@ export async function updateLead(id: number, updates: Record<string, any>) {
   const lead = await Lead.findByPk(id);
   if (!lead) return null;
 
-  const allowedFields = ['status', 'interest_level', 'notes', 'assigned_admin'];
+  const allowedFields = ['status', 'interest_level', 'notes', 'assigned_admin', 'pipeline_stage'];
   const filteredUpdates: Record<string, any> = {};
   for (const key of allowedFields) {
     if (updates[key] !== undefined) {
@@ -277,4 +277,102 @@ export async function generateLeadCsv() {
 
   const parser = new Parser();
   return parser.parse(data);
+}
+
+export async function createLeadAdmin(data: {
+  name: string;
+  email: string;
+  company?: string;
+  title?: string;
+  phone?: string;
+  role?: string;
+  source?: string;
+  notes?: string;
+}) {
+  const existing = await Lead.findOne({
+    where: { email: { [Op.iLike]: data.email.trim() } },
+  });
+
+  if (existing) {
+    return { lead: existing, isDuplicate: true };
+  }
+
+  const leadInput: LeadInput = {
+    name: data.name.trim(),
+    email: data.email.trim().toLowerCase(),
+    company: data.company?.trim() || '',
+    title: data.title?.trim() || '',
+    phone: data.phone?.trim() || '',
+    role: data.role?.trim() || '',
+    company_size: '',
+    evaluating_90_days: false,
+    interest_area: '',
+    message: '',
+    source: data.source?.trim() || 'admin_manual',
+    form_type: 'admin_manual',
+    consent_contact: false,
+    utm_source: '',
+    utm_campaign: '',
+    page_url: '',
+  };
+
+  const leadScore = calculateLeadScore(leadInput);
+
+  const lead = await Lead.create({
+    ...leadInput,
+    lead_score: leadScore,
+    pipeline_stage: 'new_lead',
+    status: 'new',
+    notes: data.notes?.trim() || '',
+  });
+
+  return { lead, isDuplicate: false };
+}
+
+export async function batchUpdateLeads(ids: number[], updates: { pipeline_stage?: string; status?: string }) {
+  const allowedUpdates: Record<string, any> = {};
+  if (updates.pipeline_stage) allowedUpdates.pipeline_stage = updates.pipeline_stage;
+  if (updates.status) allowedUpdates.status = updates.status;
+  allowedUpdates.updated_at = new Date();
+
+  const [affectedCount] = await Lead.update(allowedUpdates, {
+    where: { id: { [Op.in]: ids } },
+  });
+
+  return { updated: affectedCount };
+}
+
+const PIPELINE_STAGES = [
+  'new_lead', 'contacted', 'meeting_scheduled', 'proposal_sent', 'negotiation', 'enrolled', 'lost',
+];
+
+export async function getPipelineStats() {
+  const byStage: Record<string, number> = {};
+  for (const stage of PIPELINE_STAGES) {
+    byStage[stage] = await Lead.count({ where: { pipeline_stage: stage } });
+  }
+  return byStage;
+}
+
+export async function getLeadsByPipelineStage() {
+  const leads = await Lead.findAll({
+    include: [{ model: AdminUser, as: 'assignedAdmin', attributes: ['id', 'email'] }],
+    order: [['lead_score', 'DESC'], ['created_at', 'ASC']],
+  });
+
+  const grouped: Record<string, any[]> = {};
+  for (const stage of PIPELINE_STAGES) {
+    grouped[stage] = [];
+  }
+
+  for (const lead of leads) {
+    const stage = lead.pipeline_stage || 'new_lead';
+    if (grouped[stage]) {
+      grouped[stage].push(lead);
+    } else {
+      grouped['new_lead'].push(lead);
+    }
+  }
+
+  return grouped;
 }

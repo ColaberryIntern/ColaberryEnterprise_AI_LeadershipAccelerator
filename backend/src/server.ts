@@ -9,6 +9,7 @@ import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import adminRoutes from './routes/adminRoutes';
+import { startScheduler } from './services/schedulerService';
 
 // Import models to register associations before sync
 import './models';
@@ -38,6 +39,11 @@ app.use(errorHandler);
 async function start(): Promise<void> {
   await connectDatabase();
   await sequelize.sync();
+  // Start follow-up email scheduler if enabled
+  if (env.enableFollowUpScheduler) {
+    startScheduler();
+  }
+
   app.listen(env.port, () => {
     console.log(`Server running on port ${env.port} [${env.nodeEnv}]`);
   });

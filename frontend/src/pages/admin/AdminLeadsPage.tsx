@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
+import BatchActionBar from '../../components/admin/BatchActionBar';
 
 interface LeadStats {
   total: number;
@@ -50,6 +52,8 @@ function AdminLeadsPage() {
   const [dateTo, setDateTo] = useState('');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const fetchLeads = useCallback(async () => {
     try {
@@ -125,6 +129,25 @@ function AdminLeadsPage() {
     setPage(1);
   };
 
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === leads.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(leads.map((l) => l.id));
+    }
+  };
+
+  const handleBatchComplete = () => {
+    fetchLeads();
+    fetchStats();
+  };
+
   const hasFilters = search || statusFilter || sourceFilter || scoreMin || scoreMax || dateFrom || dateTo;
 
   const formatDate = (dateStr: string) => {
@@ -159,9 +182,14 @@ function AdminLeadsPage() {
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
           Lead Management
         </h1>
-        <button className="btn btn-outline-primary btn-sm" onClick={handleExport}>
-          Export CSV
-        </button>
+        <div className="d-flex gap-2">
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+            + Add Lead
+          </button>
+          <button className="btn btn-outline-primary btn-sm" onClick={handleExport}>
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -295,6 +323,15 @@ function AdminLeadsPage() {
         </div>
       </div>
 
+      {/* Batch Actions */}
+      {selectedIds.length > 0 && (
+        <BatchActionBar
+          selectedIds={selectedIds}
+          onClearSelection={() => setSelectedIds([])}
+          onActionComplete={handleBatchComplete}
+        />
+      )}
+
       {/* Leads Table */}
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-white fw-bold fs-6 py-3 d-flex justify-content-between">
@@ -305,6 +342,14 @@ function AdminLeadsPage() {
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
+                  <th style={{ width: '40px' }}>
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={leads.length > 0 && selectedIds.length === leads.length}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Company</th>
@@ -319,13 +364,21 @@ function AdminLeadsPage() {
               <tbody>
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-muted py-4">
+                    <td colSpan={10} className="text-center text-muted py-4">
                       No leads found
                     </td>
                   </tr>
                 ) : (
                   leads.map((lead) => (
                     <tr key={lead.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={selectedIds.includes(lead.id)}
+                          onChange={() => toggleSelect(lead.id)}
+                        />
+                      </td>
                       <td className="fw-medium">{lead.name}</td>
                       <td className="small">{lead.email}</td>
                       <td>{lead.company || '-'}</td>
@@ -392,6 +445,13 @@ function AdminLeadsPage() {
           </div>
         )}
       </div>
+
+      {showAddModal && (
+        <QuickAddLeadModal
+          onClose={() => setShowAddModal(false)}
+          onLeadCreated={() => { fetchLeads(); fetchStats(); }}
+        />
+      )}
     </>
   );
 }

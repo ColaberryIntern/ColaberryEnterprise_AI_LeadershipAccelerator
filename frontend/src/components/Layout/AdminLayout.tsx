@@ -29,8 +29,23 @@ function AdminLayout() {
             <Link to="/admin/dashboard" className="text-light text-decoration-none small">
               Dashboard
             </Link>
+            <Link to="/admin/revenue" className="text-light text-decoration-none small">
+              Revenue
+            </Link>
+            <Link to="/admin/pipeline" className="text-light text-decoration-none small">
+              Pipeline
+            </Link>
             <Link to="/admin/leads" className="text-light text-decoration-none small">
               Leads
+            </Link>
+            <Link to="/admin/sequences" className="text-light text-decoration-none small">
+              Sequences
+            </Link>
+            <Link to="/admin/import" className="text-light text-decoration-none small">
+              Import
+            </Link>
+            <Link to="/admin/settings" className="text-light text-decoration-none small">
+              Settings
             </Link>
             <button
               className="btn btn-outline-light btn-sm"
