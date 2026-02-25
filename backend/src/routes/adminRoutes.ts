@@ -51,6 +51,26 @@ import {
   handleListEvents,
   handleGetEventTypes,
 } from '../controllers/adminSettingsController';
+import {
+  handleListCampaigns,
+  handleCreateCampaign,
+  handleGetCampaign,
+  handleUpdateCampaign,
+  handleDeleteCampaign,
+  handleActivateCampaign,
+  handlePauseCampaign,
+  handleCompleteCampaign,
+  handleEnrollLeads,
+  handleRemoveLeadFromCampaign,
+  handleGetMatchingLeads,
+  handleGetCampaignStats,
+  handleGetCampaignLeads,
+  handleApolloSearch,
+  handleApolloImport,
+  handleApolloEnrich,
+  handleApolloQuota,
+  handleAIPreview,
+} from '../controllers/adminCampaignController';
 
 const router = Router();
 
@@ -108,6 +128,30 @@ router.post('/api/admin/leads/import', requireAdmin, uploadMiddleware, handleImp
 // Protected admin routes — Settings
 router.get('/api/admin/settings', requireAdmin, handleGetSettings);
 router.patch('/api/admin/settings', requireAdmin, handleUpdateSettings);
+
+// Protected admin routes — Campaigns
+router.get('/api/admin/campaigns', requireAdmin, handleListCampaigns);
+router.post('/api/admin/campaigns', requireAdmin, handleCreateCampaign);
+router.get('/api/admin/campaigns/:id', requireAdmin, handleGetCampaign);
+router.patch('/api/admin/campaigns/:id', requireAdmin, handleUpdateCampaign);
+router.delete('/api/admin/campaigns/:id', requireAdmin, handleDeleteCampaign);
+router.post('/api/admin/campaigns/:id/activate', requireAdmin, handleActivateCampaign);
+router.post('/api/admin/campaigns/:id/pause', requireAdmin, handlePauseCampaign);
+router.post('/api/admin/campaigns/:id/complete', requireAdmin, handleCompleteCampaign);
+router.post('/api/admin/campaigns/:id/enroll-leads', requireAdmin, handleEnrollLeads);
+router.delete('/api/admin/campaigns/:id/leads/:leadId', requireAdmin, handleRemoveLeadFromCampaign);
+router.get('/api/admin/campaigns/:id/matching-leads', requireAdmin, handleGetMatchingLeads);
+router.get('/api/admin/campaigns/:id/stats', requireAdmin, handleGetCampaignStats);
+router.get('/api/admin/campaigns/:id/leads', requireAdmin, handleGetCampaignLeads);
+
+// Protected admin routes — Apollo Integration
+router.post('/api/admin/apollo/search', requireAdmin, handleApolloSearch);
+router.post('/api/admin/apollo/import', requireAdmin, handleApolloImport);
+router.post('/api/admin/apollo/enrich', requireAdmin, handleApolloEnrich);
+router.get('/api/admin/apollo/quota', requireAdmin, handleApolloQuota);
+
+// Protected admin routes — AI Preview
+router.post('/api/admin/ai/preview', requireAdmin, handleAIPreview);
 
 // Protected admin routes — Event Ledger
 router.get('/api/admin/events/types', requireAdmin, handleGetEventTypes);

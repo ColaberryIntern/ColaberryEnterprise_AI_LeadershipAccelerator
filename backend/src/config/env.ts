@@ -28,6 +28,14 @@ export const env = {
   synthflowWelcomeAgentId: process.env.SYNTHFLOW_WELCOME_AGENT_ID || '',
   synthflowInterestAgentId: process.env.SYNTHFLOW_INTEREST_AGENT_ID || '',
 
+  // OpenAI
+  openaiApiKey: process.env.OPENAI_API_KEY || '',
+  aiModel: process.env.AI_MODEL || 'gpt-4o-mini',
+  aiMaxTokens: parseInt(process.env.AI_MAX_TOKENS || '1024', 10),
+
+  // Apollo
+  apolloApiKey: process.env.APOLLO_API_KEY || '',
+
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
   enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',

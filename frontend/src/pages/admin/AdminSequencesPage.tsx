@@ -14,6 +14,9 @@ interface SequenceStep {
   max_attempts?: number;
   fallback_channel?: CampaignChannel | null;
   step_goal?: string;
+  ai_instructions?: string;
+  ai_tone?: string;
+  ai_context_notes?: string;
 }
 
 interface Sequence {
@@ -96,9 +99,10 @@ function AdminSequencesPage() {
     if (!name.trim() || steps.length === 0) return;
 
     const validSteps = steps.filter((s) => {
-      if (s.channel === 'email') return s.subject.trim() && s.body_template.trim();
-      if (s.channel === 'voice') return s.subject.trim();
-      if (s.channel === 'sms') return s.subject.trim() && (s.sms_template?.trim() || s.body_template.trim());
+      const hasAI = !!s.ai_instructions?.trim();
+      if (s.channel === 'email') return s.subject.trim() && (hasAI || s.body_template.trim());
+      if (s.channel === 'voice') return s.subject.trim() && (hasAI || s.voice_prompt?.trim());
+      if (s.channel === 'sms') return s.subject.trim() && (hasAI || s.sms_template?.trim() || s.body_template.trim());
       return false;
     });
     if (validSteps.length === 0) return;
@@ -375,8 +379,58 @@ function AdminSequencesPage() {
                   </div>
 
                   <div className="mb-2">
+                    <label className="form-label small fw-semibold text-primary">
+                      AI Instructions (what should the AI achieve in this step?)
+                    </label>
+                    <textarea
+                      className="form-control form-control-sm"
+                      rows={3}
+                      value={step.ai_instructions || ''}
+                      onChange={(e) => updateStep(idx, 'ai_instructions', e.target.value)}
+                      placeholder={
+                        step.channel === 'email'
+                          ? 'Write a cold intro email. Identify AI pain points relevant to their industry. Mention the 5-day accelerator. Ask which challenge resonates most.'
+                          : step.channel === 'voice'
+                          ? 'Call to follow up on previous email. Build rapport, identify their biggest AI challenge, and book a 15-minute strategy call.'
+                          : 'Send a brief SMS reminder about the AI Leadership Accelerator. Include a link to schedule a call.'
+                      }
+                    />
+                    <div className="form-text">
+                      The AI generates the actual message content at send time using these instructions + lead context. This is the primary content source.
+                    </div>
+                  </div>
+
+                  <div className="row mb-2">
+                    <div className="col-md-6">
+                      <label className="form-label small">AI Tone (optional)</label>
+                      <select
+                        className="form-select form-select-sm"
+                        value={step.ai_tone || ''}
+                        onChange={(e) => updateStep(idx, 'ai_tone', e.target.value)}
+                      >
+                        <option value="">Default (Professional)</option>
+                        <option value="professional">Professional</option>
+                        <option value="casual">Casual</option>
+                        <option value="consultative">Consultative</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="friendly">Friendly</option>
+                      </select>
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small">AI Context Notes (optional)</label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={step.ai_context_notes || ''}
+                        onChange={(e) => updateStep(idx, 'ai_context_notes', e.target.value)}
+                        placeholder="Extra context for this step"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-2">
                     <label className="form-label small">
-                      {step.channel === 'voice' ? 'Call Label / Subject' : 'Subject Line'}
+                      {step.channel === 'voice' ? 'Call Label / Subject' : 'Subject Line (fallback)'}
                     </label>
                     <input
                       type="text"
@@ -395,7 +449,7 @@ function AdminSequencesPage() {
 
                   {(step.channel === 'email' || !step.channel) && (
                     <div>
-                      <label className="form-label small">Email Body (HTML supported)</label>
+                      <label className="form-label small">Email Body Fallback (used if AI generation fails)</label>
                       <textarea
                         className="form-control form-control-sm"
                         rows={4}

@@ -15,6 +15,12 @@ export interface SequenceStep {
   max_attempts?: number;
   fallback_channel?: CampaignChannel | null;
   step_goal?: string;
+  /** AI instructions — what the AI should achieve/say in this step.
+   *  The AI generates the actual message content at send time using this + lead context.
+   *  When set, this is the primary content source; body_template becomes fallback. */
+  ai_instructions?: string;
+  ai_tone?: string;
+  ai_context_notes?: string;
 }
 
 interface FollowUpSequenceAttributes {

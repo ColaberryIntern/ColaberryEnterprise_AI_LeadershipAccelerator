@@ -7,6 +7,7 @@ interface ScheduledEmailAttributes {
   id?: string;
   lead_id: number;
   sequence_id?: string;
+  campaign_id?: string;
   step_index: number;
   channel: CampaignChannel;
   subject: string;
@@ -20,6 +21,8 @@ interface ScheduledEmailAttributes {
   scheduled_for: Date;
   sent_at?: Date;
   status?: string;
+  ai_instructions?: string;
+  ai_generated?: boolean;
   metadata?: Record<string, any>;
   created_at?: Date;
 }
@@ -28,6 +31,7 @@ class ScheduledEmail extends Model<ScheduledEmailAttributes> implements Schedule
   declare id: string;
   declare lead_id: number;
   declare sequence_id: string;
+  declare campaign_id: string;
   declare step_index: number;
   declare channel: CampaignChannel;
   declare subject: string;
@@ -41,6 +45,8 @@ class ScheduledEmail extends Model<ScheduledEmailAttributes> implements Schedule
   declare scheduled_for: Date;
   declare sent_at: Date;
   declare status: string;
+  declare ai_instructions: string;
+  declare ai_generated: boolean;
   declare metadata: Record<string, any>;
   declare created_at: Date;
 }
@@ -61,6 +67,11 @@ ScheduledEmail.init(
       type: DataTypes.UUID,
       allowNull: true,
       references: { model: 'follow_up_sequences', key: 'id' },
+    },
+    campaign_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'campaigns', key: 'id' },
     },
     step_index: {
       type: DataTypes.INTEGER,
@@ -118,6 +129,15 @@ ScheduledEmail.init(
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: 'pending',
+    },
+    ai_instructions: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    ai_generated: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     metadata: {
       type: DataTypes.JSONB,

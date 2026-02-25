@@ -26,6 +26,13 @@ interface LeadAttributes {
   assigned_admin?: string;
   pipeline_stage?: string;
   consent_contact?: boolean;
+  lead_source_type?: string;
+  industry?: string;
+  annual_revenue?: string;
+  employee_count?: number;
+  technology_stack?: string[];
+  linkedin_url?: string;
+  apollo_id?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -55,6 +62,13 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare assigned_admin: string;
   declare pipeline_stage: string;
   declare consent_contact: boolean;
+  declare lead_source_type: string;
+  declare industry: string;
+  declare annual_revenue: string;
+  declare employee_count: number;
+  declare technology_stack: string[];
+  declare linkedin_url: string;
+  declare apollo_id: string;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -164,6 +178,35 @@ Lead.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    lead_source_type: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'warm',
+    },
+    industry: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    annual_revenue: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    employee_count: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    technology_stack: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    linkedin_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    apollo_id: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,

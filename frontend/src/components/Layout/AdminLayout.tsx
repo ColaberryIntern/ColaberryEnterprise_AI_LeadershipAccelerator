@@ -32,11 +32,17 @@ function AdminLayout() {
             <Link to="/admin/revenue" className="text-light text-decoration-none small">
               Revenue
             </Link>
+            <Link to="/admin/campaigns" className="text-light text-decoration-none small">
+              Campaigns
+            </Link>
             <Link to="/admin/pipeline" className="text-light text-decoration-none small">
               Pipeline
             </Link>
             <Link to="/admin/leads" className="text-light text-decoration-none small">
               Leads
+            </Link>
+            <Link to="/admin/apollo" className="text-light text-decoration-none small">
+              Apollo
             </Link>
             <Link to="/admin/sequences" className="text-light text-decoration-none small">
               Sequences

@@ -65,7 +65,7 @@ export async function deleteSequence(id: string) {
   return true;
 }
 
-export async function enrollLeadInSequence(leadId: number, sequenceId: string) {
+export async function enrollLeadInSequence(leadId: number, sequenceId: string, campaignId?: string) {
   const lead = await Lead.findByPk(leadId);
   if (!lead) throw new Error('Lead not found');
 
@@ -86,7 +86,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string) {
     const channel: CampaignChannel = step.channel || 'email';
     const scheduledFor = new Date(now.getTime() + step.delay_days * 24 * 60 * 60 * 1000);
 
-    // Replace template variables in text content
+    // Replace template variables in text content (fallback content)
     const replaceVars = (text: string) =>
       text
         .replace(/\{\{name\}\}/g, lead.name)
@@ -105,6 +105,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string) {
     const action = await ScheduledEmail.create({
       lead_id: leadId,
       sequence_id: sequenceId,
+      campaign_id: campaignId || null,
       step_index: i,
       channel,
       subject,
@@ -117,10 +118,11 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string) {
       fallback_channel: step.fallback_channel || null,
       scheduled_for: scheduledFor,
       status: 'pending',
+      ai_instructions: step.ai_instructions || null,
       metadata: {
         step_goal: step.step_goal || null,
-        // Store voice_prompt template (un-replaced) so the scheduler can hydrate
-        // it at execution time with fresh cohort data + conversation history
+        ai_tone: step.ai_tone || null,
+        ai_context_notes: step.ai_context_notes || null,
         voice_prompt: channel === 'voice' && step.voice_prompt ? step.voice_prompt : null,
       },
     } as any);

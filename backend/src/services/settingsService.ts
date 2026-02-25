@@ -24,6 +24,10 @@ const DEFAULTS: Record<string, any> = {
   sms_provider: 'none',
   sms_from_number: '',
   sms_api_key: '',
+  // AI Configuration
+  ai_model: 'gpt-4o-mini',
+  ai_max_tokens: 1024,
+  ai_system_prompt_default: 'You are a professional outreach specialist for Colaberry Enterprise AI Division. You write personalized, consultative messages that feel like 1:1 conversations, not marketing templates. You reference the lead\'s specific context naturally. You never sound like a mass email.',
 };
 
 export async function getSetting(key: string): Promise<any> {
