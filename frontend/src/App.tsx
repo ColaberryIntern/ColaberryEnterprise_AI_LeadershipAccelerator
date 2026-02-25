@@ -29,6 +29,7 @@ import AdminEventLedgerPage from './pages/admin/AdminEventLedgerPage';
 import AdminCampaignsPage from './pages/admin/AdminCampaignsPage';
 import AdminCampaignDetailPage from './pages/admin/AdminCampaignDetailPage';
 import AdminApolloPage from './pages/admin/AdminApolloPage';
+import AdminICPInsightsPage from './pages/admin/AdminICPInsightsPage';
 import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -67,6 +68,7 @@ function App() {
             <Route path="/admin/import" element={<AdminImportPage />} />
             <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
             <Route path="/admin/events" element={<AdminEventLedgerPage />} />
           </Route>
         </Route>

@@ -36,6 +36,9 @@ export const env = {
   // Apollo
   apolloApiKey: process.env.APOLLO_API_KEY || '',
 
+  // Mandrill Webhook
+  mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
+
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
   enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',

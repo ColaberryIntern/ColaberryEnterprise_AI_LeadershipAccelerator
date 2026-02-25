@@ -52,6 +52,16 @@ import {
   handleGetEventTypes,
 } from '../controllers/adminSettingsController';
 import {
+  handleGetInsights,
+  handleGetInsightSummary,
+  handleGetRecommendations,
+  handleComputeInsights,
+  handleGetOutcomes,
+  handleGetOutcomeStats,
+  handleGetCampaignOutcomes,
+  handleGetLeadOutcomes,
+} from '../controllers/adminInsightController';
+import {
   handleListCampaigns,
   handleCreateCampaign,
   handleGetCampaign,
@@ -152,6 +162,16 @@ router.get('/api/admin/apollo/quota', requireAdmin, handleApolloQuota);
 
 // Protected admin routes — AI Preview
 router.post('/api/admin/ai/preview', requireAdmin, handleAIPreview);
+
+// Protected admin routes — ICP Insights & Interaction Outcomes
+router.get('/api/admin/insights/summary', requireAdmin, handleGetInsightSummary);
+router.get('/api/admin/insights/recommendations', requireAdmin, handleGetRecommendations);
+router.get('/api/admin/insights/outcomes', requireAdmin, handleGetOutcomes);
+router.get('/api/admin/insights/outcome-stats', requireAdmin, handleGetOutcomeStats);
+router.get('/api/admin/insights/campaigns/:id/outcomes', requireAdmin, handleGetCampaignOutcomes);
+router.get('/api/admin/insights/leads/:id/outcomes', requireAdmin, handleGetLeadOutcomes);
+router.get('/api/admin/insights', requireAdmin, handleGetInsights);
+router.post('/api/admin/insights/compute', requireAdmin, handleComputeInsights);
 
 // Protected admin routes — Event Ledger
 router.get('/api/admin/events/types', requireAdmin, handleGetEventTypes);

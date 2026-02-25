@@ -6,6 +6,8 @@ import { env } from '../config/env';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
 import { generateMessage, buildConversationHistory } from './aiMessageService';
+import { recordActionOutcome } from './interactionService';
+import { computeInsights } from './icpInsightService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
 let transporter: nodemailer.Transporter | null = null;
@@ -203,6 +205,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     to: action.to_email,
     subject: action.subject,
     html: wrapEmailHtml(action.body),
+    headers: {
+      'X-MC-Metadata': JSON.stringify({ scheduled_email_id: action.id }),
+    },
   });
 
   await action.update({
@@ -222,6 +227,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       ai_generated: action.ai_generated || false,
     },
   });
+
+  // Record interaction outcome for ICP intelligence
+  await recordActionOutcome(action, 'sent');
 
   console.log(`[Scheduler] Email sent to ${action.to_email}: ${action.subject} (AI: ${action.ai_generated || false})`);
 }
@@ -328,6 +336,9 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
       },
     });
 
+    // Record interaction outcome for ICP intelligence
+    await recordActionOutcome(action, 'sent', { voice_call: true });
+
     console.log(`[Scheduler] Voice call initiated for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
   } else {
     throw new Error(result.error || 'Voice call failed');
@@ -373,6 +384,9 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
       ai_generated: action.ai_generated || false,
     },
   });
+
+  // Record interaction outcome for ICP intelligence
+  await recordActionOutcome(action, 'sent', { sms: true });
 
   console.log(`[Scheduler] SMS action processed for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
 }
@@ -445,13 +459,23 @@ function wrapEmailHtml(body: string): string {
 }
 
 export function startScheduler(): void {
+  // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     processScheduledActions().catch((err) => {
       console.error('[Scheduler] Unexpected error:', err);
     });
   });
 
+  // Compute ICP insights daily at 2 AM
+  cron.schedule('0 2 * * *', () => {
+    console.log('[Scheduler] Running daily ICP insight computation...');
+    computeInsights(90).catch((err) => {
+      console.error('[Scheduler] ICP insight computation error:', err);
+    });
+  });
+
   console.log('[Scheduler] AI-powered multi-channel campaign scheduler started (every 5 minutes)');
   console.log('[Scheduler] Channels: email (Mandrill), voice (Synthflow), sms (placeholder)');
   console.log('[Scheduler] AI generation: enabled for actions with ai_instructions');
+  console.log('[Scheduler] ICP insight computation: daily at 2 AM');
 }

@@ -11,6 +11,8 @@ import SystemSetting from './SystemSetting';
 import EventLedger from './EventLedger';
 import Campaign from './Campaign';
 import CampaignLead from './CampaignLead';
+import InteractionOutcome from './InteractionOutcome';
+import ICPInsight from './ICPInsight';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -53,8 +55,19 @@ Lead.hasMany(CampaignLead, { foreignKey: 'lead_id', as: 'campaignEnrollments' })
 Campaign.hasMany(ScheduledEmail, { foreignKey: 'campaign_id', as: 'scheduledEmails' });
 ScheduledEmail.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
+// Interaction Outcome associations
+Lead.hasMany(InteractionOutcome, { foreignKey: 'lead_id', as: 'interactionOutcomes' });
+InteractionOutcome.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+
+Campaign.hasMany(InteractionOutcome, { foreignKey: 'campaign_id', as: 'interactionOutcomes' });
+InteractionOutcome.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
+ScheduledEmail.hasMany(InteractionOutcome, { foreignKey: 'scheduled_email_id', as: 'outcomes' });
+InteractionOutcome.belongsTo(ScheduledEmail, { foreignKey: 'scheduled_email_id', as: 'scheduledEmail' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
+  InteractionOutcome, ICPInsight,
 };

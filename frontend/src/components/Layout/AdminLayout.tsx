@@ -47,6 +47,9 @@ function AdminLayout() {
             <Link to="/admin/sequences" className="text-light text-decoration-none small">
               Sequences
             </Link>
+            <Link to="/admin/insights" className="text-light text-decoration-none small">
+              Insights
+            </Link>
             <Link to="/admin/import" className="text-light text-decoration-none small">
               Import
             </Link>
