@@ -21,6 +21,27 @@ interface DashboardData {
   };
   upcomingAppointments: any[];
   recentActivities: any[];
+  campaignAttribution?: {
+    campaigns: Array<{
+      id: string;
+      name: string;
+      type: string;
+      status: string;
+      total_leads: number;
+      total_sent: number;
+      meetings_booked: number;
+      conversions: number;
+      conversion_rate: number;
+      budget_spent: number;
+    }>;
+    by_type: Array<{
+      type: string;
+      campaigns: number;
+      leads: number;
+      conversions: number;
+      meetings: number;
+    }>;
+  };
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -34,6 +55,12 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const FUNNEL_COLORS = ['#0dcaf0', '#0d6efd', '#6f42c1', '#fd7e14', '#ffc107', '#198754'];
+
+const TYPE_COLORS: Record<string, string> = {
+  warm_nurture: 'warning',
+  cold_outbound: 'info',
+  re_engagement: 'secondary',
+};
 
 function AdminRevenueDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -66,6 +93,8 @@ function AdminRevenueDashboardPage() {
       minute: '2-digit',
     });
   };
+
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
   if (loading) {
     return (
@@ -204,6 +233,116 @@ function AdminRevenueDashboardPage() {
               )}
             </div>
           </div>
+
+          {/* Campaign Attribution */}
+          {data.campaignAttribution && (
+            <>
+              {/* By Type Summary */}
+              {data.campaignAttribution.by_type.length > 0 && (
+                <div className="card border-0 shadow-sm mb-4">
+                  <div className="card-header bg-white fw-bold py-3">Campaign Performance by Type</div>
+                  <div className="card-body">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={data.campaignAttribution.by_type}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="type"
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={(v: string) => v.replace(/_/g, ' ')}
+                        />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip labelFormatter={(v: any) => String(v).replace(/_/g, ' ')} />
+                        <Bar dataKey="leads" fill="#0d6efd" name="Leads" />
+                        <Bar dataKey="meetings" fill="#fd7e14" name="Meetings" />
+                        <Bar dataKey="conversions" fill="#198754" name="Conversions" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="table-responsive mt-3">
+                      <table className="table table-sm mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Type</th>
+                            <th className="text-end">Campaigns</th>
+                            <th className="text-end">Leads</th>
+                            <th className="text-end">Meetings</th>
+                            <th className="text-end">Conversions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.campaignAttribution.by_type.map((t) => (
+                            <tr key={t.type}>
+                              <td>
+                                <span className={`badge bg-${TYPE_COLORS[t.type] || 'secondary'} me-1`}>
+                                  {t.type.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td className="text-end">{t.campaigns}</td>
+                              <td className="text-end">{t.leads}</td>
+                              <td className="text-end">{t.meetings}</td>
+                              <td className="text-end">{t.conversions}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Per-Campaign Table */}
+              {data.campaignAttribution.campaigns.length > 0 && (
+                <div className="card border-0 shadow-sm mb-4">
+                  <div className="card-header bg-white fw-bold py-3">Campaign Attribution</div>
+                  <div className="card-body p-0">
+                    <div className="table-responsive">
+                      <table className="table table-hover mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Campaign</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th className="text-end">Leads</th>
+                            <th className="text-end">Sent</th>
+                            <th className="text-end">Meetings</th>
+                            <th className="text-end">Conv.</th>
+                            <th className="text-end">Conv. Rate</th>
+                            <th className="text-end">Spent</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.campaignAttribution.campaigns.map((c) => (
+                            <tr key={c.id}>
+                              <td>
+                                <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none fw-medium">
+                                  {c.name}
+                                </Link>
+                              </td>
+                              <td>
+                                <span className={`badge bg-${TYPE_COLORS[c.type] || 'secondary'}`}>
+                                  {c.type.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                              <td>
+                                <span className={`badge bg-${c.status === 'active' ? 'success' : c.status === 'completed' ? 'info' : c.status === 'paused' ? 'warning' : 'secondary'}`}>
+                                  {c.status}
+                                </span>
+                              </td>
+                              <td className="text-end">{c.total_leads}</td>
+                              <td className="text-end">{c.total_sent}</td>
+                              <td className="text-end">{c.meetings_booked}</td>
+                              <td className="text-end">{c.conversions}</td>
+                              <td className="text-end">{pct(c.conversion_rate)}</td>
+                              <td className="text-end">{formatCurrency(c.budget_spent)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Right Column */}

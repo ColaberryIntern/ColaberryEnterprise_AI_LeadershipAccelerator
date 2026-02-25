@@ -80,6 +80,7 @@ import {
   handleApolloEnrich,
   handleApolloQuota,
   handleAIPreview,
+  handleGetCampaignAnalytics,
 } from '../controllers/adminCampaignController';
 
 const router = Router();
@@ -152,6 +153,7 @@ router.post('/api/admin/campaigns/:id/enroll-leads', requireAdmin, handleEnrollL
 router.delete('/api/admin/campaigns/:id/leads/:leadId', requireAdmin, handleRemoveLeadFromCampaign);
 router.get('/api/admin/campaigns/:id/matching-leads', requireAdmin, handleGetMatchingLeads);
 router.get('/api/admin/campaigns/:id/stats', requireAdmin, handleGetCampaignStats);
+router.get('/api/admin/campaigns/:id/analytics', requireAdmin, handleGetCampaignAnalytics);
 router.get('/api/admin/campaigns/:id/leads', requireAdmin, handleGetCampaignLeads);
 
 // Protected admin routes — Apollo Integration

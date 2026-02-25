@@ -21,6 +21,7 @@ import {
   getApolloQuota,
 } from '../services/apolloService';
 import { generatePreview } from '../services/aiMessageService';
+import { getCampaignAnalytics } from '../services/campaignAnalyticsService';
 
 // ── Campaign CRUD ────────────────────────────────────────────────────
 
@@ -288,6 +289,22 @@ export async function handleApolloQuota(req: Request, res: Response, next: NextF
     const quota = await getApolloQuota();
     res.json(quota);
   } catch (error) {
+    next(error);
+  }
+}
+
+// ── Campaign Analytics ──────────────────────────────────────────────
+
+export async function handleGetCampaignAnalytics(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const days = req.query.days ? parseInt(req.query.days as string, 10) : undefined;
+    const analytics = await getCampaignAnalytics(req.params.id as string, days);
+    res.json({ analytics });
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
     next(error);
   }
 }

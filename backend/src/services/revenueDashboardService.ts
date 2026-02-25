@@ -1,6 +1,7 @@
 import { Op, fn, col, literal } from 'sequelize';
 import { Lead, Activity, Appointment } from '../models';
 import { sequelize } from '../config/database';
+import { getCampaignAttribution } from './campaignAnalyticsService';
 
 const PIPELINE_STAGES = [
   'new_lead', 'contacted', 'meeting_scheduled', 'proposal_sent', 'negotiation', 'enrolled', 'lost',
@@ -113,6 +114,14 @@ export async function getRevenueDashboard() {
     limit: 10,
   });
 
+  // Campaign attribution
+  let campaignAttribution;
+  try {
+    campaignAttribution = await getCampaignAttribution();
+  } catch {
+    campaignAttribution = { campaigns: [], by_type: [] };
+  }
+
   return {
     pipelineCounts,
     funnelConversions,
@@ -128,5 +137,6 @@ export async function getRevenueDashboard() {
     },
     upcomingAppointments,
     recentActivities,
+    campaignAttribution,
   };
 }
