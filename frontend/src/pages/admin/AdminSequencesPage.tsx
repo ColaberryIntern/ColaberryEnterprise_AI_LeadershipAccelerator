@@ -9,6 +9,7 @@ interface SequenceStep {
   subject: string;
   body_template: string;
   voice_agent_type?: 'welcome' | 'interest';
+  voice_prompt?: string;
   sms_template?: string;
   max_attempts?: number;
   fallback_channel?: CampaignChannel | null;
@@ -211,6 +212,9 @@ function AdminSequencesPage() {
 
       <p className="text-muted small mb-4">
         Template variables: {'{{name}}'}, {'{{company}}'}, {'{{title}}'}, {'{{email}}'}, {'{{phone}}'}
+        <br />
+        <span className="text-info">Voice prompt extras:</span>{' '}
+        {'{{cohort_name}}'}, {'{{cohort_start}}'}, {'{{seats_remaining}}'}, {'{{conversation_history}}'}
       </p>
 
       {showForm && (
@@ -403,19 +407,35 @@ function AdminSequencesPage() {
                   )}
 
                   {step.channel === 'voice' && (
-                    <div>
-                      <label className="form-label small">Voice Script / Notes (for reference)</label>
-                      <textarea
-                        className="form-control form-control-sm"
-                        rows={3}
-                        value={step.body_template}
-                        onChange={(e) => updateStep(idx, 'body_template', e.target.value)}
-                        placeholder="Hi {{name}}, this is Alex from Colaberry. I'm reaching out because..."
-                      />
-                      <div className="form-text">
-                        The Synthflow AI agent handles the actual conversation. This script is for reference and activity logging.
+                    <>
+                      <div className="mb-2">
+                        <label className="form-label small fw-semibold text-success">
+                          Voice Prompt (AI Instructions)
+                        </label>
+                        <textarea
+                          className="form-control form-control-sm"
+                          rows={5}
+                          value={step.voice_prompt || ''}
+                          onChange={(e) => updateStep(idx, 'voice_prompt', e.target.value)}
+                          placeholder={`You are calling {{name}} from {{company}}. They expressed interest in the AI Leadership Accelerator.\n\nContext:\n- Next cohort: {{cohort_name}} starting {{cohort_start}} ({{seats_remaining}} seats left)\n- Prior interactions: {{conversation_history}}\n\nYour goal: Identify their AI pain points and book a 15-minute strategy call.`}
+                        />
+                        <div className="form-text">
+                          Dynamic AI instructions sent to the Synthflow agent at call time. Variables are
+                          replaced with live data (lead profile, next cohort, conversation history).
+                          This is <strong>not</strong> a script — the AI uses it as context to have a natural conversation.
+                        </div>
                       </div>
-                    </div>
+                      <div>
+                        <label className="form-label small">Internal Notes (for activity log)</label>
+                        <textarea
+                          className="form-control form-control-sm"
+                          rows={2}
+                          value={step.body_template}
+                          onChange={(e) => updateStep(idx, 'body_template', e.target.value)}
+                          placeholder="Internal notes for this call step (logged in activity timeline)"
+                        />
+                      </div>
+                    </>
                   )}
 
                   {step.channel === 'sms' && (

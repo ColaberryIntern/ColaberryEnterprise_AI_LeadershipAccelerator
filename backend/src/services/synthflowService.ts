@@ -4,6 +4,22 @@ interface VoiceCallParams {
   name: string;
   phone: string;
   callType: 'welcome' | 'interest';
+  /** Dynamic prompt/instructions for the AI agent on this specific call */
+  prompt?: string;
+  /** Structured context passed as customer variables to the AI agent */
+  context?: {
+    lead_name: string;
+    lead_company?: string;
+    lead_title?: string;
+    lead_email?: string;
+    lead_score?: number;
+    lead_interest?: string;
+    cohort_name?: string;
+    cohort_start_date?: string;
+    cohort_seats_remaining?: number;
+    conversation_history?: string;
+    step_goal?: string;
+  };
 }
 
 interface SynthflowResponse {
@@ -37,6 +53,40 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_agent_id' } };
   }
 
+  // Build customer object with all context for the AI agent
+  const customer: Record<string, any> = {
+    name: params.name,
+  };
+
+  // Pass structured context as customer variables so the AI agent
+  // can reference lead data, cohort info, and prior conversation
+  if (params.context) {
+    const ctx = params.context;
+    if (ctx.lead_company) customer.company = ctx.lead_company;
+    if (ctx.lead_title) customer.title = ctx.lead_title;
+    if (ctx.lead_email) customer.email = ctx.lead_email;
+    if (ctx.lead_score) customer.lead_score = ctx.lead_score;
+    if (ctx.lead_interest) customer.interest_area = ctx.lead_interest;
+    if (ctx.cohort_name) customer.next_cohort = ctx.cohort_name;
+    if (ctx.cohort_start_date) customer.cohort_start_date = ctx.cohort_start_date;
+    if (ctx.cohort_seats_remaining != null) customer.seats_remaining = ctx.cohort_seats_remaining;
+    if (ctx.conversation_history) customer.conversation_history = ctx.conversation_history;
+    if (ctx.step_goal) customer.call_objective = ctx.step_goal;
+  }
+
+  // Build the request body
+  const requestBody: Record<string, any> = {
+    model_id: agentId,
+    phone_number: params.phone,
+    customer,
+  };
+
+  // If a dynamic prompt is provided, pass it as the system prompt / instructions
+  // so the AI agent gets per-call context instead of using a static script
+  if (params.prompt) {
+    requestBody.prompt = params.prompt;
+  }
+
   try {
     const response = await fetch('https://api.synthflow.ai/v2/calls', {
       method: 'POST',
@@ -44,11 +94,7 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${env.synthflowApiKey}`,
       },
-      body: JSON.stringify({
-        model_id: agentId,
-        phone_number: params.phone,
-        customer: { name: params.name },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
@@ -58,7 +104,7 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
       return { success: false, error: JSON.stringify(data) };
     }
 
-    console.log(`[Synthflow] ${params.callType} call initiated for ${params.name}`);
+    console.log(`[Synthflow] ${params.callType} call initiated for ${params.name} (prompt-driven)`);
     return { success: true, data };
   } catch (error: any) {
     console.error('[Synthflow] Request failed:', error.message);

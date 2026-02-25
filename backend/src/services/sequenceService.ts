@@ -117,7 +117,12 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string) {
       fallback_channel: step.fallback_channel || null,
       scheduled_for: scheduledFor,
       status: 'pending',
-      metadata: { step_goal: step.step_goal || null },
+      metadata: {
+        step_goal: step.step_goal || null,
+        // Store voice_prompt template (un-replaced) so the scheduler can hydrate
+        // it at execution time with fresh cohort data + conversation history
+        voice_prompt: channel === 'voice' && step.voice_prompt ? step.voice_prompt : null,
+      },
     } as any);
 
     scheduledActions.push(action);

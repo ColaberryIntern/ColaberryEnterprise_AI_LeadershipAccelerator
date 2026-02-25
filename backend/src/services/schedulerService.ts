@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import nodemailer from 'nodemailer';
-import { ScheduledEmail, Lead } from '../models';
+import { ScheduledEmail, Lead, Activity, Cohort } from '../models';
 import { env } from '../config/env';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
@@ -116,6 +116,39 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   console.log(`[Scheduler] Email sent to ${action.to_email}: ${action.subject}`);
 }
 
+/** Get the next open cohort for dynamic voice prompt context */
+async function getNextCohort(): Promise<{ name: string; start_date: string; seats_remaining: number } | null> {
+  const cohort = await Cohort.findOne({
+    where: { status: 'open' },
+    order: [['start_date', 'ASC']],
+  });
+  if (!cohort) return null;
+  return {
+    name: cohort.name,
+    start_date: cohort.start_date,
+    seats_remaining: cohort.max_seats - cohort.seats_taken,
+  };
+}
+
+/** Build a summary of prior touchpoints so the AI can reference them naturally */
+async function buildConversationHistory(leadId: number): Promise<string> {
+  const activities = await Activity.findAll({
+    where: { lead_id: leadId },
+    order: [['created_at', 'ASC']],
+    limit: 20,
+  });
+
+  if (activities.length === 0) return 'No prior interactions with this lead.';
+
+  const lines = activities.map((a) => {
+    const date = new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const type = a.type.replace(/_/g, ' ');
+    return `- ${date}: ${type}${a.subject ? ` — ${a.subject}` : ''}`;
+  });
+
+  return lines.join('\n');
+}
+
 async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
   if (!env.enableVoiceCalls) {
     console.log('[Scheduler] Voice calls disabled. Marking as skipped.');
@@ -144,28 +177,72 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
     return;
   }
 
+  // Fetch full lead profile
   const lead = await Lead.findByPk(action.lead_id);
   const name = lead?.name || 'there';
   const callType = (action.voice_agent_type === 'welcome' ? 'welcome' : 'interest') as 'welcome' | 'interest';
 
-  const result = await triggerVoiceCall({ name, phone, callType });
+  // Build conversation history so the AI references prior touchpoints naturally
+  const conversationHistory = await buildConversationHistory(action.lead_id);
+
+  // Get next available cohort for dynamic enrollment info
+  const nextCohort = await getNextCohort();
+
+  // Build the dynamic prompt from the stored voice_prompt template
+  const voicePrompt = action.metadata?.voice_prompt as string | undefined;
+  let prompt: string | undefined;
+
+  if (voicePrompt) {
+    prompt = voicePrompt
+      .replace(/\{\{name\}\}/g, name)
+      .replace(/\{\{company\}\}/g, lead?.company || 'your organization')
+      .replace(/\{\{title\}\}/g, lead?.title || '')
+      .replace(/\{\{cohort_name\}\}/g, nextCohort?.name || 'our next cohort')
+      .replace(/\{\{cohort_start\}\}/g, nextCohort?.start_date || 'soon')
+      .replace(/\{\{seats_remaining\}\}/g, String(nextCohort?.seats_remaining ?? 'limited'))
+      .replace(/\{\{conversation_history\}\}/g, conversationHistory);
+  }
+
+  // Build rich context for the AI agent
+  const context = {
+    lead_name: name,
+    lead_company: lead?.company || undefined,
+    lead_title: lead?.title || undefined,
+    lead_email: lead?.email || undefined,
+    lead_score: lead?.lead_score || undefined,
+    lead_interest: lead?.interest_area || undefined,
+    cohort_name: nextCohort?.name || undefined,
+    cohort_start_date: nextCohort?.start_date || undefined,
+    cohort_seats_remaining: nextCohort?.seats_remaining,
+    conversation_history: conversationHistory,
+    step_goal: action.metadata?.step_goal as string || undefined,
+  };
+
+  const result = await triggerVoiceCall({ name, phone, callType, prompt, context });
 
   if (result.success) {
     await action.update({
       status: 'sent',
       sent_at: new Date(),
       attempts_made: (action.attempts_made || 0) + 1,
-      metadata: { ...(action.metadata || {}), synthflow_response: result.data },
+      metadata: { ...(action.metadata || {}), synthflow_response: result.data, prompt_sent: !!prompt },
     } as any);
 
     await logActivity({
       lead_id: action.lead_id,
       type: 'call',
       subject: `Sequence voice call initiated: ${action.subject}`,
-      metadata: { scheduled_email_id: action.id, channel: 'voice', step_index: action.step_index, call_data: result.data },
+      metadata: {
+        scheduled_email_id: action.id,
+        channel: 'voice',
+        step_index: action.step_index,
+        call_data: result.data,
+        cohort: nextCohort?.name,
+        prompt_driven: !!prompt,
+      },
     });
 
-    console.log(`[Scheduler] Voice call initiated for ${phone}: ${action.subject}`);
+    console.log(`[Scheduler] Voice call initiated for ${phone}: ${action.subject} (prompt-driven: ${!!prompt})`);
   } else {
     throw new Error(result.error || 'Voice call failed');
   }

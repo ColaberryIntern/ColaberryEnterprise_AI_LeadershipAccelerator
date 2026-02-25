@@ -9,6 +9,21 @@ const DEFAULTS: Record<string, any> = {
   price_per_enrollment: 4500,
   enable_voice_calls: false,
   enable_auto_email: true,
+  // Email (SMTP / Mandrill) configuration
+  smtp_host: 'smtp.mandrillapp.com',
+  smtp_port: 587,
+  smtp_user: '',
+  smtp_pass: '',
+  email_from: 'ali@colaberry.com',
+  email_from_name: 'Colaberry Enterprise AI',
+  // Voice (Synthflow) configuration
+  synthflow_api_key: '',
+  synthflow_welcome_agent_id: '',
+  synthflow_interest_agent_id: '',
+  // SMS configuration (placeholder — plug in Twilio / other provider)
+  sms_provider: 'none',
+  sms_from_number: '',
+  sms_api_key: '',
 };
 
 export async function getSetting(key: string): Promise<any> {

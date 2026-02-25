@@ -99,9 +99,9 @@ function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* Email & Automation */}
+      {/* Automation Toggles */}
       <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">Email & Automation</div>
+        <div className="card-header bg-white fw-bold py-3">Automation</div>
         <div className="card-body">
           <div className="row g-3">
             <div className="col-md-4">
@@ -128,7 +128,7 @@ function AdminSettingsPage() {
                   id="autoEmailEnabled"
                 />
                 <label className="form-check-label" htmlFor="autoEmailEnabled">
-                  Enable Auto Email on Lead Capture
+                  Auto Email on Lead Capture
                 </label>
               </div>
             </div>
@@ -142,7 +142,7 @@ function AdminSettingsPage() {
                   id="voiceCallsEnabled"
                 />
                 <label className="form-check-label" htmlFor="voiceCallsEnabled">
-                  Enable Voice Calls (Synthflow)
+                  Enable Voice Calls
                 </label>
               </div>
             </div>
@@ -172,6 +172,175 @@ function AdminSettingsPage() {
               />
               <div className="form-text">Maximum emails sent per day via scheduler</div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Email (SMTP / Mandrill) */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-bold py-3">
+          Email Configuration (SMTP / Mandrill)
+        </div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-4">
+              <label className="form-label small">SMTP Host</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.smtp_host ?? 'smtp.mandrillapp.com'}
+                onChange={(e) => handleChange('smtp_host', e.target.value)}
+                placeholder="smtp.mandrillapp.com"
+              />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label small">SMTP Port</label>
+              <input
+                type="number"
+                className="form-control"
+                value={settings.smtp_port ?? 587}
+                onChange={(e) => handleChange('smtp_port', parseInt(e.target.value, 10) || 587)}
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label small">SMTP User</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.smtp_user ?? ''}
+                onChange={(e) => handleChange('smtp_user', e.target.value)}
+                placeholder="username"
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label small">SMTP Password / API Key</label>
+              <input
+                type="password"
+                className="form-control"
+                value={settings.smtp_pass ?? ''}
+                onChange={(e) => handleChange('smtp_pass', e.target.value)}
+                placeholder="API key or password"
+              />
+            </div>
+          </div>
+          <div className="row g-3 mt-2">
+            <div className="col-md-4">
+              <label className="form-label small">From Email</label>
+              <input
+                type="email"
+                className="form-control"
+                value={settings.email_from ?? 'ali@colaberry.com'}
+                onChange={(e) => handleChange('email_from', e.target.value)}
+                placeholder="ali@colaberry.com"
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">From Name</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.email_from_name ?? 'Colaberry Enterprise AI'}
+                onChange={(e) => handleChange('email_from_name', e.target.value)}
+                placeholder="Colaberry Enterprise AI"
+              />
+            </div>
+          </div>
+          <div className="form-text mt-2">
+            Currently using Mandrill (Mailchimp Transactional). SMTP credentials are also set via environment variables (.env) — values here override env vars when configured.
+          </div>
+        </div>
+      </div>
+
+      {/* Voice (Synthflow) */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-bold py-3">
+          Voice Configuration (Synthflow AI)
+        </div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-4">
+              <label className="form-label small">Synthflow API Key</label>
+              <input
+                type="password"
+                className="form-control"
+                value={settings.synthflow_api_key ?? ''}
+                onChange={(e) => handleChange('synthflow_api_key', e.target.value)}
+                placeholder="sf_..."
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">Welcome Agent ID</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.synthflow_welcome_agent_id ?? ''}
+                onChange={(e) => handleChange('synthflow_welcome_agent_id', e.target.value)}
+                placeholder="Agent ID for intro/welcome calls"
+              />
+              <div className="form-text">Used for Day 0 intro calls</div>
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">Interest Agent ID</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.synthflow_interest_agent_id ?? ''}
+                onChange={(e) => handleChange('synthflow_interest_agent_id', e.target.value)}
+                placeholder="Agent ID for follow-up calls"
+              />
+              <div className="form-text">Used for follow-up / interest calls</div>
+            </div>
+          </div>
+          <div className="form-text mt-2">
+            Voice calls use dynamic prompts — the AI agent receives lead context, conversation history, and next cohort info at call time. Configure agents in the Synthflow dashboard.
+          </div>
+        </div>
+      </div>
+
+      {/* SMS */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-bold py-3">
+          SMS Configuration
+        </div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-3">
+              <label className="form-label small">SMS Provider</label>
+              <select
+                className="form-select"
+                value={settings.sms_provider ?? 'none'}
+                onChange={(e) => handleChange('sms_provider', e.target.value)}
+              >
+                <option value="none">None (disabled)</option>
+                <option value="twilio">Twilio</option>
+                <option value="synthflow">Synthflow SMS</option>
+              </select>
+            </div>
+            <div className="col-md-3">
+              <label className="form-label small">From Number</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.sms_from_number ?? ''}
+                onChange={(e) => handleChange('sms_from_number', e.target.value)}
+                placeholder="+1234567890"
+                disabled={settings.sms_provider === 'none'}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">SMS API Key</label>
+              <input
+                type="password"
+                className="form-control"
+                value={settings.sms_api_key ?? ''}
+                onChange={(e) => handleChange('sms_api_key', e.target.value)}
+                placeholder="API key for SMS provider"
+                disabled={settings.sms_provider === 'none'}
+              />
+            </div>
+          </div>
+          <div className="form-text mt-2">
+            SMS is currently a placeholder. Configure a provider (Twilio, etc.) to enable outbound SMS in campaign sequences.
           </div>
         </div>
       </div>

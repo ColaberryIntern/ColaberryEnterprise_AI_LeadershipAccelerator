@@ -8,6 +8,9 @@ export interface SequenceStep {
   subject: string;
   body_template: string;
   voice_agent_type?: 'welcome' | 'interest';
+  /** AI prompt/instructions for voice calls — not a script, but instructions for the AI agent.
+   *  Supports variables: {{name}}, {{company}}, {{title}}, {{cohort_name}}, {{cohort_start}}, {{seats_remaining}} */
+  voice_prompt?: string;
   sms_template?: string;
   max_attempts?: number;
   fallback_channel?: CampaignChannel | null;
