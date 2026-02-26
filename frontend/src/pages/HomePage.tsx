@@ -59,7 +59,7 @@ function HomePage() {
 
       {/* Executive Problem Section */}
       <section className="section-alt" aria-label="The Challenge">
-        <div className="container" style={{ maxWidth: '800px' }}>
+        <div className="container content-medium">
           <h2 className="text-center mb-4">🏢 The AI Mandate Is Now a Leadership Responsibility</h2>
           <p className="text-center text-muted mb-4">
             Enterprise leaders are under mounting pressure to deliver AI results.

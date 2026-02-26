@@ -80,7 +80,7 @@ function EnrollSuccessPage() {
       />
 
       <section className="section" aria-label="Enrollment Confirmation">
-        <div className="container" style={{ maxWidth: '700px' }}>
+        <div className="container content-narrow">
           {loading ? (
             <div className="text-center py-5">
               <div className="spinner-border text-primary" role="status">

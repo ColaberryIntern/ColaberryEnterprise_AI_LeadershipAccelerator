@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import TemperatureBadge from '../../components/TemperatureBadge';
+import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PIPELINE_STAGES } from '../../constants';
 
 interface PipelineLead {
   id: number;
@@ -15,21 +17,14 @@ interface PipelineLead {
   created_at: string;
 }
 
-const STAGES = [
-  { key: 'new_lead', label: 'New Lead', color: '#0dcaf0' },
-  { key: 'contacted', label: 'Contacted', color: '#0d6efd' },
-  { key: 'meeting_scheduled', label: 'Meeting', color: '#6f42c1' },
-  { key: 'proposal_sent', label: 'Proposal', color: '#fd7e14' },
-  { key: 'negotiation', label: 'Negotiation', color: '#ffc107' },
-  { key: 'enrolled', label: 'Enrolled', color: '#198754' },
-  { key: 'lost', label: 'Lost', color: '#6c757d' },
-];
+const STAGES = PIPELINE_STAGES;
 
 function AdminPipelinePage() {
   const [leads, setLeads] = useState<Record<string, PipelineLead[]>>({});
   const [stats, setStats] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [draggedLead, setDraggedLead] = useState<PipelineLead | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -73,7 +68,19 @@ function AdminPipelinePage() {
     e.preventDefault();
   };
 
+  const handleDragEnter = (stageKey: string) => {
+    setDragOverStage(stageKey);
+  };
+
+  const handleDragLeave = (e: React.DragEvent, stageKey: string) => {
+    // Only clear if leaving the column entirely (not entering a child)
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      if (dragOverStage === stageKey) setDragOverStage(null);
+    }
+  };
+
   const handleDrop = async (targetStage: string) => {
+    setDragOverStage(null);
     if (!draggedLead || draggedLead.pipeline_stage === targetStage) {
       setDraggedLead(null);
       return;
@@ -119,16 +126,32 @@ function AdminPipelinePage() {
 
   if (loading) {
     return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
+      <>
+        <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Pipeline' }]} />
+        <div className="d-flex gap-3" style={{ overflowX: 'auto' }}>
+          {STAGES.map((stage) => (
+            <div key={stage.key} className="flex-shrink-0" style={{ width: '220px' }}>
+              <div className="rounded-top px-3 py-2 text-white small" style={{ backgroundColor: stage.color }}>
+                <div className="skeleton" style={{ width: '70%', height: '14px', opacity: 0.5 }} />
+              </div>
+              <div className="bg-light rounded-bottom p-2" style={{ minHeight: '300px' }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="card border-0 shadow-sm mb-2 p-2">
+                    <div className="skeleton mb-1" style={{ width: '80%', height: '12px' }} />
+                    <div className="skeleton" style={{ width: '50%', height: '10px' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Pipeline' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
           Sales Pipeline
@@ -145,6 +168,8 @@ function AdminPipelinePage() {
             className="flex-shrink-0"
             style={{ width: '220px' }}
             onDragOver={handleDragOver}
+            onDragEnter={() => handleDragEnter(stage.key)}
+            onDragLeave={(e) => handleDragLeave(e, stage.key)}
             onDrop={() => handleDrop(stage.key)}
           >
             {/* Column Header */}
@@ -160,16 +185,17 @@ function AdminPipelinePage() {
 
             {/* Column Body */}
             <div
-              className="bg-light rounded-bottom p-2"
+              className={`bg-light rounded-bottom p-2${dragOverStage === stage.key ? ' pipeline-column-drag-over' : ''}`}
               style={{ minHeight: '400px', maxHeight: '70vh', overflowY: 'auto' }}
             >
               {(leads[stage.key] || []).map((lead) => (
                 <div
                   key={lead.id}
-                  className="card border-0 shadow-sm mb-2"
+                  className={`card border-0 shadow-sm mb-2${draggedLead?.id === lead.id ? ' pipeline-card-dragging' : ''}`}
                   draggable
                   onDragStart={() => handleDragStart(lead)}
-                  style={{ cursor: 'grab', fontSize: '0.85rem' }}
+                  onDragEnd={() => { setDraggedLead(null); setDragOverStage(null); }}
+                  style={{ cursor: draggedLead?.id === lead.id ? 'grabbing' : 'grab', fontSize: '0.85rem' }}
                 >
                   <div className="card-body p-2">
                     <div className="d-flex justify-content-between align-items-start mb-1">
@@ -204,7 +230,7 @@ function AdminPipelinePage() {
 
               {(leads[stage.key] || []).length === 0 && (
                 <div className="text-center text-muted small py-4" style={{ fontSize: '0.8rem' }}>
-                  No leads
+                  No leads in this stage
                 </div>
               )}
             </div>

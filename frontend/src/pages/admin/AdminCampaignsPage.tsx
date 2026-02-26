@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import Modal from '../../components/ui/Modal';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 interface Campaign {
   id: string;
@@ -114,14 +116,26 @@ function AdminCampaignsPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" />
-      </div>
+      <>
+        <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns' }]} />
+        <div className="row g-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="col-md-6 col-lg-4">
+              <div className="card border-0 shadow-sm p-3">
+                <div className="skeleton mb-2" style={{ width: '60%', height: '18px' }} />
+                <div className="skeleton mb-2" style={{ width: '40%', height: '14px' }} />
+                <div className="skeleton" style={{ width: '80%', height: '14px' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </>
     );
   }
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2 className="mb-0">Campaigns</h2>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
@@ -195,95 +209,96 @@ function AdminCampaignsPage() {
       )}
 
       {/* Create Campaign Modal */}
-      {showModal && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">New Campaign</h5>
-                <button className="btn-close" onClick={() => setShowModal(false)} />
-              </div>
-              <form onSubmit={handleCreate}>
-                <div className="modal-body">
-                  <div className="mb-3">
-                    <label className="form-label">Campaign Name *</label>
-                    <input
-                      className="form-control"
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">Description</label>
-                    <textarea
-                      className="form-control"
-                      rows={2}
-                      value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    />
-                  </div>
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Campaign Type *</label>
-                      <select
-                        className="form-select"
-                        value={form.type}
-                        onChange={(e) => setForm({ ...form, type: e.target.value })}
-                      >
-                        <option value="cold_outbound">Cold Outbound</option>
-                        <option value="warm_nurture">Warm Nurture</option>
-                        <option value="re_engagement">Re-Engagement</option>
-                      </select>
-                    </div>
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Sequence</label>
-                      <select
-                        className="form-select"
-                        value={form.sequence_id}
-                        onChange={(e) => setForm({ ...form, sequence_id: e.target.value })}
-                      >
-                        <option value="">-- Select Sequence --</option>
-                        {sequences.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">Budget ($)</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={form.budget_total}
-                      onChange={(e) => setForm({ ...form, budget_total: e.target.value })}
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label">AI System Prompt (Campaign Persona)</label>
-                    <textarea
-                      className="form-control"
-                      rows={3}
-                      value={form.ai_system_prompt}
-                      onChange={(e) => setForm({ ...form, ai_system_prompt: e.target.value })}
-                      placeholder="Define the AI's persona and brand voice for this campaign. Leave blank to use the default system prompt."
-                    />
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" disabled={!form.name}>
-                    Create Campaign
-                  </button>
-                </div>
-              </form>
+      <Modal
+        show={showModal}
+        onClose={() => setShowModal(false)}
+        title="New Campaign"
+        size="lg"
+        footer={
+          <>
+            <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+              Cancel
+            </button>
+            <button type="submit" form="create-campaign-form" className="btn btn-primary" disabled={!form.name}>
+              Create Campaign
+            </button>
+          </>
+        }
+      >
+        <form id="create-campaign-form" onSubmit={handleCreate}>
+          <div className="mb-3">
+            <label htmlFor="camp-name" className="form-label">Campaign Name *</label>
+            <input
+              id="camp-name"
+              className="form-control"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+            />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="camp-desc" className="form-label">Description</label>
+            <textarea
+              id="camp-desc"
+              className="form-control"
+              rows={2}
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </div>
+          <div className="row">
+            <div className="col-md-6 mb-3">
+              <label htmlFor="camp-type" className="form-label">Campaign Type *</label>
+              <select
+                id="camp-type"
+                className="form-select"
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
+              >
+                <option value="cold_outbound">Cold Outbound</option>
+                <option value="warm_nurture">Warm Nurture</option>
+                <option value="re_engagement">Re-Engagement</option>
+              </select>
+            </div>
+            <div className="col-md-6 mb-3">
+              <label htmlFor="camp-seq" className="form-label">Sequence</label>
+              <select
+                id="camp-seq"
+                className="form-select"
+                value={form.sequence_id}
+                onChange={(e) => setForm({ ...form, sequence_id: e.target.value })}
+              >
+                <option value="">-- Select Sequence --</option>
+                {sequences.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             </div>
           </div>
-        </div>
-      )}
+          <div className="mb-3">
+            <label htmlFor="camp-budget" className="form-label">Budget ($)</label>
+            <input
+              id="camp-budget"
+              type="number"
+              className="form-control"
+              value={form.budget_total}
+              onChange={(e) => setForm({ ...form, budget_total: e.target.value })}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="camp-prompt" className="form-label">AI System Prompt (Campaign Persona)</label>
+            <textarea
+              id="camp-prompt"
+              className="form-control"
+              rows={3}
+              value={form.ai_system_prompt}
+              onChange={(e) => setForm({ ...form, ai_system_prompt: e.target.value })}
+              placeholder="Define the AI's persona and brand voice for this campaign. Leave blank to use the default system prompt."
+            />
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

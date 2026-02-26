@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 import ActivityTimeline from '../../components/admin/ActivityTimeline';
 import AddNoteForm from '../../components/admin/AddNoteForm';
 import AppointmentCard from '../../components/admin/AppointmentCard';
@@ -58,17 +59,9 @@ interface AppointmentData {
   lead?: { id: number; name: string; email: string; company: string };
 }
 
-const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
+import { PIPELINE_STAGES, PIPELINE_STAGE_COLORS, STATUS_VALUES } from '../../constants';
 
-const PIPELINE_STAGES = [
-  { key: 'new_lead', label: 'New Lead' },
-  { key: 'contacted', label: 'Contacted' },
-  { key: 'meeting_scheduled', label: 'Meeting Scheduled' },
-  { key: 'proposal_sent', label: 'Proposal Sent' },
-  { key: 'negotiation', label: 'Negotiation' },
-  { key: 'enrolled', label: 'Enrolled' },
-  { key: 'lost', label: 'Lost' },
-];
+const STATUS_OPTIONS = STATUS_VALUES;
 
 function AdminLeadDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -187,16 +180,7 @@ function AdminLeadDetailPage() {
   };
 
   const getStageBadgeColor = (stage: string) => {
-    const colors: Record<string, string> = {
-      new_lead: '#0dcaf0',
-      contacted: '#0d6efd',
-      meeting_scheduled: '#6f42c1',
-      proposal_sent: '#fd7e14',
-      negotiation: '#ffc107',
-      enrolled: '#198754',
-      lost: '#6c757d',
-    };
-    return colors[stage] || '#6c757d';
+    return PIPELINE_STAGE_COLORS[stage] || '#6c757d';
   };
 
   if (loading) {
@@ -220,9 +204,9 @@ function AdminLeadDetailPage() {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads', to: '/admin/leads' }, { label: lead.name }]} />
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <Link to="/admin/leads" className="text-decoration-none small">&larr; Back to Leads</Link>
           <div className="d-flex align-items-center gap-3 mt-1">
             <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
               {lead.name}

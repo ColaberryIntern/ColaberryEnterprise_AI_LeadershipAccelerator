@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import { useToast } from '../../components/ui/ToastProvider';
+import ConfirmModal from '../../components/ui/ConfirmModal';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 type CampaignChannel = 'email' | 'voice' | 'sms';
 
@@ -50,6 +53,7 @@ const CHANNEL_COLORS: Record<CampaignChannel, string> = {
 };
 
 function AdminSequencesPage() {
+  const { showToast } = useToast();
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -58,6 +62,7 @@ function AdminSequencesPage() {
   const [description, setDescription] = useState('');
   const [steps, setSteps] = useState<SequenceStep[]>([{ ...EMPTY_STEP }]);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSequences();
@@ -68,7 +73,7 @@ function AdminSequencesPage() {
       const res = await api.get('/api/admin/sequences');
       setSequences(res.data.sequences);
     } catch (err) {
-      console.error('Failed to fetch sequences:', err);
+      showToast('Failed to load sequences.', 'error');
     } finally {
       setLoading(false);
     }
@@ -114,22 +119,25 @@ function AdminSequencesPage() {
       } else {
         await api.post('/api/admin/sequences', { name, description, steps: validSteps });
       }
+      showToast(editingId ? 'Sequence updated.' : 'Sequence created.', 'success');
       resetForm();
       fetchSequences();
     } catch (err) {
-      console.error('Failed to save sequence:', err);
+      showToast('Failed to save sequence.', 'error');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this sequence? Pending actions will be cancelled.')) return;
     try {
       await api.delete(`/api/admin/sequences/${id}`);
+      showToast('Sequence deleted.', 'success');
       fetchSequences();
     } catch (err) {
-      console.error('Failed to delete sequence:', err);
+      showToast('Failed to delete sequence.', 'error');
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -138,7 +146,7 @@ function AdminSequencesPage() {
       await api.patch(`/api/admin/sequences/${seq.id}`, { is_active: !seq.is_active });
       fetchSequences();
     } catch (err) {
-      console.error('Failed to toggle sequence:', err);
+      showToast('Failed to toggle sequence status.', 'error');
     }
   };
 
@@ -198,6 +206,7 @@ function AdminSequencesPage() {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Sequences' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h1 className="h3 fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>
@@ -643,7 +652,7 @@ function AdminSequencesPage() {
                             </button>
                             <button
                               className="btn btn-outline-danger btn-sm"
-                              onClick={() => handleDelete(seq.id)}
+                              onClick={() => setDeleteTarget(seq.id)}
                               style={{ fontSize: '0.75rem' }}
                             >
                               Delete
@@ -659,6 +668,16 @@ function AdminSequencesPage() {
           )}
         </div>
       </div>
+
+      <ConfirmModal
+        show={!!deleteTarget}
+        title="Delete Sequence"
+        message="Delete this sequence? Pending actions will be cancelled."
+        confirmLabel="Delete Sequence"
+        confirmVariant="danger"
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

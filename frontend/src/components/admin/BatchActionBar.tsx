@@ -1,23 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../utils/api';
-
-const PIPELINE_STAGES = [
-  { value: 'new_lead', label: 'New Lead' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'meeting_scheduled', label: 'Meeting Scheduled' },
-  { value: 'proposal_sent', label: 'Proposal Sent' },
-  { value: 'negotiation', label: 'Negotiation' },
-  { value: 'enrolled', label: 'Enrolled' },
-  { value: 'lost', label: 'Lost' },
-];
-
-const STATUS_OPTIONS = [
-  { value: 'new', label: 'New' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'qualified', label: 'Qualified' },
-  { value: 'enrolled', label: 'Enrolled' },
-  { value: 'lost', label: 'Lost' },
-];
+import { PIPELINE_STAGES, STATUS_OPTIONS } from '../../constants';
 
 interface BatchActionBarProps {
   selectedIds: number[];

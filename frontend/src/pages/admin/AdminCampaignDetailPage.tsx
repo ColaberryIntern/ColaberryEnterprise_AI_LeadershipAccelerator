@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../components/ui/ToastProvider';
+import ConfirmModal from '../../components/ui/ConfirmModal';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 import OverviewTab from '../../components/campaign/OverviewTab';
 import AnalyticsTab from '../../components/campaign/AnalyticsTab';
 import TargetingTab from '../../components/campaign/TargetingTab';
@@ -99,6 +102,7 @@ function AdminCampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { token } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [leads, setLeads] = useState<CampaignLead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -112,6 +116,10 @@ function AdminCampaignDetailPage() {
   const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
   const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
   const [enrolling, setEnrolling] = useState(false);
+
+  // Delete confirmation state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -129,7 +137,7 @@ function AdminCampaignDetailPage() {
       setStats(statsData.stats);
       setLeads(leadsData.leads || []);
     } catch (err) {
-      console.error('Failed to fetch campaign:', err);
+      showToast('Failed to load campaign data.', 'error');
     } finally {
       setLoading(false);
     }
@@ -142,7 +150,7 @@ function AdminCampaignDetailPage() {
       const data = await res.json();
       setAnalytics(data.analytics);
     } catch (err) {
-      console.error('Failed to fetch analytics:', err);
+      showToast('Failed to load analytics.', 'error');
     } finally {
       setAnalyticsLoading(false);
     }
@@ -161,9 +169,10 @@ function AdminCampaignDetailPage() {
   const handleLifecycle = async (action: 'activate' | 'pause' | 'complete') => {
     try {
       await fetch(`/api/admin/campaigns/${id}/${action}`, { method: 'POST', headers });
+      showToast(`Campaign ${action}d successfully.`, 'success');
       fetchCampaign();
     } catch (err) {
-      console.error(`Failed to ${action} campaign:`, err);
+      showToast(`Failed to ${action} campaign.`, 'error');
     }
   };
 
@@ -175,7 +184,7 @@ function AdminCampaignDetailPage() {
       setSelectedLeadIds([]);
       setShowEnrollModal(true);
     } catch (err) {
-      console.error('Failed to get matching leads:', err);
+      showToast('Failed to get matching leads.', 'error');
     }
   };
 
@@ -189,9 +198,10 @@ function AdminCampaignDetailPage() {
         body: JSON.stringify({ lead_ids: selectedLeadIds }),
       });
       setShowEnrollModal(false);
+      showToast(`${selectedLeadIds.length} lead(s) enrolled successfully.`, 'success');
       fetchCampaign();
     } catch (err) {
-      console.error('Failed to enroll leads:', err);
+      showToast('Failed to enroll leads.', 'error');
     } finally {
       setEnrolling(false);
     }
@@ -202,24 +212,30 @@ function AdminCampaignDetailPage() {
       await fetch(`/api/admin/campaigns/${id}/leads/${leadId}`, { method: 'DELETE', headers });
       fetchCampaign();
     } catch (err) {
-      console.error('Failed to remove lead:', err);
+      showToast('Failed to remove lead.', 'error');
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this campaign?')) return;
+    setDeleting(true);
     try {
       await fetch(`/api/admin/campaigns/${id}`, { method: 'DELETE', headers });
+      showToast('Campaign deleted.', 'success');
       navigate('/admin/campaigns');
     } catch (err) {
-      console.error('Failed to delete campaign:', err);
+      showToast('Failed to delete campaign.', 'error');
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
   if (loading || !campaign) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border text-primary" />
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
       </div>
     );
   }
@@ -228,6 +244,7 @@ function AdminCampaignDetailPage() {
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns', to: '/admin/campaigns' }, { label: campaign.name }]} />
       {/* Header */}
       <div className="d-flex justify-content-between align-items-start mb-3">
         <div>
@@ -271,14 +288,14 @@ function AdminCampaignDetailPage() {
               Complete
             </button>
           )}
-          <button className="btn btn-outline-danger btn-sm" onClick={handleDelete}>
+          <button className="btn btn-outline-danger btn-sm" onClick={() => setShowDeleteConfirm(true)}>
             Delete
           </button>
         </div>
       </div>
 
       {/* 8-Tab Navigation */}
-      <ul className="nav nav-tabs mb-4">
+      <ul className="nav nav-tabs nav-tabs-scrollable mb-4">
         {TABS.map((tab) => (
           <li key={tab.key} className="nav-item">
             <button
@@ -439,6 +456,18 @@ function AdminCampaignDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation */}
+      <ConfirmModal
+        show={showDeleteConfirm}
+        title="Delete Campaign"
+        message="Are you sure you want to delete this campaign? This action cannot be undone."
+        confirmLabel="Delete Campaign"
+        confirmVariant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        loading={deleting}
+      />
     </div>
   );
 }

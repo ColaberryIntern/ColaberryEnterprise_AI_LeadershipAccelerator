@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
+import Breadcrumb from '../../components/ui/Breadcrumb';
+import Pagination from '../../components/ui/Pagination';
 
 interface LedgerEvent {
   id: string;
@@ -80,6 +82,7 @@ function AdminEventLedgerPage() {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Event Ledger' }]} />
       <h1 className="h3 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
         Event Ledger
       </h1>
@@ -189,27 +192,10 @@ function AdminEventLedgerPage() {
           </div>
         </div>
 
-        {totalPages > 1 && (
-          <div className="card-footer bg-white d-flex justify-content-between align-items-center">
-            <span className="text-muted small">Page {page} of {totalPages}</span>
-            <div>
-              <button
-                className="btn btn-sm btn-outline-primary me-2"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                Previous
-              </button>
-              <button
-                className="btn btn-sm btn-outline-primary"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
+          <span className="text-muted small">Page {page} of {totalPages}</span>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
       </div>
     </>
   );

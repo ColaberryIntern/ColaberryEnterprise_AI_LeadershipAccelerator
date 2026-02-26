@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../components/ui/ToastProvider';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 interface ApolloResult {
   id: string;
@@ -20,6 +22,7 @@ interface ApolloResult {
 
 function AdminApolloPage() {
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [searching, setSearching] = useState(false);
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<ApolloResult[]>([]);
@@ -61,10 +64,10 @@ function AdminApolloPage() {
         setTotal(data.total || 0);
         setSelectedIds(new Set());
       } else {
-        alert(data.error || 'Search failed');
+        showToast(data.error || 'Search failed.', 'error');
       }
     } catch (err) {
-      console.error('Apollo search failed:', err);
+      showToast('Apollo search failed.', 'error');
     } finally {
       setSearching(false);
     }
@@ -101,7 +104,7 @@ function AdminApolloPage() {
         setSelectedIds(new Set());
       }
     } catch (err) {
-      console.error('Import failed:', err);
+      showToast('Import failed.', 'error');
     } finally {
       setImporting(false);
     }
@@ -109,6 +112,7 @@ function AdminApolloPage() {
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Apollo' }]} />
       <h2 className="mb-4">Apollo Lead Search</h2>
 
       {/* Search Form */}

@@ -156,7 +156,7 @@ function EnrollPage() {
 
       {/* Enrollment Form */}
       <section className="section" aria-label="Enrollment Form">
-        <div className="container" style={{ maxWidth: '700px' }}>
+        <div className="container content-narrow">
           {invoiceSubmitted ? (
             <div className="text-center py-5" role="alert">
               <h2 className="text-success mb-3">✅ Invoice Request Received</h2>

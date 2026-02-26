@@ -60,7 +60,7 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
   const getConfig = (type: string) => TYPE_CONFIG[type] || TYPE_CONFIG.system;
 
   if (loading) {
-    return <div className="text-center py-3"><div className="spinner-border spinner-border-sm text-primary" /></div>;
+    return <div className="text-center py-3"><div className="spinner-border spinner-border-sm text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>;
   }
 
   if (activities.length === 0) {

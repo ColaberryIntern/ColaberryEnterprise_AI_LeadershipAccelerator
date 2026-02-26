@@ -4,6 +4,10 @@ import api from '../../utils/api';
 import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
 import BatchActionBar from '../../components/admin/BatchActionBar';
 import TemperatureBadge from '../../components/TemperatureBadge';
+import Breadcrumb from '../../components/ui/Breadcrumb';
+import TableSkeleton from '../../components/ui/TableSkeleton';
+import Pagination from '../../components/ui/Pagination';
+import useDebounce from '../../hooks/useDebounce';
 
 interface LeadStats {
   total: number;
@@ -52,8 +56,8 @@ function AdminLeadsPage() {
   const [scoreMax, setScoreMax] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const search = useDebounce(searchInput, 300);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -89,11 +93,6 @@ function AdminLeadsPage() {
     Promise.all([fetchLeads(), fetchStats()]).finally(() => setLoading(false));
   }, [fetchLeads]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
-    setSearch(searchInput);
-  };
 
   const handleStatusChange = async (leadId: number, newStatus: string) => {
     try {
@@ -120,7 +119,6 @@ function AdminLeadsPage() {
   };
 
   const clearFilters = () => {
-    setSearch('');
     setSearchInput('');
     setStatusFilter('');
     setSourceFilter('');
@@ -170,16 +168,20 @@ function AdminLeadsPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
+      <>
+        <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads' }]} />
+        <div className="card border-0 shadow-sm">
+          <div className="card-body p-0">
+            <TableSkeleton rows={8} columns={7} />
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
           Lead Management
@@ -235,19 +237,15 @@ function AdminLeadsPage() {
         <div className="card-body">
           <div className="row g-3 align-items-end">
             <div className="col-md-3">
-              <form onSubmit={handleSearch}>
-                <label className="form-label small text-muted">Search</label>
-                <div className="input-group">
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Name, email, company..."
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                  />
-                  <button className="btn btn-primary" type="submit">Search</button>
-                </div>
-              </form>
+              <label className="form-label small text-muted">Search</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Name, email, company..."
+                value={searchInput}
+                onChange={(e) => { setSearchInput(e.target.value); setPage(1); }}
+                aria-label="Search leads"
+              />
             </div>
             <div className="col-md-2">
               <label className="form-label small text-muted">Status</label>
@@ -350,6 +348,7 @@ function AdminLeadsPage() {
                       className="form-check-input"
                       checked={leads.length > 0 && selectedIds.length === leads.length}
                       onChange={toggleSelectAll}
+                      aria-label="Select all leads"
                     />
                   </th>
                   <th>Name</th>
@@ -368,7 +367,7 @@ function AdminLeadsPage() {
                 {leads.length === 0 ? (
                   <tr>
                     <td colSpan={11} className="text-center text-muted py-4">
-                      No leads found
+                      {hasFilters ? 'No leads match the current filters.' : 'No leads yet. Click "+ Add Lead" to get started.'}
                     </td>
                   </tr>
                 ) : (
@@ -427,29 +426,10 @@ function AdminLeadsPage() {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="card-footer bg-white d-flex justify-content-between align-items-center">
-            <span className="text-muted small">
-              Page {page} of {totalPages}
-            </span>
-            <div>
-              <button
-                className="btn btn-sm btn-outline-primary me-2"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                Previous
-              </button>
-              <button
-                className="btn btn-sm btn-outline-primary"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
+          <span className="text-muted small">Page {page} of {totalPages}</span>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
       </div>
 
       {showAddModal && (

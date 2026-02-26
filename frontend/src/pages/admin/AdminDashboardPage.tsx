@@ -70,11 +70,18 @@ function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
+      <>
+        <div className="row g-3 mb-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="col-md-4 col-lg-2">
+              <div className="card border-0 shadow-sm p-3 text-center">
+                <div className="skeleton mx-auto mb-2" style={{ width: '50%', height: '14px' }} />
+                <div className="skeleton mx-auto" style={{ width: '40%', height: '24px' }} />
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      </>
     );
   }
 

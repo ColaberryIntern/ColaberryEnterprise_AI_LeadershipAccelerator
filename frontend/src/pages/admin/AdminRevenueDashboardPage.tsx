@@ -5,6 +5,7 @@ import {
   LineChart, Line, FunnelChart, Funnel, LabelList, Cell,
 } from 'recharts';
 import api from '../../utils/api';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 interface DashboardData {
   pipelineCounts: Record<string, number>;
@@ -120,6 +121,7 @@ function AdminRevenueDashboardPage() {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Revenue' }]} />
       <h1 className="h3 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
         Revenue Dashboard
       </h1>

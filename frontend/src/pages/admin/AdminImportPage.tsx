@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../utils/api';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 interface ImportResult {
   imported: number;
@@ -65,6 +66,7 @@ function AdminImportPage() {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Import' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
           Import Leads

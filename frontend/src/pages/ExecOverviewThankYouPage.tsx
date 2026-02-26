@@ -11,7 +11,7 @@ function ExecOverviewThankYouPage() {
       />
 
       <section className="section" aria-label="Thank You">
-        <div className="container text-center" style={{ maxWidth: '700px' }}>
+        <div className="container text-center content-narrow">
           <div className="mb-4">
             <div className="display-1 mb-3" aria-hidden="true">&#x2705;</div>
             <h1 className="display-5 fw-bold mb-3" style={{ color: 'var(--color-primary)' }}>
@@ -46,7 +46,7 @@ function ExecOverviewThankYouPage() {
             </Link>
           </div>
 
-          <div className="card border-0 shadow-sm p-4 text-start" style={{ background: '#fff3cd' }}>
+          <div className="card border-0 shadow-sm p-4 text-start" style={{ background: 'var(--color-warning-bg, #fff3cd)' }}>
             <div className="d-flex align-items-start">
               <span className="fs-4 me-3" aria-hidden="true">&#x23F3;</span>
               <div>

@@ -4,6 +4,7 @@ import {
   LineChart, Line, Cell,
 } from 'recharts';
 import api from '../../utils/api';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 const COLORS = ['#0d6efd', '#198754', '#6f42c1', '#fd7e14', '#0dcaf0', '#dc3545', '#ffc107', '#20c997'];
 
@@ -153,6 +154,7 @@ function AdminICPInsightsPage() {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Insights' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
           ICP Insights & Intelligence

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { useToast } from '../../components/ui/ToastProvider';
+import ConfirmModal from '../../components/ui/ConfirmModal';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 interface CohortDetail {
   id: string;
@@ -30,9 +33,11 @@ interface Participant {
 
 function AdminCohortDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { showToast } = useToast();
   const [cohort, setCohort] = useState<CohortDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const fetchCohort = () => {
     api
@@ -47,16 +52,16 @@ function AdminCohortDetailPage() {
   }, [id]); // eslint-disable-line
 
   const handleCloseEnrollment = async () => {
-    if (!window.confirm('Are you sure you want to close enrollment for this cohort?')) return;
     setActionLoading(true);
     try {
       await api.patch(`/api/admin/cohorts/${id}`, { status: 'closed' });
+      showToast('Enrollment closed successfully.', 'success');
       fetchCohort();
     } catch (err) {
-      console.error(err);
-      alert('Failed to close enrollment. Please try again.');
+      showToast('Failed to close enrollment. Please try again.', 'error');
     } finally {
       setActionLoading(false);
+      setShowCloseConfirm(false);
     }
   };
 
@@ -74,8 +79,7 @@ function AdminCohortDetailPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error(err);
-      alert('Failed to export CSV. Please try again.');
+      showToast('Failed to export CSV. Please try again.', 'error');
     }
   };
 
@@ -155,17 +159,7 @@ function AdminCohortDetailPage() {
 
   return (
     <>
-      {/* Breadcrumb */}
-      <nav aria-label="breadcrumb" className="mb-4">
-        <ol className="breadcrumb">
-          <li className="breadcrumb-item">
-            <Link to="/admin/dashboard">Dashboard</Link>
-          </li>
-          <li className="breadcrumb-item active" aria-current="page">
-            {cohort.name}
-          </li>
-        </ol>
-      </nav>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: cohort.name }]} />
 
       {/* Cohort Header */}
       <div className="card border-0 shadow-sm mb-4">
@@ -200,7 +194,7 @@ function AdminCohortDetailPage() {
               {cohort.status === 'open' && (
                 <button
                   className="btn btn-outline-danger btn-sm"
-                  onClick={handleCloseEnrollment}
+                  onClick={() => setShowCloseConfirm(true)}
                   disabled={actionLoading}
                 >
                   {actionLoading ? 'Closing...' : '🔒 Close Enrollment'}
@@ -262,6 +256,17 @@ function AdminCohortDetailPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        show={showCloseConfirm}
+        title="Close Enrollment"
+        message="Are you sure you want to close enrollment for this cohort? No new participants will be able to enroll."
+        confirmLabel="Close Enrollment"
+        confirmVariant="danger"
+        onConfirm={handleCloseEnrollment}
+        onCancel={() => setShowCloseConfirm(false)}
+        loading={actionLoading}
+      />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
+import Breadcrumb from '../../components/ui/Breadcrumb';
 
 function AdminSettingsPage() {
   const [settings, setSettings] = useState<Record<string, any>>({});
@@ -54,6 +55,7 @@ function AdminSettingsPage() {
 
   return (
     <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Settings' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
           System Settings

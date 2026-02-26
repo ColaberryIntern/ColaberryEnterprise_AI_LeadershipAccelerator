@@ -1,19 +1,36 @@
-import React from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+
+const adminNavLinks = [
+  { path: '/admin/dashboard', label: 'Dashboard' },
+  { path: '/admin/revenue', label: 'Revenue' },
+  { path: '/admin/campaigns', label: 'Campaigns' },
+  { path: '/admin/pipeline', label: 'Pipeline' },
+  { path: '/admin/leads', label: 'Leads' },
+  { path: '/admin/apollo', label: 'Apollo' },
+  { path: '/admin/sequences', label: 'Sequences' },
+  { path: '/admin/insights', label: 'Insights' },
+  { path: '/admin/import', label: 'Import' },
+  { path: '/admin/settings', label: 'Settings' },
+];
 
 function AdminLayout() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/admin/login');
   };
 
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+
   return (
     <div className="d-flex flex-column min-vh-100">
-      <nav className="navbar navbar-dark bg-dark" role="navigation" aria-label="Admin navigation">
+      <nav className="navbar navbar-expand-lg navbar-dark bg-dark" role="navigation" aria-label="Admin navigation">
         <div className="container">
           <Link className="navbar-brand fw-bold d-flex align-items-center" to="/admin/dashboard">
             <img
@@ -25,43 +42,39 @@ function AdminLayout() {
             />
             Colaberry Admin
           </Link>
-          <div className="d-flex align-items-center gap-3">
-            <Link to="/admin/dashboard" className="text-light text-decoration-none small">
-              Dashboard
-            </Link>
-            <Link to="/admin/revenue" className="text-light text-decoration-none small">
-              Revenue
-            </Link>
-            <Link to="/admin/campaigns" className="text-light text-decoration-none small">
-              Campaigns
-            </Link>
-            <Link to="/admin/pipeline" className="text-light text-decoration-none small">
-              Pipeline
-            </Link>
-            <Link to="/admin/leads" className="text-light text-decoration-none small">
-              Leads
-            </Link>
-            <Link to="/admin/apollo" className="text-light text-decoration-none small">
-              Apollo
-            </Link>
-            <Link to="/admin/sequences" className="text-light text-decoration-none small">
-              Sequences
-            </Link>
-            <Link to="/admin/insights" className="text-light text-decoration-none small">
-              Insights
-            </Link>
-            <Link to="/admin/import" className="text-light text-decoration-none small">
-              Import
-            </Link>
-            <Link to="/admin/settings" className="text-light text-decoration-none small">
-              Settings
-            </Link>
-            <button
-              className="btn btn-outline-light btn-sm"
-              onClick={handleLogout}
-            >
-              Logout
-            </button>
+          <button
+            className="navbar-toggler"
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-controls="adminNav"
+            aria-expanded={menuOpen}
+            aria-label="Toggle admin navigation"
+          >
+            <span className="navbar-toggler-icon" />
+          </button>
+          <div className={`collapse navbar-collapse ${menuOpen ? 'show' : ''}`} id="adminNav">
+            <ul className="navbar-nav ms-auto">
+              {adminNavLinks.map((link) => (
+                <li className="nav-item" key={link.path}>
+                  <Link
+                    className={`nav-link ${isActive(link.path) ? 'active' : ''}`}
+                    to={link.path}
+                    onClick={() => setMenuOpen(false)}
+                    aria-current={isActive(link.path) ? 'page' : undefined}
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+              <li className="nav-item mt-2 mt-lg-0">
+                <button
+                  className="btn btn-outline-light btn-sm w-100"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </li>
+            </ul>
           </div>
         </div>
       </nav>

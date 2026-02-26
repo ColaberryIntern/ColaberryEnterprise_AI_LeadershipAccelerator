@@ -1,20 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { NAV_LINKS } from '../../constants';
 
 function PublicNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
-  const navLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/program', label: 'Program' },
-    { path: '/pricing', label: 'Pricing' },
-    { path: '/sponsorship', label: 'Sponsorship' },
-    { path: '/advisory', label: 'Advisory' },
-    { path: '/case-studies', label: 'Case Studies' },
-    { path: '/enroll', label: 'Enroll' },
-    { path: '/contact', label: 'Contact' },
-  ];
+  const navLinks = NAV_LINKS;
 
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-dark sticky-top" role="navigation" aria-label="Main navigation">

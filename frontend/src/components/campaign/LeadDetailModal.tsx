@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import TemperatureBadge from '../TemperatureBadge';
+import Modal from '../ui/Modal';
 
 interface Props {
   campaignId: string;
@@ -77,146 +78,139 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
   };
 
   return (
-    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-content">
-          <div className="modal-header">
-            <div>
-              <h5 className="modal-title mb-1">{leadName}</h5>
-              <div className="d-flex gap-2 align-items-center">
-                {leadDetail && (
-                  <>
-                    <span className="text-muted small">{leadDetail.company}</span>
-                    <TemperatureBadge temperature={leadDetail.lead_temperature} size="md" />
-                    <span className={`badge bg-${leadDetail.status === 'qualified' ? 'success' : 'secondary'}`}>
-                      {leadDetail.status || 'new'}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-            <button className="btn-close" onClick={onClose} />
-          </div>
-          <div className="modal-body">
-            {loading ? (
-              <div className="text-center py-4">
-                <div className="spinner-border spinner-border-sm text-primary" />
-              </div>
-            ) : (
-              <>
-                {/* KPI Row */}
-                {leadDetail && (
-                  <div className="row g-2 mb-4">
-                    <div className="col">
-                      <div className="border rounded p-2 text-center">
-                        <div className="fw-bold">{leadDetail.lead_score || 0}</div>
-                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>Lead Score</div>
-                      </div>
-                    </div>
-                    <div className="col">
-                      <div className="border rounded p-2 text-center">
-                        <div className="fw-bold">{timeline.filter(t => t.type === 'action').length}</div>
-                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>Touchpoints</div>
-                      </div>
-                    </div>
-                    <div className="col">
-                      <div className="border rounded p-2 text-center">
-                        <div className="fw-bold">{timeline.filter(t => t.type === 'outcome').length}</div>
-                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>Responses</div>
-                      </div>
-                    </div>
-                    <div className="col">
-                      <div className="border rounded p-2 text-center">
-                        <div className="fw-bold">{leadDetail.email}</div>
-                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>Email</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Communication Timeline */}
-                <h6 className="fw-semibold mb-3">Communication Timeline</h6>
-                {timeline.length === 0 ? (
-                  <p className="text-muted small">No communication recorded yet.</p>
-                ) : (
-                  <div className="border rounded mb-4" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                    {timeline.map((entry, i) => (
-                      <div key={i} className="d-flex align-items-start gap-3 p-2 border-bottom">
-                        <div className="text-center" style={{ minWidth: 36 }}>
-                          <i className={`bi ${CHANNEL_ICONS[entry.channel || ''] || 'bi-circle'} fs-5 text-muted`} />
-                        </div>
-                        <div className="flex-grow-1">
-                          <div className="d-flex justify-content-between align-items-center">
-                            <div>
-                              <span className="fw-medium small">
-                                {entry.type === 'action' ? entry.subject || entry.action || 'Action' :
-                                 entry.type === 'outcome' ? `${(entry.outcome || '').replace(/_/g, ' ')}` :
-                                 entry.description || 'Activity'}
-                              </span>
-                              {entry.ai_generated && (
-                                <span className="badge bg-primary bg-opacity-10 text-primary ms-2" style={{ fontSize: '0.65rem' }}>AI</span>
-                              )}
-                            </div>
-                            <span className="text-muted" style={{ fontSize: '0.7rem' }}>
-                              {relTime(entry.timestamp)}
-                            </span>
-                          </div>
-                          <div className="d-flex gap-2 mt-1">
-                            <span className={`badge bg-${
-                              entry.type === 'outcome' ? 'info' :
-                              entry.type === 'action' ? 'primary' : 'secondary'
-                            } bg-opacity-10 text-${
-                              entry.type === 'outcome' ? 'info' :
-                              entry.type === 'action' ? 'primary' : 'secondary'
-                            }`} style={{ fontSize: '0.65rem' }}>
-                              {entry.type}
-                            </span>
-                            {entry.channel && (
-                              <span className="text-muted" style={{ fontSize: '0.7rem' }}>{entry.channel}</span>
-                            )}
-                            {entry.status && (
-                              <span className="text-muted" style={{ fontSize: '0.7rem' }}>{entry.status}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Temperature History */}
-                <h6 className="fw-semibold mb-3">Temperature History</h6>
-                {tempHistory.length === 0 ? (
-                  <p className="text-muted small">No temperature changes recorded.</p>
-                ) : (
-                  <div className="border rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                    {tempHistory.map((entry) => (
-                      <div key={entry.id} className="d-flex align-items-center gap-3 p-2 border-bottom">
-                        <div className="d-flex align-items-center gap-1">
-                          <TemperatureBadge temperature={entry.previous_temperature} />
-                          <span className="text-muted small mx-1">&rarr;</span>
-                          <TemperatureBadge temperature={entry.new_temperature} />
-                        </div>
-                        <div className="flex-grow-1">
-                          <span className="text-muted small text-capitalize">
-                            {entry.trigger_type.replace(/_/g, ' ')} &middot; {entry.trigger_detail?.replace(/_/g, ' ')}
-                          </span>
-                        </div>
-                        <span className="text-muted" style={{ fontSize: '0.7rem' }}>
-                          {relTime(entry.created_at)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          <div className="modal-footer">
-            <button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>
+    <Modal
+      show={true}
+      onClose={onClose}
+      title={leadName}
+      size="lg"
+      footer={<button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>}
+    >
+      {loading ? (
+        <div className="text-center py-4">
+          <div className="spinner-border spinner-border-sm text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
           </div>
         </div>
-      </div>
-    </div>
+      ) : (
+        <>
+          {/* Lead Header Badges */}
+          {leadDetail && (
+            <div className="d-flex gap-2 align-items-center mb-3">
+              <span className="text-muted small">{leadDetail.company}</span>
+              <TemperatureBadge temperature={leadDetail.lead_temperature} size="md" />
+              <span className={`badge bg-${leadDetail.status === 'qualified' ? 'success' : 'secondary'}`}>
+                {leadDetail.status || 'new'}
+              </span>
+            </div>
+          )}
+
+          {/* KPI Row */}
+          {leadDetail && (
+            <div className="row g-2 mb-4">
+              <div className="col">
+                <div className="border rounded p-2 text-center">
+                  <div className="fw-bold">{leadDetail.lead_score || 0}</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem' }}>Lead Score</div>
+                </div>
+              </div>
+              <div className="col">
+                <div className="border rounded p-2 text-center">
+                  <div className="fw-bold">{timeline.filter(t => t.type === 'action').length}</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem' }}>Touchpoints</div>
+                </div>
+              </div>
+              <div className="col">
+                <div className="border rounded p-2 text-center">
+                  <div className="fw-bold">{timeline.filter(t => t.type === 'outcome').length}</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem' }}>Responses</div>
+                </div>
+              </div>
+              <div className="col">
+                <div className="border rounded p-2 text-center">
+                  <div className="fw-bold">{leadDetail.email}</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem' }}>Email</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Communication Timeline */}
+          <h6 className="fw-semibold mb-3">Communication Timeline</h6>
+          {timeline.length === 0 ? (
+            <p className="text-muted small">No communication recorded yet.</p>
+          ) : (
+            <div className="border rounded mb-4" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {timeline.map((entry, i) => (
+                <div key={i} className="d-flex align-items-start gap-3 p-2 border-bottom">
+                  <div className="text-center" style={{ minWidth: 36 }}>
+                    <i className={`bi ${CHANNEL_ICONS[entry.channel || ''] || 'bi-circle'} fs-5 text-muted`} />
+                  </div>
+                  <div className="flex-grow-1">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div>
+                        <span className="fw-medium small">
+                          {entry.type === 'action' ? entry.subject || entry.action || 'Action' :
+                           entry.type === 'outcome' ? `${(entry.outcome || '').replace(/_/g, ' ')}` :
+                           entry.description || 'Activity'}
+                        </span>
+                        {entry.ai_generated && (
+                          <span className="badge bg-primary bg-opacity-10 text-primary ms-2" style={{ fontSize: '0.65rem' }}>AI</span>
+                        )}
+                      </div>
+                      <span className="text-muted" style={{ fontSize: '0.7rem' }}>
+                        {relTime(entry.timestamp)}
+                      </span>
+                    </div>
+                    <div className="d-flex gap-2 mt-1">
+                      <span className={`badge bg-${
+                        entry.type === 'outcome' ? 'info' :
+                        entry.type === 'action' ? 'primary' : 'secondary'
+                      } bg-opacity-10 text-${
+                        entry.type === 'outcome' ? 'info' :
+                        entry.type === 'action' ? 'primary' : 'secondary'
+                      }`} style={{ fontSize: '0.65rem' }}>
+                        {entry.type}
+                      </span>
+                      {entry.channel && (
+                        <span className="text-muted" style={{ fontSize: '0.7rem' }}>{entry.channel}</span>
+                      )}
+                      {entry.status && (
+                        <span className="text-muted" style={{ fontSize: '0.7rem' }}>{entry.status}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Temperature History */}
+          <h6 className="fw-semibold mb-3">Temperature History</h6>
+          {tempHistory.length === 0 ? (
+            <p className="text-muted small">No temperature changes recorded.</p>
+          ) : (
+            <div className="border rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              {tempHistory.map((entry) => (
+                <div key={entry.id} className="d-flex align-items-center gap-3 p-2 border-bottom">
+                  <div className="d-flex align-items-center gap-1">
+                    <TemperatureBadge temperature={entry.previous_temperature} />
+                    <span className="text-muted small mx-1">&rarr;</span>
+                    <TemperatureBadge temperature={entry.new_temperature} />
+                  </div>
+                  <div className="flex-grow-1">
+                    <span className="text-muted small text-capitalize">
+                      {entry.trigger_type.replace(/_/g, ' ')} &middot; {entry.trigger_detail?.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <span className="text-muted" style={{ fontSize: '0.7rem' }}>
+                    {relTime(entry.created_at)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
   );
 }

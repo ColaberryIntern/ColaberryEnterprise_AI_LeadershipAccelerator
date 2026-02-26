@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
 import PublicLayout from './components/Layout/PublicLayout';
 import AdminLayout from './components/Layout/AdminLayout';
@@ -36,6 +37,7 @@ import NotFoundPage from './pages/NotFoundPage';
 function App() {
   return (
     <AuthProvider>
+      <ToastProvider>
       <ScrollToTop />
       <Routes>
         <Route element={<PublicLayout />}>
@@ -73,6 +75,7 @@ function App() {
           </Route>
         </Route>
       </Routes>
+      </ToastProvider>
     </AuthProvider>
   );
 }

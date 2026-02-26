@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { FOOTER_LINKS, CONTACT_EMAIL } from '../../constants';
 
 function PublicFooter() {
   return (
@@ -24,21 +25,19 @@ function PublicFooter() {
           <div className="col-md-4 mb-4">
             <h5 className="text-light">Quick Links</h5>
             <ul className="list-unstyled">
-              <li><Link to="/program" className="text-secondary">Program</Link></li>
-              <li><Link to="/pricing" className="text-secondary">Pricing</Link></li>
-              <li><Link to="/sponsorship" className="text-secondary">Corporate Sponsorship</Link></li>
-              <li><Link to="/advisory" className="text-secondary">Enterprise AI Advisory</Link></li>
-              <li><Link to="/case-studies" className="text-secondary">Case Studies</Link></li>
-              <li><Link to="/enroll" className="text-secondary">Enroll</Link></li>
-              <li><Link to="/contact" className="text-secondary">Contact</Link></li>
+              {FOOTER_LINKS.map((link) => (
+                <li key={link.path}>
+                  <Link to={link.path} className="text-secondary">{link.label}</Link>
+                </li>
+              ))}
             </ul>
           </div>
           <div className="col-md-4 mb-4">
             <h5 className="text-light">Connect</h5>
             <ul className="list-unstyled text-secondary">
-              <li>Email: info@colaberry.com</li>
-              <li>LinkedIn: Colaberry Inc</li>
-              <li>Twitter: @Colaberry</li>
+              <li>Email: <a href={`mailto:${CONTACT_EMAIL}`} className="text-secondary">{CONTACT_EMAIL}</a></li>
+              <li>LinkedIn: <a href="https://www.linkedin.com/company/colaberry" className="text-secondary" target="_blank" rel="noopener noreferrer">Colaberry Inc</a></li>
+              <li>Twitter: <a href="https://twitter.com/Colaberry" className="text-secondary" target="_blank" rel="noopener noreferrer">@Colaberry</a></li>
             </ul>
           </div>
         </div>

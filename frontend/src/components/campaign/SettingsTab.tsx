@@ -105,7 +105,9 @@ export default function SettingsTab({ campaignId, headers }: Props) {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border text-primary" />
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
       </div>
     );
   }

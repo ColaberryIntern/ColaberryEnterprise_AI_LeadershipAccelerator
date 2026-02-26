@@ -105,7 +105,7 @@ function PricingPage() {
 
       {/* Enterprise Sponsorship Pathway */}
       <section className="section" aria-label="Enterprise Sponsorship">
-        <div className="container" style={{ maxWidth: '800px' }}>
+        <div className="container content-medium">
           <h2 className="text-center mb-4">🤝 Enterprise Sponsorship Pathway</h2>
           <p className="text-center text-muted mb-4">
             For organizations sponsoring participants from their teams or client organizations.
@@ -126,7 +126,7 @@ function PricingPage() {
 
       {/* FAQ */}
       <section className="section-alt" aria-label="Frequently Asked Questions">
-        <div className="container" style={{ maxWidth: '800px' }}>
+        <div className="container content-medium">
           <h2 className="text-center mb-5">❓ Frequently Asked Questions</h2>
           {[
             {
