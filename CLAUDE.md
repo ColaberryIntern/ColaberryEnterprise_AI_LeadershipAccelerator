@@ -395,7 +395,65 @@ Claude is planner and system hardener — not the worker.
 - Escalation replaces paralysis  
 - Daily reporting ensures oversight  
 
-Be deliberate.  
-Be testable.  
-Be autonomous.  
+Be deliberate.
+Be testable.
+Be autonomous.
 Be governed — only where necessary.
+
+---
+
+# UI/UX Design Policy
+
+## Design System
+
+- **Framework**: Bootstrap 5 (CDN) — utility-first, no custom CSS unless a class exists in `global.css`
+- **Tokens**: All colors, fonts, and spacing defined as CSS custom properties in `frontend/src/styles/global.css`
+- **Never hardcode hex values** — use `var(--color-*)` or Bootstrap utility classes
+
+## Color Palette
+
+| Token | Value | Usage |
+|---|---|---|
+| `--color-primary` | `#1a365d` | Navy — headings, primary buttons, brand |
+| `--color-primary-light` | `#2b6cb0` | Links, hover states, focus outlines |
+| `--color-secondary` | `#e53e3e` | Red — CTAs, warnings, destructive actions |
+| `--color-accent` | `#38a169` | Green — success states, positive indicators |
+| `--color-bg` | `#ffffff` | Page background |
+| `--color-bg-alt` | `#f7fafc` | Alternate section backgrounds |
+| `--color-text` | `#2d3748` | Body text |
+| `--color-text-light` | `#718096` | Muted/secondary text |
+| `--color-border` | `#e2e8f0` | Card borders, dividers |
+
+## Component Patterns
+
+- **Cards**: `card border-0 shadow-sm` with `card-header bg-white fw-semibold`
+- **Tables**: `table-responsive > table table-hover mb-0`, `thead table-light`
+- **Badges**: `badge bg-{success|warning|info|secondary|danger}`
+- **Tabs**: `nav nav-tabs mb-4` with `nav-link active` buttons
+- **Modals**: `modal show d-block` with backdrop, `role="dialog"`, `aria-modal="true"`
+- **Forms**: `form-control-sm`, `form-select-sm`, `form-label small fw-medium`
+- **Buttons**: Always `btn-sm` in admin UI; `btn-primary`, `btn-outline-secondary`, `btn-outline-danger`
+- **Filter bars**: `d-flex gap-2 mb-3 flex-wrap align-items-center`
+
+## Accessibility
+
+- **Standard**: WCAG 2.1 AA required for all UI
+- **Focus indicators**: `3px solid var(--color-primary-light)` on `:focus-visible` (defined in `responsive.css`)
+- **Touch targets**: Min 44x44px on mobile (enforced in `responsive.css` for `< 992px`)
+- **Reduced motion**: `prefers-reduced-motion: reduce` disables all animations (defined in `responsive.css`)
+- **High contrast**: `prefers-contrast: high` adds borders and full-contrast text (defined in `responsive.css`)
+- **Screen readers**: Loading spinners need `role="status"` + `visually-hidden` text
+
+## Available Design Skills
+
+| Skill | Invocation | Purpose |
+|---|---|---|
+| Baseline UI | `/baseline-ui` | Output the complete design system reference |
+| Accessibility | `/fixing-accessibility` | WCAG 2.1 AA audit and remediation |
+| Performance | `/fixing-motion-performance` | Animation, rendering, and bundle optimization |
+| Frontend Design | `/frontend-design` | Generate React + Bootstrap components and pages |
+| UI/UX Design | `/ui-ux-design` | Strategic design: research, wireframes, prototyping, design review |
+
+## Target Audience
+
+**Enterprise executives, aged 35–60.** Design must be clean, calm, and authoritative. Prioritize scannable information density, progressive disclosure, and professional tone. Think Bloomberg meets Salesforce, not consumer SaaS.
