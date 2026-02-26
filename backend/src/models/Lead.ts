@@ -33,6 +33,8 @@ interface LeadAttributes {
   technology_stack?: string[];
   linkedin_url?: string;
   apollo_id?: string;
+  lead_temperature?: string;
+  temperature_updated_at?: Date;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -69,6 +71,8 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare technology_stack: string[];
   declare linkedin_url: string;
   declare apollo_id: string;
+  declare lead_temperature: string;
+  declare temperature_updated_at: Date;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -206,6 +210,15 @@ Lead.init(
     },
     apollo_id: {
       type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    lead_temperature: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'cold',
+    },
+    temperature_updated_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     created_at: {

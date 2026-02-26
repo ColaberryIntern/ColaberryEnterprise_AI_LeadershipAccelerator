@@ -5,6 +5,7 @@ import ActivityTimeline from '../../components/admin/ActivityTimeline';
 import AddNoteForm from '../../components/admin/AddNoteForm';
 import AppointmentCard from '../../components/admin/AppointmentCard';
 import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointmentModal';
+import TemperatureBadge from '../../components/TemperatureBadge';
 
 interface LeadDetail {
   id: number;
@@ -17,6 +18,8 @@ interface LeadDetail {
   company_size: string;
   evaluating_90_days: boolean;
   lead_score: number;
+  lead_temperature?: string;
+  temperature_updated_at?: string;
   status: string;
   pipeline_stage: string;
   interest_area: string;
@@ -81,10 +84,21 @@ function AdminLeadDetailPage() {
   const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'activity' | 'appointments'>('info');
+  const [tempHistory, setTempHistory] = useState<any[]>([]);
+
+  const fetchTempHistory = async () => {
+    try {
+      const res = await api.get(`/api/admin/leads/${id}/temperature-history`);
+      setTempHistory(res.data.history || []);
+    } catch (err) {
+      // Temperature history not critical
+    }
+  };
 
   useEffect(() => {
     fetchLead();
     fetchAppointments();
+    fetchTempHistory();
   }, [id]); // eslint-disable-line
 
   const fetchLead = async () => {
@@ -213,6 +227,7 @@ function AdminLeadDetailPage() {
             <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
               {lead.name}
             </h1>
+            <TemperatureBadge temperature={lead.lead_temperature} size="md" />
             {lead.lead_score > 0 && (
               <span className={`badge ${getScoreBadge(lead.lead_score)} fs-6`}>
                 Score: {lead.lead_score}
@@ -408,6 +423,25 @@ function AdminLeadDetailPage() {
                     {lead.lead_score}
                   </div>
                   <div className="text-muted small">out of 105 possible</div>
+                </div>
+              </div>
+            )}
+
+            {/* Temperature History */}
+            {tempHistory.length > 0 && (
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-header bg-white fw-bold py-3">Temperature History</div>
+                <div className="card-body p-0">
+                  {tempHistory.slice(0, 5).map((entry: any) => (
+                    <div key={entry.id} className="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
+                      <TemperatureBadge temperature={entry.previous_temperature} />
+                      <span className="text-muted small">&rarr;</span>
+                      <TemperatureBadge temperature={entry.new_temperature} />
+                      <span className="text-muted small ms-auto">
+                        {entry.trigger_type === 'manual' ? 'Manual' : entry.trigger_detail?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

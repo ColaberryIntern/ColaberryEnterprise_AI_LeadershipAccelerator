@@ -12,6 +12,7 @@ import {
   batchUpdateLeads,
 } from '../services/leadService';
 import { logStageChange } from '../services/activityService';
+import { getTemperatureHistory, classifyLeadManual } from '../services/leadClassificationService';
 
 export async function handleAdminListLeads(
   req: Request,
@@ -237,6 +238,55 @@ export async function handleAdminBatchUpdate(
     const result = await batchUpdateLeads(ids, { pipeline_stage, status });
     res.json(result);
   } catch (error) {
+    next(error);
+  }
+}
+
+// ── Lead Temperature ────────────────────────────────────────────────
+
+export async function handleGetTemperatureHistory(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: 'Invalid lead ID' });
+      return;
+    }
+    const history = await getTemperatureHistory(id);
+    res.json({ history });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleUpdateTemperature(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: 'Invalid lead ID' });
+      return;
+    }
+    const { temperature } = req.body;
+    const validTemps = ['cold', 'cool', 'warm', 'hot', 'qualified'];
+    if (!temperature || !validTemps.includes(temperature)) {
+      res.status(400).json({ error: `temperature must be one of: ${validTemps.join(', ')}` });
+      return;
+    }
+    const adminId = req.admin?.sub;
+    const result = await classifyLeadManual(id, temperature, adminId);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message === 'Lead not found') {
+      res.status(404).json({ error: error.message });
+      return;
+    }
     next(error);
   }
 }

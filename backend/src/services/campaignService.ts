@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser } from '../models';
+import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity } from '../models';
 import { enrollLeadInSequence } from './sequenceService';
 
 export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement';
@@ -351,4 +351,173 @@ export async function getCampaignLeads(
   });
 
   return { leads: rows, total: count, page, totalPages: Math.ceil(count / limit) };
+}
+
+// ── Campaign Settings ───────────────────────────────────────────────
+
+const DEFAULT_SETTINGS = {
+  test_mode_enabled: false,
+  test_email: '',
+  test_phone: '',
+  delay_between_sends: 120,
+  max_leads_per_cycle: 10,
+  agent_name: 'Colaberry AI',
+  agent_greeting: 'Hi {first_name}, this is {agent_name} calling from Colaberry.',
+  call_time_start: '09:00',
+  call_time_end: '17:00',
+  call_timezone: 'America/Chicago',
+  call_active_days: [1, 2, 3, 4, 5],
+  max_call_duration: 300,
+  max_daily_calls: 50,
+  auto_dnc_on_request: true,
+  voicemail_enabled: true,
+  pass_prior_conversations: true,
+  auto_reply_enabled: false,
+};
+
+export async function getCampaignSettings(id: string) {
+  const campaign = await Campaign.findByPk(id);
+  if (!campaign) throw new Error('Campaign not found');
+  return { ...DEFAULT_SETTINGS, ...(campaign.settings || {}) };
+}
+
+export async function updateCampaignSettings(id: string, settings: Record<string, any>) {
+  const campaign = await Campaign.findByPk(id);
+  if (!campaign) throw new Error('Campaign not found');
+
+  const merged = { ...(campaign.settings || DEFAULT_SETTINGS), ...settings };
+  await campaign.update({ settings: merged });
+  return merged;
+}
+
+export async function updateCampaignGTM(
+  id: string,
+  data: { goals?: string; gtm_notes?: string; description?: string },
+) {
+  const campaign = await Campaign.findByPk(id);
+  if (!campaign) throw new Error('Campaign not found');
+
+  const updates: Record<string, any> = {};
+  if (data.goals !== undefined) updates.goals = data.goals;
+  if (data.gtm_notes !== undefined) updates.gtm_notes = data.gtm_notes;
+  if (data.description !== undefined) updates.description = data.description;
+
+  await campaign.update(updates);
+  return campaign.reload();
+}
+
+// ── Enriched Lead Details ───────────────────────────────────────────
+
+export async function getEnrichedCampaignLeads(campaignId: string) {
+  const campaign = await Campaign.findByPk(campaignId);
+  if (!campaign) throw new Error('Campaign not found');
+
+  const campaignLeads = await CampaignLead.findAll({
+    where: { campaign_id: campaignId },
+    include: [{ model: Lead, as: 'lead' }],
+    order: [['enrolled_at', 'DESC']],
+  });
+
+  // Get next pending action for each lead
+  const leadIds = campaignLeads.map((cl) => cl.lead_id);
+  const pendingActions = await ScheduledEmail.findAll({
+    where: {
+      campaign_id: campaignId,
+      lead_id: { [Op.in]: leadIds },
+      status: 'pending',
+    },
+    order: [['scheduled_for', 'ASC']],
+  });
+
+  const nextActionMap: Record<number, any> = {};
+  for (const action of pendingActions) {
+    if (!nextActionMap[action.lead_id]) {
+      nextActionMap[action.lead_id] = action;
+    }
+  }
+
+  const enriched = campaignLeads.map((cl: any) => {
+    const nextAction = nextActionMap[cl.lead_id];
+    return {
+      ...cl.toJSON(),
+      next_action_at: nextAction?.scheduled_for || null,
+      next_action_channel: nextAction?.channel || null,
+      next_action_step: nextAction?.step_index ?? null,
+    };
+  });
+
+  return { leads: enriched, total: enriched.length };
+}
+
+// ── Lead Campaign Timeline ──────────────────────────────────────────
+
+export async function getLeadCampaignTimeline(campaignId: string, leadId: number) {
+  const campaign = await Campaign.findByPk(campaignId);
+  if (!campaign) throw new Error('Campaign not found');
+
+  // Get all scheduled actions for this lead in this campaign
+  const actions = await ScheduledEmail.findAll({
+    where: { campaign_id: campaignId, lead_id: leadId },
+    order: [['scheduled_for', 'ASC']],
+    raw: true,
+  });
+
+  // Get all interaction outcomes for this lead in this campaign
+  const outcomes = await InteractionOutcome.findAll({
+    where: { campaign_id: campaignId, lead_id: leadId },
+    order: [['created_at', 'ASC']],
+    raw: true,
+  });
+
+  // Get activities for this lead (filter by campaign context in metadata or type)
+  const activities = await Activity.findAll({
+    where: { lead_id: leadId },
+    order: [['created_at', 'DESC']],
+    limit: 50,
+    raw: true,
+  });
+
+  // Merge into a unified timeline
+  const timeline: any[] = [];
+
+  for (const action of actions) {
+    timeline.push({
+      type: 'action',
+      timestamp: action.sent_at || action.scheduled_for,
+      channel: action.channel,
+      step_index: action.step_index,
+      status: action.status,
+      subject: action.subject,
+      body_preview: action.body ? action.body.substring(0, 200) : null,
+      ai_generated: action.ai_generated,
+      id: action.id,
+    });
+  }
+
+  for (const outcome of outcomes) {
+    timeline.push({
+      type: 'outcome',
+      timestamp: outcome.created_at,
+      channel: outcome.channel,
+      step_index: outcome.step_index,
+      outcome: outcome.outcome,
+      metadata: outcome.metadata,
+      id: outcome.id,
+    });
+  }
+
+  // Sort by timestamp descending (most recent first)
+  timeline.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  // Get campaign lead record
+  const campaignLead = await CampaignLead.findOne({
+    where: { campaign_id: campaignId, lead_id: leadId },
+    include: [{ model: Lead, as: 'lead' }],
+  });
+
+  return {
+    timeline,
+    enrollment: campaignLead ? campaignLead.toJSON() : null,
+    activities: activities.slice(0, 20),
+  };
 }

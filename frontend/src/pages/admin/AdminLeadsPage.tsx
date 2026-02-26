@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
 import BatchActionBar from '../../components/admin/BatchActionBar';
+import TemperatureBadge from '../../components/TemperatureBadge';
 
 interface LeadStats {
   total: number;
@@ -21,6 +22,7 @@ interface Lead {
   phone: string;
   status: string;
   lead_score: number;
+  lead_temperature?: string;
   source: string;
   form_type: string;
   created_at: string;
@@ -355,6 +357,7 @@ function AdminLeadsPage() {
                   <th>Company</th>
                   <th>Title</th>
                   <th>Score</th>
+                  <th>Temp</th>
                   <th>Status</th>
                   <th>Source</th>
                   <th>Date</th>
@@ -364,7 +367,7 @@ function AdminLeadsPage() {
               <tbody>
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center text-muted py-4">
+                    <td colSpan={11} className="text-center text-muted py-4">
                       No leads found
                     </td>
                   </tr>
@@ -387,6 +390,9 @@ function AdminLeadsPage() {
                         <span className={`badge ${getScoreBadge(lead.lead_score || 0)}`}>
                           {lead.lead_score || 0}
                         </span>
+                      </td>
+                      <td>
+                        <TemperatureBadge temperature={lead.lead_temperature} />
                       </td>
                       <td>
                         <select

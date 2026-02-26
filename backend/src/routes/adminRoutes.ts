@@ -18,6 +18,8 @@ import {
   handleAdminGetPipelineStats,
   handleAdminCreateLead,
   handleAdminBatchUpdate,
+  handleGetTemperatureHistory,
+  handleUpdateTemperature,
 } from '../controllers/adminLeadController';
 import {
   handleListActivities,
@@ -81,6 +83,11 @@ import {
   handleApolloQuota,
   handleAIPreview,
   handleGetCampaignAnalytics,
+  handleGetCampaignSettings,
+  handleUpdateCampaignSettings,
+  handleUpdateCampaignGTM,
+  handleGetEnrichedCampaignLeads,
+  handleGetLeadCampaignTimeline,
 } from '../controllers/adminCampaignController';
 
 const router = Router();
@@ -105,6 +112,8 @@ router.patch('/api/admin/leads/batch', requireAdmin, handleAdminBatchUpdate);
 router.get('/api/admin/leads/:id', requireAdmin, handleAdminGetLead);
 router.patch('/api/admin/leads/:id', requireAdmin, handleAdminUpdateLead);
 router.patch('/api/admin/leads/:id/pipeline', requireAdmin, handleAdminUpdatePipelineStage);
+router.get('/api/admin/leads/:id/temperature-history', requireAdmin, handleGetTemperatureHistory);
+router.patch('/api/admin/leads/:id/temperature', requireAdmin, handleUpdateTemperature);
 
 // Protected admin routes — Pipeline
 router.get('/api/admin/pipeline/stats', requireAdmin, handleAdminGetPipelineStats);
@@ -154,6 +163,11 @@ router.delete('/api/admin/campaigns/:id/leads/:leadId', requireAdmin, handleRemo
 router.get('/api/admin/campaigns/:id/matching-leads', requireAdmin, handleGetMatchingLeads);
 router.get('/api/admin/campaigns/:id/stats', requireAdmin, handleGetCampaignStats);
 router.get('/api/admin/campaigns/:id/analytics', requireAdmin, handleGetCampaignAnalytics);
+router.get('/api/admin/campaigns/:id/settings', requireAdmin, handleGetCampaignSettings);
+router.patch('/api/admin/campaigns/:id/settings', requireAdmin, handleUpdateCampaignSettings);
+router.patch('/api/admin/campaigns/:id/gtm', requireAdmin, handleUpdateCampaignGTM);
+router.get('/api/admin/campaigns/:id/lead-details', requireAdmin, handleGetEnrichedCampaignLeads);
+router.get('/api/admin/campaigns/:id/leads/:leadId/timeline', requireAdmin, handleGetLeadCampaignTimeline);
 router.get('/api/admin/campaigns/:id/leads', requireAdmin, handleGetCampaignLeads);
 
 // Protected admin routes — Apollo Integration

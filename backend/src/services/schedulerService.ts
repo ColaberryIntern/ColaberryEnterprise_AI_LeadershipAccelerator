@@ -127,6 +127,57 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
   }
 }
 
+/** Check if a voice call is within the campaign's call schedule */
+function isWithinCallSchedule(settings: Record<string, any>): boolean {
+  const tz = settings.call_timezone || 'America/Chicago';
+  const startTime = settings.call_time_start || '09:00';
+  const endTime = settings.call_time_end || '17:00';
+  const activeDays: number[] = settings.call_active_days || [1, 2, 3, 4, 5];
+
+  try {
+    // Get current time in the campaign's timezone
+    const nowStr = new Date().toLocaleString('en-US', { timeZone: tz });
+    const nowInTz = new Date(nowStr);
+    const day = nowInTz.getDay(); // 0=Sun, 1=Mon...
+    const hours = nowInTz.getHours();
+    const minutes = nowInTz.getMinutes();
+
+    // Check active day
+    if (!activeDays.includes(day)) return false;
+
+    // Check time window
+    const [startH, startM] = startTime.split(':').map(Number);
+    const [endH, endM] = endTime.split(':').map(Number);
+    const currentMinutes = hours * 60 + minutes;
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+  } catch {
+    return true; // On error, allow the call
+  }
+}
+
+/** Get campaign settings (with defaults) from a campaign record */
+function getCampaignSettingsFromRecord(campaign: any): Record<string, any> {
+  const defaults = {
+    test_mode_enabled: false,
+    test_email: '',
+    test_phone: '',
+    delay_between_sends: 120,
+    max_leads_per_cycle: 10,
+    call_time_start: '09:00',
+    call_time_end: '17:00',
+    call_timezone: 'America/Chicago',
+    call_active_days: [1, 2, 3, 4, 5],
+    max_call_duration: 300,
+    max_daily_calls: 50,
+    voicemail_enabled: true,
+    pass_prior_conversations: true,
+  };
+  return { ...defaults, ...(campaign.settings || {}) };
+}
+
 async function processScheduledActions(): Promise<void> {
   const now = new Date();
   const pendingActions = await ScheduledEmail.findAll({
@@ -134,7 +185,7 @@ async function processScheduledActions(): Promise<void> {
       status: 'pending',
       scheduled_for: { [Op.lte]: now },
     },
-    limit: 10,
+    limit: 50, // Fetch more, will be limited per-campaign
     order: [['scheduled_for', 'ASC']],
   });
 
@@ -142,14 +193,68 @@ async function processScheduledActions(): Promise<void> {
 
   console.log(`[Scheduler] Processing ${pendingActions.length} scheduled actions`);
 
+  // Group actions by campaign and apply per-campaign pacing
+  const campaignCache: Record<string, any> = {};
+  const campaignProcessed: Record<string, number> = {};
+  const dailyCallCount: Record<string, number> = {};
+
   for (const action of pendingActions) {
     const channel = (action.channel || 'email') as CampaignChannel;
+    const campaignId = action.campaign_id || '_none_';
+
+    // Load campaign settings (cached)
+    let campaignSettings: Record<string, any> = {};
+    if (action.campaign_id && !campaignCache[campaignId]) {
+      const campaign = await Campaign.findByPk(action.campaign_id);
+      if (campaign) {
+        campaignCache[campaignId] = campaign;
+        campaignSettings = getCampaignSettingsFromRecord(campaign);
+      }
+    } else if (campaignCache[campaignId]) {
+      campaignSettings = getCampaignSettingsFromRecord(campaignCache[campaignId]);
+    }
+
+    // Pacing: limit actions per campaign per cycle
+    const maxPerCycle = campaignSettings.max_leads_per_cycle || 10;
+    campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);
+    if (campaignProcessed[campaignId] >= maxPerCycle) {
+      continue; // Skip — will be picked up next cycle
+    }
+
+    // Call schedule: skip voice actions outside call window
+    if (channel === 'voice' && action.campaign_id && Object.keys(campaignSettings).length > 0) {
+      if (!isWithinCallSchedule(campaignSettings)) {
+        console.log(`[Scheduler] Voice action ${action.id} outside call window, deferring`);
+        continue;
+      }
+      // Daily call limit check
+      dailyCallCount[campaignId] = (dailyCallCount[campaignId] || 0);
+      const maxDailyCalls = campaignSettings.max_daily_calls || 50;
+      if (dailyCallCount[campaignId] >= maxDailyCalls) {
+        console.log(`[Scheduler] Daily call limit reached for campaign ${campaignId}`);
+        continue;
+      }
+      dailyCallCount[campaignId]++;
+    }
 
     try {
       // Step 1: AI content generation (for all channels)
       await generateAIContent(action);
 
-      // Step 2: Send via appropriate channel
+      // Step 2: Apply test mode overrides
+      if (campaignSettings.test_mode_enabled) {
+        if (campaignSettings.test_email && (channel === 'email')) {
+          await action.update({ to_email: campaignSettings.test_email, subject: `[TEST] ${action.subject}` } as any);
+          await action.reload();
+        }
+        if (campaignSettings.test_phone && (channel === 'voice' || channel === 'sms')) {
+          await action.update({ to_phone: campaignSettings.test_phone, subject: `[TEST] ${action.subject}` } as any);
+          await action.reload();
+        }
+        console.log(`[Scheduler] TEST MODE: action ${action.id} redirected`);
+      }
+
+      // Step 3: Send via appropriate channel
       switch (channel) {
         case 'email':
           await processEmailAction(action);
@@ -163,6 +268,14 @@ async function processScheduledActions(): Promise<void> {
         default:
           console.warn(`[Scheduler] Unknown channel: ${channel} for action ${action.id}`);
           await action.update({ status: 'failed' } as any);
+      }
+
+      campaignProcessed[campaignId]++;
+
+      // Pacing delay between sends
+      const delayMs = (campaignSettings.delay_between_sends || 0) * 1000;
+      if (delayMs > 0 && delayMs <= 30000) {
+        await new Promise((r) => setTimeout(r, delayMs));
       }
     } catch (error: any) {
       console.error(`[Scheduler] Failed to process action ${action.id} (${channel}):`, error.message);

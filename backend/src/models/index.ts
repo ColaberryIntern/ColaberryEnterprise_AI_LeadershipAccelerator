@@ -13,6 +13,7 @@ import Campaign from './Campaign';
 import CampaignLead from './CampaignLead';
 import InteractionOutcome from './InteractionOutcome';
 import ICPInsight from './ICPInsight';
+import LeadTemperatureHistory from './LeadTemperatureHistory';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -65,9 +66,16 @@ InteractionOutcome.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 ScheduledEmail.hasMany(InteractionOutcome, { foreignKey: 'scheduled_email_id', as: 'outcomes' });
 InteractionOutcome.belongsTo(ScheduledEmail, { foreignKey: 'scheduled_email_id', as: 'scheduledEmail' });
 
+// Lead Temperature History associations
+Lead.hasMany(LeadTemperatureHistory, { foreignKey: 'lead_id', as: 'temperatureHistory' });
+LeadTemperatureHistory.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+
+Campaign.hasMany(LeadTemperatureHistory, { foreignKey: 'campaign_id', as: 'temperatureChanges' });
+LeadTemperatureHistory.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
-  InteractionOutcome, ICPInsight,
+  InteractionOutcome, ICPInsight, LeadTemperatureHistory,
 };

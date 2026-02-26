@@ -22,6 +22,13 @@ import {
 } from '../services/apolloService';
 import { generatePreview } from '../services/aiMessageService';
 import { getCampaignAnalytics } from '../services/campaignAnalyticsService';
+import {
+  getCampaignSettings,
+  updateCampaignSettings,
+  updateCampaignGTM,
+  getEnrichedCampaignLeads,
+  getLeadCampaignTimeline,
+} from '../services/campaignService';
 
 // ── Campaign CRUD ────────────────────────────────────────────────────
 
@@ -300,6 +307,76 @@ export async function handleGetCampaignAnalytics(req: Request, res: Response, ne
     const days = req.query.days ? parseInt(req.query.days as string, 10) : undefined;
     const analytics = await getCampaignAnalytics(req.params.id as string, days);
     res.json({ analytics });
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+// ── Campaign Settings ───────────────────────────────────────────────
+
+export async function handleGetCampaignSettings(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const settings = await getCampaignSettings(req.params.id as string);
+    res.json({ settings });
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleUpdateCampaignSettings(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const settings = await updateCampaignSettings(req.params.id as string, req.body);
+    res.json({ settings });
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleUpdateCampaignGTM(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { goals, gtm_notes, description } = req.body;
+    const campaign = await updateCampaignGTM(req.params.id as string, { goals, gtm_notes, description });
+    res.json({ campaign });
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+// ── Enriched Lead Details + Timeline ────────────────────────────────
+
+export async function handleGetEnrichedCampaignLeads(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await getEnrichedCampaignLeads(req.params.id as string);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleGetLeadCampaignTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const timeline = await getLeadCampaignTimeline(req.params.id as string, parseInt(req.params.leadId as string, 10));
+    res.json({ timeline });
   } catch (error: any) {
     if (error.message.includes('not found')) {
       res.status(404).json({ error: error.message });

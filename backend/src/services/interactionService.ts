@@ -1,5 +1,6 @@
-import { InteractionOutcome, Lead, ScheduledEmail } from '../models';
+import { InteractionOutcome, Lead, ScheduledEmail, CampaignLead } from '../models';
 import type { OutcomeType } from '../models/InteractionOutcome';
+import { classifyLead } from './leadClassificationService';
 
 export interface RecordOutcomeParams {
   lead_id: number;
@@ -73,6 +74,36 @@ export async function recordOutcome(params: RecordOutcomeParams): Promise<void> 
       lead_source_type: lead?.lead_source_type || 'warm',
       metadata: params.metadata || null,
     } as any);
+
+    // Auto-classify lead temperature after every interaction
+    try {
+      await classifyLead(params.lead_id, params.campaign_id, params.outcome);
+    } catch (classErr: any) {
+      console.error(`[InteractionService] Classification error:`, classErr.message);
+    }
+
+    // Update CampaignLead tracking if within a campaign
+    if (params.campaign_id) {
+      try {
+        const campaignLead = await CampaignLead.findOne({
+          where: { campaign_id: params.campaign_id, lead_id: params.lead_id },
+        });
+        if (campaignLead) {
+          const updates: Record<string, any> = {
+            last_activity_at: new Date(),
+            touchpoint_count: (campaignLead.touchpoint_count || 0) + 1,
+          };
+          // Count responses (reply, answered, booked_meeting, converted)
+          const responseOutcomes = ['replied', 'answered', 'booked_meeting', 'converted'];
+          if (responseOutcomes.includes(params.outcome)) {
+            updates.response_count = (campaignLead.response_count || 0) + 1;
+          }
+          await campaignLead.update(updates);
+        }
+      } catch (trackErr: any) {
+        console.error(`[InteractionService] CampaignLead tracking error:`, trackErr.message);
+      }
+    }
   } catch (err: any) {
     // Non-blocking — don't fail sends because of tracking errors
     console.error(`[InteractionService] Failed to record outcome:`, err.message);

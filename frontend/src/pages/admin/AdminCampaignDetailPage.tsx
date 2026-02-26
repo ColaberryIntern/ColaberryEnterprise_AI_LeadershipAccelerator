@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, FunnelChart, Funnel, LabelList, Cell,
-} from 'recharts';
+import OverviewTab from '../../components/campaign/OverviewTab';
+import AnalyticsTab from '../../components/campaign/AnalyticsTab';
+import TargetingTab from '../../components/campaign/TargetingTab';
+import GTMStrategyTab from '../../components/campaign/GTMStrategyTab';
+import PromptsTab from '../../components/campaign/PromptsTab';
+import LeadsOutreachTab from '../../components/campaign/LeadsOutreachTab';
+import CRMTab from '../../components/campaign/CRMTab';
+import SettingsTab from '../../components/campaign/SettingsTab';
 
 interface CampaignDetail {
   id: string;
@@ -24,6 +28,9 @@ interface CampaignDetail {
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
+  goals?: string;
+  gtm_notes?: string;
+  settings?: Record<string, any>;
 }
 
 interface CampaignLead {
@@ -32,6 +39,12 @@ interface CampaignLead {
   status: string;
   enrolled_at: string;
   outcome: string | null;
+  current_step_index?: number;
+  total_steps?: number;
+  last_activity_at?: string | null;
+  next_action_at?: string | null;
+  touchpoint_count?: number;
+  response_count?: number;
   lead: {
     id: number;
     name: string;
@@ -40,6 +53,7 @@ interface CampaignLead {
     title: string;
     lead_score: number;
     lead_source_type: string;
+    lead_temperature?: string;
   };
 }
 
@@ -53,60 +67,26 @@ interface Stats {
 }
 
 interface AnalyticsData {
-  overview: {
-    total_leads: number;
-    total_interactions: number;
-    sent_count: number;
-    opened_count: number;
-    clicked_count: number;
-    replied_count: number;
-    bounced_count: number;
-    meetings_booked: number;
-    conversions: number;
-    open_rate: number;
-    click_rate: number;
-    reply_rate: number;
-    bounce_rate: number;
-    meeting_rate: number;
-    conversion_rate: number;
-    budget_total: number | null;
-    budget_spent: number;
-    cost_per_lead: number | null;
-    cost_per_meeting: number | null;
-  };
-  channel_performance: Array<{
-    channel: string;
-    sent: number;
-    opened: number;
-    clicked: number;
-    replied: number;
-    bounced: number;
-    meetings: number;
-    open_rate: number;
-    reply_rate: number;
-  }>;
-  funnel: Array<{ stage: string; count: number; rate: number }>;
-  daily_series: Array<{
-    date: string;
-    sent: number;
-    opened: number;
-    clicked: number;
-    replied: number;
-    bounced: number;
-  }>;
-  step_performance: Array<{
-    step_index: number;
-    channel: string;
-    total: number;
-    sent: number;
-    opened: number;
-    replied: number;
-    ai_generated: number;
-    open_rate: number;
-    reply_rate: number;
-  }>;
-  lead_outcomes: Array<{ outcome: string; count: number }>;
+  overview: any;
+  channel_performance: any[];
+  funnel: any[];
+  daily_series: any[];
+  step_performance: any[];
+  lead_outcomes: any[];
 }
+
+type TabKey = 'overview' | 'analytics' | 'targeting' | 'gtm' | 'prompts' | 'leads' | 'crm' | 'settings';
+
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'analytics', label: 'Analytics' },
+  { key: 'targeting', label: 'Targeting' },
+  { key: 'gtm', label: 'GTM & Strategy' },
+  { key: 'prompts', label: 'Prompts' },
+  { key: 'leads', label: 'Leads & Outreach' },
+  { key: 'crm', label: 'CRM' },
+  { key: 'settings', label: 'Settings' },
+];
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'secondary',
@@ -114,8 +94,6 @@ const STATUS_COLORS: Record<string, string> = {
   paused: 'warning',
   completed: 'info',
 };
-
-const FUNNEL_COLORS = ['#0d6efd', '#0dcaf0', '#6f42c1', '#fd7e14', '#198754', '#ffc107'];
 
 function AdminCampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -125,13 +103,15 @@ function AdminCampaignDetailPage() {
   const [leads, setLeads] = useState<CampaignLead[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  // Enrollment modal state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [matchingLeads, setMatchingLeads] = useState<any[]>([]);
   const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
   const [enrolling, setEnrolling] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics'>('overview');
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -236,9 +216,6 @@ function AdminCampaignDetailPage() {
     }
   };
 
-  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
-  const currency = (v: number | null) => v != null ? `$${v.toFixed(2)}` : '—';
-
   if (loading || !campaign) {
     return (
       <div className="text-center py-5">
@@ -247,20 +224,30 @@ function AdminCampaignDetailPage() {
     );
   }
 
+  const isTestMode = campaign.settings?.test_mode_enabled;
+
   return (
     <div>
       {/* Header */}
-      <div className="d-flex justify-content-between align-items-start mb-4">
+      <div className="d-flex justify-content-between align-items-start mb-3">
         <div>
           <h2 className="mb-1">{campaign.name}</h2>
-          <div className="d-flex gap-2 align-items-center">
+          <div className="d-flex gap-2 align-items-center flex-wrap">
             <span className={`badge bg-${STATUS_COLORS[campaign.status] || 'secondary'}`}>
               {campaign.status}
             </span>
             <span className="badge bg-light text-dark border">{campaign.type.replace(/_/g, ' ')}</span>
-            {campaign.sequence && (
-              <span className="text-muted small">Sequence: {campaign.sequence.name}</span>
+            {isTestMode && (
+              <span className="badge bg-danger">TEST MODE</span>
             )}
+            {campaign.budget_total && (
+              <span className="text-muted small">
+                Budget: ${campaign.budget_spent?.toFixed(0)} / ${campaign.budget_total?.toFixed(0)}
+              </span>
+            )}
+            <span className="text-muted small">
+              Created {new Date(campaign.created_at).toLocaleDateString()}
+            </span>
           </div>
         </div>
         <div className="d-flex gap-2">
@@ -290,453 +277,91 @@ function AdminCampaignDetailPage() {
         </div>
       </div>
 
-      {campaign.description && <p className="text-muted mb-4">{campaign.description}</p>}
-
-      {/* Tabs */}
+      {/* 8-Tab Navigation */}
       <ul className="nav nav-tabs mb-4">
-        <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
-          >
-            Overview & Leads
-          </button>
-        </li>
-        <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === 'analytics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('analytics')}
-          >
-            Analytics
-          </button>
-        </li>
+        {TABS.map((tab) => (
+          <li key={tab.key} className="nav-item">
+            <button
+              className={`nav-link ${activeTab === tab.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+              {tab.key === 'settings' && isTestMode && (
+                <span className="badge bg-danger ms-1" style={{ fontSize: '0.55rem' }}>!</span>
+              )}
+            </button>
+          </li>
+        ))}
       </ul>
 
-      {/* Overview Tab */}
+      {/* Tab Content */}
       {activeTab === 'overview' && (
-        <>
-          {/* Stats Cards */}
-          {stats && (
-            <div className="row g-3 mb-4">
-              <div className="col-md-3">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-body text-center">
-                    <div className="fs-4 fw-bold">{stats.total_leads}</div>
-                    <div className="text-muted small">Total Leads</div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-3">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-body text-center">
-                    <div className="fs-4 fw-bold">{stats.total_actions}</div>
-                    <div className="text-muted small">Total Actions</div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-3">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-body text-center">
-                    <div className="fs-4 fw-bold text-success">{stats.actions_by_status?.sent || 0}</div>
-                    <div className="text-muted small">Sent</div>
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-3">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-body text-center">
-                    <div className="fs-4 fw-bold text-primary">{stats.ai_generated_count}</div>
-                    <div className="text-muted small">AI Generated</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Channel & Action Breakdown */}
-          {stats && (
-            <div className="row g-3 mb-4">
-              <div className="col-md-6">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white fw-semibold">Actions by Channel</div>
-                  <div className="card-body">
-                    {Object.entries(stats.actions_by_channel || {}).map(([ch, count]) => (
-                      <div key={ch} className="d-flex justify-content-between mb-1">
-                        <span className="text-capitalize">{ch}</span>
-                        <span className="fw-bold">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="col-md-6">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white fw-semibold">Actions by Status</div>
-                  <div className="card-body">
-                    {Object.entries(stats.actions_by_status || {}).map(([st, count]) => (
-                      <div key={st} className="d-flex justify-content-between mb-1">
-                        <span className="text-capitalize">{st}</span>
-                        <span className="fw-bold">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Enrolled Leads */}
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white d-flex justify-content-between align-items-center">
-              <span className="fw-semibold">Enrolled Leads ({leads.length})</span>
-              <div className="d-flex gap-2">
-                <button className="btn btn-outline-primary btn-sm" onClick={handleShowMatchingLeads}>
-                  + Enroll Matching Leads
-                </button>
-              </div>
-            </div>
-            <div className="card-body p-0">
-              {leads.length === 0 ? (
-                <div className="text-center py-4 text-muted">
-                  No leads enrolled yet. Use the button above to find and enroll matching leads.
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-hover mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Name</th>
-                        <th>Company</th>
-                        <th>Title</th>
-                        <th>Score</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Enrolled</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leads.map((cl) => (
-                        <tr key={cl.id}>
-                          <td>{cl.lead?.name}</td>
-                          <td>{cl.lead?.company}</td>
-                          <td>{cl.lead?.title}</td>
-                          <td>{cl.lead?.lead_score}</td>
-                          <td>
-                            <span className={`badge ${cl.lead?.lead_source_type === 'cold' ? 'bg-info' : 'bg-warning'} text-dark`}>
-                              {cl.lead?.lead_source_type || 'warm'}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`badge bg-${cl.status === 'active' ? 'success' : cl.status === 'completed' ? 'info' : 'secondary'}`}>
-                              {cl.status}
-                            </span>
-                          </td>
-                          <td className="small">{new Date(cl.enrolled_at).toLocaleDateString()}</td>
-                          <td>
-                            <button
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => handleRemoveLead(cl.lead_id)}
-                              title="Remove from campaign"
-                            >
-                              x
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* AI System Prompt */}
-          {campaign.ai_system_prompt && (
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-header bg-white fw-semibold">AI System Prompt (Campaign Persona)</div>
-              <div className="card-body">
-                <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{campaign.ai_system_prompt}</pre>
-              </div>
-            </div>
-          )}
-        </>
+        <OverviewTab
+          campaignId={id!}
+          stats={stats}
+          leads={leads}
+          headers={headers}
+        />
       )}
 
-      {/* Analytics Tab */}
       {activeTab === 'analytics' && (
-        <>
-          {analyticsLoading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border text-primary" />
-              <div className="text-muted mt-2">Loading analytics...</div>
-            </div>
-          ) : !analytics ? (
-            <div className="text-center py-5 text-muted">
-              No analytics data available yet. Analytics require interaction outcomes to be recorded.
-            </div>
-          ) : (
-            <>
-              {/* KPI Cards */}
-              <div className="row g-3 mb-4">
-                <div className="col-md-2">
-                  <div className="card border-0 shadow-sm">
-                    <div className="card-body text-center p-3">
-                      <div className="fs-5 fw-bold">{analytics.overview.sent_count}</div>
-                      <div className="text-muted small">Sent</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-2">
-                  <div className="card border-0 shadow-sm">
-                    <div className="card-body text-center p-3">
-                      <div className="fs-5 fw-bold text-primary">{pct(analytics.overview.open_rate)}</div>
-                      <div className="text-muted small">Open Rate</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-2">
-                  <div className="card border-0 shadow-sm">
-                    <div className="card-body text-center p-3">
-                      <div className="fs-5 fw-bold text-info">{pct(analytics.overview.click_rate)}</div>
-                      <div className="text-muted small">Click Rate</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-2">
-                  <div className="card border-0 shadow-sm">
-                    <div className="card-body text-center p-3">
-                      <div className="fs-5 fw-bold text-success">{pct(analytics.overview.reply_rate)}</div>
-                      <div className="text-muted small">Reply Rate</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-2">
-                  <div className="card border-0 shadow-sm">
-                    <div className="card-body text-center p-3">
-                      <div className="fs-5 fw-bold" style={{ color: '#6f42c1' }}>{analytics.overview.meetings_booked}</div>
-                      <div className="text-muted small">Meetings</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-2">
-                  <div className="card border-0 shadow-sm">
-                    <div className="card-body text-center p-3">
-                      <div className="fs-5 fw-bold text-warning">{pct(analytics.overview.conversion_rate)}</div>
-                      <div className="text-muted small">Conversion</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <AnalyticsTab
+          analytics={analytics}
+          loading={analyticsLoading}
+        />
+      )}
 
-              {/* Cost KPIs (only if budget exists) */}
-              {(analytics.overview.budget_total || analytics.overview.budget_spent > 0) && (
-                <div className="row g-3 mb-4">
-                  <div className="col-md-3">
-                    <div className="card border-0 shadow-sm">
-                      <div className="card-body text-center p-3">
-                        <div className="fs-5 fw-bold">{currency(analytics.overview.budget_total)}</div>
-                        <div className="text-muted small">Budget</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-3">
-                    <div className="card border-0 shadow-sm">
-                      <div className="card-body text-center p-3">
-                        <div className="fs-5 fw-bold">{currency(analytics.overview.budget_spent)}</div>
-                        <div className="text-muted small">Spent</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-3">
-                    <div className="card border-0 shadow-sm">
-                      <div className="card-body text-center p-3">
-                        <div className="fs-5 fw-bold">{currency(analytics.overview.cost_per_lead)}</div>
-                        <div className="text-muted small">Cost / Lead</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-3">
-                    <div className="card border-0 shadow-sm">
-                      <div className="card-body text-center p-3">
-                        <div className="fs-5 fw-bold">{currency(analytics.overview.cost_per_meeting)}</div>
-                        <div className="text-muted small">Cost / Meeting</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+      {activeTab === 'targeting' && (
+        <TargetingTab
+          campaignId={id!}
+          targeting_criteria={campaign.targeting_criteria || {}}
+          headers={headers}
+          onRefresh={fetchCampaign}
+        />
+      )}
 
-              {/* Conversion Funnel */}
-              {analytics.funnel.length > 0 && (
-                <div className="card border-0 shadow-sm mb-4">
-                  <div className="card-header bg-white fw-semibold">Conversion Funnel</div>
-                  <div className="card-body">
-                    <div className="row g-2 mb-3">
-                      {analytics.funnel.map((s) => (
-                        <div key={s.stage} className="col text-center">
-                          <div className="small text-muted">{s.stage}</div>
-                          <div className="h5 fw-bold mb-0">{s.count}</div>
-                          <div className="small text-muted">{pct(s.rate)}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <FunnelChart>
-                        <Tooltip formatter={(value: any) => [value, 'Count']} />
-                        <Funnel
-                          dataKey="count"
-                          data={analytics.funnel.map((s) => ({ name: s.stage, count: s.count }))}
-                          isAnimationActive
-                        >
-                          <LabelList position="center" fill="#fff" fontSize={12} />
-                          {analytics.funnel.map((_e, i) => (
-                            <Cell key={i} fill={FUNNEL_COLORS[i % FUNNEL_COLORS.length]} />
-                          ))}
-                        </Funnel>
-                      </FunnelChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
+      {activeTab === 'gtm' && (
+        <GTMStrategyTab
+          campaignId={id!}
+          campaign={campaign}
+          headers={headers}
+          onRefresh={fetchCampaign}
+        />
+      )}
 
-              {/* Channel Performance */}
-              {analytics.channel_performance.length > 0 && (
-                <div className="card border-0 shadow-sm mb-4">
-                  <div className="card-header bg-white fw-semibold">Channel Performance</div>
-                  <div className="card-body">
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={analytics.channel_performance}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="channel" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="sent" fill="#0d6efd" name="Sent" />
-                        <Bar dataKey="opened" fill="#0dcaf0" name="Opened" />
-                        <Bar dataKey="clicked" fill="#6f42c1" name="Clicked" />
-                        <Bar dataKey="replied" fill="#198754" name="Replied" />
-                        <Bar dataKey="meetings" fill="#fd7e14" name="Meetings" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <div className="table-responsive mt-3">
-                      <table className="table table-sm table-hover mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th>Channel</th>
-                            <th className="text-end">Sent</th>
-                            <th className="text-end">Opened</th>
-                            <th className="text-end">Clicked</th>
-                            <th className="text-end">Replied</th>
-                            <th className="text-end">Open Rate</th>
-                            <th className="text-end">Reply Rate</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {analytics.channel_performance.map((ch) => (
-                            <tr key={ch.channel}>
-                              <td className="text-capitalize fw-medium">{ch.channel}</td>
-                              <td className="text-end">{ch.sent}</td>
-                              <td className="text-end">{ch.opened}</td>
-                              <td className="text-end">{ch.clicked}</td>
-                              <td className="text-end">{ch.replied}</td>
-                              <td className="text-end">{pct(ch.open_rate)}</td>
-                              <td className="text-end">{pct(ch.reply_rate)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
+      {activeTab === 'prompts' && (
+        <PromptsTab
+          campaignId={id!}
+          aiSystemPrompt={campaign.ai_system_prompt}
+          sequence={campaign.sequence}
+          headers={headers}
+          onRefresh={fetchCampaign}
+        />
+      )}
 
-              {/* Daily Activity Trend */}
-              {analytics.daily_series.length > 0 && (
-                <div className="card border-0 shadow-sm mb-4">
-                  <div className="card-header bg-white fw-semibold">Daily Activity</div>
-                  <div className="card-body">
-                    <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={analytics.daily_series}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                        <YAxis allowDecimals={false} />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="sent" stroke="#0d6efd" strokeWidth={2} name="Sent" />
-                        <Line type="monotone" dataKey="opened" stroke="#0dcaf0" strokeWidth={2} name="Opened" />
-                        <Line type="monotone" dataKey="replied" stroke="#198754" strokeWidth={2} name="Replied" />
-                        <Line type="monotone" dataKey="bounced" stroke="#dc3545" strokeWidth={1} name="Bounced" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
+      {activeTab === 'leads' && (
+        <LeadsOutreachTab
+          campaignId={id!}
+          leads={leads}
+          headers={headers}
+          onShowMatchingLeads={handleShowMatchingLeads}
+          onRemoveLead={handleRemoveLead}
+          onRefresh={fetchCampaign}
+        />
+      )}
 
-              {/* Step-by-Step Performance */}
-              {analytics.step_performance.length > 0 && (
-                <div className="card border-0 shadow-sm mb-4">
-                  <div className="card-header bg-white fw-semibold">Step-by-Step Performance</div>
-                  <div className="card-body p-0">
-                    <div className="table-responsive">
-                      <table className="table table-hover mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th>Step</th>
-                            <th>Channel</th>
-                            <th className="text-end">Total</th>
-                            <th className="text-end">Sent</th>
-                            <th className="text-end">Opened</th>
-                            <th className="text-end">Replied</th>
-                            <th className="text-end">AI Gen</th>
-                            <th className="text-end">Open Rate</th>
-                            <th className="text-end">Reply Rate</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {analytics.step_performance.map((step) => (
-                            <tr key={`${step.step_index}-${step.channel}`}>
-                              <td className="fw-medium">Step {step.step_index + 1}</td>
-                              <td className="text-capitalize">{step.channel}</td>
-                              <td className="text-end">{step.total}</td>
-                              <td className="text-end">{step.sent}</td>
-                              <td className="text-end">{step.opened}</td>
-                              <td className="text-end">{step.replied}</td>
-                              <td className="text-end">
-                                <span className={step.ai_generated > 0 ? 'text-primary fw-bold' : ''}>
-                                  {step.ai_generated}
-                                </span>
-                              </td>
-                              <td className="text-end">{pct(step.open_rate)}</td>
-                              <td className="text-end">{pct(step.reply_rate)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
+      {activeTab === 'crm' && (
+        <CRMTab
+          campaignId={id!}
+          headers={headers}
+        />
+      )}
 
-              {/* Lead Outcomes */}
-              {analytics.lead_outcomes.length > 0 && (
-                <div className="card border-0 shadow-sm mb-4">
-                  <div className="card-header bg-white fw-semibold">Lead Outcomes</div>
-                  <div className="card-body">
-                    <div className="row g-3">
-                      {analytics.lead_outcomes.map((lo) => (
-                        <div key={lo.outcome} className="col-md-3 col-sm-4">
-                          <div className="border rounded p-3 text-center">
-                            <div className="fs-4 fw-bold">{lo.count}</div>
-                            <div className="text-muted small text-capitalize">{lo.outcome.replace(/_/g, ' ')}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </>
+      {activeTab === 'settings' && (
+        <SettingsTab
+          campaignId={id!}
+          headers={headers}
+        />
       )}
 
       {/* Enroll Modal */}

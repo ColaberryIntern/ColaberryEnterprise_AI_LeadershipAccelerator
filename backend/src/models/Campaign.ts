@@ -16,6 +16,9 @@ interface CampaignAttributes {
   budget_total?: number;
   budget_spent?: number;
   ai_system_prompt?: string;
+  settings?: Record<string, any>;
+  goals?: string;
+  gtm_notes?: string;
   started_at?: Date;
   completed_at?: Date;
   created_by?: string;
@@ -35,6 +38,9 @@ class Campaign extends Model<CampaignAttributes> implements CampaignAttributes {
   declare budget_total: number;
   declare budget_spent: number;
   declare ai_system_prompt: string;
+  declare settings: Record<string, any>;
+  declare goals: string;
+  declare gtm_notes: string;
   declare started_at: Date;
   declare completed_at: Date;
   declare created_by: string;
@@ -91,6 +97,37 @@ Campaign.init(
       defaultValue: 0,
     },
     ai_system_prompt: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    settings: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: {
+        test_mode_enabled: false,
+        test_email: '',
+        test_phone: '',
+        delay_between_sends: 120,
+        max_leads_per_cycle: 10,
+        agent_name: 'Colaberry AI',
+        agent_greeting: 'Hi {first_name}, this is {agent_name} calling from Colaberry.',
+        call_time_start: '09:00',
+        call_time_end: '17:00',
+        call_timezone: 'America/Chicago',
+        call_active_days: [1, 2, 3, 4, 5],
+        max_call_duration: 300,
+        max_daily_calls: 50,
+        auto_dnc_on_request: true,
+        voicemail_enabled: true,
+        pass_prior_conversations: true,
+        auto_reply_enabled: false,
+      },
+    },
+    goals: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    gtm_notes: {
       type: DataTypes.TEXT,
       allowNull: true,
     },

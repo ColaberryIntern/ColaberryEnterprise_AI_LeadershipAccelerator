@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import TemperatureBadge from '../../components/TemperatureBadge';
 
 interface PipelineLead {
   id: number;
@@ -9,6 +10,7 @@ interface PipelineLead {
   company: string;
   title: string;
   lead_score: number;
+  lead_temperature?: string;
   pipeline_stage: string;
   created_at: string;
 }
@@ -190,6 +192,9 @@ function AdminPipelinePage() {
                     {lead.title && (
                       <div className="text-muted" style={{ fontSize: '0.7rem' }}>{lead.title}</div>
                     )}
+                    <div className="mt-1">
+                      <TemperatureBadge temperature={lead.lead_temperature} />
+                    </div>
                     <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
                       {getDaysInStage(lead.created_at)}d ago
                     </div>
