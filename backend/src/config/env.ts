@@ -39,6 +39,11 @@ export const env = {
   // Mandrill Webhook
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
 
+  // Google Calendar
+  googleCalendarId: process.env.GOOGLE_CALENDAR_ID || '',
+  googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
+  googlePrivateKey: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
   enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',

@@ -14,6 +14,7 @@ import CampaignLead from './CampaignLead';
 import InteractionOutcome from './InteractionOutcome';
 import ICPInsight from './ICPInsight';
 import LeadTemperatureHistory from './LeadTemperatureHistory';
+import StrategyCall from './StrategyCall';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -78,4 +79,5 @@ export {
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
+  StrategyCall,
 };

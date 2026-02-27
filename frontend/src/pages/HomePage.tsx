@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import LeadCaptureForm from '../components/LeadCaptureForm';
+import StrategyCallModal from '../components/StrategyCallModal';
 
 function HomePage() {
   const navigate = useNavigate();
+  const [showBooking, setShowBooking] = useState(false);
 
   const industries = [
     { icon: '💻', name: 'Technology' },
@@ -264,12 +266,12 @@ function HomePage() {
           <p className="mb-4 small" style={{ opacity: 0.6 }}>
             Most executives schedule this call immediately after reviewing the briefing.
           </p>
-          <Link
-            to="/contact"
+          <button
             className="btn btn-hero-primary btn-lg px-5"
+            onClick={() => setShowBooking(true)}
           >
             Schedule Executive Strategy Call →
-          </Link>
+          </button>
           <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
             <span className="small">✓ 30-minute focused session</span>
             <span className="small">✓ No obligation</span>
@@ -277,6 +279,8 @@ function HomePage() {
           </div>
         </div>
       </section>
+
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
     </>
   );
 }
