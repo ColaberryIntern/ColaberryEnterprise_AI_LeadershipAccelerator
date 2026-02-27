@@ -83,7 +83,6 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
   const auth = getAuthClient();
   const calendar = google.calendar({ version: 'v3', auth });
 
-  // Build date range in business timezone
   const now = new Date();
   // Start from tomorrow to avoid same-day bookings
   const startDate = new Date(now);
@@ -93,27 +92,9 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + days);
 
-  // Query freebusy
-  const freeBusyRes = await calendar.freebusy.query({
-    requestBody: {
-      timeMin: startDate.toISOString(),
-      timeMax: endDate.toISOString(),
-      timeZone: BUSINESS_TIMEZONE,
-      items: [{ id: env.googleCalendarId }],
-    },
-  });
-
-  const calData = freeBusyRes.data.calendars?.[env.googleCalendarId];
-  // If the calendar returned errors (e.g. notFound), it means the service account
-  // doesn't have access — warn clearly instead of silently showing all slots open
-  if (calData?.errors && calData.errors.length > 0) {
-    console.error('[Calendar] Freebusy errors for', env.googleCalendarId, ':', JSON.stringify(calData.errors));
-    throw new AppError(
-      'Calendar access not configured. Please share the calendar with the service account.',
-      503,
-    );
-  }
-  const busyBlocks = calData?.busy || [];
+  // Use events.list instead of freebusy so we can distinguish all-day events
+  // from timed events. All-day events (start.date) should NOT block time slots.
+  const busyBlocks = await getTimedBusyBlocks(calendar, startDate, endDate);
 
   // Generate available slots per day
   const dates: DateSlots[] = [];
@@ -121,17 +102,14 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
 
   while (current < endDate) {
     if (isWeekday(current)) {
-      // Generate all business-hour slots for this day
       const allSlots = generateBusinessSlots(current);
 
-      // Filter out slots that overlap with busy blocks
       const available = allSlots.filter((slot) => {
-        // Also filter out past slots
         const slotDateObj = new Date(slot.start);
         if (slotDateObj <= now) return false;
 
         return !busyBlocks.some((busy) =>
-          slotsOverlap(slot, busy.start || '', busy.end || '')
+          slotsOverlap(slot, busy.start, busy.end)
         );
       });
 
@@ -148,6 +126,50 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
   return { dates, timezone: BUSINESS_TIMEZONE };
 }
 
+/**
+ * Fetch timed (non-all-day) events from the calendar and return them as busy blocks.
+ * All-day events (which use start.date instead of start.dateTime) are excluded
+ * so they don't block bookable time slots.
+ */
+async function getTimedBusyBlocks(
+  calendar: ReturnType<typeof google.calendar>,
+  timeMin: Date,
+  timeMax: Date,
+): Promise<{ start: string; end: string }[]> {
+  const blocks: { start: string; end: string }[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const res = await calendar.events.list({
+      calendarId: env.googleCalendarId,
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+      pageToken,
+    });
+
+    for (const event of res.data.items || []) {
+      // Skip all-day events — they use start.date, not start.dateTime
+      if (!event.start?.dateTime || !event.end?.dateTime) continue;
+      // Skip transparent (free) events
+      if (event.transparency === 'transparent') continue;
+      // Skip cancelled events
+      if (event.status === 'cancelled') continue;
+
+      blocks.push({
+        start: event.start.dateTime,
+        end: event.end.dateTime,
+      });
+    }
+
+    pageToken = res.data.nextPageToken || undefined;
+  } while (pageToken);
+
+  return blocks;
+}
+
 export async function createBooking(data: BookingInput): Promise<BookingResult> {
   const auth = getAuthClient();
   const calendar = google.calendar({ version: 'v3', auth });
@@ -155,16 +177,8 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   const startTime = new Date(data.slotStart);
   const endTime = new Date(startTime.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
 
-  // Pre-booking conflict check: verify the slot is still free
-  const conflictCheck = await calendar.freebusy.query({
-    requestBody: {
-      timeMin: startTime.toISOString(),
-      timeMax: endTime.toISOString(),
-      timeZone: BUSINESS_TIMEZONE,
-      items: [{ id: env.googleCalendarId }],
-    },
-  });
-  const conflicts = conflictCheck.data.calendars?.[env.googleCalendarId]?.busy || [];
+  // Pre-booking conflict check: verify the slot is still free (ignoring all-day events)
+  const conflicts = await getTimedBusyBlocks(calendar, startTime, endTime);
   if (conflicts.length > 0) {
     throw new AppError('This time slot is no longer available. Please select a different time.', 409);
   }
