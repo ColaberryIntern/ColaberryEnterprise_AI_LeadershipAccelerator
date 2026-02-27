@@ -13,6 +13,8 @@ import {
 } from '../services/leadService';
 import { logStageChange } from '../services/activityService';
 import { getTemperatureHistory, classifyLeadManual } from '../services/leadClassificationService';
+import StrategyCall from '../models/StrategyCall';
+import StrategyCallIntelligence from '../models/StrategyCallIntelligence';
 
 export async function handleAdminListLeads(
   req: Request,
@@ -287,6 +289,32 @@ export async function handleUpdateTemperature(
       res.status(404).json({ error: error.message });
       return;
     }
+    next(error);
+  }
+}
+
+// ── Strategy Prep Intelligence ─────────────────────────────────────
+
+export async function handleGetLeadStrategyPrep(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: 'Invalid lead ID' });
+      return;
+    }
+
+    const calls = await StrategyCall.findAll({
+      where: { lead_id: id },
+      include: [{ model: StrategyCallIntelligence, as: 'intelligence' }],
+      order: [['created_at', 'DESC']],
+    });
+
+    res.json({ strategyCalls: calls });
+  } catch (error) {
     next(error);
   }
 }

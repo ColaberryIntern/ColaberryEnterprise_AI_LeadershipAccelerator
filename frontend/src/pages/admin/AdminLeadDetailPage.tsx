@@ -76,8 +76,9 @@ function AdminLeadDetailPage() {
   const [saveMessage, setSaveMessage] = useState('');
   const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'activity' | 'appointments'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'activity' | 'appointments' | 'strategy'>('info');
   const [tempHistory, setTempHistory] = useState<any[]>([]);
+  const [strategyCalls, setStrategyCalls] = useState<any[]>([]);
 
   const fetchTempHistory = async () => {
     try {
@@ -88,10 +89,20 @@ function AdminLeadDetailPage() {
     }
   };
 
+  const fetchStrategyPrep = async () => {
+    try {
+      const res = await api.get(`/api/admin/leads/${id}/strategy-prep`);
+      setStrategyCalls(res.data.strategyCalls || []);
+    } catch (err) {
+      // Strategy prep data not critical
+    }
+  };
+
   useEffect(() => {
     fetchLead();
     fetchAppointments();
     fetchTempHistory();
+    fetchStrategyPrep();
   }, [id]); // eslint-disable-line
 
   const fetchLead = async () => {
@@ -262,6 +273,11 @@ function AdminLeadDetailPage() {
         <li className="nav-item">
           <button className={`nav-link ${activeTab === 'appointments' ? 'active' : ''}`} onClick={() => setActiveTab('appointments')}>
             Appointments ({appointments.length})
+          </button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link ${activeTab === 'strategy' ? 'active' : ''}`} onClick={() => setActiveTab('strategy')}>
+            Strategy Prep {strategyCalls.some((c: any) => c.intelligence) ? `(${strategyCalls.filter((c: any) => c.intelligence).length})` : ''}
           </button>
         </li>
       </ul>
@@ -538,6 +554,197 @@ function AdminLeadDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'strategy' && (
+        <div>
+          {strategyCalls.length === 0 ? (
+            <div className="card admin-table-card">
+              <div className="card-body text-center py-4">
+                <p className="text-muted mb-0">No strategy calls found for this lead</p>
+              </div>
+            </div>
+          ) : (
+            strategyCalls.map((call: any) => {
+              const intel = call.intelligence;
+              let synthesis: any = null;
+              if (intel?.ai_synthesis) {
+                try { synthesis = JSON.parse(intel.ai_synthesis); } catch { /* ignore */ }
+              }
+
+              return (
+                <div key={call.id} className="card admin-table-card mb-4">
+                  <div className="card-header fw-bold py-3 d-flex justify-content-between align-items-center">
+                    <span>
+                      Strategy Call &mdash;{' '}
+                      {new Date(call.scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                    <div className="d-flex gap-2">
+                      <span className={`badge ${call.status === 'scheduled' ? 'bg-primary' : call.status === 'completed' ? 'bg-success' : call.status === 'no_show' ? 'bg-danger' : 'bg-secondary'}`}>
+                        {call.status}
+                      </span>
+                      {intel && (
+                        <span className={`badge ${intel.completion_score >= 60 ? 'bg-success' : intel.completion_score >= 30 ? 'bg-warning text-dark' : 'bg-secondary'}`}>
+                          Prep: {intel.completion_score}%
+                        </span>
+                      )}
+                      {intel?.ai_confidence_score !== null && intel?.ai_confidence_score !== undefined && (
+                        <span className={`badge ${intel.ai_confidence_score >= 70 ? 'bg-info' : 'bg-warning text-dark'}`}>
+                          AI: {intel.ai_confidence_score}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="card-body">
+                    {!intel ? (
+                      <p className="text-muted small mb-0">No prep form submitted yet</p>
+                    ) : (
+                      <div className="row g-3">
+                        {/* Completion Progress */}
+                        <div className="col-12">
+                          <div className="progress" style={{ height: 6 }}>
+                            <div
+                              className={`progress-bar ${intel.completion_score >= 60 ? 'bg-success' : 'bg-primary'}`}
+                              style={{ width: `${intel.completion_score}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Key Fields */}
+                        <div className="col-md-4">
+                          <div className="text-muted small">AI Maturity</div>
+                          <div className="fw-semibold">{intel.ai_maturity_level || '-'}</div>
+                        </div>
+                        <div className="col-md-4">
+                          <div className="text-muted small">Team Size</div>
+                          <div className="fw-semibold">{intel.team_size || '-'}</div>
+                        </div>
+                        <div className="col-md-4">
+                          <div className="text-muted small">Timeline</div>
+                          <div className="fw-semibold">{(intel.timeline_urgency || '-').replace(/_/g, ' ')}</div>
+                        </div>
+
+                        {/* Challenges */}
+                        {intel.primary_challenges?.length > 0 && (
+                          <div className="col-12">
+                            <div className="text-muted small mb-1">Challenges</div>
+                            <div className="d-flex flex-wrap gap-1">
+                              {intel.primary_challenges.map((c: string) => (
+                                <span key={c} className="badge bg-light text-dark border">{c}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tools */}
+                        {intel.current_tools?.length > 0 && (
+                          <div className="col-12">
+                            <div className="text-muted small mb-1">Current Tools</div>
+                            <div className="d-flex flex-wrap gap-1">
+                              {intel.current_tools.map((t: string) => (
+                                <span key={t} className="badge bg-light text-dark border">{t}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Budget & Consulting */}
+                        {(intel.budget_range || intel.evaluating_consultants) && (
+                          <div className="col-12">
+                            <div className="text-muted small">Budget</div>
+                            <div>
+                              {intel.budget_range ? intel.budget_range.replace(/_/g, ' ') : 'Not specified'}
+                              {intel.evaluating_consultants && <span className="badge bg-warning text-dark ms-2">Evaluating consultants</span>}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Priority Use Case */}
+                        {intel.priority_use_case && (
+                          <div className="col-12">
+                            <div className="text-muted small">Priority Use Case</div>
+                            <div className="bg-light p-2 rounded small">{intel.priority_use_case}</div>
+                          </div>
+                        )}
+
+                        {/* Questions */}
+                        {intel.specific_questions && (
+                          <div className="col-12">
+                            <div className="text-muted small">Questions for Call</div>
+                            <div className="bg-light p-2 rounded small">{intel.specific_questions}</div>
+                          </div>
+                        )}
+
+                        {/* File Upload */}
+                        {intel.uploaded_file_name && (
+                          <div className="col-12">
+                            <div className="text-muted small">Uploaded Document</div>
+                            <div className="badge bg-info">{intel.uploaded_file_name}</div>
+                          </div>
+                        )}
+
+                        {/* AI Synthesis */}
+                        {synthesis && (
+                          <div className="col-12">
+                            <details>
+                              <summary className="fw-semibold small" style={{ cursor: 'pointer' }}>
+                                AI Synthesis (Confidence: {intel.ai_confidence_score}%)
+                              </summary>
+                              <div className="mt-2 bg-light p-3 rounded">
+                                <div className="mb-2">
+                                  <strong className="small">Executive Summary</strong>
+                                  <p className="small mb-2">{synthesis.executive_summary}</p>
+                                </div>
+                                {synthesis.pain_points?.length > 0 && (
+                                  <div className="mb-2">
+                                    <strong className="small">Pain Points</strong>
+                                    <ul className="small mb-1">
+                                      {synthesis.pain_points.map((p: string, i: number) => <li key={i}>{p}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                {synthesis.recommended_topics?.length > 0 && (
+                                  <div className="mb-2">
+                                    <strong className="small">Recommended Topics</strong>
+                                    <ul className="small mb-1">
+                                      {synthesis.recommended_topics.map((t: string, i: number) => <li key={i}>{t}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                <div className="mb-2">
+                                  <strong className="small">Suggested Approach</strong>
+                                  <p className="small mb-1">{synthesis.suggested_approach}</p>
+                                </div>
+                                {synthesis.red_flags?.length > 0 && (
+                                  <div className="mb-2">
+                                    <strong className="small text-danger">Red Flags</strong>
+                                    <ul className="small mb-1">
+                                      {synthesis.red_flags.map((r: string, i: number) => <li key={i}>{r}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                {intel.ai_recommended_focus?.length > 0 && (
+                                  <div>
+                                    <strong className="small">Focus Areas</strong>
+                                    <div className="d-flex flex-wrap gap-1 mt-1">
+                                      {intel.ai_recommended_focus.map((f: string) => (
+                                        <span key={f} className="badge bg-primary">{f}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 

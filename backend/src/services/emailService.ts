@@ -118,6 +118,7 @@ interface StrategyCallConfirmationData {
   scheduledAt: Date;
   timezone: string;
   meetLink: string;
+  prepToken?: string;
 }
 
 export async function sendStrategyCallConfirmation(data: StrategyCallConfirmationData): Promise<void> {
@@ -184,6 +185,9 @@ function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmationData): 
     <li>Personalized recommendations for your team's next steps</li>
   </ul>
 
+  ${data.prepToken ? `<p><a href="${env.frontendUrl}/strategy-call-prep?token=${data.prepToken}" class="cta" style="background: #38a169;">Prepare for Your Call (5 min)</a></p>
+  <p style="font-size: 14px; color: #718096;">Completing your prep form helps us personalize your strategy session and make the most of your 30 minutes.</p>` : ''}
+
   <p>If you need to reschedule, please reply to this email directly.</p>
 
   <div class="footer">
@@ -191,6 +195,147 @@ function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmationData): 
     Colaberry Enterprise AI Division<br>
     AI Leadership | Architecture | Implementation | Advisory</p>
   </div>
+</body>
+</html>
+  `.trim();
+}
+
+export interface IntelligenceBriefData {
+  name: string;
+  email: string;
+  company: string;
+  completionScore: number;
+  aiMaturity: string;
+  timeline: string;
+  challenges: string[];
+  tools: string[];
+  budgetRange: string;
+  evaluatingConsultants: boolean;
+  priorityUseCase: string;
+  specificQuestions: string;
+  uploadedFileName: string | null;
+  aiSynthesis: string | null;
+  aiConfidenceScore: number | null;
+  aiRecommendedFocus: string[] | null;
+  leadId: number | null;
+}
+
+export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping intelligence brief for:', data.name);
+    return;
+  }
+
+  const alertTo = env.emailFrom; // ali@colaberry.com
+
+  await transporter.sendMail({
+    from: `"Colaberry Strategy Intel" <${env.emailFrom}>`,
+    to: alertTo,
+    subject: `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) \u2014 Score: ${data.completionScore}%`,
+    html: buildIntelligenceBriefHtml(data),
+  });
+
+  console.log('[Email] Intelligence brief sent for:', data.name);
+}
+
+function buildIntelligenceBriefHtml(data: IntelligenceBriefData): string {
+  const scoreBg = data.completionScore >= 60 ? '#38a169' : data.completionScore >= 30 ? '#dd6b20' : '#e53e3e';
+  const confidenceBg = (data.aiConfidenceScore || 0) >= 70 ? '#38a169' : (data.aiConfidenceScore || 0) >= 40 ? '#dd6b20' : '#e53e3e';
+
+  let synthesisHtml = '';
+  if (data.aiSynthesis) {
+    try {
+      const synth = JSON.parse(data.aiSynthesis);
+      synthesisHtml = `
+      <h2 style="color: #1a365d; font-size: 18px; margin-top: 24px;">AI Synthesis</h2>
+      <div class="card">
+        <div style="margin-bottom: 12px;">
+          <strong>Executive Summary:</strong><br>${synth.executive_summary || 'N/A'}
+        </div>
+        ${synth.pain_points?.length ? `<div style="margin-bottom: 12px;"><strong>Pain Points:</strong><ul>${synth.pain_points.map((p: string) => `<li>${p}</li>`).join('')}</ul></div>` : ''}
+        ${synth.recommended_topics?.length ? `<div style="margin-bottom: 12px;"><strong>Recommended Topics:</strong><ul>${synth.recommended_topics.map((t: string) => `<li>${t}</li>`).join('')}</ul></div>` : ''}
+        <div style="margin-bottom: 12px;">
+          <strong>Opportunity Assessment:</strong><br>${synth.opportunity_assessment || 'N/A'}
+        </div>
+        <div style="margin-bottom: 12px;">
+          <strong>Suggested Approach:</strong><br>${synth.suggested_approach || 'N/A'}
+        </div>
+        ${synth.red_flags?.length ? `<div style="margin-bottom: 12px;"><strong style="color: #e53e3e;">Red Flags:</strong><ul>${synth.red_flags.map((r: string) => `<li>${r}</li>`).join('')}</ul></div>` : ''}
+      </div>`;
+    } catch {
+      synthesisHtml = `<h2 style="color: #1a365d; font-size: 18px;">AI Synthesis</h2><div class="card"><p>${data.aiSynthesis}</p></div>`;
+    }
+  }
+
+  const adminUrl = data.leadId ? `${env.frontendUrl}/admin/leads/${data.leadId}` : '';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 650px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 22px; }
+    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
+    .card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 16px; margin: 12px 0; }
+    .badge { display: inline-block; color: white; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 14px; }
+    .field { margin-bottom: 6px; }
+    .field-label { color: #6c757d; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .field-value { font-size: 15px; }
+    .pill { display: inline-block; background: #e2e8f0; padding: 2px 8px; border-radius: 10px; font-size: 13px; margin: 2px; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Strategy Call Intelligence Brief</h1>
+
+  <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+    <span class="badge" style="background: ${scoreBg};">Prep: ${data.completionScore}%</span>
+    ${data.aiConfidenceScore !== null ? `<span class="badge" style="background: ${confidenceBg};">AI Confidence: ${data.aiConfidenceScore}%</span>` : ''}
+    <span class="badge" style="background: #1a365d;">${data.aiMaturity || 'Unknown'}</span>
+  </div>
+
+  <div class="card">
+    <div class="field">
+      <div class="field-label">Name</div>
+      <div class="field-value"><strong>${data.name}</strong></div>
+    </div>
+    <div class="field">
+      <div class="field-label">Company</div>
+      <div class="field-value">${data.company || 'Not provided'}</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Email</div>
+      <div class="field-value"><a href="mailto:${data.email}">${data.email}</a></div>
+    </div>
+    <div class="field">
+      <div class="field-label">Timeline</div>
+      <div class="field-value">${data.timeline || 'Not specified'}</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Budget</div>
+      <div class="field-value">${data.budgetRange || 'Not specified'} ${data.evaluatingConsultants ? '| Evaluating consultants' : ''}</div>
+    </div>
+    ${data.uploadedFileName ? `<div class="field"><div class="field-label">Uploaded Document</div><div class="field-value">${data.uploadedFileName}</div></div>` : ''}
+  </div>
+
+  <h2>Challenges</h2>
+  <div>${data.challenges.map(c => `<span class="pill">${c}</span>`).join(' ')}</div>
+
+  <h2>Current Tools</h2>
+  <div>${data.tools.length > 0 ? data.tools.map(t => `<span class="pill">${t}</span>`).join(' ') : '<em>None listed</em>'}</div>
+
+  ${data.priorityUseCase ? `<h2>Priority Use Case</h2><div class="card"><p>${data.priorityUseCase}</p></div>` : ''}
+
+  ${data.specificQuestions ? `<h2>Questions for the Call</h2><div class="card"><p>${data.specificQuestions}</p></div>` : ''}
+
+  ${data.aiRecommendedFocus?.length ? `<h2>Recommended Focus Areas</h2><div>${data.aiRecommendedFocus.map(f => `<span class="pill" style="background: #1a365d; color: white;">${f}</span>`).join(' ')}</div>` : ''}
+
+  ${synthesisHtml}
+
+  ${adminUrl ? `<p style="margin-top: 24px;"><a href="${adminUrl}" style="color: #1a365d; font-weight: 600;">View Lead in Admin Dashboard &rarr;</a></p>` : ''}
 </body>
 </html>
   `.trim();

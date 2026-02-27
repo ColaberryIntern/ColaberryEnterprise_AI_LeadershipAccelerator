@@ -15,6 +15,7 @@ import InteractionOutcome from './InteractionOutcome';
 import ICPInsight from './ICPInsight';
 import LeadTemperatureHistory from './LeadTemperatureHistory';
 import StrategyCall from './StrategyCall';
+import StrategyCallIntelligence from './StrategyCallIntelligence';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -67,6 +68,13 @@ InteractionOutcome.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 ScheduledEmail.hasMany(InteractionOutcome, { foreignKey: 'scheduled_email_id', as: 'outcomes' });
 InteractionOutcome.belongsTo(ScheduledEmail, { foreignKey: 'scheduled_email_id', as: 'scheduledEmail' });
 
+// Strategy Call associations
+StrategyCall.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(StrategyCall, { foreignKey: 'lead_id', as: 'strategyCalls' });
+StrategyCall.hasOne(StrategyCallIntelligence, { foreignKey: 'strategy_call_id', as: 'intelligence' });
+StrategyCallIntelligence.belongsTo(StrategyCall, { foreignKey: 'strategy_call_id', as: 'strategyCall' });
+StrategyCallIntelligence.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+
 // Lead Temperature History associations
 Lead.hasMany(LeadTemperatureHistory, { foreignKey: 'lead_id', as: 'temperatureHistory' });
 LeadTemperatureHistory.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
@@ -79,5 +87,5 @@ export {
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
-  StrategyCall,
+  StrategyCall, StrategyCallIntelligence,
 };

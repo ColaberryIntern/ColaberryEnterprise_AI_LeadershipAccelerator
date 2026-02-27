@@ -20,6 +20,7 @@ import {
   handleAdminBatchUpdate,
   handleGetTemperatureHistory,
   handleUpdateTemperature,
+  handleGetLeadStrategyPrep,
 } from '../controllers/adminLeadController';
 import {
   handleListActivities,
@@ -114,6 +115,7 @@ router.patch('/api/admin/leads/:id', requireAdmin, handleAdminUpdateLead);
 router.patch('/api/admin/leads/:id/pipeline', requireAdmin, handleAdminUpdatePipelineStage);
 router.get('/api/admin/leads/:id/temperature-history', requireAdmin, handleGetTemperatureHistory);
 router.patch('/api/admin/leads/:id/temperature', requireAdmin, handleUpdateTemperature);
+router.get('/api/admin/leads/:id/strategy-prep', requireAdmin, handleGetLeadStrategyPrep);
 
 // Protected admin routes — Pipeline
 router.get('/api/admin/pipeline/stats', requireAdmin, handleAdminGetPipelineStats);

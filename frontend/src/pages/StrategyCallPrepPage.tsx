@@ -1,8 +1,681 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import api from '../utils/api';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+interface CallInfo {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  scheduled_at: string;
+  timezone: string;
+}
+
+interface IntelligenceData {
+  primary_challenges: string[];
+  ai_maturity_level: string;
+  team_size: string;
+  priority_use_case: string;
+  timeline_urgency: string;
+  current_tools: string[];
+  budget_range: string;
+  evaluating_consultants: boolean;
+  previous_ai_investment: string;
+  specific_questions: string;
+  additional_context: string;
+  uploaded_file_name: string | null;
+  completion_score: number;
+  status: string;
+}
+
+interface PrepOptions {
+  challenges: string[];
+  tools: string[];
+  maturityLevels: string[];
+  teamSizes: string[];
+  timelines: string[];
+  budgets: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Client-side completion scoring (mirrors backend)                   */
+/* ------------------------------------------------------------------ */
+
+function computeScore(form: FormState, hasFile: boolean): number {
+  let s = 0;
+  if (form.primary_challenges.length > 0) s += 10;
+  if (form.ai_maturity_level) s += 10;
+  if (form.team_size) s += 10;
+  if (form.priority_use_case.trim()) s += 10;
+  if (form.timeline_urgency) s += 10;
+  if (form.current_tools.length > 0) s += 10;
+  if (hasFile) s += 20;
+  if (form.budget_range.trim()) s += 5;
+  if (form.evaluating_consultants !== undefined) s += 5;
+  if (form.specific_questions.trim()) s += 5;
+  if (form.additional_context.trim()) s += 5;
+  return s;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Form state                                                         */
+/* ------------------------------------------------------------------ */
+
+interface FormState {
+  primary_challenges: string[];
+  ai_maturity_level: string;
+  team_size: string;
+  priority_use_case: string;
+  timeline_urgency: string;
+  current_tools: string[];
+  budget_range: string;
+  evaluating_consultants: boolean;
+  previous_ai_investment: string;
+  specific_questions: string;
+  additional_context: string;
+}
+
+const INITIAL_FORM: FormState = {
+  primary_challenges: [],
+  ai_maturity_level: '',
+  team_size: '',
+  priority_use_case: '',
+  timeline_urgency: '',
+  current_tools: [],
+  budget_range: '',
+  evaluating_consultants: false,
+  previous_ai_investment: '',
+  specific_questions: '',
+  additional_context: '',
+};
+
+/* ------------------------------------------------------------------ */
+/*  Label helpers                                                      */
+/* ------------------------------------------------------------------ */
+
+const MATURITY_LABELS: Record<string, string> = {
+  exploring: 'Exploring \u2014 researching possibilities',
+  experimenting: 'Experimenting \u2014 running small tests',
+  piloting: 'Piloting \u2014 active POCs underway',
+  scaling: 'Scaling \u2014 expanding proven solutions',
+  optimizing: 'Optimizing \u2014 mature AI operations',
+};
+
+const TEAM_LABELS: Record<string, string> = {
+  '1-10': '1\u201310 employees',
+  '11-50': '11\u201350 employees',
+  '51-200': '51\u2013200 employees',
+  '201-1000': '201\u20131,000 employees',
+  '1000+': '1,000+ employees',
+};
+
+const TIMELINE_LABELS: Record<string, string> = {
+  immediate: 'Immediate \u2014 within 30 days',
+  '1-3_months': '1\u20133 months',
+  '3-6_months': '3\u20136 months',
+  '6-12_months': '6\u201312 months',
+  no_timeline: 'No specific timeline',
+};
+
+const BUDGET_LABELS: Record<string, string> = {
+  under_10k: 'Under $10K',
+  '10k-50k': '$10K\u2013$50K',
+  '50k-150k': '$50K\u2013$150K',
+  '150k-500k': '$150K\u2013$500K',
+  '500k+': '$500K+',
+  not_defined: 'Not yet defined',
+};
+
+/* ================================================================== */
+/*  Component                                                          */
+/* ================================================================== */
 
 export default function StrategyCallPrepPage() {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+
+  if (!token) return <StaticPrepContent />;
+
+  return <DynamicPrepForm token={token} />;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dynamic prep form (token provided)                                 */
+/* ------------------------------------------------------------------ */
+
+function DynamicPrepForm({ token }: { token: string }) {
+  const [loading, setLoading] = useState(true);
+  const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
+  const [options, setOptions] = useState<PrepOptions | null>(null);
+  const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [hasFile, setHasFile] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+
+  useEffect(() => {
+    api
+      .get(`/api/strategy-prep/${token}`)
+      .then((res) => {
+        setCallInfo(res.data.call);
+        setOptions(res.data.options);
+        if (res.data.intelligence) {
+          const intel = res.data.intelligence as IntelligenceData;
+          setForm({
+            primary_challenges: intel.primary_challenges || [],
+            ai_maturity_level: intel.ai_maturity_level || '',
+            team_size: intel.team_size || '',
+            priority_use_case: intel.priority_use_case || '',
+            timeline_urgency: intel.timeline_urgency || '',
+            current_tools: intel.current_tools || [],
+            budget_range: intel.budget_range || '',
+            evaluating_consultants: intel.evaluating_consultants || false,
+            previous_ai_investment: intel.previous_ai_investment || '',
+            specific_questions: intel.specific_questions || '',
+            additional_context: intel.additional_context || '',
+          });
+          setHasFile(!!intel.uploaded_file_name);
+          if (intel.status === 'submitted' || intel.status === 'synthesized') {
+            setSubmitted(true);
+          }
+        }
+      })
+      .catch(() => setError('Unable to load your strategy call. Please check the link and try again.'))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const score = useMemo(() => computeScore(form, hasFile), [form, hasFile]);
+
+  const toggleChallenge = useCallback((c: string) => {
+    setForm((prev) => ({
+      ...prev,
+      primary_challenges: prev.primary_challenges.includes(c)
+        ? prev.primary_challenges.filter((x) => x !== c)
+        : [...prev.primary_challenges, c],
+    }));
+  }, []);
+
+  const toggleTool = useCallback((t: string) => {
+    setForm((prev) => ({
+      ...prev,
+      current_tools: prev.current_tools.includes(t)
+        ? prev.current_tools.filter((x) => x !== t)
+        : [...prev.current_tools, t],
+    }));
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (form.primary_challenges.length === 0) {
+      setFormError('Please select at least one AI challenge.');
+      return;
+    }
+    if (!form.ai_maturity_level) {
+      setFormError('Please select your AI maturity level.');
+      return;
+    }
+    if (!form.team_size) {
+      setFormError('Please select your team size.');
+      return;
+    }
+    if (!form.timeline_urgency) {
+      setFormError('Please select a timeline.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.post(`/api/strategy-prep/${token}`, form);
+      setSubmitted(true);
+    } catch (err: any) {
+      if (err.response?.status === 400 && err.response.data?.details) {
+        setFormError(err.response.data.details.map((d: any) => d.message).join('. '));
+      } else {
+        setFormError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-5">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container py-5 text-center">
+        <p className="text-danger mb-3">{error}</p>
+        <Link to="/" className="btn btn-outline-primary btn-sm">
+          Return to Homepage
+        </Link>
+      </div>
+    );
+  }
+
+  if (submitted) {
+    return <SuccessState callInfo={callInfo!} score={score} />;
+  }
+
+  return (
+    <>
+      <SEOHead
+        title="Prepare for Your Strategy Call | Colaberry Enterprise AI"
+        description="Complete your 5-minute prep form to maximize your executive AI strategy session."
+      />
+
+      {/* Hero */}
+      <section
+        className="text-light text-center"
+        style={{
+          background: 'linear-gradient(135deg, #0f1b2d 0%, #1a365d 50%, #1e3a5f 100%)',
+          padding: '4rem 0 3rem',
+        }}
+      >
+        <div className="container" style={{ maxWidth: '750px' }}>
+          <h1 className="text-light mb-2" style={{ fontSize: '2rem' }}>
+            Prepare for Your Strategy Call
+          </h1>
+          {callInfo && (
+            <p className="mb-2" style={{ opacity: 0.85 }}>
+              {callInfo.name} &mdash;{' '}
+              {new Date(callInfo.scheduled_at).toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                timeZone: callInfo.timezone,
+              })}
+            </p>
+          )}
+          <p className="small mb-0" style={{ opacity: 0.7 }}>
+            Complete in 5 minutes &mdash; save 15 minutes during your call
+          </p>
+        </div>
+      </section>
+
+      {/* Progress Bar */}
+      <section className="bg-white border-bottom py-3 sticky-top" style={{ zIndex: 10 }}>
+        <div className="container" style={{ maxWidth: '750px' }}>
+          <div className="d-flex align-items-center gap-3">
+            <span className="small fw-semibold text-muted" style={{ minWidth: 80 }}>
+              {score}% Ready
+            </span>
+            <div className="progress flex-grow-1" style={{ height: 8 }}>
+              <div
+                className={`progress-bar ${score >= 60 ? 'bg-success' : 'bg-primary'}`}
+                role="progressbar"
+                style={{ width: `${score}%`, transition: 'width 0.3s ease' }}
+                aria-valuenow={score}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats */}
+      <section className="py-3" style={{ background: 'var(--color-bg-alt)' }}>
+        <div className="container">
+          <div className="row text-center g-3" style={{ maxWidth: '750px', margin: '0 auto' }}>
+            {[
+              { stat: '42%', label: 'Shorter decision cycle' },
+              { stat: '2x', label: 'More productive sessions' },
+              { stat: 'Clearer', label: 'ROI alignment' },
+            ].map((item) => (
+              <div className="col-4" key={item.label}>
+                <div className="fw-bold" style={{ color: 'var(--color-primary)', fontSize: '1.2rem' }}>
+                  {item.stat}
+                </div>
+                <div className="text-muted small">{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Form */}
+      <section className="section">
+        <div className="container" style={{ maxWidth: '750px' }}>
+          {formError && (
+            <div className="alert alert-danger py-2 mb-4" role="alert">
+              {formError}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            {/* Section 1: AI Challenges */}
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <h5 className="fw-semibold mb-1">Your AI Challenges</h5>
+                <p className="text-muted small mb-3">
+                  Select all that apply <span className="text-danger">*</span>
+                </p>
+                <div className="d-flex flex-wrap gap-2">
+                  {(options?.challenges || []).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className={`btn btn-sm ${form.primary_challenges.includes(c) ? 'btn-primary' : 'btn-outline-secondary'}`}
+                      onClick={() => toggleChallenge(c)}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Current State */}
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <h5 className="fw-semibold mb-3">Current State</h5>
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">
+                      AI Maturity Level <span className="text-danger">*</span>
+                    </label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={form.ai_maturity_level}
+                      onChange={(e) => setForm((f) => ({ ...f, ai_maturity_level: e.target.value }))}
+                    >
+                      <option value="">Select...</option>
+                      {(options?.maturityLevels || []).map((m) => (
+                        <option key={m} value={m}>
+                          {MATURITY_LABELS[m] || m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">
+                      Team Size <span className="text-danger">*</span>
+                    </label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={form.team_size}
+                      onChange={(e) => setForm((f) => ({ ...f, team_size: e.target.value }))}
+                    >
+                      <option value="">Select...</option>
+                      {(options?.teamSizes || []).map((t) => (
+                        <option key={t} value={t}>
+                          {TEAM_LABELS[t] || t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="form-label small fw-medium">Current AI Tools</label>
+                  <div className="d-flex flex-wrap gap-2">
+                    {(options?.tools || []).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        className={`btn btn-sm ${form.current_tools.includes(t) ? 'btn-primary' : 'btn-outline-secondary'}`}
+                        onClick={() => toggleTool(t)}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Priority & Timeline */}
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <h5 className="fw-semibold mb-3">Priority &amp; Timeline</h5>
+                <div className="mb-3">
+                  <label className="form-label small fw-medium">Priority Use Case</label>
+                  <textarea
+                    className="form-control form-control-sm"
+                    rows={3}
+                    placeholder="Describe the AI use case you'd most like to discuss..."
+                    value={form.priority_use_case}
+                    onChange={(e) => setForm((f) => ({ ...f, priority_use_case: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label small fw-medium">
+                    Timeline <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={form.timeline_urgency}
+                    onChange={(e) => setForm((f) => ({ ...f, timeline_urgency: e.target.value }))}
+                  >
+                    <option value="">Select...</option>
+                    {(options?.timelines || []).map((t) => (
+                      <option key={t} value={t}>
+                        {TIMELINE_LABELS[t] || t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Budget Context (optional) */}
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <h5 className="fw-semibold mb-1">Budget Context</h5>
+                <p className="text-muted small mb-3">Optional &mdash; helps us tailor recommendations</p>
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">Budget Range</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={form.budget_range}
+                      onChange={(e) => setForm((f) => ({ ...f, budget_range: e.target.value }))}
+                    >
+                      <option value="">Select...</option>
+                      {(options?.budgets || []).map((b) => (
+                        <option key={b} value={b}>
+                          {BUDGET_LABELS[b] || b}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6 d-flex align-items-end">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="eval-consultants"
+                        checked={form.evaluating_consultants}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, evaluating_consultants: e.target.checked }))
+                        }
+                      />
+                      <label className="form-check-label small" htmlFor="eval-consultants">
+                        Currently evaluating consultants
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="form-label small fw-medium">Previous AI Investment</label>
+                  <textarea
+                    className="form-control form-control-sm"
+                    rows={2}
+                    placeholder="Any prior AI spend or pilots..."
+                    value={form.previous_ai_investment}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, previous_ai_investment: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 5: For Your Call */}
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <h5 className="fw-semibold mb-3">For Your Call</h5>
+                <div className="mb-3">
+                  <label className="form-label small fw-medium">
+                    Specific Questions for the Session
+                  </label>
+                  <textarea
+                    className="form-control form-control-sm"
+                    rows={3}
+                    placeholder="What would you like to leave this call knowing?"
+                    value={form.specific_questions}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, specific_questions: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="form-label small fw-medium">Additional Context</label>
+                  <textarea
+                    className="form-control form-control-sm"
+                    rows={2}
+                    placeholder="Anything else we should know before the call..."
+                    value={form.additional_context}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, additional_context: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 6: File Upload placeholder (Phase 4) */}
+            <div className="card border-0 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <h5 className="fw-semibold mb-1">Upload Materials</h5>
+                <p className="text-muted small mb-3">
+                  Optional &mdash; upload AI roadmaps, org charts, or strategic documents (PDF, PPT)
+                </p>
+                <div
+                  className="border border-2 border-dashed rounded text-center py-4 px-3"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-alt)' }}
+                >
+                  <p className="text-muted mb-0 small">
+                    File upload coming soon. For now, describe relevant documents in the fields above.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              className="btn btn-hero-primary btn-lg w-100"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                    aria-hidden="true"
+                  />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Preparation'
+              )}
+            </button>
+
+            <p className="text-muted small mt-3 text-center mb-0">
+              All information is confidential and used solely to personalize your strategy session.
+            </p>
+          </form>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Success state after submission                                     */
+/* ------------------------------------------------------------------ */
+
+function SuccessState({ callInfo, score }: { callInfo: CallInfo; score: number }) {
+  return (
+    <>
+      <SEOHead
+        title="Preparation Complete | Colaberry Enterprise AI"
+        description="Your strategy call preparation is complete."
+      />
+
+      <section
+        className="text-light text-center"
+        style={{
+          background: 'linear-gradient(135deg, #0f1b2d 0%, #1a365d 50%, #1e3a5f 100%)',
+          padding: '5rem 0',
+        }}
+      >
+        <div className="container" style={{ maxWidth: '650px' }}>
+          <div
+            className="rounded-circle bg-success text-white d-inline-flex align-items-center justify-content-center mb-3"
+            style={{ width: 56, height: 56, fontSize: '1.8rem' }}
+            aria-hidden="true"
+          >
+            &#10003;
+          </div>
+          <h1 className="text-light mb-2" style={{ fontSize: '2rem' }}>
+            {score >= 60 ? "You're Ready" : 'Preparation Submitted'}
+          </h1>
+          <div className="mb-3">
+            <span
+              className="badge bg-success px-3 py-2"
+              style={{ fontSize: '1rem' }}
+            >
+              {score}% Complete
+            </span>
+          </div>
+          <p className="mb-0" style={{ opacity: 0.85 }}>
+            Thank you, {callInfo.name}. Your responses have been saved and will be used to
+            personalize your strategy session.
+          </p>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container text-center" style={{ maxWidth: '600px' }}>
+          <div className="bg-light rounded p-4 mb-4">
+            <h5 className="fw-semibold mb-2">What Happens Next</h5>
+            <ul className="list-unstyled text-start mb-0">
+              <li className="mb-2">&#10003; Your responses are being analyzed</li>
+              <li className="mb-2">&#10003; Your strategy session will be tailored to your specific challenges</li>
+              <li>&#10003; You'll receive a calendar reminder before your call</li>
+            </ul>
+          </div>
+
+          <Link to="/" className="btn btn-hero-primary btn-lg px-5">
+            Return to Homepage
+          </Link>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Static content (no token)                                          */
+/* ------------------------------------------------------------------ */
+
+function StaticPrepContent() {
   return (
     <>
       <SEOHead
@@ -106,19 +779,6 @@ export default function StrategyCallPrepPage() {
               </ul>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Cohort Reminder */}
-      <section className="section-alt">
-        <div className="container text-center" style={{ maxWidth: 650 }}>
-          <p className="mb-1" style={{ color: 'var(--color-primary)' }}>
-            <strong>The March 31 Enterprise AI Cohort begins soon.</strong>
-          </p>
-          <p className="text-muted small mb-0">
-            Many executives use this strategy call to determine if the cohort aligns
-            with their deployment goals.
-          </p>
         </div>
       </section>
 

@@ -13,6 +13,8 @@ export interface StrategyCallAttributes {
   meet_link: string;
   status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
   notes: string | null;
+  prep_token?: string;
+  lead_id?: number | null;
   created_at?: Date;
 }
 
@@ -28,6 +30,8 @@ class StrategyCall extends Model<StrategyCallAttributes> implements StrategyCall
   declare meet_link: string;
   declare status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
   declare notes: string | null;
+  declare prep_token: string;
+  declare lead_id: number | null;
   declare created_at: Date;
 }
 
@@ -79,6 +83,17 @@ StrategyCall.init(
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    prep_token: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      allowNull: true,
+      unique: true,
+    },
+    lead_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'leads', key: 'id' },
     },
     created_at: {
       type: DataTypes.DATE,

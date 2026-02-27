@@ -14,6 +14,7 @@ type Step = 'date' | 'time' | 'details' | 'submitting' | 'success';
 interface BookingResult {
   scheduled_at: string;
   meet_link: string;
+  prep_token: string;
 }
 
 function formatDateLabel(dateStr: string): { dayOfWeek: string; monthDay: string } {
@@ -369,7 +370,7 @@ export default function StrategyCallModal({ show, onClose }: StrategyCallModalPr
             >
               Add to Calendar (.ics)
             </button>
-            <a href="/strategy-call-prep" className="btn btn-outline-secondary btn-sm">
+            <a href={`/strategy-call-prep?token=${bookingResult.prep_token}`} className="btn btn-outline-secondary btn-sm">
               Prepare for Your Call
             </a>
           </div>

@@ -10,6 +10,7 @@ import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
+import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import { startScheduler } from './services/schedulerService';
 
 // Import models to register associations before sync
@@ -35,6 +36,7 @@ app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(adminRoutes);
 app.use(calendarRoutes);
+app.use(strategyPrepRoutes);
 
 app.use(errorHandler);
 
