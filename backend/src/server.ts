@@ -42,7 +42,7 @@ app.use(errorHandler);
 
 async function start(): Promise<void> {
   await connectDatabase();
-  await sequelize.sync();
+  await sequelize.sync({ alter: true });
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {
     startScheduler();
