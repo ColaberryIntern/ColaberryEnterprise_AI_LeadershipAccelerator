@@ -71,17 +71,7 @@ function generateBusinessSlots(date: Date): TimeSlot[] {
   return slots;
 }
 
-function toUTC(localDateTimeStr: string, tz: string): Date {
-  // Parse as local time in the given timezone
-  const d = new Date(localDateTimeStr + (localDateTimeStr.includes('+') || localDateTimeStr.includes('Z') ? '' : `[${tz}]`));
-  // Fallback: use Intl to compute offset
-  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  void formatter; // timezone validation
-  return new Date(new Date(localDateTimeStr).toLocaleString('en-US', { timeZone: 'UTC' }));
-}
-
-function slotsOverlap(slot: TimeSlot, busyStart: string, busyEnd: string, tz: string): boolean {
-  // Convert slot times (in business tz) to epoch ms for comparison
+function slotsOverlap(slot: TimeSlot, busyStart: string, busyEnd: string): boolean {
   const slotStartMs = new Date(slot.start).getTime();
   const slotEndMs = new Date(slot.end).getTime();
   const busyStartMs = new Date(busyStart).getTime();
@@ -113,7 +103,17 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
     },
   });
 
-  const busyBlocks = freeBusyRes.data.calendars?.[env.googleCalendarId]?.busy || [];
+  const calData = freeBusyRes.data.calendars?.[env.googleCalendarId];
+  // If the calendar returned errors (e.g. notFound), it means the service account
+  // doesn't have access — warn clearly instead of silently showing all slots open
+  if (calData?.errors && calData.errors.length > 0) {
+    console.error('[Calendar] Freebusy errors for', env.googleCalendarId, ':', JSON.stringify(calData.errors));
+    throw new AppError(
+      'Calendar access not configured. Please share the calendar with the service account.',
+      503,
+    );
+  }
+  const busyBlocks = calData?.busy || [];
 
   // Generate available slots per day
   const dates: DateSlots[] = [];
@@ -131,7 +131,7 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
         if (slotDateObj <= now) return false;
 
         return !busyBlocks.some((busy) =>
-          slotsOverlap(slot, busy.start || '', busy.end || '', BUSINESS_TIMEZONE)
+          slotsOverlap(slot, busy.start || '', busy.end || '')
         );
       });
 
@@ -154,6 +154,20 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
 
   const startTime = new Date(data.slotStart);
   const endTime = new Date(startTime.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
+
+  // Pre-booking conflict check: verify the slot is still free
+  const conflictCheck = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: startTime.toISOString(),
+      timeMax: endTime.toISOString(),
+      timeZone: BUSINESS_TIMEZONE,
+      items: [{ id: env.googleCalendarId }],
+    },
+  });
+  const conflicts = conflictCheck.data.calendars?.[env.googleCalendarId]?.busy || [];
+  if (conflicts.length > 0) {
+    throw new AppError('This time slot is no longer available. Please select a different time.', 409);
+  }
 
   const companyLabel = data.company ? ` (${data.company})` : '';
 
