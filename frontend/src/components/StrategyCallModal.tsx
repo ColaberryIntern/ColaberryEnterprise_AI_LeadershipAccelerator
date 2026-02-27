@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import Modal from './ui/Modal';
 import { useCalendarAvailability } from '../hooks/useCalendarAvailability';
+import { downloadICS } from '../utils/ics';
 import api from '../utils/api';
 
 interface StrategyCallModalProps {
@@ -315,10 +316,22 @@ export default function StrategyCallModal({ show, onClose }: StrategyCallModalPr
 
       {/* Step 4: Success */}
       {step === 'success' && bookingResult && (
-        <div className="text-center py-4">
-          <div className="fs-1 mb-3" aria-hidden="true">&#10003;</div>
-          <h4 className="mb-3" style={{ color: 'var(--color-accent)' }}>Your Strategy Call is Booked</h4>
+        <div className="py-4 px-2">
+          {/* Header */}
+          <div className="text-center mb-4">
+            <div
+              className="rounded-circle bg-success text-white d-inline-flex align-items-center justify-content-center mb-3"
+              style={{ width: 48, height: 48, fontSize: '1.5rem' }}
+              aria-hidden="true"
+            >
+              &#10003;
+            </div>
+            <h4 className="fw-bold mb-0" style={{ color: 'var(--color-accent)' }}>
+              Your Executive Strategy Call is Confirmed
+            </h4>
+          </div>
 
+          {/* Date/time confirmation */}
           <div className="alert alert-light border mb-4">
             <strong>{formatConfirmationDate(bookingResult.scheduled_at, timezone)}</strong>
             <br />
@@ -326,25 +339,57 @@ export default function StrategyCallModal({ show, onClose }: StrategyCallModalPr
             <span className="text-muted ms-2 small">({timezone.replace(/_/g, ' ')})</span>
           </div>
 
-          {bookingResult.meet_link && (
-            <a
-              href={bookingResult.meet_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary mb-3"
+          {/* What to Expect */}
+          <div className="bg-light rounded p-3 mb-4 text-start">
+            <h6 className="fw-semibold mb-2">What to Expect</h6>
+            <ul className="list-unstyled mb-0">
+              <li className="mb-1">&#10003; 30-minute focused architecture session</li>
+              <li className="mb-1">&#10003; Identify 1&ndash;2 high-impact AI deployment opportunities</li>
+              <li>&#10003; Clear internal roadmap recommendation</li>
+            </ul>
+          </div>
+
+          {/* Action buttons */}
+          <div className="d-flex gap-2 justify-content-center mb-3">
+            <button
+              type="button"
+              className="btn btn-outline-primary btn-sm"
+              onClick={() => {
+                const start = new Date(bookingResult.scheduled_at);
+                downloadICS(
+                  {
+                    title: 'Executive AI Strategy Call \u2014 Colaberry',
+                    description: 'Your 30-minute executive AI strategy session with Colaberry.',
+                    startDate: start,
+                    endDate: new Date(start.getTime() + 30 * 60 * 1000),
+                  },
+                  'strategy-call.ics',
+                );
+              }}
             >
-              Open Google Meet Link
+              Add to Calendar (.ics)
+            </button>
+            <a href="/strategy-call-prep" className="btn btn-outline-secondary btn-sm">
+              Prepare for Your Call
             </a>
-          )}
+          </div>
 
-          <p className="text-muted small mb-1">A confirmation email has been sent to your inbox.</p>
-          <p className="text-muted small mb-0">
-            Need to reschedule? Reply to the confirmation email.
-          </p>
+          {/* Cohort reminder */}
+          <div className="border-top pt-3 mt-3 text-center">
+            <p className="small text-muted mb-1">
+              The March 31 Enterprise AI Cohort begins soon.
+            </p>
+            <p className="small text-muted mb-0">
+              Many strategy call participants join this cohort.
+            </p>
+          </div>
 
-          <button className="btn btn-outline-secondary btn-sm mt-4" onClick={handleClose}>
-            Close
-          </button>
+          {/* Close */}
+          <div className="text-center mt-4">
+            <button className="btn btn-outline-secondary btn-sm" onClick={handleClose}>
+              Close
+            </button>
+          </div>
         </div>
       )}
     </Modal>
