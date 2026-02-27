@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import api from '../../utils/api';
 import Modal from '../../components/ui/Modal';
 import Breadcrumb from '../../components/ui/Breadcrumb';
 
@@ -45,7 +45,6 @@ const TYPE_BORDER_COLORS: Record<string, string> = {
 };
 
 function AdminCampaignsPage() {
-  const { token } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,60 +60,42 @@ function AdminCampaignsPage() {
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (filterType) params.append('type', filterType);
-      if (filterStatus) params.append('status', filterStatus);
-      const res = await fetch(`/api/admin/campaigns?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setCampaigns(data.campaigns || []);
+      const params: Record<string, string> = {};
+      if (filterType) params.type = filterType;
+      if (filterStatus) params.status = filterStatus;
+      const res = await api.get('/api/admin/campaigns', { params });
+      setCampaigns(res.data.campaigns || []);
     } catch (err) {
       console.error('Failed to fetch campaigns:', err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [filterType, filterStatus]);
 
-  const fetchSequences = async () => {
+  const fetchSequences = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/sequences', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setSequences(data || []);
+      const res = await api.get('/api/admin/sequences');
+      setSequences(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to fetch sequences:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchCampaigns();
-    fetchSequences();
-  }, [filterType, filterStatus]);
+    Promise.all([fetchCampaigns(), fetchSequences()]).finally(() => setLoading(false));
+  }, [fetchCampaigns, fetchSequences]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/admin/campaigns', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...form,
-          budget_total: form.budget_total ? parseFloat(form.budget_total) : null,
-          sequence_id: form.sequence_id || null,
-        }),
+      await api.post('/api/admin/campaigns', {
+        ...form,
+        budget_total: form.budget_total ? parseFloat(form.budget_total) : null,
+        sequence_id: form.sequence_id || null,
       });
-      if (res.ok) {
-        setShowModal(false);
-        setForm({ name: '', description: '', type: 'cold_outbound', sequence_id: '', budget_total: '', ai_system_prompt: '' });
-        fetchCampaigns();
-      }
+      setShowModal(false);
+      setForm({ name: '', description: '', type: 'cold_outbound', sequence_id: '', budget_total: '', ai_system_prompt: '' });
+      fetchCampaigns();
     } catch (err) {
       console.error('Failed to create campaign:', err);
     }
@@ -195,15 +176,15 @@ function AdminCampaignsPage() {
                       {TYPE_LABELS[c.type] || c.type}
                     </span>
                     {c.description && (
-                      <p className="text-muted small mb-2" style={{ lineClamp: 2, overflow: 'hidden' }}>
+                      <p className="text-muted small mb-2" style={{ WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {c.description}
                       </p>
                     )}
                     <div className="d-flex gap-3 text-muted small mt-auto">
                       <span>{c.lead_count} leads</span>
                       {c.sequence && <span>Seq: {c.sequence.name}</span>}
-                      {c.budget_total && (
-                        <span>${c.budget_spent?.toFixed(0)} / ${c.budget_total?.toFixed(0)}</span>
+                      {c.budget_total != null && c.budget_total > 0 && (
+                        <span>${(c.budget_spent || 0).toFixed(0)} / ${c.budget_total.toFixed(0)}</span>
                       )}
                     </div>
                   </div>

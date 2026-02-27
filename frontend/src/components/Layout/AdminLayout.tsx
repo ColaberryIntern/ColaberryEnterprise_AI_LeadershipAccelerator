@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import ErrorBoundary from '../ui/ErrorBoundary';
 
 const adminNavLinks = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: 'grid' },
@@ -148,7 +149,9 @@ function AdminLayout() {
 
         {/* Page Content */}
         <div className="container-fluid px-4 py-4">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </div>
     </div>
