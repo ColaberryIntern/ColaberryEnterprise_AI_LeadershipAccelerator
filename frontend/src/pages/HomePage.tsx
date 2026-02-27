@@ -186,54 +186,61 @@ function HomePage() {
       </section>
 
       {/* Executive Overview Download */}
-      <section className="section-alt" id="download-overview" aria-label="Download Executive Overview">
-        <div className="container" style={{ maxWidth: '960px' }}>
-          <div className="text-center mb-4">
-            <h2 className="mb-3">Get the Executive AI Accelerator Briefing</h2>
-            <p className="text-muted mb-0" style={{ maxWidth: '700px', margin: '0 auto' }}>
-              Download the complete program brief — including the full ROI framework,
-              enterprise case studies, and 21-day implementation roadmap.
-              Delivered instantly to your inbox.
-            </p>
-          </div>
+      <section className="section-alt py-5" id="download-overview" aria-label="Download Executive Overview">
+        <div className="container" style={{ maxWidth: '1100px' }}>
+          <div className="bg-white rounded-4 shadow p-4 p-md-5">
 
-          {/* Benefit Grid */}
-          <div className="row g-3 mb-4">
-            {[
-              { icon: '📋', title: '21-Day Roadmap' },
-              { icon: '📊', title: 'ROI Framework' },
-              { icon: '🏢', title: 'Enterprise Case Studies' },
-              { icon: '🏗️', title: 'Architecture Blueprint' },
-            ].map((item) => (
-              <div className="col-6 col-md-3" key={item.title}>
-                <div className="text-center p-3 rounded border bg-white">
-                  <div className="fs-3 mb-1" aria-hidden="true">{item.icon}</div>
-                  <div className="fw-semibold small">{item.title}</div>
+            {/* Section Header */}
+            <div className="text-center mb-5">
+              <span className="badge rounded-pill px-3 py-2 mb-3 d-inline-block" style={{ background: '#fff3cd', color: '#856404', fontSize: '0.85rem' }}>
+                March 31 Cohort Enrollment Open
+              </span>
+              <h2 className="mb-3" style={{ fontSize: '2rem' }}>Executive AI Accelerator Briefing</h2>
+              <p className="text-muted mb-0" style={{ maxWidth: '680px', margin: '0 auto', fontSize: '1.1rem' }}>
+                Built for CTOs, CIOs, CDOs, and Directors ready to deploy internal AI capability within 30 days.
+              </p>
+            </div>
+
+            {/* Value Preview Cards */}
+            <div className="row g-4 mb-5">
+              {[
+                { icon: '📅', title: '21-Day Execution Roadmap', description: 'Clear day-by-day transformation path' },
+                { icon: '💰', title: 'ROI & Cost Framework', description: 'Internal build vs consulting math' },
+                { icon: '🏢', title: 'Enterprise Case Studies', description: 'Documented deployment results' },
+                { icon: '🧱', title: 'AI Architecture Blueprint', description: 'Learn / Build / Manage model' },
+              ].map((item) => (
+                <div className="col-md-6 col-lg-3" key={item.title}>
+                  <div className="card card-lift h-100 border text-center p-3">
+                    <div className="fs-2 mb-2" aria-hidden="true">{item.icon}</div>
+                    <div className="fw-bold small mb-1">{item.title}</div>
+                    <div className="text-muted" style={{ fontSize: '0.8rem' }}>{item.description}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {/* Lead Capture Form */}
+            <LeadCaptureForm
+              formType="executive_overview_download"
+              fields={['name', 'email', 'company', 'title', 'phone', 'company_size', 'evaluating_90_days']}
+              submitLabel="Get Executive Briefing →"
+              buttonClassName="btn btn-hero-primary btn-lg w-100"
+              captureUtm={true}
+              onSuccess={() => navigate('/executive-overview/thank-you')}
+              className="mb-4"
+            />
+
+            {/* Enterprise Trust Strip */}
+            <div className="text-center mt-4 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+              <p className="fw-semibold small mb-1">
+                Enterprise Data Respect Policy
+              </p>
+              <p className="text-muted small mb-0">
+                We never sell your information. Your data is used solely to deliver requested materials.
+              </p>
+            </div>
+
           </div>
-
-          {/* Urgency Badge */}
-          <div className="text-center mb-4">
-            <span className="badge px-3 py-2" style={{ background: '#fff3cd', color: '#856404', fontSize: '0.85rem' }}>
-              March 31 Cohort Enrollment Now Open — Limited Seats
-            </span>
-          </div>
-
-          <LeadCaptureForm
-            formType="executive_overview_download"
-            fields={['name', 'email', 'company', 'title', 'phone', 'company_size', 'evaluating_90_days']}
-            submitLabel="Get Executive Briefing →"
-            buttonClassName="btn btn-hero-primary btn-lg w-100"
-            captureUtm={true}
-            onSuccess={() => navigate('/executive-overview/thank-you')}
-          />
-
-          {/* Privacy Reassurance */}
-          <p className="text-center text-muted small mt-3">
-            Your information is secure. We never share your data with third parties.
-          </p>
         </div>
       </section>
 
