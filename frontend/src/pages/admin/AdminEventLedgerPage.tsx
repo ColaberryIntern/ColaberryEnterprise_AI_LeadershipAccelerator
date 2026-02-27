@@ -88,7 +88,7 @@ function AdminEventLedgerPage() {
       </h1>
 
       {/* Filters */}
-      <div className="card border-0 shadow-sm mb-4">
+      <div className="card admin-table-card mb-4">
         <div className="card-body">
           <div className="row g-3 align-items-end">
             <div className="col-md-3">
@@ -137,7 +137,7 @@ function AdminEventLedgerPage() {
       </div>
 
       {/* Events Table */}
-      <div className="card border-0 shadow-sm">
+      <div className="card admin-table-card">
         <div className="card-body p-0">
           <div className="table-responsive">
             <table className="table table-hover mb-0">
@@ -164,7 +164,7 @@ function AdminEventLedgerPage() {
                         {formatDate(evt.created_at)}
                       </td>
                       <td>
-                        <span className={`badge ${getTypeBadgeColor(evt.event_type)}`}>
+                        <span className={`badge rounded-pill ${getTypeBadgeColor(evt.event_type)}`}>
                           {evt.event_type}
                         </span>
                       </td>
@@ -192,7 +192,7 @@ function AdminEventLedgerPage() {
           </div>
         </div>
 
-        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div className="card-footer d-flex justify-content-between align-items-center">
           <span className="text-muted small">Page {page} of {totalPages}</span>
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>

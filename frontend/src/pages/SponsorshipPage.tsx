@@ -32,7 +32,7 @@ function SponsorshipPage() {
           <h2 className="text-center mb-5">📊 The Cost of the Alternatives</h2>
           <div className="row g-4">
             <div className="col-md-4">
-              <div className="card h-100 border-0 shadow-sm p-4">
+              <div className="card card-lift h-100 border-0 shadow-sm p-4">
                 <div className="text-center mb-3">
                   <span className="fs-1" aria-hidden="true">💸</span>
                 </div>
@@ -47,7 +47,7 @@ function SponsorshipPage() {
               </div>
             </div>
             <div className="col-md-4">
-              <div className="card h-100 border-0 shadow-sm p-4">
+              <div className="card card-lift h-100 border-0 shadow-sm p-4">
                 <div className="text-center mb-3">
                   <span className="fs-1" aria-hidden="true">👤</span>
                 </div>
@@ -62,7 +62,7 @@ function SponsorshipPage() {
               </div>
             </div>
             <div className="col-md-4">
-              <div className="card h-100 border-primary border-2 shadow-sm p-4">
+              <div className="card card-lift h-100 border-primary border-2 shadow p-4" style={{ borderTop: '4px solid var(--color-accent)', background: 'linear-gradient(135deg, rgba(56,161,105,0.03) 0%, transparent 100%)' }}>
                 <div className="text-center mb-3">
                   <span className="fs-1" aria-hidden="true">⚡</span>
                 </div>
@@ -94,7 +94,7 @@ function SponsorshipPage() {
               { icon: '💰', title: 'Fraction of the Cost', description: '10–100x more cost-effective per capability unit delivered. Train a team for less than one consulting engagement.' },
             ].map((item) => (
               <div className="col-md-4" key={item.title}>
-                <div className="card h-100 border-0 shadow-sm text-center p-4">
+                <div className="card card-lift h-100 border-0 shadow-sm text-center p-4">
                   <div className="fs-1 mb-3" aria-hidden="true">{item.icon}</div>
                   <h3 className="h5">{item.title}</h3>
                   <p className="text-muted mb-0">{item.description}</p>

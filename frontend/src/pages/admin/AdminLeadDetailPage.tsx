@@ -213,7 +213,7 @@ function AdminLeadDetailPage() {
             </h1>
             <TemperatureBadge temperature={lead.lead_temperature} size="md" />
             {lead.lead_score > 0 && (
-              <span className={`badge ${getScoreBadge(lead.lead_score)} fs-6`}>
+              <span className={`badge rounded-pill ${getScoreBadge(lead.lead_score)} fs-6`}>
                 Score: {lead.lead_score}
               </span>
             )}
@@ -229,7 +229,7 @@ function AdminLeadDetailPage() {
       </div>
 
       {/* Pipeline Stage Bar */}
-      <div className="card border-0 shadow-sm mb-4">
+      <div className="card admin-table-card mb-4">
         <div className="card-body py-2">
           <div className="d-flex align-items-center gap-2">
             <span className="text-muted small fw-bold me-2">Pipeline:</span>
@@ -270,8 +270,8 @@ function AdminLeadDetailPage() {
         <div className="row g-4">
           <div className="col-lg-8">
             {/* Contact Info */}
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-header bg-white fw-bold py-3">Contact Information</div>
+            <div className="card admin-table-card mb-4">
+              <div className="card-header fw-bold py-3">Contact Information</div>
               <div className="card-body">
                 <div className="row g-3">
                   <div className="col-md-6">
@@ -326,8 +326,8 @@ function AdminLeadDetailPage() {
 
             {/* UTM / Tracking Data */}
             {(lead.utm_source || lead.utm_campaign || lead.page_url) && (
-              <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-white fw-bold py-3">Tracking Data</div>
+              <div className="card admin-table-card mb-4">
+                <div className="card-header fw-bold py-3">Tracking Data</div>
                 <div className="card-body">
                   <div className="row g-3">
                     {lead.utm_source && (
@@ -354,8 +354,8 @@ function AdminLeadDetailPage() {
             )}
 
             {/* Status + Notes */}
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-header bg-white fw-bold py-3">Status &amp; Notes</div>
+            <div className="card admin-table-card mb-4">
+              <div className="card-header fw-bold py-3">Status &amp; Notes</div>
               <div className="card-body">
                 <div className="mb-3">
                   <label className="form-label small text-muted">Status</label>
@@ -400,8 +400,8 @@ function AdminLeadDetailPage() {
           {/* Right: Lead Score + Automation History */}
           <div className="col-lg-4">
             {lead.lead_score > 0 && (
-              <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-white fw-bold py-3">Lead Score</div>
+              <div className="card admin-table-card mb-4">
+                <div className="card-header fw-bold py-3">Lead Score</div>
                 <div className="card-body text-center">
                   <div className={`badge ${getScoreBadge(lead.lead_score)} fs-3 px-4 py-2 mb-2`}>
                     {lead.lead_score}
@@ -413,8 +413,8 @@ function AdminLeadDetailPage() {
 
             {/* Temperature History */}
             {tempHistory.length > 0 && (
-              <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-white fw-bold py-3">Temperature History</div>
+              <div className="card admin-table-card mb-4">
+                <div className="card-header fw-bold py-3">Temperature History</div>
                 <div className="card-body p-0">
                   {tempHistory.slice(0, 5).map((entry: any) => (
                     <div key={entry.id} className="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
@@ -430,8 +430,8 @@ function AdminLeadDetailPage() {
               </div>
             )}
 
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-bold py-3">Automation History</div>
+            <div className="card admin-table-card">
+              <div className="card-header fw-bold py-3">Automation History</div>
               <div className="card-body">
                 {automationHistory.length === 0 ? (
                   <p className="text-muted small mb-0">No automation events yet</p>
@@ -473,8 +473,8 @@ function AdminLeadDetailPage() {
       {activeTab === 'activity' && (
         <div className="row g-4">
           <div className="col-lg-8">
-            <div className="card border-0 shadow-sm mb-4">
-              <div className="card-header bg-white fw-bold py-3">Add Activity</div>
+            <div className="card admin-table-card mb-4">
+              <div className="card-header fw-bold py-3">Add Activity</div>
               <div className="card-body">
                 <AddNoteForm
                   leadId={lead.id}
@@ -483,8 +483,8 @@ function AdminLeadDetailPage() {
               </div>
             </div>
 
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-bold py-3">Activity Timeline</div>
+            <div className="card admin-table-card">
+              <div className="card-header fw-bold py-3">Activity Timeline</div>
               <div className="card-body">
                 <ActivityTimeline leadId={lead.id} refreshKey={activityRefreshKey} />
               </div>
@@ -493,8 +493,8 @@ function AdminLeadDetailPage() {
 
           <div className="col-lg-4">
             {lead.lead_score > 0 && (
-              <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-white fw-bold py-3">Lead Score</div>
+              <div className="card admin-table-card mb-4">
+                <div className="card-header fw-bold py-3">Lead Score</div>
                 <div className="card-body text-center">
                   <div className={`badge ${getScoreBadge(lead.lead_score)} fs-3 px-4 py-2 mb-2`}>
                     {lead.lead_score}
@@ -510,8 +510,8 @@ function AdminLeadDetailPage() {
       {activeTab === 'appointments' && (
         <div className="row g-4">
           <div className="col-lg-8">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-bold py-3 d-flex justify-content-between align-items-center">
+            <div className="card admin-table-card">
+              <div className="card-header fw-bold py-3 d-flex justify-content-between align-items-center">
                 <span>Appointments</span>
                 <button
                   className="btn btn-primary btn-sm"

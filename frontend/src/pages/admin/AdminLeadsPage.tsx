@@ -170,7 +170,7 @@ function AdminLeadsPage() {
     return (
       <>
         <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads' }]} />
-        <div className="card border-0 shadow-sm">
+        <div className="card admin-table-card">
           <div className="card-body p-0">
             <TableSkeleton rows={8} columns={7} />
           </div>
@@ -200,40 +200,50 @@ function AdminLeadsPage() {
       {stats && (
         <div className="row g-3 mb-4">
           <div className="col-6 col-md">
-            <div className="card border-0 shadow-sm p-3 text-center">
-              <div className="text-muted small mb-1">Total</div>
-              <div className="h4 fw-bold mb-0">{stats.total}</div>
+            <div className="card admin-kpi-card">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #4a5568' }}>
+                <div className="text-muted small">Total</div>
+                <div className="h4 fw-bold mb-0">{stats.total}</div>
+              </div>
             </div>
           </div>
           <div className="col-6 col-md">
-            <div className="card border-0 shadow-sm p-3 text-center">
-              <div className="text-muted small mb-1">New</div>
-              <div className="h4 fw-bold mb-0 text-info">{stats.byStatus.new || 0}</div>
+            <div className="card admin-kpi-card">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #0dcaf0' }}>
+                <div className="text-muted small">New</div>
+                <div className="h4 fw-bold mb-0" style={{ color: '#0dcaf0' }}>{stats.byStatus.new || 0}</div>
+              </div>
             </div>
           </div>
           <div className="col-6 col-md">
-            <div className="card border-0 shadow-sm p-3 text-center" style={{ borderLeft: '3px solid #dc3545' }}>
-              <div className="text-muted small mb-1">High-Intent</div>
-              <div className="h4 fw-bold mb-0 text-danger">{stats.highIntent}</div>
+            <div className="card admin-kpi-card">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #dc3545', background: 'linear-gradient(135deg, rgba(220,53,69,0.04) 0%, transparent 100%)' }}>
+                <div className="text-muted small">High-Intent</div>
+                <div className="h4 fw-bold mb-0 text-danger">{stats.highIntent}</div>
+              </div>
             </div>
           </div>
           <div className="col-6 col-md">
-            <div className="card border-0 shadow-sm p-3 text-center">
-              <div className="text-muted small mb-1">This Month</div>
-              <div className="h4 fw-bold mb-0">{stats.thisMonth}</div>
+            <div className="card admin-kpi-card">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #6f42c1' }}>
+                <div className="text-muted small">This Month</div>
+                <div className="h4 fw-bold mb-0" style={{ color: '#6f42c1' }}>{stats.thisMonth}</div>
+              </div>
             </div>
           </div>
           <div className="col-6 col-md">
-            <div className="card border-0 shadow-sm p-3 text-center">
-              <div className="text-muted small mb-1">Conversion</div>
-              <div className="h4 fw-bold mb-0 text-success">{stats.conversionRate}%</div>
+            <div className="card admin-kpi-card">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #198754' }}>
+                <div className="text-muted small">Conversion</div>
+                <div className="h4 fw-bold mb-0 text-success">{stats.conversionRate}%</div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Filters */}
-      <div className="card border-0 shadow-sm mb-4">
+      <div className="card admin-table-card mb-4">
         <div className="card-body">
           <div className="row g-3 align-items-end">
             <div className="col-md-3">
@@ -333,13 +343,13 @@ function AdminLeadsPage() {
       )}
 
       {/* Leads Table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-bold fs-6 py-3 d-flex justify-content-between">
+      <div className="card admin-table-card">
+        <div className="card-header fw-bold fs-6 py-3 d-flex justify-content-between">
           <span>Leads ({total})</span>
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover mb-0">
+            <table className="table table-hover table-striped mb-0">
               <thead className="table-light">
                 <tr>
                   <th style={{ width: '40px' }}>

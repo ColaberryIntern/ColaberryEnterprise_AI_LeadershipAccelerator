@@ -169,7 +169,7 @@ function AdminICPInsightsPage() {
       </div>
 
       {/* Filters */}
-      <div className="card border-0 shadow-sm mb-4">
+      <div className="card admin-table-card mb-4">
         <div className="card-body py-3">
           <div className="row g-3 align-items-end">
             <div className="col-md-3">
@@ -215,7 +215,7 @@ function AdminICPInsightsPage() {
       {/* Stats Overview */}
       <div className="row g-4 mb-4">
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card admin-table-card h-100">
             <div className="card-body text-center">
               <div className="text-muted small">Total Interactions</div>
               <div className="fs-2 fw-bold" style={{ color: 'var(--color-primary)' }}>
@@ -225,7 +225,7 @@ function AdminICPInsightsPage() {
           </div>
         </div>
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card admin-table-card h-100">
             <div className="card-body text-center">
               <div className="text-muted small">Last 90 Days</div>
               <div className="fs-2 fw-bold text-success">
@@ -235,7 +235,7 @@ function AdminICPInsightsPage() {
           </div>
         </div>
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card admin-table-card h-100">
             <div className="card-body text-center">
               <div className="text-muted small">Top Recommendations</div>
               <div className="fs-2 fw-bold text-primary">
@@ -245,7 +245,7 @@ function AdminICPInsightsPage() {
           </div>
         </div>
         <div className="col-md-3">
-          <div className="card border-0 shadow-sm h-100">
+          <div className="card admin-table-card h-100">
             <div className="card-body text-center">
               <div className="text-muted small">Last Computed</div>
               <div className="fs-6 fw-bold text-muted mt-2">
@@ -260,8 +260,8 @@ function AdminICPInsightsPage() {
 
       {/* Targeting Recommendations */}
       {recommendations.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-bold py-3">
+        <div className="card admin-table-card mb-4">
+          <div className="card-header fw-bold py-3">
             Targeting Recommendations — {metricLabels[metricName]}
           </div>
           <div className="card-body p-0">
@@ -288,7 +288,7 @@ function AdminICPInsightsPage() {
                       <td className="text-end fw-bold">{formatPercent(rec.metric_value)}</td>
                       <td className="text-end">{rec.sample_size}</td>
                       <td className="text-center">
-                        <span className={`badge bg-${confidenceColor(rec.confidence)}`}>
+                        <span className={`badge rounded-pill bg-${confidenceColor(rec.confidence)}`}>
                           {confidenceLabel(rec.confidence)}
                         </span>
                       </td>
@@ -304,8 +304,8 @@ function AdminICPInsightsPage() {
       {/* Outcome Distribution + Channel Distribution */}
       <div className="row g-4 mb-4">
         <div className="col-md-6">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-header bg-white fw-bold py-3">Outcome Distribution</div>
+          <div className="card admin-table-card h-100">
+            <div className="card-header fw-bold py-3">Outcome Distribution</div>
             <div className="card-body">
               {outcomeChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
@@ -328,8 +328,8 @@ function AdminICPInsightsPage() {
           </div>
         </div>
         <div className="col-md-6">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-header bg-white fw-bold py-3">Channel Distribution</div>
+          <div className="card admin-table-card h-100">
+            <div className="card-header fw-bold py-3">Channel Distribution</div>
             <div className="card-body">
               {channelChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={250}>
@@ -354,8 +354,8 @@ function AdminICPInsightsPage() {
       </div>
 
       {/* Daily Trend */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">Daily Interaction Trend</div>
+      <div className="card admin-table-card mb-4">
+        <div className="card-header fw-bold py-3">Daily Interaction Trend</div>
         <div className="card-body">
           {trendChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
@@ -389,8 +389,8 @@ function AdminICPInsightsPage() {
         }));
 
         return (
-          <div key={dim} className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white fw-bold py-3">
+          <div key={dim} className="card admin-table-card mb-4">
+            <div className="card-header fw-bold py-3">
               {dimensionLabels[dim]} — {metricLabels[metricName]}
             </div>
             <div className="card-body">
@@ -427,7 +427,7 @@ function AdminICPInsightsPage() {
                           <td className="text-end fw-bold">{formatPercent(d.rate)}</td>
                           <td className="text-end">{d.sample_size}</td>
                           <td className="text-center">
-                            <span className={`badge bg-${confidenceColor(d.confidence)}`}>
+                            <span className={`badge rounded-pill bg-${confidenceColor(d.confidence)}`}>
                               {confidenceLabel(d.confidence)}
                             </span>
                           </td>
@@ -444,8 +444,8 @@ function AdminICPInsightsPage() {
 
       {/* Cross-dimensional: Industry x Title */}
       {summary?.industry_x_title?.response_rate?.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-bold py-3">
+        <div className="card admin-table-card mb-4">
+          <div className="card-header fw-bold py-3">
             Industry + Title Combinations — Response Rate
           </div>
           <div className="card-body p-0">
@@ -470,7 +470,7 @@ function AdminICPInsightsPage() {
                         <td className="text-end fw-bold">{formatPercent(d.rate)}</td>
                         <td className="text-end">{d.sample_size}</td>
                         <td className="text-center">
-                          <span className={`badge bg-${confidenceColor(d.confidence)}`}>
+                          <span className={`badge rounded-pill bg-${confidenceColor(d.confidence)}`}>
                             {confidenceLabel(d.confidence)}
                           </span>
                         </td>
@@ -486,7 +486,7 @@ function AdminICPInsightsPage() {
 
       {/* Empty state */}
       {recommendations.length === 0 && outcomeChartData.length === 0 && (
-        <div className="card border-0 shadow-sm mb-4">
+        <div className="card admin-table-card mb-4">
           <div className="card-body text-center py-5">
             <h5 className="text-muted">No Insight Data Yet</h5>
             <p className="text-muted small mb-3">

@@ -38,6 +38,12 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'info',
 };
 
+const TYPE_BORDER_COLORS: Record<string, string> = {
+  cold_outbound: '#0dcaf0',
+  warm_nurture: '#fd7e14',
+  re_engagement: '#6f42c1',
+};
+
 function AdminCampaignsPage() {
   const { token } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -121,7 +127,7 @@ function AdminCampaignsPage() {
         <div className="row g-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="col-md-6 col-lg-4">
-              <div className="card border-0 shadow-sm p-3">
+              <div className="card admin-table-card p-3">
                 <div className="skeleton mb-2" style={{ width: '60%', height: '18px' }} />
                 <div className="skeleton mb-2" style={{ width: '40%', height: '14px' }} />
                 <div className="skeleton" style={{ width: '80%', height: '14px' }} />
@@ -177,11 +183,11 @@ function AdminCampaignsPage() {
           {campaigns.map((c) => (
             <div key={c.id} className="col-md-6 col-lg-4">
               <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none">
-                <div className="card h-100 border-0 shadow-sm">
+                <div className="card h-100 admin-table-card card-lift" style={{ borderTop: `3px solid ${TYPE_BORDER_COLORS[c.type] || '#6c757d'}` }}>
                   <div className="card-body">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <h6 className="card-title text-dark mb-0">{c.name}</h6>
-                      <span className={`badge bg-${STATUS_COLORS[c.status] || 'secondary'}`}>
+                      <span className={`badge rounded-pill bg-${STATUS_COLORS[c.status] || 'secondary'}`}>
                         {c.status}
                       </span>
                     </div>

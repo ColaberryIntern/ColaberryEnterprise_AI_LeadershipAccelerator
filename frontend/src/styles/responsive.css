@@ -96,6 +96,37 @@ textarea:focus-visible {
   }
 }
 
+/* Admin sidebar responsive */
+@media (max-width: 991.98px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .admin-content {
+    margin-left: 0 !important;
+  }
+
+  .admin-mobile-header {
+    display: flex !important;
+    align-items: center;
+    gap: 0.75rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .admin-sidebar-toggle {
+    display: none !important;
+  }
+
+  .admin-sidebar-backdrop {
+    display: none !important;
+  }
+}
+
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   .card {

@@ -28,8 +28,8 @@ function PricingPage() {
       {/* Single Pricing Tier */}
       <section className="section" aria-label="Pricing">
         <div className="container" style={{ maxWidth: '650px' }}>
-          <div className="card border-primary border-2 shadow-sm">
-            <div className="card-header bg-primary text-white text-center fw-bold fs-5">
+          <div className="card border-primary border-2 shadow">
+            <div className="card-header text-white text-center fw-bold fs-5" style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%)' }}>
               ⚡ Executive AI Build Accelerator
             </div>
             <div className="card-body p-5 text-center">
@@ -73,27 +73,19 @@ function PricingPage() {
         <div className="container">
           <h2 className="text-center mb-5">🏢 Corporate Group Enrollment</h2>
           <div className="row g-4 text-center">
-            <div className="col-md-4">
-              <div className="card h-100 border-0 shadow-sm p-4">
-                <div className="fs-1 mb-3" aria-hidden="true">👥</div>
-                <h3 className="h5">2–4 Participants</h3>
-                <p className="text-muted">Custom group rate with shared cohort experience</p>
+            {[
+              { icon: '👥', title: '2–4 Participants', desc: 'Custom group rate with shared cohort experience', color: '#3182ce' },
+              { icon: '🏬', title: '5–9 Participants', desc: 'Cohort pricing with dedicated support sessions', color: '#805ad5' },
+              { icon: '🏭', title: '10+ Participants', desc: 'Private corporate cohort — fully tailored to your organization', color: '#38a169' },
+            ].map((tier) => (
+              <div className="col-md-4" key={tier.title}>
+                <div className="card card-lift h-100 border-0 shadow-sm p-4 text-center" style={{ borderTop: `4px solid ${tier.color}` }}>
+                  <div className="fs-1 mb-3" aria-hidden="true">{tier.icon}</div>
+                  <h3 className="h5">{tier.title}</h3>
+                  <p className="text-muted">{tier.desc}</p>
+                </div>
               </div>
-            </div>
-            <div className="col-md-4">
-              <div className="card h-100 border-0 shadow-sm p-4">
-                <div className="fs-1 mb-3" aria-hidden="true">🏬</div>
-                <h3 className="h5">5–9 Participants</h3>
-                <p className="text-muted">Cohort pricing with dedicated support sessions</p>
-              </div>
-            </div>
-            <div className="col-md-4">
-              <div className="card h-100 border-0 shadow-sm p-4">
-                <div className="fs-1 mb-3" aria-hidden="true">🏭</div>
-                <h3 className="h5">10+ Participants</h3>
-                <p className="text-muted">Private corporate cohort — fully tailored to your organization</p>
-              </div>
-            </div>
+            ))}
           </div>
           <div className="text-center mt-4">
             <Link to="/contact" className="btn btn-outline-primary btn-lg">

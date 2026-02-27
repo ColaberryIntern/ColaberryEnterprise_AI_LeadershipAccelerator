@@ -77,8 +77,8 @@ function AdminImportPage() {
       </div>
 
       {/* Instructions */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">CSV Format</div>
+      <div className="card admin-table-card mb-4">
+        <div className="card-header fw-bold py-3">CSV Format</div>
         <div className="card-body">
           <p className="small text-muted mb-2">
             Upload a CSV file with leads. Required columns: <strong>name</strong> and <strong>email</strong>.
@@ -93,8 +93,8 @@ function AdminImportPage() {
       </div>
 
       {/* Upload Area */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">Upload</div>
+      <div className="card admin-table-card mb-4">
+        <div className="card-header fw-bold py-3">Upload</div>
         <div className="card-body">
           <div className="mb-3">
             <input
@@ -127,8 +127,8 @@ function AdminImportPage() {
 
       {/* Results */}
       {result && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white fw-bold py-3">Import Results</div>
+        <div className="card admin-table-card">
+          <div className="card-header fw-bold py-3">Import Results</div>
           <div className="card-body">
             <div className="row g-3 mb-3">
               <div className="col-md-3">

@@ -231,8 +231,8 @@ function AdminSequencesPage() {
       </p>
 
       {showForm && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-bold py-3">
+        <div className="card admin-table-card mb-4">
+          <div className="card-header fw-bold py-3">
             {editingId ? 'Edit Sequence' : 'New Multi-Channel Sequence'}
           </div>
           <div className="card-body">
@@ -576,8 +576,8 @@ function AdminSequencesPage() {
         </div>
       )}
 
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-bold py-3">
+      <div className="card admin-table-card">
+        <div className="card-header fw-bold py-3">
           Sequences ({sequences.length})
         </div>
         <div className="card-body p-0">
@@ -631,7 +631,7 @@ function AdminSequencesPage() {
                         </td>
                         <td>
                           <span
-                            className={`badge ${seq.is_active ? 'bg-success' : 'bg-secondary'}`}
+                            className={`badge rounded-pill ${seq.is_active ? 'bg-success' : 'bg-secondary'}`}
                             style={{ cursor: 'pointer' }}
                             onClick={() => handleToggleActive(seq)}
                           >

@@ -250,7 +250,7 @@ function AdminCampaignDetailPage() {
         <div>
           <h2 className="mb-1">{campaign.name}</h2>
           <div className="d-flex gap-2 align-items-center flex-wrap">
-            <span className={`badge bg-${STATUS_COLORS[campaign.status] || 'secondary'}`}>
+            <span className={`badge rounded-pill bg-${STATUS_COLORS[campaign.status] || 'secondary'}`}>
               {campaign.status}
             </span>
             <span className="badge bg-light text-dark border">{campaign.type.replace(/_/g, ' ')}</span>

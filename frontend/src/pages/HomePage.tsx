@@ -47,7 +47,7 @@ function HomePage() {
             Technical Leaders responsible for AI strategy and deployment.
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
-            <a href="#download-overview" className="btn btn-lg btn-accent">
+            <a href="#download-overview" className="btn btn-lg btn-hero-primary">
               📥 Download Executive Overview
             </a>
             <Link to="/sponsorship" className="btn btn-lg btn-outline-light">
@@ -120,29 +120,37 @@ function HomePage() {
                 title: 'Built for Technical Executives',
                 description:
                   'Designed for Directors, VPs, and CTOs — not beginners. Every session addresses the strategic and architectural decisions leaders actually face.',
+                color: '#1a365d',
               },
               {
                 icon: '🏗️',
                 title: 'Production-Ready Architecture',
                 description:
                   'Participants build real POCs using enterprise-grade AI architecture patterns — not toy demos. Work is immediately deployable or presentable.',
+                color: '#e53e3e',
               },
               {
                 icon: '📦',
                 title: 'Executive Sponsorship Support Kit',
                 description:
                   'Includes cost justification templates, ROI calculators, vendor evaluation frameworks, and approval process guides for internal budget approval.',
+                color: '#38a169',
               },
               {
                 icon: '🌐',
                 title: 'Ongoing Enterprise AI Advisory Ecosystem',
                 description:
                   'Access to ongoing advisory engagements, peer cohort sessions, and Colaberry\'s enterprise AI architecture network beyond the accelerator.',
+                color: '#805ad5',
               },
             ].map((item) => (
               <div className="col-md-6 col-lg-3" key={item.title}>
-                <div className="card h-100 border-0 shadow-sm text-center p-4">
-                  <div className="fs-1 mb-3" aria-hidden="true">{item.icon}</div>
+                <div className="card card-lift h-100 border-0 shadow-sm text-center p-4" style={{ borderTop: `4px solid ${item.color}` }}>
+                  <div
+                    className="fs-3 mb-3 d-inline-flex align-items-center justify-content-center mx-auto"
+                    style={{ width: '56px', height: '56px', borderRadius: '50%', background: `${item.color}15` }}
+                    aria-hidden="true"
+                  >{item.icon}</div>
                   <h3 className="h5">{item.title}</h3>
                   <p className="text-muted">{item.description}</p>
                 </div>
@@ -167,7 +175,7 @@ function HomePage() {
           <div className="row g-4">
             {industries.map((industry) => (
               <div className="col-md-3 col-6" key={industry.name}>
-                <div className="p-4 bg-white rounded shadow-sm">
+                <div className="card card-lift border-0 shadow-sm p-4 text-center" style={{ borderTop: '3px solid var(--color-primary-light)' }}>
                   <div className="fs-1 mb-2" aria-hidden="true">{industry.icon}</div>
                   <h3 className="h6 mb-0">{industry.name}</h3>
                 </div>
@@ -208,7 +216,7 @@ function HomePage() {
           <p className="mb-4">
             Schedule a 30-minute strategy call with our Enterprise AI team.
           </p>
-          <Link to="/contact" className="btn btn-lg btn-accent">
+          <Link to="/contact" className="btn btn-lg btn-hero-primary">
             Request a Strategy Call
           </Link>
           {/* TODO: Replace with Calendly/booking link */}

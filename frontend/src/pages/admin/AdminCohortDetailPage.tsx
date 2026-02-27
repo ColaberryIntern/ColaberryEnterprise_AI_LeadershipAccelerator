@@ -115,7 +115,7 @@ function AdminCohortDetailPage() {
       failed: 'Failed',
     };
     return (
-      <span className={`badge ${colors[status] || 'bg-secondary'}`}>
+      <span className={`badge rounded-pill ${colors[status] || 'bg-secondary'}`}>
         {labels[status] || status}
       </span>
     );
@@ -128,7 +128,7 @@ function AdminCohortDetailPage() {
       completed: 'bg-secondary',
     };
     return (
-      <span className={`badge ${colors[status] || 'bg-secondary'} fs-6`}>
+      <span className={`badge rounded-pill ${colors[status] || 'bg-secondary'} fs-6`}>
         {status}
       </span>
     );
@@ -162,7 +162,7 @@ function AdminCohortDetailPage() {
       <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: cohort.name }]} />
 
       {/* Cohort Header */}
-      <div className="card border-0 shadow-sm mb-4">
+      <div className="card admin-table-card mb-4">
         <div className="card-body p-4">
           <div className="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
@@ -206,8 +206,8 @@ function AdminCohortDetailPage() {
       </div>
 
       {/* Participants Table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-bold fs-5 py-3">
+      <div className="card admin-table-card">
+        <div className="card-header fw-bold fs-5 py-3">
           Participants ({participants.length})
         </div>
         <div className="card-body p-0">

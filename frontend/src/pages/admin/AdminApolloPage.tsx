@@ -116,7 +116,7 @@ function AdminApolloPage() {
       <h2 className="mb-4">Apollo Lead Search</h2>
 
       {/* Search Form */}
-      <div className="card border-0 shadow-sm mb-4">
+      <div className="card admin-table-card mb-4">
         <div className="card-body">
           <form onSubmit={handleSearch}>
             <div className="row g-3">
@@ -195,8 +195,8 @@ function AdminApolloPage() {
 
       {/* Results */}
       {results.length > 0 && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
+        <div className="card admin-table-card">
+          <div className="card-header d-flex justify-content-between align-items-center">
             <span className="fw-semibold">Results ({total} total, showing {results.length})</span>
             <div className="d-flex gap-2">
               <button className="btn btn-outline-secondary btn-sm" onClick={selectAll}>

@@ -70,8 +70,8 @@ function AdminSettingsPage() {
       )}
 
       {/* Lead Scoring */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">Lead Scoring</div>
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #3182ce' }}>
+        <div className="card-header fw-bold py-3">Lead Scoring</div>
         <div className="card-body">
           <div className="row g-3">
             <div className="col-md-4">
@@ -102,8 +102,8 @@ function AdminSettingsPage() {
       </div>
 
       {/* Automation Toggles */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">Automation</div>
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #38a169' }}>
+        <div className="card-header fw-bold py-3">Automation</div>
         <div className="card-body">
           <div className="row g-3">
             <div className="col-md-4">
@@ -179,8 +179,8 @@ function AdminSettingsPage() {
       </div>
 
       {/* Email (SMTP / Mandrill) */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #805ad5' }}>
+        <div className="card-header fw-bold py-3">
           Email Configuration (SMTP / Mandrill)
         </div>
         <div className="card-body">
@@ -254,8 +254,8 @@ function AdminSettingsPage() {
       </div>
 
       {/* Voice (Synthflow) */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #dd6b20' }}>
+        <div className="card-header fw-bold py-3">
           Voice Configuration (Synthflow AI)
         </div>
         <div className="card-body">
@@ -300,8 +300,8 @@ function AdminSettingsPage() {
       </div>
 
       {/* AI Configuration */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #dc3545' }}>
+        <div className="card-header fw-bold py-3">
           AI Configuration (OpenAI)
         </div>
         <div className="card-body">
@@ -352,8 +352,8 @@ function AdminSettingsPage() {
       </div>
 
       {/* SMS */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-bold py-3">
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #0dcaf0' }}>
+        <div className="card-header fw-bold py-3">
           SMS Configuration
         </div>
         <div className="card-body">
