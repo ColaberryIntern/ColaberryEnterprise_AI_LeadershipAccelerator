@@ -23,6 +23,7 @@ interface LeadCaptureFormProps {
   submitLabel?: string;
   successMessage?: string;
   className?: string;
+  buttonClassName?: string;
   showConsent?: boolean;
   captureUtm?: boolean;
   onSuccess?: () => void;
@@ -34,6 +35,7 @@ function LeadCaptureForm({
   submitLabel = 'Submit',
   successMessage = 'Thank you! We\'ll be in touch shortly.',
   className = '',
+  buttonClassName = 'btn btn-primary btn-lg',
   showConsent = true,
   captureUtm = false,
   onSuccess,
@@ -337,10 +339,12 @@ function LeadCaptureForm({
         <div className="col-12">
           <button
             type="submit"
-            className="btn btn-primary btn-lg"
+            className={buttonClassName}
             disabled={submitting}
           >
-            {submitting ? 'Submitting...' : submitLabel}
+            {submitting ? (
+              <><span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Sending...</>
+            ) : submitLabel}
           </button>
         </div>
       </div>

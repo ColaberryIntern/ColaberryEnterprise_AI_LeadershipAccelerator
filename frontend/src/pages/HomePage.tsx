@@ -48,7 +48,7 @@ function HomePage() {
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <a href="#download-overview" className="btn btn-lg btn-hero-primary">
-              📥 Download Executive Overview
+              Get Executive Briefing
             </a>
             <Link to="/sponsorship" className="btn btn-lg btn-outline-light">
               🤝 Request Corporate Sponsorship Kit
@@ -187,21 +187,53 @@ function HomePage() {
 
       {/* Executive Overview Download */}
       <section className="section-alt" id="download-overview" aria-label="Download Executive Overview">
-        <div className="container" style={{ maxWidth: '750px' }}>
+        <div className="container" style={{ maxWidth: '960px' }}>
           <div className="text-center mb-4">
-            <h2 className="mb-3">📥 Download the Executive Overview</h2>
-            <p className="text-muted mb-0">
-              Get the full program overview, pricing details, and ROI framework.
-              Sent immediately to your inbox.
+            <h2 className="mb-3">Get the Executive AI Accelerator Briefing</h2>
+            <p className="text-muted mb-0" style={{ maxWidth: '700px', margin: '0 auto' }}>
+              Download the complete program brief — including the full ROI framework,
+              enterprise case studies, and 21-day implementation roadmap.
+              Delivered instantly to your inbox.
             </p>
           </div>
+
+          {/* Benefit Grid */}
+          <div className="row g-3 mb-4">
+            {[
+              { icon: '📋', title: '21-Day Roadmap' },
+              { icon: '📊', title: 'ROI Framework' },
+              { icon: '🏢', title: 'Enterprise Case Studies' },
+              { icon: '🏗️', title: 'Architecture Blueprint' },
+            ].map((item) => (
+              <div className="col-6 col-md-3" key={item.title}>
+                <div className="text-center p-3 rounded border bg-white">
+                  <div className="fs-3 mb-1" aria-hidden="true">{item.icon}</div>
+                  <div className="fw-semibold small">{item.title}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Urgency Badge */}
+          <div className="text-center mb-4">
+            <span className="badge px-3 py-2" style={{ background: '#fff3cd', color: '#856404', fontSize: '0.85rem' }}>
+              March 31 Cohort Enrollment Now Open — Limited Seats
+            </span>
+          </div>
+
           <LeadCaptureForm
             formType="executive_overview_download"
             fields={['name', 'email', 'company', 'title', 'phone', 'company_size', 'evaluating_90_days']}
-            submitLabel="📥 Download Executive Overview"
+            submitLabel="Get Executive Briefing →"
+            buttonClassName="btn btn-hero-primary btn-lg w-100"
             captureUtm={true}
             onSuccess={() => navigate('/executive-overview/thank-you')}
           />
+
+          {/* Privacy Reassurance */}
+          <p className="text-center text-muted small mt-3">
+            Your information is secure. We never share your data with third parties.
+          </p>
         </div>
       </section>
 
