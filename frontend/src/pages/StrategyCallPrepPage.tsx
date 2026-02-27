@@ -154,6 +154,9 @@ function DynamicPrepForm({ token }: { token: string }) {
   const [options, setOptions] = useState<PrepOptions | null>(null);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [hasFile, setHasFile] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -181,6 +184,7 @@ function DynamicPrepForm({ token }: { token: string }) {
             additional_context: intel.additional_context || '',
           });
           setHasFile(!!intel.uploaded_file_name);
+          setFileName(intel.uploaded_file_name || null);
           if (intel.status === 'submitted' || intel.status === 'synthesized') {
             setSubmitted(true);
           }
@@ -209,6 +213,49 @@ function DynamicPrepForm({ token }: { token: string }) {
         : [...prev.current_tools, t],
     }));
   }, []);
+
+  const handleFileUpload = useCallback(async (file: File) => {
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Only PDF and PowerPoint files are accepted.');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setUploadError('File must be under 20MB.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post(`/api/strategy-prep/${token}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setHasFile(true);
+      setFileName(res.data.file_name);
+    } catch (err: any) {
+      setUploadError(err.response?.data?.error || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }, [token]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+  }, [handleFileUpload]);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+  }, [handleFileUpload]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -558,21 +605,89 @@ function DynamicPrepForm({ token }: { token: string }) {
               </div>
             </div>
 
-            {/* Section 6: File Upload placeholder (Phase 4) */}
+            {/* Section 6: File Upload */}
             <div className="card border-0 shadow-sm mb-4">
               <div className="card-body p-4">
                 <h5 className="fw-semibold mb-1">Upload Materials</h5>
                 <p className="text-muted small mb-3">
-                  Optional &mdash; upload AI roadmaps, org charts, or strategic documents (PDF, PPT)
+                  Optional &mdash; upload AI roadmaps, org charts, or strategic documents (PDF, PPT). Max 20MB.
                 </p>
-                <div
-                  className="border border-2 border-dashed rounded text-center py-4 px-3"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg-alt)' }}
-                >
-                  <p className="text-muted mb-0 small">
-                    File upload coming soon. For now, describe relevant documents in the fields above.
-                  </p>
-                </div>
+
+                {hasFile && fileName ? (
+                  <div className="d-flex align-items-center gap-2 p-3 rounded" style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: '1.4rem' }}>&#128196;</span>
+                    <div className="flex-grow-1">
+                      <div className="fw-medium small">{fileName}</div>
+                      <div className="text-muted" style={{ fontSize: '0.75rem' }}>Uploaded successfully</div>
+                    </div>
+                    <label
+                      className="btn btn-outline-secondary btn-sm mb-0"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      Replace
+                      <input
+                        type="file"
+                        accept=".pdf,.ppt,.pptx"
+                        className="d-none"
+                        onChange={handleFileInput}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div
+                    className="border border-2 rounded text-center py-4 px-3"
+                    style={{
+                      borderStyle: 'dashed',
+                      borderColor: uploading ? 'var(--color-primary-light)' : 'var(--color-border)',
+                      background: 'var(--color-bg-alt)',
+                      cursor: 'pointer',
+                    }}
+                    onDrop={handleDrop}
+                    onDragOver={(e) => e.preventDefault()}
+                    onClick={() => document.getElementById('file-input')?.click()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        document.getElementById('file-input')?.click();
+                      }
+                    }}
+                  >
+                    {uploading ? (
+                      <>
+                        <div className="spinner-border spinner-border-sm text-primary mb-2" role="status">
+                          <span className="visually-hidden">Uploading...</span>
+                        </div>
+                        <p className="text-muted mb-0 small">Uploading and extracting text...</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mb-1 small fw-medium">
+                          Drag &amp; drop a file here, or click to browse
+                        </p>
+                        <p className="text-muted mb-0" style={{ fontSize: '0.75rem' }}>
+                          Accepted: PDF, PPT, PPTX (max 20MB)
+                        </p>
+                      </>
+                    )}
+                    <input
+                      id="file-input"
+                      type="file"
+                      accept=".pdf,.ppt,.pptx"
+                      className="d-none"
+                      onChange={handleFileInput}
+                    />
+                  </div>
+                )}
+
+                {uploadError && (
+                  <div className="text-danger small mt-2">{uploadError}</div>
+                )}
+
+                <p className="text-muted mt-2 mb-0" style={{ fontSize: '0.7rem' }}>
+                  Uploaded documents are confidential and used solely to personalize your strategy session.
+                </p>
               </div>
             </div>
 

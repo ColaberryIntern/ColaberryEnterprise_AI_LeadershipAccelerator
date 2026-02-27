@@ -1,3 +1,4 @@
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -12,6 +13,7 @@ import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import { startScheduler } from './services/schedulerService';
+import { UPLOAD_DIR } from './config/upload';
 
 // Import models to register associations before sync
 import './models';
@@ -41,6 +43,9 @@ app.use(strategyPrepRoutes);
 app.use(errorHandler);
 
 async function start(): Promise<void> {
+  // Ensure uploads directory exists
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
   await connectDatabase();
   await sequelize.sync({ alter: true });
   // Start follow-up email scheduler if enabled

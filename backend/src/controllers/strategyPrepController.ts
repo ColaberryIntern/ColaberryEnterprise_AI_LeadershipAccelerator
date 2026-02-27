@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import StrategyCall from '../models/StrategyCall';
@@ -11,8 +12,9 @@ import {
   TIMELINE_OPTIONS,
   BUDGET_OPTIONS,
 } from '../schemas/strategyPrepSchema';
-import { calculateCompletionScore } from '../services/strategyPrepService';
+import { calculateCompletionScore, cancelPrepNudge } from '../services/strategyPrepService';
 import { synthesizeIntelligence } from '../services/synthesisService';
+import { extractText } from '../services/fileExtractionService';
 
 export async function handleGetPrep(
   req: Request,
@@ -130,6 +132,13 @@ export async function handleSubmitPrep(
       console.error('[StrategyPrep] Synthesis failed (non-blocking):', err)
     );
 
+    // Cancel pending nudge campaign actions now that prep is submitted (non-blocking)
+    if (call.lead_id) {
+      cancelPrepNudge(call.lead_id).catch((err) =>
+        console.error('[StrategyPrep] Cancel nudge failed (non-blocking):', err)
+      );
+    }
+
     res.json({
       success: true,
       completion_score: completionScore,
@@ -146,6 +155,107 @@ export async function handleSubmitPrep(
       });
       return;
     }
+    next(error);
+  }
+}
+
+export async function handleUploadFile(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { token } = req.params;
+
+    const call = await StrategyCall.findOne({ where: { prep_token: token } });
+    if (!call) {
+      res.status(404).json({ error: 'Strategy call not found' });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+
+    // Find or create intelligence record
+    let intelligence = await StrategyCallIntelligence.findOne({
+      where: { strategy_call_id: call.id },
+    });
+
+    // Delete old file if replacing
+    if (intelligence?.uploaded_file_path) {
+      try {
+        fs.unlinkSync(intelligence.uploaded_file_path);
+      } catch {
+        // Old file may not exist; ignore
+      }
+    }
+
+    // Extract text from uploaded file
+    let extractedText: string | null = null;
+    try {
+      extractedText = await extractText(file.path);
+      console.log(`[StrategyPrep] Extracted ${extractedText.length} chars from ${file.originalname}`);
+    } catch (err: any) {
+      console.warn('[StrategyPrep] Text extraction failed (non-fatal):', err.message);
+    }
+
+    const uploadFields = {
+      strategy_call_id: call.id,
+      lead_id: call.lead_id || null,
+      uploaded_file_path: file.path,
+      uploaded_file_name: file.originalname,
+      uploaded_file_type: file.mimetype,
+      extracted_text: extractedText,
+      updated_at: new Date(),
+    };
+
+    if (intelligence) {
+      await intelligence.update(uploadFields);
+    } else {
+      intelligence = await StrategyCallIntelligence.create({
+        ...uploadFields,
+        primary_challenges: [],
+        ai_maturity_level: '',
+        team_size: '',
+        timeline_urgency: '',
+        current_tools: [],
+        completion_score: 20, // File alone = 20%
+        status: 'draft',
+      } as any);
+    }
+
+    // Recalculate completion score if form data exists
+    if (intelligence.ai_maturity_level) {
+      const score = calculateCompletionScore(
+        {
+          primary_challenges: intelligence.primary_challenges || [],
+          ai_maturity_level: intelligence.ai_maturity_level as any,
+          team_size: intelligence.team_size as any,
+          timeline_urgency: intelligence.timeline_urgency as any,
+          priority_use_case: intelligence.priority_use_case || '',
+          current_tools: intelligence.current_tools || [],
+          budget_range: intelligence.budget_range || '',
+          evaluating_consultants: intelligence.evaluating_consultants,
+          previous_ai_investment: intelligence.previous_ai_investment || '',
+          specific_questions: intelligence.specific_questions || '',
+          additional_context: intelligence.additional_context || '',
+        },
+        true
+      );
+      await intelligence.update({ completion_score: score });
+    }
+
+    res.json({
+      success: true,
+      file_name: file.originalname,
+      file_size: file.size,
+      extracted_length: extractedText?.length || 0,
+      completion_score: intelligence.completion_score,
+    });
+  } catch (error) {
     next(error);
   }
 }

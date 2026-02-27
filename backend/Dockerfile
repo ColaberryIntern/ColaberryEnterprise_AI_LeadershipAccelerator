@@ -13,6 +13,7 @@ WORKDIR /app
 COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend/package.json ./
+RUN mkdir -p /app/uploads/strategy-prep
 ENV NODE_ENV=production
 EXPOSE 3001
 CMD ["node", "dist/server.js"]

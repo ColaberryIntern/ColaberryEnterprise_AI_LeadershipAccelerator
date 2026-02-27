@@ -6,6 +6,7 @@ import { getAvailableSlots, createBooking } from '../services/calendarService';
 import StrategyCall from '../models/StrategyCall';
 import Lead from '../models/Lead';
 import { sendStrategyCallConfirmation } from '../services/emailService';
+import { enrollInPrepNudge } from '../services/strategyPrepService';
 
 export async function handleGetAvailability(
   req: Request,
@@ -113,6 +114,13 @@ export async function handleBookCall(
       meetLink: booking.meetLink,
       prepToken: call.prep_token,
     }).catch((err) => console.error('[Email] Strategy call confirmation failed:', err));
+
+    // Enroll in prep nudge campaign (non-blocking)
+    if (leadId && call.prep_token) {
+      enrollInPrepNudge(leadId, call.prep_token).catch((err) =>
+        console.error('[Calendar] Prep nudge enrollment failed (non-blocking):', err)
+      );
+    }
 
     res.status(201).json({
       booking: {

@@ -1,13 +1,14 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import nodemailer from 'nodemailer';
-import { ScheduledEmail, Lead, Cohort, Campaign } from '../models';
+import { ScheduledEmail, Lead, Cohort, Campaign, StrategyCall } from '../models';
 import { env } from '../config/env';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
 import { generateMessage, buildConversationHistory } from './aiMessageService';
 import { recordActionOutcome } from './interactionService';
 import { computeInsights } from './icpInsightService';
+import { cancelPrepNudge, enrollInNoShowRecovery } from './strategyPrepService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
 let transporter: nodemailer.Transporter | null = null;
@@ -571,11 +572,62 @@ function wrapEmailHtml(body: string): string {
   `.trim();
 }
 
+/** Detect no-show strategy calls (30+ min past scheduled time, still 'scheduled') */
+async function detectNoShows(): Promise<void> {
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+  const noShows = await StrategyCall.findAll({
+    where: {
+      status: 'scheduled',
+      scheduled_at: { [Op.lt]: thirtyMinAgo },
+    },
+  });
+
+  if (noShows.length === 0) return;
+
+  console.log(`[Scheduler] Detected ${noShows.length} no-show strategy call(s)`);
+
+  for (const call of noShows) {
+    try {
+      await call.update({ status: 'no_show' });
+      console.log(`[Scheduler] Marked call ${call.id} as no_show (was scheduled for ${call.scheduled_at})`);
+
+      if (call.lead_id) {
+        // Cancel any pending nudge actions
+        await cancelPrepNudge(call.lead_id);
+
+        // Enroll in no-show recovery campaign
+        await enrollInNoShowRecovery(call.lead_id);
+
+        await logActivity({
+          lead_id: call.lead_id,
+          type: 'system',
+          subject: 'Strategy call no-show detected',
+          metadata: {
+            strategy_call_id: call.id,
+            scheduled_at: call.scheduled_at,
+            action: 'enrolled_in_no_show_recovery',
+          },
+        });
+      }
+    } catch (err: any) {
+      console.error(`[Scheduler] No-show processing failed for call ${call.id}:`, err.message);
+    }
+  }
+}
+
 export function startScheduler(): void {
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     processScheduledActions().catch((err) => {
       console.error('[Scheduler] Unexpected error:', err);
+    });
+  });
+
+  // Detect no-show strategy calls every 15 minutes
+  cron.schedule('*/15 * * * *', () => {
+    detectNoShows().catch((err) => {
+      console.error('[Scheduler] No-show detection error:', err);
     });
   });
 
@@ -590,5 +642,6 @@ export function startScheduler(): void {
   console.log('[Scheduler] AI-powered multi-channel campaign scheduler started (every 5 minutes)');
   console.log('[Scheduler] Channels: email (Mandrill), voice (Synthflow), sms (placeholder)');
   console.log('[Scheduler] AI generation: enabled for actions with ai_instructions');
+  console.log('[Scheduler] No-show detection: every 15 minutes');
   console.log('[Scheduler] ICP insight computation: daily at 2 AM');
 }
