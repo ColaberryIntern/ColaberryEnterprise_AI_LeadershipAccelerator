@@ -307,6 +307,21 @@ function AdminSettingsPage() {
               />
             </div>
           </div>
+          <div className="row g-3 mt-2">
+            <div className="col-md-8">
+              <label className="form-label small">Admin Notification Emails</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.admin_notification_emails ?? ''}
+                onChange={(e) => handleChange('admin_notification_emails', e.target.value)}
+                placeholder="ali@colaberry.com, team@colaberry.com"
+              />
+              <div className="form-text">
+                Comma-separated list of emails that receive high-intent alerts and strategy call intelligence briefs. Falls back to From Email if empty.
+              </div>
+            </div>
+          </div>
           <div className="form-text mt-2">
             Currently using Mandrill (Mailchimp Transactional). SMTP credentials are also set via environment variables (.env) — values here override env vars when configured.
           </div>

@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
-import { getTestOverrides } from './settingsService';
+import { getTestOverrides, getSetting } from './settingsService';
 
 const transporter =
   env.smtpUser && env.smtpPass
@@ -29,6 +29,16 @@ async function resolveEmailRecipient(
     // If settings DB fails, don't block email sending
   }
   return { to: intended, subject };
+}
+
+async function getAdminRecipients(): Promise<string> {
+  try {
+    const adminEmails = await getSetting('admin_notification_emails');
+    if (adminEmails && adminEmails.trim()) return adminEmails.trim();
+  } catch {
+    // Fall back to env.emailFrom
+  }
+  return env.emailFrom;
 }
 
 interface EnrollmentConfirmationData {
@@ -120,7 +130,7 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
     return;
   }
 
-  const alertTo = env.emailFrom; // ali@colaberry.com
+  const alertTo = await getAdminRecipients();
   const r = await resolveEmailRecipient(alertTo, `High-Intent Executive Lead: ${data.name} (Score: ${data.score})`);
 
   await transporter.sendMail({
@@ -248,7 +258,7 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
     return;
   }
 
-  const alertTo = env.emailFrom; // ali@colaberry.com
+  const alertTo = await getAdminRecipients();
   const r = await resolveEmailRecipient(alertTo, `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) \u2014 Score: ${data.completionScore}%`);
 
   await transporter.sendMail({
