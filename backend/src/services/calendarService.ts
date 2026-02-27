@@ -55,16 +55,28 @@ function isWeekday(date: Date): boolean {
   return day >= 1 && day <= 5;
 }
 
+function getETOffset(dateStr: string): string {
+  const noon = new Date(`${dateStr}T12:00:00Z`);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: BUSINESS_TIMEZONE,
+    timeZoneName: 'short',
+  });
+  const parts = formatter.formatToParts(noon);
+  const tzName = parts.find((p) => p.type === 'timeZoneName')?.value;
+  return tzName === 'EDT' ? '-04:00' : '-05:00';
+}
+
 function generateBusinessSlots(date: Date): TimeSlot[] {
   const slots: TimeSlot[] = [];
   const dateStr = date.toISOString().split('T')[0];
+  const offset = getETOffset(dateStr);
 
   for (let hour = BUSINESS_HOUR_START; hour < BUSINESS_HOUR_END; hour++) {
     for (let min = 0; min < 60; min += SLOT_DURATION_MINUTES) {
-      const startStr = `${dateStr}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`;
+      const startStr = `${dateStr}T${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}:00${offset}`;
       const endHour = min + SLOT_DURATION_MINUTES >= 60 ? hour + 1 : hour;
       const endMin = (min + SLOT_DURATION_MINUTES) % 60;
-      const endStr = `${dateStr}T${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}:00`;
+      const endStr = `${dateStr}T${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}:00${offset}`;
       slots.push({ start: startStr, end: endStr });
     }
   }
