@@ -32,6 +32,7 @@ import AdminCampaignDetailPage from './pages/admin/AdminCampaignDetailPage';
 import AdminApolloPage from './pages/admin/AdminApolloPage';
 import AdminICPInsightsPage from './pages/admin/AdminICPInsightsPage';
 import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
+import StrategyCallPrepPage from './pages/StrategyCallPrepPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
           <Route path="/enroll/cancel" element={<EnrollCancelPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/executive-overview/thank-you" element={<ExecOverviewThankYouPage />} />
+          <Route path="/strategy-call-prep" element={<StrategyCallPrepPage />} />
           <Route path="/about" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
