@@ -244,21 +244,37 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Bottom CTA */}
+      {/* Strategy Call CTA */}
       <section
-        className="cta-bg text-light text-center py-5"
-        aria-label="Call to Action"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1920&q=80)' }}
+        className="text-light text-center"
+        aria-label="Schedule Strategy Call"
+        style={{
+          background: 'linear-gradient(135deg, #0f1b2d 0%, #1a365d 50%, #1e3a5f 100%)',
+          padding: '5rem 0',
+        }}
       >
-        <div className="container py-4">
-          <h2 className="text-light mb-3">🚀 Ready to Build AI Capability Inside Your Organization?</h2>
-          <p className="mb-4">
-            Schedule a 30-minute strategy call with our Enterprise AI team.
+        <div className="container" style={{ maxWidth: '750px' }}>
+          <h2 className="text-light mb-3" style={{ fontSize: '2rem' }}>
+            Ready to Deploy AI in the Next 30 Days?
+          </h2>
+          <p className="mb-4" style={{ opacity: 0.85, fontSize: '1.1rem' }}>
+            Schedule a 30-minute executive strategy session to align roadmap,
+            architecture, and internal capability.
           </p>
-          <Link to="/contact" className="btn btn-lg btn-hero-primary">
-            Request a Strategy Call
+          <p className="mb-4 small" style={{ opacity: 0.6 }}>
+            Most executives schedule this call immediately after reviewing the briefing.
+          </p>
+          <Link
+            to="/contact"
+            className="btn btn-hero-primary btn-lg px-5"
+          >
+            Schedule Executive Strategy Call →
           </Link>
-          {/* TODO: Replace with Calendly/booking link */}
+          <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
+            <span className="small">✓ 30-minute focused session</span>
+            <span className="small">✓ No obligation</span>
+            <span className="small">✓ Architecture-first discussion</span>
+          </div>
         </div>
       </section>
     </>
