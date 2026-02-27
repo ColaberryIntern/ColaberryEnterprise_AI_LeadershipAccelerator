@@ -140,14 +140,15 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
 
 /**
  * Fetch timed (non-all-day) events from the calendar and return them as busy blocks.
- * All-day events (which use start.date instead of start.dateTime) are excluded
- * so they don't block bookable time slots.
+ * Excluded: all-day events, transparent/free events, cancelled events,
+ * and multi-day timed events (>24h) which are calendar holds, not real meetings.
  */
 async function getTimedBusyBlocks(
   calendar: ReturnType<typeof google.calendar>,
   timeMin: Date,
   timeMax: Date,
 ): Promise<{ start: string; end: string }[]> {
+  const MAX_MEETING_MS = 24 * 60 * 60 * 1000; // 24 hours
   const blocks: { start: string; end: string }[] = [];
   let pageToken: string | undefined;
 
@@ -169,6 +170,9 @@ async function getTimedBusyBlocks(
       if (event.transparency === 'transparent') continue;
       // Skip cancelled events
       if (event.status === 'cancelled') continue;
+      // Skip multi-day timed events (>24h) — calendar holds, not real meetings
+      const durationMs = new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime();
+      if (durationMs > MAX_MEETING_MS) continue;
 
       blocks.push({
         start: event.start.dateTime,
