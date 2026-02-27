@@ -41,6 +41,32 @@ async function getAdminRecipients(): Promise<string> {
   return env.emailFrom;
 }
 
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '  - ')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&rarr;/g, '->')
+    .replace(/&mdash;/g, '--')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function emailHeaders(tag: string) {
+  return {
+    'List-Unsubscribe': `<mailto:${env.emailFrom}?subject=unsubscribe>`,
+    'X-MC-Tags': tag,
+  };
+}
+
 interface EnrollmentConfirmationData {
   to: string;
   fullName: string;
@@ -59,14 +85,17 @@ export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationDat
   }
 
   const r = await resolveEmailRecipient(data.to, 'Welcome to the Enterprise AI Leadership Accelerator');
-  await transporter.sendMail({
+  const html = buildConfirmationHtml(data);
+  const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
-    html: buildConfirmationHtml(data),
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('enrollment-confirmation'),
   });
 
-  console.log('[Email] Enrollment confirmation sent to:', r.to);
+  console.log(`[Email] Enrollment confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 interface InterestEmailData {
@@ -82,14 +111,17 @@ export async function sendInterestEmail(data: InterestEmailData): Promise<void> 
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Enterprise AI Leadership Accelerator Details');
-  await transporter.sendMail({
+  const html = buildInterestHtml(data);
+  const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
-    html: buildInterestHtml(data),
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('interest-email'),
   });
 
-  console.log('[Email] Interest email sent to:', r.to);
+  console.log(`[Email] Interest email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 interface ExecutiveOverviewEmailData {
@@ -104,14 +136,17 @@ export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailDat
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Overview + ROI Framework');
-  await transporter.sendMail({
+  const html = buildExecutiveOverviewHtml(data);
+  const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
-    html: buildExecutiveOverviewHtml(data),
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('executive-overview'),
   });
 
-  console.log('[Email] Executive overview email sent to:', r.to);
+  console.log(`[Email] Executive overview email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 interface HighIntentAlertData {
@@ -133,14 +168,17 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
   const alertTo = await getAdminRecipients();
   const r = await resolveEmailRecipient(alertTo, `High-Intent Executive Lead: ${data.name} (Score: ${data.score})`);
 
-  await transporter.sendMail({
+  const html = buildHighIntentAlertHtml(data);
+  const info = await transporter.sendMail({
     from: `"Colaberry Lead Alert" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
-    html: buildHighIntentAlertHtml(data),
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('high-intent-alert'),
   });
 
-  console.log('[Email] High-intent alert sent for:', data.name, '(score:', data.score, ')');
+  console.log(`[Email] High-intent alert sent for: ${data.name} (score: ${data.score}) | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 interface StrategyCallConfirmationData {
@@ -159,14 +197,17 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Strategy Call is Confirmed');
-  await transporter.sendMail({
+  const html = buildStrategyCallConfirmationHtml(data);
+  const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
-    html: buildStrategyCallConfirmationHtml(data),
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('strategy-call-confirmation'),
   });
 
-  console.log('[Email] Strategy call confirmation sent to:', r.to);
+  console.log(`[Email] Strategy call confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmationData): string {
@@ -261,14 +302,17 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
   const alertTo = await getAdminRecipients();
   const r = await resolveEmailRecipient(alertTo, `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) \u2014 Score: ${data.completionScore}%`);
 
-  await transporter.sendMail({
+  const html = buildIntelligenceBriefHtml(data);
+  const info = await transporter.sendMail({
     from: `"Colaberry Strategy Intel" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
-    html: buildIntelligenceBriefHtml(data),
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('intelligence-brief'),
   });
 
-  console.log('[Email] Intelligence brief sent for:', data.name);
+  console.log(`[Email] Intelligence brief sent for: ${data.name} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildIntelligenceBriefHtml(data: IntelligenceBriefData): string {

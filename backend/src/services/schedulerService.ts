@@ -29,6 +29,23 @@ function getTransporter() {
   return transporter;
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '  - ')
+    .replace(/<\/h[1-6]>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Get the next open cohort for dynamic context */
 async function getNextCohort(): Promise<{ name: string; start_date: string; seats_remaining: number } | null> {
   const cohort = await Cohort.findOne({
@@ -334,15 +351,21 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     return;
   }
 
-  await mailer.sendMail({
+  const html = wrapEmailHtml(action.body);
+  const info = await mailer.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: action.to_email,
     subject: action.subject,
-    html: wrapEmailHtml(action.body),
+    html,
+    text: stripHtml(html),
     headers: {
       'X-MC-Metadata': JSON.stringify({ scheduled_email_id: action.id }),
+      'List-Unsubscribe': `<mailto:${env.emailFrom}?subject=unsubscribe>`,
+      'X-MC-Tags': 'campaign-sequence',
     },
   });
+
+  console.log(`[Scheduler] Email sent to: ${action.to_email} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 
   await action.update({
     status: 'sent',
