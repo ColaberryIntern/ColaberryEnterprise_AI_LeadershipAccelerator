@@ -308,7 +308,7 @@ export default function StrategyCallModal({ show, onClose }: StrategyCallModalPr
           </form>
 
           <p className="text-muted small mt-3 mb-0 text-center">
-            A Google Meet link will be emailed to you upon confirmation.
+            A confirmation email with call details will be sent to you.
           </p>
         </div>
       )}

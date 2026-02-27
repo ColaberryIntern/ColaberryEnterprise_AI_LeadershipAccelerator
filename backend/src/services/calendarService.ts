@@ -203,13 +203,12 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
 
   const event = await calendar.events.insert({
     calendarId: env.googleCalendarId,
-    conferenceDataVersion: 1,
     requestBody: {
       summary: `Executive AI Strategy Call — ${data.name}${companyLabel}`,
       description: [
         `Strategy call with ${data.name}`,
         data.company ? `Company: ${data.company}` : '',
-        data.email ? `Email: ${data.email}` : '',
+        `Email: ${data.email}`,
         data.phone ? `Phone: ${data.phone}` : '',
         '',
         'Booked via Colaberry Enterprise AI Leadership Accelerator website.',
@@ -222,15 +221,6 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
         dateTime: endTime.toISOString(),
         timeZone: BUSINESS_TIMEZONE,
       },
-      attendees: [
-        { email: data.email, displayName: data.name },
-      ],
-      conferenceData: {
-        createRequest: {
-          requestId: `strategy-call-${Date.now()}`,
-          conferenceSolutionKey: { type: 'hangoutsMeet' },
-        },
-      },
       reminders: {
         useDefault: false,
         overrides: [
@@ -242,13 +232,10 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   });
 
   const eventId = event.data.id || '';
-  const meetLink = event.data.conferenceData?.entryPoints?.find(
-    (ep) => ep.entryPointType === 'video'
-  )?.uri || event.data.hangoutLink || '';
 
   return {
     eventId,
-    meetLink,
+    meetLink: '',
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString(),
   };
