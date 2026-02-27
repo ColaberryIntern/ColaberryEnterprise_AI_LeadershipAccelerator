@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
+import { getTestOverrides } from './settingsService';
 
 const transporter =
   env.smtpUser && env.smtpPass
@@ -13,6 +14,22 @@ const transporter =
         },
       })
     : null;
+
+async function resolveEmailRecipient(
+  intended: string,
+  subject: string
+): Promise<{ to: string; subject: string }> {
+  try {
+    const test = await getTestOverrides();
+    if (test.enabled && test.email) {
+      console.log(`[Email] TEST MODE: redirecting from ${intended} to ${test.email}`);
+      return { to: test.email, subject: `[TEST \u2192 ${intended}] ${subject}` };
+    }
+  } catch {
+    // If settings DB fails, don't block email sending
+  }
+  return { to: intended, subject };
+}
 
 interface EnrollmentConfirmationData {
   to: string;
@@ -31,14 +48,15 @@ export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationDat
     return;
   }
 
+  const r = await resolveEmailRecipient(data.to, 'Welcome to the Enterprise AI Leadership Accelerator');
   await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    to: data.to,
-    subject: 'Welcome to the Enterprise AI Leadership Accelerator',
+    to: r.to,
+    subject: r.subject,
     html: buildConfirmationHtml(data),
   });
 
-  console.log('[Email] Enrollment confirmation sent to:', data.to);
+  console.log('[Email] Enrollment confirmation sent to:', r.to);
 }
 
 interface InterestEmailData {
@@ -53,14 +71,15 @@ export async function sendInterestEmail(data: InterestEmailData): Promise<void> 
     return;
   }
 
+  const r = await resolveEmailRecipient(data.to, 'Your Enterprise AI Leadership Accelerator Details');
   await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    to: data.to,
-    subject: 'Your Enterprise AI Leadership Accelerator Details',
+    to: r.to,
+    subject: r.subject,
     html: buildInterestHtml(data),
   });
 
-  console.log('[Email] Interest email sent to:', data.to);
+  console.log('[Email] Interest email sent to:', r.to);
 }
 
 interface ExecutiveOverviewEmailData {
@@ -74,14 +93,15 @@ export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailDat
     return;
   }
 
+  const r = await resolveEmailRecipient(data.to, 'Your Executive AI Overview + ROI Framework');
   await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    to: data.to,
-    subject: 'Your Executive AI Overview + ROI Framework',
+    to: r.to,
+    subject: r.subject,
     html: buildExecutiveOverviewHtml(data),
   });
 
-  console.log('[Email] Executive overview email sent to:', data.to);
+  console.log('[Email] Executive overview email sent to:', r.to);
 }
 
 interface HighIntentAlertData {
@@ -101,11 +121,12 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
   }
 
   const alertTo = env.emailFrom; // ali@colaberry.com
+  const r = await resolveEmailRecipient(alertTo, `High-Intent Executive Lead: ${data.name} (Score: ${data.score})`);
 
   await transporter.sendMail({
     from: `"Colaberry Lead Alert" <${env.emailFrom}>`,
-    to: alertTo,
-    subject: `High-Intent Executive Lead: ${data.name} (Score: ${data.score})`,
+    to: r.to,
+    subject: r.subject,
     html: buildHighIntentAlertHtml(data),
   });
 
@@ -127,14 +148,15 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
     return;
   }
 
+  const r = await resolveEmailRecipient(data.to, 'Your Executive AI Strategy Call is Confirmed');
   await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    to: data.to,
-    subject: 'Your Executive AI Strategy Call is Confirmed',
+    to: r.to,
+    subject: r.subject,
     html: buildStrategyCallConfirmationHtml(data),
   });
 
-  console.log('[Email] Strategy call confirmation sent to:', data.to);
+  console.log('[Email] Strategy call confirmation sent to:', r.to);
 }
 
 function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmationData): string {
@@ -227,11 +249,12 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
   }
 
   const alertTo = env.emailFrom; // ali@colaberry.com
+  const r = await resolveEmailRecipient(alertTo, `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) \u2014 Score: ${data.completionScore}%`);
 
   await transporter.sendMail({
     from: `"Colaberry Strategy Intel" <${env.emailFrom}>`,
-    to: alertTo,
-    subject: `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) \u2014 Score: ${data.completionScore}%`,
+    to: r.to,
+    subject: r.subject,
     html: buildIntelligenceBriefHtml(data),
   });
 

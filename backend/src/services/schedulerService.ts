@@ -9,6 +9,7 @@ import { generateMessage, buildConversationHistory } from './aiMessageService';
 import { recordActionOutcome } from './interactionService';
 import { computeInsights } from './icpInsightService';
 import { cancelPrepNudge, enrollInNoShowRecovery } from './strategyPrepService';
+import { getTestOverrides } from './settingsService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
 let transporter: nodemailer.Transporter | null = null;
@@ -242,8 +243,27 @@ async function processScheduledActions(): Promise<void> {
       // Step 1: AI content generation (for all channels)
       await generateAIContent(action);
 
-      // Step 2: Apply test mode overrides
-      if (campaignSettings.test_mode_enabled) {
+      // Step 2: Apply test mode overrides (global takes precedence over per-campaign)
+      let testApplied = false;
+      try {
+        const globalTest = await getTestOverrides();
+        if (globalTest.enabled) {
+          if (globalTest.email && channel === 'email') {
+            await action.update({ to_email: globalTest.email, subject: `[TEST \u2192 ${action.to_email}] ${action.subject}` } as any);
+            await action.reload();
+          }
+          if (globalTest.phone && (channel === 'voice' || channel === 'sms')) {
+            await action.update({ to_phone: globalTest.phone, subject: `[TEST] ${action.subject}` } as any);
+            await action.reload();
+          }
+          console.log(`[Scheduler] GLOBAL TEST MODE: action ${action.id} redirected`);
+          testApplied = true;
+        }
+      } catch {
+        // If settings DB fails, fall through to per-campaign test mode
+      }
+
+      if (!testApplied && campaignSettings.test_mode_enabled) {
         if (campaignSettings.test_email && (channel === 'email')) {
           await action.update({ to_email: campaignSettings.test_email, subject: `[TEST] ${action.subject}` } as any);
           await action.reload();
@@ -252,7 +272,7 @@ async function processScheduledActions(): Promise<void> {
           await action.update({ to_phone: campaignSettings.test_phone, subject: `[TEST] ${action.subject}` } as any);
           await action.reload();
         }
-        console.log(`[Scheduler] TEST MODE: action ${action.id} redirected`);
+        console.log(`[Scheduler] CAMPAIGN TEST MODE: action ${action.id} redirected`);
       }
 
       // Step 3: Send via appropriate channel

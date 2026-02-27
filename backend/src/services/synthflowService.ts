@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { getTestOverrides } from './settingsService';
 
 interface VoiceCallParams {
   name: string;
@@ -53,6 +54,18 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_agent_id' } };
   }
 
+  // Check global test mode — redirect phone if enabled
+  let actualPhone = params.phone;
+  try {
+    const test = await getTestOverrides();
+    if (test.enabled && test.phone) {
+      console.log(`[Synthflow] TEST MODE: redirecting call from ${params.phone} to ${test.phone}`);
+      actualPhone = test.phone;
+    }
+  } catch {
+    // If settings DB fails, don't block the call
+  }
+
   // Build customer object with all context for the AI agent
   const customer: Record<string, any> = {
     name: params.name,
@@ -77,7 +90,7 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   // Build the request body
   const requestBody: Record<string, any> = {
     model_id: agentId,
-    phone_number: params.phone,
+    phone_number: actualPhone,
     customer,
   };
 

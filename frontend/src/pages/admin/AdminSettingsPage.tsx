@@ -69,6 +69,66 @@ function AdminSettingsPage() {
         <div className="alert alert-success py-2 small">Settings saved successfully.</div>
       )}
 
+      {/* Test Mode */}
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #dd6b20' }}>
+        <div className="card-header fw-bold py-3 d-flex align-items-center gap-2">
+          Test Mode
+          {settings.test_mode_enabled && (
+            <span className="badge bg-warning text-dark">ACTIVE</span>
+          )}
+        </div>
+        <div className="card-body">
+          {settings.test_mode_enabled && (
+            <div className="alert alert-warning py-2 small mb-3">
+              <strong>TEST MODE ACTIVE</strong> — All emails, SMS, and voice calls are being redirected to the test addresses below. No communications will reach real leads.
+            </div>
+          )}
+          <div className="row g-3">
+            <div className="col-md-4">
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={settings.test_mode_enabled ?? false}
+                  onChange={(e) => handleChange('test_mode_enabled', e.target.checked)}
+                  id="testModeEnabled"
+                />
+                <label className="form-check-label" htmlFor="testModeEnabled">
+                  Enable Global Test Mode
+                </label>
+              </div>
+              <div className="form-text">
+                When enabled, all system emails and calls redirect to test addresses
+              </div>
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">Test Email</label>
+              <input
+                type="email"
+                className="form-control"
+                value={settings.test_email ?? ''}
+                onChange={(e) => handleChange('test_email', e.target.value)}
+                placeholder="test@example.com"
+                disabled={!settings.test_mode_enabled}
+              />
+              <div className="form-text">All system emails will be redirected here</div>
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">Test Phone</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.test_phone ?? ''}
+                onChange={(e) => handleChange('test_phone', e.target.value)}
+                placeholder="+1234567890"
+                disabled={!settings.test_mode_enabled}
+              />
+              <div className="form-text">All SMS and voice calls will be redirected here</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Lead Scoring */}
       <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #3182ce' }}>
         <div className="card-header fw-bold py-3">Lead Scoring</div>

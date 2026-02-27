@@ -217,15 +217,24 @@ function DynamicPrepForm({ token }: { token: string }) {
   const handleFileUpload = useCallback(async (file: File) => {
     const allowedTypes = [
       'application/pdf',
-      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'application/rtf',
+      'text/rtf',
+      'text/plain',
+      'text/markdown',
+      'text/csv',
     ];
     if (!allowedTypes.includes(file.type)) {
-      setUploadError('Only PDF and PowerPoint files are accepted.');
+      setUploadError('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV');
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
-      setUploadError('File must be under 20MB.');
+    if (file.size > 50 * 1024 * 1024) {
+      setUploadError('File must be under 50MB.');
       return;
     }
 
@@ -627,7 +636,7 @@ function DynamicPrepForm({ token }: { token: string }) {
                       Replace
                       <input
                         type="file"
-                        accept=".pdf,.ppt,.pptx"
+                        accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv"
                         className="d-none"
                         onChange={handleFileInput}
                       />
@@ -667,14 +676,14 @@ function DynamicPrepForm({ token }: { token: string }) {
                           Drag &amp; drop a file here, or click to browse
                         </p>
                         <p className="text-muted mb-0" style={{ fontSize: '0.75rem' }}>
-                          Accepted: PDF, PPT, PPTX (max 20MB)
+                          Accepted: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV (max 50MB)
                         </p>
                       </>
                     )}
                     <input
                       id="file-input"
                       type="file"
-                      accept=".pdf,.ppt,.pptx"
+                      accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.rtf,.txt,.md,.csv"
                       className="d-none"
                       onChange={handleFileInput}
                     />

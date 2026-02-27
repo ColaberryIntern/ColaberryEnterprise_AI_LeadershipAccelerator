@@ -146,7 +146,7 @@ StrategyCallIntelligence.init(
       allowNull: true,
     },
     uploaded_file_type: {
-      type: DataTypes.STRING(10),
+      type: DataTypes.STRING(100),
       allowNull: true,
     },
     extracted_text: {

@@ -24,6 +24,10 @@ const DEFAULTS: Record<string, any> = {
   sms_provider: 'none',
   sms_from_number: '',
   sms_api_key: '',
+  // Test Mode — redirect all communications to test addresses
+  test_mode_enabled: false,
+  test_email: '',
+  test_phone: '',
   // AI Configuration
   ai_model: 'gpt-4o-mini',
   ai_max_tokens: 1024,
@@ -60,6 +64,16 @@ export async function setSetting(key: string, value: any, adminId?: string): Pro
     } as any);
     await logEvent('setting_created', adminId || 'system', 'setting', key, { value });
   }
+}
+
+export async function getTestOverrides(): Promise<{ enabled: boolean; email: string; phone: string }> {
+  const enabled = await getSetting('test_mode_enabled');
+  if (!enabled) return { enabled: false, email: '', phone: '' };
+  return {
+    enabled: true,
+    email: (await getSetting('test_email')) || '',
+    phone: (await getSetting('test_phone')) || '',
+  };
 }
 
 export async function setMultipleSettings(
