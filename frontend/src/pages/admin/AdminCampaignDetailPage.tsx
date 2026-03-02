@@ -78,14 +78,13 @@ interface AnalyticsData {
   lead_outcomes: any[];
 }
 
-type TabKey = 'overview' | 'analytics' | 'targeting' | 'gtm' | 'prompts' | 'leads' | 'crm' | 'settings';
+type TabKey = 'overview' | 'analytics' | 'targeting' | 'gtm' | 'leads' | 'crm' | 'settings';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'analytics', label: 'Analytics' },
   { key: 'targeting', label: 'Targeting' },
-  { key: 'gtm', label: 'GTM & Strategy' },
-  { key: 'prompts', label: 'Prompts' },
+  { key: 'gtm', label: 'Strategy & Prompts' },
   { key: 'leads', label: 'Leads & Outreach' },
   { key: 'crm', label: 'CRM' },
   { key: 'settings', label: 'Settings' },
@@ -294,9 +293,9 @@ function AdminCampaignDetailPage() {
         </div>
       </div>
 
-      {/* 8-Tab Navigation */}
+      {/* Tab Navigation */}
       <ul className="nav nav-tabs nav-tabs-scrollable mb-4">
-        {TABS.map((tab) => (
+        {TABS.filter((tab) => tab.key !== 'targeting' || campaign.type === 'cold_outbound').map((tab) => (
           <li key={tab.key} className="nav-item">
             <button
               className={`nav-link ${activeTab === tab.key ? 'active' : ''}`}
@@ -338,22 +337,22 @@ function AdminCampaignDetailPage() {
       )}
 
       {activeTab === 'gtm' && (
-        <GTMStrategyTab
-          campaignId={id!}
-          campaign={campaign}
-          headers={headers}
-          onRefresh={fetchCampaign}
-        />
-      )}
-
-      {activeTab === 'prompts' && (
-        <PromptsTab
-          campaignId={id!}
-          aiSystemPrompt={campaign.ai_system_prompt}
-          sequence={campaign.sequence}
-          headers={headers}
-          onRefresh={fetchCampaign}
-        />
+        <>
+          <GTMStrategyTab
+            campaignId={id!}
+            campaign={campaign}
+            headers={headers}
+            onRefresh={fetchCampaign}
+          />
+          <hr className="my-4" />
+          <PromptsTab
+            campaignId={id!}
+            aiSystemPrompt={campaign.ai_system_prompt}
+            sequence={campaign.sequence}
+            headers={headers}
+            onRefresh={fetchCampaign}
+          />
+        </>
       )}
 
       {activeTab === 'leads' && (

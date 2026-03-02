@@ -70,7 +70,7 @@ export default function CRMTab({ campaignId, headers }: Props) {
             { headers }
           );
           const tlData = await tlRes.json();
-          for (const entry of (tlData.timeline || [])) {
+          for (const entry of (Array.isArray(tlData.timeline) ? tlData.timeline : [])) {
             allActivities.push({
               ...entry,
               lead_id: cl.lead_id,

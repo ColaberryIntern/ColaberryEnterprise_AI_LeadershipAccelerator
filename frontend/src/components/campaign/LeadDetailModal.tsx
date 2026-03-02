@@ -55,8 +55,8 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
         const tlData = await tlRes.json();
         const thData = await thRes.json();
         const ldData = await ldRes.json();
-        setTimeline(tlData.timeline || []);
-        setTempHistory(thData.history || []);
+        setTimeline(Array.isArray(tlData.timeline) ? tlData.timeline : []);
+        setTempHistory(Array.isArray(thData.history) ? thData.history : []);
         setLeadDetail(ldData);
       } catch (err) {
         console.error('Failed to fetch lead detail:', err);

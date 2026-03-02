@@ -56,7 +56,7 @@ export default function PromptsTab({ campaignId, aiSystemPrompt, sequence, heade
     }
   };
 
-  const steps = sequence?.steps || [];
+  const steps = Array.isArray(sequence?.steps) ? sequence.steps : [];
 
   return (
     <>

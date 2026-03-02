@@ -12,6 +12,8 @@ interface Props {
 export default function Modal({ show, onClose, title, size = 'md', children, footer }: Props) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
 
   useEffect(() => {
     if (!show) return;
@@ -20,7 +22,7 @@ export default function Modal({ show, onClose, title, size = 'md', children, foo
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       // Focus trap
@@ -57,7 +59,7 @@ export default function Modal({ show, onClose, title, size = 'md', children, foo
       document.body.style.overflow = '';
       previousFocusRef.current?.focus();
     };
-  }, [show, onClose]);
+  }, [show]);
 
   if (!show) return null;
 

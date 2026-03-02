@@ -96,9 +96,10 @@ export default function SettingsTab({ campaignId, headers }: Props) {
   };
 
   const toggleDay = (day: number) => {
-    const days = settings.call_active_days.includes(day)
-      ? settings.call_active_days.filter((d) => d !== day)
-      : [...settings.call_active_days, day].sort();
+    const activeDays = Array.isArray(settings.call_active_days) ? settings.call_active_days : DEFAULT_SETTINGS.call_active_days;
+    const days = activeDays.includes(day)
+      ? activeDays.filter((d) => d !== day)
+      : [...activeDays, day].sort();
     updateSetting('call_active_days', days);
   };
 

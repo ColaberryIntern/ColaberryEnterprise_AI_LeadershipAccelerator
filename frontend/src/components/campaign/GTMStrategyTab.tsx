@@ -45,7 +45,7 @@ export default function GTMStrategyTab({ campaignId, campaign, headers, onRefres
     }
   };
 
-  const steps = campaign.sequence?.steps || [];
+  const steps = Array.isArray(campaign.sequence?.steps) ? campaign.sequence.steps : [];
   const totalDays = steps.reduce((sum: number, s: any) => sum + (s.delay_days || 0), 0);
 
   return (
