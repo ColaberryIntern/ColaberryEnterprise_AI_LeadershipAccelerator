@@ -115,10 +115,10 @@ export async function handleBookCall(
       prepToken: call.prep_token,
     }).catch((err) => console.error('[Email] Strategy call confirmation failed:', err));
 
-    // Enroll in prep nudge campaign (non-blocking)
+    // Enroll in strategy call readiness campaign (non-blocking)
     if (leadId && call.prep_token) {
-      enrollInPrepNudge(leadId, call.prep_token).catch((err) =>
-        console.error('[Calendar] Prep nudge enrollment failed (non-blocking):', err)
+      enrollInPrepNudge(leadId, call.prep_token, booking.meetLink, new Date(booking.startTime)).catch((err) =>
+        console.error('[Calendar] Readiness campaign enrollment failed (non-blocking):', err)
       );
     }
 

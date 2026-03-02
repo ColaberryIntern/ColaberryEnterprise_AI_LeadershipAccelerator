@@ -1,5 +1,5 @@
 import { env } from '../config/env';
-import { AutomationLog, FollowUpSequence } from '../models';
+import { AutomationLog, FollowUpSequence, Campaign } from '../models';
 import { triggerVoiceCall } from './synthflowService';
 import { sendEnrollmentConfirmation, sendInterestEmail, sendExecutiveOverviewEmail, sendHighIntentAlert } from './emailService';
 import { enrollLeadInSequence } from './sequenceService';
@@ -203,15 +203,22 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
     }
   }
 
-  // Auto-enroll in default nurture sequence (if follow-up scheduler is enabled)
+  // Auto-enroll in form-specific campaign sequence
   if (env.enableFollowUpScheduler) {
     try {
-      const defaultSequence = await FollowUpSequence.findOne({
-        where: { name: 'New Lead Nurture Campaign', is_active: true },
+      const sequenceName = isOverviewForm
+        ? 'Executive Briefing Interest'
+        : 'New Lead Nurture Campaign';
+
+      const targetSequence = await FollowUpSequence.findOne({
+        where: { name: sequenceName, is_active: true },
       });
-      if (defaultSequence) {
-        await enrollLeadInSequence(lead.id, defaultSequence.id);
-        console.log('[Automation] Lead enrolled in nurture sequence:', lead.email);
+      if (targetSequence) {
+        const associatedCampaign = await Campaign.findOne({
+          where: { sequence_id: targetSequence.id, status: 'active' },
+        });
+        await enrollLeadInSequence(lead.id, targetSequence.id, associatedCampaign?.id);
+        console.log(`[Automation] Lead enrolled in ${sequenceName}:`, lead.email);
       }
     } catch (error: any) {
       console.error('[Automation] Sequence enrollment failed:', error.message);

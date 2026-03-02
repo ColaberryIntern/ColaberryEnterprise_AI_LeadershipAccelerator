@@ -3,7 +3,7 @@ import { FollowUpSequence, Campaign, ScheduledEmail } from '../models';
 import { enrollLeadInSequence } from './sequenceService';
 import { env } from '../config/env';
 
-const PREP_NUDGE_SEQUENCE_NAME = 'Strategy Call Prep Nudge';
+const PREP_NUDGE_SEQUENCE_NAME = 'Strategy Call Readiness';
 const NO_SHOW_SEQUENCE_NAME = 'Strategy Call No-Show Recovery';
 
 /**
@@ -63,7 +63,12 @@ async function findSequenceAndCampaign(sequenceName: string): Promise<{
  * Enroll a lead in the prep nudge sequence.
  * Injects the prep link into each scheduled action's metadata so the AI can include it.
  */
-export async function enrollInPrepNudge(leadId: number, prepToken: string): Promise<void> {
+export async function enrollInPrepNudge(
+  leadId: number,
+  prepToken: string,
+  meetLink?: string,
+  scheduledAt?: Date,
+): Promise<void> {
   const result = await findSequenceAndCampaign(PREP_NUDGE_SEQUENCE_NAME);
   if (!result) {
     console.warn('[PrepService] Prep nudge sequence not seeded yet. Skipping enrollment.');
@@ -76,12 +81,18 @@ export async function enrollInPrepNudge(leadId: number, prepToken: string): Prom
   try {
     const actions = await enrollLeadInSequence(leadId, sequence.id, campaign?.id);
 
-    // Inject prep link into each action's metadata so AI can include it in content
+    // Inject prep link + meeting details into each action's metadata so AI can include them
+    const meetingContext = [
+      `IMPORTANT: Include this preparation form link prominently in the message: ${prepLink}`,
+      meetLink ? `Meeting link (Google Meet): ${meetLink}` : '',
+      scheduledAt ? `Scheduled call time: ${scheduledAt.toISOString()}` : '',
+    ].filter(Boolean).join('\n');
+
     for (const action of actions) {
       await action.update({
         metadata: {
           ...(action.metadata || {}),
-          ai_context_notes: `IMPORTANT: Include this preparation form link prominently in the message: ${prepLink}`,
+          ai_context_notes: meetingContext,
           prep_token: prepToken,
         },
       } as any);
