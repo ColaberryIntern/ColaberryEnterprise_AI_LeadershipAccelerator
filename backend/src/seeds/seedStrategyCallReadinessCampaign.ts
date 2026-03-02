@@ -8,67 +8,73 @@ const STRATEGY_READINESS_CAMPAIGN_NAME = 'Strategy Call Readiness Campaign';
 const READINESS_SEQUENCE = {
   name: STRATEGY_READINESS_SEQUENCE_NAME,
   description:
-    'Auto-enrolled on booking. 5-step readiness campaign to ensure executives are prepared for their strategy call. Replaces the old 3-step Prep Nudge. Cancelled when prep form is submitted.',
+    'Auto-enrolled on booking. 5-step countdown readiness campaign scheduled backwards from call time (T-3d, T-1d, T-6h, T-3h, T-15min). Actions whose countdown time has already passed are auto-cancelled at enrollment. Cancelled entirely when prep form is submitted.',
   is_active: true,
   steps: [
     {
       delay_days: 0,
+      minutes_before_call: 4320, // T-3 days
       channel: 'email' as const,
       subject: 'Quick 5-min prep for your strategy call',
       body_template: '',
-      ai_instructions: `Write a warm, concise email encouraging the executive to complete a 5-minute strategy call preparation form before their upcoming call. Emphasize that filling it out will make their strategy call 2x more productive and save 15 minutes during the actual call. The prep form link will be provided in context notes — include it as a prominent CTA button. Also briefly preview what the call will cover: AI readiness assessment, high-impact use cases, and a 90-day action plan. Keep the tone professional but friendly. Sign off as Ali Merchant, Colaberry Enterprise AI Division.`,
+      ai_instructions: `Write a warm, concise email encouraging the executive to complete a 5-minute strategy call preparation form before their upcoming call in a few days. Emphasize that filling it out will make their strategy call 2x more productive and save 15 minutes during the actual call. The prep form link will be provided in context notes — include it as a prominent CTA button. Also briefly preview what the call will cover: AI readiness assessment, high-impact use cases, and a 90-day action plan. Mention the scheduled call date/time from context notes so they know exactly when it is. Keep the tone professional but friendly. Sign off as Ali Merchant, Colaberry Enterprise AI Division.`,
       ai_tone: 'professional, encouraging',
       ai_context_notes: '',
-      step_goal: 'Get executive to start the prep form immediately after booking',
+      step_goal: 'Get executive to start the prep form 3 days before the call',
       max_attempts: 1,
       fallback_channel: null,
     },
     {
-      delay_days: 1,
+      delay_days: 0,
+      minutes_before_call: 1440, // T-1 day
       channel: 'email' as const,
-      subject: 'What to expect in your strategy call',
+      subject: 'What to expect in tomorrow\'s strategy call',
       body_template: '',
-      ai_instructions: `Write an email previewing the strategy call agenda. Cover what will happen during the 30-minute session: (1) We will review their AI readiness based on their prep form responses, (2) We will identify 2-3 high-impact AI use cases specific to their organization, (3) We will map out a 90-day action plan, (4) We will discuss whether the 5-day Accelerator program is the right next step. Encourage them to come prepared by thinking about: What AI projects have they tried? What blocked them? What would success look like in 6 months? Do NOT include the prep form link here — this is purely readiness content to set expectations. Sign off as Ali Merchant.`,
+      ai_instructions: `Write an email previewing the strategy call agenda for tomorrow. Cover what will happen during the 30-minute session: (1) We will review their AI readiness based on their prep form responses, (2) We will identify 2-3 high-impact AI use cases specific to their organization, (3) We will map out a 90-day action plan, (4) We will discuss whether the 5-day Accelerator program is the right next step. Encourage them to come prepared by thinking about: What AI projects have they tried? What blocked them? What would success look like in 6 months? Reference the call time from context notes. Do NOT include the prep form link here — this is purely readiness content to set expectations. Sign off as Ali Merchant.`,
       ai_tone: 'consultative, informative',
       ai_context_notes: '',
-      step_goal: 'Set expectations and get the executive thinking about their AI challenges before the call',
+      step_goal: 'Set expectations the day before and get the executive thinking about their AI challenges',
       max_attempts: 1,
       fallback_channel: null,
     },
     {
-      delay_days: 1,
+      delay_days: 0,
+      minutes_before_call: 360, // T-6 hours
       channel: 'sms' as const,
       subject: 'Prep form reminder',
       body_template: '',
       sms_template: '',
-      ai_instructions: `Write a brief SMS (under 160 chars) reminding the executive to complete their strategy call prep form. Include the prep link from context notes. Keep it casual and direct.`,
+      ai_instructions: `Write a brief SMS (under 160 chars) reminding the executive their strategy call is in about 6 hours. If they haven't completed the prep form, nudge them. Include the prep link from context notes. Keep it casual and direct.`,
       ai_tone: 'casual, direct',
       ai_context_notes: '',
-      step_goal: 'Quick SMS nudge to complete prep form',
+      step_goal: 'Same-day SMS nudge 6 hours before the call',
       max_attempts: 1,
       fallback_channel: 'email' as const,
     },
     {
-      delay_days: 2,
+      delay_days: 0,
+      minutes_before_call: 180, // T-3 hours
       channel: 'email' as const,
       subject: '3 things the most productive strategy calls have in common',
       body_template: '',
-      ai_instructions: `Write a brief, helpful email sharing 3 things that make strategy calls most productive: (1) Completing the prep form so we can personalize the discussion to their specific challenges, (2) Having a specific AI challenge or use case in mind to discuss — the more concrete the better, (3) Being prepared to discuss timeline and budget so we can give realistic, actionable recommendations instead of generic advice. If they have not completed the prep form yet, include the prep link from context notes. Frame this as helping them get maximum value from their 30 minutes, not as a sales pitch. Sign off as Ali Merchant.`,
+      ai_instructions: `Write a brief, helpful email sharing 3 things that make strategy calls most productive: (1) Completing the prep form so we can personalize the discussion to their specific challenges, (2) Having a specific AI challenge or use case in mind to discuss — the more concrete the better, (3) Being prepared to discuss timeline and budget so we can give realistic, actionable recommendations instead of generic advice. Their call is in about 3 hours — include the call time and Google Meet link from context notes. If they have not completed the prep form yet, include the prep link from context notes. Frame this as helping them get maximum value from their 30 minutes, not as a sales pitch. Sign off as Ali Merchant.`,
       ai_tone: 'professional, helpful',
       ai_context_notes: '',
-      step_goal: 'Help executive prepare mentally and complete prep form if not done',
+      step_goal: 'Final prep tips 3 hours before the call with logistics',
       max_attempts: 1,
       fallback_channel: null,
     },
     {
-      delay_days: 3,
-      channel: 'email' as const,
-      subject: 'Your strategy call is coming up — final prep',
+      delay_days: 0,
+      minutes_before_call: 15, // T-15 minutes
+      channel: 'sms' as const,
+      subject: 'Your strategy call starts in 15 minutes!',
       body_template: '',
-      ai_instructions: `Write a final prep email the day before the strategy call. Include: (1) Meeting logistics — the meeting time and Google Meet link will be in context notes, include them prominently, (2) Last chance to complete the prep form if not done (include link from context notes), (3) Brief reminder of what to expect. Keep it short and logistical, not salesy. Even if they have already completed the prep form, this should still feel useful as a meeting reminder with logistics. Sign off as Ali Merchant, Colaberry Enterprise AI Division.`,
-      ai_tone: 'professional, slightly urgent',
+      sms_template: '',
+      ai_instructions: `Write a brief SMS (under 160 chars) reminding the executive their strategy call starts in 15 minutes. Include the Google Meet link from context notes. Keep it short and action-oriented — just the meeting link and a quick "See you there!"`,
+      ai_tone: 'friendly, urgent',
       ai_context_notes: '',
-      step_goal: 'Final logistics reminder and last chance prep form nudge',
+      step_goal: 'Final 15-minute reminder with meeting link',
       max_attempts: 1,
       fallback_channel: null,
     },
@@ -144,9 +150,11 @@ async function seed() {
     console.log('Completed old Prep Nudge campaign.');
   }
 
-  console.log('Steps:');
+  console.log('Steps (countdown from call time):');
   READINESS_SEQUENCE.steps.forEach((s, i) => {
-    console.log(`  ${i + 1}. Day ${s.delay_days} [${s.channel}] ${s.subject}`);
+    const mins = s.minutes_before_call;
+    const label = mins >= 1440 ? `T-${mins / 1440}d` : mins >= 60 ? `T-${mins / 60}h` : `T-${mins}min`;
+    console.log(`  ${i + 1}. ${label} [${s.channel}] ${s.subject}`);
   });
 
   process.exit(0);

@@ -60,8 +60,10 @@ async function findSequenceAndCampaign(sequenceName: string): Promise<{
 }
 
 /**
- * Enroll a lead in the prep nudge sequence.
- * Injects the prep link into each scheduled action's metadata so the AI can include it.
+ * Enroll a lead in the strategy call readiness sequence.
+ * Uses countdown scheduling: each action is scheduled backwards from the call time.
+ * Actions whose countdown time is already past are auto-cancelled.
+ * Injects the prep link + meeting details into each action's metadata.
  */
 export async function enrollInPrepNudge(
   leadId: number,
@@ -71,7 +73,7 @@ export async function enrollInPrepNudge(
 ): Promise<void> {
   const result = await findSequenceAndCampaign(PREP_NUDGE_SEQUENCE_NAME);
   if (!result) {
-    console.warn('[PrepService] Prep nudge sequence not seeded yet. Skipping enrollment.');
+    console.warn('[PrepService] Readiness sequence not seeded yet. Skipping enrollment.');
     return;
   }
 
@@ -81,26 +83,52 @@ export async function enrollInPrepNudge(
   try {
     const actions = await enrollLeadInSequence(leadId, sequence.id, campaign?.id);
 
-    // Inject prep link + meeting details into each action's metadata so AI can include them
     const meetingContext = [
       `IMPORTANT: Include this preparation form link prominently in the message: ${prepLink}`,
       meetLink ? `Meeting link (Google Meet): ${meetLink}` : '',
       scheduledAt ? `Scheduled call time: ${scheduledAt.toISOString()}` : '',
     ].filter(Boolean).join('\n');
 
-    for (const action of actions) {
-      await action.update({
+    const now = new Date();
+    let scheduled = 0;
+    let cancelled = 0;
+
+    for (let i = 0; i < actions.length; i++) {
+      const step = sequence.steps[i];
+      const action = actions[i];
+      const updates: Record<string, any> = {
         metadata: {
           ...(action.metadata || {}),
           ai_context_notes: meetingContext,
           prep_token: prepToken,
         },
-      } as any);
+      };
+
+      // Countdown scheduling: calculate scheduled_for backwards from call time
+      const minutesBefore = (step as any).minutes_before_call;
+      if (minutesBefore !== undefined && scheduledAt) {
+        const countdownTime = new Date(scheduledAt.getTime() - minutesBefore * 60 * 1000);
+        if (countdownTime <= now) {
+          // This action's window has already passed — cancel it
+          updates.status = 'cancelled';
+          updates.scheduled_for = countdownTime;
+          cancelled++;
+        } else {
+          updates.scheduled_for = countdownTime;
+          scheduled++;
+        }
+      } else {
+        scheduled++;
+      }
+
+      await action.update(updates as any);
     }
 
-    console.log(`[PrepService] Enrolled lead ${leadId} in prep nudge (${actions.length} actions)`);
+    console.log(
+      `[PrepService] Enrolled lead ${leadId} in readiness countdown: ${scheduled} scheduled, ${cancelled} auto-cancelled (past window)`
+    );
   } catch (err: any) {
-    console.error('[PrepService] Failed to enroll in prep nudge:', err.message);
+    console.error('[PrepService] Failed to enroll in readiness sequence:', err.message);
   }
 }
 
