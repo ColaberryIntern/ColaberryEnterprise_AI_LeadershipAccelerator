@@ -1,4 +1,4 @@
-import { FollowUpSequence, ScheduledEmail, Lead } from '../models';
+import { FollowUpSequence, ScheduledEmail, Lead, CampaignLead } from '../models';
 import type { SequenceStep } from '../models/FollowUpSequence';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
@@ -72,10 +72,11 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
   const sequence = await FollowUpSequence.findByPk(sequenceId);
   if (!sequence || !sequence.is_active) throw new Error('Sequence not found or inactive');
 
-  // Cancel any existing pending actions for this lead from any sequence
+  // Cancel any existing pending actions for this lead from THIS sequence only
+  // (preserves actions from other campaigns the lead may be enrolled in)
   await ScheduledEmail.update(
     { status: 'cancelled' } as any,
-    { where: { lead_id: leadId, status: 'pending' } }
+    { where: { lead_id: leadId, sequence_id: sequenceId, status: 'pending' } }
   );
 
   const now = new Date();
@@ -128,6 +129,23 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
     } as any);
 
     scheduledActions.push(action);
+  }
+
+  // Create CampaignLead record so campaign UI shows lead count
+  if (campaignId) {
+    try {
+      await CampaignLead.findOrCreate({
+        where: { campaign_id: campaignId, lead_id: leadId },
+        defaults: {
+          campaign_id: campaignId,
+          lead_id: leadId,
+          status: 'active',
+          total_steps: sequence.steps.length,
+        } as any,
+      });
+    } catch (err: any) {
+      console.warn('[Sequence] CampaignLead upsert failed (non-blocking):', err.message);
+    }
   }
 
   return scheduledActions;
