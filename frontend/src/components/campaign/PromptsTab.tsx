@@ -8,6 +8,16 @@ interface Props {
   onRefresh: () => void;
 }
 
+const formatTiming = (step: any): string => {
+  if (step.minutes_before_call) {
+    const mins = step.minutes_before_call;
+    if (mins >= 1440) return `T-${mins / 1440}d`;
+    if (mins >= 60) return `T-${mins / 60}h`;
+    return `T-${mins}min`;
+  }
+  return step.delay_days ? `Day ${step.delay_days}` : 'Day 0';
+};
+
 export default function PromptsTab({ campaignId, aiSystemPrompt, sequence, headers, onRefresh }: Props) {
   const [prompt, setPrompt] = useState(aiSystemPrompt || '');
   const [saving, setSaving] = useState(false);
@@ -57,6 +67,7 @@ export default function PromptsTab({ campaignId, aiSystemPrompt, sequence, heade
   };
 
   const steps = Array.isArray(sequence?.steps) ? sequence.steps : [];
+  const isCountdown = steps.length > 0 && steps.every((s: any) => s.minutes_before_call);
 
   return (
     <>
@@ -106,6 +117,7 @@ export default function PromptsTab({ campaignId, aiSystemPrompt, sequence, heade
                 <thead className="table-light">
                   <tr>
                     <th>Step</th>
+                    <th>Timing</th>
                     <th>Channel</th>
                     <th>AI Instructions</th>
                     <th>Tone</th>
@@ -116,12 +128,17 @@ export default function PromptsTab({ campaignId, aiSystemPrompt, sequence, heade
                   {steps.map((step: any, i: number) => (
                     <tr key={i}>
                       <td className="fw-medium">{i + 1}</td>
+                      <td>
+                        <span className={`badge ${isCountdown ? 'bg-info bg-opacity-10 text-info' : 'bg-light text-dark border'}`}>
+                          {formatTiming(step)}
+                        </span>
+                      </td>
                       <td className="text-capitalize">{step.channel}</td>
                       <td className="small" style={{ maxWidth: 300 }}>
                         {step.ai_instructions || step.body_template || '—'}
                       </td>
-                      <td className="small text-capitalize">{step.tone || '—'}</td>
-                      <td className="small">{step.goal || '—'}</td>
+                      <td className="small text-capitalize">{step.ai_tone || '—'}</td>
+                      <td className="small">{step.step_goal || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

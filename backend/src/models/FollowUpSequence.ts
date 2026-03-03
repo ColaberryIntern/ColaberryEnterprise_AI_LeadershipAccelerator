@@ -4,6 +4,7 @@ import type { CampaignChannel } from './ScheduledEmail';
 
 export interface SequenceStep {
   delay_days: number;
+  minutes_before_call?: number;
   channel: CampaignChannel;
   subject: string;
   body_template: string;

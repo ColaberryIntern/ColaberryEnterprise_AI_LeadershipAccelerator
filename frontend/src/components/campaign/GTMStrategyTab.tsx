@@ -13,6 +13,16 @@ interface Props {
   onRefresh: () => void;
 }
 
+const formatTiming = (step: any): string => {
+  if (step.minutes_before_call) {
+    const mins = step.minutes_before_call;
+    if (mins >= 1440) return `T-${mins / 1440}d`;
+    if (mins >= 60) return `T-${mins / 60}h`;
+    return `T-${mins}min`;
+  }
+  return step.delay_days ? `Day ${step.delay_days}` : 'Day 0';
+};
+
 export default function GTMStrategyTab({ campaignId, campaign, headers, onRefresh }: Props) {
   const [description, setDescription] = useState(campaign.description || '');
   const [goals, setGoals] = useState(campaign.goals || '');
@@ -46,10 +56,23 @@ export default function GTMStrategyTab({ campaignId, campaign, headers, onRefres
   };
 
   const steps = Array.isArray(campaign.sequence?.steps) ? campaign.sequence.steps : [];
+  const isCountdown = steps.length > 0 && steps.every((s: any) => s.minutes_before_call);
   const totalDays = steps.reduce((sum: number, s: any) => sum + (s.delay_days || 0), 0);
 
   return (
     <>
+      {/* Campaign Goal — prominent display */}
+      {campaign.goals && (
+        <div className="card border-0 shadow-sm mb-4 border-start border-4 border-primary">
+          <div className="card-body">
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <span className="badge bg-primary bg-opacity-10 text-primary">Campaign Goal</span>
+            </div>
+            <p className="mb-0" style={{ whiteSpace: 'pre-line' }}>{campaign.goals}</p>
+          </div>
+        </div>
+      )}
+
       {/* Campaign Type */}
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold">Campaign Info</div>
@@ -60,6 +83,9 @@ export default function GTMStrategyTab({ campaignId, campaign, headers, onRefres
               <span className="badge bg-light text-dark border fs-6">
                 {campaign.type?.replace(/_/g, ' ') || 'Unknown'}
               </span>
+              {isCountdown && (
+                <span className="badge bg-info bg-opacity-10 text-info ms-2">Countdown Campaign</span>
+              )}
             </div>
           </div>
           <div className="mb-3">
@@ -117,8 +143,8 @@ export default function GTMStrategyTab({ campaignId, campaign, headers, onRefres
                 <div className="fw-medium">{steps.length}</div>
               </div>
               <div>
-                <span className="text-muted small">Total Days</span>
-                <div className="fw-medium">{totalDays}</div>
+                <span className="text-muted small">{isCountdown ? 'Type' : 'Total Days'}</span>
+                <div className="fw-medium">{isCountdown ? 'Countdown' : totalDays}</div>
               </div>
             </div>
             {steps.length > 0 && (
@@ -128,8 +154,9 @@ export default function GTMStrategyTab({ campaignId, campaign, headers, onRefres
                     <tr>
                       <th>Step</th>
                       <th>Channel</th>
-                      <th>Delay (days)</th>
+                      <th>Timing</th>
                       <th>Subject/Action</th>
+                      <th>Goal</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -137,8 +164,13 @@ export default function GTMStrategyTab({ campaignId, campaign, headers, onRefres
                       <tr key={i}>
                         <td className="fw-medium">{i + 1}</td>
                         <td className="text-capitalize">{step.channel}</td>
-                        <td>{step.delay_days || 0}</td>
+                        <td>
+                          <span className={`badge ${isCountdown ? 'bg-info bg-opacity-10 text-info' : 'bg-light text-dark border'}`}>
+                            {formatTiming(step)}
+                          </span>
+                        </td>
                         <td className="small">{step.subject || step.action || '—'}</td>
+                        <td className="small text-muted">{step.step_goal || '—'}</td>
                       </tr>
                     ))}
                   </tbody>

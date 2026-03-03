@@ -115,6 +115,8 @@ async function seed() {
       type: 'warm_nurture',
       status: 'active',
       sequence_id: sequence.id,
+      goals: 'Ensure every strategy call booking results in a prepared, engaged executive who shows up ready for a productive 30-minute session. Target 90%+ show rate. Get executives to complete the prep form before the call so we can personalize the discussion to their specific AI challenges and organizational context.',
+      gtm_notes: 'This is a warm nurture countdown campaign. Leads are auto-enrolled on booking a strategy call. The sequence runs backwards from the scheduled call time (T-3d, T-1d, T-6h, T-3h, T-15min). The campaign should never feel salesy — the executive has already committed to the call. Focus is on preparation, expectation-setting, and logistics. All messages are AI-generated using lead context. The sequence auto-cancels steps whose countdown time has already passed at enrollment and cancels entirely when the prep form is submitted.',
       channel_config: {
         email: { enabled: true, daily_limit: 50 },
         voice: { enabled: false },
@@ -129,7 +131,12 @@ async function seed() {
     } as any);
     console.log('Created Strategy Call Readiness campaign. ID:', campaign.id);
   } else {
-    await campaign.update({ sequence_id: sequence.id, status: 'active' });
+    await campaign.update({
+      sequence_id: sequence.id,
+      status: 'active',
+      goals: 'Ensure every strategy call booking results in a prepared, engaged executive who shows up ready for a productive 30-minute session. Target 90%+ show rate. Get executives to complete the prep form before the call so we can personalize the discussion to their specific AI challenges and organizational context.',
+      gtm_notes: 'This is a warm nurture countdown campaign. Leads are auto-enrolled on booking a strategy call. The sequence runs backwards from the scheduled call time (T-3d, T-1d, T-6h, T-3h, T-15min). The campaign should never feel salesy — the executive has already committed to the call. Focus is on preparation, expectation-setting, and logistics. All messages are AI-generated using lead context. The sequence auto-cancels steps whose countdown time has already passed at enrollment and cancels entirely when the prep form is submitted.',
+    } as any);
     console.log('Updated Strategy Call Readiness campaign. ID:', campaign.id);
   }
 

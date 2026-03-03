@@ -63,9 +63,22 @@ export default function SettingsTab({ campaignId, headers }: Props) {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`/api/admin/campaigns/${campaignId}/settings`, { headers });
-      const data = await res.json();
-      setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
+      // Fetch global settings and campaign settings in parallel
+      const [globalRes, campaignRes] = await Promise.all([
+        fetch('/api/admin/settings', { headers }),
+        fetch(`/api/admin/campaigns/${campaignId}/settings`, { headers }),
+      ]);
+      const globalData = await globalRes.json();
+      const campaignData = await campaignRes.json();
+
+      // Map relevant global settings to campaign settings shape
+      const globalDefaults: Partial<CampaignSettings> = {};
+      if (globalData.test_mode_enabled !== undefined) globalDefaults.test_mode_enabled = globalData.test_mode_enabled;
+      if (globalData.test_email) globalDefaults.test_email = globalData.test_email;
+      if (globalData.test_phone) globalDefaults.test_phone = globalData.test_phone;
+
+      // Merge: hardcoded defaults → global settings → campaign overrides
+      setSettings({ ...DEFAULT_SETTINGS, ...globalDefaults, ...(campaignData.settings || {}) });
     } catch (err) {
       console.error('Failed to fetch settings:', err);
     } finally {
@@ -115,6 +128,12 @@ export default function SettingsTab({ campaignId, headers }: Props) {
 
   return (
     <>
+      {/* Inheritance Notice */}
+      <div className="alert alert-info py-2 mb-4 d-flex align-items-center gap-2">
+        <i className="bi bi-info-circle"></i>
+        <small>Campaign settings inherit from global settings. Changes here override global defaults for this campaign only.</small>
+      </div>
+
       {/* Test Mode */}
       <div className={`card border-0 shadow-sm mb-4 ${settings.test_mode_enabled ? 'border-danger border-2' : ''}`}>
         <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
