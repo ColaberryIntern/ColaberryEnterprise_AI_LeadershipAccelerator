@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity } from '../models';
+import StrategyCall from '../models/StrategyCall';
 import { enrollLeadInSequence } from './sequenceService';
 
 export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement';
@@ -368,6 +369,19 @@ export async function getCampaignLeads(
     if (!nextActionMap[a.lead_id]) nextActionMap[a.lead_id] = a;
   }
 
+  // Enrich with strategy call data (most recent per lead)
+  const strategyCalls = leadIds.length > 0
+    ? await StrategyCall.findAll({
+        where: { lead_id: { [Op.in]: leadIds } },
+        order: [['scheduled_at', 'DESC']],
+      })
+    : [];
+
+  const callMap: Record<number, any> = {};
+  for (const sc of strategyCalls) {
+    if (!callMap[sc.lead_id!]) callMap[sc.lead_id!] = sc;
+  }
+
   const leads = rows.map((r) => {
     const json = (r as any).toJSON();
     const next = nextActionMap[r.lead_id];
@@ -376,6 +390,8 @@ export async function getCampaignLeads(
       next_action_at: next?.scheduled_for || json.next_action_at || null,
       next_action_channel: next?.channel || null,
       next_action_subject: next?.subject || null,
+      strategy_call_at: callMap[r.lead_id]?.scheduled_at || null,
+      strategy_call_status: callMap[r.lead_id]?.status || null,
     };
   });
 

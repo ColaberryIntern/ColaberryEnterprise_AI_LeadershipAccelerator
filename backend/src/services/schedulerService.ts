@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import nodemailer from 'nodemailer';
-import { ScheduledEmail, Lead, Cohort, Campaign, StrategyCall } from '../models';
+import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall } from '../models';
 import { env } from '../config/env';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
@@ -653,6 +653,12 @@ async function detectNoShows(): Promise<void> {
       console.log(`[Scheduler] Marked call ${call.id} as no_show (was scheduled for ${call.scheduled_at})`);
 
       if (call.lead_id) {
+        // Auto-complete CampaignLead — the call has passed
+        await CampaignLead.update(
+          { status: 'completed', completed_at: new Date(), outcome: 'no_show' } as any,
+          { where: { lead_id: call.lead_id, status: 'active' } }
+        );
+
         // Cancel any pending nudge actions
         await cancelPrepNudge(call.lead_id);
 

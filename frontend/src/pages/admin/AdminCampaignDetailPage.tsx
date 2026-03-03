@@ -48,6 +48,8 @@ interface CampaignLead {
   next_action_at?: string | null;
   next_action_channel?: string | null;
   next_action_subject?: string | null;
+  strategy_call_at?: string | null;
+  strategy_call_status?: string | null;
   touchpoint_count?: number;
   response_count?: number;
   lead: {

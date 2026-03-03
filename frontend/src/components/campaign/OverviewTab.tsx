@@ -14,6 +14,8 @@ interface CampaignLead {
   next_action_at?: string | null;
   next_action_channel?: string | null;
   next_action_subject?: string | null;
+  strategy_call_at?: string | null;
+  strategy_call_status?: string | null;
   touchpoint_count?: number;
   response_count?: number;
   lead: {
@@ -70,6 +72,27 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
   const fmtDate = (d: string | null | undefined) => {
     if (!d) return '—';
     return new Date(d).toLocaleDateString();
+  };
+
+  const callCountdown = (d: string | null | undefined) => {
+    if (!d) return null;
+    const diff = new Date(d).getTime() - Date.now();
+    const absDiff = Math.abs(diff);
+    const mins = Math.floor(absDiff / 60000);
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    let label: string;
+    if (days > 0) label = `${days}d ${hrs % 24}h`;
+    else if (hrs > 0) label = `${hrs}h ${mins % 60}m`;
+    else label = `${mins}m`;
+    return { isFuture: diff > 0, label };
+  };
+
+  const isCallPast = (cl: CampaignLead) => {
+    if (!cl.strategy_call_at) return false;
+    const pastStatuses = ['no_show', 'completed', 'cancelled'];
+    if (cl.strategy_call_status && pastStatuses.includes(cl.strategy_call_status)) return true;
+    return new Date(cl.strategy_call_at).getTime() < Date.now();
   };
 
   return (
@@ -149,15 +172,19 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
                     <th>Temperature</th>
                     <th>Status</th>
                     <th>Step</th>
+                    <th>Call</th>
                     <th>Last Activity</th>
                     <th>Next Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {leads.map((cl) => (
+                  {leads.map((cl) => {
+                    const pastCall = isCallPast(cl);
+                    const countdown = callCountdown(cl.strategy_call_at);
+                    return (
                     <tr
                       key={cl.id}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: 'pointer', opacity: pastCall ? 0.5 : 1 }}
                       onClick={() => setSelectedLead(cl)}
                     >
                       <td className="fw-medium">{cl.lead?.name}</td>
@@ -179,6 +206,15 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
                           ? `Step ${(cl.current_step_index || 0) + 1} of ${cl.total_steps}`
                           : '—'}
                       </td>
+                      <td className="small">
+                        {countdown ? (
+                          countdown.isFuture ? (
+                            <span className="text-success fw-medium">in {countdown.label}</span>
+                          ) : (
+                            <span className="text-muted">{countdown.label} ago</span>
+                          )
+                        ) : '—'}
+                      </td>
                       <td className="small text-muted">{relTime(cl.last_activity_at)}</td>
                       <td className="small">
                         {cl.next_action_at ? (
@@ -195,7 +231,8 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
                         ) : '—'}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
