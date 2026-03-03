@@ -90,6 +90,28 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
   const responses = timeline.filter(t => t.type === 'outcome').length;
   const lastContact = timeline.length > 0 ? timeline[0]?.timestamp : null;
 
+  const callCountdown = (d: string | null | undefined) => {
+    if (!d) return null;
+    const diff = new Date(d).getTime() - Date.now();
+    const absDiff = Math.abs(diff);
+    const mins = Math.floor(absDiff / 60000);
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    let label: string;
+    if (days > 0) label = `${days}d ${hrs % 24}h`;
+    else if (hrs > 0) label = `${hrs}h ${mins % 60}m`;
+    else label = `${mins}m`;
+    return { isFuture: diff > 0, label };
+  };
+
+  const fmtDateTime = (d: string | null | undefined) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  };
+
   const STATUS_COLORS: Record<string, string> = {
     active: 'success',
     completed: 'info',
@@ -170,6 +192,19 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
                 <div className="text-muted" style={{ fontSize: '0.7rem' }}>Last Contact</div>
               </div>
             </div>
+            {enrollment?.strategy_call_at && (() => {
+              const cd = callCountdown(enrollment.strategy_call_at);
+              return (
+                <div className="col">
+                  <div className="border rounded p-2 text-center">
+                    <div className={`fw-bold small ${cd?.isFuture ? 'text-success' : 'text-muted'}`}>
+                      {cd ? (cd.isFuture ? `in ${cd.label}` : `${cd.label} ago`) : '—'}
+                    </div>
+                    <div className="text-muted" style={{ fontSize: '0.7rem' }}>Strategy Call</div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Two-Column Layout */}
@@ -268,6 +303,34 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
                       <div className="text-muted small">Enrolled</div>
                       <div className="fw-medium small">{fmtDate(enrollment.enrolled_at)}</div>
                     </div>
+                    {enrollment.strategy_call_at && (
+                      <div className="mb-3">
+                        <div className="text-muted small">Strategy Call</div>
+                        <div className="fw-medium small">{fmtDateTime(enrollment.strategy_call_at)}</div>
+                        {(() => {
+                          const cd = callCountdown(enrollment.strategy_call_at);
+                          return cd ? (
+                            <span className={`small ${cd.isFuture ? 'text-success' : 'text-muted'}`}>
+                              {cd.isFuture ? `in ${cd.label}` : `${cd.label} ago`}
+                            </span>
+                          ) : null;
+                        })()}
+                        {enrollment.strategy_call_meet_link && (
+                          <div className="mt-1">
+                            <a
+                              href={enrollment.strategy_call_meet_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-outline-primary btn-sm"
+                              style={{ fontSize: '0.7rem' }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Join Meeting
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="mb-3">
                       <div className="text-muted small">Step Progress</div>
                       <div className="fw-medium small">

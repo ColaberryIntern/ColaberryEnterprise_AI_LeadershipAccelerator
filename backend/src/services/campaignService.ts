@@ -560,9 +560,20 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
     include: [{ model: Lead, as: 'lead' }],
   });
 
+  // Get most recent strategy call for this lead
+  const strategyCall = await StrategyCall.findOne({
+    where: { lead_id: leadId },
+    order: [['scheduled_at', 'DESC']],
+  });
+
   return {
     timeline,
-    enrollment: campaignLead ? campaignLead.toJSON() : null,
+    enrollment: campaignLead ? {
+      ...campaignLead.toJSON(),
+      strategy_call_at: strategyCall?.scheduled_at || null,
+      strategy_call_status: strategyCall?.status || null,
+      strategy_call_meet_link: (strategyCall as any)?.meet_link || null,
+    } : null,
     activities: activities.slice(0, 20),
   };
 }
