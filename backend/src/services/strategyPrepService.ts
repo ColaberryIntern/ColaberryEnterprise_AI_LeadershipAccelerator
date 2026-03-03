@@ -1,5 +1,5 @@
 import { StrategyPrepInput } from '../schemas/strategyPrepSchema';
-import { FollowUpSequence, Campaign, ScheduledEmail } from '../models';
+import { FollowUpSequence, Campaign, ScheduledEmail, CampaignLead } from '../models';
 import { enrollLeadInSequence } from './sequenceService';
 import { env } from '../config/env';
 
@@ -60,6 +60,35 @@ async function findSequenceAndCampaign(sequenceName: string): Promise<{
 }
 
 /**
+ * Cancel pending actions from a named sequence for a lead.
+ * Used to suppress lower-priority campaigns when a lead advances in the funnel:
+ *   Briefing Interest (awareness) → Strategy Call Readiness (decision) → No-Show Recovery (recovery)
+ * Also marks the CampaignLead as completed with outcome 'superseded'.
+ */
+async function cancelCampaignActionsForLead(leadId: number, sequenceName: string): Promise<number> {
+  const sequence = await FollowUpSequence.findOne({ where: { name: sequenceName } });
+  if (!sequence) return 0;
+
+  const [count] = await ScheduledEmail.update(
+    { status: 'cancelled' } as any,
+    { where: { lead_id: leadId, sequence_id: sequence.id, status: 'pending' } }
+  );
+
+  if (count > 0) {
+    const campaign = await Campaign.findOne({ where: { sequence_id: sequence.id } });
+    if (campaign) {
+      await CampaignLead.update(
+        { status: 'completed', outcome: 'superseded' } as any,
+        { where: { campaign_id: campaign.id, lead_id: leadId, status: 'active' } }
+      );
+    }
+    console.log(`[PrepService] Cancelled ${count} pending "${sequenceName}" actions for lead ${leadId} (superseded)`);
+  }
+
+  return count;
+}
+
+/**
  * Enroll a lead in the strategy call readiness sequence.
  * Uses countdown scheduling: each action is scheduled backwards from the call time.
  * Actions whose countdown time is already past are auto-cancelled.
@@ -81,6 +110,9 @@ export async function enrollInPrepNudge(
   const prepLink = `${env.frontendUrl}/strategy-call-prep?token=${prepToken}`;
 
   try {
+    // Cancel any pending Briefing Interest actions — lead has already booked a call
+    await cancelCampaignActionsForLead(leadId, 'Executive Briefing Interest');
+
     const actions = await enrollLeadInSequence(leadId, sequence.id, campaign?.id);
 
     const meetingContext = [
@@ -172,6 +204,9 @@ export async function enrollInNoShowRecovery(leadId: number): Promise<void> {
   const bookingLink = `${env.frontendUrl}/strategy-call`;
 
   try {
+    // Cancel any pending Briefing Interest actions — no-show recovery takes priority
+    await cancelCampaignActionsForLead(leadId, 'Executive Briefing Interest');
+
     const actions = await enrollLeadInSequence(leadId, sequence.id, campaign?.id);
 
     // Inject booking link into metadata for AI context
