@@ -216,22 +216,27 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
                         ) : '—'}
                       </td>
                       <td className="small text-muted">{relTime(cl.last_activity_at)}</td>
-                      <td className="small">
-                        {cl.next_action_at ? (
-                          <>
-                            {cl.next_action_channel && (
-                              <span className={`badge bg-${cl.next_action_channel === 'email' ? 'info' : cl.next_action_channel === 'sms' ? 'warning' : 'secondary'} me-1`}>
-                                {cl.next_action_channel}
+                      <td className="small" style={{ maxWidth: 220 }}>
+                        {cl.next_action_at ? (() => {
+                          const cd = callCountdown(cl.next_action_at);
+                          return (
+                            <>
+                              {cl.next_action_channel && (
+                                <span className={`badge bg-${cl.next_action_channel === 'email' ? 'info' : cl.next_action_channel === 'sms' ? 'warning' : 'secondary'} me-1`}>
+                                  {cl.next_action_channel}
+                                </span>
+                              )}
+                              <span className={cd?.isFuture ? 'text-success' : 'text-muted'}>
+                                {cd ? (cd.isFuture ? `in ${cd.label}` : `${cd.label} ago`) : fmtDate(cl.next_action_at)}
                               </span>
-                            )}
-                            {fmtDate(cl.next_action_at)}
-                          </>
-                        ) : cl.strategy_call_at && countdown?.isFuture ? (
-                          <>
-                            <span className="badge bg-success bg-opacity-10 text-success me-1">call</span>
-                            {fmtDate(cl.strategy_call_at)}
-                          </>
-                        ) : cl.status === 'completed' || (cl.current_step_index !== undefined && cl.total_steps && cl.current_step_index >= cl.total_steps - 1) ? (
+                              {cl.next_action_subject && (
+                                <div className="text-muted text-truncate" style={{ fontSize: '0.7rem', maxWidth: 200 }} title={cl.next_action_subject}>
+                                  {cl.next_action_subject}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })() : cl.status === 'completed' || (cl.current_step_index !== undefined && cl.total_steps && cl.current_step_index >= cl.total_steps - 1) ? (
                           <span className="text-muted">Complete</span>
                         ) : '—'}
                       </td>
