@@ -350,7 +350,36 @@ export async function getCampaignLeads(
     offset,
   });
 
-  return { leads: rows, total: count, page, totalPages: Math.ceil(count / limit) };
+  // Enrich with dynamic next action from ScheduledEmail (more reliable than static column)
+  const leadIds = rows.map((r) => r.lead_id);
+  const nextActions = leadIds.length > 0
+    ? await ScheduledEmail.findAll({
+        where: {
+          campaign_id: campaignId,
+          lead_id: { [Op.in]: leadIds },
+          status: 'pending',
+        },
+        order: [['scheduled_for', 'ASC']],
+      })
+    : [];
+
+  const nextActionMap: Record<number, any> = {};
+  for (const a of nextActions) {
+    if (!nextActionMap[a.lead_id]) nextActionMap[a.lead_id] = a;
+  }
+
+  const leads = rows.map((r) => {
+    const json = (r as any).toJSON();
+    const next = nextActionMap[r.lead_id];
+    return {
+      ...json,
+      next_action_at: next?.scheduled_for || json.next_action_at || null,
+      next_action_channel: next?.channel || null,
+      next_action_subject: next?.subject || null,
+    };
+  });
+
+  return { leads, total: count, page, totalPages: Math.ceil(count / limit) };
 }
 
 // ── Campaign Settings ───────────────────────────────────────────────

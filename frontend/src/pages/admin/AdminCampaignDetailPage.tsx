@@ -46,6 +46,8 @@ interface CampaignLead {
   total_steps?: number;
   last_activity_at?: string | null;
   next_action_at?: string | null;
+  next_action_channel?: string | null;
+  next_action_subject?: string | null;
   touchpoint_count?: number;
   response_count?: number;
   lead: {

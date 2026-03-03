@@ -375,8 +375,8 @@ export async function handleGetEnrichedCampaignLeads(req: Request, res: Response
 
 export async function handleGetLeadCampaignTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const timeline = await getLeadCampaignTimeline(req.params.id as string, parseInt(req.params.leadId as string, 10));
-    res.json({ timeline });
+    const result = await getLeadCampaignTimeline(req.params.id as string, parseInt(req.params.leadId as string, 10));
+    res.json(result);
   } catch (error: any) {
     if (error.message.includes('not found')) {
       res.status(404).json({ error: error.message });

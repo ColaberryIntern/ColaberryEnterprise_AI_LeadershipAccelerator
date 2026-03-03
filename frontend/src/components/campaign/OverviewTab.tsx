@@ -12,6 +12,8 @@ interface CampaignLead {
   total_steps?: number;
   last_activity_at?: string | null;
   next_action_at?: string | null;
+  next_action_channel?: string | null;
+  next_action_subject?: string | null;
   touchpoint_count?: number;
   response_count?: number;
   lead: {
@@ -179,7 +181,18 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
                       </td>
                       <td className="small text-muted">{relTime(cl.last_activity_at)}</td>
                       <td className="small">
-                        {cl.next_action_at ? fmtDate(cl.next_action_at) : '—'}
+                        {cl.next_action_at ? (
+                          <>
+                            {cl.next_action_channel && (
+                              <span className={`badge bg-${cl.next_action_channel === 'email' ? 'info' : cl.next_action_channel === 'sms' ? 'warning' : 'secondary'} me-1`}>
+                                {cl.next_action_channel}
+                              </span>
+                            )}
+                            {fmtDate(cl.next_action_at)}
+                          </>
+                        ) : cl.status === 'completed' || (cl.current_step_index !== undefined && cl.total_steps && cl.current_step_index >= cl.total_steps - 1) ? (
+                          <span className="text-muted">Complete</span>
+                        ) : '—'}
                       </td>
                     </tr>
                   ))}
