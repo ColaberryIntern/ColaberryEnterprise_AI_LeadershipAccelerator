@@ -156,8 +156,39 @@ export async function enrollInPrepNudge(
       await action.update(updates as any);
     }
 
+    // Mark step 0 (confirmation email) as sent — the actual email is sent by calendarController
+    const confirmAction = actions[0];
+    if (confirmAction && confirmAction.step_index === 0 && !(confirmAction as any).minutes_before_call) {
+      await confirmAction.update({
+        status: 'sent',
+        sent_at: new Date(),
+        attempts_made: 1,
+      } as any);
+    }
+
+    // Update CampaignLead tracking: step 0 complete, set next action time
+    if (campaign) {
+      const nextPending = await ScheduledEmail.findOne({
+        where: {
+          campaign_id: campaign.id,
+          lead_id: leadId,
+          status: 'pending',
+        },
+        order: [['scheduled_for', 'ASC']],
+      });
+
+      await CampaignLead.update(
+        {
+          current_step_index: 0,
+          last_activity_at: new Date(),
+          next_action_at: nextPending ? nextPending.scheduled_for : null,
+        } as any,
+        { where: { campaign_id: campaign.id, lead_id: leadId } }
+      );
+    }
+
     console.log(
-      `[PrepService] Enrolled lead ${leadId} in readiness countdown: ${scheduled} scheduled, ${cancelled} auto-cancelled (past window)`
+      `[PrepService] Enrolled lead ${leadId} in readiness countdown: 1 confirmation (sent), ${scheduled} scheduled, ${cancelled} auto-cancelled (past window)`
     );
   } catch (err: any) {
     console.error('[PrepService] Failed to enroll in readiness sequence:', err.message);

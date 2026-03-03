@@ -355,6 +355,7 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   const html = wrapEmailHtml(action.body);
   const info = await mailer.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: action.to_email,
     subject: action.subject,
     html,

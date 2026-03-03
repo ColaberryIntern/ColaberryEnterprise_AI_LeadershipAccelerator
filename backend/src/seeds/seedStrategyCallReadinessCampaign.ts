@@ -1,6 +1,7 @@
+import { Op } from 'sequelize';
 import { connectDatabase, sequelize } from '../config/database';
 import '../models';
-import { FollowUpSequence, Campaign } from '../models';
+import { FollowUpSequence, Campaign, CampaignLead, ScheduledEmail } from '../models';
 
 export const STRATEGY_READINESS_SEQUENCE_NAME = 'Strategy Call Readiness';
 const STRATEGY_READINESS_CAMPAIGN_NAME = 'Strategy Call Readiness Campaign';
@@ -8,9 +9,22 @@ const STRATEGY_READINESS_CAMPAIGN_NAME = 'Strategy Call Readiness Campaign';
 const READINESS_SEQUENCE = {
   name: STRATEGY_READINESS_SEQUENCE_NAME,
   description:
-    'Auto-enrolled on booking. 5-step countdown readiness campaign scheduled backwards from call time (T-3d, T-1d, T-6h, T-3h, T-15min). Actions whose countdown time has already passed are auto-cancelled at enrollment. Cancelled entirely when prep form is submitted.',
+    'Auto-enrolled on booking. 6-step campaign: immediate confirmation + 5-step countdown readiness sequence scheduled backwards from call time (T-3d, T-1d, T-6h, T-3h, T-15min). Actions whose countdown time has already passed are auto-cancelled at enrollment. Cancelled entirely when prep form is submitted.',
   is_active: true,
   steps: [
+    {
+      delay_days: 0,
+      // No minutes_before_call — sent immediately at enrollment
+      channel: 'email' as const,
+      subject: 'Your Executive AI Strategy Call is Confirmed',
+      body_template: '',
+      ai_instructions: '',  // Not AI-generated — sent directly by sendStrategyCallConfirmation()
+      ai_tone: '',
+      ai_context_notes: '',
+      step_goal: 'Confirm the booking with call details, meet link, and prep form link',
+      max_attempts: 1,
+      fallback_channel: null,
+    },
     {
       delay_days: 0,
       minutes_before_call: 4320, // T-3 days
@@ -116,7 +130,7 @@ async function seed() {
       status: 'active',
       sequence_id: sequence.id,
       goals: 'Ensure every strategy call booking results in a prepared, engaged executive who shows up ready for a productive 30-minute session. Target 90%+ show rate. Get executives to complete the prep form before the call so we can personalize the discussion to their specific AI challenges and organizational context.',
-      gtm_notes: 'This is a warm nurture countdown campaign. Leads are auto-enrolled on booking a strategy call. The sequence runs backwards from the scheduled call time (T-3d, T-1d, T-6h, T-3h, T-15min). The campaign should never feel salesy — the executive has already committed to the call. Focus is on preparation, expectation-setting, and logistics. All messages are AI-generated using lead context. The sequence auto-cancels steps whose countdown time has already passed at enrollment and cancels entirely when the prep form is submitted.',
+      gtm_notes: 'This is a warm nurture countdown campaign. Leads are auto-enrolled on booking a strategy call. Step 1 is the booking confirmation (sent immediately). Steps 2-6 are a countdown sequence scheduled backwards from the call time (T-3d, T-1d, T-6h, T-3h, T-15min). The campaign should never feel salesy — the executive has already committed to the call. Focus is on preparation, expectation-setting, and logistics. All messages are AI-generated using lead context. The sequence auto-cancels steps whose countdown time has already passed at enrollment and cancels entirely when the prep form is submitted.',
       channel_config: {
         email: { enabled: true, daily_limit: 50 },
         voice: { enabled: false },
@@ -135,7 +149,7 @@ async function seed() {
       sequence_id: sequence.id,
       status: 'active',
       goals: 'Ensure every strategy call booking results in a prepared, engaged executive who shows up ready for a productive 30-minute session. Target 90%+ show rate. Get executives to complete the prep form before the call so we can personalize the discussion to their specific AI challenges and organizational context.',
-      gtm_notes: 'This is a warm nurture countdown campaign. Leads are auto-enrolled on booking a strategy call. The sequence runs backwards from the scheduled call time (T-3d, T-1d, T-6h, T-3h, T-15min). The campaign should never feel salesy — the executive has already committed to the call. Focus is on preparation, expectation-setting, and logistics. All messages are AI-generated using lead context. The sequence auto-cancels steps whose countdown time has already passed at enrollment and cancels entirely when the prep form is submitted.',
+      gtm_notes: 'This is a warm nurture countdown campaign. Leads are auto-enrolled on booking a strategy call. Step 1 is the booking confirmation (sent immediately). Steps 2-6 are a countdown sequence scheduled backwards from the call time (T-3d, T-1d, T-6h, T-3h, T-15min). The campaign should never feel salesy — the executive has already committed to the call. Focus is on preparation, expectation-setting, and logistics. All messages are AI-generated using lead context. The sequence auto-cancels steps whose countdown time has already passed at enrollment and cancels entirely when the prep form is submitted.',
     } as any);
     console.log('Updated Strategy Call Readiness campaign. ID:', campaign.id);
   }
@@ -157,12 +171,77 @@ async function seed() {
     console.log('Completed old Prep Nudge campaign.');
   }
 
-  console.log('Steps (countdown from call time):');
+  console.log('Steps:');
   READINESS_SEQUENCE.steps.forEach((s, i) => {
-    const mins = s.minutes_before_call;
-    const label = mins >= 1440 ? `T-${mins / 1440}d` : mins >= 60 ? `T-${mins / 60}h` : `T-${mins}min`;
+    const mins = (s as any).minutes_before_call;
+    const label = mins ? (mins >= 1440 ? `T-${mins / 1440}d` : mins >= 60 ? `T-${mins / 60}h` : `T-${mins}min`) : 'Immediate';
     console.log(`  ${i + 1}. ${label} [${s.channel}] ${s.subject}`);
   });
+
+  // Backfill existing enrollments: update total_steps and add step 0 confirmation record
+  if (campaign) {
+    const existingLeads = await CampaignLead.findAll({
+      where: { campaign_id: campaign.id },
+    });
+
+    let backfilled = 0;
+    for (const cl of existingLeads) {
+      // Update total_steps to 6
+      const updates: Record<string, any> = { total_steps: READINESS_SEQUENCE.steps.length };
+
+      // Create step 0 ScheduledEmail if it doesn't exist yet
+      const existingStep0 = await ScheduledEmail.findOne({
+        where: {
+          campaign_id: campaign.id,
+          lead_id: cl.lead_id,
+          step_index: 0,
+          subject: 'Your Executive AI Strategy Call is Confirmed',
+        },
+      });
+
+      if (!existingStep0) {
+        await ScheduledEmail.create({
+          lead_id: cl.lead_id,
+          sequence_id: sequence.id,
+          campaign_id: campaign.id,
+          step_index: 0,
+          channel: 'email',
+          subject: 'Your Executive AI Strategy Call is Confirmed',
+          body: '',
+          to_email: '',
+          scheduled_for: (cl as any).created_at || new Date(),
+          status: 'sent',
+          sent_at: (cl as any).created_at || new Date(),
+          attempts_made: 1,
+          metadata: { backfilled: true },
+        } as any);
+      }
+
+      // Set current_step_index and last_activity_at
+      updates.current_step_index = 0;
+      if (!cl.last_activity_at) {
+        updates.last_activity_at = (cl as any).created_at || new Date();
+      }
+
+      // Find next pending action for next_action_at
+      const nextPending = await ScheduledEmail.findOne({
+        where: {
+          campaign_id: campaign.id,
+          lead_id: cl.lead_id,
+          status: 'pending',
+        },
+        order: [['scheduled_for', 'ASC']],
+      });
+      updates.next_action_at = nextPending ? nextPending.scheduled_for : null;
+
+      await cl.update(updates as any);
+      backfilled++;
+    }
+
+    if (backfilled > 0) {
+      console.log(`[Backfill] Updated ${backfilled} existing enrollments: total_steps=6, added confirmation step`);
+    }
+  }
 
   process.exit(0);
 }

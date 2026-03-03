@@ -98,6 +98,31 @@ export async function recordOutcome(params: RecordOutcomeParams): Promise<void> 
           if (responseOutcomes.includes(params.outcome)) {
             updates.response_count = (campaignLead.response_count || 0) + 1;
           }
+
+          // Update step progress tracking
+          if (params.step_index !== undefined) {
+            // Only advance forward (don't regress if actions execute out of order)
+            if (params.step_index >= (campaignLead.current_step_index || 0)) {
+              updates.current_step_index = params.step_index;
+            }
+
+            // Find next pending action for this lead in this campaign
+            const nextAction = await ScheduledEmail.findOne({
+              where: {
+                campaign_id: params.campaign_id,
+                lead_id: params.lead_id,
+                status: 'pending',
+              },
+              order: [['scheduled_for', 'ASC']],
+            });
+            updates.next_action_at = nextAction ? nextAction.scheduled_for : null;
+
+            // Auto-complete CampaignLead when no more pending actions
+            if (!nextAction) {
+              updates.status = 'completed';
+            }
+          }
+
           await campaignLead.update(updates);
         }
       } catch (trackErr: any) {

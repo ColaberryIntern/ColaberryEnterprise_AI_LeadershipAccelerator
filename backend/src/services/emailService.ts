@@ -88,6 +88,7 @@ export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationDat
   const html = buildConfirmationHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
@@ -114,6 +115,7 @@ export async function sendInterestEmail(data: InterestEmailData): Promise<void> 
   const html = buildInterestHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
@@ -139,6 +141,7 @@ export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailDat
   const html = buildExecutiveOverviewHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
@@ -171,6 +174,7 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
   const html = buildHighIntentAlertHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Lead Alert" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
@@ -200,6 +204,7 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
   const html = buildStrategyCallConfirmationHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
@@ -305,6 +310,7 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
   const html = buildIntelligenceBriefHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Strategy Intel" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
