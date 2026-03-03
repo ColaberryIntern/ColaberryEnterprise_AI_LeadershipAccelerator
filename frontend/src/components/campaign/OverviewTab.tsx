@@ -226,6 +226,11 @@ export default function OverviewTab({ campaignId, stats, leads, headers }: Props
                             )}
                             {fmtDate(cl.next_action_at)}
                           </>
+                        ) : cl.strategy_call_at && countdown?.isFuture ? (
+                          <>
+                            <span className="badge bg-success bg-opacity-10 text-success me-1">call</span>
+                            {fmtDate(cl.strategy_call_at)}
+                          </>
                         ) : cl.status === 'completed' || (cl.current_step_index !== undefined && cl.total_steps && cl.current_step_index >= cl.total_steps - 1) ? (
                           <span className="text-muted">Complete</span>
                         ) : '—'}

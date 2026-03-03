@@ -349,7 +349,11 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
                     </div>
                     <div className="mb-3">
                       <div className="text-muted small">Next Action</div>
-                      <div className="fw-medium small">{fmtDate(enrollment.next_action_at)}</div>
+                      <div className="fw-medium small">
+                        {enrollment.next_action_at ? fmtDate(enrollment.next_action_at) : enrollment.strategy_call_at && new Date(enrollment.strategy_call_at).getTime() > Date.now() ? (
+                          <><span className="badge bg-success bg-opacity-10 text-success me-1">call</span>{fmtDateTime(enrollment.strategy_call_at)}</>
+                        ) : <span className="text-muted">Complete</span>}
+                      </div>
                     </div>
                     <div className="mb-3">
                       <div className="text-muted small">Last Activity</div>
