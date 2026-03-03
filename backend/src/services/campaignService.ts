@@ -572,6 +572,13 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
     order: [['scheduled_at', 'DESC']],
   });
 
+  // Get next pending action for this lead
+  const nextAction = await ScheduledEmail.findOne({
+    where: { campaign_id: campaignId, lead_id: leadId, status: 'pending' },
+    order: [['scheduled_for', 'ASC']],
+    raw: true,
+  });
+
   return {
     timeline,
     enrollment: campaignLead ? {
@@ -579,6 +586,9 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
       strategy_call_at: strategyCall?.scheduled_at || null,
       strategy_call_status: strategyCall?.status || null,
       strategy_call_meet_link: (strategyCall as any)?.meet_link || null,
+      next_action_at: nextAction?.scheduled_for || null,
+      next_action_channel: nextAction?.channel || null,
+      next_action_subject: nextAction?.subject || null,
     } : null,
     activities: activities.slice(0, 20),
   };

@@ -19,6 +19,7 @@ interface TimelineEntry {
   action?: string;
   outcome?: string;
   status?: string;
+  step_index?: number;
   ai_generated?: boolean;
   description?: string;
   body?: string | null;
@@ -362,7 +363,29 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
                     <div className="mb-3">
                       <div className="text-muted small">Next Action</div>
                       <div className="fw-medium small">
-                        {enrollment.next_action_at ? fmtDate(enrollment.next_action_at) : enrollment.strategy_call_at && new Date(enrollment.strategy_call_at).getTime() > Date.now() ? (
+                        {enrollment.next_action_at ? (() => {
+                          const cd = callCountdown(enrollment.next_action_at);
+                          return (
+                            <>
+                              {enrollment.next_action_channel && (
+                                <span className={`badge bg-${enrollment.next_action_channel === 'email' ? 'info' : enrollment.next_action_channel === 'sms' ? 'warning' : 'secondary'} me-1`}>
+                                  {enrollment.next_action_channel}
+                                </span>
+                              )}
+                              <span className={cd?.isFuture ? 'text-success' : 'text-muted'}>
+                                {cd ? (cd.isFuture ? `in ${cd.label}` : `${cd.label} ago`) : fmtDateTime(enrollment.next_action_at)}
+                              </span>
+                              <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                                {fmtDateTime(enrollment.next_action_at)}
+                              </div>
+                              {enrollment.next_action_subject && (
+                                <div className="text-muted text-truncate" style={{ fontSize: '0.7rem', maxWidth: 200 }} title={enrollment.next_action_subject}>
+                                  {enrollment.next_action_subject}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })() : enrollment.strategy_call_at && new Date(enrollment.strategy_call_at).getTime() > Date.now() ? (
                           <><span className="badge bg-success bg-opacity-10 text-success me-1">call</span>{fmtDateTime(enrollment.strategy_call_at)}</>
                         ) : <span className="text-muted">Complete</span>}
                       </div>
@@ -422,6 +445,7 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
       {selectedAction && (
         <ActionDetailModal
           action={selectedAction}
+          totalSteps={enrollment?.total_steps}
           onClose={() => setSelectedAction(null)}
         />
       )}

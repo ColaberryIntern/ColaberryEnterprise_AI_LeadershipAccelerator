@@ -373,6 +373,7 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     status: 'sent',
     sent_at: new Date(),
     attempts_made: (action.attempts_made || 0) + 1,
+    body: html,
   } as any);
 
   await logActivity({
