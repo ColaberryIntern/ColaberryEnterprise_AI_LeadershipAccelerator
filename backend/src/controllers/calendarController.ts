@@ -7,6 +7,7 @@ import StrategyCall from '../models/StrategyCall';
 import Lead from '../models/Lead';
 import { sendStrategyCallConfirmation } from '../services/emailService';
 import { enrollInPrepNudge } from '../services/strategyPrepService';
+import { advancePipelineStage } from '../services/pipelineService';
 
 export async function handleGetAvailability(
   req: Request,
@@ -92,10 +93,8 @@ export async function handleBookCall(
         });
         console.log('[Calendar] Created new lead:', lead.id, 'for', emailLower);
       } else {
-        // Update pipeline stage if they booked a strategy call
-        if (lead.pipeline_stage === 'new_lead') {
-          await lead.update({ pipeline_stage: 'meeting_scheduled' });
-        }
+        // Advance pipeline stage for strategy call booking (from new_lead or contacted)
+        await advancePipelineStage(lead.id, 'meeting_scheduled', 'strategy_call_booked');
         console.log('[Calendar] Found existing lead:', lead.id, 'for', emailLower);
       }
 

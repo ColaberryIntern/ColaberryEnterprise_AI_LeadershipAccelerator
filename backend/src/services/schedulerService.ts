@@ -9,6 +9,7 @@ import { generateMessage, buildConversationHistory } from './aiMessageService';
 import { recordActionOutcome } from './interactionService';
 import { computeInsights } from './icpInsightService';
 import { cancelPrepNudge, enrollInNoShowRecovery } from './strategyPrepService';
+import { advancePipelineStage } from './pipelineService';
 import { getTestOverrides } from './settingsService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
@@ -389,6 +390,11 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   await recordActionOutcome(action, 'sent');
 
   console.log(`[Scheduler] Email sent to ${action.to_email}: ${action.subject} (AI: ${action.ai_generated || false})`);
+
+  // Auto-advance pipeline: new_lead → contacted
+  advancePipelineStage(action.lead_id, 'contacted', `campaign_email_sent:${action.id}`).catch(
+    (err) => console.error('[Scheduler] Pipeline advance failed:', err.message)
+  );
 }
 
 async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
@@ -497,6 +503,11 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
     await recordActionOutcome(action, 'sent', { voice_call: true });
 
     console.log(`[Scheduler] Voice call initiated for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
+
+    // Auto-advance pipeline: new_lead → contacted
+    advancePipelineStage(action.lead_id, 'contacted', `campaign_voice_sent:${action.id}`).catch(
+      (err) => console.error('[Scheduler] Pipeline advance failed:', err.message)
+    );
   } else {
     throw new Error(result.error || 'Voice call failed');
   }
@@ -546,6 +557,11 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
   await recordActionOutcome(action, 'sent', { sms: true });
 
   console.log(`[Scheduler] SMS action processed for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
+
+  // Auto-advance pipeline: new_lead → contacted
+  advancePipelineStage(action.lead_id, 'contacted', `campaign_sms_sent:${action.id}`).catch(
+    (err) => console.error('[Scheduler] Pipeline advance failed:', err.message)
+  );
 }
 
 async function handleFallback(action: InstanceType<typeof ScheduledEmail>): Promise<void> {

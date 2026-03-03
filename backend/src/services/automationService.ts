@@ -3,6 +3,7 @@ import { AutomationLog, FollowUpSequence, Campaign } from '../models';
 import { triggerVoiceCall } from './synthflowService';
 import { sendEnrollmentConfirmation, sendInterestEmail, sendExecutiveOverviewEmail, sendHighIntentAlert } from './emailService';
 import { enrollLeadInSequence } from './sequenceService';
+import { advancePipelineStage } from './pipelineService';
 
 interface LogParams {
   type: 'email' | 'voice_call' | 'alert';
@@ -130,6 +131,10 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
         related_id: relatedId,
         status: 'success',
       });
+      // Auto-advance pipeline: new_lead → contacted
+      advancePipelineStage(lead.id, 'contacted', 'initial_email_sent').catch((err) =>
+        console.error('[Automation] Pipeline advance failed:', err.message)
+      );
     } catch (error: any) {
       console.error('[Automation] Lead email failed:', error.message);
       await logAutomation({
@@ -161,6 +166,12 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
         status: result.success ? 'success' : 'failed',
         provider_response: JSON.stringify(result.data || result.error),
       });
+      if (result.success) {
+        // Auto-advance pipeline: new_lead → contacted
+        advancePipelineStage(lead.id, 'contacted', 'initial_voice_call').catch((err) =>
+          console.error('[Automation] Pipeline advance failed:', err.message)
+        );
+      }
     } catch (error: any) {
       console.error('[Automation] Lead voice call failed:', error.message);
       await logAutomation({

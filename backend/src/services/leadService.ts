@@ -351,6 +351,21 @@ export async function getPipelineStats() {
   for (const stage of PIPELINE_STAGES) {
     byStage[stage] = await Lead.count({ where: { pipeline_stage: stage } });
   }
+
+  // Count leads with NULL/empty/invalid pipeline_stage and include in 'new_lead'
+  const uncategorized = await Lead.count({
+    where: {
+      [Op.or]: [
+        { pipeline_stage: null as any },
+        { pipeline_stage: '' },
+        { pipeline_stage: { [Op.notIn]: PIPELINE_STAGES } },
+      ],
+    },
+  });
+  if (uncategorized > 0) {
+    byStage['new_lead'] = (byStage['new_lead'] || 0) + uncategorized;
+  }
+
   return byStage;
 }
 
