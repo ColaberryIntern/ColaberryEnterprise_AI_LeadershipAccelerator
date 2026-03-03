@@ -535,8 +535,12 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
       step_index: action.step_index,
       status: action.status,
       subject: action.subject,
-      body_preview: action.body ? action.body.substring(0, 200) : null,
+      body: action.body || null,
+      to_email: action.to_email || null,
+      to_phone: action.to_phone || null,
+      scheduled_for: action.scheduled_for,
       ai_generated: action.ai_generated,
+      metadata: action.metadata || null,
       id: action.id,
     });
   }

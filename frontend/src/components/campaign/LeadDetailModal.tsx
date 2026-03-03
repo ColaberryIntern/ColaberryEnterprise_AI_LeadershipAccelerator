@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import TemperatureBadge from '../TemperatureBadge';
 import Modal from '../ui/Modal';
+import ActionDetailModal from './ActionDetailModal';
 
 interface Props {
   campaignId: string;
@@ -20,6 +21,11 @@ interface TimelineEntry {
   status?: string;
   ai_generated?: boolean;
   description?: string;
+  body?: string | null;
+  to_email?: string | null;
+  to_phone?: string | null;
+  scheduled_for?: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 interface TempHistoryEntry {
@@ -44,6 +50,7 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
   const [loading, setLoading] = useState(true);
   const [leadDetail, setLeadDetail] = useState<any>(null);
   const [enrollment, setEnrollment] = useState<any>(null);
+  const [selectedAction, setSelectedAction] = useState<TimelineEntry | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -217,7 +224,12 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
               ) : (
                 <div className="border rounded mb-4" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                   {timeline.map((entry, i) => (
-                    <div key={i} className="d-flex align-items-start gap-3 p-2 border-bottom">
+                    <div
+                      key={i}
+                      className="d-flex align-items-start gap-3 p-2 border-bottom"
+                      style={entry.type === 'action' ? { cursor: 'pointer' } : undefined}
+                      onClick={() => entry.type === 'action' && setSelectedAction(entry)}
+                    >
                       <div className="text-center" style={{ minWidth: 36 }}>
                         <i className={`bi ${CHANNEL_ICONS[entry.channel || ''] || 'bi-circle'} fs-5 text-muted`} />
                       </div>
@@ -404,6 +416,14 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
             </div>
           </div>
         </>
+      )}
+
+      {/* Action Detail Popup */}
+      {selectedAction && (
+        <ActionDetailModal
+          action={selectedAction}
+          onClose={() => setSelectedAction(null)}
+        />
       )}
     </Modal>
   );
