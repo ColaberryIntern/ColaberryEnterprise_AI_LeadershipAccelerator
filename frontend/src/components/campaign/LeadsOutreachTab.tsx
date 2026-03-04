@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import TemperatureBadge from '../TemperatureBadge';
 import LeadDetailModal from './LeadDetailModal';
 
+const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG';
+const ghlContactUrl = (contactId: string) =>
+  `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
+
 interface CampaignLead {
   id: string;
   lead_id: number;
@@ -22,6 +26,7 @@ interface CampaignLead {
     lead_score: number;
     lead_source_type: string;
     lead_temperature?: string;
+    ghl_contact_id?: string;
   };
 }
 
@@ -230,6 +235,19 @@ export default function LeadsOutreachTab({
                       onClick={() => setSelectedLead(cl)}
                     >
                       {cl.lead?.name}
+                      {cl.lead?.ghl_contact_id && (
+                        <a
+                          href={ghlContactUrl(cl.lead.ghl_contact_id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="View in GoHighLevel"
+                          className="ms-2"
+                          style={{ verticalAlign: 'middle' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <img src="/ghl-logo.svg" alt="GHL" width="18" height="18" style={{ borderRadius: '3px' }} />
+                        </a>
+                      )}
                     </td>
                     <td>{cl.lead?.company}</td>
                     <td><TemperatureBadge temperature={cl.lead?.lead_temperature} /></td>

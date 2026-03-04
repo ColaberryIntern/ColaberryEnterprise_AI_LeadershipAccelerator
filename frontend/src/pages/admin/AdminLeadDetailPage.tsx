@@ -36,9 +36,14 @@ interface LeadDetail {
   page_url: string;
   assigned_admin: string;
   assignedAdmin?: { id: string; email: string };
+  ghl_contact_id?: string;
   created_at: string;
   updated_at: string;
 }
+
+const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG';
+const ghlContactUrl = (contactId: string) =>
+  `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
 
 interface AutomationEntry {
   id: string;
@@ -254,6 +259,18 @@ function AdminLeadDetailPage() {
           <div className="d-flex align-items-center gap-3 mt-1">
             <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
               {lead.name}
+              {lead.ghl_contact_id && (
+                <a
+                  href={ghlContactUrl(lead.ghl_contact_id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="View in GoHighLevel"
+                  className="ms-2"
+                  style={{ verticalAlign: 'middle' }}
+                >
+                  <img src="/ghl-logo.svg" alt="GHL" width="24" height="24" style={{ borderRadius: '4px' }} />
+                </a>
+              )}
             </h1>
             <TemperatureBadge temperature={lead.lead_temperature} size="md" />
             {lead.lead_score > 0 && (

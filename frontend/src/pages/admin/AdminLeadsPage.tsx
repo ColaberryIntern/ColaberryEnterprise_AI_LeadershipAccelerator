@@ -31,7 +31,12 @@ interface Lead {
   form_type: string;
   created_at: string;
   assignedAdmin?: { id: string; email: string };
+  ghl_contact_id?: string;
 }
+
+const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG';
+const ghlContactUrl = (contactId: string) =>
+  `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
 
@@ -391,7 +396,27 @@ function AdminLeadsPage() {
                           onChange={() => toggleSelect(lead.id)}
                         />
                       </td>
-                      <td className="fw-medium">{lead.name}</td>
+                      <td className="fw-medium">
+                        {lead.name}
+                        {lead.ghl_contact_id && (
+                          <a
+                            href={ghlContactUrl(lead.ghl_contact_id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View in GoHighLevel"
+                            className="ms-2"
+                            style={{ verticalAlign: 'middle' }}
+                          >
+                            <img
+                              src="/ghl-logo.svg"
+                              alt="GHL"
+                              width="18"
+                              height="18"
+                              style={{ borderRadius: '3px' }}
+                            />
+                          </a>
+                        )}
+                      </td>
                       <td className="small">{lead.email}</td>
                       <td>{lead.company || '-'}</td>
                       <td className="small">{lead.title || '-'}</td>

@@ -15,7 +15,12 @@ interface PipelineLead {
   lead_temperature?: string;
   pipeline_stage: string;
   created_at: string;
+  ghl_contact_id?: string;
 }
+
+const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG';
+const ghlContactUrl = (contactId: string) =>
+  `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
 
 const STAGES = PIPELINE_STAGES;
 
@@ -199,13 +204,25 @@ function AdminPipelinePage() {
                 >
                   <div className="card-body p-2">
                     <div className="d-flex justify-content-between align-items-start mb-1">
-                      <Link
-                        to={`/admin/leads/${lead.id}`}
-                        className="fw-bold text-decoration-none text-dark small"
-                        style={{ lineHeight: 1.2 }}
-                      >
-                        {lead.name}
-                      </Link>
+                      <span className="d-flex align-items-center gap-1">
+                        <Link
+                          to={`/admin/leads/${lead.id}`}
+                          className="fw-bold text-decoration-none text-dark small"
+                          style={{ lineHeight: 1.2 }}
+                        >
+                          {lead.name}
+                        </Link>
+                        {lead.ghl_contact_id && (
+                          <a
+                            href={ghlContactUrl(lead.ghl_contact_id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View in GoHighLevel"
+                          >
+                            <img src="/ghl-logo.svg" alt="GHL" width="14" height="14" style={{ borderRadius: '2px' }} />
+                          </a>
+                        )}
+                      </span>
                       {lead.lead_score > 0 && (
                         <span className={`badge ${getScoreBadge(lead.lead_score)} ms-1`} style={{ fontSize: '0.7rem' }}>
                           {lead.lead_score}
