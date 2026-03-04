@@ -7,6 +7,10 @@ import api from '../utils/api';
 interface StrategyCallModalProps {
   show: boolean;
   onClose: () => void;
+  initialName?: string;
+  initialEmail?: string;
+  initialCompany?: string;
+  initialPhone?: string;
 }
 
 type Step = 'date' | 'time' | 'details' | 'submitting' | 'success';
@@ -42,15 +46,22 @@ function formatConfirmationDate(isoStr: string, tz: string): string {
   });
 }
 
-export default function StrategyCallModal({ show, onClose }: StrategyCallModalProps) {
+export default function StrategyCallModal({
+  show,
+  onClose,
+  initialName = '',
+  initialEmail = '',
+  initialCompany = '',
+  initialPhone = '',
+}: StrategyCallModalProps) {
   const { dates, loading, error: availError, refetch } = useCalendarAvailability();
   const [step, setStep] = useState<Step>('date');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(initialName);
+  const [email, setEmail] = useState(initialEmail);
+  const [company, setCompany] = useState(initialCompany);
+  const [phone, setPhone] = useState(initialPhone);
   const [formError, setFormError] = useState('');
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
 
@@ -65,10 +76,10 @@ export default function StrategyCallModal({ show, onClose }: StrategyCallModalPr
     setStep('date');
     setSelectedDate('');
     setSelectedSlot(null);
-    setName('');
-    setEmail('');
-    setCompany('');
-    setPhone('');
+    setName(initialName);
+    setEmail(initialEmail);
+    setCompany(initialCompany);
+    setPhone(initialPhone);
     setFormError('');
     setBookingResult(null);
   };

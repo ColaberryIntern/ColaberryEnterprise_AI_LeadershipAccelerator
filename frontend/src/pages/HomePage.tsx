@@ -228,7 +228,7 @@ function HomePage() {
               submitLabel="Get Executive Briefing →"
               buttonClassName="btn btn-hero-primary btn-lg w-100"
               captureUtm={true}
-              onSuccess={() => navigate('/executive-overview/thank-you')}
+              onSuccess={(data) => navigate('/executive-overview/thank-you', { state: data })}
               className="mb-4"
             />
 

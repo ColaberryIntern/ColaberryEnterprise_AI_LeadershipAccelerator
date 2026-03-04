@@ -26,7 +26,7 @@ interface LeadCaptureFormProps {
   buttonClassName?: string;
   showConsent?: boolean;
   captureUtm?: boolean;
-  onSuccess?: () => void;
+  onSuccess?: (data?: { name: string; email: string; company: string; phone: string }) => void;
 }
 
 function LeadCaptureForm({
@@ -124,7 +124,12 @@ function LeadCaptureForm({
       await api.post('/api/leads', payload);
       setSubmitted(true);
       if (onSuccess) {
-        onSuccess();
+        onSuccess({
+          name: formData.name,
+          email: formData.email,
+          company: formData.company,
+          phone: formData.phone,
+        });
       }
     } catch (err: any) {
       if (err.response?.status === 400 && err.response?.data?.details) {

@@ -1,10 +1,19 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 
+interface LocationState {
+  name?: string;
+  email?: string;
+  company?: string;
+  phone?: string;
+}
+
 function ExecOverviewThankYouPage() {
   const [showBooking, setShowBooking] = useState(false);
+  const location = useLocation();
+  const leadData = (location.state as LocationState) || {};
 
   return (
     <>
@@ -41,11 +50,11 @@ function ExecOverviewThankYouPage() {
               Ready to Discuss How This Fits Your Organization?
             </h2>
             <p className="mb-3 text-light opacity-75">
-              Schedule a complimentary 15-minute strategy call with our Enterprise AI team.
+              Schedule a complimentary 30-minute strategy call with our Enterprise AI team.
               We'll review your AI priorities and show you how the accelerator maps to your goals.
             </p>
             <button onClick={() => setShowBooking(true)} className="btn btn-lg btn-accent">
-              Schedule a 15-Minute Strategy Call
+              Schedule a 30-Minute Strategy Call
             </button>
           </div>
 
@@ -71,7 +80,14 @@ function ExecOverviewThankYouPage() {
         </div>
       </section>
 
-      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
+      <StrategyCallModal
+        show={showBooking}
+        onClose={() => setShowBooking(false)}
+        initialName={leadData.name}
+        initialEmail={leadData.email}
+        initialCompany={leadData.company}
+        initialPhone={leadData.phone}
+      />
     </>
   );
 }
