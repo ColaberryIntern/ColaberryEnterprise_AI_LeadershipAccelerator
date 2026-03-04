@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { getAllSettings, setMultipleSettings } from '../services/settingsService';
 import { listEvents, getEventTypes } from '../services/ledgerService';
+import { compileDigestData } from '../services/digestService';
+import { sendDigestEmail } from '../services/emailService';
 
 export async function handleGetSettings(
   _req: Request,
@@ -67,6 +69,20 @@ export async function handleGetEventTypes(
   try {
     const types = await getEventTypes();
     res.json({ types });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleSendTestDigest(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = await compileDigestData('daily');
+    await sendDigestEmail(data);
+    res.json({ message: 'Test digest sent successfully' });
   } catch (error) {
     next(error);
   }

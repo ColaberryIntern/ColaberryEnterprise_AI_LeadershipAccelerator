@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { getTestOverrides, getSetting } from './settingsService';
+import type { DigestData } from './digestService';
 
 const transporter =
   env.smtpUser && env.smtpPass
@@ -666,6 +667,211 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
   <div class="footer">
     <p>Colaberry Enterprise AI Division<br>
     AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Email Digest                                                       */
+/* ------------------------------------------------------------------ */
+
+export async function sendDigestEmail(data: DigestData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping digest email.');
+    return;
+  }
+
+  const alertTo = await getAdminRecipients();
+  const periodLabel = data.period === 'weekly' ? 'Weekly' : 'Daily';
+  const dateStr = data.generatedAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const subject = `${periodLabel} Admin Digest — ${dateStr}`;
+
+  const r = await resolveEmailRecipient(alertTo, subject);
+  const html = buildDigestHtml(data);
+
+  const info = await transporter.sendMail({
+    from: `"Colaberry Admin Digest" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('admin-digest'),
+  });
+
+  console.log(`[Email] ${periodLabel} digest sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+}
+
+function buildDigestHtml(data: DigestData): string {
+  const periodLabel = data.period === 'weekly' ? 'Weekly' : 'Daily';
+  const dateStr = data.generatedAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  const fmtCurrency = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n);
+
+  const fmtDuration = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const sec = Math.round(secs % 60);
+    return `${m}m ${sec}s`;
+  };
+
+  const pipelineLabels: Record<string, string> = {
+    new_lead: 'New Lead', contacted: 'Contacted', meeting_scheduled: 'Meeting Scheduled',
+    proposal_sent: 'Proposal Sent', negotiation: 'Negotiation', enrolled: 'Enrolled', lost: 'Lost',
+  };
+  const pipelineRows = Object.entries(data.pipeline)
+    .map(([stage, count]) => `<tr><td style="padding:4px 8px;font-size:13px;">${pipelineLabels[stage] || stage}</td><td style="padding:4px 8px;font-size:13px;text-align:right;font-weight:600;">${count}</td></tr>`)
+    .join('');
+
+  const stallLabels: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High' };
+  const atRiskRows = data.atRisk.length > 0
+    ? data.atRisk.map(ar =>
+        `<tr><td style="padding:4px 8px;font-size:13px;">${ar.leadName}</td><td style="padding:4px 8px;font-size:13px;">${ar.company}</td><td style="padding:4px 8px;font-size:13px;text-align:center;">${ar.score}</td><td style="padding:4px 8px;font-size:13px;">${stallLabels[ar.stall_risk] || ar.stall_risk}</td><td style="padding:4px 8px;font-size:13px;text-align:right;">${ar.days_since_last_activity}d</td></tr>`
+      ).join('')
+    : '';
+
+  const appointmentItems = data.appointments.length > 0
+    ? data.appointments.map(a => {
+        const d = new Date(a.scheduled_at);
+        const dt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' +
+                   d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        return `<li style="margin-bottom:6px;font-size:13px;"><strong>${a.title}</strong> -- ${a.lead_name} (${dt})</li>`;
+      }).join('')
+    : '';
+
+  const actions: string[] = [];
+  const highStalls = (data.opportunities.stall_counts?.high || 0) + (data.opportunities.stall_counts?.medium || 0);
+  if (highStalls > 0) actions.push(`${highStalls} at-risk opportunit${highStalls === 1 ? 'y needs' : 'ies need'} follow-up`);
+  if (data.revenue.pendingInvoice > 0) actions.push(`${data.revenue.pendingInvoice} pending invoice${data.revenue.pendingInvoice === 1 ? '' : 's'} need attention`);
+  if (data.appointments.length > 0) actions.push(`${data.appointments.length} appointment${data.appointments.length === 1 ? '' : 's'} this week`);
+  if (data.highIntentCount > 0) actions.push(`${data.highIntentCount} high-intent visitor${data.highIntentCount === 1 ? '' : 's'} detected`);
+
+  const actionHtml = actions.length > 0
+    ? actions.map(a => `<li style="margin-bottom:4px;font-size:13px;">${a}</li>`).join('')
+    : '<li style="font-size:13px;color:#718096;">No urgent actions</li>';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 650px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 22px; margin-bottom: 4px; }
+    h2 { color: #1a365d; font-size: 16px; margin-top: 24px; margin-bottom: 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+    .subtitle { color: #718096; font-size: 13px; margin-bottom: 20px; }
+    .kpi-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+    .kpi-box { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 140px; }
+    .kpi-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 20px; font-weight: 700; color: #1a365d; }
+    .kpi-sub { font-size: 11px; color: #718096; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f7fafc; color: #4a5568; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; text-align: left; }
+    .action-box { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px 16px; margin-top: 8px; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #718096; }
+  </style>
+</head>
+<body>
+  <h1>${periodLabel} Admin Digest</h1>
+  <div class="subtitle">${dateStr}</div>
+
+  <h2>Revenue &amp; Enrollments</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Revenue</div>
+      <div class="kpi-value" style="color:#38a169;">${fmtCurrency(data.revenue.totalRevenue)}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Enrollments</div>
+      <div class="kpi-value" style="color:#3182ce;">${data.revenue.totalEnrollments}</div>
+      ${data.revenue.pendingInvoice > 0 ? `<div class="kpi-sub">${data.revenue.pendingInvoice} pending</div>` : ''}
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Seats Remaining</div>
+      <div class="kpi-value" style="color:#805ad5;">${data.revenue.seatsRemaining}</div>
+    </div>
+  </div>
+
+  <h2>Lead Pipeline</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Total Leads</div>
+      <div class="kpi-value">${data.leads.total}</div>
+      <div class="kpi-sub">${data.leads.thisMonth} this month</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Conversion Rate</div>
+      <div class="kpi-value">${data.leads.conversionRate}%</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">High Intent</div>
+      <div class="kpi-value" style="color:#e53e3e;">${data.leads.highIntent}</div>
+    </div>
+  </div>
+  ${pipelineRows ? `<table style="margin-top:8px;"><thead><tr><th>Stage</th><th style="text-align:right;">Count</th></tr></thead><tbody>${pipelineRows}</tbody></table>` : ''}
+
+  <h2>Opportunity Highlights</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Avg Score</div>
+      <div class="kpi-value">${data.opportunities.avg_score}</div>
+      <div class="kpi-sub">${data.opportunities.total_scored} scored</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Pipeline Value</div>
+      <div class="kpi-value" style="color:#1a365d;">${fmtCurrency(data.opportunities.total_pipeline_value)}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Weighted Forecast</div>
+      <div class="kpi-value" style="color:#2b6cb0;">${fmtCurrency(data.forecast.weighted_pipeline_value)}</div>
+      <div class="kpi-sub">${data.forecast.total_projected_enrollments.toFixed(1)} proj. enrollments</div>
+    </div>
+  </div>
+
+  ${atRiskRows ? `
+  <h2>At-Risk Opportunities</h2>
+  <table>
+    <thead><tr><th>Lead</th><th>Company</th><th style="text-align:center;">Score</th><th>Risk</th><th style="text-align:right;">Idle</th></tr></thead>
+    <tbody>${atRiskRows}</tbody>
+  </table>
+  ` : ''}
+
+  <h2>Visitor Engagement</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Visitors (30d)</div>
+      <div class="kpi-value">${data.visitors.total_visitors}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Sessions (30d)</div>
+      <div class="kpi-value">${data.visitors.total_sessions}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Avg Duration</div>
+      <div class="kpi-value">${fmtDuration(data.visitors.avg_session_duration)}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Bounce Rate</div>
+      <div class="kpi-value">${data.visitors.bounce_rate.toFixed(1)}%</div>
+    </div>
+  </div>
+
+  ${appointmentItems ? `
+  <h2>Upcoming Appointments</h2>
+  <ul style="padding-left:20px;">${appointmentItems}</ul>
+  ` : ''}
+
+  <h2>Action Items</h2>
+  <div class="action-box">
+    <ul style="padding-left:20px;margin:0;">${actionHtml}</ul>
+  </div>
+
+  <div class="footer">
+    <p><strong>Colaberry Enterprise AI Division</strong><br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+    <p style="font-size:11px;color:#a0aec0;">This is an automated digest. Configure frequency in Admin Settings.</p>
   </div>
 </body>
 </html>

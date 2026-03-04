@@ -806,4 +806,31 @@ export function startScheduler(): void {
     }
   });
   console.log('[Scheduler] Opportunity score recomputation: every 20 minutes');
+
+  // Email digest — check every hour at :00
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const { getSetting } = require('./settingsService');
+      const enabled = await getSetting('digest_enabled');
+      if (!enabled) return;
+
+      const frequency = (await getSetting('digest_frequency')) || 'daily';
+      const sendHour = parseInt(String(await getSetting('digest_send_hour') ?? 7), 10);
+      const sendDay = parseInt(String(await getSetting('digest_send_day') ?? 1), 10);
+
+      const now = new Date();
+      if (now.getHours() !== sendHour) return;
+      if (frequency === 'weekly' && now.getDay() !== sendDay) return;
+
+      console.log(`[Scheduler] Generating ${frequency} digest email...`);
+      const { compileDigestData } = require('./digestService');
+      const { sendDigestEmail } = require('./emailService');
+      const data = await compileDigestData(frequency);
+      await sendDigestEmail(data);
+      console.log(`[Scheduler] ${frequency} digest email sent successfully`);
+    } catch (err: any) {
+      console.error('[Scheduler] Digest email failed:', err.message);
+    }
+  });
+  console.log('[Scheduler] Email digest: hourly check (sends at configured hour/day)');
 }

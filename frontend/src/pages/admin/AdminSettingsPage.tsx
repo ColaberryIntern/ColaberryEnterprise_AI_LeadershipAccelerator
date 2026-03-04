@@ -328,6 +328,95 @@ function AdminSettingsPage() {
         </div>
       </div>
 
+      {/* Email Digest */}
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #38a169' }}>
+        <div className="card-header fw-bold py-3 d-flex align-items-center gap-2">
+          Email Digest
+          {settings.digest_enabled && <span className="badge bg-success">ENABLED</span>}
+        </div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-3">
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={settings.digest_enabled ?? false}
+                  onChange={(e) => handleChange('digest_enabled', e.target.checked)}
+                  id="digestEnabled"
+                />
+                <label className="form-check-label" htmlFor="digestEnabled">
+                  Enable Email Digest
+                </label>
+              </div>
+            </div>
+            <div className="col-md-3">
+              <label className="form-label small">Frequency</label>
+              <select
+                className="form-select"
+                value={settings.digest_frequency ?? 'daily'}
+                onChange={(e) => handleChange('digest_frequency', e.target.value)}
+                disabled={!settings.digest_enabled}
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+            <div className="col-md-2">
+              <label className="form-label small">Send Hour (24h)</label>
+              <input
+                type="number"
+                className="form-control"
+                value={settings.digest_send_hour ?? 7}
+                onChange={(e) => handleChange('digest_send_hour', parseInt(e.target.value, 10) || 7)}
+                min={0}
+                max={23}
+                disabled={!settings.digest_enabled}
+              />
+            </div>
+            <div className="col-md-2">
+              <label className="form-label small">Weekly Day</label>
+              <select
+                className="form-select"
+                value={settings.digest_send_day ?? 1}
+                onChange={(e) => handleChange('digest_send_day', parseInt(e.target.value, 10))}
+                disabled={!settings.digest_enabled || settings.digest_frequency !== 'weekly'}
+              >
+                <option value={0}>Sunday</option>
+                <option value={1}>Monday</option>
+                <option value={2}>Tuesday</option>
+                <option value={3}>Wednesday</option>
+                <option value={4}>Thursday</option>
+                <option value={5}>Friday</option>
+                <option value={6}>Saturday</option>
+              </select>
+            </div>
+            <div className="col-md-2 d-flex align-items-end">
+              <button
+                className="btn btn-outline-primary btn-sm"
+                onClick={async () => {
+                  try {
+                    setSaving(true);
+                    await api.post('/api/admin/digest/test');
+                    alert('Test digest sent successfully!');
+                  } catch (err: any) {
+                    alert('Failed to send test digest: ' + (err.response?.data?.error || err.message));
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving}
+              >
+                Send Test Digest
+              </button>
+            </div>
+          </div>
+          <div className="form-text mt-2">
+            Digest emails are sent to the Admin Notification Emails configured above. Recipients receive a summary of pipeline, opportunities, visitors, and action items.
+          </div>
+        </div>
+      </div>
+
       {/* Voice (Synthflow) */}
       <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #dd6b20' }}>
         <div className="card-header fw-bold py-3">

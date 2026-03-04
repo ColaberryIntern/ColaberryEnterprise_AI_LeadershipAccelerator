@@ -53,6 +53,7 @@ import {
   handleUpdateSettings,
   handleListEvents,
   handleGetEventTypes,
+  handleSendTestDigest,
 } from '../controllers/adminSettingsController';
 import {
   handleGetLeadJourney,
@@ -176,6 +177,7 @@ router.post('/api/admin/leads/import', requireAdmin, uploadMiddleware, handleImp
 // Protected admin routes — Settings
 router.get('/api/admin/settings', requireAdmin, handleGetSettings);
 router.patch('/api/admin/settings', requireAdmin, handleUpdateSettings);
+router.post('/api/admin/digest/test', requireAdmin, handleSendTestDigest);
 
 // Protected admin routes — Campaigns
 router.get('/api/admin/campaigns', requireAdmin, handleListCampaigns);

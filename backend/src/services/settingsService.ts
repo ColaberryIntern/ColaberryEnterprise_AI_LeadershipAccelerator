@@ -33,6 +33,11 @@ const DEFAULTS: Record<string, any> = {
   ai_model: 'gpt-4o-mini',
   ai_max_tokens: 1024,
   ai_system_prompt_default: 'You are a professional outreach specialist for Colaberry Enterprise AI Division. You write personalized, consultative messages that feel like 1:1 conversations, not marketing templates. You reference the lead\'s specific context naturally. You never sound like a mass email.',
+  // Email Digest
+  digest_enabled: false,
+  digest_frequency: 'daily',     // 'daily' | 'weekly'
+  digest_send_hour: 7,           // 0-23, hour in server timezone
+  digest_send_day: 1,            // 0=Sun, 1=Mon, ..., 6=Sat (for weekly)
 };
 
 export async function getSetting(key: string): Promise<any> {
