@@ -166,7 +166,21 @@ export async function enrollInPrepNudge(
       } as any);
     }
 
-    // Update CampaignLead tracking: step 0 complete, set next action time
+    // Track highest cancelled step index to advance past skipped steps
+    // If call is close (e.g., 1 day out), early countdown steps are cancelled —
+    // advance current_step_index so UI shows "Step 3 of 6" not "Step 1 of 6"
+    let lastSkippedIndex = 0;
+    for (let i = 1; i < actions.length; i++) {
+      const minutesBefore = (sequence.steps[i] as any).minutes_before_call;
+      if (minutesBefore !== undefined && scheduledAt) {
+        const countdownTime = new Date(scheduledAt.getTime() - minutesBefore * 60 * 1000);
+        if (countdownTime <= now) {
+          lastSkippedIndex = i;
+        }
+      }
+    }
+
+    // Update CampaignLead tracking: advance past skipped steps, set next action time
     if (campaign) {
       const nextPending = await ScheduledEmail.findOne({
         where: {
@@ -179,7 +193,7 @@ export async function enrollInPrepNudge(
 
       await CampaignLead.update(
         {
-          current_step_index: 0,
+          current_step_index: lastSkippedIndex,
           last_activity_at: new Date(),
           next_action_at: nextPending ? nextPending.scheduled_for : null,
         } as any,
