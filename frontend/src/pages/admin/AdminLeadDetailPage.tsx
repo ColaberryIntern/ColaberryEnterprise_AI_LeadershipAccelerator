@@ -7,6 +7,7 @@ import AddNoteForm from '../../components/admin/AddNoteForm';
 import AppointmentCard from '../../components/admin/AppointmentCard';
 import ScheduleAppointmentModal from '../../components/admin/ScheduleAppointmentModal';
 import TemperatureBadge from '../../components/TemperatureBadge';
+import JourneyTimeline from '../../components/admin/JourneyTimeline';
 
 interface LeadDetail {
   id: number;
@@ -106,7 +107,7 @@ function AdminLeadDetailPage() {
   const [saveMessage, setSaveMessage] = useState('');
   const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'activity' | 'appointments' | 'strategy'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'activity' | 'appointments' | 'strategy' | 'journey'>('info');
   const [tempHistory, setTempHistory] = useState<any[]>([]);
   const [strategyCalls, setStrategyCalls] = useState<any[]>([]);
   const [visitor, setVisitor] = useState<VisitorData | null>(null);
@@ -310,6 +311,11 @@ function AdminLeadDetailPage() {
         <li className="nav-item">
           <button className={`nav-link ${activeTab === 'strategy' ? 'active' : ''}`} onClick={() => setActiveTab('strategy')}>
             Strategy Prep {strategyCalls.some((c: any) => c.intelligence) ? `(${strategyCalls.filter((c: any) => c.intelligence).length})` : ''}
+          </button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link ${activeTab === 'journey' ? 'active' : ''}`} onClick={() => setActiveTab('journey')}>
+            Journey
           </button>
         </li>
       </ul>
@@ -894,6 +900,10 @@ function AdminLeadDetailPage() {
             })
           )}
         </div>
+      )}
+
+      {activeTab === 'journey' && (
+        <JourneyTimeline leadId={lead.id} />
       )}
 
       <ScheduleAppointmentModal

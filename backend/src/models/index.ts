@@ -23,6 +23,7 @@ import BehavioralSignal from './BehavioralSignal';
 import IntentScore from './IntentScore';
 import ChatConversation from './ChatConversation';
 import ChatMessage from './ChatMessage';
+import OpportunityScore from './OpportunityScore';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -132,6 +133,12 @@ ChatConversation.belongsTo(VisitorSession, { foreignKey: 'session_id', as: 'sess
 ChatConversation.hasMany(ChatMessage, { foreignKey: 'conversation_id', as: 'messages' });
 ChatMessage.belongsTo(ChatConversation, { foreignKey: 'conversation_id', as: 'conversation' });
 
+// Opportunity Score associations
+Lead.hasOne(OpportunityScore, { foreignKey: 'lead_id', as: 'opportunityScore' });
+OpportunityScore.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Visitor.hasOne(OpportunityScore, { foreignKey: 'visitor_id', as: 'opportunityScore' });
+OpportunityScore.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -141,4 +148,5 @@ export {
   Visitor, VisitorSession, PageEvent,
   BehavioralSignal, IntentScore,
   ChatConversation, ChatMessage,
+  OpportunityScore,
 };

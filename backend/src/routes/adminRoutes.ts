@@ -55,6 +55,14 @@ import {
   handleGetEventTypes,
 } from '../controllers/adminSettingsController';
 import {
+  handleGetLeadJourney,
+  handleGetVisitorJourney,
+  handleGetOpportunityScores,
+  handleGetOpportunitySummary,
+  handleGetForecastProjections,
+  handleRecomputeOpportunities,
+} from '../controllers/adminOpportunityController';
+import {
   handleGetInsights,
   handleGetInsightSummary,
   handleGetRecommendations,
@@ -133,6 +141,7 @@ router.patch('/api/admin/leads/:id/pipeline', requireAdmin, handleAdminUpdatePip
 router.get('/api/admin/leads/:id/temperature-history', requireAdmin, handleGetTemperatureHistory);
 router.patch('/api/admin/leads/:id/temperature', requireAdmin, handleUpdateTemperature);
 router.get('/api/admin/leads/:id/strategy-prep', requireAdmin, handleGetLeadStrategyPrep);
+router.get('/api/admin/leads/:id/journey', requireAdmin, handleGetLeadJourney);
 
 // Protected admin routes — Pipeline
 router.get('/api/admin/pipeline/stats', requireAdmin, handleAdminGetPipelineStats);
@@ -225,6 +234,13 @@ router.get('/api/admin/visitors/:id/sessions', requireAdmin, handleGetVisitorSes
 router.get('/api/admin/visitors/:id/signals', requireAdmin, handleGetVisitorSignals);
 router.get('/api/admin/visitors/:id/intent', requireAdmin, handleGetVisitorIntent);
 router.get('/api/admin/sessions/:id/events', requireAdmin, handleGetSessionEvents);
+
+// Protected admin routes — Journey & Opportunities
+router.get('/api/admin/visitors/:id/journey', requireAdmin, handleGetVisitorJourney);
+router.get('/api/admin/opportunities/summary', requireAdmin, handleGetOpportunitySummary);
+router.get('/api/admin/opportunities/forecast', requireAdmin, handleGetForecastProjections);
+router.post('/api/admin/opportunities/recompute', requireAdmin, handleRecomputeOpportunities);
+router.get('/api/admin/opportunities', requireAdmin, handleGetOpportunityScores);
 
 // Protected admin routes — Chat Conversations
 router.get('/api/admin/chat/stats', requireAdmin, handleGetChatStats);

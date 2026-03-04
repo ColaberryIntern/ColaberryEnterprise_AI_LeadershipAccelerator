@@ -32,6 +32,7 @@ import AdminCampaignDetailPage from './pages/admin/AdminCampaignDetailPage';
 import AdminApolloPage from './pages/admin/AdminApolloPage';
 import AdminICPInsightsPage from './pages/admin/AdminICPInsightsPage';
 import AdminVisitorsPage from './pages/admin/AdminVisitorsPage';
+import AdminOpportunitiesPage from './pages/admin/AdminOpportunitiesPage';
 import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
 import StrategyCallPrepPage from './pages/StrategyCallPrepPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -67,6 +68,7 @@ function App() {
             <Route path="/admin/leads" element={<AdminLeadsPage />} />
             <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
             <Route path="/admin/visitors" element={<AdminVisitorsPage />} />
+            <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
             <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
             <Route path="/admin/campaigns/:id" element={<AdminCampaignDetailPage />} />
             <Route path="/admin/apollo" element={<AdminApolloPage />} />

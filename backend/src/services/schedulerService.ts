@@ -13,6 +13,7 @@ import { advancePipelineStage } from './pipelineService';
 import { detectSignalsForRecentSessions } from './behavioralSignalService';
 import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
+import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getTestOverrides } from './settingsService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
@@ -792,4 +793,17 @@ export function startScheduler(): void {
   console.log('[Scheduler] Intent score recomputation: every 15 minutes');
   console.log('[Scheduler] Behavioral trigger evaluation: every 10 minutes (offset)');
   console.log('[Scheduler] Chat message retention cleanup: daily at 3:30 AM (180-day retention)');
+
+  // Opportunity score recomputation — every 20 minutes (offset from other jobs)
+  cron.schedule('3,23,43 * * * *', async () => {
+    try {
+      const scored = await recomputeActiveOpportunityScores();
+      if (scored > 0) {
+        console.log(`[Scheduler] Recomputed opportunity scores for ${scored} lead(s)`);
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Opportunity score recomputation error:', err.message);
+    }
+  });
+  console.log('[Scheduler] Opportunity score recomputation: every 20 minutes');
 }
