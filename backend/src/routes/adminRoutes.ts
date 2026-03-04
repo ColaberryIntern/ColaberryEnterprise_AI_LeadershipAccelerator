@@ -118,6 +118,7 @@ import {
   handleGhlSync,
   handleGhlStatus,
   handleGhlTestSms,
+  handleGhlResyncLead,
 } from '../controllers/adminCampaignController';
 
 const router = Router();
@@ -205,6 +206,7 @@ router.get('/api/admin/campaigns/:id/leads', requireAdmin, handleGetCampaignLead
 router.post('/api/admin/campaigns/:id/ghl-sync', requireAdmin, handleGhlSync);
 router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus);
 router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
+router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlResyncLead);
 
 // Protected admin routes — Apollo Integration
 router.post('/api/admin/apollo/search', requireAdmin, handleApolloSearch);

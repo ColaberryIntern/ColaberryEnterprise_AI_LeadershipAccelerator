@@ -170,7 +170,8 @@ export async function sendSmsViaGhl(
 
 export async function syncLeadToGhl(
   lead: InstanceType<typeof Lead>,
-  interestGroup: string
+  interestGroup: string,
+  force = false
 ): Promise<SyncResult> {
   const enabled = await getSetting('ghl_enabled');
   if (!enabled) return { contactId: null, isTestMode: false };
@@ -183,8 +184,13 @@ export async function syncLeadToGhl(
   const notePrefix = isTestMode ? '[TEST MODE] ' : '';
 
   try {
-    // If lead already has a real GHL contact, skip
-    if (lead.ghl_contact_id && !isTestMode) {
+    // Force resync: clear old contact ID first
+    if (force && lead.ghl_contact_id) {
+      await lead.update({ ghl_contact_id: null });
+    }
+
+    // If lead already has a real GHL contact, skip (unless force)
+    if (lead.ghl_contact_id && !isTestMode && !force) {
       await logActivity({
         lead_id: lead.id,
         type: 'system',
@@ -274,7 +280,8 @@ export async function syncLeadToGhl(
 export async function bulkSyncCampaignLeads(
   campaignId: string,
   interestGroup: string,
-  leads: InstanceType<typeof Lead>[]
+  leads: InstanceType<typeof Lead>[],
+  force = false
 ): Promise<{ synced: number; failed: number; results: Array<{ leadId: number; contactId: string | null; error?: string }> }> {
   const results: Array<{ leadId: number; contactId: string | null; error?: string }> = [];
   let synced = 0;
@@ -282,7 +289,7 @@ export async function bulkSyncCampaignLeads(
 
   for (const lead of leads) {
     try {
-      const syncResult = await syncLeadToGhl(lead, interestGroup);
+      const syncResult = await syncLeadToGhl(lead, interestGroup, force);
       // Only persist ghl_contact_id when NOT in test mode
       if (syncResult.contactId && !syncResult.isTestMode && !lead.ghl_contact_id) {
         await lead.update({ ghl_contact_id: syncResult.contactId });

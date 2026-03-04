@@ -43,6 +43,7 @@ export default function CRMTab({ campaignId, headers }: Props) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [sendingTestSms, setSendingTestSms] = useState(false);
+  const [resyncingLeadId, setResyncingLeadId] = useState<number | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [selectedLeadName, setSelectedLeadName] = useState('');
 
@@ -62,16 +63,28 @@ export default function CRMTab({ campaignId, headers }: Props) {
     }
   };
 
-  const handleBulkSync = async () => {
+  const handleBulkSync = async (force = false) => {
     setSyncing(true);
     try {
-      const res = await api.post(`/api/admin/campaigns/${campaignId}/ghl-sync`);
+      const res = await api.post(`/api/admin/campaigns/${campaignId}/ghl-sync`, { force });
       alert(`Sync complete: ${res.data.synced} synced, ${res.data.failed} failed`);
       fetchGhlStatus();
     } catch (err: any) {
       alert('Sync failed: ' + (err.response?.data?.error || err.message));
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleResyncLead = async (leadId: number) => {
+    setResyncingLeadId(leadId);
+    try {
+      await api.post(`/api/admin/campaigns/${campaignId}/ghl-resync-lead`, { leadId });
+      fetchGhlStatus();
+    } catch (err: any) {
+      alert('Resync failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setResyncingLeadId(null);
     }
   };
 
@@ -131,7 +144,7 @@ export default function CRMTab({ campaignId, headers }: Props) {
             <div className="d-flex gap-2">
               <button
                 className="btn btn-outline-primary btn-sm"
-                onClick={handleBulkSync}
+                onClick={() => handleBulkSync(false)}
                 disabled={syncing}
               >
                 {syncing ? (
@@ -142,6 +155,14 @@ export default function CRMTab({ campaignId, headers }: Props) {
                 ) : (
                   'Sync All Leads'
                 )}
+              </button>
+              <button
+                className="btn btn-outline-warning btn-sm"
+                onClick={() => handleBulkSync(true)}
+                disabled={syncing}
+                title="Clear all GHL contact IDs and re-sync every lead"
+              >
+                Resync All
               </button>
               <button
                 className="btn btn-outline-secondary btn-sm"
@@ -207,6 +228,7 @@ export default function CRMTab({ campaignId, headers }: Props) {
                     <th>Email</th>
                     <th>GHL Status</th>
                     <th>GHL Link</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -245,6 +267,20 @@ export default function CRMTab({ campaignId, headers }: Props) {
                         ) : (
                           <span className="text-muted">—</span>
                         )}
+                      </td>
+                      <td>
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}
+                          onClick={() => handleResyncLead(lead.lead_id)}
+                          disabled={resyncingLeadId === lead.lead_id}
+                        >
+                          {resyncingLeadId === lead.lead_id ? (
+                            <span className="spinner-border spinner-border-sm" style={{ width: '0.7rem', height: '0.7rem' }} />
+                          ) : (
+                            'Resync'
+                          )}
+                        </button>
                       </td>
                     </tr>
                   ))}

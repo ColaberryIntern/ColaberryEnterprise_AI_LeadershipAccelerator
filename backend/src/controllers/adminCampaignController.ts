@@ -30,6 +30,7 @@ import {
   getLeadCampaignTimeline,
   syncAllCampaignLeadsToGhl,
   getCampaignGhlStatus,
+  resyncCampaignLead,
 } from '../services/campaignService';
 import { sendSmsViaGhl } from '../services/ghlService';
 import { getTestOverrides } from '../services/settingsService';
@@ -415,7 +416,26 @@ export async function handleAIPreview(req: Request, res: Response, next: NextFun
 
 export async function handleGhlSync(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await syncAllCampaignLeadsToGhl(req.params.id as string);
+    const force = req.body?.force === true;
+    const result = await syncAllCampaignLeadsToGhl(req.params.id as string, force);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleGhlResyncLead(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { leadId } = req.body;
+    if (!leadId) {
+      res.status(400).json({ error: 'leadId is required' });
+      return;
+    }
+    const result = await resyncCampaignLead(req.params.id as string, Number(leadId));
     res.json(result);
   } catch (error: any) {
     if (error.message.includes('not found')) {

@@ -644,7 +644,7 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
 
 // ── GHL Bulk Sync ───────────────────────────────────────────────────
 
-export async function syncAllCampaignLeadsToGhl(campaignId: string) {
+export async function syncAllCampaignLeadsToGhl(campaignId: string, force = false) {
   const campaign = await Campaign.findByPk(campaignId);
   if (!campaign) throw new Error('Campaign not found');
 
@@ -662,7 +662,22 @@ export async function syncAllCampaignLeadsToGhl(campaignId: string) {
   });
 
   const leads = campaignLeads.map((cl: any) => cl.lead).filter(Boolean);
-  return bulkSyncCampaignLeads(campaignId, campaign.interest_group, leads);
+  return bulkSyncCampaignLeads(campaignId, campaign.interest_group, leads, force);
+}
+
+export async function resyncCampaignLead(campaignId: string, leadId: number) {
+  const campaign = await Campaign.findByPk(campaignId);
+  if (!campaign) throw new Error('Campaign not found');
+  if (!campaign.interest_group) throw new Error('Campaign has no interest group');
+
+  const lead = await Lead.findByPk(leadId);
+  if (!lead) throw new Error('Lead not found');
+
+  const syncResult = await syncLeadToGhl(lead, campaign.interest_group, true);
+  if (syncResult.contactId && !syncResult.isTestMode) {
+    await lead.update({ ghl_contact_id: syncResult.contactId });
+  }
+  return syncResult;
 }
 
 export async function getCampaignGhlStatus(campaignId: string) {
