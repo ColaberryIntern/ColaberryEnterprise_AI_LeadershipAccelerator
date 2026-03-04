@@ -38,6 +38,10 @@ const DEFAULTS: Record<string, any> = {
   digest_frequency: 'daily',     // 'daily' | 'weekly'
   digest_send_hour: 7,           // 0-23, hour in server timezone
   digest_send_day: 1,            // 0=Sun, 1=Mon, ..., 6=Sat (for weekly)
+  // GoHighLevel CRM
+  ghl_enabled: false,
+  ghl_api_key: '',
+  ghl_location_id: 'JFWwp8q7l6T12NWTIOKG',
 };
 
 export async function getSetting(key: string): Promise<any> {

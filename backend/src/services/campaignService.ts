@@ -2,6 +2,8 @@ import { Op } from 'sequelize';
 import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity } from '../models';
 import StrategyCall from '../models/StrategyCall';
 import { enrollLeadInSequence } from './sequenceService';
+import { getSetting } from './settingsService';
+import { syncLeadToGhl, bulkSyncCampaignLeads } from './ghlService';
 
 export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement';
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
@@ -19,7 +21,7 @@ interface CreateCampaignParams {
 }
 
 export async function createCampaign(params: CreateCampaignParams) {
-  return Campaign.create({
+  const campaign = await Campaign.create({
     name: params.name,
     description: params.description || '',
     type: params.type,
@@ -36,6 +38,13 @@ export async function createCampaign(params: CreateCampaignParams) {
     ai_system_prompt: params.ai_system_prompt || null,
     created_by: params.created_by,
   } as any);
+
+  // Auto-generate interest_group
+  const slug = params.name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+  const uid = campaign.id.substring(0, 8);
+  await campaign.update({ interest_group: `Colaberry_${slug}_${uid}` });
+
+  return campaign;
 }
 
 interface ListCampaignsParams {
@@ -90,6 +99,13 @@ export async function getCampaignById(id: string) {
   });
 
   if (!campaign) return null;
+
+  // Backfill interest_group for campaigns created before GHL integration
+  if (!campaign.interest_group) {
+    const slug = campaign.name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    const uid = campaign.id.substring(0, 8);
+    await campaign.update({ interest_group: `Colaberry_${slug}_${uid}` });
+  }
 
   const leadCount = await CampaignLead.count({ where: { campaign_id: id } });
   const statusCounts: Record<string, number> = {};
@@ -218,6 +234,22 @@ export async function enrollLeadsInCampaign(campaignId: string, leadIds: number[
       // If campaign is active, enroll in the sequence
       if (campaign.status === 'active') {
         await enrollLeadInSequence(leadId, campaign.sequence_id, campaignId);
+      }
+
+      // Sync lead to GHL if enabled
+      try {
+        const ghlEnabled = await getSetting('ghl_enabled');
+        if (ghlEnabled && campaign.interest_group) {
+          const lead = await Lead.findByPk(leadId);
+          if (lead) {
+            const contactId = await syncLeadToGhl(lead, campaign.interest_group);
+            if (contactId && !lead.ghl_contact_id) {
+              await lead.update({ ghl_contact_id: contactId });
+            }
+          }
+        }
+      } catch (ghlErr: any) {
+        console.warn(`[GHL] Sync failed during enrollment for lead ${leadId}: ${ghlErr.message}`);
       }
 
       results.push({ leadId, status: 'enrolled' });
@@ -606,5 +638,67 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
       next_action_subject: nextAction?.subject || null,
     } : null,
     activities: activities.slice(0, 20),
+  };
+}
+
+// ── GHL Bulk Sync ───────────────────────────────────────────────────
+
+export async function syncAllCampaignLeadsToGhl(campaignId: string) {
+  const campaign = await Campaign.findByPk(campaignId);
+  if (!campaign) throw new Error('Campaign not found');
+
+  // Ensure interest_group exists
+  if (!campaign.interest_group) {
+    const slug = campaign.name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+    const uid = campaign.id.substring(0, 8);
+    await campaign.update({ interest_group: `Colaberry_${slug}_${uid}` });
+    await campaign.reload();
+  }
+
+  const campaignLeads = await CampaignLead.findAll({
+    where: { campaign_id: campaignId, status: { [Op.ne]: 'removed' } },
+    include: [{ model: Lead, as: 'lead' }],
+  });
+
+  const leads = campaignLeads.map((cl: any) => cl.lead).filter(Boolean);
+  return bulkSyncCampaignLeads(campaignId, campaign.interest_group, leads);
+}
+
+export async function getCampaignGhlStatus(campaignId: string) {
+  const campaign = await Campaign.findByPk(campaignId);
+  if (!campaign) throw new Error('Campaign not found');
+
+  const totalLeads = await CampaignLead.count({
+    where: { campaign_id: campaignId, status: { [Op.ne]: 'removed' } },
+  });
+
+  const campaignLeads = await CampaignLead.findAll({
+    where: { campaign_id: campaignId, status: { [Op.ne]: 'removed' } },
+    include: [{ model: Lead, as: 'lead' }],
+  });
+
+  const syncedCount = campaignLeads.filter(
+    (cl: any) => cl.lead?.ghl_contact_id
+  ).length;
+
+  // Get recent GHL-related activities
+  const leadIds = campaignLeads.map((cl) => cl.lead_id);
+  const recentActivities = leadIds.length > 0
+    ? await Activity.findAll({
+        where: {
+          lead_id: { [Op.in]: leadIds },
+          type: { [Op.in]: ['system', 'sms'] },
+        },
+        include: [{ model: Lead, as: 'lead', attributes: ['id', 'name', 'email'] }],
+        order: [['created_at', 'DESC']],
+        limit: 50,
+      })
+    : [];
+
+  return {
+    interest_group: campaign.interest_group,
+    total_leads: totalLeads,
+    synced_leads: syncedCount,
+    activities: recentActivities,
   };
 }

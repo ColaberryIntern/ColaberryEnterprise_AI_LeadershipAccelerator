@@ -28,7 +28,12 @@ import {
   updateCampaignGTM,
   getEnrichedCampaignLeads,
   getLeadCampaignTimeline,
+  syncAllCampaignLeadsToGhl,
+  getCampaignGhlStatus,
 } from '../services/campaignService';
+import { sendSmsViaGhl } from '../services/ghlService';
+import { getTestOverrides } from '../services/settingsService';
+import Lead from '../models/Lead';
 
 // ── Campaign CRUD ────────────────────────────────────────────────────
 
@@ -402,6 +407,62 @@ export async function handleAIPreview(req: Request, res: Response, next: NextFun
       res.status(400).json({ error: 'OpenAI API key not configured' });
       return;
     }
+    next(error);
+  }
+}
+
+// ── GHL CRM Integration ──────────────────────────────────────────────
+
+export async function handleGhlSync(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await syncAllCampaignLeadsToGhl(req.params.id as string);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleGhlStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await getCampaignGhlStatus(req.params.id as string);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleGhlTestSms(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const testOverrides = await getTestOverrides();
+    if (!testOverrides.enabled || !testOverrides.email) {
+      res.status(400).json({ error: 'Test mode must be enabled with a test email to send test SMS' });
+      return;
+    }
+
+    // Find lead by test email
+    const lead = await Lead.findOne({ where: { email: testOverrides.email } });
+    if (!lead?.ghl_contact_id) {
+      res.status(400).json({ error: 'Test lead not found in GHL. Sync the test lead first.' });
+      return;
+    }
+
+    const message = req.body.message || 'This is a test SMS from Colaberry Enterprise AI.';
+    const result = await sendSmsViaGhl(lead.ghl_contact_id, message);
+
+    if (result.success) {
+      res.json({ message: 'Test SMS sent via GHL', contact_id: lead.ghl_contact_id });
+    } else {
+      res.status(500).json({ error: result.error || 'Failed to send test SMS' });
+    }
+  } catch (error) {
     next(error);
   }
 }

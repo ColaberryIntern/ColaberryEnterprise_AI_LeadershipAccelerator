@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import api from '../../utils/api';
 import LeadDetailModal from './LeadDetailModal';
 
 interface Props {
   campaignId: string;
   headers: Record<string, string>;
+}
+
+interface GhlStatus {
+  interest_group: string | null;
+  total_leads: number;
+  synced_leads: number;
 }
 
 interface ActivityEntry {
@@ -48,10 +55,50 @@ export default function CRMTab({ campaignId, headers }: Props) {
   const [filterOutcome, setFilterOutcome] = useState('all');
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [selectedLeadName, setSelectedLeadName] = useState('');
+  const [ghlStatus, setGhlStatus] = useState<GhlStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [sendingTestSms, setSendingTestSms] = useState(false);
 
   useEffect(() => {
     fetchActivities();
+    fetchGhlStatus();
   }, [campaignId]);
+
+  const fetchGhlStatus = async () => {
+    try {
+      const res = await api.get(`/api/admin/campaigns/${campaignId}/ghl-status`);
+      setGhlStatus(res.data);
+    } catch {
+      // GHL may not be enabled — that's fine
+    }
+  };
+
+  const handleBulkSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await api.post(`/api/admin/campaigns/${campaignId}/ghl-sync`);
+      alert(`Sync complete: ${res.data.synced} synced, ${res.data.failed} failed`);
+      fetchGhlStatus();
+    } catch (err: any) {
+      alert('Sync failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleTestSms = async () => {
+    setSendingTestSms(true);
+    try {
+      await api.post(`/api/admin/campaigns/${campaignId}/ghl-test-sms`, {
+        message: 'Test SMS from Colaberry Enterprise AI campaign.',
+      });
+      alert('Test SMS sent via GHL!');
+    } catch (err: any) {
+      alert('Test SMS failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setSendingTestSms(false);
+    }
+  };
 
   const fetchActivities = async () => {
     setLoading(true);
@@ -119,6 +166,74 @@ export default function CRMTab({ campaignId, headers }: Props) {
 
   return (
     <>
+      {/* GHL CRM Status */}
+      {ghlStatus && (
+        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #1a365d' }}>
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h6 className="fw-bold mb-0" style={{ color: '#1a365d' }}>
+                <i className="bi bi-diagram-3 me-2" />GoHighLevel CRM
+              </h6>
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={handleBulkSync}
+                  disabled={syncing}
+                >
+                  {syncing ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-1" />
+                      Syncing...
+                    </>
+                  ) : (
+                    'Sync All Leads'
+                  )}
+                </button>
+                <button
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={handleTestSms}
+                  disabled={sendingTestSms}
+                >
+                  {sendingTestSms ? 'Sending...' : 'Send Test SMS'}
+                </button>
+              </div>
+            </div>
+            <div className="row g-3">
+              <div className="col-md-4">
+                <div className="small text-muted">Interest Group</div>
+                <div className="fw-medium">
+                  {ghlStatus.interest_group ? (
+                    <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.8rem' }}>
+                      {ghlStatus.interest_group}
+                    </span>
+                  ) : (
+                    <span className="text-muted fst-italic">Not generated</span>
+                  )}
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="small text-muted">GHL Sync Status</div>
+                <div className="fw-medium">
+                  <span className="text-success">{ghlStatus.synced_leads}</span>
+                  {' / '}
+                  <span>{ghlStatus.total_leads}</span>
+                  {' leads synced'}
+                  {ghlStatus.total_leads > 0 && (
+                    <span className="text-muted ms-1">
+                      ({Math.round((ghlStatus.synced_leads / ghlStatus.total_leads) * 100)}%)
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="small text-muted">Webhook URL</div>
+                <code className="small">/api/webhook/ghl/sms-reply</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Aggregation Cards */}
       <div className="row g-3 mb-4">
         <div className="col-md-4">

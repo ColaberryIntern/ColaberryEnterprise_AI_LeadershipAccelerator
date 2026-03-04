@@ -56,6 +56,7 @@ export default function SettingsTab({ campaignId, headers }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [interestGroup, setInterestGroup] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSettings();
@@ -63,13 +64,17 @@ export default function SettingsTab({ campaignId, headers }: Props) {
 
   const fetchSettings = async () => {
     try {
-      // Fetch global settings and campaign settings in parallel
-      const [globalRes, campaignRes] = await Promise.all([
+      // Fetch global settings, campaign settings, and campaign details in parallel
+      const [globalRes, campaignRes, campaignDetailRes] = await Promise.all([
         fetch('/api/admin/settings', { headers }),
         fetch(`/api/admin/campaigns/${campaignId}/settings`, { headers }),
+        fetch(`/api/admin/campaigns/${campaignId}`, { headers }),
       ]);
       const globalData = await globalRes.json();
       const campaignData = await campaignRes.json();
+      const campaignDetail = await campaignDetailRes.json();
+
+      setInterestGroup(campaignDetail.interest_group || null);
 
       // Map relevant global settings to campaign settings shape
       const globalDefaults: Partial<CampaignSettings> = {};
@@ -128,6 +133,21 @@ export default function SettingsTab({ campaignId, headers }: Props) {
 
   return (
     <>
+      {/* Interest Group */}
+      {interestGroup && (
+        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #1a365d' }}>
+          <div className="card-body py-3">
+            <div className="d-flex align-items-center gap-3">
+              <div className="small text-muted fw-medium">Interest Group</div>
+              <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.85rem' }}>
+                {interestGroup}
+              </span>
+              <span className="text-muted small fst-italic">(auto-generated, read-only)</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Inheritance Notice */}
       <div className="alert alert-info py-2 mb-4 d-flex align-items-center gap-2">
         <i className="bi bi-info-circle"></i>

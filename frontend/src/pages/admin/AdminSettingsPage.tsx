@@ -463,6 +463,61 @@ function AdminSettingsPage() {
         </div>
       </div>
 
+      {/* GoHighLevel CRM */}
+      <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #1a365d' }}>
+        <div className="card-header fw-bold py-3 d-flex align-items-center gap-2">
+          GoHighLevel CRM Integration
+          {settings.ghl_enabled && <span className="badge bg-success">ENABLED</span>}
+        </div>
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-3">
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={settings.ghl_enabled ?? false}
+                  onChange={(e) => handleChange('ghl_enabled', e.target.checked)}
+                  id="ghlEnabled"
+                />
+                <label className="form-check-label" htmlFor="ghlEnabled">
+                  Enable GHL CRM
+                </label>
+              </div>
+              <div className="form-text">
+                Sync leads to GHL, send SMS via GHL workflows
+              </div>
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">GHL API Key</label>
+              <input
+                type="password"
+                className="form-control"
+                value={settings.ghl_api_key ?? ''}
+                onChange={(e) => handleChange('ghl_api_key', e.target.value)}
+                placeholder="Bearer token from GHL"
+                disabled={!settings.ghl_enabled}
+              />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small">GHL Location ID</label>
+              <input
+                type="text"
+                className="form-control"
+                value={settings.ghl_location_id ?? 'JFWwp8q7l6T12NWTIOKG'}
+                onChange={(e) => handleChange('ghl_location_id', e.target.value)}
+                placeholder="Location ID"
+                disabled={!settings.ghl_enabled}
+              />
+            </div>
+          </div>
+          <div className="form-text mt-2">
+            GHL integration syncs leads to GoHighLevel contacts with Interest Group tags, sends SMS via the Cory_SMS_Composed custom field (triggers GHL workflow), and receives reply webhooks.
+            Webhook URL: <code>/api/webhook/ghl/sms-reply</code>
+          </div>
+        </div>
+      </div>
+
       {/* AI Configuration */}
       <div className="card admin-table-card mb-4" style={{ borderLeft: '4px solid #dc3545' }}>
         <div className="card-header fw-bold py-3">
@@ -558,7 +613,7 @@ function AdminSettingsPage() {
             </div>
           </div>
           <div className="form-text mt-2">
-            SMS is currently a placeholder. Configure a provider (Twilio, etc.) to enable outbound SMS in campaign sequences.
+            SMS is sent via GoHighLevel when GHL integration is enabled above. These legacy SMS settings are for direct provider integration (Twilio, etc.) as a fallback.
           </div>
         </div>
       </div>

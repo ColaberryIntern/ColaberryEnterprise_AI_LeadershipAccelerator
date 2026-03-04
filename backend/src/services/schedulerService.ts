@@ -14,7 +14,8 @@ import { detectSignalsForRecentSessions } from './behavioralSignalService';
 import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
-import { getTestOverrides } from './settingsService';
+import { getSetting, getTestOverrides } from './settingsService';
+import { sendSmsViaGhl, addContactNote } from './ghlService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
 let transporter: nodemailer.Transporter | null = null;
@@ -536,14 +537,30 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
     return;
   }
 
-  // SMS integration placeholder — when a provider (Twilio, etc.) is configured, replace this
-  console.log(`[Scheduler] SMS to ${phone}: ${action.body?.substring(0, 160)}`);
+  // Send SMS via GHL if enabled, otherwise log as placeholder
+  const ghlEnabled = await getSetting('ghl_enabled');
+  const lead = await Lead.findByPk(action.lead_id);
+
+  if (ghlEnabled && lead?.ghl_contact_id) {
+    const result = await sendSmsViaGhl(lead.ghl_contact_id, action.body || '');
+    if (!result.success) {
+      console.warn(`[Scheduler] GHL SMS failed for lead ${action.lead_id}: ${result.error}`);
+    }
+    // Add GHL note documenting the SMS
+    await addContactNote(
+      lead.ghl_contact_id,
+      `📱 SMS Sent: ${action.subject || 'Campaign message'}\n${(action.body || '').substring(0, 500)}`
+    ).catch(() => {});
+    console.log(`[Scheduler] SMS sent via GHL for lead ${action.lead_id}: ${action.subject}`);
+  } else {
+    console.log(`[Scheduler] SMS to ${phone}: ${action.body?.substring(0, 160)} (no GHL — placeholder)`);
+  }
 
   await action.update({
     status: 'sent',
     sent_at: new Date(),
     attempts_made: (action.attempts_made || 0) + 1,
-    metadata: { ...(action.metadata || {}), sms_placeholder: true, ai_generated: action.ai_generated || false },
+    metadata: { ...(action.metadata || {}), ghl_sent: !!(ghlEnabled && lead?.ghl_contact_id), ai_generated: action.ai_generated || false },
   } as any);
 
   await logActivity({

@@ -115,6 +115,9 @@ import {
   handleUpdateCampaignGTM,
   handleGetEnrichedCampaignLeads,
   handleGetLeadCampaignTimeline,
+  handleGhlSync,
+  handleGhlStatus,
+  handleGhlTestSms,
 } from '../controllers/adminCampaignController';
 
 const router = Router();
@@ -199,6 +202,9 @@ router.patch('/api/admin/campaigns/:id/gtm', requireAdmin, handleUpdateCampaignG
 router.get('/api/admin/campaigns/:id/lead-details', requireAdmin, handleGetEnrichedCampaignLeads);
 router.get('/api/admin/campaigns/:id/leads/:leadId/timeline', requireAdmin, handleGetLeadCampaignTimeline);
 router.get('/api/admin/campaigns/:id/leads', requireAdmin, handleGetCampaignLeads);
+router.post('/api/admin/campaigns/:id/ghl-sync', requireAdmin, handleGhlSync);
+router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus);
+router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
 
 // Protected admin routes — Apollo Integration
 router.post('/api/admin/apollo/search', requireAdmin, handleApolloSearch);

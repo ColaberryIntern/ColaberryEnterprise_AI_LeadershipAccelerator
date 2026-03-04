@@ -21,6 +21,7 @@ interface CampaignAttributes {
   gtm_notes?: string;
   started_at?: Date;
   completed_at?: Date;
+  interest_group?: string;
   created_by?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -43,6 +44,7 @@ class Campaign extends Model<CampaignAttributes> implements CampaignAttributes {
   declare gtm_notes: string;
   declare started_at: Date;
   declare completed_at: Date;
+  declare interest_group: string;
   declare created_by: string;
   declare created_at: Date;
   declare updated_at: Date;
@@ -137,6 +139,10 @@ Campaign.init(
     },
     completed_at: {
       type: DataTypes.DATE,
+      allowNull: true,
+    },
+    interest_group: {
+      type: DataTypes.STRING(100),
       allowNull: true,
     },
     created_by: {
