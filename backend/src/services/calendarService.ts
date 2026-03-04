@@ -47,7 +47,6 @@ function getAuthClient() {
     email: env.googleServiceAccountEmail,
     key: env.googlePrivateKey,
     scopes: ['https://www.googleapis.com/auth/calendar'],
-    subject: env.googleCalendarOwnerEmail || undefined,
   });
 }
 
@@ -229,10 +228,21 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
     },
   };
 
-  // Try with Google Meet conference data first; fall back to plain event if unsupported
+  // Try with Google Meet conference data using impersonation; fall back to plain event
   let event;
   try {
-    event = await calendar.events.insert({
+    // Meet creation requires impersonating the calendar owner (domain-wide delegation)
+    const impersonateAuth = env.googleCalendarOwnerEmail
+      ? new google.auth.JWT({
+          email: env.googleServiceAccountEmail,
+          key: env.googlePrivateKey,
+          scopes: ['https://www.googleapis.com/auth/calendar'],
+          subject: env.googleCalendarOwnerEmail,
+        })
+      : auth;
+    const meetCalendar = google.calendar({ version: 'v3', auth: impersonateAuth });
+
+    event = await meetCalendar.events.insert({
       calendarId: env.googleCalendarId,
       conferenceDataVersion: 1,
       requestBody: {
