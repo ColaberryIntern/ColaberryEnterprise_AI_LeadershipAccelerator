@@ -16,6 +16,9 @@ import ICPInsight from './ICPInsight';
 import LeadTemperatureHistory from './LeadTemperatureHistory';
 import StrategyCall from './StrategyCall';
 import StrategyCallIntelligence from './StrategyCallIntelligence';
+import Visitor from './Visitor';
+import VisitorSession from './VisitorSession';
+import PageEvent from './PageEvent';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -82,10 +85,25 @@ LeadTemperatureHistory.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Campaign.hasMany(LeadTemperatureHistory, { foreignKey: 'campaign_id', as: 'temperatureChanges' });
 LeadTemperatureHistory.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
+// Visitor Intelligence associations
+Visitor.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasOne(Visitor, { foreignKey: 'lead_id', as: 'visitor' });
+
+Visitor.hasMany(VisitorSession, { foreignKey: 'visitor_id', as: 'sessions' });
+VisitorSession.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+
+VisitorSession.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+
+VisitorSession.hasMany(PageEvent, { foreignKey: 'session_id', as: 'events' });
+PageEvent.belongsTo(VisitorSession, { foreignKey: 'session_id', as: 'session' });
+
+PageEvent.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
   StrategyCall, StrategyCallIntelligence,
+  Visitor, VisitorSession, PageEvent,
 };

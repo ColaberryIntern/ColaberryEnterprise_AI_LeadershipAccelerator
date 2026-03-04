@@ -35,6 +35,7 @@ interface LeadAttributes {
   apollo_id?: string;
   lead_temperature?: string;
   temperature_updated_at?: Date;
+  visitor_id?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -73,6 +74,7 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare apollo_id: string;
   declare lead_temperature: string;
   declare temperature_updated_at: Date;
+  declare visitor_id: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -219,6 +221,10 @@ Lead.init(
     },
     temperature_updated_at: {
       type: DataTypes.DATE,
+      allowNull: true,
+    },
+    visitor_id: {
+      type: DataTypes.UUID,
       allowNull: true,
     },
     created_at: {

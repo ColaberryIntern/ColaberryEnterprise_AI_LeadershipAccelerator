@@ -59,6 +59,28 @@ interface AppointmentData {
   lead?: { id: number; name: string; email: string; company: string };
 }
 
+interface VisitorSessionData {
+  id: string;
+  started_at: string;
+  ended_at: string;
+  page_count: number;
+  entry_page: string;
+  exit_page: string;
+}
+
+interface VisitorData {
+  id: string;
+  total_sessions: number;
+  total_pageviews: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  device_type: string;
+  city: string;
+  country: string;
+  referrer_domain: string;
+  recent_sessions: VisitorSessionData[];
+}
+
 import { PIPELINE_STAGES, PIPELINE_STAGE_COLORS, STATUS_VALUES } from '../../constants';
 
 const STATUS_OPTIONS = STATUS_VALUES;
@@ -79,6 +101,7 @@ function AdminLeadDetailPage() {
   const [activeTab, setActiveTab] = useState<'info' | 'activity' | 'appointments' | 'strategy'>('info');
   const [tempHistory, setTempHistory] = useState<any[]>([]);
   const [strategyCalls, setStrategyCalls] = useState<any[]>([]);
+  const [visitor, setVisitor] = useState<VisitorData | null>(null);
 
   const fetchTempHistory = async () => {
     try {
@@ -110,6 +133,7 @@ function AdminLeadDetailPage() {
       const res = await api.get(`/api/admin/leads/${id}`);
       setLead(res.data.lead);
       setAutomationHistory(res.data.automationHistory || []);
+      setVisitor(res.data.visitor || null);
       setNotes(res.data.lead.notes || '');
       setStatus(res.data.lead.status || 'new');
       setPipelineStage(res.data.lead.pipeline_stage || 'new_lead');
@@ -364,6 +388,84 @@ function AdminLeadDetailPage() {
                         <div className="text-break small"><code>{lead.page_url}</code></div>
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Website Activity */}
+            {visitor && (
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-header bg-white fw-semibold py-3">Website Activity</div>
+                <div className="card-body">
+                  <div className="row g-3 mb-3">
+                    <div className="col-md-3">
+                      <div className="text-muted small">Total Sessions</div>
+                      <div className="fw-semibold">{visitor.total_sessions ?? 0}</div>
+                    </div>
+                    <div className="col-md-3">
+                      <div className="text-muted small">Total Pageviews</div>
+                      <div className="fw-semibold">{visitor.total_pageviews ?? 0}</div>
+                    </div>
+                    <div className="col-md-3">
+                      <div className="text-muted small">First Seen</div>
+                      <div className="fw-semibold">{visitor.first_seen_at ? formatDate(visitor.first_seen_at) : '-'}</div>
+                    </div>
+                    <div className="col-md-3">
+                      <div className="text-muted small">Last Seen</div>
+                      <div className="fw-semibold">{visitor.last_seen_at ? formatDate(visitor.last_seen_at) : '-'}</div>
+                    </div>
+                  </div>
+
+                  {visitor.device_type && (
+                    <div className="d-flex gap-3 mb-3 small text-muted">
+                      {visitor.device_type && <span>Device: <strong className="text-body">{visitor.device_type}</strong></span>}
+                      {visitor.city && <span>Location: <strong className="text-body">{visitor.city}{visitor.country ? `, ${visitor.country}` : ''}</strong></span>}
+                      {visitor.referrer_domain && <span>Referrer: <strong className="text-body">{visitor.referrer_domain}</strong></span>}
+                    </div>
+                  )}
+
+                  {visitor.recent_sessions && visitor.recent_sessions.length > 0 && (
+                    <div className="table-responsive">
+                      <table className="table table-hover mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th className="small fw-medium">Date</th>
+                            <th className="small fw-medium">Duration</th>
+                            <th className="small fw-medium">Pages</th>
+                            <th className="small fw-medium">Entry Page</th>
+                            <th className="small fw-medium">Exit Page</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visitor.recent_sessions.map((session) => {
+                            const duration = session.started_at && session.ended_at
+                              ? Math.round((new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+                              : null;
+                            const durationStr = duration !== null
+                              ? duration >= 60
+                                ? `${Math.floor(duration / 60)}m ${duration % 60}s`
+                                : `${duration}s`
+                              : '-';
+                            return (
+                              <tr key={session.id}>
+                                <td className="small">{formatDate(session.started_at)}</td>
+                                <td className="small">{durationStr}</td>
+                                <td className="small">{session.page_count ?? '-'}</td>
+                                <td className="small text-truncate" style={{ maxWidth: 200 }}>{session.entry_page || '-'}</td>
+                                <td className="small text-truncate" style={{ maxWidth: 200 }}>{session.exit_page || '-'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="mt-3">
+                    <Link to={`/admin/visitors/${visitor.id}`} className="small fw-medium" style={{ color: 'var(--color-primary-light)' }}>
+                      View Full Visitor Profile &rarr;
+                    </Link>
                   </div>
                 </div>
               </div>

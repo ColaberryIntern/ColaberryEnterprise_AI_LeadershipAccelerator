@@ -63,7 +63,37 @@ export async function handleAdminGetLead(
       res.status(404).json({ error: 'Lead not found' });
       return;
     }
-    res.json(result);
+
+    let visitorData = null;
+    if (result.lead.visitor_id) {
+      try {
+        const { Visitor, VisitorSession } = require('../models');
+        const visitor = await Visitor.findByPk(result.lead.visitor_id);
+        if (visitor) {
+          const recentSessions = await VisitorSession.findAll({
+            where: { visitor_id: visitor.id },
+            order: [['started_at', 'DESC']],
+            limit: 10,
+          });
+          visitorData = {
+            id: visitor.id,
+            total_sessions: visitor.total_sessions,
+            total_pageviews: visitor.total_pageviews,
+            first_seen_at: visitor.first_seen_at,
+            last_seen_at: visitor.last_seen_at,
+            device_type: visitor.device_type,
+            city: visitor.city,
+            country: visitor.country,
+            referrer_domain: visitor.referrer_domain,
+            recent_sessions: recentSessions,
+          };
+        }
+      } catch (err) {
+        console.error('[AdminLead] Failed to load visitor data:', err);
+      }
+    }
+
+    res.json({ ...result, visitor: visitorData });
   } catch (error) {
     next(error);
   }

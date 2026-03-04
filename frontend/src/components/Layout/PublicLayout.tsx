@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import PublicNavbar from './PublicNavbar';
 import PublicFooter from './PublicFooter';
+import { initTracker } from '../../utils/tracker';
 
 function PublicLayout() {
+  useEffect(() => { initTracker(); }, []);
+
   return (
     <div className="d-flex flex-column min-vh-100">
       <a href="#main-content" className="skip-nav">

@@ -51,6 +51,8 @@ export const env = {
   enableAutoEmail: process.env.ENABLE_AUTO_EMAIL !== 'false', // default on
   enableHighIntentAlert: process.env.ENABLE_HIGH_INTENT_ALERT === 'true',
   enableFollowUpScheduler: process.env.ENABLE_FOLLOWUP_SCHEDULER === 'true',
+  enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
+  visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',

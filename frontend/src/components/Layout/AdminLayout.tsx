@@ -9,6 +9,7 @@ const adminNavLinks = [
   { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone' },
   { path: '/admin/pipeline', label: 'Pipeline', icon: 'funnel' },
   { path: '/admin/leads', label: 'Leads', icon: 'people' },
+  { path: '/admin/visitors', label: 'Visitors', icon: 'eye' },
   { path: '/admin/apollo', label: 'Apollo', icon: 'rocket' },
   { path: '/admin/sequences', label: 'Sequences', icon: 'list-check' },
   { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
@@ -32,6 +33,14 @@ const iconPaths: Record<string, string> = {
 };
 
 function AdminIcon({ name }: { name: string }) {
+  if (name === 'eye') {
+    return (
+      <svg className="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    );
+  }
   const path = iconPaths[name];
   if (!path) return null;
   return (
@@ -87,7 +96,7 @@ function AdminLayout() {
         {/* Nav Links */}
         <nav className="admin-nav-section">
           <div className="admin-nav-label">Main</div>
-          {adminNavLinks.slice(0, 5).map((link) => (
+          {adminNavLinks.slice(0, 6).map((link) => (
             <Link
               key={link.path}
               to={link.path}
@@ -101,7 +110,7 @@ function AdminLayout() {
           ))}
 
           <div className="admin-nav-label mt-3">Tools</div>
-          {adminNavLinks.slice(5).map((link) => (
+          {adminNavLinks.slice(6).map((link) => (
             <Link
               key={link.path}
               to={link.path}

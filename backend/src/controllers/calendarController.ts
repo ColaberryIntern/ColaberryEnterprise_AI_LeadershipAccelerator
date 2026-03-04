@@ -114,6 +114,20 @@ export async function handleBookCall(
       console.error('[Calendar] Lead find-or-create failed (non-blocking):', err);
     }
 
+    // Resolve visitor identity if fingerprint provided
+    if (req.body.visitor_fingerprint && leadId) {
+      try {
+        const { Visitor } = require('../models');
+        const { resolveIdentity } = require('../services/visitorTrackingService');
+        const visitor = await Visitor.findOne({ where: { fingerprint: req.body.visitor_fingerprint } });
+        if (visitor && !visitor.lead_id) {
+          await resolveIdentity(visitor.id, leadId);
+        }
+      } catch (err) {
+        console.error('[Calendar] Visitor identity resolution failed (non-blocking):', err);
+      }
+    }
+
     // Send confirmation email and capture HTML for campaign record
     let confirmationHtml = '';
     try {

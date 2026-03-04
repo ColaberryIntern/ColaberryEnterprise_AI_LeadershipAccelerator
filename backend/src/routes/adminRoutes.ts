@@ -65,6 +65,15 @@ import {
   handleGetLeadOutcomes,
 } from '../controllers/adminInsightController';
 import {
+  handleListVisitors,
+  handleGetVisitorStats,
+  handleGetLiveVisitors,
+  handleGetVisitorTrend,
+  handleGetVisitorProfile,
+  handleGetVisitorSessions,
+  handleGetSessionEvents,
+} from '../controllers/adminVisitorController';
+import {
   handleListCampaigns,
   handleCreateCampaign,
   handleGetCampaign,
@@ -194,5 +203,14 @@ router.post('/api/admin/insights/compute', requireAdmin, handleComputeInsights);
 // Protected admin routes — Event Ledger
 router.get('/api/admin/events/types', requireAdmin, handleGetEventTypes);
 router.get('/api/admin/events', requireAdmin, handleListEvents);
+
+// Protected admin routes — Visitor Intelligence
+router.get('/api/admin/visitors/stats', requireAdmin, handleGetVisitorStats);
+router.get('/api/admin/visitors/live', requireAdmin, handleGetLiveVisitors);
+router.get('/api/admin/visitors/trend', requireAdmin, handleGetVisitorTrend);
+router.get('/api/admin/visitors', requireAdmin, handleListVisitors);
+router.get('/api/admin/visitors/:id', requireAdmin, handleGetVisitorProfile);
+router.get('/api/admin/visitors/:id/sessions', requireAdmin, handleGetVisitorSessions);
+router.get('/api/admin/sessions/:id/events', requireAdmin, handleGetSessionEvents);
 
 export default router;

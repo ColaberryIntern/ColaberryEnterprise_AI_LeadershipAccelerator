@@ -133,6 +133,7 @@ export default function StrategyCallModal({
 
     setStep('submitting');
     try {
+      const visitorFp = localStorage.getItem('cb_visitor_fp');
       const res = await api.post('/api/calendar/book', {
         name: name.trim(),
         email: email.trim(),
@@ -140,6 +141,7 @@ export default function StrategyCallModal({
         phone: phone.trim(),
         slot_start: selectedSlot.start,
         timezone,
+        visitor_fingerprint: visitorFp || undefined,
       });
       setBookingResult(res.data.booking);
       setStep('success');

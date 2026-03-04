@@ -13,6 +13,20 @@ export async function submitLead(req: Request, res: Response, next: NextFunction
       leadId: lead.id,
     });
 
+    // Resolve visitor identity if fingerprint provided
+    if (req.body.visitor_fingerprint) {
+      try {
+        const { Visitor } = require('../models');
+        const { resolveIdentity } = require('../services/visitorTrackingService');
+        const visitor = await Visitor.findOne({ where: { fingerprint: req.body.visitor_fingerprint } });
+        if (visitor && !visitor.lead_id) {
+          await resolveIdentity(visitor.id, lead.id);
+        }
+      } catch (err) {
+        console.error('[Lead] Visitor identity resolution failed (non-blocking):', err);
+      }
+    }
+
     // Always trigger automation — even for returning visitors, they expect the email.
     // Use submitted form data (not lead record) so the correct email template is sent.
     runLeadAutomation({

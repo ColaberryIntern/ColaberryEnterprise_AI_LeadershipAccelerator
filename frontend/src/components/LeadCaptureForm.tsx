@@ -121,6 +121,10 @@ function LeadCaptureForm({
         if (utmParams.utm_campaign) payload.utm_campaign = utmParams.utm_campaign;
         payload.page_url = window.location.href;
       }
+      const visitorFp = localStorage.getItem('cb_visitor_fp');
+      if (visitorFp) {
+        payload.visitor_fingerprint = visitorFp;
+      }
       await api.post('/api/leads', payload);
       setSubmitted(true);
       if (onSuccess) {

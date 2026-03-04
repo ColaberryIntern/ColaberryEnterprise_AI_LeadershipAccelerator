@@ -706,9 +706,27 @@ export function startScheduler(): void {
     });
   });
 
+  // Visitor data retention: delete page_events older than 90 days
+  cron.schedule('0 3 * * *', async () => {
+    try {
+      const { PageEvent } = require('../models');
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 90);
+      const deleted = await PageEvent.destroy({
+        where: { timestamp: { [Op.lt]: cutoff } },
+      });
+      if (deleted > 0) {
+        console.log(`[Scheduler] Cleaned up ${deleted} page events older than 90 days`);
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Page event cleanup failed:', err.message);
+    }
+  });
+
   console.log('[Scheduler] AI-powered multi-channel campaign scheduler started (every 5 minutes)');
   console.log('[Scheduler] Channels: email (Mandrill), voice (Synthflow), sms (placeholder)');
   console.log('[Scheduler] AI generation: enabled for actions with ai_instructions');
   console.log('[Scheduler] No-show detection: every 15 minutes');
   console.log('[Scheduler] ICP insight computation: daily at 2 AM');
+  console.log('[Scheduler] Page event data retention cleanup: daily at 3 AM (90-day retention)');
 }
