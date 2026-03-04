@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import StrategyCallModal from '../components/StrategyCallModal';
 
 function ExecOverviewThankYouPage() {
+  const [showBooking, setShowBooking] = useState(false);
+
   return (
     <>
       <SEOHead
@@ -41,9 +44,9 @@ function ExecOverviewThankYouPage() {
               Schedule a complimentary 15-minute strategy call with our Enterprise AI team.
               We'll review your AI priorities and show you how the accelerator maps to your goals.
             </p>
-            <Link to="/contact" className="btn btn-lg btn-accent">
+            <button onClick={() => setShowBooking(true)} className="btn btn-lg btn-accent">
               Schedule a 15-Minute Strategy Call
-            </Link>
+            </button>
           </div>
 
           <div className="card border-0 shadow-sm p-4 text-start" style={{ background: 'var(--color-warning-bg, #fff3cd)' }}>
@@ -67,6 +70,8 @@ function ExecOverviewThankYouPage() {
           </div>
         </div>
       </section>
+
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
     </>
   );
 }
