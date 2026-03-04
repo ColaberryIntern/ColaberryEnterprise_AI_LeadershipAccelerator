@@ -254,10 +254,10 @@ export function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmation
   <div class="highlight">
     <strong>Date & Time:</strong> ${formattedDate}<br>
     <strong>Duration:</strong> 30 minutes<br>
-    <strong>Format:</strong> Google Meet (video call)
+    <strong>Format:</strong> ${data.meetLink ? 'Google Meet (video call)' : 'Video call — meeting link will be sent separately'}
   </div>
 
-  <p><a href="${data.meetLink}" class="cta">Join Google Meet</a></p>
+  ${data.meetLink ? `<p><a href="${data.meetLink}" class="cta">Join Google Meet</a></p>` : ''}
 
   <p><strong>What to expect:</strong></p>
   <ul>
