@@ -80,7 +80,18 @@ export async function findContactByEmail(email: string): Promise<GHLContact | nu
   );
 
   if (!result.success || !result.data?.contacts?.length) return null;
-  return result.data.contacts[0] as GHLContact;
+
+  const contact = result.data.contacts[0] as GHLContact;
+
+  // GHL V1 query does fuzzy matching — verify exact email match
+  if (contact.email?.toLowerCase() !== email.toLowerCase()) {
+    console.warn(
+      `[GHL] Fuzzy match rejected: searched "${email}", got "${contact.email}" (contact ${contact.id})`
+    );
+    return null;
+  }
+
+  return contact;
 }
 
 /* ------------------------------------------------------------------ */
@@ -102,7 +113,7 @@ export async function createContact(
     phone: lead.phone || undefined,
     companyName: lead.company || undefined,
     tags: [interestGroup],
-    customField: { interest_group: interestGroup },
+    customField: { interestgroup: interestGroup },
   });
 
   if (!result.success) return { success: false, error: result.error };
@@ -195,7 +206,7 @@ export async function syncLeadToGhl(
         lead_id: lead.id,
         type: 'system',
         subject: 'GHL Contact Already Linked',
-        metadata: { action: 'ghl_sync', status: 'existing', ghl_contact_id: lead.ghl_contact_id },
+        metadata: { action: 'ghl_sync', status: 'existing', ghl_contact_id: lead.ghl_contact_id, email: effectiveEmail },
       });
       return { contactId: lead.ghl_contact_id, isTestMode };
     }
@@ -253,6 +264,7 @@ export async function syncLeadToGhl(
           status: 'success',
           ghl_contact_id: contactId,
           interest_group: interestGroup,
+          email: effectiveEmail,
           test_mode: isTestMode,
         },
       });
