@@ -26,7 +26,7 @@ interface GHLResult {
 /*  Core API helper                                                    */
 /* ------------------------------------------------------------------ */
 
-const GHL_BASE = 'https://services.leadconnectorhq.com';
+const GHL_BASE = 'https://rest.gohighlevel.com/v1';
 
 async function ghlFetch(
   path: string,
@@ -44,7 +44,6 @@ async function ghlFetch(
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'Version': '2021-07-28',
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -68,9 +67,8 @@ async function ghlFetch(
 /* ------------------------------------------------------------------ */
 
 export async function findContactByEmail(email: string): Promise<GHLContact | null> {
-  const locationId = await getSetting('ghl_location_id');
   const result = await ghlFetch(
-    `/contacts/?query=${encodeURIComponent(email)}&locationId=${locationId}`,
+    `/contacts/?query=${encodeURIComponent(email)}&limit=1`,
     'GET'
   );
 
@@ -86,22 +84,18 @@ export async function createContact(
   lead: { name: string; email: string; phone?: string; company?: string; title?: string },
   interestGroup: string
 ): Promise<{ success: boolean; contactId?: string; error?: string }> {
-  const locationId = await getSetting('ghl_location_id');
   const nameParts = (lead.name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
 
   const result = await ghlFetch('/contacts/', 'POST', {
-    locationId,
     firstName,
     lastName,
     email: lead.email,
     phone: lead.phone || undefined,
     companyName: lead.company || undefined,
     tags: [interestGroup],
-    customFields: [
-      { key: 'interest_group', field_value: interestGroup },
-    ],
+    customField: { interest_group: interestGroup },
   });
 
   if (!result.success) return { success: false, error: result.error };
@@ -137,7 +131,7 @@ export async function addContactTag(contactId: string, tag: string): Promise<voi
 /* ------------------------------------------------------------------ */
 
 export async function addContactNote(contactId: string, note: string): Promise<void> {
-  const result = await ghlFetch(`/contacts/${contactId}/notes`, 'POST', {
+  const result = await ghlFetch(`/contacts/${contactId}/notes/`, 'POST', {
     body: note,
   });
   if (!result.success) {
@@ -154,9 +148,7 @@ export async function sendSmsViaGhl(
   message: string
 ): Promise<GHLResult> {
   const result = await updateContact(contactId, {
-    customFields: [
-      { key: 'cory_sms_composed', field_value: message },
-    ],
+    customField: { cory_sms_composed: message },
   });
 
   if (result.success) {
