@@ -15,6 +15,7 @@ import {
 import { calculateCompletionScore, cancelPrepNudge } from '../services/strategyPrepService';
 import { synthesizeIntelligence } from '../services/synthesisService';
 import { extractText } from '../services/fileExtractionService';
+import { updateCalendarEvent } from '../services/calendarService';
 
 export async function handleGetPrep(
   req: Request,
@@ -139,6 +140,14 @@ export async function handleSubmitPrep(
       );
     }
 
+    // Update Google Calendar event with prep data (non-blocking)
+    if (call.google_event_id) {
+      const prepDescription = buildPrepDescription(call, data);
+      updateCalendarEvent(call.google_event_id, prepDescription).catch((err) =>
+        console.error('[StrategyPrep] Calendar update failed (non-blocking):', err)
+      );
+    }
+
     res.json({
       success: true,
       completion_score: completionScore,
@@ -258,4 +267,49 @@ export async function handleUploadFile(
   } catch (error) {
     next(error);
   }
+}
+
+function buildPrepDescription(
+  call: StrategyCall,
+  data: Record<string, any>,
+  synthesis?: { ai_synthesis?: string | null; ai_recommended_focus?: string | null; ai_confidence_score?: number | null }
+): string {
+  const lines: string[] = [
+    `Strategy call with ${call.name}`,
+    call.company ? `Company: ${call.company}` : '',
+    `Email: ${call.email}`,
+    call.phone ? `Phone: ${call.phone}` : '',
+    call.meet_link ? `Meet: ${call.meet_link}` : '',
+    '',
+    '── Prep Intelligence ──',
+    data.ai_maturity_level ? `AI Maturity: ${data.ai_maturity_level}` : '',
+    data.team_size ? `Team Size: ${data.team_size}` : '',
+    data.timeline_urgency ? `Timeline: ${data.timeline_urgency}` : '',
+    data.budget_range ? `Budget: ${data.budget_range}` : '',
+    data.primary_challenges?.length ? `Challenges: ${data.primary_challenges.join(', ')}` : '',
+    data.current_tools?.length ? `Tools in Use: ${data.current_tools.join(', ')}` : '',
+    data.priority_use_case ? `Priority Use Case: ${data.priority_use_case}` : '',
+    data.evaluating_consultants ? 'Evaluating Consultants: Yes' : '',
+    data.previous_ai_investment ? `Previous AI Investment: ${data.previous_ai_investment}` : '',
+  ];
+
+  if (synthesis?.ai_synthesis) {
+    lines.push('', '── AI Synthesis ──');
+    try {
+      const parsed = JSON.parse(synthesis.ai_synthesis);
+      if (parsed.executive_summary) lines.push(parsed.executive_summary);
+    } catch {
+      lines.push(synthesis.ai_synthesis.substring(0, 500));
+    }
+    if (synthesis.ai_recommended_focus) lines.push(`Recommended Focus: ${synthesis.ai_recommended_focus}`);
+    if (synthesis.ai_confidence_score) lines.push(`Confidence: ${synthesis.ai_confidence_score}%`);
+  }
+
+  if (data.specific_questions) {
+    lines.push('', '── Questions from Executive ──', data.specific_questions);
+  }
+
+  lines.push('', 'Booked via Colaberry Enterprise AI Leadership Accelerator website.');
+
+  return lines.filter(Boolean).join('\n');
 }

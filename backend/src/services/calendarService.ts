@@ -203,6 +203,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
 
   const event = await calendar.events.insert({
     calendarId: env.googleCalendarId,
+    conferenceDataVersion: 1,
     requestBody: {
       summary: `Executive AI Strategy Call — ${data.name}${companyLabel}`,
       description: [
@@ -221,6 +222,12 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
         dateTime: endTime.toISOString(),
         timeZone: BUSINESS_TIMEZONE,
       },
+      conferenceData: {
+        createRequest: {
+          requestId: `strategy-${Date.now()}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      },
       reminders: {
         useDefault: false,
         overrides: [
@@ -232,11 +239,32 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   });
 
   const eventId = event.data.id || '';
+  const meetLink =
+    event.data.conferenceData?.entryPoints?.find(
+      (ep) => ep.entryPointType === 'video'
+    )?.uri || event.data.hangoutLink || '';
 
   return {
     eventId,
-    meetLink: '',
+    meetLink,
     startTime: startTime.toISOString(),
     endTime: endTime.toISOString(),
   };
+}
+
+export async function updateCalendarEvent(eventId: string, description: string): Promise<void> {
+  try {
+    const auth = getAuthClient();
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    await calendar.events.patch({
+      calendarId: env.googleCalendarId,
+      eventId,
+      requestBody: { description },
+    });
+
+    console.log('[Calendar] Updated event description:', eventId);
+  } catch (err: any) {
+    console.error('[Calendar] Failed to update event:', eventId, err.message);
+  }
 }

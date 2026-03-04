@@ -4,6 +4,7 @@ import StrategyCallIntelligence from '../models/StrategyCallIntelligence';
 import StrategyCall from '../models/StrategyCall';
 import Lead from '../models/Lead';
 import { sendIntelligenceBrief } from './emailService';
+import { updateCalendarEvent } from './calendarService';
 
 let openaiClient: OpenAI | null = null;
 
@@ -148,7 +149,7 @@ export async function synthesizeIntelligence(intelligenceId: string): Promise<vo
       result.confidence_score
     );
 
-    // Send intelligence brief email to Ali (non-blocking)
+    // Send intelligence brief email and update calendar event (non-blocking)
     try {
       const call = await StrategyCall.findByPk(intelligence.strategy_call_id);
       if (call) {
@@ -171,6 +172,14 @@ export async function synthesizeIntelligence(intelligenceId: string): Promise<vo
           aiRecommendedFocus: intelligence.ai_recommended_focus,
           leadId: intelligence.lead_id,
         }).catch((err) => console.error('[Synthesis] Intelligence brief email failed:', err));
+
+        // Update Google Calendar event with full prep + synthesis data
+        if (call.google_event_id) {
+          const description = buildCalendarDescription(call, intelligence, result);
+          updateCalendarEvent(call.google_event_id, description).catch((err) =>
+            console.error('[Synthesis] Calendar update failed:', err)
+          );
+        }
       }
     } catch (err) {
       console.error('[Synthesis] Failed to send intelligence brief:', err);
@@ -178,4 +187,44 @@ export async function synthesizeIntelligence(intelligenceId: string): Promise<vo
   } catch (err) {
     console.error('[Synthesis] OpenAI call failed:', err);
   }
+}
+
+function buildCalendarDescription(
+  call: StrategyCall,
+  intel: StrategyCallIntelligence,
+  synthesis: SynthesisResult
+): string {
+  const lines: string[] = [
+    `Strategy call with ${call.name}`,
+    call.company ? `Company: ${call.company}` : '',
+    `Email: ${call.email}`,
+    call.phone ? `Phone: ${call.phone}` : '',
+    call.meet_link ? `Meet: ${call.meet_link}` : '',
+    '',
+    '── Prep Intelligence ──',
+    intel.ai_maturity_level ? `AI Maturity: ${intel.ai_maturity_level}` : '',
+    intel.team_size ? `Team Size: ${intel.team_size}` : '',
+    intel.timeline_urgency ? `Timeline: ${intel.timeline_urgency}` : '',
+    intel.budget_range ? `Budget: ${intel.budget_range}` : '',
+    intel.primary_challenges?.length ? `Challenges: ${intel.primary_challenges.join(', ')}` : '',
+    intel.current_tools?.length ? `Tools in Use: ${intel.current_tools.join(', ')}` : '',
+    intel.priority_use_case ? `Priority Use Case: ${intel.priority_use_case}` : '',
+    intel.evaluating_consultants ? 'Evaluating Consultants: Yes' : '',
+    intel.previous_ai_investment ? `Previous AI Investment: ${intel.previous_ai_investment}` : '',
+    '',
+    '── AI Synthesis ──',
+    synthesis.executive_summary || '',
+    synthesis.recommended_focus?.length ? `Recommended Focus: ${synthesis.recommended_focus.join(', ')}` : '',
+    synthesis.confidence_score ? `Confidence: ${synthesis.confidence_score}%` : '',
+    synthesis.suggested_approach ? `Approach: ${synthesis.suggested_approach}` : '',
+    synthesis.red_flags?.length ? `Red Flags: ${synthesis.red_flags.join(', ')}` : '',
+  ];
+
+  if (intel.specific_questions) {
+    lines.push('', '── Questions from Executive ──', intel.specific_questions);
+  }
+
+  lines.push('', 'Booked via Colaberry Enterprise AI Leadership Accelerator website.');
+
+  return lines.filter(Boolean).join('\n');
 }
