@@ -53,6 +53,9 @@ export const env = {
   enableFollowUpScheduler: process.env.ENABLE_FOLLOWUP_SCHEDULER === 'true',
   enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
   visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
+  enableChat: process.env.ENABLE_CHAT === 'true',
+  chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
+  chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',

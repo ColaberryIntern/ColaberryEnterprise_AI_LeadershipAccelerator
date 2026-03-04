@@ -93,7 +93,33 @@ interface TrafficSource {
   sessions: number;
 }
 
-type TabKey = 'live' | 'all' | 'high_intent' | 'analytics' | 'sessions';
+interface ChatConversationData {
+  id: string;
+  visitor_id: string;
+  status: string;
+  started_at: string;
+  ended_at?: string;
+  message_count: number;
+  visitor_message_count: number;
+  page_url?: string;
+  page_category?: string;
+  trigger_type: string;
+  summary?: string;
+  visitor?: {
+    id: string;
+    fingerprint: string;
+    lead?: { id: number; name: string; email: string; company?: string } | null;
+  };
+}
+
+interface ChatMessageData2 {
+  id: string;
+  role: string;
+  content: string;
+  timestamp: string;
+}
+
+type TabKey = 'live' | 'all' | 'high_intent' | 'analytics' | 'sessions' | 'chat';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -226,6 +252,15 @@ function AdminVisitorsPage() {
   const [visitorSignals, setVisitorSignals] = useState<BehavioralSignalData[]>([]);
   const [visitorIntentScore, setVisitorIntentScore] = useState<any>(null);
 
+  /* --- Chat --- */
+  const [chatConversations, setChatConversations] = useState<ChatConversationData[]>([]);
+  const [chatTotal, setChatTotal] = useState(0);
+  const [chatPage, setChatPage] = useState(1);
+  const [chatTotalPages, setChatTotalPages] = useState(1);
+  const [chatStats, setChatStats] = useState<{ total_conversations: number; active_conversations: number; today_conversations: number; avg_messages: number } | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<ChatConversationData | null>(null);
+  const [conversationMessages, setConversationMessages] = useState<ChatMessageData2[]>([]);
+
   /* --- Filters --- */
   const [filters, setFilters] = useState({
     search: '',
@@ -307,6 +342,31 @@ function AdminVisitorsPage() {
     }
   }, []);
 
+  const fetchChat = useCallback(async () => {
+    try {
+      const [convRes, statsRes] = await Promise.all([
+        api.get('/api/admin/chat/conversations', { params: { page: chatPage, limit: 25 } }),
+        api.get('/api/admin/chat/stats'),
+      ]);
+      setChatConversations(convRes.data.conversations || []);
+      setChatTotal(convRes.data.total || 0);
+      setChatTotalPages(convRes.data.totalPages || 1);
+      setChatStats(statsRes.data || null);
+    } catch (err) {
+      console.error('Failed to fetch chat data:', err);
+    }
+  }, [chatPage]);
+
+  const fetchConversationDetail = async (conv: ChatConversationData) => {
+    setSelectedConversation(conv);
+    try {
+      const res = await api.get(`/api/admin/chat/conversations/${conv.id}`);
+      setConversationMessages(res.data?.messages || []);
+    } catch (err) {
+      console.error('Failed to fetch conversation detail:', err);
+    }
+  };
+
   const fetchVisitorDetail = async (visitor: Visitor) => {
     setSelectedVisitor(visitor);
     setVisitorSessions([]);
@@ -360,8 +420,10 @@ function AdminVisitorsPage() {
       fetchAnalytics().finally(() => setLoading(false));
     } else if (activeTab === 'sessions') {
       fetchSessions().finally(() => setLoading(false));
+    } else if (activeTab === 'chat') {
+      fetchChat().finally(() => setLoading(false));
     }
-  }, [activeTab, fetchLive, fetchStats, fetchAllVisitors, fetchHighIntent, fetchAnalytics, fetchSessions]);
+  }, [activeTab, fetchLive, fetchStats, fetchAllVisitors, fetchHighIntent, fetchAnalytics, fetchSessions, fetchChat]);
 
   // Auto-refresh for live tab
   useEffect(() => {
@@ -807,6 +869,115 @@ function AdminVisitorsPage() {
     </div>
   );
 
+  const renderChatTab = () => (
+    <div>
+      {/* Chat stats cards */}
+      {chatStats && (
+        <div className="row g-3 mb-4">
+          <div className="col-6 col-lg-3">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid var(--color-primary, #1a365d)' }}>
+                <div className="text-muted small">Total Conversations</div>
+                <div className="h4 fw-bold mb-0">{chatStats.total_conversations}</div>
+              </div>
+            </div>
+          </div>
+          <div className="col-6 col-lg-3">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #38a169' }}>
+                <div className="text-muted small">Active Now</div>
+                <div className="h4 fw-bold mb-0">{chatStats.active_conversations}</div>
+              </div>
+            </div>
+          </div>
+          <div className="col-6 col-lg-3">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #2b6cb0' }}>
+                <div className="text-muted small">Today</div>
+                <div className="h4 fw-bold mb-0">{chatStats.today_conversations}</div>
+              </div>
+            </div>
+          </div>
+          <div className="col-6 col-lg-3">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #e53e3e' }}>
+                <div className="text-muted small">Avg Messages</div>
+                <div className="h4 fw-bold mb-0">{chatStats.avg_messages}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conversations table */}
+      <div className="card border-0 shadow-sm">
+        <div className="card-header bg-white fw-semibold">Chat Conversations</div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Visitor</th>
+                  <th>Started</th>
+                  <th>Messages</th>
+                  <th>Page</th>
+                  <th>Trigger</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chatConversations.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center text-muted py-4">No chat conversations yet.</td>
+                  </tr>
+                ) : (
+                  chatConversations.map((conv) => (
+                    <tr
+                      key={conv.id}
+                      onClick={() => fetchConversationDetail(conv)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td className="fw-medium small">
+                        {conv.visitor?.lead?.name || `Anonymous (${conv.visitor?.fingerprint?.slice(0, 8)}...)`}
+                        {conv.visitor?.lead && (
+                          <span className="badge bg-info ms-1" style={{ fontSize: '0.65rem' }}>Known</span>
+                        )}
+                      </td>
+                      <td className="text-nowrap small">{formatRelative(conv.started_at)}</td>
+                      <td>
+                        <span className="badge bg-light text-dark">{conv.message_count}</span>
+                      </td>
+                      <td className="small">{conv.page_category || '-'}</td>
+                      <td className="small">
+                        <span className={`badge bg-${conv.trigger_type === 'proactive_behavioral' ? 'warning' : 'light'} text-dark`}>
+                          {conv.trigger_type.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge bg-${conv.status === 'active' ? 'success' : conv.status === 'escalated' ? 'danger' : 'secondary'}`}>
+                          {conv.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {chatTotalPages > 1 && (
+          <div className="card-footer bg-white">
+            <Pagination
+              page={chatPage}
+              totalPages={chatTotalPages}
+              onPageChange={setChatPage}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const renderSessionsTab = () => (
     <div className="card border-0 shadow-sm">
       <div className="card-header bg-white fw-semibold">Recent Sessions</div>
@@ -1134,6 +1305,7 @@ function AdminVisitorsPage() {
             { key: 'high_intent' as TabKey, label: 'High Intent' },
             { key: 'analytics' as TabKey, label: 'Analytics' },
             { key: 'sessions' as TabKey, label: 'Sessions' },
+            { key: 'chat' as TabKey, label: 'Chat' },
           ]).map((tab) => (
             <li className="nav-item" key={tab.key}>
               <button
@@ -1157,9 +1329,62 @@ function AdminVisitorsPage() {
       {activeTab === 'high_intent' && renderHighIntentTab()}
       {activeTab === 'analytics' && renderAnalyticsTab()}
       {activeTab === 'sessions' && renderSessionsTab()}
+      {activeTab === 'chat' && renderChatTab()}
 
       {/* Visitor detail modal */}
       {renderDetailModal()}
+
+      {/* Conversation detail modal */}
+      {selectedConversation && (
+        <div className="modal show d-block" tabIndex={-1} role="dialog" aria-modal="true" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-lg modal-dialog-scrollable">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  Conversation — {selectedConversation.visitor?.lead?.name || `Anonymous (${selectedConversation.visitor?.fingerprint?.slice(0, 8)}...)`}
+                </h5>
+                <button type="button" className="btn-close" onClick={() => { setSelectedConversation(null); setConversationMessages([]); }} />
+              </div>
+              <div className="modal-body">
+                <div className="d-flex gap-3 mb-3 flex-wrap">
+                  <span className={`badge bg-${selectedConversation.status === 'active' ? 'success' : 'secondary'}`}>{selectedConversation.status}</span>
+                  <small className="text-muted">Started: {formatRelative(selectedConversation.started_at)}</small>
+                  <small className="text-muted">Messages: {selectedConversation.message_count}</small>
+                  <small className="text-muted">Trigger: {selectedConversation.trigger_type.replace(/_/g, ' ')}</small>
+                  {selectedConversation.page_category && <small className="text-muted">Page: {selectedConversation.page_category}</small>}
+                </div>
+                {selectedConversation.summary && (
+                  <div className="alert alert-light small mb-3">
+                    <strong>Summary:</strong> {selectedConversation.summary}
+                  </div>
+                )}
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {conversationMessages.map((msg) => (
+                    <div key={msg.id} className={`d-flex mb-2 ${msg.role === 'visitor' ? 'justify-content-end' : 'justify-content-start'}`}>
+                      <div
+                        className="px-3 py-2 rounded"
+                        style={{
+                          maxWidth: '80%',
+                          backgroundColor: msg.role === 'visitor' ? '#e8f0fe' : msg.role === 'system' ? '#fff3cd' : '#f8f9fa',
+                          border: '1px solid var(--color-border)',
+                          fontSize: '13px',
+                        }}
+                      >
+                        <div className="text-muted small mb-1">{msg.role === 'visitor' ? 'Visitor' : msg.role === 'system' ? 'System' : 'AI Assistant'}</div>
+                        {msg.content}
+                        <div className="text-muted small mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary btn-sm" onClick={() => { setSelectedConversation(null); setConversationMessages([]); }}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

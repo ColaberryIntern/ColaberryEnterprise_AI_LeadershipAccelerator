@@ -8,14 +8,18 @@ import {
 } from '../services/visitorTrackingService';
 import { detectSessionSignals } from '../services/behavioralSignalService';
 import { computeIntentScore } from '../services/intentScoringService';
+import { evaluateVisitorForTriggers } from '../services/behavioralTriggerService';
 import { env } from '../config/env';
 
-/** Fire-and-forget signal detection + intent scoring for high-value events */
+/** Fire-and-forget signal detection + intent scoring + behavioral triggers for high-value events */
 function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
   detectSessionSignals(sessionId)
     .then((signals) => {
       if (signals.length > 0) {
-        return computeIntentScore(visitorId);
+        return computeIntentScore(visitorId).then(() => {
+          // Evaluate behavioral trigger campaigns for this visitor
+          return evaluateVisitorForTriggers(visitorId);
+        });
       }
     })
     .catch((err) => console.error('[Tracking] Signal analysis error:', err.message));

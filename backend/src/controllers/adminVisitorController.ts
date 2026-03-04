@@ -8,6 +8,7 @@ import {
 } from '../services/visitorAnalyticsService';
 import { getVisitorSignals, getVisitorSignalSummary, getSignalDefinitions } from '../services/behavioralSignalService';
 import { getHighIntentVisitors, getIntentScoreForVisitor, getIntentDistribution } from '../services/intentScoringService';
+import { listConversations, getConversationDetail, getChatStats } from '../services/chatService';
 import { VisitorSession, PageEvent, IntentScore } from '../models';
 
 // ---------------------------------------------------------------------------
@@ -206,6 +207,53 @@ export async function handleGetIntentDistribution(req: Request, res: Response, n
 export async function handleGetSignalDefinitions(req: Request, res: Response, next: NextFunction) {
   try {
     res.json(getSignalDefinitions());
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 13. List Chat Conversations             GET /api/admin/chat/conversations
+// ---------------------------------------------------------------------------
+
+export async function handleListChatConversations(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { page, limit, status } = req.query;
+    const result = await listConversations({
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      status: status as string | undefined,
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 14. Chat Conversation Detail            GET /api/admin/chat/conversations/:id
+// ---------------------------------------------------------------------------
+
+export async function handleGetChatConversation(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getConversationDetail(req.params.id as string);
+    if (!result) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 15. Chat Stats                          GET /api/admin/chat/stats
+// ---------------------------------------------------------------------------
+
+export async function handleGetChatStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const stats = await getChatStats();
+    res.json(stats);
   } catch (error) {
     next(error);
   }

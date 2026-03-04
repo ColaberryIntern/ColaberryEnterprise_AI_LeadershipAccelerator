@@ -77,6 +77,9 @@ import {
   handleGetHighIntentVisitors,
   handleGetIntentDistribution,
   handleGetSignalDefinitions,
+  handleListChatConversations,
+  handleGetChatConversation,
+  handleGetChatStats,
 } from '../controllers/adminVisitorController';
 import {
   handleListCampaigns,
@@ -222,5 +225,10 @@ router.get('/api/admin/visitors/:id/sessions', requireAdmin, handleGetVisitorSes
 router.get('/api/admin/visitors/:id/signals', requireAdmin, handleGetVisitorSignals);
 router.get('/api/admin/visitors/:id/intent', requireAdmin, handleGetVisitorIntent);
 router.get('/api/admin/sessions/:id/events', requireAdmin, handleGetSessionEvents);
+
+// Protected admin routes — Chat Conversations
+router.get('/api/admin/chat/stats', requireAdmin, handleGetChatStats);
+router.get('/api/admin/chat/conversations', requireAdmin, handleListChatConversations);
+router.get('/api/admin/chat/conversations/:id', requireAdmin, handleGetChatConversation);
 
 export default router;

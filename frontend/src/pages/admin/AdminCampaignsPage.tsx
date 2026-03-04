@@ -29,6 +29,7 @@ const TYPE_LABELS: Record<string, string> = {
   warm_nurture: 'Warm Nurture',
   cold_outbound: 'Cold Outbound',
   re_engagement: 'Re-Engagement',
+  behavioral_trigger: 'Behavioral Trigger',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -42,6 +43,7 @@ const TYPE_BORDER_COLORS: Record<string, string> = {
   cold_outbound: '#0dcaf0',
   warm_nurture: '#fd7e14',
   re_engagement: '#6f42c1',
+  behavioral_trigger: '#38a169',
 };
 
 function AdminCampaignsPage() {
@@ -56,6 +58,14 @@ function AdminCampaignsPage() {
     sequence_id: '',
     budget_total: '',
     ai_system_prompt: '',
+  });
+  const [triggerRules, setTriggerRules] = useState<{ signal_type: string; min_count: number }[]>([]);
+  const [triggerSettings, setTriggerSettings] = useState({
+    min_intent_score: 45,
+    require_all_rules: true,
+    cooldown_hours: 72,
+    auto_start_chat: false,
+    exclude_identified: false,
   });
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -88,13 +98,24 @@ function AdminCampaignsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/api/admin/campaigns', {
+      const payload: any = {
         ...form,
         budget_total: form.budget_total ? parseFloat(form.budget_total) : null,
         sequence_id: form.sequence_id || null,
-      });
+      };
+
+      if (form.type === 'behavioral_trigger') {
+        payload.targeting_criteria = {
+          trigger_rules: triggerRules.filter(r => r.signal_type),
+          ...triggerSettings,
+        };
+      }
+
+      await api.post('/api/admin/campaigns', payload);
       setShowModal(false);
       setForm({ name: '', description: '', type: 'cold_outbound', sequence_id: '', budget_total: '', ai_system_prompt: '' });
+      setTriggerRules([]);
+      setTriggerSettings({ min_intent_score: 45, require_all_rules: true, cooldown_hours: 72, auto_start_chat: false, exclude_identified: false });
       fetchCampaigns();
     } catch (err) {
       console.error('Failed to create campaign:', err);
@@ -245,6 +266,7 @@ function AdminCampaignsPage() {
                 <option value="cold_outbound">Cold Outbound</option>
                 <option value="warm_nurture">Warm Nurture</option>
                 <option value="re_engagement">Re-Engagement</option>
+                <option value="behavioral_trigger">Behavioral Trigger</option>
               </select>
             </div>
             <div className="col-md-6 mb-3">
@@ -284,6 +306,134 @@ function AdminCampaignsPage() {
               placeholder="Define the AI's persona and brand voice for this campaign. Leave blank to use the default system prompt."
             />
           </div>
+
+          {/* Behavioral Trigger Rules — shown when type is behavioral_trigger */}
+          {form.type === 'behavioral_trigger' && (
+            <div className="card border-0 bg-light mb-3">
+              <div className="card-body">
+                <h6 className="card-title fw-semibold mb-3">Trigger Rules</h6>
+
+                <div className="row mb-3">
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">Min Intent Score (0-100)</label>
+                    <input
+                      type="range"
+                      className="form-range"
+                      min={0}
+                      max={100}
+                      value={triggerSettings.min_intent_score}
+                      onChange={(e) => setTriggerSettings({ ...triggerSettings, min_intent_score: Number(e.target.value) })}
+                    />
+                    <small className="text-muted">{triggerSettings.min_intent_score}</small>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">Cooldown Hours</label>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={triggerSettings.cooldown_hours}
+                      onChange={(e) => setTriggerSettings({ ...triggerSettings, cooldown_hours: Number(e.target.value) })}
+                      min={0}
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label small fw-medium">Signal Rules</label>
+                  {triggerRules.map((rule, idx) => (
+                    <div key={idx} className="d-flex gap-2 mb-2 align-items-center">
+                      <select
+                        className="form-select form-select-sm"
+                        value={rule.signal_type}
+                        onChange={(e) => {
+                          const updated = [...triggerRules];
+                          updated[idx] = { ...updated[idx], signal_type: e.target.value };
+                          setTriggerRules(updated);
+                        }}
+                      >
+                        <option value="">Select signal...</option>
+                        <option value="pricing_visit">Pricing Visit</option>
+                        <option value="enroll_page_visit">Enroll Page Visit</option>
+                        <option value="contact_page_visit">Contact Page Visit</option>
+                        <option value="strategy_call_visit">Strategy Call Visit</option>
+                        <option value="cta_click_enroll">CTA Click - Enroll</option>
+                        <option value="cta_click_strategy">CTA Click - Strategy</option>
+                        <option value="form_started">Form Started</option>
+                        <option value="form_submitted">Form Submitted</option>
+                        <option value="return_visit">Return Visit</option>
+                        <option value="deep_scroll_pricing">Deep Scroll - Pricing</option>
+                        <option value="deep_scroll_program">Deep Scroll - Program</option>
+                        <option value="evaluation_pattern">Evaluation Pattern</option>
+                        <option value="research_pattern">Research Pattern</option>
+                        <option value="long_session">Long Session</option>
+                        <option value="multi_page_session">Multi-Page Session</option>
+                      </select>
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        style={{ width: '80px' }}
+                        value={rule.min_count}
+                        onChange={(e) => {
+                          const updated = [...triggerRules];
+                          updated[idx] = { ...updated[idx], min_count: Number(e.target.value) };
+                          setTriggerRules(updated);
+                        }}
+                        min={1}
+                        placeholder="Min"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-danger"
+                        onClick={() => setTriggerRules(triggerRules.filter((_, i) => i !== idx))}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => setTriggerRules([...triggerRules, { signal_type: '', min_count: 1 }])}
+                  >
+                    + Add Signal Rule
+                  </button>
+                </div>
+
+                <div className="d-flex flex-wrap gap-3">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id="trigger-all"
+                      checked={triggerSettings.require_all_rules}
+                      onChange={(e) => setTriggerSettings({ ...triggerSettings, require_all_rules: e.target.checked })}
+                    />
+                    <label className="form-check-label small" htmlFor="trigger-all">Require all rules (AND)</label>
+                  </div>
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id="trigger-chat"
+                      checked={triggerSettings.auto_start_chat}
+                      onChange={(e) => setTriggerSettings({ ...triggerSettings, auto_start_chat: e.target.checked })}
+                    />
+                    <label className="form-check-label small" htmlFor="trigger-chat">Auto-start proactive chat</label>
+                  </div>
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id="trigger-exclude"
+                      checked={triggerSettings.exclude_identified}
+                      onChange={(e) => setTriggerSettings({ ...triggerSettings, exclude_identified: e.target.checked })}
+                    />
+                    <label className="form-check-label small" htmlFor="trigger-exclude">Exclude identified leads</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </Modal>
     </div>

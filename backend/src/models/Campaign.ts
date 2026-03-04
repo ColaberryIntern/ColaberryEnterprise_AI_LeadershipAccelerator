@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement';
+export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'behavioral_trigger';
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
 
 interface CampaignAttributes {

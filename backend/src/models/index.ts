@@ -21,6 +21,8 @@ import VisitorSession from './VisitorSession';
 import PageEvent from './PageEvent';
 import BehavioralSignal from './BehavioralSignal';
 import IntentScore from './IntentScore';
+import ChatConversation from './ChatConversation';
+import ChatMessage from './ChatMessage';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -118,6 +120,18 @@ IntentScore.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
 IntentScore.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Lead.hasOne(IntentScore, { foreignKey: 'lead_id', as: 'intentScore' });
 
+// Chat Conversation associations
+Visitor.hasMany(ChatConversation, { foreignKey: 'visitor_id', as: 'chatConversations' });
+ChatConversation.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+
+ChatConversation.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(ChatConversation, { foreignKey: 'lead_id', as: 'chatConversations' });
+
+ChatConversation.belongsTo(VisitorSession, { foreignKey: 'session_id', as: 'session' });
+
+ChatConversation.hasMany(ChatMessage, { foreignKey: 'conversation_id', as: 'messages' });
+ChatMessage.belongsTo(ChatConversation, { foreignKey: 'conversation_id', as: 'conversation' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -126,4 +140,5 @@ export {
   StrategyCall, StrategyCallIntelligence,
   Visitor, VisitorSession, PageEvent,
   BehavioralSignal, IntentScore,
+  ChatConversation, ChatMessage,
 };

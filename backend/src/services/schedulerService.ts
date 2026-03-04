@@ -12,6 +12,7 @@ import { cancelPrepNudge, enrollInNoShowRecovery } from './strategyPrepService';
 import { advancePipelineStage } from './pipelineService';
 import { detectSignalsForRecentSessions } from './behavioralSignalService';
 import { recomputeRecentIntentScores } from './intentScoringService';
+import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { getTestOverrides } from './settingsService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
@@ -734,6 +735,19 @@ export function startScheduler(): void {
     }
   });
 
+  // Behavioral trigger evaluation: every 10 minutes (after signal detection)
+  cron.schedule('5,15,25,35,45,55 * * * *', async () => {
+    try {
+      if (!env.enableVisitorTracking) return;
+      const enrolled = await evaluateBehavioralTriggers();
+      if (enrolled > 0) {
+        console.log(`[Scheduler] Behavioral triggers enrolled ${enrolled} lead(s)`);
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Behavioral trigger evaluation error:', err.message);
+    }
+  });
+
   // Visitor data retention: delete page_events older than 90 days
   cron.schedule('0 3 * * *', async () => {
     try {
@@ -751,6 +765,23 @@ export function startScheduler(): void {
     }
   });
 
+  // Chat message retention: delete chat_messages older than 180 days
+  cron.schedule('30 3 * * *', async () => {
+    try {
+      const { ChatMessage } = require('../models');
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 180);
+      const deleted = await ChatMessage.destroy({
+        where: { timestamp: { [Op.lt]: cutoff } },
+      });
+      if (deleted > 0) {
+        console.log(`[Scheduler] Cleaned up ${deleted} chat messages older than 180 days`);
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Chat message cleanup failed:', err.message);
+    }
+  });
+
   console.log('[Scheduler] AI-powered multi-channel campaign scheduler started (every 5 minutes)');
   console.log('[Scheduler] Channels: email (Mandrill), voice (Synthflow), sms (placeholder)');
   console.log('[Scheduler] AI generation: enabled for actions with ai_instructions');
@@ -759,4 +790,6 @@ export function startScheduler(): void {
   console.log('[Scheduler] Page event data retention cleanup: daily at 3 AM (90-day retention)');
   console.log('[Scheduler] Behavioral signal detection: every 10 minutes');
   console.log('[Scheduler] Intent score recomputation: every 15 minutes');
+  console.log('[Scheduler] Behavioral trigger evaluation: every 10 minutes (offset)');
+  console.log('[Scheduler] Chat message retention cleanup: daily at 3:30 AM (180-day retention)');
 }

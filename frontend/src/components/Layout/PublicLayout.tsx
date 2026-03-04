@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import PublicNavbar from './PublicNavbar';
 import PublicFooter from './PublicFooter';
 import { initTracker } from '../../utils/tracker';
+
+const ChatWidget = lazy(() => import('../ChatWidget'));
 
 function PublicLayout() {
   useEffect(() => { initTracker(); }, []);
@@ -17,6 +19,9 @@ function PublicLayout() {
         <Outlet />
       </main>
       <PublicFooter />
+      <Suspense fallback={null}>
+        <ChatWidget />
+      </Suspense>
     </div>
   );
 }
