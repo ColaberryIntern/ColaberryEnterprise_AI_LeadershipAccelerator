@@ -217,7 +217,7 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
   return html;
 }
 
-function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmationData): string {
+export function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmationData): string {
   const dateOptions: Intl.DateTimeFormatOptions = {
     weekday: 'long',
     year: 'numeric',
