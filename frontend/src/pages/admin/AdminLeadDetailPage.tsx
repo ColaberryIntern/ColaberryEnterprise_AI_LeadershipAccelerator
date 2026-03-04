@@ -79,6 +79,14 @@ interface VisitorData {
   country: string;
   referrer_domain: string;
   recent_sessions: VisitorSessionData[];
+  intent_score?: number | null;
+  intent_level?: string | null;
+  signals?: Array<{
+    id: string;
+    signal_type: string;
+    signal_strength: number;
+    detected_at: string;
+  }>;
 }
 
 import { PIPELINE_STAGES, PIPELINE_STAGE_COLORS, STATUS_VALUES } from '../../constants';
@@ -396,7 +404,23 @@ function AdminLeadDetailPage() {
             {/* Website Activity */}
             {visitor && (
               <div className="card border-0 shadow-sm mb-4">
-                <div className="card-header bg-white fw-semibold py-3">Website Activity</div>
+                <div className="card-header bg-white fw-semibold py-3 d-flex justify-content-between align-items-center">
+                  <span>Website Activity</span>
+                  {visitor.intent_score != null && (
+                    <span className={`badge ${
+                      visitor.intent_level === 'very_high' ? 'bg-danger' :
+                      visitor.intent_level === 'high' ? 'bg-warning text-dark' :
+                      visitor.intent_level === 'medium' ? 'bg-info text-dark' :
+                      'bg-light text-dark'
+                    }`}>
+                      Intent: {visitor.intent_score}/100 ({
+                        visitor.intent_level === 'very_high' ? 'Very High' :
+                        visitor.intent_level === 'high' ? 'High' :
+                        visitor.intent_level === 'medium' ? 'Medium' : 'Low'
+                      })
+                    </span>
+                  )}
+                </div>
                 <div className="card-body">
                   <div className="row g-3 mb-3">
                     <div className="col-md-3">
@@ -416,6 +440,28 @@ function AdminLeadDetailPage() {
                       <div className="fw-semibold">{visitor.last_seen_at ? formatDate(visitor.last_seen_at) : '-'}</div>
                     </div>
                   </div>
+
+                  {/* Behavioral Signals */}
+                  {visitor.signals && visitor.signals.length > 0 && (
+                    <div className="mb-3">
+                      <div className="small fw-medium text-muted mb-2">Behavioral Signals</div>
+                      <div className="d-flex flex-wrap gap-1">
+                        {visitor.signals.map((sig) => (
+                          <span
+                            key={sig.id}
+                            className={`badge ${
+                              sig.signal_strength >= 40 ? 'bg-danger' :
+                              sig.signal_strength >= 25 ? 'bg-warning text-dark' :
+                              'bg-light text-dark border'
+                            }`}
+                            title={`Strength: ${sig.signal_strength} | ${formatDate(sig.detected_at)}`}
+                          >
+                            {sig.signal_type.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {visitor.device_type && (
                     <div className="d-flex gap-3 mb-3 small text-muted">

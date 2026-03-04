@@ -1,5 +1,5 @@
 import { Op, fn, col, literal } from 'sequelize';
-import { Visitor, VisitorSession, PageEvent, Lead } from '../models';
+import { Visitor, VisitorSession, PageEvent, Lead, IntentScore } from '../models';
 import { sequelize } from '../config/database';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +31,12 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
             attributes: ['id', 'name', 'email', 'company'],
             required: false,
           },
+          {
+            model: IntentScore,
+            as: 'intentScore',
+            attributes: ['score', 'intent_level', 'signals_count'],
+            required: false,
+          },
         ],
       },
     ],
@@ -41,6 +47,7 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
   return sessions.map((s: any) => {
     const visitor = s.visitor;
     const lead = visitor?.lead;
+    const intentScore = visitor?.intentScore;
 
     return {
       session_id: s.id,
@@ -58,6 +65,8 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
       city: visitor?.city ?? null,
       country: visitor?.country ?? null,
       is_identified: !!lead,
+      intent_score: intentScore?.score ?? null,
+      intent_level: intentScore?.intent_level ?? null,
     };
   });
 }
@@ -287,7 +296,15 @@ export async function listVisitors(params: {
 
   const { rows, count } = await Visitor.findAndCountAll({
     where,
-    include: [leadInclude],
+    include: [
+      leadInclude,
+      {
+        model: IntentScore,
+        as: 'intentScore',
+        attributes: ['score', 'intent_level', 'signals_count', 'last_signal_at', 'score_updated_at'],
+        required: false,
+      },
+    ],
     order: [[sortField, sortOrder]],
     limit,
     offset,
@@ -311,6 +328,11 @@ export async function getVisitorProfile(visitorId: string): Promise<object | nul
       {
         model: Lead,
         as: 'lead',
+        required: false,
+      },
+      {
+        model: IntentScore,
+        as: 'intentScore',
         required: false,
       },
     ],

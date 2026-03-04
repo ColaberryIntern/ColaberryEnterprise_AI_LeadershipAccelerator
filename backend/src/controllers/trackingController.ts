@@ -6,7 +6,20 @@ import {
   categorizePagePath,
   updateHeartbeat,
 } from '../services/visitorTrackingService';
+import { detectSessionSignals } from '../services/behavioralSignalService';
+import { computeIntentScore } from '../services/intentScoringService';
 import { env } from '../config/env';
+
+/** Fire-and-forget signal detection + intent scoring for high-value events */
+function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
+  detectSessionSignals(sessionId)
+    .then((signals) => {
+      if (signals.length > 0) {
+        return computeIntentScore(visitorId);
+      }
+    })
+    .catch((err) => console.error('[Tracking] Signal analysis error:', err.message));
+}
 
 const VALID_EVENT_TYPES = [
   'pageview',
@@ -115,6 +128,12 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       timestamp: timestamp ? new Date(timestamp) : new Date(),
     });
 
+    // Trigger real-time signal analysis for high-value events
+    const HIGH_VALUE_EVENTS = ['cta_click', 'form_start', 'form_submit'];
+    if (HIGH_VALUE_EVENTS.includes(event_type)) {
+      triggerSignalAnalysis(sessionId, visitorId);
+    }
+
     res.status(200).json({ visitor_id: visitorId, session_id: sessionId });
   } catch (err) {
     console.error('[Tracking]', err);
@@ -191,6 +210,14 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
         timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
       });
       eventsRecorded++;
+    }
+
+    // Trigger real-time signal analysis if batch contains high-value events
+    const hasHighValue = events.some((e: any) =>
+      ['cta_click', 'form_start', 'form_submit'].includes(e.event_type)
+    );
+    if (hasHighValue) {
+      triggerSignalAnalysis(sessionId, visitorId);
     }
 
     res.status(200).json({

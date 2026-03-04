@@ -6,7 +6,9 @@ import {
   getVisitorTrend,
   getVisitorProfile,
 } from '../services/visitorAnalyticsService';
-import { VisitorSession, PageEvent } from '../models';
+import { getVisitorSignals, getVisitorSignalSummary, getSignalDefinitions } from '../services/behavioralSignalService';
+import { getHighIntentVisitors, getIntentScoreForVisitor, getIntentDistribution } from '../services/intentScoringService';
+import { VisitorSession, PageEvent, IntentScore } from '../models';
 
 // ---------------------------------------------------------------------------
 // 1. List Visitors (paginated)         GET /api/admin/visitors
@@ -132,6 +134,78 @@ export async function handleGetSessionEvents(req: Request, res: Response, next: 
       order: [['timestamp', 'ASC']],
     });
     res.json(events);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8. Visitor Signals                    GET /api/admin/visitors/:id/signals
+// ---------------------------------------------------------------------------
+
+export async function handleGetVisitorSignals(req: Request, res: Response, next: NextFunction) {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+    const signals = await getVisitorSignals(req.params.id as string, limit);
+    const summary = await getVisitorSignalSummary(req.params.id as string);
+    res.json({ signals, summary });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 9. Visitor Intent Score               GET /api/admin/visitors/:id/intent
+// ---------------------------------------------------------------------------
+
+export async function handleGetVisitorIntent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const intentScore = await getIntentScoreForVisitor(req.params.id as string);
+    const signals = await getVisitorSignals(req.params.id as string, 20);
+    res.json({
+      intent: intentScore || { score: 0, intent_level: 'low', signals_count: 0 },
+      recent_signals: signals,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 10. High Intent Visitors              GET /api/admin/visitors/high-intent
+// ---------------------------------------------------------------------------
+
+export async function handleGetHighIntentVisitors(req: Request, res: Response, next: NextFunction) {
+  try {
+    const threshold = req.query.threshold ? Number(req.query.threshold) : 45;
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+    const visitors = await getHighIntentVisitors(threshold, limit);
+    res.json(visitors);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 11. Intent Distribution               GET /api/admin/visitors/intent-distribution
+// ---------------------------------------------------------------------------
+
+export async function handleGetIntentDistribution(req: Request, res: Response, next: NextFunction) {
+  try {
+    const distribution = await getIntentDistribution();
+    res.json(distribution);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 12. Signal Definitions                GET /api/admin/visitors/signal-definitions
+// ---------------------------------------------------------------------------
+
+export async function handleGetSignalDefinitions(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json(getSignalDefinitions());
   } catch (error) {
     next(error);
   }

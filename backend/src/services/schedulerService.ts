@@ -10,6 +10,8 @@ import { recordActionOutcome } from './interactionService';
 import { computeInsights } from './icpInsightService';
 import { cancelPrepNudge, enrollInNoShowRecovery } from './strategyPrepService';
 import { advancePipelineStage } from './pipelineService';
+import { detectSignalsForRecentSessions } from './behavioralSignalService';
+import { recomputeRecentIntentScores } from './intentScoringService';
 import { getTestOverrides } from './settingsService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
@@ -706,6 +708,32 @@ export function startScheduler(): void {
     });
   });
 
+  // Behavioral signal detection: analyze closed sessions every 10 minutes
+  cron.schedule('*/10 * * * *', async () => {
+    try {
+      if (!env.enableVisitorTracking) return;
+      const signalsDetected = await detectSignalsForRecentSessions();
+      if (signalsDetected > 0) {
+        console.log(`[Scheduler] Detected ${signalsDetected} behavioral signal(s) from recent sessions`);
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Behavioral signal detection error:', err.message);
+    }
+  });
+
+  // Intent score recomputation: update scores for visitors with recent signals every 15 minutes
+  cron.schedule('7,22,37,52 * * * *', async () => {
+    try {
+      if (!env.enableVisitorTracking) return;
+      const scored = await recomputeRecentIntentScores();
+      if (scored > 0) {
+        console.log(`[Scheduler] Recomputed intent scores for ${scored} visitor(s)`);
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Intent score recomputation error:', err.message);
+    }
+  });
+
   // Visitor data retention: delete page_events older than 90 days
   cron.schedule('0 3 * * *', async () => {
     try {
@@ -729,4 +757,6 @@ export function startScheduler(): void {
   console.log('[Scheduler] No-show detection: every 15 minutes');
   console.log('[Scheduler] ICP insight computation: daily at 2 AM');
   console.log('[Scheduler] Page event data retention cleanup: daily at 3 AM (90-day retention)');
+  console.log('[Scheduler] Behavioral signal detection: every 10 minutes');
+  console.log('[Scheduler] Intent score recomputation: every 15 minutes');
 }

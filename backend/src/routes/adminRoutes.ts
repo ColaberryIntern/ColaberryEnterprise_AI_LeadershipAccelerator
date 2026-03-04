@@ -72,6 +72,11 @@ import {
   handleGetVisitorProfile,
   handleGetVisitorSessions,
   handleGetSessionEvents,
+  handleGetVisitorSignals,
+  handleGetVisitorIntent,
+  handleGetHighIntentVisitors,
+  handleGetIntentDistribution,
+  handleGetSignalDefinitions,
 } from '../controllers/adminVisitorController';
 import {
   handleListCampaigns,
@@ -208,9 +213,14 @@ router.get('/api/admin/events', requireAdmin, handleListEvents);
 router.get('/api/admin/visitors/stats', requireAdmin, handleGetVisitorStats);
 router.get('/api/admin/visitors/live', requireAdmin, handleGetLiveVisitors);
 router.get('/api/admin/visitors/trend', requireAdmin, handleGetVisitorTrend);
+router.get('/api/admin/visitors/high-intent', requireAdmin, handleGetHighIntentVisitors);
+router.get('/api/admin/visitors/intent-distribution', requireAdmin, handleGetIntentDistribution);
+router.get('/api/admin/visitors/signal-definitions', requireAdmin, handleGetSignalDefinitions);
 router.get('/api/admin/visitors', requireAdmin, handleListVisitors);
 router.get('/api/admin/visitors/:id', requireAdmin, handleGetVisitorProfile);
 router.get('/api/admin/visitors/:id/sessions', requireAdmin, handleGetVisitorSessions);
+router.get('/api/admin/visitors/:id/signals', requireAdmin, handleGetVisitorSignals);
+router.get('/api/admin/visitors/:id/intent', requireAdmin, handleGetVisitorIntent);
 router.get('/api/admin/sessions/:id/events', requireAdmin, handleGetSessionEvents);
 
 export default router;

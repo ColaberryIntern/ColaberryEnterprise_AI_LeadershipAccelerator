@@ -29,6 +29,24 @@ interface Visitor {
   exit_page?: string;
   session_duration?: number;
   pageview_count?: number;
+  // intent fields
+  intent_score?: number | null;
+  intent_level?: string | null;
+  intentScore?: {
+    score: number;
+    intent_level: string;
+    signals_count: number;
+    last_signal_at?: string;
+    score_updated_at?: string;
+  } | null;
+}
+
+interface BehavioralSignalData {
+  id: string;
+  signal_type: string;
+  signal_strength: number;
+  context?: Record<string, any>;
+  detected_at: string;
 }
 
 interface VisitorSession {
@@ -75,7 +93,7 @@ interface TrafficSource {
   sessions: number;
 }
 
-type TabKey = 'live' | 'all' | 'analytics' | 'sessions';
+type TabKey = 'live' | 'all' | 'high_intent' | 'analytics' | 'sessions';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -140,6 +158,35 @@ function DeviceIcon({ type }: { type?: string }) {
   return <DesktopIcon />;
 }
 
+function IntentBadge({ score, level }: { score?: number | null; level?: string | null }) {
+  if (score == null && !level) return <span className="text-muted small">-</span>;
+  const displayScore = score ?? 0;
+  const displayLevel = level || 'low';
+  const badgeClass =
+    displayLevel === 'very_high' ? 'bg-danger' :
+    displayLevel === 'high' ? 'bg-warning text-dark' :
+    displayLevel === 'medium' ? 'bg-info text-dark' :
+    'bg-light text-dark';
+  const labelText =
+    displayLevel === 'very_high' ? 'Very High' :
+    displayLevel === 'high' ? 'High' :
+    displayLevel === 'medium' ? 'Medium' : 'Low';
+
+  return (
+    <span className={`badge ${badgeClass}`} title={`Intent Score: ${displayScore}/100`}>
+      {displayScore} {labelText}
+    </span>
+  );
+}
+
+function getIntentScore(v: Visitor): number | null {
+  return v.intent_score ?? v.intentScore?.score ?? null;
+}
+
+function getIntentLevel(v: Visitor): string | null {
+  return v.intent_level ?? v.intentScore?.intent_level ?? null;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -171,6 +218,13 @@ function AdminVisitorsPage() {
   const [visitorSessions, setVisitorSessions] = useState<VisitorSession[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [sessionEvents, setSessionEvents] = useState<Record<string, SessionEvent[]>>({});
+
+  /* --- High Intent --- */
+  const [highIntentVisitors, setHighIntentVisitors] = useState<any[]>([]);
+
+  /* --- Detail modal signals --- */
+  const [visitorSignals, setVisitorSignals] = useState<BehavioralSignalData[]>([]);
+  const [visitorIntentScore, setVisitorIntentScore] = useState<any>(null);
 
   /* --- Filters --- */
   const [filters, setFilters] = useState({
@@ -244,16 +298,34 @@ function AdminVisitorsPage() {
     }
   }, []);
 
+  const fetchHighIntent = useCallback(async () => {
+    try {
+      const res = await api.get('/api/admin/visitors/high-intent', { params: { threshold: 20, limit: 50 } });
+      setHighIntentVisitors(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch high intent visitors:', err);
+    }
+  }, []);
+
   const fetchVisitorDetail = async (visitor: Visitor) => {
     setSelectedVisitor(visitor);
     setVisitorSessions([]);
     setExpandedSession(null);
     setSessionEvents({});
+    setVisitorSignals([]);
+    setVisitorIntentScore(null);
     try {
-      const res = await api.get(`/api/admin/visitors/${visitor.id}/sessions`);
-      setVisitorSessions(res.data.sessions || []);
+      const [sessRes, intentRes] = await Promise.all([
+        api.get(`/api/admin/visitors/${visitor.id}/sessions`),
+        api.get(`/api/admin/visitors/${visitor.id}/intent`).catch(() => null),
+      ]);
+      setVisitorSessions(sessRes.data.sessions || sessRes.data || []);
+      if (intentRes?.data) {
+        setVisitorIntentScore(intentRes.data.intent);
+        setVisitorSignals(intentRes.data.recent_signals || []);
+      }
     } catch (err) {
-      console.error('Failed to fetch visitor sessions:', err);
+      console.error('Failed to fetch visitor detail:', err);
     }
   };
 
@@ -282,12 +354,14 @@ function AdminVisitorsPage() {
       Promise.all([fetchLive(), fetchStats()]).finally(() => setLoading(false));
     } else if (activeTab === 'all') {
       fetchAllVisitors().finally(() => setLoading(false));
+    } else if (activeTab === 'high_intent') {
+      fetchHighIntent().finally(() => setLoading(false));
     } else if (activeTab === 'analytics') {
       fetchAnalytics().finally(() => setLoading(false));
     } else if (activeTab === 'sessions') {
       fetchSessions().finally(() => setLoading(false));
     }
-  }, [activeTab, fetchLive, fetchStats, fetchAllVisitors, fetchAnalytics, fetchSessions]);
+  }, [activeTab, fetchLive, fetchStats, fetchAllVisitors, fetchHighIntent, fetchAnalytics, fetchSessions]);
 
   // Auto-refresh for live tab
   useEffect(() => {
@@ -389,12 +463,12 @@ function AdminVisitorsPage() {
                 <tr>
                   <th>Visitor</th>
                   <th>Status</th>
+                  <th>Intent</th>
                   <th>Current Page</th>
                   <th>Duration</th>
                   <th>Pages</th>
                   <th>Referrer</th>
                   <th>Device</th>
-                  <th>City</th>
                 </tr>
               </thead>
               <tbody>
@@ -413,6 +487,7 @@ function AdminVisitorsPage() {
                     >
                       <td>{renderVisitorCell(v)}</td>
                       <td>{renderStatusBadge(v)}</td>
+                      <td><IntentBadge score={getIntentScore(v)} level={getIntentLevel(v)} /></td>
                       <td className="small text-truncate" style={{ maxWidth: 200 }}>
                         {v.current_page || v.exit_page || '-'}
                       </td>
@@ -420,7 +495,6 @@ function AdminVisitorsPage() {
                       <td>{v.pageview_count ?? v.total_pageviews ?? 0}</td>
                       <td className="small">{v.referrer_domain || 'Direct'}</td>
                       <td><DeviceIcon type={v.device_type} /></td>
-                      <td className="small">{v.city || '-'}</td>
                     </tr>
                   ))
                 )}
@@ -494,12 +568,12 @@ function AdminVisitorsPage() {
                 <tr>
                   <th>Visitor</th>
                   <th>Status</th>
+                  <th>Intent</th>
                   <th>Sessions</th>
                   <th>Pageviews</th>
                   <th>First Seen</th>
                   <th>Last Seen</th>
                   <th>Source</th>
-                  <th>Device</th>
                 </tr>
               </thead>
               <tbody>
@@ -518,12 +592,12 @@ function AdminVisitorsPage() {
                     >
                       <td>{renderVisitorCell(v)}</td>
                       <td>{renderStatusBadge(v)}</td>
+                      <td><IntentBadge score={getIntentScore(v)} level={getIntentLevel(v)} /></td>
                       <td>{v.total_sessions ?? 0}</td>
                       <td>{v.total_pageviews ?? 0}</td>
                       <td className="text-nowrap small">{formatDate(v.first_seen_at)}</td>
                       <td className="text-nowrap small">{formatRelative(v.last_seen_at)}</td>
                       <td className="small">{v.utm_source || v.referrer_domain || 'Direct'}</td>
-                      <td><DeviceIcon type={v.device_type} /></td>
                     </tr>
                   ))
                 )}
@@ -651,6 +725,86 @@ function AdminVisitorsPage() {
         </div>
       </div>
     </>
+  );
+
+  const renderHighIntentTab = () => (
+    <div className="card border-0 shadow-sm">
+      <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+        <span>High Intent Visitors ({highIntentVisitors.length})</span>
+        <span className="text-muted small">Score 20+ (decayed over 7-day half-life)</span>
+      </div>
+      <div className="card-body p-0">
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Visitor</th>
+                <th>Intent Score</th>
+                <th>Intent Level</th>
+                <th>Signals</th>
+                <th>Last Signal</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {highIntentVisitors.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted py-4">
+                    No high-intent visitors detected yet. Signals accumulate as visitors browse.
+                  </td>
+                </tr>
+              ) : (
+                highIntentVisitors.map((item: any) => {
+                  const visitor = item.visitor;
+                  const lead = visitor?.lead;
+                  return (
+                    <tr
+                      key={item.id}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => visitor && fetchVisitorDetail({
+                        id: visitor.id,
+                        fingerprint: visitor.fingerprint,
+                        lead_id: lead?.id,
+                        lead_name: lead?.name,
+                        total_sessions: 0,
+                        total_pageviews: 0,
+                        first_seen_at: '',
+                        last_seen_at: visitor.last_seen_at || '',
+                      })}
+                    >
+                      <td>
+                        <span className="fw-medium">{lead?.name || 'Anonymous'}</span>
+                        {!lead && visitor?.fingerprint && (
+                          <span className="ms-1 text-muted" style={{ fontSize: '0.75rem' }}>
+                            {visitor.fingerprint.slice(0, 8)}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="fw-bold" style={{ fontSize: '1.1rem' }}>{item.score}</span>
+                        <span className="text-muted small">/100</span>
+                      </td>
+                      <td><IntentBadge score={item.score} level={item.intent_level} /></td>
+                      <td>{item.signals_count}</td>
+                      <td className="text-nowrap small">
+                        {item.last_signal_at ? formatRelative(item.last_signal_at) : '-'}
+                      </td>
+                      <td>
+                        {lead ? (
+                          <span className="badge bg-success">Known</span>
+                        ) : (
+                          <span className="badge bg-secondary">Anonymous</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 
   const renderSessionsTab = () => (
@@ -796,6 +950,80 @@ function AdminVisitorsPage() {
                   </div>
                 </div>
 
+                {/* Intent Score + Signals */}
+                {(visitorIntentScore || visitorSignals.length > 0) && (
+                  <div className="mb-4">
+                    <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>
+                      Behavioral Intelligence
+                    </h6>
+                    {visitorIntentScore && (
+                      <div className="d-flex align-items-center gap-3 mb-3">
+                        <div>
+                          <span className="text-muted small">Intent Score</span>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="h4 fw-bold mb-0">{visitorIntentScore.score ?? 0}</span>
+                            <span className="text-muted">/100</span>
+                            <IntentBadge score={visitorIntentScore.score} level={visitorIntentScore.intent_level} />
+                          </div>
+                        </div>
+                        <div className="ms-4">
+                          <span className="text-muted small">Signals</span>
+                          <div className="fw-medium">{visitorIntentScore.signals_count ?? 0}</div>
+                        </div>
+                      </div>
+                    )}
+                    {visitorSignals.length > 0 && (
+                      <div className="table-responsive">
+                        <table className="table table-sm mb-0" style={{ fontSize: '0.8rem' }}>
+                          <thead className="table-light">
+                            <tr>
+                              <th>Signal</th>
+                              <th>Strength</th>
+                              <th>Detected</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visitorSignals.map((sig) => (
+                              <tr key={sig.id}>
+                                <td>
+                                  <span className="fw-medium">{sig.signal_type.replace(/_/g, ' ')}</span>
+                                </td>
+                                <td>
+                                  <div className="d-flex align-items-center gap-1">
+                                    <div
+                                      style={{
+                                        width: 40,
+                                        height: 6,
+                                        background: '#e2e8f0',
+                                        borderRadius: 3,
+                                        overflow: 'hidden',
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          width: `${Math.min(sig.signal_strength, 100)}%`,
+                                          height: '100%',
+                                          background:
+                                            sig.signal_strength >= 40 ? '#e53e3e' :
+                                            sig.signal_strength >= 25 ? '#dd6b20' :
+                                            '#38a169',
+                                          borderRadius: 3,
+                                        }}
+                                      />
+                                    </div>
+                                    <span className="text-muted">{sig.signal_strength}</span>
+                                  </div>
+                                </td>
+                                <td className="text-muted text-nowrap">{formatRelative(sig.detected_at)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Sessions list */}
                 <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>
                   Sessions ({visitorSessions.length})
@@ -903,6 +1131,7 @@ function AdminVisitorsPage() {
           {([
             { key: 'live' as TabKey, label: 'Live Visitors' },
             { key: 'all' as TabKey, label: 'All Visitors' },
+            { key: 'high_intent' as TabKey, label: 'High Intent' },
             { key: 'analytics' as TabKey, label: 'Analytics' },
             { key: 'sessions' as TabKey, label: 'Sessions' },
           ]).map((tab) => (
@@ -925,6 +1154,7 @@ function AdminVisitorsPage() {
       {/* Tab content */}
       {activeTab === 'live' && renderLiveTab()}
       {activeTab === 'all' && renderAllTab()}
+      {activeTab === 'high_intent' && renderHighIntentTab()}
       {activeTab === 'analytics' && renderAnalyticsTab()}
       {activeTab === 'sessions' && renderSessionsTab()}
 

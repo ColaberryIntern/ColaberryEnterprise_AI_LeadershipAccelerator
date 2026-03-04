@@ -19,6 +19,8 @@ import StrategyCallIntelligence from './StrategyCallIntelligence';
 import Visitor from './Visitor';
 import VisitorSession from './VisitorSession';
 import PageEvent from './PageEvent';
+import BehavioralSignal from './BehavioralSignal';
+import IntentScore from './IntentScore';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -99,6 +101,23 @@ PageEvent.belongsTo(VisitorSession, { foreignKey: 'session_id', as: 'session' })
 
 PageEvent.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
 
+// Behavioral Signal associations
+Visitor.hasMany(BehavioralSignal, { foreignKey: 'visitor_id', as: 'signals' });
+BehavioralSignal.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+
+BehavioralSignal.belongsTo(VisitorSession, { foreignKey: 'session_id', as: 'session' });
+VisitorSession.hasMany(BehavioralSignal, { foreignKey: 'session_id', as: 'signals' });
+
+BehavioralSignal.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(BehavioralSignal, { foreignKey: 'lead_id', as: 'behavioralSignals' });
+
+// Intent Score associations
+Visitor.hasOne(IntentScore, { foreignKey: 'visitor_id', as: 'intentScore' });
+IntentScore.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+
+IntentScore.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasOne(IntentScore, { foreignKey: 'lead_id', as: 'intentScore' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -106,4 +125,5 @@ export {
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
   StrategyCall, StrategyCallIntelligence,
   Visitor, VisitorSession, PageEvent,
+  BehavioralSignal, IntentScore,
 };

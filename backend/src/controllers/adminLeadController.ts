@@ -67,14 +67,23 @@ export async function handleAdminGetLead(
     let visitorData = null;
     if (result.lead.visitor_id) {
       try {
-        const { Visitor, VisitorSession } = require('../models');
+        const { Visitor, VisitorSession, IntentScore, BehavioralSignal } = require('../models');
         const visitor = await Visitor.findByPk(result.lead.visitor_id);
         if (visitor) {
-          const recentSessions = await VisitorSession.findAll({
-            where: { visitor_id: visitor.id },
-            order: [['started_at', 'DESC']],
-            limit: 10,
-          });
+          const [recentSessions, intentScore, recentSignals] = await Promise.all([
+            VisitorSession.findAll({
+              where: { visitor_id: visitor.id },
+              order: [['started_at', 'DESC']],
+              limit: 10,
+            }),
+            IntentScore.findOne({ where: { visitor_id: visitor.id } }),
+            BehavioralSignal.findAll({
+              where: { visitor_id: visitor.id },
+              order: [['detected_at', 'DESC']],
+              limit: 15,
+              attributes: ['id', 'signal_type', 'signal_strength', 'detected_at'],
+            }),
+          ]);
           visitorData = {
             id: visitor.id,
             total_sessions: visitor.total_sessions,
@@ -86,6 +95,9 @@ export async function handleAdminGetLead(
             country: visitor.country,
             referrer_domain: visitor.referrer_domain,
             recent_sessions: recentSessions,
+            intent_score: intentScore?.score ?? null,
+            intent_level: intentScore?.intent_level ?? null,
+            signals: recentSignals,
           };
         }
       } catch (err) {
