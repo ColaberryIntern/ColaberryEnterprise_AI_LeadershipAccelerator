@@ -121,7 +121,7 @@ export async function handleBookCall(
         to: data.email,
         name: data.name,
         scheduledAt: new Date(booking.startTime),
-        timezone: data.timezone,
+        timezone: 'America/Chicago',
         meetLink: booking.meetLink,
         prepToken: call.prep_token,
       });

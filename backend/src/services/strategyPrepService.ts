@@ -116,10 +116,20 @@ export async function enrollInPrepNudge(
 
     const actions = await enrollLeadInSequence(leadId, sequence.id, campaign?.id);
 
+    // Pre-format time in Central Time for AI-generated emails
+    const cstTime = scheduledAt
+      ? new Intl.DateTimeFormat('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit',
+          timeZone: 'America/Chicago', timeZoneName: 'short',
+        }).format(scheduledAt)
+      : '';
+
     const meetingContext = [
       `IMPORTANT: Include this preparation form link prominently in the message: ${prepLink}`,
       meetLink ? `Meeting link (Google Meet): ${meetLink}` : '',
-      scheduledAt ? `Scheduled call time: ${scheduledAt.toISOString()}` : '',
+      cstTime ? `Scheduled call time: ${cstTime}` : '',
+      'IMPORTANT: Always display times in Central Time (CT). Never use UTC.',
     ].filter(Boolean).join('\n');
 
     const now = new Date();

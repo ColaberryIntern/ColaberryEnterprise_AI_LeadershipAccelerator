@@ -194,37 +194,47 @@ function buildCalendarDescription(
   intel: StrategyCallIntelligence,
   synthesis: SynthesisResult
 ): string {
+  const SEP = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
   const lines: string[] = [
-    `Strategy call with ${call.name}`,
-    call.company ? `Company: ${call.company}` : '',
-    `Email: ${call.email}`,
-    call.phone ? `Phone: ${call.phone}` : '',
-    call.meet_link ? `Meet: ${call.meet_link}` : '',
+    'EXECUTIVE AI STRATEGY CALL',
+    SEP,
     '',
-    '── Prep Intelligence ──',
-    intel.ai_maturity_level ? `AI Maturity: ${intel.ai_maturity_level}` : '',
-    intel.team_size ? `Team Size: ${intel.team_size}` : '',
-    intel.timeline_urgency ? `Timeline: ${intel.timeline_urgency}` : '',
-    intel.budget_range ? `Budget: ${intel.budget_range}` : '',
-    intel.primary_challenges?.length ? `Challenges: ${intel.primary_challenges.join(', ')}` : '',
-    intel.current_tools?.length ? `Tools in Use: ${intel.current_tools.join(', ')}` : '',
-    intel.priority_use_case ? `Priority Use Case: ${intel.priority_use_case}` : '',
-    intel.evaluating_consultants ? 'Evaluating Consultants: Yes' : '',
-    intel.previous_ai_investment ? `Previous AI Investment: ${intel.previous_ai_investment}` : '',
-    '',
-    '── AI Synthesis ──',
-    synthesis.executive_summary || '',
-    synthesis.recommended_focus?.length ? `Recommended Focus: ${synthesis.recommended_focus.join(', ')}` : '',
-    synthesis.confidence_score ? `Confidence: ${synthesis.confidence_score}%` : '',
-    synthesis.suggested_approach ? `Approach: ${synthesis.suggested_approach}` : '',
-    synthesis.red_flags?.length ? `Red Flags: ${synthesis.red_flags.join(', ')}` : '',
+    `Name: ${call.name}`,
   ];
+  if (call.company) lines.push(`Company: ${call.company}`);
+  lines.push(`Email: ${call.email}`);
+  if (call.phone) lines.push(`Phone: ${call.phone}`);
+  if (call.meet_link) lines.push(`Meet: ${call.meet_link}`);
 
-  if (intel.specific_questions) {
-    lines.push('', '── Questions from Executive ──', intel.specific_questions);
+  // Prep Intelligence
+  const prepLines: string[] = [];
+  if (intel.ai_maturity_level) prepLines.push(`\u2022 AI Maturity: ${intel.ai_maturity_level}`);
+  if (intel.team_size) prepLines.push(`\u2022 Team Size: ${intel.team_size}`);
+  if (intel.timeline_urgency) prepLines.push(`\u2022 Timeline: ${intel.timeline_urgency}`);
+  if (intel.budget_range) prepLines.push(`\u2022 Budget: ${intel.budget_range}`);
+  if (intel.primary_challenges?.length) prepLines.push(`\u2022 Challenges: ${intel.primary_challenges.join(', ')}`);
+  if (intel.current_tools?.length) prepLines.push(`\u2022 Tools in Use: ${intel.current_tools.join(', ')}`);
+  if (intel.priority_use_case) prepLines.push(`\u2022 Priority Use Case: ${intel.priority_use_case}`);
+  if (intel.evaluating_consultants) prepLines.push('\u2022 Evaluating Consultants: Yes');
+  if (intel.previous_ai_investment) prepLines.push(`\u2022 Previous AI Investment: ${intel.previous_ai_investment}`);
+
+  if (prepLines.length > 0) {
+    lines.push('', '', 'PREP INTELLIGENCE', SEP, '', ...prepLines);
   }
 
-  lines.push('', 'Booked via Colaberry Enterprise AI Leadership Accelerator website.');
+  // AI Synthesis
+  const confLabel = synthesis.confidence_score ? ` (${synthesis.confidence_score}% confidence)` : '';
+  lines.push('', '', `AI SYNTHESIS${confLabel}`, SEP, '');
+  if (synthesis.executive_summary) lines.push(synthesis.executive_summary, '');
+  if (synthesis.recommended_focus?.length) lines.push(`\u2022 Focus: ${synthesis.recommended_focus.join(', ')}`);
+  if (synthesis.suggested_approach) lines.push(`\u2022 Approach: ${synthesis.suggested_approach}`);
+  if (synthesis.red_flags?.length) lines.push(`\u2022 Red Flags: ${synthesis.red_flags.join(', ')}`);
 
-  return lines.filter(Boolean).join('\n');
+  if (intel.specific_questions) {
+    lines.push('', '', 'QUESTIONS FROM EXECUTIVE', SEP, '', intel.specific_questions);
+  }
+
+  lines.push('', '\u2500\u2500\u2500', 'Booked via Colaberry Enterprise AI Leadership Accelerator');
+
+  return lines.join('\n');
 }

@@ -47,6 +47,7 @@ function getAuthClient() {
     email: env.googleServiceAccountEmail,
     key: env.googlePrivateKey,
     scopes: ['https://www.googleapis.com/auth/calendar'],
+    subject: env.googleCalendarOwnerEmail || undefined,
   });
 }
 
