@@ -213,6 +213,7 @@ export async function syncLeadToGhl(
 
     // Search by email
     let contactId: string | null = null;
+    let isNewContact = false;
     const existing = await findContactByEmail(effectiveEmail);
     if (existing) {
       contactId = existing.id;
@@ -243,22 +244,28 @@ export async function syncLeadToGhl(
         return { contactId: null, isTestMode, error: createResult.error };
       }
       contactId = createResult.contactId || null;
+      isNewContact = !!contactId;
     }
 
     if (contactId) {
-      await addContactNote(
-        contactId,
-        `${notePrefix}📋 Lead Synced from Colaberry Accelerator\n` +
-        `👤 ${lead.name} | ${lead.company || 'N/A'}\n` +
-        `📧 ${effectiveEmail}\n` +
-        `🏷️ Interest Group: ${interestGroup}\n` +
-        `📊 Lead Score: ${lead.lead_score || 0} | Stage: ${lead.pipeline_stage || 'new_lead'}`
-      );
+      // Only add note for newly created contacts — don't cross-contaminate existing ones
+      if (isNewContact) {
+        await addContactNote(
+          contactId,
+          `${notePrefix}📋 Lead Synced from Colaberry Accelerator\n` +
+          `👤 ${lead.name} | ${lead.company || 'N/A'}\n` +
+          `📧 ${effectiveEmail}\n` +
+          `🏷️ Interest Group: ${interestGroup}\n` +
+          `📊 Lead Score: ${lead.lead_score || 0} | Stage: ${lead.pipeline_stage || 'new_lead'}`
+        );
+      }
 
       await logActivity({
         lead_id: lead.id,
         type: 'system',
-        subject: isTestMode ? 'GHL Test Sync' : 'GHL Contact Synced',
+        subject: isNewContact
+          ? (isTestMode ? 'GHL Test Sync' : 'GHL Contact Created')
+          : 'GHL Linked to Existing Contact',
         metadata: {
           action: 'ghl_sync',
           status: 'success',
@@ -266,10 +273,11 @@ export async function syncLeadToGhl(
           interest_group: interestGroup,
           email: effectiveEmail,
           test_mode: isTestMode,
+          is_new_contact: isNewContact,
         },
       });
 
-      console.log(`[GHL] Lead ${lead.id} synced as contact ${contactId} (group: ${interestGroup}${isTestMode ? ', TEST MODE' : ''})`);
+      console.log(`[GHL] Lead ${lead.id} ${isNewContact ? 'created' : 'linked'} as contact ${contactId} (group: ${interestGroup}${isTestMode ? ', TEST MODE' : ''})`);
     }
 
     return { contactId, isTestMode };
