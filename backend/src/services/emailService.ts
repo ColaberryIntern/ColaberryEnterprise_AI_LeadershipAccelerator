@@ -104,15 +104,14 @@ interface InterestEmailData {
   fullName: string;
 }
 
-export async function sendInterestEmail(data: InterestEmailData): Promise<void> {
+export async function sendInterestEmail(data: InterestEmailData): Promise<string> {
+  const html = buildInterestHtml(data);
   if (!transporter) {
     console.warn('[Email] SMTP not configured. Skipping interest email to:', data.to);
-    console.log('[Email] Would have sent interest email to:', data.to);
-    return;
+    return html;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Enterprise AI Leadership Accelerator Details');
-  const html = buildInterestHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
@@ -124,6 +123,7 @@ export async function sendInterestEmail(data: InterestEmailData): Promise<void> 
   });
 
   console.log(`[Email] Interest email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  return html;
 }
 
 interface ExecutiveOverviewEmailData {
@@ -131,14 +131,14 @@ interface ExecutiveOverviewEmailData {
   fullName: string;
 }
 
-export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailData): Promise<void> {
+export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailData): Promise<string> {
+  const html = buildExecutiveOverviewHtml(data);
   if (!transporter) {
     console.warn('[Email] SMTP not configured. Skipping executive overview email to:', data.to);
-    return;
+    return html;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Overview + ROI Framework');
-  const html = buildExecutiveOverviewHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
@@ -150,6 +150,7 @@ export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailDat
   });
 
   console.log(`[Email] Executive overview email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  return html;
 }
 
 interface HighIntentAlertData {

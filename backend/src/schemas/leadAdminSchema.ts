@@ -16,7 +16,7 @@ export const leadFilterSchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
   sort: z.enum(['created_at', 'updated_at', 'name', 'email', 'status', 'lead_score']).optional(),
   order: z.enum(['ASC', 'DESC']).optional(),
 });

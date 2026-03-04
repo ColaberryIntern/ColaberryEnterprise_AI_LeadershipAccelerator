@@ -1,9 +1,10 @@
 import { env } from '../config/env';
-import { AutomationLog, FollowUpSequence, Campaign } from '../models';
+import { AutomationLog, FollowUpSequence, Campaign, ScheduledEmail } from '../models';
 import { triggerVoiceCall } from './synthflowService';
 import { sendEnrollmentConfirmation, sendInterestEmail, sendExecutiveOverviewEmail, sendHighIntentAlert } from './emailService';
 import { enrollLeadInSequence } from './sequenceService';
 import { advancePipelineStage } from './pipelineService';
+import { recordOutcome } from './interactionService';
 
 interface LogParams {
   type: 'email' | 'voice_call' | 'alert';
@@ -118,12 +119,13 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
   const isOverviewForm = lead.form_type === 'executive_overview_download';
 
   // Email — route by form_type
+  let initialEmailHtml = '';
   if (env.enableAutoEmail) {
     try {
       if (isOverviewForm) {
-        await sendExecutiveOverviewEmail({ to: lead.email, fullName: lead.name });
+        initialEmailHtml = await sendExecutiveOverviewEmail({ to: lead.email, fullName: lead.name });
       } else {
-        await sendInterestEmail({ to: lead.email, fullName: lead.name });
+        initialEmailHtml = await sendInterestEmail({ to: lead.email, fullName: lead.name });
       }
       await logAutomation({
         type: 'email',
@@ -135,6 +137,14 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
       advancePipelineStage(lead.id, 'contacted', 'initial_email_sent').catch((err) =>
         console.error('[Automation] Pipeline advance failed:', err.message)
       );
+      // Record sent outcome for temperature classification
+      recordOutcome({
+        lead_id: lead.id,
+        channel: 'email',
+        step_index: 0,
+        outcome: 'sent',
+        metadata: { form_type: lead.form_type, day0: true },
+      }).catch((err) => console.error('[Automation] sent outcome failed:', err.message));
     } catch (error: any) {
       console.error('[Automation] Lead email failed:', error.message);
       await logAutomation({
@@ -228,8 +238,20 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
         const associatedCampaign = await Campaign.findOne({
           where: { sequence_id: targetSequence.id, status: 'active' },
         });
-        await enrollLeadInSequence(lead.id, targetSequence.id, associatedCampaign?.id);
+        const actions = await enrollLeadInSequence(lead.id, targetSequence.id, associatedCampaign?.id);
         console.log(`[Automation] Lead enrolled in ${sequenceName}:`, lead.email);
+
+        // Mark Step 0 (Day 0 initial email) as sent with captured HTML
+        const step0 = actions.find((a: any) => a.step_index === 0);
+        if (step0 && initialEmailHtml) {
+          await step0.update({
+            status: 'sent',
+            sent_at: new Date(),
+            attempts_made: 1,
+            body: initialEmailHtml,
+          } as any);
+          console.log(`[Automation] Marked Step 0 as sent for lead ${lead.id}`);
+        }
       }
     } catch (error: any) {
       console.error('[Automation] Sequence enrollment failed:', error.message);
