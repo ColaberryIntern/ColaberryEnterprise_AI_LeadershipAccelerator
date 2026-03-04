@@ -224,7 +224,7 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
                 <p className="text-muted small">No communication recorded yet.</p>
               ) : (() => {
                 const sentEntries = timeline.filter(e => e.status !== 'pending');
-                const upcomingEntries = timeline.filter(e => e.status === 'pending');
+                const upcomingEntries = timeline.filter(e => e.status === 'pending').reverse();
                 const futureTime = (d: string | null | undefined) => {
                   if (!d) return '—';
                   const diff = new Date(d).getTime() - Date.now();
