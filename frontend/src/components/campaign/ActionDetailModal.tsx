@@ -13,6 +13,7 @@ interface ActionEntry {
   to_phone?: string | null;
   scheduled_for?: string | null;
   ai_generated?: boolean;
+  ai_instructions?: string | null;
   metadata?: Record<string, any> | null;
 }
 
@@ -52,6 +53,7 @@ export default function ActionDetailModal({ action, totalSteps, onClose }: Props
   const isPending = action.status === 'pending';
   const isEmail = action.channel === 'email';
   const isSms = action.channel === 'sms';
+  const meta = action.metadata || {};
 
   return (
     <Modal
@@ -136,9 +138,39 @@ export default function ActionDetailModal({ action, totalSteps, onClose }: Props
           </div>
         )
       ) : isPending ? (
-        <div className="text-center py-4 text-muted small">
-          <i className="bi bi-clock-history fs-3 d-block mb-2" />
-          Content will be AI-generated at send time.
+        <div className="py-3">
+          {/* Step Goal */}
+          {meta.step_goal && (
+            <div className="mb-3">
+              <div className="small fw-medium text-muted mb-1">Goal</div>
+              <div className="small">{meta.step_goal}</div>
+            </div>
+          )}
+
+          {/* AI Tone */}
+          {meta.ai_tone && (
+            <div className="mb-3">
+              <div className="small fw-medium text-muted mb-1">Tone</div>
+              <span className="badge bg-primary bg-opacity-10 text-primary">{meta.ai_tone}</span>
+            </div>
+          )}
+
+          {/* AI Instructions / Prompt */}
+          {action.ai_instructions ? (
+            <div className="mb-3">
+              <div className="small fw-medium text-muted mb-1">AI Prompt</div>
+              <div className="border rounded p-3 bg-light">
+                <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                  {action.ai_instructions}
+                </pre>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-3 text-muted small">
+              <i className="bi bi-clock-history fs-3 d-block mb-2" />
+              Content will be AI-generated at send time.
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-center py-4 text-muted small">

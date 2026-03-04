@@ -8,6 +8,7 @@ import Lead from '../models/Lead';
 import { sendStrategyCallConfirmation } from '../services/emailService';
 import { enrollInPrepNudge } from '../services/strategyPrepService';
 import { advancePipelineStage } from '../services/pipelineService';
+import { recordOutcome } from '../services/interactionService';
 
 export async function handleGetAvailability(
   req: Request,
@@ -100,6 +101,15 @@ export async function handleBookCall(
 
       leadId = lead.id;
       await call.update({ lead_id: leadId });
+
+      // Record booked_meeting interaction for temperature classification (40 pts → warm)
+      recordOutcome({
+        lead_id: leadId,
+        channel: 'email',
+        step_index: 0,
+        outcome: 'booked_meeting',
+        metadata: { strategy_call_id: call.id, scheduled_at: booking.startTime },
+      }).catch((err) => console.error('[Calendar] booked_meeting outcome failed:', err));
     } catch (err) {
       console.error('[Calendar] Lead find-or-create failed (non-blocking):', err);
     }

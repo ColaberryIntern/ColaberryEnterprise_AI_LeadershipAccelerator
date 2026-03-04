@@ -522,12 +522,26 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
     raw: true,
   });
 
+  // Look up sequence steps for ai_instructions (for pending actions)
+  let sequenceSteps: any[] = [];
+  if (campaign.sequence_id) {
+    const sequence = await FollowUpSequence.findByPk(campaign.sequence_id);
+    if (sequence) sequenceSteps = sequence.steps || [];
+  }
+
   // Merge into a unified timeline
   const timeline: any[] = [];
 
   for (const action of actions) {
     // Skip cancelled actions; include both sent and pending (upcoming)
     if (action.status === 'cancelled') continue;
+
+    // Attach ai_instructions from sequence step for pending actions
+    let ai_instructions: string | null = null;
+    if (action.status === 'pending' && action.step_index !== undefined && sequenceSteps[action.step_index]) {
+      ai_instructions = sequenceSteps[action.step_index].ai_instructions || null;
+    }
+
     timeline.push({
       type: 'action',
       timestamp: action.sent_at || action.scheduled_for,
@@ -541,6 +555,7 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
       scheduled_for: action.scheduled_for,
       ai_generated: action.ai_generated,
       metadata: action.metadata || null,
+      ai_instructions,
       id: action.id,
     });
   }
