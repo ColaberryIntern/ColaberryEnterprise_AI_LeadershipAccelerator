@@ -31,18 +31,25 @@ export default function ActionDetailModal({ action, totalSteps, onClose }: Props
     });
   };
 
-  const relTime = (d: string | null | undefined) => {
+  const countdown = (d: string | null | undefined) => {
     if (!d) return null;
-    const diff = Date.now() - new Date(d).getTime();
+    const diff = new Date(d).getTime() - Date.now();
+    if (diff < 0) {
+      const absDiff = Math.abs(diff);
+      const mins = Math.floor(absDiff / 60000);
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.floor(hrs / 24)}d ago`;
+    }
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
+    if (mins < 60) return `in ${mins}m`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
+    if (hrs < 24) return `in ${hrs}h ${mins % 60}m`;
+    return `in ${Math.floor(hrs / 24)}d ${hrs % 24}h`;
   };
 
+  const isPending = action.status === 'pending';
   const isEmail = action.channel === 'email';
   const isSms = action.channel === 'sms';
 
@@ -54,7 +61,7 @@ export default function ActionDetailModal({ action, totalSteps, onClose }: Props
       size="lg"
       footer={<button className="btn btn-secondary btn-sm" onClick={onClose}>Close</button>}
     >
-      {/* Delivery Info */}
+      {/* Meta Info */}
       <div className="d-flex flex-wrap gap-3 mb-3 pb-3 border-bottom">
         <div>
           <span className="text-muted small d-block">Channel</span>
@@ -63,9 +70,13 @@ export default function ActionDetailModal({ action, totalSteps, onClose }: Props
           </span>
         </div>
         <div>
-          <span className="text-muted small d-block">Delivery</span>
-          <span className={`badge bg-${action.status === 'sent' ? 'success' : action.status === 'failed' ? 'danger' : 'secondary'}`}>
-            {action.status === 'sent' ? 'Delivered' : action.status}
+          <span className="text-muted small d-block">Status</span>
+          <span className={`badge bg-${
+            isPending ? 'warning' :
+            action.status === 'sent' ? 'success' :
+            action.status === 'failed' ? 'danger' : 'secondary'
+          }`}>
+            {isPending ? 'Scheduled' : action.status === 'sent' ? 'Delivered' : action.status}
           </span>
         </div>
         {action.ai_generated && (
@@ -88,19 +99,23 @@ export default function ActionDetailModal({ action, totalSteps, onClose }: Props
             <span className="small fw-medium">{action.to_email || action.to_phone}</span>
           </div>
         )}
-        <div>
-          <span className="text-muted small d-block">Sent</span>
-          <span className="small fw-medium">
-            {fmtDateTime(action.timestamp)}
-            {relTime(action.timestamp) && (
-              <span className="text-muted ms-1">({relTime(action.timestamp)})</span>
-            )}
-          </span>
-        </div>
-        {action.scheduled_for && action.scheduled_for !== action.timestamp && (
+        {isPending ? (
           <div>
             <span className="text-muted small d-block">Scheduled For</span>
-            <span className="small fw-medium">{fmtDateTime(action.scheduled_for)}</span>
+            <span className="small fw-medium">
+              {fmtDateTime(action.scheduled_for || action.timestamp)}
+            </span>
+            <span className="text-success small ms-1">
+              {countdown(action.scheduled_for || action.timestamp)}
+            </span>
+          </div>
+        ) : (
+          <div>
+            <span className="text-muted small d-block">Sent</span>
+            <span className="small fw-medium">
+              {fmtDateTime(action.timestamp)}
+              <span className="text-muted ms-1">({countdown(action.timestamp)})</span>
+            </span>
           </div>
         )}
       </div>
@@ -120,6 +135,11 @@ export default function ActionDetailModal({ action, totalSteps, onClose }: Props
             </pre>
           </div>
         )
+      ) : isPending ? (
+        <div className="text-center py-4 text-muted small">
+          <i className="bi bi-clock-history fs-3 d-block mb-2" />
+          Content will be AI-generated at send time.
+        </div>
       ) : (
         <div className="text-center py-4 text-muted small">
           <i className="bi bi-envelope-x fs-3 d-block mb-2" />

@@ -99,6 +99,7 @@ export async function enrollInPrepNudge(
   prepToken: string,
   meetLink?: string,
   scheduledAt?: Date,
+  confirmationHtml?: string,
 ): Promise<void> {
   const result = await findSequenceAndCampaign(PREP_NUDGE_SEQUENCE_NAME);
   if (!result) {
@@ -163,6 +164,7 @@ export async function enrollInPrepNudge(
         status: 'sent',
         sent_at: new Date(),
         attempts_made: 1,
+        ...(confirmationHtml ? { body: confirmationHtml } : {}),
       } as any);
     }
 

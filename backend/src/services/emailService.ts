@@ -194,14 +194,15 @@ interface StrategyCallConfirmationData {
   prepToken?: string;
 }
 
-export async function sendStrategyCallConfirmation(data: StrategyCallConfirmationData): Promise<void> {
+export async function sendStrategyCallConfirmation(data: StrategyCallConfirmationData): Promise<string> {
+  const html = buildStrategyCallConfirmationHtml(data);
+
   if (!transporter) {
     console.warn('[Email] SMTP not configured. Skipping strategy call confirmation to:', data.to);
-    return;
+    return html;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Strategy Call is Confirmed');
-  const html = buildStrategyCallConfirmationHtml(data);
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
@@ -213,6 +214,7 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
   });
 
   console.log(`[Email] Strategy call confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  return html;
 }
 
 function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmationData): string {

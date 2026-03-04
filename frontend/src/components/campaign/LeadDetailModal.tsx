@@ -222,35 +222,56 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
               <h6 className="fw-semibold mb-3">Communication Timeline</h6>
               {timeline.length === 0 ? (
                 <p className="text-muted small">No communication recorded yet.</p>
-              ) : (
-                <div className="border rounded mb-4" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                  {timeline.map((entry, i) => (
-                    <div
-                      key={i}
-                      className="d-flex align-items-start gap-3 p-2 border-bottom"
-                      style={entry.type === 'action' ? { cursor: 'pointer' } : undefined}
-                      onClick={() => entry.type === 'action' && setSelectedAction(entry)}
-                    >
-                      <div className="text-center" style={{ minWidth: 36 }}>
-                        <i className={`bi ${CHANNEL_ICONS[entry.channel || ''] || 'bi-circle'} fs-5 text-muted`} />
-                      </div>
-                      <div className="flex-grow-1">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div>
-                            <span className="fw-medium small">
-                              {entry.type === 'action' ? entry.subject || entry.action || 'Action' :
-                               entry.type === 'outcome' ? `${(entry.outcome || '').replace(/_/g, ' ')}` :
-                               entry.description || 'Activity'}
-                            </span>
-                            {entry.ai_generated && (
-                              <span className="badge bg-primary bg-opacity-10 text-primary ms-2" style={{ fontSize: '0.65rem' }}>AI</span>
-                            )}
-                          </div>
-                          <span className="text-muted" style={{ fontSize: '0.7rem' }}>
-                            {relTime(entry.timestamp)}
+              ) : (() => {
+                const sentEntries = timeline.filter(e => e.status !== 'pending');
+                const upcomingEntries = timeline.filter(e => e.status === 'pending');
+                const futureTime = (d: string | null | undefined) => {
+                  if (!d) return '—';
+                  const diff = new Date(d).getTime() - Date.now();
+                  if (diff < 0) return relTime(d);
+                  const mins = Math.floor(diff / 60000);
+                  if (mins < 60) return `in ${mins}m`;
+                  const hrs = Math.floor(mins / 60);
+                  if (hrs < 24) return `in ${hrs}h ${mins % 60}m`;
+                  const days = Math.floor(hrs / 24);
+                  return `in ${days}d ${hrs % 24}h`;
+                };
+
+                const renderEntry = (entry: TimelineEntry, i: number, isPending: boolean) => (
+                  <div
+                    key={`${isPending ? 'p' : 's'}-${i}`}
+                    className="d-flex align-items-start gap-3 p-2 border-bottom"
+                    style={{
+                      cursor: entry.type === 'action' ? 'pointer' : undefined,
+                      opacity: isPending ? 0.65 : 1,
+                    }}
+                    onClick={() => entry.type === 'action' && setSelectedAction(entry)}
+                  >
+                    <div className="text-center" style={{ minWidth: 36 }}>
+                      <i className={`bi ${CHANNEL_ICONS[entry.channel || ''] || 'bi-circle'} fs-5 ${isPending ? 'text-muted' : 'text-muted'}`} />
+                    </div>
+                    <div className="flex-grow-1">
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <span className={`${isPending ? '' : 'fw-medium'} small`}>
+                            {entry.type === 'action' ? entry.subject || entry.action || 'Action' :
+                             entry.type === 'outcome' ? `${(entry.outcome || '').replace(/_/g, ' ')}` :
+                             entry.description || 'Activity'}
                           </span>
+                          {entry.ai_generated && (
+                            <span className="badge bg-primary bg-opacity-10 text-primary ms-2" style={{ fontSize: '0.65rem' }}>AI</span>
+                          )}
                         </div>
-                        <div className="d-flex gap-2 mt-1">
+                        <span className={isPending ? 'text-success' : 'text-muted'} style={{ fontSize: '0.7rem' }}>
+                          {isPending ? futureTime(entry.timestamp) : relTime(entry.timestamp)}
+                        </span>
+                      </div>
+                      <div className="d-flex gap-2 mt-1">
+                        {isPending ? (
+                          <span className="badge bg-warning bg-opacity-10 text-warning" style={{ fontSize: '0.65rem' }}>
+                            scheduled
+                          </span>
+                        ) : (
                           <span className={`badge bg-${
                             entry.type === 'outcome' ? 'info' :
                             entry.type === 'action' ? 'primary' : 'secondary'
@@ -258,20 +279,33 @@ export default function LeadDetailModal({ campaignId, leadId, leadName, headers,
                             entry.type === 'outcome' ? 'info' :
                             entry.type === 'action' ? 'primary' : 'secondary'
                           }`} style={{ fontSize: '0.65rem' }}>
-                            {entry.type}
+                            {entry.status === 'sent' ? 'sent' : entry.type}
                           </span>
-                          {entry.channel && (
-                            <span className="text-muted" style={{ fontSize: '0.7rem' }}>{entry.channel}</span>
-                          )}
-                          {entry.status && (
-                            <span className="text-muted" style={{ fontSize: '0.7rem' }}>{entry.status}</span>
-                          )}
-                        </div>
+                        )}
+                        {entry.channel && (
+                          <span className={`badge bg-${entry.channel === 'email' ? 'info' : entry.channel === 'sms' ? 'warning' : 'secondary'} bg-opacity-10 text-${entry.channel === 'email' ? 'info' : entry.channel === 'sms' ? 'warning' : 'secondary'}`} style={{ fontSize: '0.65rem' }}>
+                            {entry.channel}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                );
+
+                return (
+                  <div className="border rounded mb-4" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                    {sentEntries.map((entry, i) => renderEntry(entry, i, false))}
+                    {upcomingEntries.length > 0 && (
+                      <>
+                        <div className="px-3 py-1 bg-light border-bottom">
+                          <span className="text-muted small fw-medium">Upcoming</span>
+                        </div>
+                        {upcomingEntries.map((entry, i) => renderEntry(entry, i, true))}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Temperature History */}
               <h6 className="fw-semibold mb-3">Temperature History</h6>

@@ -526,8 +526,8 @@ export async function getLeadCampaignTimeline(campaignId: string, leadId: number
   const timeline: any[] = [];
 
   for (const action of actions) {
-    // Only show actions that actually happened (skip cancelled/pending)
-    if (action.status === 'cancelled' || action.status === 'pending') continue;
+    // Skip cancelled actions; include both sent and pending (upcoming)
+    if (action.status === 'cancelled') continue;
     timeline.push({
       type: 'action',
       timestamp: action.sent_at || action.scheduled_for,
