@@ -699,6 +699,7 @@ export async function getCampaignGhlStatus(campaignId: string) {
     lead_id: cl.lead_id,
     name: cl.lead?.name || '',
     email: cl.lead?.email || '',
+    phone: cl.lead?.phone || '',
     ghl_contact_id: cl.lead?.ghl_contact_id || null,
     sync_status: cl.lead?.ghl_contact_id ? 'synced' : 'not_synced',
   }));

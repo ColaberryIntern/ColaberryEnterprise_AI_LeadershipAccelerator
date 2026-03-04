@@ -15,6 +15,7 @@ interface GhlLeadStatus {
   lead_id: number;
   name: string;
   email: string;
+  phone: string;
   ghl_contact_id: string | null;
   sync_status: 'synced' | 'not_synced' | 'failed';
 }
@@ -226,6 +227,7 @@ export default function CRMTab({ campaignId, headers }: Props) {
                   <tr>
                     <th>Lead Name</th>
                     <th>Email</th>
+                    <th>Phone</th>
                     <th>GHL Status</th>
                     <th>GHL Link</th>
                     <th></th>
@@ -245,6 +247,7 @@ export default function CRMTab({ campaignId, headers }: Props) {
                         <span className="text-primary">{lead.name}</span>
                       </td>
                       <td className="small">{lead.email}</td>
+                      <td className="small">{lead.phone || '—'}</td>
                       <td>
                         <span className={`badge bg-${
                           lead.sync_status === 'synced' ? 'success' :
