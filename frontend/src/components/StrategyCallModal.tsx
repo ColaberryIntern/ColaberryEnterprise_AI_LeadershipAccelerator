@@ -36,6 +36,26 @@ function formatTime(isoStr: string, tz: string): string {
   });
 }
 
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length === 0) return '';
+  // +1 (XXX) XXX-XXXX for 11-digit starting with 1
+  if (digits.length <= 11 && digits[0] === '1') {
+    const d = digits.slice(1);
+    if (d.length <= 3) return `+1 (${d}`;
+    if (d.length <= 6) return `+1 (${d.slice(0, 3)}) ${d.slice(3)}`;
+    return `+1 (${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6, 10)}`;
+  }
+  // (XXX) XXX-XXXX for 10-digit US numbers
+  if (digits.length <= 10) {
+    if (digits.length <= 3) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  }
+  // For longer international numbers, return with + prefix
+  return `+${digits}`;
+}
+
 function formatConfirmationDate(isoStr: string, tz: string): string {
   return new Date(isoStr).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -61,7 +81,7 @@ export default function StrategyCallModal({
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [company, setCompany] = useState(initialCompany);
-  const [phone, setPhone] = useState(initialPhone);
+  const [phone, setPhone] = useState(initialPhone ? formatPhone(initialPhone) : '');
   const [formError, setFormError] = useState('');
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
 
@@ -79,7 +99,7 @@ export default function StrategyCallModal({
     setName(initialName);
     setEmail(initialEmail);
     setCompany(initialCompany);
-    setPhone(initialPhone);
+    setPhone(initialPhone ? formatPhone(initialPhone) : '');
     setFormError('');
     setBookingResult(null);
   };
@@ -296,8 +316,8 @@ export default function StrategyCallModal({
                   className="form-control"
                   id="sc-phone"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 123-4567"
+                  onChange={(e) => setPhone(formatPhone(e.target.value))}
+                  placeholder="(555) 123-4567"
                   disabled={step === 'submitting'}
                 />
               </div>

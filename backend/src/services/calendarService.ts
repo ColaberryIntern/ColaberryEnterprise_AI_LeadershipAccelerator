@@ -201,42 +201,57 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
 
   const companyLabel = data.company ? ` (${data.company})` : '';
 
-  const event = await calendar.events.insert({
-    calendarId: env.googleCalendarId,
-    conferenceDataVersion: 1,
-    requestBody: {
-      summary: `Executive AI Strategy Call — ${data.name}${companyLabel}`,
-      description: [
-        `Strategy call with ${data.name}`,
-        data.company ? `Company: ${data.company}` : '',
-        `Email: ${data.email}`,
-        data.phone ? `Phone: ${data.phone}` : '',
-        '',
-        'Booked via Colaberry Enterprise AI Leadership Accelerator website.',
-      ].filter(Boolean).join('\n'),
-      start: {
-        dateTime: startTime.toISOString(),
-        timeZone: BUSINESS_TIMEZONE,
-      },
-      end: {
-        dateTime: endTime.toISOString(),
-        timeZone: BUSINESS_TIMEZONE,
-      },
-      conferenceData: {
-        createRequest: {
-          requestId: `strategy-${Date.now()}`,
-          conferenceSolutionKey: { type: 'hangoutsMeet' },
+  const baseRequest = {
+    summary: `Executive AI Strategy Call — ${data.name}${companyLabel}`,
+    description: [
+      `Strategy call with ${data.name}`,
+      data.company ? `Company: ${data.company}` : '',
+      `Email: ${data.email}`,
+      data.phone ? `Phone: ${data.phone}` : '',
+      '',
+      'Booked via Colaberry Enterprise AI Leadership Accelerator website.',
+    ].filter(Boolean).join('\n'),
+    start: {
+      dateTime: startTime.toISOString(),
+      timeZone: BUSINESS_TIMEZONE,
+    },
+    end: {
+      dateTime: endTime.toISOString(),
+      timeZone: BUSINESS_TIMEZONE,
+    },
+    reminders: {
+      useDefault: false,
+      overrides: [
+        { method: 'email', minutes: 60 },
+        { method: 'popup', minutes: 15 },
+      ],
+    },
+  };
+
+  // Try with Google Meet conference data first; fall back to plain event if unsupported
+  let event;
+  try {
+    event = await calendar.events.insert({
+      calendarId: env.googleCalendarId,
+      conferenceDataVersion: 1,
+      requestBody: {
+        ...baseRequest,
+        conferenceData: {
+          createRequest: {
+            requestId: `strategy-${Date.now()}`,
+            conferenceSolutionKey: { type: 'hangoutsMeet' },
+          },
         },
       },
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'email', minutes: 60 },
-          { method: 'popup', minutes: 15 },
-        ],
-      },
-    },
-  });
+    });
+    console.log('[Calendar] Event created with Meet conference data');
+  } catch (meetErr: any) {
+    console.warn('[Calendar] Meet link creation failed, creating event without conference:', meetErr.message);
+    event = await calendar.events.insert({
+      calendarId: env.googleCalendarId,
+      requestBody: baseRequest,
+    });
+  }
 
   const eventId = event.data.id || '';
   const meetLink =
