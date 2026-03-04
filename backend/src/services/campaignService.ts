@@ -242,9 +242,10 @@ export async function enrollLeadsInCampaign(campaignId: string, leadIds: number[
         if (ghlEnabled && campaign.interest_group) {
           const lead = await Lead.findByPk(leadId);
           if (lead) {
-            const contactId = await syncLeadToGhl(lead, campaign.interest_group);
-            if (contactId && !lead.ghl_contact_id) {
-              await lead.update({ ghl_contact_id: contactId });
+            const syncResult = await syncLeadToGhl(lead, campaign.interest_group);
+            // Only persist ghl_contact_id when NOT in test mode
+            if (syncResult.contactId && !syncResult.isTestMode && !lead.ghl_contact_id) {
+              await lead.update({ ghl_contact_id: syncResult.contactId });
             }
           }
         }
@@ -668,20 +669,26 @@ export async function getCampaignGhlStatus(campaignId: string) {
   const campaign = await Campaign.findByPk(campaignId);
   if (!campaign) throw new Error('Campaign not found');
 
-  const totalLeads = await CampaignLead.count({
-    where: { campaign_id: campaignId, status: { [Op.ne]: 'removed' } },
-  });
-
   const campaignLeads = await CampaignLead.findAll({
     where: { campaign_id: campaignId, status: { [Op.ne]: 'removed' } },
     include: [{ model: Lead, as: 'lead' }],
   });
 
+  const totalLeads = campaignLeads.length;
   const syncedCount = campaignLeads.filter(
     (cl: any) => cl.lead?.ghl_contact_id
   ).length;
 
-  // Get recent GHL-related activities
+  // Per-lead sync status
+  const leads = campaignLeads.map((cl: any) => ({
+    lead_id: cl.lead_id,
+    name: cl.lead?.name || '',
+    email: cl.lead?.email || '',
+    ghl_contact_id: cl.lead?.ghl_contact_id || null,
+    sync_status: cl.lead?.ghl_contact_id ? 'synced' : 'not_synced',
+  }));
+
+  // CRM-specific activities (ghl_sync, sms with ghl metadata)
   const leadIds = campaignLeads.map((cl) => cl.lead_id);
   const recentActivities = leadIds.length > 0
     ? await Activity.findAll({
@@ -691,14 +698,30 @@ export async function getCampaignGhlStatus(campaignId: string) {
         },
         include: [{ model: Lead, as: 'lead', attributes: ['id', 'name', 'email'] }],
         order: [['created_at', 'DESC']],
-        limit: 50,
+        limit: 100,
       })
     : [];
+
+  // Filter to CRM-only activities (ghl_sync actions or sms with ghl metadata)
+  const crmActivities = recentActivities
+    .map((a: any) => a.toJSON())
+    .filter((a: any) => a.metadata?.action?.startsWith('ghl_') || (a.type === 'sms' && a.metadata?.ghl_contact_id))
+    .map((a: any) => ({
+      id: a.id,
+      lead_id: a.lead_id,
+      lead_name: a.lead?.name || '',
+      lead_email: a.lead?.email || '',
+      type: a.type,
+      subject: a.subject,
+      metadata: a.metadata,
+      created_at: a.created_at,
+    }));
 
   return {
     interest_group: campaign.interest_group,
     total_leads: totalLeads,
     synced_leads: syncedCount,
-    activities: recentActivities,
+    leads,
+    activities: crmActivities,
   };
 }

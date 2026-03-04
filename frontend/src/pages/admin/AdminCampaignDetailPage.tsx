@@ -61,6 +61,7 @@ interface CampaignLead {
     lead_score: number;
     lead_source_type: string;
     lead_temperature?: string;
+    ghl_contact_id?: string;
   };
 }
 

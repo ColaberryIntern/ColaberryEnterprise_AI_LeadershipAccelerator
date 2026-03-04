@@ -1,4 +1,5 @@
 import { getSetting, getTestOverrides } from './settingsService';
+import { logActivity } from './activityService';
 import Lead from '../models/Lead';
 
 /* ------------------------------------------------------------------ */
@@ -19,6 +20,12 @@ interface GHLContact {
 interface GHLResult {
   success: boolean;
   data?: any;
+  error?: string;
+}
+
+export interface SyncResult {
+  contactId: string | null;
+  isTestMode: boolean;
   error?: string;
 }
 
@@ -164,29 +171,35 @@ export async function sendSmsViaGhl(
 export async function syncLeadToGhl(
   lead: InstanceType<typeof Lead>,
   interestGroup: string
-): Promise<string | null> {
+): Promise<SyncResult> {
   const enabled = await getSetting('ghl_enabled');
-  if (!enabled) return null;
+  if (!enabled) return { contactId: null, isTestMode: false };
 
-  // Test mode: use test email instead of real lead email
   const testOverrides = await getTestOverrides();
-  const effectiveEmail = testOverrides.enabled && testOverrides.email
+  const isTestMode = !!(testOverrides.enabled);
+  const effectiveEmail = isTestMode && testOverrides.email
     ? testOverrides.email
     : lead.email;
-  const notePrefix = testOverrides.enabled ? '[TEST MODE] ' : '';
+  const notePrefix = isTestMode ? '[TEST MODE] ' : '';
 
   try {
-    // Check if contact already exists
-    let contactId = lead.ghl_contact_id || null;
+    // If lead already has a real GHL contact, skip
+    if (lead.ghl_contact_id && !isTestMode) {
+      await logActivity({
+        lead_id: lead.id,
+        type: 'system',
+        subject: 'GHL Contact Already Linked',
+        metadata: { action: 'ghl_sync', status: 'existing', ghl_contact_id: lead.ghl_contact_id },
+      });
+      return { contactId: lead.ghl_contact_id, isTestMode };
+    }
 
-    if (!contactId) {
-      // Search by email
-      const existing = await findContactByEmail(effectiveEmail);
-      if (existing) {
-        contactId = existing.id;
-        // Add interest_group tag to existing contact
-        await addContactTag(contactId, interestGroup);
-      }
+    // Search by email
+    let contactId: string | null = null;
+    const existing = await findContactByEmail(effectiveEmail);
+    if (existing) {
+      contactId = existing.id;
+      await addContactTag(contactId, interestGroup);
     }
 
     // Create new contact if not found
@@ -195,7 +208,7 @@ export async function syncLeadToGhl(
         {
           name: lead.name,
           email: effectiveEmail,
-          phone: testOverrides.enabled && testOverrides.phone ? testOverrides.phone : lead.phone,
+          phone: isTestMode && testOverrides.phone ? testOverrides.phone : lead.phone,
           company: lead.company,
           title: lead.title,
         },
@@ -204,13 +217,18 @@ export async function syncLeadToGhl(
 
       if (!createResult.success) {
         console.error(`[GHL] Failed to create contact for lead ${lead.id}: ${createResult.error}`);
-        return null;
+        await logActivity({
+          lead_id: lead.id,
+          type: 'system',
+          subject: 'GHL Sync Failed',
+          metadata: { action: 'ghl_sync', status: 'failed', error: createResult.error, interest_group: interestGroup },
+        });
+        return { contactId: null, isTestMode, error: createResult.error };
       }
       contactId = createResult.contactId || null;
     }
 
     if (contactId) {
-      // Add structured note
       await addContactNote(
         contactId,
         `${notePrefix}📋 Lead Synced from Colaberry Accelerator\n` +
@@ -220,13 +238,32 @@ export async function syncLeadToGhl(
         `📊 Lead Score: ${lead.lead_score || 0} | Stage: ${lead.pipeline_stage || 'new_lead'}`
       );
 
-      console.log(`[GHL] Lead ${lead.id} synced as contact ${contactId} (group: ${interestGroup})`);
+      await logActivity({
+        lead_id: lead.id,
+        type: 'system',
+        subject: isTestMode ? 'GHL Test Sync' : 'GHL Contact Synced',
+        metadata: {
+          action: 'ghl_sync',
+          status: 'success',
+          ghl_contact_id: contactId,
+          interest_group: interestGroup,
+          test_mode: isTestMode,
+        },
+      });
+
+      console.log(`[GHL] Lead ${lead.id} synced as contact ${contactId} (group: ${interestGroup}${isTestMode ? ', TEST MODE' : ''})`);
     }
 
-    return contactId;
+    return { contactId, isTestMode };
   } catch (error: any) {
     console.error(`[GHL] syncLeadToGhl failed for lead ${lead.id}:`, error.message);
-    return null;
+    await logActivity({
+      lead_id: lead.id,
+      type: 'system',
+      subject: 'GHL Sync Failed',
+      metadata: { action: 'ghl_sync', status: 'failed', error: error.message },
+    }).catch(() => {}); // don't let logging failure mask the real error
+    return { contactId: null, isTestMode, error: error.message };
   }
 }
 
@@ -245,12 +282,13 @@ export async function bulkSyncCampaignLeads(
 
   for (const lead of leads) {
     try {
-      const contactId = await syncLeadToGhl(lead, interestGroup);
-      if (contactId && !lead.ghl_contact_id) {
-        await lead.update({ ghl_contact_id: contactId });
+      const syncResult = await syncLeadToGhl(lead, interestGroup);
+      // Only persist ghl_contact_id when NOT in test mode
+      if (syncResult.contactId && !syncResult.isTestMode && !lead.ghl_contact_id) {
+        await lead.update({ ghl_contact_id: syncResult.contactId });
       }
-      results.push({ leadId: lead.id, contactId });
-      if (contactId) synced++;
+      results.push({ leadId: lead.id, contactId: syncResult.contactId, error: syncResult.error });
+      if (syncResult.contactId) synced++;
       else failed++;
     } catch (error: any) {
       results.push({ leadId: lead.id, contactId: null, error: error.message });

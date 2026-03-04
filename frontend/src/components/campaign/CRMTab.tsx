@@ -2,74 +2,63 @@ import React, { useEffect, useState } from 'react';
 import api from '../../utils/api';
 import LeadDetailModal from './LeadDetailModal';
 
+const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG';
+const ghlContactUrl = (contactId: string) =>
+  `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
+
 interface Props {
   campaignId: string;
   headers: Record<string, string>;
+}
+
+interface GhlLeadStatus {
+  lead_id: number;
+  name: string;
+  email: string;
+  ghl_contact_id: string | null;
+  sync_status: 'synced' | 'not_synced' | 'failed';
+}
+
+interface CrmActivity {
+  id: string;
+  lead_id: number;
+  lead_name: string;
+  lead_email: string;
+  type: string;
+  subject: string;
+  metadata: Record<string, any>;
+  created_at: string;
 }
 
 interface GhlStatus {
   interest_group: string | null;
   total_leads: number;
   synced_leads: number;
+  leads: GhlLeadStatus[];
+  activities: CrmActivity[];
 }
-
-interface ActivityEntry {
-  type: string;
-  timestamp: string;
-  lead_id: number;
-  lead_name: string;
-  channel?: string;
-  subject?: string;
-  action?: string;
-  outcome?: string;
-  status?: string;
-  ai_generated?: boolean;
-}
-
-const CHANNEL_ICONS: Record<string, string> = {
-  email: 'bi-envelope',
-  voice: 'bi-telephone',
-  sms: 'bi-chat-dots',
-  linkedin: 'bi-linkedin',
-};
-
-const OUTCOME_COLORS: Record<string, string> = {
-  opened: 'info',
-  clicked: 'primary',
-  replied: 'success',
-  answered: 'success',
-  bounced: 'danger',
-  unsubscribed: 'danger',
-  booked_meeting: 'warning',
-  converted: 'success',
-  sent: 'secondary',
-  declined: 'danger',
-  no_response: 'secondary',
-  voicemail: 'secondary',
-};
 
 export default function CRMTab({ campaignId, headers }: Props) {
-  const [activities, setActivities] = useState<ActivityEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filterChannel, setFilterChannel] = useState('all');
-  const [filterOutcome, setFilterOutcome] = useState('all');
-  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
-  const [selectedLeadName, setSelectedLeadName] = useState('');
   const [ghlStatus, setGhlStatus] = useState<GhlStatus | null>(null);
+  const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [sendingTestSms, setSendingTestSms] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const [selectedLeadName, setSelectedLeadName] = useState('');
 
   useEffect(() => {
-    fetchActivities();
     fetchGhlStatus();
   }, [campaignId]);
 
   const fetchGhlStatus = async () => {
+    setLoading(true);
     try {
       const res = await api.get(`/api/admin/campaigns/${campaignId}/ghl-status`);
       setGhlStatus(res.data);
     } catch {
-      // GHL may not be enabled — that's fine
+      // GHL may not be enabled
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -100,57 +89,6 @@ export default function CRMTab({ campaignId, headers }: Props) {
     }
   };
 
-  const fetchActivities = async () => {
-    setLoading(true);
-    try {
-      // Fetch all leads and build activity from their timelines
-      const res = await fetch(`/api/admin/campaigns/${campaignId}/lead-details`, { headers });
-      const data = await res.json();
-      const enrichedLeads = data.leads || [];
-
-      // Build a consolidated activity list from enriched lead data
-      const allActivities: ActivityEntry[] = [];
-      for (const cl of enrichedLeads) {
-        try {
-          const tlRes = await fetch(
-            `/api/admin/campaigns/${campaignId}/leads/${cl.lead_id}/timeline`,
-            { headers }
-          );
-          const tlData = await tlRes.json();
-          for (const entry of (Array.isArray(tlData.timeline) ? tlData.timeline : [])) {
-            allActivities.push({
-              ...entry,
-              lead_id: cl.lead_id,
-              lead_name: cl.lead?.name || `Lead #${cl.lead_id}`,
-            });
-          }
-        } catch {
-          // Skip individual lead errors
-        }
-      }
-
-      // Sort by timestamp desc
-      allActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setActivities(allActivities);
-    } catch (err) {
-      console.error('Failed to fetch CRM activities:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filtered = activities.filter((a) => {
-    const matchesChannel = filterChannel === 'all' || a.channel === filterChannel;
-    const matchesOutcome = filterOutcome === 'all' || a.outcome === filterOutcome || a.type === filterOutcome;
-    return matchesChannel && matchesOutcome;
-  });
-
-  const totalTouchpoints = activities.filter((a) => a.type === 'action').length;
-  const totalOutcomes = activities.filter((a) => a.type === 'outcome').length;
-  const responseRate = totalTouchpoints > 0
-    ? ((totalOutcomes / totalTouchpoints) * 100).toFixed(1) + '%'
-    : '0%';
-
   const relTime = (d: string) => {
     const diff = Date.now() - new Date(d).getTime();
     const mins = Math.floor(diff / 60000);
@@ -161,198 +99,219 @@ export default function CRMTab({ campaignId, headers }: Props) {
     return `${days}d ago`;
   };
 
-  const uniqueChannels = [...new Set(activities.map((a) => a.channel).filter(Boolean))];
-  const uniqueOutcomes = [...new Set(activities.map((a) => a.outcome).filter(Boolean))];
+  if (loading) {
+    return (
+      <div className="text-center py-5">
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <div className="text-muted mt-2 small">Loading CRM status...</div>
+      </div>
+    );
+  }
+
+  if (!ghlStatus) {
+    return (
+      <div className="text-center py-5 text-muted">
+        <i className="bi bi-diagram-3 fs-1 d-block mb-2" />
+        GoHighLevel CRM integration is not enabled. Enable it in Settings.
+      </div>
+    );
+  }
 
   return (
     <>
       {/* GHL CRM Status */}
-      {ghlStatus && (
-        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #1a365d' }}>
-          <div className="card-body">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h6 className="fw-bold mb-0" style={{ color: '#1a365d' }}>
-                <i className="bi bi-diagram-3 me-2" />GoHighLevel CRM
-              </h6>
-              <div className="d-flex gap-2">
-                <button
-                  className="btn btn-outline-primary btn-sm"
-                  onClick={handleBulkSync}
-                  disabled={syncing}
-                >
-                  {syncing ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-1" />
-                      Syncing...
-                    </>
-                  ) : (
-                    'Sync All Leads'
-                  )}
-                </button>
-                <button
-                  className="btn btn-outline-secondary btn-sm"
-                  onClick={handleTestSms}
-                  disabled={sendingTestSms}
-                >
-                  {sendingTestSms ? 'Sending...' : 'Send Test SMS'}
-                </button>
-              </div>
-            </div>
-            <div className="row g-3">
-              <div className="col-md-4">
-                <div className="small text-muted">Interest Group</div>
-                <div className="fw-medium">
-                  {ghlStatus.interest_group ? (
-                    <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.8rem' }}>
-                      {ghlStatus.interest_group}
-                    </span>
-                  ) : (
-                    <span className="text-muted fst-italic">Not generated</span>
-                  )}
-                </div>
-              </div>
-              <div className="col-md-4">
-                <div className="small text-muted">GHL Sync Status</div>
-                <div className="fw-medium">
-                  <span className="text-success">{ghlStatus.synced_leads}</span>
-                  {' / '}
-                  <span>{ghlStatus.total_leads}</span>
-                  {' leads synced'}
-                  {ghlStatus.total_leads > 0 && (
-                    <span className="text-muted ms-1">
-                      ({Math.round((ghlStatus.synced_leads / ghlStatus.total_leads) * 100)}%)
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="col-md-4">
-                <div className="small text-muted">Webhook URL</div>
-                <code className="small">/api/webhook/ghl/sms-reply</code>
-              </div>
+      <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #1a365d' }}>
+        <div className="card-body">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h6 className="fw-bold mb-0" style={{ color: '#1a365d' }}>
+              <i className="bi bi-diagram-3 me-2" />GoHighLevel CRM
+            </h6>
+            <div className="d-flex gap-2">
+              <button
+                className="btn btn-outline-primary btn-sm"
+                onClick={handleBulkSync}
+                disabled={syncing}
+              >
+                {syncing ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-1" />
+                    Syncing...
+                  </>
+                ) : (
+                  'Sync All Leads'
+                )}
+              </button>
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                onClick={handleTestSms}
+                disabled={sendingTestSms}
+              >
+                {sendingTestSms ? 'Sending...' : 'Send Test SMS'}
+              </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Aggregation Cards */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold">{totalTouchpoints}</div>
-              <div className="text-muted small">Total Touchpoints</div>
+          <div className="row g-3">
+            <div className="col-md-4">
+              <div className="small text-muted">Interest Group</div>
+              <div className="fw-medium">
+                {ghlStatus.interest_group ? (
+                  <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.8rem' }}>
+                    {ghlStatus.interest_group}
+                  </span>
+                ) : (
+                  <span className="text-muted fst-italic">Not generated</span>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold text-success">{responseRate}</div>
-              <div className="text-muted small">Response Rate</div>
+            <div className="col-md-4">
+              <div className="small text-muted">GHL Sync Status</div>
+              <div className="fw-medium">
+                <span className="text-success">{ghlStatus.synced_leads}</span>
+                {' / '}
+                <span>{ghlStatus.total_leads}</span>
+                {' leads synced'}
+                {ghlStatus.total_leads > 0 && (
+                  <span className="text-muted ms-1">
+                    ({Math.round((ghlStatus.synced_leads / ghlStatus.total_leads) * 100)}%)
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center p-3">
-              <div className="fs-4 fw-bold text-primary">{activities.length}</div>
-              <div className="text-muted small">Total Events</div>
+            <div className="col-md-4">
+              <div className="small text-muted">Webhook URL</div>
+              <code className="small">/api/webhook/ghl/sms-reply</code>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="d-flex gap-2 mb-3">
-        <select
-          className="form-select form-select-sm"
-          style={{ maxWidth: 150 }}
-          value={filterChannel}
-          onChange={(e) => setFilterChannel(e.target.value)}
-        >
-          <option value="all">All Channels</option>
-          {uniqueChannels.map((ch) => (
-            <option key={ch} value={ch}>{ch}</option>
-          ))}
-        </select>
-        <select
-          className="form-select form-select-sm"
-          style={{ maxWidth: 180 }}
-          value={filterOutcome}
-          onChange={(e) => setFilterOutcome(e.target.value)}
-        >
-          <option value="all">All Types</option>
-          <option value="action">Actions</option>
-          <option value="outcome">Outcomes</option>
-          {uniqueOutcomes.map((o) => (
-            <option key={o} value={o}>{o?.replace(/_/g, ' ')}</option>
-          ))}
-        </select>
-        <button className="btn btn-outline-secondary btn-sm ms-auto" onClick={fetchActivities} disabled={loading}>
-          Refresh
-        </button>
-      </div>
-
-      {/* Activity Log */}
-      {loading ? (
-        <div className="text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <div className="text-muted mt-2 small">Loading campaign activity...</div>
+      {/* Lead Sync Status Table */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+          <span>Lead Sync Status</span>
+          <button className="btn btn-outline-secondary btn-sm" onClick={fetchGhlStatus} disabled={loading}>
+            <i className="bi bi-arrow-clockwise me-1" />Refresh
+          </button>
         </div>
-      ) : (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-0">
-            {filtered.length === 0 ? (
-              <div className="text-center py-4 text-muted">No activity recorded yet.</div>
-            ) : (
-              <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                {filtered.map((entry, i) => (
-                  <div key={i} className="d-flex align-items-start gap-3 p-3 border-bottom">
-                    <div className="text-center" style={{ minWidth: 36 }}>
-                      <i className={`bi ${CHANNEL_ICONS[entry.channel || ''] || 'bi-circle'} fs-5 text-muted`} />
-                    </div>
-                    <div className="flex-grow-1">
-                      <div className="d-flex justify-content-between">
-                        <div>
-                          <span
-                            className="fw-medium small text-primary"
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setSelectedLeadId(entry.lead_id);
-                              setSelectedLeadName(entry.lead_name);
-                            }}
+        <div className="card-body p-0">
+          {ghlStatus.leads.length === 0 ? (
+            <div className="text-center py-4 text-muted">No leads enrolled yet.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Lead Name</th>
+                    <th>Email</th>
+                    <th>GHL Status</th>
+                    <th>GHL Link</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ghlStatus.leads.map((lead) => (
+                    <tr key={lead.lead_id}>
+                      <td
+                        className="fw-medium"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setSelectedLeadId(lead.lead_id);
+                          setSelectedLeadName(lead.name);
+                        }}
+                      >
+                        <span className="text-primary">{lead.name}</span>
+                      </td>
+                      <td className="small">{lead.email}</td>
+                      <td>
+                        <span className={`badge bg-${
+                          lead.sync_status === 'synced' ? 'success' :
+                          lead.sync_status === 'failed' ? 'danger' : 'secondary'
+                        }`}>
+                          {lead.sync_status === 'synced' ? 'Synced' :
+                           lead.sync_status === 'failed' ? 'Failed' : 'Not Synced'}
+                        </span>
+                      </td>
+                      <td>
+                        {lead.ghl_contact_id ? (
+                          <a
+                            href={ghlContactUrl(lead.ghl_contact_id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View in GoHighLevel"
                           >
-                            {entry.lead_name}
-                          </span>
-                          <span className="text-muted small ms-2">
-                            {entry.subject || entry.action || entry.outcome?.replace(/_/g, ' ') || entry.type}
-                          </span>
-                          {entry.ai_generated && (
-                            <span className="badge bg-primary bg-opacity-10 text-primary ms-2" style={{ fontSize: '0.6rem' }}>AI</span>
-                          )}
-                        </div>
-                        <span className="text-muted" style={{ fontSize: '0.7rem' }}>{relTime(entry.timestamp)}</span>
-                      </div>
-                      <div className="d-flex gap-2 mt-1">
-                        {entry.outcome && (
-                          <span className={`badge bg-${OUTCOME_COLORS[entry.outcome] || 'secondary'} bg-opacity-10 text-${OUTCOME_COLORS[entry.outcome] || 'secondary'}`} style={{ fontSize: '0.6rem' }}>
-                            {entry.outcome.replace(/_/g, ' ')}
-                          </span>
+                            <img src="/ghl-logo.svg" alt="GHL" width="18" height="18" style={{ borderRadius: '3px' }} />
+                          </a>
+                        ) : (
+                          <span className="text-muted">—</span>
                         )}
-                        {entry.channel && (
-                          <span className="text-muted" style={{ fontSize: '0.7rem' }}>{entry.channel}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* CRM Event Timeline */}
+      <div className="card border-0 shadow-sm">
+        <div className="card-header bg-white fw-semibold">
+          CRM Event Timeline
+        </div>
+        <div className="card-body p-0">
+          {ghlStatus.activities.length === 0 ? (
+            <div className="text-center py-4 text-muted">
+              No CRM activity recorded yet. Sync leads to generate events.
+            </div>
+          ) : (
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {ghlStatus.activities.map((activity) => (
+                <div key={activity.id} className="d-flex align-items-start gap-3 p-3 border-bottom">
+                  <div className="text-center" style={{ minWidth: 36 }}>
+                    <i className={`bi ${
+                      activity.metadata?.status === 'success' ? 'bi-check-circle text-success' :
+                      activity.metadata?.status === 'failed' ? 'bi-x-circle text-danger' :
+                      activity.metadata?.status === 'existing' ? 'bi-link-45deg text-info' :
+                      'bi-circle text-muted'
+                    } fs-5`} />
+                  </div>
+                  <div className="flex-grow-1">
+                    <div className="d-flex justify-content-between">
+                      <div>
+                        <span
+                          className="fw-medium small text-primary"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            setSelectedLeadId(activity.lead_id);
+                            setSelectedLeadName(activity.lead_name);
+                          }}
+                        >
+                          {activity.lead_name}
+                        </span>
+                        <span className="text-muted small ms-2">{activity.subject}</span>
+                        {activity.metadata?.test_mode && (
+                          <span className="badge bg-warning bg-opacity-10 text-warning ms-2" style={{ fontSize: '0.6rem' }}>TEST</span>
+                        )}
+                      </div>
+                      <span className="text-muted" style={{ fontSize: '0.7rem' }}>{relTime(activity.created_at)}</span>
+                    </div>
+                    {activity.metadata?.error && (
+                      <div className="text-danger small mt-1">{activity.metadata.error}</div>
+                    )}
+                    {activity.metadata?.ghl_contact_id && (
+                      <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                        Contact: {activity.metadata.ghl_contact_id}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Lead Modal */}
       {selectedLeadId && (
