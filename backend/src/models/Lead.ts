@@ -246,6 +246,13 @@ Lead.init(
     sequelize,
     tableName: 'leads',
     timestamps: false,
+    indexes: [
+      {
+        unique: true,
+        fields: [sequelize.fn('LOWER', sequelize.col('email')) as any],
+        name: 'leads_email_unique',
+      },
+    ],
   }
 );
 

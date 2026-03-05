@@ -45,6 +45,7 @@ export default function CRMTab({ campaignId, headers }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [sendingTestSms, setSendingTestSms] = useState(false);
   const [resyncingLeadId, setResyncingLeadId] = useState<number | null>(null);
+  const [deletingLeadId, setDeletingLeadId] = useState<number | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [selectedLeadName, setSelectedLeadName] = useState('');
 
@@ -100,6 +101,19 @@ export default function CRMTab({ campaignId, headers }: Props) {
       alert('Test SMS failed: ' + (err.response?.data?.error || err.message));
     } finally {
       setSendingTestSms(false);
+    }
+  };
+
+  const handleDeleteLead = async (leadId: number, leadName: string) => {
+    if (!confirm(`Delete lead "${leadName}"? This removes the lead and all related data. This cannot be undone.`)) return;
+    setDeletingLeadId(leadId);
+    try {
+      await api.delete(`/api/admin/leads/${leadId}`);
+      fetchGhlStatus();
+    } catch (err: any) {
+      alert('Delete failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDeletingLeadId(null);
     }
   };
 
@@ -272,18 +286,33 @@ export default function CRMTab({ campaignId, headers }: Props) {
                         )}
                       </td>
                       <td>
-                        <button
-                          className="btn btn-outline-secondary btn-sm"
-                          style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}
-                          onClick={() => handleResyncLead(lead.lead_id)}
-                          disabled={resyncingLeadId === lead.lead_id}
-                        >
-                          {resyncingLeadId === lead.lead_id ? (
-                            <span className="spinner-border spinner-border-sm" style={{ width: '0.7rem', height: '0.7rem' }} />
-                          ) : (
-                            'Resync'
-                          )}
-                        </button>
+                        <div className="d-flex gap-1">
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}
+                            onClick={() => handleResyncLead(lead.lead_id)}
+                            disabled={resyncingLeadId === lead.lead_id}
+                          >
+                            {resyncingLeadId === lead.lead_id ? (
+                              <span className="spinner-border spinner-border-sm" style={{ width: '0.7rem', height: '0.7rem' }} />
+                            ) : (
+                              'Resync'
+                            )}
+                          </button>
+                          <button
+                            className="btn btn-outline-danger btn-sm"
+                            style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem' }}
+                            onClick={() => handleDeleteLead(lead.lead_id, lead.name)}
+                            disabled={deletingLeadId === lead.lead_id}
+                            title="Delete lead"
+                          >
+                            {deletingLeadId === lead.lead_id ? (
+                              <span className="spinner-border spinner-border-sm" style={{ width: '0.7rem', height: '0.7rem' }} />
+                            ) : (
+                              <i className="bi bi-trash" />
+                            )}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

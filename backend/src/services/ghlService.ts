@@ -99,18 +99,19 @@ export async function findContactByEmail(email: string): Promise<GHLContact | nu
 /* ------------------------------------------------------------------ */
 
 export async function createContact(
-  lead: { name: string; email: string; company?: string; title?: string },
+  lead: { name: string; email: string; phone?: string; company?: string; title?: string },
   interestGroup: string
 ): Promise<{ success: boolean; contactId?: string; error?: string }> {
   const nameParts = (lead.name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
 
-  // Phone intentionally omitted — GHL deduplicates on phone, causing merge issues
+  // Phone restored — our system now enforces unique phones so GHL dedup won't trigger
   const result = await ghlFetch('/contacts/', 'POST', {
     firstName,
     lastName,
     email: lead.email,
+    phone: lead.phone || undefined,
     companyName: lead.company || undefined,
     tags: [interestGroup],
     customField: { interestgroup: interestGroup },
@@ -226,6 +227,7 @@ export async function syncLeadToGhl(
         {
           name: lead.name,
           email: effectiveEmail,
+          phone: isTestMode && testOverrides.phone ? testOverrides.phone : lead.phone,
           company: lead.company,
           title: lead.title,
         },

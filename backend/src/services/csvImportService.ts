@@ -1,7 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import { Op } from 'sequelize';
 import Lead from '../models/Lead';
-import { calculateLeadScore, LeadInput } from './leadService';
+import { calculateLeadScore, normalizePhone, LeadInput } from './leadService';
 
 interface ImportResult {
   imported: number;
@@ -52,6 +52,22 @@ export async function importLeadsFromCsv(buffer: Buffer): Promise<ImportResult> 
       if (existing) {
         result.skipped++;
         continue;
+      }
+
+      // Check for duplicate (by phone, normalized)
+      if (row.phone?.trim()) {
+        const normalized = normalizePhone(row.phone.trim());
+        if (normalized) {
+          const allWithPhone = await Lead.findAll({
+            where: { phone: { [Op.not]: null as any, [Op.ne]: '' } } as any,
+            attributes: ['id', 'phone'],
+          });
+          const phoneMatch = allWithPhone.find(l => normalizePhone(l.phone) === normalized);
+          if (phoneMatch) {
+            result.skipped++;
+            continue;
+          }
+        }
       }
 
       // Build lead data

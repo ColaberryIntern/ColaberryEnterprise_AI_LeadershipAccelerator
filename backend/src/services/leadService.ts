@@ -4,6 +4,29 @@ import Lead from '../models/Lead';
 import { AdminUser, AutomationLog } from '../models';
 import { Parser } from 'json2csv';
 
+/* ── Phone normalization ─────────────────────────────────────────── */
+
+export function normalizePhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+  // US numbers: strip leading country code 1 if 11 digits
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  return digits;
+}
+
+async function findLeadByNormalizedPhone(phone: string | undefined, excludeId?: number): Promise<any | null> {
+  if (!phone) return null;
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+  const where: any = {
+    phone: { [Op.not]: null as any, [Op.ne]: '' },
+  };
+  if (excludeId) where.id = { [Op.ne]: excludeId };
+  const leads = await Lead.findAll({ where, attributes: ['id', 'phone', 'name', 'email'] });
+  return leads.find(l => normalizePhone(l.phone) === normalized) || null;
+}
+
 export const leadSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   email: z.string().email('Invalid email address').max(255),
@@ -80,6 +103,14 @@ export async function createLead(data: LeadInput) {
 
   if (recentDuplicate) {
     return { lead: recentDuplicate, isDuplicate: true };
+  }
+
+  // Duplicate check: same phone (normalized)
+  if (data.phone) {
+    const phoneMatch = await findLeadByNormalizedPhone(data.phone);
+    if (phoneMatch) {
+      return { lead: phoneMatch, isDuplicate: true };
+    }
   }
 
   const leadScore = calculateLeadScore(data);
@@ -295,6 +326,14 @@ export async function createLeadAdmin(data: {
 
   if (existing) {
     return { lead: existing, isDuplicate: true };
+  }
+
+  // Duplicate check: same phone (normalized)
+  if (data.phone) {
+    const phoneMatch = await findLeadByNormalizedPhone(data.phone);
+    if (phoneMatch) {
+      return { lead: phoneMatch, isDuplicate: true, duplicateField: 'phone' };
+    }
   }
 
   const leadInput: LeadInput = {

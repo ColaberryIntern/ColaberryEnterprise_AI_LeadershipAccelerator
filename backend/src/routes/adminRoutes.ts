@@ -21,6 +21,7 @@ import {
   handleGetTemperatureHistory,
   handleUpdateTemperature,
   handleGetLeadStrategyPrep,
+  handleDeleteLead,
 } from '../controllers/adminLeadController';
 import {
   handleListActivities,
@@ -142,6 +143,7 @@ router.post('/api/admin/leads', requireAdmin, handleAdminCreateLead);
 router.patch('/api/admin/leads/batch', requireAdmin, handleAdminBatchUpdate);
 router.get('/api/admin/leads/:id', requireAdmin, handleAdminGetLead);
 router.patch('/api/admin/leads/:id', requireAdmin, handleAdminUpdateLead);
+router.delete('/api/admin/leads/:id', requireAdmin, handleDeleteLead);
 router.patch('/api/admin/leads/:id/pipeline', requireAdmin, handleAdminUpdatePipelineStage);
 router.get('/api/admin/leads/:id/temperature-history', requireAdmin, handleGetTemperatureHistory);
 router.patch('/api/admin/leads/:id/temperature', requireAdmin, handleUpdateTemperature);
