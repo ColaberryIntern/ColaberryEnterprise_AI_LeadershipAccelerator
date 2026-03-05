@@ -99,29 +99,25 @@ export async function findContactByEmail(email: string): Promise<GHLContact | nu
 /* ------------------------------------------------------------------ */
 
 export async function createContact(
-  lead: { name: string; email: string; phone?: string; company?: string; title?: string },
+  lead: { name: string; email: string; company?: string; title?: string },
   interestGroup: string
-): Promise<{ success: boolean; contactId?: string; contactEmail?: string; error?: string }> {
+): Promise<{ success: boolean; contactId?: string; error?: string }> {
   const nameParts = (lead.name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
 
+  // Phone intentionally omitted — GHL deduplicates on phone, causing merge issues
   const result = await ghlFetch('/contacts/', 'POST', {
     firstName,
     lastName,
     email: lead.email,
-    phone: lead.phone || undefined,
     companyName: lead.company || undefined,
     tags: [interestGroup],
     customField: { interestgroup: interestGroup },
   });
 
   if (!result.success) return { success: false, error: result.error };
-  return {
-    success: true,
-    contactId: result.data?.contact?.id,
-    contactEmail: result.data?.contact?.email,
-  };
+  return { success: true, contactId: result.data?.contact?.id };
 }
 
 /* ------------------------------------------------------------------ */
@@ -230,7 +226,6 @@ export async function syncLeadToGhl(
         {
           name: lead.name,
           email: effectiveEmail,
-          phone: isTestMode && testOverrides.phone ? testOverrides.phone : lead.phone,
           company: lead.company,
           title: lead.title,
         },
@@ -246,28 +241,6 @@ export async function syncLeadToGhl(
           metadata: { action: 'ghl_sync', status: 'failed', error: createResult.error, interest_group: interestGroup },
         });
         return { contactId: null, isTestMode, error: createResult.error };
-      }
-
-      // Detect phone-based dedup: GHL merged with existing contact
-      if (createResult.contactEmail &&
-          createResult.contactEmail.toLowerCase() !== effectiveEmail.toLowerCase()) {
-        console.warn(
-          `[GHL] Phone dedup detected for lead ${lead.id}: sent "${effectiveEmail}", got "${createResult.contactEmail}"`
-        );
-        await logActivity({
-          lead_id: lead.id,
-          type: 'system',
-          subject: 'GHL Sync Failed \u2014 Phone Duplicate',
-          metadata: {
-            action: 'ghl_sync',
-            status: 'failed',
-            error: `Phone dedup: GHL merged with existing contact (${createResult.contactEmail})`,
-            interest_group: interestGroup,
-            sent_email: effectiveEmail,
-            got_email: createResult.contactEmail,
-          },
-        });
-        return { contactId: null, isTestMode, error: 'Phone dedup \u2014 contact merged with existing' };
       }
 
       contactId = createResult.contactId || null;
