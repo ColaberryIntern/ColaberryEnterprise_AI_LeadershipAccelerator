@@ -48,7 +48,8 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
     page: params.page || 1,
   };
 
-  if (params.q_person_title?.length) body.q_person_title = params.q_person_title;
+  // New API uses person_titles (array) instead of q_person_title
+  if (params.q_person_title?.length) body.person_titles = params.q_person_title;
   if (params.person_seniorities?.length) body.person_seniorities = params.person_seniorities;
   if (params.q_organization_industries?.length) body.q_organization_industries = params.q_organization_industries;
   if (params.organization_num_employees_ranges?.length) body.organization_num_employees_ranges = params.organization_num_employees_ranges;
@@ -67,12 +68,69 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   }
 
   const data: any = await response.json();
+  const total = data.total_entries || data.pagination?.total_entries || 0;
+  const searchResults = data.people || [];
+
+  // New API returns obfuscated data — enrich each person by ID to get full details
+  const enrichedPeople: ApolloPersonResult[] = [];
+  for (const result of searchResults) {
+    try {
+      const enriched = await enrichPersonById(apiKey, result.id);
+      if (enriched) enrichedPeople.push(enriched);
+    } catch {
+      // Skip persons that fail to enrich — still include basic search data
+      enrichedPeople.push({
+        id: result.id,
+        first_name: result.first_name || '',
+        last_name: result.last_name_obfuscated || '',
+        name: result.first_name || '',
+        title: result.title || '',
+        email: '',
+        organization: result.organization ? {
+          name: result.organization.name || '',
+          industry: '',
+        } : undefined,
+      });
+    }
+  }
 
   return {
-    people: data.people || [],
-    total: data.pagination?.total_entries || 0,
-    page: data.pagination?.page || 1,
-    per_page: data.pagination?.per_page || 25,
+    people: enrichedPeople,
+    total,
+    page: params.page || 1,
+    per_page: params.per_page || 25,
+  };
+}
+
+async function enrichPersonById(apiKey: string, personId: string): Promise<ApolloPersonResult | null> {
+  const response = await fetch(`${APOLLO_BASE_URL}/v1/people/match`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+    body: JSON.stringify({ id: personId }),
+  });
+
+  if (!response.ok) return null;
+
+  const data: any = await response.json();
+  const person = data.person;
+  if (!person) return null;
+
+  return {
+    id: person.id,
+    first_name: person.first_name || '',
+    last_name: person.last_name || '',
+    name: person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim(),
+    title: person.title || '',
+    email: person.email || '',
+    phone_numbers: person.phone_numbers,
+    linkedin_url: person.linkedin_url,
+    organization: person.organization ? {
+      name: person.organization.name || '',
+      industry: person.organization.industry || '',
+      estimated_num_employees: person.organization.estimated_num_employees,
+      annual_revenue_printed: person.organization.annual_revenue_printed,
+      technology_names: person.organization.technology_names,
+    } : undefined,
   };
 }
 
