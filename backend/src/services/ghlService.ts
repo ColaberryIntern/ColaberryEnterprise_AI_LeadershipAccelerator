@@ -101,7 +101,7 @@ export async function findContactByEmail(email: string): Promise<GHLContact | nu
 export async function createContact(
   lead: { name: string; email: string; phone?: string; company?: string; title?: string },
   interestGroup: string
-): Promise<{ success: boolean; contactId?: string; error?: string }> {
+): Promise<{ success: boolean; contactId?: string; contactEmail?: string; error?: string }> {
   const nameParts = (lead.name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
@@ -117,7 +117,11 @@ export async function createContact(
   });
 
   if (!result.success) return { success: false, error: result.error };
-  return { success: true, contactId: result.data?.contact?.id };
+  return {
+    success: true,
+    contactId: result.data?.contact?.id,
+    contactEmail: result.data?.contact?.email,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -243,6 +247,29 @@ export async function syncLeadToGhl(
         });
         return { contactId: null, isTestMode, error: createResult.error };
       }
+
+      // Detect phone-based dedup: GHL merged with existing contact
+      if (createResult.contactEmail &&
+          createResult.contactEmail.toLowerCase() !== effectiveEmail.toLowerCase()) {
+        console.warn(
+          `[GHL] Phone dedup detected for lead ${lead.id}: sent "${effectiveEmail}", got "${createResult.contactEmail}"`
+        );
+        await logActivity({
+          lead_id: lead.id,
+          type: 'system',
+          subject: 'GHL Sync Failed \u2014 Phone Duplicate',
+          metadata: {
+            action: 'ghl_sync',
+            status: 'failed',
+            error: `Phone dedup: GHL merged with existing contact (${createResult.contactEmail})`,
+            interest_group: interestGroup,
+            sent_email: effectiveEmail,
+            got_email: createResult.contactEmail,
+          },
+        });
+        return { contactId: null, isTestMode, error: 'Phone dedup \u2014 contact merged with existing' };
+      }
+
       contactId = createResult.contactId || null;
       isNewContact = !!contactId;
     }
