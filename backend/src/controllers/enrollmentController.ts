@@ -9,6 +9,8 @@ import {
   getEnrollmentBySessionId,
 } from '../services/enrollmentService';
 import { listOpenCohorts } from '../services/cohortService';
+import { Cohort } from '../models';
+import { runEnrollmentAutomation } from '../services/automationService';
 
 export async function handleListOpenCohorts(
   _req: Request,
@@ -73,6 +75,23 @@ export async function handleCreateInvoiceRequest(
   try {
     const data = createInvoiceRequestSchema.parse(req.body);
     const enrollment = await createInvoiceEnrollment(data);
+    // Send confirmation email (fire-and-forget)
+    const cohort = await Cohort.findByPk(enrollment.cohort_id);
+    if (cohort) {
+      runEnrollmentAutomation({
+        id: enrollment.id,
+        email: enrollment.email,
+        full_name: enrollment.full_name,
+        phone: enrollment.phone || undefined,
+        cohort: {
+          name: cohort.name,
+          start_date: cohort.start_date,
+          core_day: cohort.core_day,
+          core_time: cohort.core_time,
+          optional_lab_day: cohort.optional_lab_day || undefined,
+        },
+      }).catch((err) => console.error('[Invoice] Automation error:', err));
+    }
 
     res.status(201).json({
       message: 'Invoice request received. Our team will contact you within 1 business day.',
