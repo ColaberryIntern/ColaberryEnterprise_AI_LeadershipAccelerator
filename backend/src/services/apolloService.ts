@@ -71,31 +71,30 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   const total = data.total_entries || data.pagination?.total_entries || 0;
   const searchResults = data.people || [];
 
-  // New API returns obfuscated data — enrich each person by ID to get full details
-  const enrichedPeople: ApolloPersonResult[] = [];
-  for (const result of searchResults) {
-    try {
-      const enriched = await enrichPersonById(apiKey, result.id);
-      if (enriched) enrichedPeople.push(enriched);
-    } catch {
-      // Skip persons that fail to enrich — still include basic search data
-      enrichedPeople.push({
-        id: result.id,
-        first_name: result.first_name || '',
-        last_name: result.last_name_obfuscated || '',
-        name: result.first_name || '',
-        title: result.title || '',
-        email: '',
-        organization: result.organization ? {
-          name: result.organization.name || '',
-          industry: '',
-        } : undefined,
-      });
-    }
-  }
+  console.log(`[Apollo] Search returned ${searchResults.length} results (total: ${total})`);
+
+  // Map raw search results directly — no enrichment at search time.
+  // Enrichment (to get emails, full names) happens at import time to avoid
+  // rate limiting and wasted credits on leads that won't be imported.
+  const people: ApolloPersonResult[] = searchResults.map((r: any) => ({
+    id: r.id,
+    first_name: r.first_name || '',
+    last_name: r.last_name || r.last_name_obfuscated || '',
+    name: r.name || r.first_name || '',
+    title: r.title || '',
+    email: r.email || '',
+    linkedin_url: r.linkedin_url,
+    organization: r.organization ? {
+      name: r.organization.name || '',
+      industry: r.organization.industry || '',
+      estimated_num_employees: r.organization.estimated_num_employees,
+      annual_revenue_printed: r.organization.annual_revenue_printed,
+      technology_names: r.organization.technology_names,
+    } : undefined,
+  }));
 
   return {
-    people: enrichedPeople,
+    people,
     total,
     page: params.page || 1,
     per_page: params.per_page || 25,
@@ -170,8 +169,20 @@ export async function importApolloResults(
   let errors = 0;
   const leads: any[] = [];
 
+  const apiKey = env.apolloApiKey;
+
   for (const person of people) {
     try {
+      // Enrich leads missing email (search results are obfuscated in new Apollo API)
+      if (!person.email && person.id && apiKey) {
+        try {
+          const enriched = await enrichPersonById(apiKey, person.id);
+          if (enriched) Object.assign(person, enriched);
+        } catch (enrichErr: any) {
+          console.warn(`[Apollo] Enrichment failed for ${person.id}: ${enrichErr.message}`);
+        }
+      }
+
       if (!person.email) {
         errors++;
         continue;
@@ -322,8 +333,8 @@ export async function getApolloQuota(): Promise<{ available: boolean; message: s
     // Simple check — try a minimal search
     const response = await fetch(`${APOLLO_BASE_URL}/v1/mixed_people/api_search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, per_page: 1, page: 1, q_person_title: ['CEO'] }),
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+      body: JSON.stringify({ per_page: 1, page: 1, person_titles: ['CEO'] }),
     });
 
     if (response.ok) {

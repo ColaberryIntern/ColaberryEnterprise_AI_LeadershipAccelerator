@@ -873,8 +873,10 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
       const res = await api.post(`/api/admin/icp-profiles/${profileId}/search`, { page: 1, per_page: 25 });
       setApolloResults(res.data.people || []);
       setApolloTotal(res.data.total || 0);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Apollo search failed:', err);
+      const msg = err?.response?.data?.error || err?.message || 'Apollo search failed';
+      alert(msg);
     } finally {
       setApolloSearching(false);
     }
@@ -895,8 +897,10 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
       });
       await loadEnrolledLeads();
       onRefresh();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Import and enroll failed:', err);
+      const msg = err?.response?.data?.error || err?.message || 'Import failed';
+      alert(msg);
     } finally {
       setImporting(false);
     }
