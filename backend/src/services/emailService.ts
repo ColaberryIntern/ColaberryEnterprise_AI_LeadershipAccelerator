@@ -620,6 +620,7 @@ function buildInterestHtml(data: InterestEmailData): string {
 }
 
 function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
+  const portalUrl = env.frontendUrl || 'http://95.216.199.47:8888';
   return `
 <!DOCTYPE html>
 <html>
@@ -630,8 +631,12 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
     h1 { color: #1a365d; font-size: 24px; }
     h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
     .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta-box { background: #1a365d; color: #ffffff; text-align: center; padding: 20px; border-radius: 8px; margin: 24px 0; }
+    .cta-box a { display: inline-block; background: #38a169; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-weight: 600; font-size: 16px; }
     ul { padding-left: 20px; }
     li { margin-bottom: 8px; }
+    .step { display: flex; align-items: flex-start; margin-bottom: 12px; }
+    .step-num { background: #1a365d; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; margin-right: 12px; flex-shrink: 0; }
     .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
   </style>
 </head>
@@ -640,7 +645,7 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
 
   <p>Dear ${data.fullName},</p>
 
-  <p>Your enrollment has been confirmed. Here are your cohort details:</p>
+  <p>Your enrollment has been confirmed — you're in! Here are your cohort details:</p>
 
   <div class="highlight">
     <strong>Cohort:</strong> ${data.cohortName}<br>
@@ -649,8 +654,22 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
     ${data.optionalLabDay ? `<strong>Optional Architecture Lab:</strong> ${data.optionalLabDay}<br>` : ''}
   </div>
 
-  <h2>Pre-Class Requirements</h2>
-  <p>Please complete the following before your first session:</p>
+  <h2>Get Started Now</h2>
+  <p>Your Participant Portal is where you'll access session materials, submit assignments, and track your progress throughout the program. Once your account is activated by our team, here's how to sign in:</p>
+
+  <div style="margin: 16px 0;">
+    <div class="step"><span class="step-num">1</span><span>Go to your <a href="${portalUrl}/portal/login" style="color:#2b6cb0;font-weight:600;">Participant Portal</a></span></div>
+    <div class="step"><span class="step-num">2</span><span>Enter the email address you enrolled with (<strong>${data.to}</strong>)</span></div>
+    <div class="step"><span class="step-num">3</span><span>Check your inbox for a secure sign-in link — click it to access your dashboard</span></div>
+  </div>
+
+  <div class="cta-box">
+    <p style="margin: 0 0 12px 0; font-size: 15px;">Ready to dive in?</p>
+    <a href="${portalUrl}/portal/login">Go to Your Portal</a>
+  </div>
+
+  <h2>Before Your First Session</h2>
+  <p>To hit the ground running, please prepare the following:</p>
   <ul>
     <li><strong>Claude Code paid account</strong> (Max or Team plan)</li>
     <li><strong>Company-approved LLM API key</strong> (OpenAI, Anthropic, or equivalent)</li>
@@ -659,10 +678,12 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
     <li><strong>2-3 AI use cases</strong> relevant to your role and organization</li>
   </ul>
 
-  <h2>What to Expect</h2>
-  <p>Over the next 3 weeks, you will build a working AI Proof of Capability, create an executive presentation deck, and design a 90-Day AI expansion roadmap — all scoped to your organization's highest-priority use case.</p>
+  <p>Don't worry if you're still gathering these — you'll find detailed guidance in the portal once you're logged in.</p>
 
-  <p>If you have any questions before your first session, reach out to us at <a href="mailto:info@colaberry.com">info@colaberry.com</a>.</p>
+  <h2>What You'll Build</h2>
+  <p>Over the next 3 weeks, you will build a working AI Proof of Capability, create an executive presentation deck, and design a 90-Day AI expansion roadmap — all scoped to your organization's highest-priority use case. This is hands-on, outcome-driven work that you can take back to your team immediately.</p>
+
+  <p>Questions? Reach out anytime at <a href="mailto:info@colaberry.com" style="color:#2b6cb0;">info@colaberry.com</a>.</p>
 
   <div class="footer">
     <p>Colaberry Enterprise AI Division<br>
