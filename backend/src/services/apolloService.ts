@@ -44,7 +44,6 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   if (!apiKey) throw new Error('Apollo API key not configured');
 
   const body: Record<string, any> = {
-    api_key: apiKey,
     per_page: params.per_page || 25,
     page: params.page || 1,
   };
@@ -58,7 +57,7 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
 
   const response = await fetch(`${APOLLO_BASE_URL}/v1/mixed_people/search`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify(body),
   });
 
@@ -83,8 +82,8 @@ export async function enrichPerson(email: string): Promise<ApolloPersonResult | 
 
   const response = await fetch(`${APOLLO_BASE_URL}/v1/people/match`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, email }),
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+    body: JSON.stringify({ email }),
   });
 
   if (!response.ok) {
