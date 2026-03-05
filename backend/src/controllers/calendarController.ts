@@ -8,6 +8,7 @@ import Lead from '../models/Lead';
 import { sendStrategyCallConfirmation } from '../services/emailService';
 import { enrollInPrepNudge } from '../services/strategyPrepService';
 import { advancePipelineStage } from '../services/pipelineService';
+import { syncNewLeadToGhl } from '../services/ghlService';
 import { recordOutcome } from '../services/interactionService';
 
 export async function handleGetAvailability(
@@ -93,6 +94,11 @@ export async function handleBookCall(
           status: 'new',
         });
         console.log('[Calendar] Created new lead:', lead.id, 'for', emailLower);
+
+        // Auto-sync new lead to GHL (fire-and-forget)
+        syncNewLeadToGhl(lead).catch((err) =>
+          console.error('[Calendar] GHL sync error:', err)
+        );
       } else {
         // Advance pipeline stage for strategy call booking (from new_lead or contacted)
         await advancePipelineStage(lead.id, 'meeting_scheduled', 'strategy_call_booked');
