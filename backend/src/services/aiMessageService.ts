@@ -243,6 +243,102 @@ export async function buildConversationHistory(leadId: number): Promise<string> 
   return lines.join('\n');
 }
 
+/** Generate the ideal ICP profile for a campaign using AI */
+export async function generateICPProfile(campaign: {
+  name: string;
+  description?: string;
+  type?: string;
+  goals?: string;
+  gtm_notes?: string;
+  ai_system_prompt?: string;
+}): Promise<{
+  name: string;
+  description: string;
+  person_titles: string[];
+  person_seniorities: string[];
+  industries: string[];
+  company_size_min: number;
+  company_size_max: number;
+  person_locations: string[];
+  keywords: string[];
+  pain_indicators: string[];
+  buying_signals: string[];
+}> {
+  const client = getClient();
+
+  const model = (await getSetting('ai_model')) || env.aiModel;
+
+  const systemPrompt = `You are an expert B2B sales strategist and Ideal Customer Profile (ICP) designer for Colaberry Enterprise AI Division, which offers AI Leadership training programs and enterprise AI consulting.
+
+Given a campaign's context, generate the PERFECT Ideal Customer Profile — the exact type of person and company most likely to convert.
+
+OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences:
+{
+  "name": "Short descriptive name for this ICP (e.g. 'Enterprise AI Decision Makers')",
+  "description": "1-2 sentence description of who this profile targets and why they're ideal",
+  "person_titles": ["array of 5-8 specific job titles to target, e.g. 'CTO', 'VP of Engineering', 'Director of AI', 'Chief Data Officer'"],
+  "person_seniorities": ["array from: c_suite, vp, director, manager, senior — pick the 2-3 most relevant"],
+  "industries": ["array of 4-6 specific industries where these buyers exist"],
+  "company_size_min": 50,
+  "company_size_max": 5000,
+  "person_locations": ["array of 1-3 geographic locations, e.g. 'United States'"],
+  "keywords": ["array of 4-6 keywords that appear in ideal prospects' profiles or companies"],
+  "pain_indicators": ["array of 4-6 specific business pain points these prospects face that our offering solves"],
+  "buying_signals": ["array of 4-6 observable signals that indicate readiness to buy"]
+}
+
+RULES:
+- Be SPECIFIC — not "Technology" but "SaaS", "FinTech", "HealthTech"
+- Job titles should be EXACT titles found on LinkedIn, not generic descriptions
+- Pain indicators should be real business problems, not vague statements
+- Buying signals should be observable behaviors (hiring patterns, budget cycles, tech adoption)
+- Company size should reflect realistic mid-market to enterprise targets
+- Keywords should be terms that appear in Apollo/LinkedIn profiles of ideal buyers`;
+
+  const userPrompt = `Generate the ideal customer profile for this campaign:
+
+CAMPAIGN NAME: ${campaign.name}
+CAMPAIGN TYPE: ${campaign.type || 'cold_outbound'}
+${campaign.description ? `DESCRIPTION: ${campaign.description}` : ''}
+${campaign.goals ? `GOALS: ${campaign.goals}` : ''}
+${campaign.gtm_notes ? `GTM STRATEGY NOTES: ${campaign.gtm_notes}` : ''}
+${campaign.ai_system_prompt ? `AI SYSTEM PROMPT (for context on messaging approach): ${campaign.ai_system_prompt}` : ''}
+
+Based on this campaign context, generate the perfect ICP that will maximize conversion rates.`;
+
+  const response = await client.chat.completions.create({
+    model,
+    max_tokens: 1000,
+    temperature: 0.7,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content?.trim() || '';
+
+  try {
+    const cleaned = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    return JSON.parse(cleaned);
+  } catch {
+    // Return sensible defaults if parse fails
+    return {
+      name: `${campaign.name} - ICP`,
+      description: 'AI-generated ideal customer profile',
+      person_titles: ['CTO', 'VP of Engineering', 'Director of AI', 'Chief Data Officer'],
+      person_seniorities: ['c_suite', 'vp', 'director'],
+      industries: ['SaaS', 'Financial Services', 'Healthcare', 'Technology'],
+      company_size_min: 100,
+      company_size_max: 5000,
+      person_locations: ['United States'],
+      keywords: ['enterprise ai', 'digital transformation', 'machine learning'],
+      pain_indicators: ['Manual processes', 'AI adoption challenges', 'Data strategy gaps'],
+      buying_signals: ['Hiring AI roles', 'Budget planning season', 'Recent funding'],
+    };
+  }
+}
+
 /** Generate a preview message with sample data (for the admin UI "Preview AI Output" button) */
 export async function generatePreview(
   channel: AIChannel,

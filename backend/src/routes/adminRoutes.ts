@@ -134,6 +134,7 @@ import {
   handleGhlStatus,
   handleGhlTestSms,
   handleGhlResyncLead,
+  handleGenerateICP,
 } from '../controllers/adminCampaignController';
 
 const router = Router();
@@ -225,6 +226,7 @@ router.post('/api/admin/campaigns/:id/ghl-sync', requireAdmin, handleGhlSync);
 router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus);
 router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
 router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlResyncLead);
+router.post('/api/admin/campaigns/:id/generate-icp', requireAdmin, handleGenerateICP);
 
 // Protected admin routes — ICP Profiles
 router.get('/api/admin/icp-profiles', requireAdmin, handleListICPProfiles);

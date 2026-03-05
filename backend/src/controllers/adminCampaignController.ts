@@ -20,7 +20,7 @@ import {
   importApolloResults,
   getApolloQuota,
 } from '../services/apolloService';
-import { generatePreview } from '../services/aiMessageService';
+import { generatePreview, generateICPProfile } from '../services/aiMessageService';
 import { getCampaignAnalytics } from '../services/campaignAnalyticsService';
 import {
   getCampaignSettings,
@@ -482,6 +482,32 @@ export async function handleGhlTestSms(req: Request, res: Response, next: NextFu
     } else {
       res.status(500).json({ error: result.error || 'Failed to send test SMS' });
     }
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ── AI-Generated ICP Profile ────────────────────────────────────────
+
+export async function handleGenerateICP(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const campaign = await getCampaignById(id);
+    if (!campaign) {
+      res.status(404).json({ error: 'Campaign not found' });
+      return;
+    }
+
+    const profile = await generateICPProfile({
+      name: campaign.name,
+      description: campaign.description,
+      type: campaign.type,
+      goals: campaign.goals,
+      gtm_notes: campaign.gtm_notes,
+      ai_system_prompt: campaign.ai_system_prompt,
+    });
+
+    res.json({ profile });
   } catch (error) {
     next(error);
   }

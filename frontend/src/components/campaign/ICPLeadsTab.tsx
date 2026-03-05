@@ -682,6 +682,7 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [form, setForm] = useState<ICPFormState>({ ...EMPTY_FORM });
   const [formSaving, setFormSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   // Apollo search state
   const [searchingProfile, setSearchingProfile] = useState<string | null>(null);
@@ -729,10 +730,35 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
 
   // ── Create / Edit ────────────────────────────────────────────────────
 
-  const openCreateForm = () => {
+  const openCreateForm = async () => {
     setEditingProfileId(null);
     setForm({ ...EMPTY_FORM });
     setShowForm(true);
+    setGenerating(true);
+    try {
+      const res = await api.post(`/api/admin/campaigns/${campaignId}/generate-icp`);
+      const p = res.data.profile;
+      if (p) {
+        setForm({
+          name: p.name || '',
+          description: p.description || '',
+          role: 'primary',
+          person_titles: p.person_titles || [],
+          person_seniorities: p.person_seniorities || [],
+          industries: p.industries || [],
+          company_size_min: p.company_size_min || '',
+          company_size_max: p.company_size_max || '',
+          person_locations: p.person_locations || [],
+          keywords: p.keywords || [],
+          pain_indicators: p.pain_indicators || [],
+          buying_signals: p.buying_signals || [],
+        });
+      }
+    } catch (err) {
+      console.error('Failed to generate ICP profile:', err);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const openEditForm = (profile: ICPProfile) => {
@@ -912,8 +938,8 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
         <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
           <span>ICP Profiles ({profiles.length})</span>
           {!showForm && (
-            <button className="btn btn-primary btn-sm" onClick={openCreateForm}>
-              + Add ICP Profile
+            <button className="btn btn-primary btn-sm" onClick={openCreateForm} disabled={generating}>
+              {generating ? 'Generating...' : '+ Add ICP Profile'}
             </button>
           )}
         </div>
@@ -921,9 +947,19 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
           {/* Create / Edit Form */}
           {showForm && (
             <div className="mb-4">
-              <h6 className="fw-semibold mb-3">
-                {editingProfileId ? 'Edit ICP Profile' : 'Create ICP Profile'}
-              </h6>
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <h6 className="fw-semibold mb-0">
+                  {editingProfileId ? 'Edit ICP Profile' : 'Create ICP Profile'}
+                </h6>
+                {generating && (
+                  <span className="d-flex align-items-center gap-1 text-primary small">
+                    <span className="spinner-border spinner-border-sm" role="status">
+                      <span className="visually-hidden">Generating...</span>
+                    </span>
+                    AI is generating your ideal customer profile...
+                  </span>
+                )}
+              </div>
               <ICPForm
                 form={form}
                 setForm={setForm}
@@ -943,10 +979,19 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
             <div className="text-center py-4">
               <p className="text-muted mb-2">No ICP profiles linked to this campaign yet.</p>
               <p className="text-muted small">
-                ICP profiles define your ideal customer — job titles, industries, seniority levels, company size, and locations that Apollo will search for.
+                Click below and AI will generate the perfect customer profile based on your campaign — titles, industries, company size, pain points, and buying signals.
               </p>
-              <button className="btn btn-primary btn-sm" onClick={openCreateForm}>
-                Create Your First ICP Profile
+              <button className="btn btn-primary" onClick={openCreateForm} disabled={generating}>
+                {generating ? (
+                  <span className="d-flex align-items-center gap-2">
+                    <span className="spinner-border spinner-border-sm" role="status">
+                      <span className="visually-hidden">Generating...</span>
+                    </span>
+                    Generating Ideal Customer Profile...
+                  </span>
+                ) : (
+                  'Generate Ideal Customer Profile'
+                )}
               </button>
             </div>
           ) : (
