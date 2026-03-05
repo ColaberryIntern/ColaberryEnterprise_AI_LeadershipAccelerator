@@ -287,3 +287,132 @@ export async function getCohortDashboard(cohortId: string) {
     enrollments,
   };
 }
+
+
+// -- Post-Session Processing --
+
+export async function detectAbsentParticipants(sessionId: string) {
+  const session = await LiveSession.findByPk(sessionId);
+  if (!session) return [];
+
+  const enrollments = await Enrollment.findAll({
+    where: { cohort_id: session.cohort_id, status: 'active' },
+  });
+
+  const attendanceRecords = await AttendanceRecord.findAll({
+    where: { session_id: sessionId },
+  });
+
+  const attendedIds = new Set(
+    attendanceRecords
+      .filter((r) => r.status === 'present' || r.status === 'late' || r.status === 'excused')
+      .map((r) => r.enrollment_id)
+  );
+
+  const absent: Array<{ enrollment: InstanceType<typeof Enrollment>; consecutiveMisses: number; missedTitles: string[] }> = [];
+
+  for (const enrollment of enrollments) {
+    if (attendedIds.has(enrollment.id)) continue;
+
+    // Auto-mark absent if no record exists
+    await markAttendance({
+      enrollment_id: enrollment.id,
+      session_id: sessionId,
+      status: 'absent',
+      marked_by: 'system',
+    });
+
+    // Count consecutive misses (most recent sessions first)
+    const cohortSessions = await LiveSession.findAll({
+      where: { cohort_id: session.cohort_id, status: 'completed' },
+      order: [['session_number', 'DESC']],
+    });
+
+    let consecutiveMisses = 0;
+    const missedTitles: string[] = [];
+    for (const s of cohortSessions) {
+      const record = await AttendanceRecord.findOne({
+        where: { enrollment_id: enrollment.id, session_id: s.id },
+      });
+      if (!record || record.status === 'absent') {
+        consecutiveMisses++;
+        missedTitles.push(`#${s.session_number} ${s.title}`);
+      } else {
+        break;
+      }
+    }
+
+    absent.push({ enrollment, consecutiveMisses, missedTitles });
+  }
+
+  return absent;
+}
+
+export async function getUpcomingSessions(hoursAhead: number) {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
+
+  const todayStr = now.toISOString().split('T')[0];
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  const sessions = await LiveSession.findAll({
+    where: {
+      status: 'scheduled',
+      session_date: {
+        [Op.between]: [todayStr, cutoffStr],
+      },
+    },
+    include: [{ model: Cohort, as: 'cohort' }],
+  });
+
+  // Filter by actual time comparison
+  return sessions.filter((s) => {
+    const sessionDateTime = new Date(`${s.session_date}T${convertTo24h(s.start_time)}:00`);
+    return sessionDateTime > now && sessionDateTime <= cutoff;
+  });
+}
+
+export async function getSessionsToMarkLive() {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  const sessions = await LiveSession.findAll({
+    where: { status: 'scheduled', session_date: todayStr },
+  });
+
+  return sessions.filter((s) => {
+    const startTime = new Date(`${s.session_date}T${convertTo24h(s.start_time)}:00`);
+    const fifteenMinBefore = new Date(startTime.getTime() - 15 * 60 * 1000);
+    return now >= fifteenMinBefore;
+  });
+}
+
+export async function getSessionsToMarkCompleted() {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const yesterdayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const sessions = await LiveSession.findAll({
+    where: {
+      status: 'live',
+      session_date: { [Op.in]: [todayStr, yesterdayStr] },
+    },
+  });
+
+  return sessions.filter((s) => {
+    const endTime = new Date(`${s.session_date}T${convertTo24h(s.end_time)}:00`);
+    const thirtyMinAfterEnd = new Date(endTime.getTime() + 30 * 60 * 1000);
+    return now >= thirtyMinAfterEnd;
+  });
+}
+
+function convertTo24h(timeStr: string): string {
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return '10:00';
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const period = match[3]?.toUpperCase();
+  if (period === 'PM' && hours < 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}

@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import nodemailer from 'nodemailer';
-import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall } from '../models';
+import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall , Enrollment } from '../models';
 import { env } from '../config/env';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
@@ -17,6 +17,11 @@ import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting, getTestOverrides } from './settingsService';
 import { sendSmsViaGhl, addContactNote } from './ghlService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
+import {
+  getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
+  detectAbsentParticipants, computeAllReadinessScores,
+} from './acceleratorService';
+import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -902,4 +907,123 @@ export function startScheduler(): void {
     }
   });
   console.log('[Scheduler] Email digest: hourly check (sends at configured hour/day)');
+
+  // -- Accelerator Session Lifecycle --
+
+  // Session reminders: check every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      // 24-hour reminders
+      const upcoming24h = await getUpcomingSessions(24);
+      for (const session of upcoming24h) {
+        const enrollments = await Enrollment.findAll({
+          where: { cohort_id: session.cohort_id, status: 'active' },
+        });
+        for (const e of enrollments) {
+          await sendSessionReminder({
+            to: e.email,
+            fullName: e.full_name,
+            sessionTitle: session.title,
+            sessionNumber: session.session_number,
+            sessionDate: session.session_date,
+            startTime: session.start_time,
+            meetingLink: session.meeting_link || null,
+            materialsJson: session.materials_json || null,
+            isOneHour: false,
+          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${e.email}:`, err.message));
+        }
+        if (enrollments.length > 0) {
+          console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+        }
+      }
+
+      // 1-hour reminders
+      const upcoming1h = await getUpcomingSessions(1);
+      for (const session of upcoming1h) {
+        const enrollments = await Enrollment.findAll({
+          where: { cohort_id: session.cohort_id, status: 'active' },
+        });
+        for (const e of enrollments) {
+          await sendSessionReminder({
+            to: e.email,
+            fullName: e.full_name,
+            sessionTitle: session.title,
+            sessionNumber: session.session_number,
+            sessionDate: session.session_date,
+            startTime: session.start_time,
+            meetingLink: session.meeting_link || null,
+            materialsJson: session.materials_json || null,
+            isOneHour: true,
+          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${e.email}:`, err.message));
+        }
+        if (enrollments.length > 0) {
+          console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+        }
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Session reminder error:', err.message);
+    }
+  });
+
+  // Auto-mark sessions as live (15 min before start) and completed (30 min after end)
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const toLive = await getSessionsToMarkLive();
+      for (const session of toLive) {
+        await session.update({ status: 'live' });
+        console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as live`);
+      }
+
+      const toComplete = await getSessionsToMarkCompleted();
+      for (const session of toComplete) {
+        await session.update({ status: 'completed' });
+        console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
+
+        // Post-completion: detect absences, send recap emails, recompute readiness
+        const absentees = await detectAbsentParticipants(session.id);
+        for (const { enrollment, consecutiveMisses, missedTitles } of absentees) {
+          // Send missed session recap
+          await sendMissedSessionEmail({
+            to: enrollment.email,
+            fullName: enrollment.full_name,
+            sessionTitle: session.title,
+            sessionNumber: session.session_number,
+            sessionDate: session.session_date,
+            recordingUrl: session.recording_url || null,
+            materialsJson: session.materials_json || null,
+            consecutiveMisses,
+          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${enrollment.email}:`, err.message));
+
+          // Alert admin if 2+ consecutive absences
+          if (consecutiveMisses >= 2) {
+            const cohort = await (await import('../models')).Cohort.findByPk(session.cohort_id);
+            await sendAbsenceAlert({
+              enrollmentName: enrollment.full_name,
+              enrollmentEmail: enrollment.email,
+              enrollmentCompany: enrollment.company,
+              cohortName: cohort?.name || 'Unknown Cohort',
+              consecutiveMisses,
+              missedSessions: missedTitles,
+            }).catch((err: any) => console.error(`[Scheduler] Absence alert failed for ${enrollment.full_name}:`, err.message));
+          }
+        }
+
+        if (absentees.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: ${absentees.length} absent, recap emails sent`);
+        }
+
+        // Recompute readiness scores for all active enrollments in this cohort
+        await computeAllReadinessScores(session.cohort_id).catch((err: any) =>
+          console.error(`[Scheduler] Readiness recompute failed for cohort ${session.cohort_id}:`, err.message)
+        );
+        console.log(`[Scheduler] Readiness scores recomputed for cohort ${session.cohort_id}`);
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Session lifecycle error:', err.message);
+    }
+  });
+
+  console.log('[Scheduler] Accelerator: session reminders every 30 min (24h + 1h before)');
+  console.log('[Scheduler] Accelerator: session lifecycle (live/completed) every 5 min');
+  console.log('[Scheduler] Accelerator: post-session absence detection + readiness recompute');
 }

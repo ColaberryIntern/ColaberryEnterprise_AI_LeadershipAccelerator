@@ -877,3 +877,243 @@ function buildDigestHtml(data: DigestData): string {
 </html>
   `.trim();
 }
+// --- Accelerator Session Emails ---
+
+interface SessionReminderData {
+  to: string;
+  fullName: string;
+  sessionTitle: string;
+  sessionNumber: number;
+  sessionDate: string;
+  startTime: string;
+  meetingLink: string | null;
+  materialsJson: any[] | null;
+  isOneHour: boolean;
+}
+
+export async function sendSessionReminder(data: SessionReminderData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping session reminder to:', data.to);
+    return;
+  }
+
+  const urgency = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
+  const r = await resolveEmailRecipient(
+    data.to,
+    `[Accelerator] ${urgency}: Session ${data.sessionNumber} — ${data.sessionTitle}`
+  );
+  const html = buildSessionReminderHtml(data);
+  const info = await transporter.sendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-session-reminder'),
+  });
+
+  console.log(`[Email] Session reminder sent to: ${r.to} | msgId: ${info.messageId}`);
+}
+
+function buildSessionReminderHtml(data: SessionReminderData): string {
+  const urgencyLabel = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
+  const materialsHtml = data.materialsJson?.length
+    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
+    : '';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .urgency { background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-weight: 600; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+  </style>
+</head>
+<body>
+  <h1>Session ${data.sessionNumber}: ${data.sessionTitle}</h1>
+
+  <div class="urgency">${urgencyLabel}</div>
+
+  <p>Dear ${data.fullName},</p>
+
+  <p>This is a reminder for your upcoming Accelerator session.</p>
+
+  <div class="highlight">
+    <strong>Session:</strong> #${data.sessionNumber} — ${data.sessionTitle}<br>
+    <strong>Date:</strong> ${data.sessionDate}<br>
+    <strong>Time:</strong> ${data.startTime} ET
+  </div>
+
+  ${data.meetingLink ? `<p><a href="${data.meetingLink}" class="cta">Join Session</a></p>` : '<p><em>Meeting link will be shared before the session starts.</em></p>'}
+
+  ${materialsHtml}
+
+  <p>Please ensure you have completed any pre-work assignments before the session begins.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+interface MissedSessionData {
+  to: string;
+  fullName: string;
+  sessionTitle: string;
+  sessionNumber: number;
+  sessionDate: string;
+  recordingUrl: string | null;
+  materialsJson: any[] | null;
+  consecutiveMisses: number;
+}
+
+export async function sendMissedSessionEmail(data: MissedSessionData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping missed session email to:', data.to);
+    return;
+  }
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    `[Accelerator] Missed Session ${data.sessionNumber}: ${data.sessionTitle} — Catch Up`
+  );
+  const html = buildMissedSessionHtml(data);
+  const info = await transporter.sendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-missed-session'),
+  });
+
+  console.log(`[Email] Missed session email sent to: ${r.to} | msgId: ${info.messageId}`);
+}
+
+function buildMissedSessionHtml(data: MissedSessionData): string {
+  const materialsHtml = data.materialsJson?.length
+    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
+    : '';
+
+  const warningHtml = data.consecutiveMisses >= 2
+    ? `<div style="background: #fed7d7; border: 1px solid #fc8181; padding: 12px 16px; border-radius: 6px; margin: 16px 0;">
+        <strong>Attendance Alert:</strong> You have missed ${data.consecutiveMisses} consecutive sessions. Consistent attendance is critical for program completion. Please reach out if you need support.
+      </div>`
+    : '';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+  </style>
+</head>
+<body>
+  <h1>Session ${data.sessionNumber} Recap: ${data.sessionTitle}</h1>
+
+  <p>Dear ${data.fullName},</p>
+
+  <p>We missed you at Session ${data.sessionNumber} on ${data.sessionDate}. Here is everything you need to catch up:</p>
+
+  ${warningHtml}
+
+  ${data.recordingUrl ? `<div class="highlight"><strong>Session Recording:</strong><br><a href="${data.recordingUrl}">Watch the recording</a></div>` : '<p><em>The session recording will be available shortly.</em></p>'}
+
+  ${materialsHtml}
+
+  <p>Please review the materials and complete any assignments before the next session. If you have questions, reply to this email.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+interface AbsenceAlertData {
+  enrollmentName: string;
+  enrollmentEmail: string;
+  enrollmentCompany: string;
+  cohortName: string;
+  consecutiveMisses: number;
+  missedSessions: string[];
+}
+
+export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping absence alert for:', data.enrollmentName);
+    return;
+  }
+
+  const alertTo = await getAdminRecipients();
+  const r = await resolveEmailRecipient(
+    alertTo,
+    `[Accelerator Alert] ${data.enrollmentName} — ${data.consecutiveMisses} Consecutive Absences`
+  );
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #e53e3e; font-size: 22px; }
+    .card { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 16px 0; }
+    .field { margin-bottom: 8px; }
+    .field-label { color: #6c757d; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .field-value { font-size: 16px; font-weight: 500; }
+    .action { background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 6px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Consecutive Absence Alert</h1>
+  <p>A participant has missed ${data.consecutiveMisses} consecutive sessions. Intervention recommended.</p>
+
+  <div class="card">
+    <div class="field"><div class="field-label">Participant</div><div class="field-value">${data.enrollmentName}</div></div>
+    <div class="field"><div class="field-label">Email</div><div class="field-value"><a href="mailto:${data.enrollmentEmail}">${data.enrollmentEmail}</a></div></div>
+    <div class="field"><div class="field-label">Company</div><div class="field-value">${data.enrollmentCompany}</div></div>
+    <div class="field"><div class="field-label">Cohort</div><div class="field-value">${data.cohortName}</div></div>
+    <div class="field"><div class="field-label">Missed Sessions</div><div class="field-value">${data.missedSessions.join(', ')}</div></div>
+  </div>
+
+  <div class="action">
+    <strong>Recommended Action:</strong> Reach out to the participant to discuss attendance and determine if support is needed. Consider scheduling a 1:1 check-in.
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const info = await transporter.sendMail({
+    from: `"Colaberry Accelerator Alert" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-absence-alert'),
+  });
+
+  console.log(`[Email] Absence alert sent for: ${data.enrollmentName} | msgId: ${info.messageId}`);
+}
