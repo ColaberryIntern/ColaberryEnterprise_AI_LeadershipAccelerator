@@ -101,6 +101,7 @@ import {
   handleRefreshProfileStats,
   handleGetProfileRecommendations,
   handleApplyRecommendation,
+  handleSearchAndEnroll,
   handleBuildColdCampaign,
   handleGetSequenceTemplates,
 } from '../controllers/icpProfileController';
@@ -235,6 +236,7 @@ router.post('/api/admin/icp-profiles/:id/search', requireAdmin, handleSearchApol
 router.post('/api/admin/icp-profiles/:id/refresh-stats', requireAdmin, handleRefreshProfileStats);
 router.get('/api/admin/icp-profiles/:id/recommendations', requireAdmin, handleGetProfileRecommendations);
 router.post('/api/admin/icp-profiles/:id/apply-recommendation', requireAdmin, handleApplyRecommendation);
+router.post('/api/admin/icp-profiles/:id/search-and-enroll', requireAdmin, handleSearchAndEnroll);
 
 // Protected admin routes — Apollo Integration
 router.post('/api/admin/apollo/search', requireAdmin, handleApolloSearch);

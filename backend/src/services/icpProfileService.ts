@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { ICPProfile, Campaign } from '../models';
 import { ApolloSearchParams, searchPeople, importApolloResults } from './apolloService';
 import { getInsights, getTargetingRecommendations } from './icpInsightService';
+import { enrollLeadsInCampaign } from './campaignService';
 
 // ── CRUD ────────────────────────────────────────────────────────────────
 
@@ -173,6 +174,53 @@ export async function importLeadsFromProfile(
 ) {
   const people = await searchApolloFromProfileBulk(profileId, maxLeads);
   return importApolloResults(people);
+}
+
+// ── One-Click: Search Apollo + Import + Enroll ──────────────────────────
+
+export async function searchAndEnrollFromProfile(
+  profileId: string,
+  campaignId: string,
+  maxLeads = 100,
+): Promise<{ imported: number; duplicates: number; enrolled: number; errors: number; leads: any[] }> {
+  const profile = await getICPProfile(profileId);
+
+  // 1. Search Apollo using profile filters
+  const people = await searchApolloFromProfileBulk(profileId, maxLeads);
+
+  if (people.length === 0) {
+    return { imported: 0, duplicates: 0, enrolled: 0, errors: 0, leads: [] };
+  }
+
+  // 2. Import leads (dedup + create)
+  const importResult = await importApolloResults(people, {
+    campaign_id: campaignId,
+    scoring_criteria: {
+      target_industries: profile.industries || [],
+      company_size_min: profile.company_size_min,
+      company_size_max: profile.company_size_max,
+    },
+  });
+
+  // 3. Enroll all leads (new + existing duplicates) in campaign
+  let enrolled = 0;
+  if (importResult.leads.length > 0) {
+    const leadIds = importResult.leads.map((l: any) => l.id);
+    try {
+      const enrollResult = await enrollLeadsInCampaign(campaignId, leadIds);
+      enrolled = enrollResult.filter((r: any) => r.status === 'enrolled' || r.status === 'active').length;
+    } catch (err: any) {
+      console.error(`[ICP] Enrollment error for profile ${profileId}: ${err.message}`);
+    }
+  }
+
+  return {
+    imported: importResult.imported,
+    duplicates: importResult.duplicates,
+    enrolled,
+    errors: importResult.errors,
+    leads: importResult.leads,
+  };
 }
 
 // ── Refresh Profile Stats from ICP Insights ─────────────────────────────

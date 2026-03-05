@@ -9,6 +9,7 @@ import {
   refreshProfileStats,
   getProfileRecommendations,
   applyRecommendation,
+  searchAndEnrollFromProfile,
 } from '../services/icpProfileService';
 import {
   buildColdCampaign,
@@ -111,6 +112,31 @@ export async function handleRefreshProfileStats(
   try {
     const profile = await refreshProfileStats(req.params.id as string);
     res.json({ profile });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ── ICP Search + Import + Enroll ─────────────────────────────────────────
+
+export async function handleSearchAndEnroll(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const profileId = req.params.id as string;
+    const { campaign_id, max_leads } = req.body;
+    if (!campaign_id) {
+      res.status(400).json({ error: 'campaign_id is required' });
+      return;
+    }
+    const result = await searchAndEnrollFromProfile(
+      profileId,
+      campaign_id,
+      max_leads || 100,
+    );
+    res.json(result);
   } catch (error) {
     next(error);
   }

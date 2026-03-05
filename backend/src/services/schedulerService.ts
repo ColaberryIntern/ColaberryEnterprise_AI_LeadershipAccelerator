@@ -95,22 +95,56 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       }
     }
 
+    // Build enriched lead data for AI personalization
+    const leadData: Record<string, any> = {
+      name: lead.name,
+      company: lead.company || undefined,
+      title: lead.title || undefined,
+      industry: lead.industry || undefined,
+      lead_score: lead.lead_score || undefined,
+      source_type: lead.lead_source_type || undefined,
+      interest_area: lead.interest_area || undefined,
+      email: lead.email,
+      phone: lead.phone || undefined,
+      technology_stack: lead.technology_stack || undefined,
+      annual_revenue: lead.annual_revenue || undefined,
+      employee_count: lead.employee_count || undefined,
+      company_size: lead.company_size || undefined,
+      lead_temperature: lead.lead_temperature || undefined,
+      pipeline_stage: lead.pipeline_stage || undefined,
+      status: lead.status || undefined,
+      interest_level: lead.interest_level || undefined,
+      evaluating_90_days: lead.evaluating_90_days || undefined,
+      notes: lead.notes || undefined,
+      linkedin_url: lead.linkedin_url || undefined,
+      source: lead.source || undefined,
+      form_type: lead.form_type || undefined,
+    };
+
+    // Load ICP profile intelligence (pain indicators, buying signals) for this campaign
+    if (action.campaign_id) {
+      try {
+        const { ICPProfile } = require('../models');
+        const profiles = await ICPProfile.findAll({
+          where: { campaign_id: action.campaign_id },
+          order: [['role', 'ASC']],
+          limit: 1,
+        });
+        if (profiles.length > 0) {
+          if (profiles[0].pain_indicators?.length) leadData.pain_indicators = profiles[0].pain_indicators;
+          if (profiles[0].buying_signals?.length) leadData.buying_signals = profiles[0].buying_signals;
+        }
+      } catch (err: any) {
+        // Non-critical — proceed without ICP intelligence
+      }
+    }
+
     const result = await generateMessage({
       channel: channel as 'email' | 'sms' | 'voice',
       ai_instructions: action.ai_instructions,
       tone: action.metadata?.ai_tone || undefined,
       context_notes: action.metadata?.ai_context_notes || undefined,
-      lead: {
-        name: lead.name,
-        company: lead.company || undefined,
-        title: lead.title || undefined,
-        industry: lead.industry || undefined,
-        lead_score: lead.lead_score || undefined,
-        source_type: lead.lead_source_type || undefined,
-        interest_area: lead.interest_area || undefined,
-        email: lead.email,
-        phone: lead.phone || undefined,
-      },
+      lead: leadData as any,
       conversationHistory,
       campaignContext,
       cohortContext: nextCohort ? {

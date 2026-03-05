@@ -12,6 +12,7 @@ import PromptsTab from '../../components/campaign/PromptsTab';
 import LeadsOutreachTab from '../../components/campaign/LeadsOutreachTab';
 import CRMTab from '../../components/campaign/CRMTab';
 import SettingsTab from '../../components/campaign/SettingsTab';
+import ICPLeadsTab from '../../components/campaign/ICPLeadsTab';
 
 interface CampaignDetail {
   id: string;
@@ -83,12 +84,13 @@ interface AnalyticsData {
   lead_outcomes: any[];
 }
 
-type TabKey = 'overview' | 'analytics' | 'targeting' | 'gtm' | 'leads' | 'crm' | 'settings';
+type TabKey = 'overview' | 'analytics' | 'targeting' | 'icp_leads' | 'gtm' | 'leads' | 'crm' | 'settings';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'analytics', label: 'Analytics' },
   { key: 'targeting', label: 'Targeting' },
+  { key: 'icp_leads', label: 'ICP & Leads' },
   { key: 'gtm', label: 'Strategy & Prompts' },
   { key: 'leads', label: 'Leads & Outreach' },
   { key: 'crm', label: 'CRM' },
@@ -338,6 +340,16 @@ function AdminCampaignDetailPage() {
           targeting_criteria={campaign.targeting_criteria || {}}
           headers={headers}
           onRefresh={fetchCampaign}
+        />
+      )}
+
+      {activeTab === 'icp_leads' && (
+        <ICPLeadsTab
+          campaignId={id!}
+          campaignType={campaign.type}
+          headers={headers}
+          onRefresh={fetchCampaign}
+          onSwitchTab={(tab) => setActiveTab(tab as TabKey)}
         />
       )}
 

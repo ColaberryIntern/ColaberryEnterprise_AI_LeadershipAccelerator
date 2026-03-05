@@ -18,6 +18,23 @@ export interface GenerateMessageParams {
     interest_area?: string;
     email?: string;
     phone?: string;
+    // Enrichment fields
+    technology_stack?: string[];
+    annual_revenue?: string;
+    employee_count?: number;
+    company_size?: string;
+    lead_temperature?: string;
+    pipeline_stage?: string;
+    status?: string;
+    interest_level?: string;
+    evaluating_90_days?: boolean;
+    notes?: string;
+    linkedin_url?: string;
+    source?: string;
+    form_type?: string;
+    // ICP intelligence (from campaign's ICP profile)
+    pain_indicators?: string[];
+    buying_signals?: string[];
   };
   conversationHistory?: string;
   campaignContext?: {
@@ -113,6 +130,21 @@ function buildUserPrompt(params: GenerateMessageParams): string {
   if (lead.interest_area) parts.push(`- Interest Area: ${lead.interest_area}`);
   if (lead.lead_score !== undefined) parts.push(`- Lead Score: ${lead.lead_score}/100`);
   if (lead.source_type) parts.push(`- Lead Type: ${lead.source_type}`);
+  if (lead.technology_stack?.length) parts.push(`- Technology Stack: ${lead.technology_stack.join(', ')}`);
+  if (lead.employee_count) parts.push(`- Company Size: ${lead.employee_count} employees`);
+  if (lead.annual_revenue) parts.push(`- Annual Revenue: ${lead.annual_revenue}`);
+  if (lead.lead_temperature && lead.lead_temperature !== 'cold') parts.push(`- Lead Temperature: ${lead.lead_temperature}`);
+  if (lead.pipeline_stage) parts.push(`- Pipeline Stage: ${lead.pipeline_stage}`);
+  if (lead.interest_level) parts.push(`- Interest Level: ${lead.interest_level}`);
+  if (lead.evaluating_90_days) parts.push(`- Actively evaluating solutions (within 90 days)`);
+  if (lead.notes) parts.push(`- Admin Notes: ${lead.notes.substring(0, 500)}`);
+  if (lead.source) parts.push(`- Source: ${lead.source}`);
+
+  if (lead.pain_indicators?.length || lead.buying_signals?.length) {
+    parts.push(`\nICP INTELLIGENCE:`);
+    if (lead.pain_indicators?.length) parts.push(`- Pain Indicators: ${lead.pain_indicators.join(', ')}`);
+    if (lead.buying_signals?.length) parts.push(`- Buying Signals: ${lead.buying_signals.join(', ')}`);
+  }
 
   if (campaignContext) {
     parts.push(`\nCAMPAIGN CONTEXT:`);
