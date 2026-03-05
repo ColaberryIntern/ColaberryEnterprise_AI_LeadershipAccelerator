@@ -1,10 +1,12 @@
 import { env } from '../config/env';
-import { AutomationLog, FollowUpSequence, Campaign, ScheduledEmail } from '../models';
+import { AutomationLog, FollowUpSequence, Campaign, ScheduledEmail, Lead } from '../models';
 import { triggerVoiceCall } from './synthflowService';
 import { sendEnrollmentConfirmation, sendInterestEmail, sendExecutiveOverviewEmail, sendHighIntentAlert } from './emailService';
 import { enrollLeadInSequence } from './sequenceService';
 import { advancePipelineStage } from './pipelineService';
 import { recordOutcome } from './interactionService';
+import { syncLeadToGhl } from './ghlService';
+import { getSetting } from './settingsService';
 
 interface LogParams {
   type: 'email' | 'voice_call' | 'alert';
@@ -240,6 +242,24 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
         });
         const actions = await enrollLeadInSequence(lead.id, targetSequence.id, associatedCampaign?.id);
         console.log(`[Automation] Lead enrolled in ${sequenceName}:`, lead.email);
+
+        // Sync to GHL with campaign interest group
+        if (associatedCampaign?.interest_group) {
+          try {
+            const ghlEnabled = await getSetting('ghl_enabled');
+            if (ghlEnabled) {
+              const leadRecord = await Lead.findByPk(lead.id);
+              if (leadRecord) {
+                const syncResult = await syncLeadToGhl(leadRecord, associatedCampaign.interest_group);
+                if (syncResult.contactId && !syncResult.isTestMode && !leadRecord.ghl_contact_id) {
+                  await leadRecord.update({ ghl_contact_id: syncResult.contactId });
+                }
+              }
+            }
+          } catch (ghlErr: any) {
+            console.error(`[Automation] GHL interest group sync failed for lead ${lead.id}: ${ghlErr.message}`);
+          }
+        }
 
         // Mark Step 0 (Day 0 initial email) as sent with captured HTML
         const step0 = actions.find((a: any) => a.step_index === 0);
