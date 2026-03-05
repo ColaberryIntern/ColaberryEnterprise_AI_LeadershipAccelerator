@@ -56,11 +56,15 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   if (params.person_locations?.length) body.person_locations = params.person_locations;
   if (params.q_keywords) body.q_keywords = params.q_keywords;
 
+  console.log(`[Apollo] Search request body:`, JSON.stringify(body));
+
   const response = await fetch(`${APOLLO_BASE_URL}/v1/mixed_people/api_search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify(body),
   });
+
+  console.log(`[Apollo] Search response status: ${response.status}`);
 
   if (!response.ok) {
     const errorText = await response.text();
