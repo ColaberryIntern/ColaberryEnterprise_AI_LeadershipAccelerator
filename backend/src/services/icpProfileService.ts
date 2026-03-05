@@ -101,7 +101,9 @@ export function buildApolloFilters(profile: ICPProfile): ApolloSearchParams {
   }
 
   if (profile.keywords?.length) {
-    filters.q_keywords = profile.keywords.join(' ');
+    // Apollo treats q_keywords as a single search query — long strings return 0 results.
+    // Use only the first 2 keywords to keep the search broad enough.
+    filters.q_keywords = profile.keywords.slice(0, 2).join(' ');
   }
 
   // Merge any raw apollo_filters passthrough
