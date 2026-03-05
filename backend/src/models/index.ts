@@ -25,6 +25,9 @@ import ChatConversation from './ChatConversation';
 import ChatMessage from './ChatMessage';
 import OpportunityScore from './OpportunityScore';
 import ICPProfile from './ICPProfile';
+import LiveSession from './LiveSession';
+import AttendanceRecord from './AttendanceRecord';
+import AssignmentSubmission from './AssignmentSubmission';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -146,6 +149,23 @@ OpportunityScore.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Visitor.hasOne(OpportunityScore, { foreignKey: 'visitor_id', as: 'opportunityScore' });
 OpportunityScore.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
 
+
+// LiveSession associations
+Cohort.hasMany(LiveSession, { foreignKey: 'cohort_id', as: 'liveSessions' });
+LiveSession.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+// AttendanceRecord associations
+Enrollment.hasMany(AttendanceRecord, { foreignKey: 'enrollment_id', as: 'attendanceRecords' });
+AttendanceRecord.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+LiveSession.hasMany(AttendanceRecord, { foreignKey: 'session_id', as: 'attendanceRecords' });
+AttendanceRecord.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
+
+// AssignmentSubmission associations
+Enrollment.hasMany(AssignmentSubmission, { foreignKey: 'enrollment_id', as: 'submissions' });
+AssignmentSubmission.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+LiveSession.hasMany(AssignmentSubmission, { foreignKey: 'session_id', as: 'submissions' });
+AssignmentSubmission.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -157,4 +177,5 @@ export {
   ChatConversation, ChatMessage,
   OpportunityScore,
   ICPProfile,
+  LiveSession, AttendanceRecord, AssignmentSubmission,
 };

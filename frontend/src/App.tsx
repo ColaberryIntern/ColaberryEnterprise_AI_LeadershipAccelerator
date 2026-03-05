@@ -34,6 +34,7 @@ import CampaignBuilderPage from './pages/admin/CampaignBuilderPage';
 import AdminICPInsightsPage from './pages/admin/AdminICPInsightsPage';
 import AdminVisitorsPage from './pages/admin/AdminVisitorsPage';
 import AdminOpportunitiesPage from './pages/admin/AdminOpportunitiesPage';
+import AdminAcceleratorPage from './pages/admin/AdminAcceleratorPage';
 import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
 import StrategyCallPrepPage from './pages/StrategyCallPrepPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -80,6 +81,7 @@ function App() {
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
             <Route path="/admin/events" element={<AdminEventLedgerPage />} />
+            <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
           </Route>
         </Route>
       </Routes>

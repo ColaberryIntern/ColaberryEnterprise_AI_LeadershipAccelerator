@@ -13,6 +13,15 @@ export interface EnrollmentAttributes {
   stripe_session_id?: string;
   payment_status: 'paid' | 'pending_invoice' | 'failed';
   payment_method: 'credit_card' | 'invoice';
+  status?: 'active' | 'completed' | 'withdrawn' | 'suspended';
+  readiness_score?: number;
+  prework_score?: number;
+  attendance_score?: number;
+  assignment_score?: number;
+  maturity_level?: number;
+  intake_completed?: boolean;
+  intake_data_json?: any;
+  notes?: string;
   created_at?: Date;
 }
 
@@ -28,6 +37,15 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare stripe_session_id: string;
   declare payment_status: 'paid' | 'pending_invoice' | 'failed';
   declare payment_method: 'credit_card' | 'invoice';
+  declare status: 'active' | 'completed' | 'withdrawn' | 'suspended';
+  declare readiness_score: number;
+  declare prework_score: number;
+  declare attendance_score: number;
+  declare assignment_score: number;
+  declare maturity_level: number;
+  declare intake_completed: boolean;
+  declare intake_data_json: any;
+  declare notes: string;
   declare created_at: Date;
 }
 
@@ -79,6 +97,45 @@ Enrollment.init(
     payment_method: {
       type: DataTypes.ENUM('credit_card', 'invoice'),
       allowNull: false,
+    },
+    status: {
+      type: DataTypes.ENUM('active', 'completed', 'withdrawn', 'suspended'),
+      allowNull: false,
+      defaultValue: 'active',
+    },
+    readiness_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    prework_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    attendance_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    assignment_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    maturity_level: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    intake_completed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    intake_data_json: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,

@@ -136,6 +136,16 @@ import {
   handleGhlResyncLead,
   handleGenerateICP,
 } from '../controllers/adminCampaignController';
+import {
+  handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
+  handleGenerateMeetLink,
+  handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
+  handleListEnrollmentSubmissions, handleListSessionSubmissions, handleCreateSubmission,
+  handleUpdateSubmission, handleUploadSubmission,
+  handleGetReadiness, handleComputeReadiness, handleComputeAllReadiness,
+  handleGetDashboard,
+} from '../controllers/acceleratorController';
+import { strategyPrepUpload } from '../config/upload';
 
 const router = Router();
 
@@ -288,5 +298,26 @@ router.get('/api/admin/opportunities', requireAdmin, handleGetOpportunityScores)
 router.get('/api/admin/chat/stats', requireAdmin, handleGetChatStats);
 router.get('/api/admin/chat/conversations', requireAdmin, handleListChatConversations);
 router.get('/api/admin/chat/conversations/:id', requireAdmin, handleGetChatConversation);
+
+
+// Protected admin routes - Accelerator
+router.get('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, handleListSessions);
+router.post('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, handleCreateSession);
+router.get('/api/admin/accelerator/cohorts/:cohortId/dashboard', requireAdmin, handleGetDashboard);
+router.post('/api/admin/accelerator/cohorts/:cohortId/readiness', requireAdmin, handleComputeAllReadiness);
+router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
+router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
+router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);
+router.post('/api/admin/accelerator/sessions/:id/meet-link', requireAdmin, handleGenerateMeetLink);
+router.get('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleGetAttendance);
+router.post('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleMarkAttendance);
+router.get('/api/admin/accelerator/sessions/:id/submissions', requireAdmin, handleListSessionSubmissions);
+router.patch('/api/admin/accelerator/attendance/:id', requireAdmin, handleUpdateAttendance);
+router.get('/api/admin/accelerator/enrollments/:enrollmentId/submissions', requireAdmin, handleListEnrollmentSubmissions);
+router.get('/api/admin/accelerator/enrollments/:enrollmentId/readiness', requireAdmin, handleGetReadiness);
+router.post('/api/admin/accelerator/enrollments/:enrollmentId/readiness', requireAdmin, handleComputeReadiness);
+router.post('/api/admin/accelerator/submissions', requireAdmin, handleCreateSubmission);
+router.patch('/api/admin/accelerator/submissions/:id', requireAdmin, handleUpdateSubmission);
+router.post('/api/admin/accelerator/submissions/:id/upload', requireAdmin, strategyPrepUpload.single('file'), handleUploadSubmission);
 
 export default router;
