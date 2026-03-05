@@ -24,6 +24,7 @@ import IntentScore from './IntentScore';
 import ChatConversation from './ChatConversation';
 import ChatMessage from './ChatMessage';
 import OpportunityScore from './OpportunityScore';
+import ICPProfile from './ICPProfile';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -133,6 +134,12 @@ ChatConversation.belongsTo(VisitorSession, { foreignKey: 'session_id', as: 'sess
 ChatConversation.hasMany(ChatMessage, { foreignKey: 'conversation_id', as: 'messages' });
 ChatMessage.belongsTo(ChatConversation, { foreignKey: 'conversation_id', as: 'conversation' });
 
+// ICP Profile associations
+Campaign.hasMany(ICPProfile, { foreignKey: 'campaign_id', as: 'icpProfiles' });
+ICPProfile.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
+ICPProfile.belongsTo(AdminUser, { foreignKey: 'created_by', as: 'creator' });
+
 // Opportunity Score associations
 Lead.hasOne(OpportunityScore, { foreignKey: 'lead_id', as: 'opportunityScore' });
 OpportunityScore.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
@@ -149,4 +156,5 @@ export {
   BehavioralSignal, IntentScore,
   ChatConversation, ChatMessage,
   OpportunityScore,
+  ICPProfile,
 };

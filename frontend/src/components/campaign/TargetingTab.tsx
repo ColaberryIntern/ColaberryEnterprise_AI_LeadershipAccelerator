@@ -1,4 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import api from '../../utils/api';
+
+interface ICPProfile {
+  id: string;
+  name: string;
+  role: 'primary' | 'secondary';
+  person_titles: string[];
+  person_seniorities: string[];
+  industries: string[];
+  company_size_min: number | null;
+  company_size_max: number | null;
+  person_locations: string[];
+  keywords: string[];
+  response_rate: number | null;
+  booking_rate: number | null;
+  sample_size: number | null;
+  last_computed_at: string | null;
+}
 
 interface TargetingCriteria {
   industries?: string[];
@@ -26,10 +44,31 @@ export default function TargetingTab({ campaignId, targeting_criteria, headers, 
   const [industryInput, setIndustryInput] = useState('');
   const [titleInput, setTitleInput] = useState('');
   const [sourceInput, setSourceInput] = useState('');
+  const [icpProfiles, setIcpProfiles] = useState<ICPProfile[]>([]);
+  const [icpLoading, setIcpLoading] = useState(false);
 
   useEffect(() => {
     setCriteria(targeting_criteria || {});
   }, [targeting_criteria]);
+
+  useEffect(() => {
+    api.get('/api/admin/icp-profiles', { params: { campaign_id: campaignId } })
+      .then((res) => setIcpProfiles(res.data.profiles || []))
+      .catch(() => {});
+  }, [campaignId]);
+
+  const refreshProfileStats = async (profileId: string) => {
+    setIcpLoading(true);
+    try {
+      await api.post(`/api/admin/icp-profiles/${profileId}/refresh-stats`);
+      const res = await api.get('/api/admin/icp-profiles', { params: { campaign_id: campaignId } });
+      setIcpProfiles(res.data.profiles || []);
+    } catch (err) {
+      console.error('Failed to refresh stats:', err);
+    } finally {
+      setIcpLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -76,6 +115,87 @@ export default function TargetingTab({ campaignId, targeting_criteria, headers, 
 
   return (
     <>
+      {/* ICP Profiles Section */}
+      {icpProfiles.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white fw-semibold">ICP Profiles</div>
+          <div className="card-body">
+            <div className="row g-3">
+              {icpProfiles.map((profile) => (
+                <div key={profile.id} className="col-md-6">
+                  <div className="border rounded p-3">
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <div>
+                        <span className={`badge ${profile.role === 'primary' ? 'bg-primary' : 'bg-secondary'} me-2`}>
+                          {profile.role}
+                        </span>
+                        <span className="fw-medium">{profile.name}</span>
+                      </div>
+                      <button
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => refreshProfileStats(profile.id)}
+                        disabled={icpLoading}
+                        title="Refresh performance stats from ICP insights"
+                      >
+                        Refresh Stats
+                      </button>
+                    </div>
+
+                    {profile.person_titles?.length > 0 && (
+                      <div className="mb-1">
+                        <span className="small text-muted">Titles:</span>{' '}
+                        {profile.person_titles.map((t, i) => (
+                          <span key={i} className="badge bg-light text-dark me-1 small">{t}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {profile.industries?.length > 0 && (
+                      <div className="mb-1">
+                        <span className="small text-muted">Industries:</span>{' '}
+                        {profile.industries.map((ind, i) => (
+                          <span key={i} className="badge bg-light text-dark me-1 small">{ind}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    {(profile.company_size_min || profile.company_size_max) && (
+                      <div className="mb-1">
+                        <span className="small text-muted">Company size:</span>{' '}
+                        <span className="small">{profile.company_size_min || '?'}–{profile.company_size_max || '?'}</span>
+                      </div>
+                    )}
+
+                    {profile.sample_size != null && profile.sample_size > 0 && (
+                      <div className="mt-2 pt-2 border-top">
+                        <div className="d-flex gap-3">
+                          <div className="small">
+                            <span className="text-muted">Response:</span>{' '}
+                            <span className="fw-medium">
+                              {profile.response_rate != null ? `${(profile.response_rate * 100).toFixed(1)}%` : '—'}
+                            </span>
+                          </div>
+                          <div className="small">
+                            <span className="text-muted">Booking:</span>{' '}
+                            <span className="fw-medium">
+                              {profile.booking_rate != null ? `${(profile.booking_rate * 100).toFixed(1)}%` : '—'}
+                            </span>
+                          </div>
+                          <div className="small">
+                            <span className="text-muted">n=</span>
+                            <span>{profile.sample_size}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold">Targeting Criteria</div>
         <div className="card-body">

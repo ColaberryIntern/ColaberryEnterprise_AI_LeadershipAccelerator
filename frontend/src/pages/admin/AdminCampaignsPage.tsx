@@ -146,9 +146,14 @@ function AdminCampaignsPage() {
       <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns' }]} />
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2 className="mb-0">Campaigns</h2>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          + New Campaign
-        </button>
+        <div className="d-flex gap-2">
+          <Link to="/admin/campaigns/build-cold" className="btn btn-outline-primary">
+            Build Cold Campaign
+          </Link>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+            + New Campaign
+          </button>
+        </div>
       </div>
 
       <div className="row mb-3">

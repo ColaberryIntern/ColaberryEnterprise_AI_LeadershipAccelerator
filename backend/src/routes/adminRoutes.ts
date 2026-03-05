@@ -92,6 +92,17 @@ import {
   handleGetChatStats,
 } from '../controllers/adminVisitorController';
 import {
+  handleCreateICPProfile,
+  handleListICPProfiles,
+  handleGetICPProfile,
+  handleUpdateICPProfile,
+  handleDeleteICPProfile,
+  handleSearchApolloFromProfile,
+  handleRefreshProfileStats,
+  handleBuildColdCampaign,
+  handleGetSequenceTemplates,
+} from '../controllers/icpProfileController';
+import {
   handleListCampaigns,
   handleCreateCampaign,
   handleGetCampaign,
@@ -188,6 +199,8 @@ router.post('/api/admin/digest/test', requireAdmin, handleSendTestDigest);
 // Protected admin routes — Campaigns
 router.get('/api/admin/campaigns', requireAdmin, handleListCampaigns);
 router.post('/api/admin/campaigns', requireAdmin, handleCreateCampaign);
+router.post('/api/admin/campaigns/build-cold', requireAdmin, handleBuildColdCampaign);
+router.get('/api/admin/campaigns/sequence-templates', requireAdmin, handleGetSequenceTemplates);
 router.get('/api/admin/campaigns/:id', requireAdmin, handleGetCampaign);
 router.patch('/api/admin/campaigns/:id', requireAdmin, handleUpdateCampaign);
 router.delete('/api/admin/campaigns/:id', requireAdmin, handleDeleteCampaign);
@@ -209,6 +222,15 @@ router.post('/api/admin/campaigns/:id/ghl-sync', requireAdmin, handleGhlSync);
 router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus);
 router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
 router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlResyncLead);
+
+// Protected admin routes — ICP Profiles
+router.get('/api/admin/icp-profiles', requireAdmin, handleListICPProfiles);
+router.post('/api/admin/icp-profiles', requireAdmin, handleCreateICPProfile);
+router.get('/api/admin/icp-profiles/:id', requireAdmin, handleGetICPProfile);
+router.patch('/api/admin/icp-profiles/:id', requireAdmin, handleUpdateICPProfile);
+router.delete('/api/admin/icp-profiles/:id', requireAdmin, handleDeleteICPProfile);
+router.post('/api/admin/icp-profiles/:id/search', requireAdmin, handleSearchApolloFromProfile);
+router.post('/api/admin/icp-profiles/:id/refresh-stats', requireAdmin, handleRefreshProfileStats);
 
 // Protected admin routes — Apollo Integration
 router.post('/api/admin/apollo/search', requireAdmin, handleApolloSearch);

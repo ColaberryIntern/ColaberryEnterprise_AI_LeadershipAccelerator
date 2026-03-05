@@ -30,6 +30,7 @@ import AdminEventLedgerPage from './pages/admin/AdminEventLedgerPage';
 import AdminCampaignsPage from './pages/admin/AdminCampaignsPage';
 import AdminCampaignDetailPage from './pages/admin/AdminCampaignDetailPage';
 import AdminApolloPage from './pages/admin/AdminApolloPage';
+import CampaignBuilderPage from './pages/admin/CampaignBuilderPage';
 import AdminICPInsightsPage from './pages/admin/AdminICPInsightsPage';
 import AdminVisitorsPage from './pages/admin/AdminVisitorsPage';
 import AdminOpportunitiesPage from './pages/admin/AdminOpportunitiesPage';
@@ -70,6 +71,7 @@ function App() {
             <Route path="/admin/visitors" element={<AdminVisitorsPage />} />
             <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
             <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
+            <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />
             <Route path="/admin/campaigns/:id" element={<AdminCampaignDetailPage />} />
             <Route path="/admin/apollo" element={<AdminApolloPage />} />
             <Route path="/admin/sequences" element={<AdminSequencesPage />} />

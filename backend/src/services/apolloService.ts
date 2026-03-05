@@ -5,7 +5,7 @@ import { syncNewLeadToGhl } from './ghlService';
 
 const APOLLO_BASE_URL = 'https://api.apollo.io';
 
-interface ApolloSearchParams {
+export interface ApolloSearchParams {
   q_person_title?: string[];
   person_seniorities?: string[];
   q_organization_industries?: string[];
@@ -16,7 +16,7 @@ interface ApolloSearchParams {
   page?: number;
 }
 
-interface ApolloPersonResult {
+export interface ApolloPersonResult {
   id: string;
   first_name: string;
   last_name: string;
@@ -96,8 +96,17 @@ export async function enrichPerson(email: string): Promise<ApolloPersonResult | 
   return data.person || null;
 }
 
+export interface ColdLeadScoringCriteria {
+  target_industries?: string[];
+  target_titles_pattern?: RegExp;
+  company_size_min?: number;
+  company_size_max?: number;
+  target_technologies?: string[];
+}
+
 export async function importApolloResults(
-  people: ApolloPersonResult[]
+  people: ApolloPersonResult[],
+  options?: { campaign_id?: string; scoring_criteria?: ColdLeadScoringCriteria },
 ): Promise<{ imported: number; duplicates: number; errors: number; leads: any[] }> {
   let imported = 0;
   let duplicates = 0;
@@ -130,15 +139,18 @@ export async function importApolloResults(
       const phone = person.phone_numbers?.[0]?.raw_number || '';
       const org = person.organization;
 
-      const leadScore = calculateColdLeadScore({
-        title: person.title,
-        email: person.email,
-        phone,
-        industry: org?.industry,
-        employee_count: org?.estimated_num_employees,
-        annual_revenue: org?.annual_revenue_printed,
-        technology_stack: org?.technology_names,
-      });
+      const leadScore = calculateColdLeadScore(
+        {
+          title: person.title,
+          email: person.email,
+          phone,
+          industry: org?.industry,
+          employee_count: org?.estimated_num_employees,
+          annual_revenue: org?.annual_revenue_printed,
+          technology_stack: org?.technology_names,
+        },
+        options?.scoring_criteria,
+      );
 
       const lead = await Lead.create({
         name: person.name || `${person.first_name} ${person.last_name}`.trim(),
@@ -176,20 +188,23 @@ export async function importApolloResults(
   return { imported, duplicates, errors, leads };
 }
 
-/** Cold lead scoring algorithm — different criteria than warm leads */
-export function calculateColdLeadScore(lead: {
-  title?: string;
-  email?: string;
-  phone?: string;
-  industry?: string;
-  employee_count?: number;
-  annual_revenue?: string;
-  technology_stack?: string[];
-}): number {
+/** Cold lead scoring algorithm — accepts optional ICP criteria to override defaults */
+export function calculateColdLeadScore(
+  lead: {
+    title?: string;
+    email?: string;
+    phone?: string;
+    industry?: string;
+    employee_count?: number;
+    annual_revenue?: string;
+    technology_stack?: string[];
+  },
+  criteria?: ColdLeadScoringCriteria,
+): number {
   let score = 0;
 
   // Industry match to ICP target list (+15)
-  const icpIndustries = [
+  const icpIndustries = criteria?.target_industries || [
     'saas', 'software', 'technology', 'financial services', 'fintech',
     'healthcare', 'manufacturing', 'professional services', 'consulting',
   ];
@@ -199,13 +214,16 @@ export function calculateColdLeadScore(lead: {
   }
 
   // Executive title — C-suite/VP/Director (+20)
-  const execPattern = /\b(chief|ceo|cto|cio|cdo|cfo|coo|vp|vice\s*president|svp|evp|director|head\s+of)\b/i;
+  const execPattern = criteria?.target_titles_pattern ||
+    /\b(chief|ceo|cto|cio|cdo|cfo|coo|vp|vice\s*president|svp|evp|director|head\s+of)\b/i;
   if (lead.title && execPattern.test(lead.title)) score += 20;
 
-  // Company size in sweet spot 51-500 (+15)
+  // Company size in sweet spot (+15)
   if (lead.employee_count) {
-    if (lead.employee_count >= 51 && lead.employee_count <= 500) score += 15;
-    else if (lead.employee_count > 500) score += 10;
+    const min = criteria?.company_size_min ?? 51;
+    const max = criteria?.company_size_max ?? 500;
+    if (lead.employee_count >= min && lead.employee_count <= max) score += 15;
+    else if (lead.employee_count > max) score += 10;
   }
 
   // Revenue bracket match (+10)
@@ -227,7 +245,8 @@ export function calculateColdLeadScore(lead: {
   if (lead.phone && lead.phone.trim().length > 0) score += 15;
 
   // Technology stack overlap (+15)
-  const icpTech = ['salesforce', 'aws', 'azure', 'gcp', 'snowflake', 'databricks', 'python', 'tensorflow'];
+  const icpTech = criteria?.target_technologies ||
+    ['salesforce', 'aws', 'azure', 'gcp', 'snowflake', 'databricks', 'python', 'tensorflow'];
   if (lead.technology_stack?.length) {
     const overlap = lead.technology_stack.filter((t) =>
       icpTech.some((icp) => t.toLowerCase().includes(icp))
