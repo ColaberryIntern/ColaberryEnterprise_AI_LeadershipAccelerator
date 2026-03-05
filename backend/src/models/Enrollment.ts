@@ -23,6 +23,8 @@ export interface EnrollmentAttributes {
   intake_data_json?: any;
   notes?: string;
   created_at?: Date;
+  portal_token?: string;
+  portal_token_expires_at?: Date;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -46,6 +48,8 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare intake_completed: boolean;
   declare intake_data_json: any;
   declare notes: string;
+  declare portal_token: string;
+  declare portal_token_expires_at: Date;
   declare created_at: Date;
 }
 
@@ -135,6 +139,14 @@ Enrollment.init(
     },
     notes: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    portal_token: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    portal_token_expires_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     created_at: {

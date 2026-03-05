@@ -13,6 +13,7 @@ import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
+import participantRoutes from './routes/participantRoutes';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
 
@@ -41,6 +42,7 @@ app.use(adminRoutes);
 app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
+app.use(participantRoutes);
 
 app.use(errorHandler);
 

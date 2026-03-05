@@ -37,6 +37,16 @@ import AdminOpportunitiesPage from './pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from './pages/admin/AdminAcceleratorPage';
 import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
 import StrategyCallPrepPage from './pages/StrategyCallPrepPage';
+import { ParticipantAuthProvider } from './contexts/ParticipantAuthContext';
+import PortalProtectedRoute from './components/PortalProtectedRoute';
+import PortalLayout from './components/Layout/PortalLayout';
+import PortalLoginPage from './pages/portal/PortalLoginPage';
+import PortalVerifyPage from './pages/portal/PortalVerifyPage';
+import PortalDashboardPage from './pages/portal/PortalDashboardPage';
+import PortalSessionsPage from './pages/portal/PortalSessionsPage';
+import PortalSessionDetailPage from './pages/portal/PortalSessionDetailPage';
+import PortalAssignmentsPage from './pages/portal/PortalAssignmentsPage';
+import PortalProgressPage from './pages/portal/PortalProgressPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -82,6 +92,17 @@ function App() {
             <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
             <Route path="/admin/events" element={<AdminEventLedgerPage />} />
             <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
+          </Route>
+        </Route>
+        <Route path="/portal/login" element={<ParticipantAuthProvider><PortalLoginPage /></ParticipantAuthProvider>} />
+        <Route path="/portal/verify" element={<ParticipantAuthProvider><PortalVerifyPage /></ParticipantAuthProvider>} />
+        <Route element={<ParticipantAuthProvider><PortalProtectedRoute /></ParticipantAuthProvider>}>
+          <Route element={<PortalLayout />}>
+            <Route path="/portal/dashboard" element={<PortalDashboardPage />} />
+            <Route path="/portal/sessions" element={<PortalSessionsPage />} />
+            <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
+            <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
+            <Route path="/portal/progress" element={<PortalProgressPage />} />
           </Route>
         </Route>
       </Routes>
