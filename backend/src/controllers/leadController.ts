@@ -1,12 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { leadSchema, createLead } from '../services/leadService';
 import { runLeadAutomation } from '../services/automationService';
+import { syncNewLeadToGhl } from '../services/ghlService';
 import { ZodError } from 'zod';
 
 export async function submitLead(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const data = leadSchema.parse(req.body);
     const { lead, isDuplicate } = await createLead(data);
+
+    // Auto-sync new lead to GHL (fire-and-forget)
+    if (!isDuplicate) {
+      syncNewLeadToGhl(lead).catch((err) =>
+        console.error('[LeadController] GHL sync error:', err)
+      );
+    }
 
     res.status(201).json({
       message: 'Thank you for your interest',

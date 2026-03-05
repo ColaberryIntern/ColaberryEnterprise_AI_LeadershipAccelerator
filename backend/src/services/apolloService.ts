@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { env } from '../config/env';
 import Lead from '../models/Lead';
+import { syncNewLeadToGhl } from './ghlService';
 
 const APOLLO_BASE_URL = 'https://api.apollo.io';
 
@@ -158,6 +159,11 @@ export async function importApolloResults(
         status: 'new',
         pipeline_stage: 'new_lead',
       } as any);
+
+      // Auto-sync to GHL (fire-and-forget)
+      syncNewLeadToGhl(lead).catch((err) =>
+        console.error(`[Apollo] GHL sync error ${person.email}: ${err.message}`)
+      );
 
       imported++;
       leads.push(lead);

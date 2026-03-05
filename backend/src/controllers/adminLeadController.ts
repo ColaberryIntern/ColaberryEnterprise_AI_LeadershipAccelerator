@@ -17,6 +17,7 @@ import StrategyCall from '../models/StrategyCall';
 import StrategyCallIntelligence from '../models/StrategyCallIntelligence';
 import Lead from '../models/Lead';
 import { CampaignLead, Activity } from '../models';
+import { syncNewLeadToGhl } from '../services/ghlService';
 
 export async function handleAdminListLeads(
   req: Request,
@@ -240,6 +241,11 @@ export async function handleAdminCreateLead(
       res.status(409).json({ error: `A lead with this ${field} already exists`, lead: result.lead });
       return;
     }
+
+    // Auto-sync new lead to GHL (fire-and-forget)
+    syncNewLeadToGhl(result.lead).catch((err) =>
+      console.error('[AdminLead] GHL sync error:', err)
+    );
 
     res.status(201).json({ lead: result.lead });
   } catch (error) {

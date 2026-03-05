@@ -2,6 +2,7 @@ import { parse } from 'csv-parse/sync';
 import { Op } from 'sequelize';
 import Lead from '../models/Lead';
 import { calculateLeadScore, normalizePhone, LeadInput } from './leadService';
+import { syncNewLeadToGhl } from './ghlService';
 
 interface ImportResult {
   imported: number;
@@ -92,12 +93,17 @@ export async function importLeadsFromCsv(buffer: Buffer): Promise<ImportResult> 
 
       const leadScore = calculateLeadScore(leadData);
 
-      await Lead.create({
+      const newLead = await Lead.create({
         ...leadData,
         lead_score: leadScore,
         pipeline_stage: 'new_lead',
         status: 'new',
       });
+
+      // Auto-sync to GHL (fire-and-forget)
+      syncNewLeadToGhl(newLead).catch((err) =>
+        console.error(`[CSVImport] GHL sync error row ${rowNum}: ${err.message}`)
+      );
 
       result.imported++;
     } catch (error: any) {
