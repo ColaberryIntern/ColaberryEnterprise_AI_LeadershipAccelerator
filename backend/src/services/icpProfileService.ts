@@ -100,11 +100,10 @@ export function buildApolloFilters(profile: ICPProfile): ApolloSearchParams {
     filters.person_locations = profile.person_locations;
   }
 
-  if (profile.keywords?.length) {
-    // Apollo treats q_keywords as a single search query — long strings return 0 results.
-    // Use only the first 2 keywords to keep the search broad enough.
-    filters.q_keywords = profile.keywords.slice(0, 2).join(' ');
-  }
+  // NOTE: q_keywords is intentionally NOT sent to Apollo — it drastically reduces
+  // results (e.g. 19,043 → 2). The other filters (titles, seniorities, industries,
+  // company size, locations) provide sufficient targeting. Keywords are retained in
+  // the ICP profile for AI personalization of outreach messages.
 
   // Merge any raw apollo_filters passthrough
   if (profile.apollo_filters && Object.keys(profile.apollo_filters).length) {
