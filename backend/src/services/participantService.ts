@@ -9,11 +9,18 @@ import { sendPortalMagicLink } from './emailService';
 
 export async function requestMagicLink(email: string): Promise<{ success: boolean; message: string }> {
   const enrollment = await Enrollment.findOne({
-    where: { email: email.toLowerCase().trim(), status: 'active' },
+    where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: true },
   });
 
-  // Always return success to prevent email enumeration
   if (!enrollment) {
+    // Check if enrollment exists but portal not enabled
+    const pendingEnrollment = await Enrollment.findOne({
+      where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: false },
+    });
+    if (pendingEnrollment) {
+      return { success: false, message: 'Your enrollment is pending admin approval for portal access. Please contact your program administrator.' };
+    }
+    // Generic message to prevent email enumeration
     return { success: true, message: 'If an active enrollment exists for this email, a link has been sent.' };
   }
 

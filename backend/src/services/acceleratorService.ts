@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import {
-  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission,
+  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail,
 } from '../models';
 
 export async function listSessionsByCohort(cohortId: string) {
@@ -415,4 +415,49 @@ function convertTo24h(timeStr: string): string {
   if (period === 'PM' && hours < 12) hours += 12;
   if (period === 'AM' && hours === 12) hours = 0;
   return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
+
+// -- Enrollment Management --
+
+export async function listCohortEnrollments(cohortId: string) {
+  return Enrollment.findAll({
+    where: { cohort_id: cohortId },
+    order: [['created_at', 'DESC']],
+    include: [{ model: Cohort, as: 'cohort', attributes: ['name'] }],
+  });
+}
+
+export async function setPortalAccess(enrollmentId: string, enabled: boolean) {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) return null;
+
+  await enrollment.update({ portal_enabled: enabled });
+
+  // When enabling portal access, remove the lead from all active campaigns
+  if (enabled) {
+    await removeLeadFromAllCampaigns(enrollment.email);
+  }
+
+  return enrollment;
+}
+
+async function removeLeadFromAllCampaigns(email: string) {
+  const lead = await Lead.findOne({ where: { email: email.toLowerCase().trim() } });
+  if (!lead) return;
+
+  const activeCampaignLeads = await CampaignLead.findAll({
+    where: {
+      lead_id: lead.id,
+      status: { [Op.in]: ['enrolled', 'active'] },
+    },
+  });
+
+  for (const cl of activeCampaignLeads) {
+    // Cancel pending scheduled emails for this lead in this campaign
+    await ScheduledEmail.update(
+      { status: 'cancelled' } as any,
+      { where: { campaign_id: cl.campaign_id, lead_id: lead.id, status: 'pending' } }
+    );
+    await cl.update({ status: 'removed', outcome: 'converted_to_student' } as any);
+  }
 }

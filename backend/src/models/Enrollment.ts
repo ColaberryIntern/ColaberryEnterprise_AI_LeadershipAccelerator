@@ -25,6 +25,7 @@ export interface EnrollmentAttributes {
   created_at?: Date;
   portal_token?: string;
   portal_token_expires_at?: Date;
+  portal_enabled?: boolean;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -50,6 +51,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare notes: string;
   declare portal_token: string;
   declare portal_token_expires_at: Date;
+  declare portal_enabled: boolean;
   declare created_at: Date;
 }
 
@@ -148,6 +150,11 @@ Enrollment.init(
     portal_token_expires_at: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    portal_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     created_at: {
       type: DataTypes.DATE,

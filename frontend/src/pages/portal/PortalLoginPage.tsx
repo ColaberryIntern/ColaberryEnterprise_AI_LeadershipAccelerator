@@ -12,8 +12,12 @@ function PortalLoginPage() {
     setError('');
     setLoading(true);
     try {
-      await portalApi.post('/api/portal/request-link', { email });
-      setSent(true);
+      const res = await portalApi.post('/api/portal/request-link', { email });
+      if (res.data.success === false) {
+        setError(res.data.message || 'Unable to send access link.');
+      } else {
+        setSent(true);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to send access link. Please try again.');
     } finally {

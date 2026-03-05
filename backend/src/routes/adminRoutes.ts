@@ -145,6 +145,8 @@ import {
   handleGetReadiness, handleComputeReadiness, handleComputeAllReadiness,
   handleGetDashboard,
   handleCreateEnrollment,
+  handleListCohortEnrollments,
+  handleSetPortalAccess,
 } from '../controllers/acceleratorController';
 import { strategyPrepUpload } from '../config/upload';
 
@@ -307,6 +309,8 @@ router.post('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, h
 router.get('/api/admin/accelerator/cohorts/:cohortId/dashboard', requireAdmin, handleGetDashboard);
 router.post('/api/admin/accelerator/cohorts/:cohortId/readiness', requireAdmin, handleComputeAllReadiness);
 router.post('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleCreateEnrollment);
+router.get('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleListCohortEnrollments);
+router.patch('/api/admin/accelerator/enrollments/:id/portal-access', requireAdmin, handleSetPortalAccess);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
 router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);

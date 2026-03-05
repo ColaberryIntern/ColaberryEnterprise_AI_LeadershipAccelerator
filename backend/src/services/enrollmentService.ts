@@ -120,6 +120,7 @@ export async function createAdminEnrollment(data: {
     payment_status: 'paid',
     payment_method: 'invoice',
     status: 'active',
+    portal_enabled: false,
     notes: data.notes || 'Manually added by admin',
   });
 

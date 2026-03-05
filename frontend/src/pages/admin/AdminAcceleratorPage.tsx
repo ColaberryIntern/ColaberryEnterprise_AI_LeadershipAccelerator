@@ -51,6 +51,10 @@ interface EnrollmentInfo {
   assignment_score: number;
   maturity_level: number;
   status: string;
+  payment_status?: string;
+  payment_method?: string;
+  portal_enabled?: boolean;
+  created_at?: string;
 }
 
 interface Submission {
@@ -84,7 +88,7 @@ interface DashboardData {
   enrollments: EnrollmentInfo[];
 }
 
-type TabKey = 'sessions' | 'attendance' | 'submissions' | 'readiness';
+type TabKey = 'sessions' | 'participants' | 'attendance' | 'submissions' | 'readiness';
 
 function AdminAcceleratorPage() {
   const { showToast } = useToast();
@@ -118,10 +122,12 @@ function AdminAcceleratorPage() {
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  // Add Participant state
-  const [showParticipantModal, setShowParticipantModal] = useState(false);
-  const [participantForm, setParticipantForm] = useState({ full_name: '', email: '', company: '', title: '', notes: '' });
-  const [participantSaving, setParticipantSaving] = useState(false);
+
+  // Participants tab state
+  const [cohortEnrollments, setCohortEnrollments] = useState<EnrollmentInfo[]>([]);
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+  const [portalFilter, setPortalFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending_invoice' | 'failed'>('all');
 
   useEffect(() => {
     api.get('/api/admin/cohorts').then((res) => {
@@ -292,6 +298,42 @@ function AdminAcceleratorPage() {
     setReadinessLoading(false);
   };
 
+  // -- Participants / Enrollment handlers --
+
+  const loadEnrollments = useCallback(async () => {
+    if (!selectedCohortId) return;
+    setEnrollmentsLoading(true);
+    try {
+      const res = await api.get(`/api/admin/accelerator/cohorts/${selectedCohortId}/enrollments`);
+      setCohortEnrollments(res.data.enrollments || []);
+    } catch { showToast('Failed to load enrollments', 'error'); }
+    setEnrollmentsLoading(false);
+  }, [selectedCohortId]); // eslint-disable-line
+
+  useEffect(() => {
+    if (activeTab === 'participants') {
+      loadEnrollments();
+    }
+  }, [activeTab, loadEnrollments]);
+
+  const handleTogglePortal = async (enrollmentId: string, enabled: boolean) => {
+    try {
+      await api.patch(`/api/admin/accelerator/enrollments/${enrollmentId}/portal-access`, { portal_enabled: enabled });
+      showToast(enabled ? 'Portal access enabled' : 'Portal access revoked', 'success');
+      loadEnrollments();
+      loadDashboard();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to update portal access', 'error');
+    }
+  };
+
+  const filteredEnrollments = cohortEnrollments.filter((e) => {
+    if (portalFilter === 'enabled' && !e.portal_enabled) return false;
+    if (portalFilter === 'disabled' && e.portal_enabled) return false;
+    if (paymentFilter !== 'all' && e.payment_status !== paymentFilter) return false;
+    return true;
+  });
+
   // -- Helpers --
 
   const statusBadge = (status: string) => {
@@ -303,6 +345,16 @@ function AdminAcceleratorPage() {
     return <span className={`badge ${colors[status] || 'bg-secondary'}`}>{status}</span>;
   };
 
+  const paymentBadge = (status: string) => {
+    const colors: Record<string, string> = {
+      paid: 'bg-success', pending_invoice: 'bg-warning text-dark', failed: 'bg-danger',
+    };
+    const labels: Record<string, string> = {
+      paid: 'Paid', pending_invoice: 'Pending Invoice', failed: 'Failed',
+    };
+    return <span className={`badge ${colors[status] || 'bg-secondary'}`}>{labels[status] || status}</span>;
+  };
+
   const readinessColor = (score: number | null) => {
     if (!score) return 'text-muted';
     if (score >= 70) return 'text-success';
@@ -311,26 +363,7 @@ function AdminAcceleratorPage() {
   };
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-
-
-  const handleCreateParticipant = async () => {
-    if (!participantForm.full_name || !participantForm.email || !participantForm.company) {
-      showToast('Name, email, and company are required', 'error');
-      return;
-    }
-    setParticipantSaving(true);
-    try {
-      await api.post(`/api/admin/accelerator/cohorts/${selectedCohortId}/enrollments`, participantForm);
-      showToast('Participant added successfully', 'success');
-      setShowParticipantModal(false);
-      setParticipantForm({ full_name: '', email: '', company: '', title: '', notes: '' });
-      loadDashboard();
-    } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to add participant', 'error');
-    } finally {
-      setParticipantSaving(false);
-    }
-  };
+  const formatDateTime = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   if (loading) {
     return (
@@ -361,9 +394,6 @@ function AdminAcceleratorPage() {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-        <button className="btn btn-success btn-sm" onClick={() => setShowParticipantModal(true)} disabled={!selectedCohortId}>
-          <i className="bi bi-person-plus me-1"></i>Add Participant
-        </button>
       </div>
 
       {/* Stats Cards */}
@@ -390,7 +420,7 @@ function AdminAcceleratorPage() {
 
       {/* Tabs */}
       <ul className="nav nav-tabs mb-4">
-        {(['sessions', 'attendance', 'submissions', 'readiness'] as TabKey[]).map((tab) => (
+        {(['sessions', 'participants', 'attendance', 'submissions', 'readiness'] as TabKey[]).map((tab) => (
           <li key={tab} className="nav-item">
             <button
               className={`nav-link${activeTab === tab ? ' active' : ''}`}
@@ -465,6 +495,71 @@ function AdminAcceleratorPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'participants' && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span className="fw-semibold">Enrollments ({filteredEnrollments.length})</span>
+            <div className="d-flex gap-2 align-items-center">
+              <select className="form-select form-select-sm" style={{ width: 'auto' }} value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as any)}>
+                <option value="all">All Payments</option>
+                <option value="paid">Paid</option>
+                <option value="pending_invoice">Pending Invoice</option>
+                <option value="failed">Failed</option>
+              </select>
+              <select className="form-select form-select-sm" style={{ width: 'auto' }} value={portalFilter} onChange={(e) => setPortalFilter(e.target.value as any)}>
+                <option value="all">All Portal</option>
+                <option value="enabled">Portal Enabled</option>
+                <option value="disabled">Portal Disabled</option>
+              </select>
+            </div>
+          </div>
+          <div className="card-body p-0">
+            {enrollmentsLoading ? (
+              <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Company</th>
+                      <th>Payment</th>
+                      <th>Portal Access</th>
+                      <th>Enrolled</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEnrollments.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center text-muted py-4">No enrollments found</td></tr>
+                    ) : filteredEnrollments.map((e) => (
+                      <tr key={e.id}>
+                        <td className="fw-medium">{e.full_name}</td>
+                        <td className="small">{e.email}</td>
+                        <td>{e.company}</td>
+                        <td>{paymentBadge(e.payment_status || 'failed')}</td>
+                        <td>
+                          {e.portal_enabled ? (
+                            <button className="btn btn-outline-danger btn-sm" onClick={() => handleTogglePortal(e.id, false)}>
+                              <i className="bi bi-lock me-1"></i>Revoke
+                            </button>
+                          ) : (
+                            <button className="btn btn-success btn-sm" onClick={() => handleTogglePortal(e.id, true)}>
+                              <i className="bi bi-unlock me-1"></i>Enable Portal
+                            </button>
+                          )}
+                        </td>
+                        <td className="small">{formatDateTime(e.created_at || '')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -738,52 +833,6 @@ function AdminAcceleratorPage() {
         onConfirm={handleDeleteSession}
         onCancel={() => setDeleteTarget(null)}
       />
-
-      {/* Add Participant Modal */}
-      {showParticipantModal && (
-        <>
-          <div className="modal-backdrop show" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} />
-          <div className="modal show d-block" tabIndex={-1} role="dialog" aria-modal="true">
-            <div className="modal-dialog">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title fw-semibold">Add Participant</h5>
-                  <button type="button" className="btn-close" onClick={() => setShowParticipantModal(false)} aria-label="Close" />
-                </div>
-                <div className="modal-body">
-                  <div className="mb-3">
-                    <label className="form-label small fw-medium">Full Name *</label>
-                    <input type="text" className="form-control form-control-sm" value={participantForm.full_name} onChange={(e) => setParticipantForm({ ...participantForm, full_name: e.target.value })} placeholder="Jane Smith" />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-medium">Email *</label>
-                    <input type="email" className="form-control form-control-sm" value={participantForm.email} onChange={(e) => setParticipantForm({ ...participantForm, email: e.target.value })} placeholder="jane@company.com" />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-medium">Company *</label>
-                    <input type="text" className="form-control form-control-sm" value={participantForm.company} onChange={(e) => setParticipantForm({ ...participantForm, company: e.target.value })} placeholder="Acme Corp" />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-medium">Title</label>
-                    <input type="text" className="form-control form-control-sm" value={participantForm.title} onChange={(e) => setParticipantForm({ ...participantForm, title: e.target.value })} placeholder="VP of Technology" />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-medium">Notes</label>
-                    <textarea className="form-control form-control-sm" rows={2} value={participantForm.notes} onChange={(e) => setParticipantForm({ ...participantForm, notes: e.target.value })} placeholder="Corporate sponsor, etc." />
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowParticipantModal(false)}>Cancel</button>
-                  <button className="btn btn-primary btn-sm" onClick={handleCreateParticipant} disabled={participantSaving} style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}>
-                    {participantSaving ? <><span className="spinner-border spinner-border-sm me-1"></span>Adding...</> : 'Add Participant'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
     </>
   );
 }

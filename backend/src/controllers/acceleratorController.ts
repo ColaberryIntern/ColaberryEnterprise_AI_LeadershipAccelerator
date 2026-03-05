@@ -4,6 +4,7 @@ import {
   getSessionAttendance, markAttendance, bulkMarkAttendance, updateAttendanceRecord,
   listSubmissionsByEnrollment, listSubmissionsBySession, createSubmission, updateSubmission,
   computeReadinessScore, computeAllReadinessScores, getCohortDashboard,
+  listCohortEnrollments, setPortalAccess,
 } from '../services/acceleratorService';
 import { generateMeetLink } from '../services/meetingService';
 import { LiveSession } from '../models';
@@ -187,5 +188,26 @@ export async function handleCreateEnrollment(req: Request, res: Response, next: 
       notes,
     });
     res.status(201).json({ enrollment });
+  } catch (err) { next(err); }
+}
+
+// -- Enrollment Management --
+
+export async function handleListCohortEnrollments(req: Request, res: Response, next: NextFunction) {
+  try {
+    const enrollments = await listCohortEnrollments(req.params.cohortId as string);
+    res.json({ enrollments });
+  } catch (err) { next(err); }
+}
+
+export async function handleSetPortalAccess(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { portal_enabled } = req.body;
+    if (typeof portal_enabled !== 'boolean') {
+      return res.status(400).json({ error: 'portal_enabled (boolean) is required' });
+    }
+    const enrollment = await setPortalAccess(req.params.id as string, portal_enabled);
+    if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' });
+    res.json({ enrollment });
   } catch (err) { next(err); }
 }
