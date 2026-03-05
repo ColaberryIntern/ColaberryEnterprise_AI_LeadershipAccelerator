@@ -4,7 +4,7 @@ import { triggerVoiceCall } from './synthflowService';
 import { sendEnrollmentConfirmation, sendInterestEmail, sendExecutiveOverviewEmail, sendHighIntentAlert } from './emailService';
 import { enrollLeadInSequence } from './sequenceService';
 import { advancePipelineStage } from './pipelineService';
-import { recordOutcome } from './interactionService';
+import { recordOutcome, recordActionOutcome } from './interactionService';
 import { syncLeadToGhl } from './ghlService';
 import { getSetting } from './settingsService';
 
@@ -271,6 +271,12 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
             body: initialEmailHtml,
           } as any);
           console.log(`[Automation] Marked Step 0 as sent for lead ${lead.id}`);
+
+          // Record the interaction so CampaignLead tracking updates
+          // (last_activity_at, touchpoint_count, current_step_index, next_action_at)
+          await recordActionOutcome(step0, 'sent').catch((err: any) =>
+            console.error(`[Automation] recordActionOutcome failed for lead ${lead.id}:`, err.message)
+          );
         }
       }
     } catch (error: any) {
