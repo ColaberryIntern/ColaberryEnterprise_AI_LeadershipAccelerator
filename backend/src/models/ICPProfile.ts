@@ -24,7 +24,13 @@ interface ICPProfileAttributes {
   // Performance (populated by ICP insight feedback)
   response_rate?: number;
   booking_rate?: number;
+  open_rate?: number;
+  conversion_rate?: number;
   sample_size?: number;
+  confidence_score?: number;
+  performance_grade?: string;
+  trend?: string;
+  recommendation_data?: Record<string, any>[];
   last_computed_at?: Date;
 
   // Associations
@@ -51,7 +57,13 @@ class ICPProfile extends Model<ICPProfileAttributes> implements ICPProfileAttrib
   declare buying_signals: string[];
   declare response_rate: number;
   declare booking_rate: number;
+  declare open_rate: number;
+  declare conversion_rate: number;
   declare sample_size: number;
+  declare confidence_score: number;
+  declare performance_grade: string;
+  declare trend: string;
+  declare recommendation_data: Record<string, any>[];
   declare last_computed_at: Date;
   declare campaign_id: string;
   declare created_by: string;
@@ -135,10 +147,35 @@ ICPProfile.init(
       type: DataTypes.DECIMAL(5, 4),
       allowNull: true,
     },
+    open_rate: {
+      type: DataTypes.DECIMAL(5, 4),
+      allowNull: true,
+    },
+    conversion_rate: {
+      type: DataTypes.DECIMAL(5, 4),
+      allowNull: true,
+    },
     sample_size: {
       type: DataTypes.INTEGER,
       allowNull: true,
       defaultValue: 0,
+    },
+    confidence_score: {
+      type: DataTypes.DECIMAL(5, 4),
+      allowNull: true,
+    },
+    performance_grade: {
+      type: DataTypes.STRING(1),
+      allowNull: true,
+    },
+    trend: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    recommendation_data: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
     },
     last_computed_at: {
       type: DataTypes.DATE,

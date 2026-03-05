@@ -719,12 +719,30 @@ export function startScheduler(): void {
     });
   });
 
-  // Compute ICP insights daily at 2 AM
-  cron.schedule('0 2 * * *', () => {
-    console.log('[Scheduler] Running daily ICP insight computation...');
-    computeInsights(90).catch((err) => {
+  // Compute ICP insights daily at 2 AM, then auto-refresh active ICP profiles
+  cron.schedule('0 2 * * *', async () => {
+    try {
+      console.log('[Scheduler] Running daily ICP insight computation...');
+      await computeInsights(90);
+
+      // Auto-refresh stats for ICP profiles linked to active campaigns
+      const { refreshProfileStats } = require('./icpProfileService');
+      const { ICPProfile } = require('../models');
+      const activeProfiles = await ICPProfile.findAll({
+        include: [{ model: Campaign, as: 'campaign', where: { status: 'active' }, required: true }],
+      });
+      if (activeProfiles.length > 0) {
+        console.log(`[Scheduler] Refreshing stats for ${activeProfiles.length} active ICP profile(s)...`);
+        for (const profile of activeProfiles) {
+          await refreshProfileStats(profile.id).catch((err: any) =>
+            console.error(`[Scheduler] Profile stats refresh error (${profile.id}):`, err.message),
+          );
+        }
+        console.log('[Scheduler] ICP profile stats refresh complete');
+      }
+    } catch (err) {
       console.error('[Scheduler] ICP insight computation error:', err);
-    });
+    }
   });
 
   // Behavioral signal detection: analyze closed sessions every 10 minutes

@@ -99,6 +99,8 @@ import {
   handleDeleteICPProfile,
   handleSearchApolloFromProfile,
   handleRefreshProfileStats,
+  handleGetProfileRecommendations,
+  handleApplyRecommendation,
   handleBuildColdCampaign,
   handleGetSequenceTemplates,
 } from '../controllers/icpProfileController';
@@ -231,6 +233,8 @@ router.patch('/api/admin/icp-profiles/:id', requireAdmin, handleUpdateICPProfile
 router.delete('/api/admin/icp-profiles/:id', requireAdmin, handleDeleteICPProfile);
 router.post('/api/admin/icp-profiles/:id/search', requireAdmin, handleSearchApolloFromProfile);
 router.post('/api/admin/icp-profiles/:id/refresh-stats', requireAdmin, handleRefreshProfileStats);
+router.get('/api/admin/icp-profiles/:id/recommendations', requireAdmin, handleGetProfileRecommendations);
+router.post('/api/admin/icp-profiles/:id/apply-recommendation', requireAdmin, handleApplyRecommendation);
 
 // Protected admin routes — Apollo Integration
 router.post('/api/admin/apollo/search', requireAdmin, handleApolloSearch);

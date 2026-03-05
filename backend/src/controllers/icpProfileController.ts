@@ -7,6 +7,8 @@ import {
   listICPProfiles,
   searchApolloFromProfile,
   refreshProfileStats,
+  getProfileRecommendations,
+  applyRecommendation,
 } from '../services/icpProfileService';
 import {
   buildColdCampaign,
@@ -108,6 +110,34 @@ export async function handleRefreshProfileStats(
 ): Promise<void> {
   try {
     const profile = await refreshProfileStats(req.params.id as string);
+    res.json({ profile });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ── ICP Recommendations ─────────────────────────────────────────────────
+
+export async function handleGetProfileRecommendations(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const result = await getProfileRecommendations(req.params.id as string);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleApplyRecommendation(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const profile = await applyRecommendation(req.params.id as string, req.body);
     res.json({ profile });
   } catch (error) {
     next(error);

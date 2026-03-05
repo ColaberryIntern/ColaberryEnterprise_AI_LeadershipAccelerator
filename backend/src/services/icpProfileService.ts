@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { ICPProfile, Campaign } from '../models';
 import { ApolloSearchParams, searchPeople, importApolloResults } from './apolloService';
-import { getInsights } from './icpInsightService';
+import { getInsights, getTargetingRecommendations } from './icpInsightService';
 
 // ── CRUD ────────────────────────────────────────────────────────────────
 
@@ -177,6 +177,14 @@ export async function importLeadsFromProfile(
 
 // ── Refresh Profile Stats from ICP Insights ─────────────────────────────
 
+function computePerformanceGrade(responseRate: number | null): string | null {
+  if (responseRate == null) return null;
+  if (responseRate > 0.30) return 'A';
+  if (responseRate > 0.15) return 'B';
+  if (responseRate > 0.05) return 'C';
+  return 'D';
+}
+
 export async function refreshProfileStats(profileId: string) {
   const profile = await getICPProfile(profileId);
 
@@ -185,9 +193,15 @@ export async function refreshProfileStats(profileId: string) {
     campaign_type: 'cold_outbound',
   });
 
-  let totalResponseRate = 0;
-  let totalBookingRate = 0;
-  let matchCount = 0;
+  // Accumulators per metric (weighted by sample size)
+  const metricAccum: Record<string, { weightedSum: number; totalWeight: number }> = {
+    response_rate: { weightedSum: 0, totalWeight: 0 },
+    booking_rate: { weightedSum: 0, totalWeight: 0 },
+    open_rate: { weightedSum: 0, totalWeight: 0 },
+    conversion_rate: { weightedSum: 0, totalWeight: 0 },
+  };
+
+  let minConfidence: number | null = null;
   let totalSampleSize = 0;
 
   for (const insight of insights) {
@@ -198,7 +212,7 @@ export async function refreshProfileStats(profileId: string) {
       insight.dimension_type === 'industry' &&
       profile.industries?.length &&
       profile.industries.some(
-        (ind) => ind.toLowerCase() === insight.dimension_value.toLowerCase(),
+        (ind: string) => ind.toLowerCase() === insight.dimension_value.toLowerCase(),
       )
     ) {
       isMatch = true;
@@ -209,13 +223,13 @@ export async function refreshProfileStats(profileId: string) {
       insight.dimension_type === 'title_category' &&
       profile.person_titles?.length &&
       profile.person_titles.some(
-        (t) => t.toLowerCase().includes(insight.dimension_value.toLowerCase()),
+        (t: string) => t.toLowerCase().includes(insight.dimension_value.toLowerCase()),
       )
     ) {
       isMatch = true;
     }
 
-    // Match by company size
+    // Match by company size bucket
     if (
       insight.dimension_type === 'company_size' &&
       profile.company_size_min != null
@@ -223,28 +237,333 @@ export async function refreshProfileStats(profileId: string) {
       isMatch = true;
     }
 
+    // Match by source type (cold profiles match cold source)
+    if (
+      insight.dimension_type === 'source_type' &&
+      insight.dimension_value === 'cold'
+    ) {
+      isMatch = true;
+    }
+
+    // Match cross-dimensional (industry_x_title)
+    if (insight.dimension_type === 'industry_x_title') {
+      const [insightIndustry, insightTitle] = insight.dimension_value.split('::');
+      const industryMatch = profile.industries?.some(
+        (ind: string) => ind.toLowerCase() === insightIndustry?.toLowerCase(),
+      );
+      const titleMatch = profile.person_titles?.some(
+        (t: string) => t.toLowerCase().includes(insightTitle?.toLowerCase() || ''),
+      );
+      if (industryMatch && titleMatch) isMatch = true;
+    }
+
     if (isMatch) {
-      if (insight.metric_name === 'response_rate') {
-        totalResponseRate += insight.metric_value * insight.sample_size;
+      const metricName = insight.metric_name as string;
+      const metricValue = parseFloat(String(insight.metric_value));
+      const sampleSize = insight.sample_size as number;
+      const confidence = parseFloat(String(insight.confidence));
+
+      if (metricAccum[metricName]) {
+        metricAccum[metricName].weightedSum += metricValue * sampleSize;
+        metricAccum[metricName].totalWeight += sampleSize;
       }
-      if (insight.metric_name === 'booking_rate') {
-        totalBookingRate += insight.metric_value * insight.sample_size;
+
+      totalSampleSize += sampleSize;
+
+      if (minConfidence === null || confidence < minConfidence) {
+        minConfidence = confidence;
       }
-      totalSampleSize += insight.sample_size;
-      matchCount++;
     }
   }
+
+  // Compute weighted averages
+  const responseRate = metricAccum.response_rate.totalWeight > 0
+    ? metricAccum.response_rate.weightedSum / metricAccum.response_rate.totalWeight
+    : null;
+  const bookingRate = metricAccum.booking_rate.totalWeight > 0
+    ? metricAccum.booking_rate.weightedSum / metricAccum.booking_rate.totalWeight
+    : null;
+  const openRate = metricAccum.open_rate.totalWeight > 0
+    ? metricAccum.open_rate.weightedSum / metricAccum.open_rate.totalWeight
+    : null;
+  const conversionRate = metricAccum.conversion_rate.totalWeight > 0
+    ? metricAccum.conversion_rate.weightedSum / metricAccum.conversion_rate.totalWeight
+    : null;
+
+  // Compute trend: compare to previous profile values
+  let trend: string | null = null;
+  if (responseRate != null && profile.response_rate != null) {
+    const prevRate = parseFloat(String(profile.response_rate));
+    const diff = responseRate - prevRate;
+    if (Math.abs(diff) < 0.02) trend = 'stable';
+    else if (diff > 0) trend = 'improving';
+    else trend = 'declining';
+  }
+
+  // Generate and cache recommendations
+  const recommendations = await generateRecommendations(profile);
 
   const updates: any = {
     last_computed_at: new Date(),
     sample_size: totalSampleSize,
+    response_rate: responseRate,
+    booking_rate: bookingRate,
+    open_rate: openRate,
+    conversion_rate: conversionRate,
+    confidence_score: minConfidence,
+    performance_grade: computePerformanceGrade(responseRate),
+    trend,
+    recommendation_data: recommendations,
   };
-
-  if (totalSampleSize > 0) {
-    updates.response_rate = totalResponseRate / totalSampleSize;
-    updates.booking_rate = totalBookingRate / totalSampleSize;
-  }
 
   await profile.update(updates);
   return profile;
+}
+
+// ── Profile Recommendations ──────────────────────────────────────────────
+
+export interface ICPRecommendation {
+  type: 'add' | 'remove' | 'adjust';
+  dimension: 'industry' | 'title' | 'company_size' | 'seniority' | 'location';
+  value: string;
+  reason: string;
+  metric_value: number;
+  metric_name: string;
+  sample_size: number;
+  confidence: number;
+}
+
+async function generateRecommendations(profile: ICPProfile): Promise<ICPRecommendation[]> {
+  const recommendations: ICPRecommendation[] = [];
+
+  // Get top-performing dimensions for cold outbound
+  const topInsights = await getTargetingRecommendations('cold_outbound', 'response_rate', 10);
+
+  // Current profile dimensions (lowercase for comparison)
+  const currentIndustries = new Set(
+    (profile.industries || []).map((i: string) => i.toLowerCase()),
+  );
+  const currentTitles = new Set(
+    (profile.person_titles || []).map((t: string) => t.toLowerCase()),
+  );
+
+  for (const insight of topInsights) {
+    // Suggest adding high-performing industries not in the profile
+    if (insight.dimension_type === 'industry' && insight.metric_value > 0.10) {
+      if (!currentIndustries.has(insight.dimension_value.toLowerCase())) {
+        recommendations.push({
+          type: 'add',
+          dimension: 'industry',
+          value: insight.dimension_value,
+          reason: `${(insight.metric_value * 100).toFixed(1)}% response rate (n=${insight.sample_size})`,
+          metric_value: insight.metric_value,
+          metric_name: 'response_rate',
+          sample_size: insight.sample_size,
+          confidence: insight.confidence,
+        });
+      }
+    }
+
+    // Suggest adding high-performing title categories not in the profile
+    if (insight.dimension_type === 'title_category' && insight.metric_value > 0.10) {
+      const alreadyTargeted = [...currentTitles].some(
+        (t) => t.includes(insight.dimension_value.toLowerCase()),
+      );
+      if (!alreadyTargeted) {
+        recommendations.push({
+          type: 'add',
+          dimension: 'title',
+          value: insight.dimension_value,
+          reason: `${(insight.metric_value * 100).toFixed(1)}% response rate (n=${insight.sample_size})`,
+          metric_value: insight.metric_value,
+          metric_name: 'response_rate',
+          sample_size: insight.sample_size,
+          confidence: insight.confidence,
+        });
+      }
+    }
+
+    // Suggest company size adjustments
+    if (insight.dimension_type === 'company_size' && insight.metric_value > 0.15) {
+      const bucketMap: Record<string, [number, number]> = {
+        '1-10': [1, 10],
+        '11-50': [11, 50],
+        '51-200': [51, 200],
+        '201-1000': [201, 1000],
+        '1000+': [1000, 10000],
+      };
+      const range = bucketMap[insight.dimension_value];
+      if (range) {
+        const [min, max] = range;
+        const profileMin = profile.company_size_min ?? 0;
+        const profileMax = profile.company_size_max ?? 99999;
+        // Suggest if best bucket is outside current range
+        if (min > profileMax || max < profileMin) {
+          recommendations.push({
+            type: 'adjust',
+            dimension: 'company_size',
+            value: `${min}-${max}`,
+            reason: `${insight.dimension_value} companies have ${(insight.metric_value * 100).toFixed(1)}% response rate (n=${insight.sample_size})`,
+            metric_value: insight.metric_value,
+            metric_name: 'response_rate',
+            sample_size: insight.sample_size,
+            confidence: insight.confidence,
+          });
+        }
+      }
+    }
+  }
+
+  // Check for underperforming dimensions currently in the profile
+  const profileInsights = await getInsights({
+    campaign_type: 'cold_outbound',
+    metric_name: 'response_rate',
+    min_sample_size: 20,
+  });
+
+  for (const insight of profileInsights) {
+    const metricValue = parseFloat(String(insight.metric_value));
+    if (metricValue >= 0.05) continue; // Only flag <5% response rate
+
+    // Check if this underperformer is in the profile
+    if (
+      insight.dimension_type === 'industry' &&
+      currentIndustries.has(insight.dimension_value.toLowerCase())
+    ) {
+      recommendations.push({
+        type: 'remove',
+        dimension: 'industry',
+        value: insight.dimension_value,
+        reason: `Only ${(metricValue * 100).toFixed(1)}% response rate (n=${insight.sample_size})`,
+        metric_value: metricValue,
+        metric_name: 'response_rate',
+        sample_size: insight.sample_size,
+        confidence: parseFloat(String(insight.confidence)),
+      });
+    }
+
+    if (insight.dimension_type === 'title_category') {
+      const matchedTitle = [...currentTitles].find(
+        (t) => t.includes(insight.dimension_value.toLowerCase()),
+      );
+      if (matchedTitle) {
+        recommendations.push({
+          type: 'remove',
+          dimension: 'title',
+          value: insight.dimension_value,
+          reason: `Only ${(metricValue * 100).toFixed(1)}% response rate (n=${insight.sample_size})`,
+          metric_value: metricValue,
+          metric_name: 'response_rate',
+          sample_size: insight.sample_size,
+          confidence: parseFloat(String(insight.confidence)),
+        });
+      }
+    }
+  }
+
+  // Sort by confidence descending, limit to 10
+  recommendations.sort((a, b) => b.confidence - a.confidence);
+  return recommendations.slice(0, 10);
+}
+
+export async function getProfileRecommendations(profileId: string): Promise<{
+  recommendations: ICPRecommendation[];
+  profile_performance: {
+    grade: string | null;
+    trend: string | null;
+    response_rate: number | null;
+    booking_rate: number | null;
+    open_rate: number | null;
+    conversion_rate: number | null;
+    sample_size: number;
+    confidence_score: number | null;
+  };
+}> {
+  const profile = await getICPProfile(profileId);
+
+  // Use cached recommendations if fresh (computed within last hour), otherwise regenerate
+  let recommendations: ICPRecommendation[];
+  const lastComputed = profile.last_computed_at ? new Date(profile.last_computed_at).getTime() : 0;
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+  if (lastComputed > oneHourAgo && profile.recommendation_data?.length) {
+    recommendations = profile.recommendation_data as ICPRecommendation[];
+  } else {
+    recommendations = await generateRecommendations(profile);
+    await profile.update({ recommendation_data: recommendations } as any);
+  }
+
+  return {
+    recommendations,
+    profile_performance: {
+      grade: profile.performance_grade || null,
+      trend: profile.trend || null,
+      response_rate: profile.response_rate != null ? parseFloat(String(profile.response_rate)) : null,
+      booking_rate: profile.booking_rate != null ? parseFloat(String(profile.booking_rate)) : null,
+      open_rate: profile.open_rate != null ? parseFloat(String(profile.open_rate)) : null,
+      conversion_rate: profile.conversion_rate != null ? parseFloat(String(profile.conversion_rate)) : null,
+      sample_size: profile.sample_size || 0,
+      confidence_score: profile.confidence_score != null ? parseFloat(String(profile.confidence_score)) : null,
+    },
+  };
+}
+
+export async function applyRecommendation(
+  profileId: string,
+  recommendation: ICPRecommendation,
+): Promise<ICPProfile> {
+  const profile = await getICPProfile(profileId);
+
+  switch (recommendation.type) {
+    case 'add': {
+      if (recommendation.dimension === 'industry') {
+        const industries = [...(profile.industries || [])];
+        if (!industries.some((i: string) => i.toLowerCase() === recommendation.value.toLowerCase())) {
+          industries.push(recommendation.value);
+          await profile.update({ industries } as any);
+        }
+      } else if (recommendation.dimension === 'title') {
+        const titles = [...(profile.person_titles || [])];
+        if (!titles.some((t: string) => t.toLowerCase() === recommendation.value.toLowerCase())) {
+          titles.push(recommendation.value);
+          await profile.update({ person_titles: titles } as any);
+        }
+      }
+      break;
+    }
+    case 'remove': {
+      if (recommendation.dimension === 'industry') {
+        const industries = (profile.industries || []).filter(
+          (i: string) => i.toLowerCase() !== recommendation.value.toLowerCase(),
+        );
+        await profile.update({ industries } as any);
+      } else if (recommendation.dimension === 'title') {
+        const titles = (profile.person_titles || []).filter(
+          (t: string) => !t.toLowerCase().includes(recommendation.value.toLowerCase()),
+        );
+        await profile.update({ person_titles: titles } as any);
+      }
+      break;
+    }
+    case 'adjust': {
+      if (recommendation.dimension === 'company_size') {
+        const [min, max] = recommendation.value.split('-').map(Number);
+        const currentMin = profile.company_size_min ?? min;
+        const currentMax = profile.company_size_max ?? max;
+        await profile.update({
+          company_size_min: Math.min(currentMin, min),
+          company_size_max: Math.max(currentMax, max),
+        } as any);
+      }
+      break;
+    }
+  }
+
+  // Remove the applied recommendation from cached data
+  const remaining = (profile.recommendation_data || []).filter(
+    (r: any) => !(r.type === recommendation.type && r.dimension === recommendation.dimension && r.value === recommendation.value),
+  );
+  await profile.update({ recommendation_data: remaining } as any);
+
+  return profile.reload();
 }

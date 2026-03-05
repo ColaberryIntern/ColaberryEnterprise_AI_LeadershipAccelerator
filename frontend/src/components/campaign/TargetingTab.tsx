@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 
+interface ICPRecommendation {
+  type: 'add' | 'remove' | 'adjust';
+  dimension: 'industry' | 'title' | 'company_size' | 'seniority' | 'location';
+  value: string;
+  reason: string;
+  metric_value: number;
+  metric_name: string;
+  sample_size: number;
+  confidence: number;
+}
+
 interface ICPProfile {
   id: string;
   name: string;
@@ -14,7 +25,13 @@ interface ICPProfile {
   keywords: string[];
   response_rate: number | null;
   booking_rate: number | null;
+  open_rate: number | null;
+  conversion_rate: number | null;
   sample_size: number | null;
+  confidence_score: number | null;
+  performance_grade: string | null;
+  trend: string | null;
+  recommendation_data: ICPRecommendation[] | null;
   last_computed_at: string | null;
 }
 
@@ -46,6 +63,9 @@ export default function TargetingTab({ campaignId, targeting_criteria, headers, 
   const [sourceInput, setSourceInput] = useState('');
   const [icpProfiles, setIcpProfiles] = useState<ICPProfile[]>([]);
   const [icpLoading, setIcpLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState<Record<string, ICPRecommendation[]>>({});
+  const [dismissedRecs, setDismissedRecs] = useState<Set<string>>(new Set());
+  const [applyingRec, setApplyingRec] = useState(false);
 
   useEffect(() => {
     setCriteria(targeting_criteria || {});
@@ -68,6 +88,47 @@ export default function TargetingTab({ campaignId, targeting_criteria, headers, 
     } finally {
       setIcpLoading(false);
     }
+  };
+
+  const loadRecommendations = async (profileId: string) => {
+    try {
+      const res = await api.get(`/api/admin/icp-profiles/${profileId}/recommendations`);
+      setRecommendations((prev) => ({ ...prev, [profileId]: res.data.recommendations || [] }));
+    } catch (err) {
+      console.error('Failed to load recommendations:', err);
+    }
+  };
+
+  const handleApplyRec = async (profileId: string, rec: ICPRecommendation) => {
+    setApplyingRec(true);
+    try {
+      await api.post(`/api/admin/icp-profiles/${profileId}/apply-recommendation`, rec);
+      // Reload profiles and recommendations
+      const profilesRes = await api.get('/api/admin/icp-profiles', { params: { campaign_id: campaignId } });
+      setIcpProfiles(profilesRes.data.profiles || []);
+      await loadRecommendations(profileId);
+    } catch (err) {
+      console.error('Failed to apply recommendation:', err);
+    } finally {
+      setApplyingRec(false);
+    }
+  };
+
+  const dismissRec = (profileId: string, rec: ICPRecommendation) => {
+    setDismissedRecs((prev) => new Set(prev).add(`${profileId}:${rec.type}:${rec.dimension}:${rec.value}`));
+  };
+
+  const getGradeBadge = (grade: string | null) => {
+    if (!grade) return null;
+    const colors: Record<string, string> = { A: 'bg-success', B: 'bg-info', C: 'bg-warning', D: 'bg-danger' };
+    return <span className={`badge ${colors[grade] || 'bg-secondary'} ms-2`}>{grade}</span>;
+  };
+
+  const getTrendIcon = (trend: string | null) => {
+    if (!trend) return null;
+    if (trend === 'improving') return <span className="text-success ms-1" title="Improving">&#9650;</span>;
+    if (trend === 'declining') return <span className="text-danger ms-1" title="Declining">&#9660;</span>;
+    return <span className="text-muted ms-1" title="Stable">&#9644;</span>;
   };
 
   const handleSave = async () => {
@@ -130,16 +191,32 @@ export default function TargetingTab({ campaignId, targeting_criteria, headers, 
                           {profile.role}
                         </span>
                         <span className="fw-medium">{profile.name}</span>
+                        {getGradeBadge(profile.performance_grade)}
                       </div>
-                      <button
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={() => refreshProfileStats(profile.id)}
-                        disabled={icpLoading}
-                        title="Refresh performance stats from ICP insights"
-                      >
-                        Refresh Stats
-                      </button>
+                      <div className="d-flex gap-1">
+                        <button
+                          className="btn btn-outline-info btn-sm"
+                          onClick={() => loadRecommendations(profile.id)}
+                          title="Load ICP recommendations"
+                        >
+                          Recommendations
+                        </button>
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => refreshProfileStats(profile.id)}
+                          disabled={icpLoading}
+                          title="Refresh performance stats from ICP insights"
+                        >
+                          Refresh Stats
+                        </button>
+                      </div>
                     </div>
+
+                    {profile.performance_grade === 'D' && (
+                      <div className="alert alert-warning py-1 px-2 mb-2 small">
+                        Underperforming — consider adjusting targeting dimensions
+                      </div>
+                    )}
 
                     {profile.person_titles?.length > 0 && (
                       <div className="mb-1">
@@ -168,17 +245,24 @@ export default function TargetingTab({ campaignId, targeting_criteria, headers, 
 
                     {profile.sample_size != null && profile.sample_size > 0 && (
                       <div className="mt-2 pt-2 border-top">
-                        <div className="d-flex gap-3">
+                        <div className="d-flex gap-3 flex-wrap">
                           <div className="small">
                             <span className="text-muted">Response:</span>{' '}
                             <span className="fw-medium">
                               {profile.response_rate != null ? `${(profile.response_rate * 100).toFixed(1)}%` : '—'}
                             </span>
+                            {getTrendIcon(profile.trend)}
                           </div>
                           <div className="small">
                             <span className="text-muted">Booking:</span>{' '}
                             <span className="fw-medium">
                               {profile.booking_rate != null ? `${(profile.booking_rate * 100).toFixed(1)}%` : '—'}
+                            </span>
+                          </div>
+                          <div className="small">
+                            <span className="text-muted">Open:</span>{' '}
+                            <span className="fw-medium">
+                              {profile.open_rate != null ? `${(profile.open_rate * 100).toFixed(1)}%` : '—'}
                             </span>
                           </div>
                           <div className="small">
@@ -192,6 +276,57 @@ export default function TargetingTab({ campaignId, targeting_criteria, headers, 
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ICP Recommendations Section */}
+      {icpProfiles.some((p) => (recommendations[p.id] || []).length > 0) && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white fw-semibold">ICP Recommendations</div>
+          <div className="card-body">
+            {icpProfiles.map((profile) => {
+              const recs = (recommendations[profile.id] || []).filter(
+                (r) => !dismissedRecs.has(`${profile.id}:${r.type}:${r.dimension}:${r.value}`),
+              );
+              if (recs.length === 0) return null;
+              return (
+                <div key={profile.id} className="mb-3">
+                  <div className="small fw-medium text-muted mb-2">{profile.name}</div>
+                  {recs.map((rec, i) => (
+                    <div key={i} className="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
+                      <span className={`badge ${rec.type === 'add' ? 'bg-success' : rec.type === 'remove' ? 'bg-danger' : 'bg-info'}`}>
+                        {rec.type === 'add' ? '+' : rec.type === 'remove' ? '-' : '~'}
+                      </span>
+                      <div className="flex-grow-1 small">
+                        <span className="fw-medium">{rec.type === 'add' ? 'Add' : rec.type === 'remove' ? 'Remove' : 'Adjust'}</span>{' '}
+                        <span className="fw-medium">{rec.value}</span>{' '}
+                        <span className="text-muted">({rec.dimension})</span>
+                        <br />
+                        <span className="text-muted">{rec.reason}</span>
+                      </div>
+                      <div className="d-flex gap-1">
+                        <button
+                          className="btn btn-outline-success btn-sm"
+                          onClick={() => handleApplyRec(profile.id, rec)}
+                          disabled={applyingRec}
+                          title="Apply this recommendation"
+                        >
+                          Apply
+                        </button>
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => dismissRec(profile.id, rec)}
+                          title="Dismiss"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
