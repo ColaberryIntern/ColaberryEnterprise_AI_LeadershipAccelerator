@@ -88,3 +88,42 @@ export async function getEnrollmentBySessionId(stripeSessionId: string) {
     include: [{ model: Cohort, as: 'cohort' }],
   });
 }
+
+export async function createAdminEnrollment(data: {
+  full_name: string;
+  email: string;
+  company: string;
+  title?: string;
+  phone?: string;
+  company_size?: string;
+  cohort_id: string;
+  notes?: string;
+}): Promise<Enrollment> {
+  const existing = await Enrollment.findOne({
+    where: { email: data.email.toLowerCase().trim(), cohort_id: data.cohort_id },
+  });
+  if (existing) {
+    throw new AppError('An enrollment already exists for this email in this cohort', 400);
+  }
+
+  const cohort = await Cohort.findByPk(data.cohort_id);
+  if (!cohort) throw new AppError('Cohort not found', 404);
+
+  const enrollment = await Enrollment.create({
+    full_name: data.full_name,
+    email: data.email.toLowerCase().trim(),
+    company: data.company,
+    title: data.title || undefined,
+    phone: data.phone || undefined,
+    company_size: data.company_size || undefined,
+    cohort_id: data.cohort_id,
+    payment_status: 'paid',
+    payment_method: 'invoice',
+    status: 'active',
+    notes: data.notes || 'Manually added by admin',
+  });
+
+  await Cohort.increment('seats_taken', { by: 1, where: { id: data.cohort_id } });
+
+  return enrollment;
+}

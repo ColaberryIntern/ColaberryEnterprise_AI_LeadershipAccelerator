@@ -19,11 +19,12 @@ interface ProgressData {
 function PortalProgressPage() {
   const [data, setData] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     portalApi.get('/api/portal/progress')
       .then((res) => setData(res.data))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 

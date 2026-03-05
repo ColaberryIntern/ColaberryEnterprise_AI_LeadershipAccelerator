@@ -4,7 +4,7 @@ import portalApi from '../../utils/portalApi';
 interface DashboardData {
   enrollment: any;
   cohort: any;
-  stats: { total_sessions: number; completed_sessions: number; };
+  progress: { total_sessions: number; completed_sessions: number; };
   next_session: any;
   recent_submissions: any[];
 }
@@ -12,11 +12,12 @@ interface DashboardData {
 function PortalDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     portalApi.get('/api/portal/dashboard')
       .then((res) => setData(res.data))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -30,11 +31,11 @@ function PortalDashboardPage() {
     );
   }
 
-  if (!data) {
-    return <div className="alert alert-danger">Failed to load dashboard data.</div>;
+  if (error || !data) {
+    return <div className="alert alert-warning"><i className="bi bi-exclamation-triangle me-2"></i>Unable to load your dashboard. Your enrollment may not be active yet, or there was a connection issue. Please try again or contact support.</div>;
   }
 
-  const { enrollment, cohort, stats, next_session, recent_submissions } = data;
+  const { enrollment, cohort, progress, next_session, recent_submissions } = data;
 
   const scoreCards = [
     { label: 'Readiness Score', value: enrollment.readiness_score ?? 0, color: '#1a365d', icon: 'bi-speedometer2' },
@@ -76,9 +77,9 @@ function PortalDashboardPage() {
             </div>
             <div className="card-body">
               <div className="d-flex justify-content-between small mb-2">
-                <span>{stats.completed_sessions} of {stats.total_sessions} sessions completed</span>
+                <span>{progress.completed_sessions} of {progress.total_sessions} sessions completed</span>
                 <span className="fw-semibold">
-                  {stats.total_sessions > 0 ? Math.round((stats.completed_sessions / stats.total_sessions) * 100) : 0}%
+                  {progress.total_sessions > 0 ? Math.round((progress.completed_sessions / progress.total_sessions) * 100) : 0}%
                 </span>
               </div>
               <div className="progress" style={{ height: 8 }}>
@@ -86,12 +87,12 @@ function PortalDashboardPage() {
                   className="progress-bar"
                   role="progressbar"
                   style={{
-                    width: `${stats.total_sessions > 0 ? (stats.completed_sessions / stats.total_sessions) * 100 : 0}%`,
+                    width: `${progress.total_sessions > 0 ? (progress.completed_sessions / progress.total_sessions) * 100 : 0}%`,
                     background: 'var(--color-primary)',
                   }}
-                  aria-valuenow={stats.completed_sessions}
+                  aria-valuenow={progress.completed_sessions}
                   aria-valuemin={0}
-                  aria-valuemax={stats.total_sessions}
+                  aria-valuemax={progress.total_sessions}
                 ></div>
               </div>
             </div>

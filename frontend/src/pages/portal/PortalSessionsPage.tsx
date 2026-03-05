@@ -33,11 +33,12 @@ const attendanceBadge: Record<string, string> = {
 function PortalSessionsPage() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     portalApi.get('/api/portal/sessions')
       .then((res) => setSessions(res.data))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 

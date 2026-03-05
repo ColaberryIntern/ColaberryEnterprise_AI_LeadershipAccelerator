@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
@@ -94,15 +94,17 @@ function App() {
             <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
           </Route>
         </Route>
-        <Route path="/portal/login" element={<ParticipantAuthProvider><PortalLoginPage /></ParticipantAuthProvider>} />
-        <Route path="/portal/verify" element={<ParticipantAuthProvider><PortalVerifyPage /></ParticipantAuthProvider>} />
-        <Route element={<ParticipantAuthProvider><PortalProtectedRoute /></ParticipantAuthProvider>}>
-          <Route element={<PortalLayout />}>
-            <Route path="/portal/dashboard" element={<PortalDashboardPage />} />
-            <Route path="/portal/sessions" element={<PortalSessionsPage />} />
-            <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
-            <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
-            <Route path="/portal/progress" element={<PortalProgressPage />} />
+        <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
+          <Route path="/portal/login" element={<PortalLoginPage />} />
+          <Route path="/portal/verify" element={<PortalVerifyPage />} />
+          <Route element={<PortalProtectedRoute />}>
+            <Route element={<PortalLayout />}>
+              <Route path="/portal/dashboard" element={<PortalDashboardPage />} />
+              <Route path="/portal/sessions" element={<PortalSessionsPage />} />
+              <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
+              <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
+              <Route path="/portal/progress" element={<PortalProgressPage />} />
+            </Route>
           </Route>
         </Route>
       </Routes>

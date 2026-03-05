@@ -171,3 +171,21 @@ export async function handleGetDashboard(req: Request, res: Response, next: Next
     res.json(dashboard);
   } catch (err) { next(err); }
 }
+
+// -- Admin Enrollment --
+
+export async function handleCreateEnrollment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { full_name, email, company, title, phone, company_size, notes } = req.body;
+    if (!full_name || !email || !company) {
+      return res.status(400).json({ error: 'full_name, email, and company are required' });
+    }
+    const { createAdminEnrollment } = await import('../services/enrollmentService');
+    const enrollment = await createAdminEnrollment({
+      full_name, email, company, title, phone, company_size,
+      cohort_id: req.params.cohortId as string,
+      notes,
+    });
+    res.status(201).json({ enrollment });
+  } catch (err) { next(err); }
+}

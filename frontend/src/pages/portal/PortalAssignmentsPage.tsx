@@ -17,6 +17,7 @@ interface Submission {
 function PortalAssignmentsPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -27,7 +28,7 @@ function PortalAssignmentsPage() {
     setLoading(true);
     portalApi.get('/api/portal/submissions')
       .then((res) => setSubmissions(res.data))
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   };
 

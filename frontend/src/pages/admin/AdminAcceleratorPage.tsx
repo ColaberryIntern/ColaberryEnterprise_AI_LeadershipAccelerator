@@ -118,6 +118,10 @@ function AdminAcceleratorPage() {
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  // Add Participant state
+  const [showParticipantModal, setShowParticipantModal] = useState(false);
+  const [participantForm, setParticipantForm] = useState({ full_name: '', email: '', company: '', title: '', notes: '' });
+  const [participantSaving, setParticipantSaving] = useState(false);
 
   useEffect(() => {
     api.get('/api/admin/cohorts').then((res) => {
@@ -308,6 +312,26 @@ function AdminAcceleratorPage() {
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
+
+  const handleCreateParticipant = async () => {
+    if (!participantForm.full_name || !participantForm.email || !participantForm.company) {
+      showToast('Name, email, and company are required', 'error');
+      return;
+    }
+    setParticipantSaving(true);
+    try {
+      await api.post(`/api/admin/accelerator/cohorts/${selectedCohortId}/enrollments`, participantForm);
+      showToast('Participant added successfully', 'success');
+      setShowParticipantModal(false);
+      setParticipantForm({ full_name: '', email: '', company: '', title: '', notes: '' });
+      loadDashboard();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to add participant', 'error');
+    } finally {
+      setParticipantSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -337,6 +361,9 @@ function AdminAcceleratorPage() {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
+        <button className="btn btn-success btn-sm" onClick={() => setShowParticipantModal(true)} disabled={!selectedCohortId}>
+          <i className="bi bi-person-plus me-1"></i>Add Participant
+        </button>
       </div>
 
       {/* Stats Cards */}
@@ -711,6 +738,52 @@ function AdminAcceleratorPage() {
         onConfirm={handleDeleteSession}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* Add Participant Modal */}
+      {showParticipantModal && (
+        <>
+          <div className="modal-backdrop show" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} />
+          <div className="modal show d-block" tabIndex={-1} role="dialog" aria-modal="true">
+            <div className="modal-dialog">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title fw-semibold">Add Participant</h5>
+                  <button type="button" className="btn-close" onClick={() => setShowParticipantModal(false)} aria-label="Close" />
+                </div>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label className="form-label small fw-medium">Full Name *</label>
+                    <input type="text" className="form-control form-control-sm" value={participantForm.full_name} onChange={(e) => setParticipantForm({ ...participantForm, full_name: e.target.value })} placeholder="Jane Smith" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-medium">Email *</label>
+                    <input type="email" className="form-control form-control-sm" value={participantForm.email} onChange={(e) => setParticipantForm({ ...participantForm, email: e.target.value })} placeholder="jane@company.com" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-medium">Company *</label>
+                    <input type="text" className="form-control form-control-sm" value={participantForm.company} onChange={(e) => setParticipantForm({ ...participantForm, company: e.target.value })} placeholder="Acme Corp" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-medium">Title</label>
+                    <input type="text" className="form-control form-control-sm" value={participantForm.title} onChange={(e) => setParticipantForm({ ...participantForm, title: e.target.value })} placeholder="VP of Technology" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-medium">Notes</label>
+                    <textarea className="form-control form-control-sm" rows={2} value={participantForm.notes} onChange={(e) => setParticipantForm({ ...participantForm, notes: e.target.value })} placeholder="Corporate sponsor, etc." />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowParticipantModal(false)}>Cancel</button>
+                  <button className="btn btn-primary btn-sm" onClick={handleCreateParticipant} disabled={participantSaving} style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}>
+                    {participantSaving ? <><span className="spinner-border spinner-border-sm me-1"></span>Adding...</> : 'Add Participant'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
     </>
   );
 }
