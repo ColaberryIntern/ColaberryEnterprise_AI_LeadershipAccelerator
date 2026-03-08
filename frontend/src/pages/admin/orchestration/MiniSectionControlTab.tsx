@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import PreviewPanel from './builder/PreviewPanel';
 
 type MiniSectionType = 'executive_reality_check' | 'ai_strategy' | 'prompt_template' | 'implementation_task' | 'knowledge_check';
 
@@ -543,11 +544,11 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
   };
 
   const renderPreviewTab = () => (
-    <div className="text-center py-4">
-      <i className="bi bi-eye" style={{ fontSize: 32, color: 'var(--color-text-light)' }}></i>
-      <p className="text-muted small mt-2">Live Preview — coming soon.</p>
-      <p className="text-muted" style={{ fontSize: 11 }}>Will render student-facing V2 content from mini-section config.</p>
-    </div>
+    <PreviewPanel
+      miniSections={miniSections}
+      lessonTitle={selectedLesson?.title || 'Untitled Section'}
+      lessonId={selectedLessonId}
+    />
   );
 
   const renderTestAITab = () => (
