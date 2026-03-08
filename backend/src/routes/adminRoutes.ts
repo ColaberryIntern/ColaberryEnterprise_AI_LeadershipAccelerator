@@ -403,6 +403,7 @@ import {
   handleGetDashboard as handleGetOrchDashboard, handleGetArtifactStatus,
   handleGetProgramModules, handleGetProgramSessions, handleGetProgramFlow,
   handleGetProgramSkills, handleGetProgramGates,
+  handleGetLesson, handleUpdateLesson, handleUpdateSessionFields,
 } from '../controllers/orchestrationController';
 
 // Prompt Templates
@@ -436,6 +437,13 @@ router.get('/api/admin/orchestration/cohorts/:cohortId/flow', requireAdmin, hand
 router.get('/api/admin/orchestration/cohorts/:cohortId/dashboard', requireAdmin, handleGetOrchDashboard);
 router.get('/api/admin/orchestration/sessions/:sessionId/detail', requireAdmin, handleGetOrchSessionDetail);
 router.get('/api/admin/orchestration/enrollments/:enrollmentId/sessions/:sessionId/artifact-status', requireAdmin, handleGetArtifactStatus);
+
+// Lesson Construction
+router.get('/api/admin/orchestration/lessons/:id', requireAdmin, handleGetLesson);
+router.put('/api/admin/orchestration/lessons/:id', requireAdmin, handleUpdateLesson);
+
+// Session Fields (completion threshold, variable keys, triggers)
+router.put('/api/admin/orchestration/sessions/:id/fields', requireAdmin, handleUpdateSessionFields);
 
 // Program-Wide (no cohort required)
 router.get('/api/admin/orchestration/program/modules', requireAdmin, handleGetProgramModules);

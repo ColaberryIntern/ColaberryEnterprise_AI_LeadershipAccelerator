@@ -248,6 +248,56 @@ export async function handleGetArtifactStatus(req: Request, res: Response) {
 
 // --- Program-Wide Endpoints (no cohort dependency) ---
 
+// --- Lesson Construction Update ---
+
+export async function handleGetLesson(req: Request, res: Response) {
+  try {
+    const lesson = await CurriculumLesson.findByPk(req.params.id as string);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    res.json(lesson);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleUpdateLesson(req: Request, res: Response) {
+  try {
+    const lesson = await CurriculumLesson.findByPk(req.params.id as string);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    const allowedFields = [
+      'learning_goal', 'mandatory', 'build_phase_flag', 'presentation_phase_flag',
+      'associated_session_id', 'required_min_completion_before_session', 'sort_order',
+    ];
+    const updates: any = {};
+    for (const f of allowedFields) {
+      if (req.body[f] !== undefined) updates[f] = req.body[f];
+    }
+    await lesson.update(updates);
+    res.json(lesson);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleUpdateSessionFields(req: Request, res: Response) {
+  try {
+    const session = await LiveSession.findByPk(req.params.id as string);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const allowedFields = [
+      'minimum_section_completion_pct', 'required_variable_keys',
+      'email_trigger_config', 'reminder_trigger_config',
+    ];
+    const updates: any = {};
+    for (const f of allowedFields) {
+      if (req.body[f] !== undefined) updates[f] = req.body[f];
+    }
+    await session.update(updates);
+    res.json(session);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 async function getFirstCohortId(): Promise<string | null> {
   const cohort = await Cohort.findOne({ order: [['created_at', 'ASC']] });
   return cohort ? cohort.id : null;
