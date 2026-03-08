@@ -37,7 +37,7 @@ function PortalSessionsPage() {
 
   useEffect(() => {
     portalApi.get('/api/portal/sessions')
-      .then((res) => setSessions(res.data))
+      .then((res) => setSessions(res.data.sessions || []))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);

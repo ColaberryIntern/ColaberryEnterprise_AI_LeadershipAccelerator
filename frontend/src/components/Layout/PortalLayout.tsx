@@ -1,6 +1,8 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
+import { MentorContextProvider } from '../../contexts/MentorContext';
+import PortalMentorChat from '../portal/PortalMentorChat';
 
 function PortalLayout() {
   const { logout } = useParticipantAuth();
@@ -13,12 +15,14 @@ function PortalLayout() {
 
   const navItems = [
     { to: '/portal/dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
+    { to: '/portal/curriculum', label: 'Curriculum', icon: 'bi-mortarboard' },
     { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
     { to: '/portal/assignments', label: 'Assignments', icon: 'bi-file-earmark-text' },
     { to: '/portal/progress', label: 'Progress', icon: 'bi-graph-up' },
   ];
 
   return (
+    <MentorContextProvider>
     <div className="min-vh-100" style={{ background: 'var(--color-bg-alt)' }}>
       <nav className="navbar navbar-expand-lg bg-white border-bottom shadow-sm">
         <div className="container">
@@ -68,7 +72,10 @@ function PortalLayout() {
       <main className="container py-4">
         <Outlet />
       </main>
+
+      <PortalMentorChat />
     </div>
+    </MentorContextProvider>
   );
 }
 

@@ -3,6 +3,7 @@ import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import Breadcrumb from '../../components/ui/Breadcrumb';
 import ConfirmModal from '../../components/ui/ConfirmModal';
+import AdminCurriculumTab from './AdminCurriculumTab';
 
 interface Cohort {
   id: string;
@@ -88,7 +89,7 @@ interface DashboardData {
   enrollments: EnrollmentInfo[];
 }
 
-type TabKey = 'sessions' | 'participants' | 'attendance' | 'submissions' | 'readiness';
+type TabKey = 'sessions' | 'participants' | 'attendance' | 'submissions' | 'readiness' | 'curriculum';
 
 function AdminAcceleratorPage() {
   const { showToast } = useToast();
@@ -420,7 +421,7 @@ function AdminAcceleratorPage() {
 
       {/* Tabs */}
       <ul className="nav nav-tabs mb-4">
-        {(['sessions', 'participants', 'attendance', 'submissions', 'readiness'] as TabKey[]).map((tab) => (
+        {(['sessions', 'participants', 'attendance', 'submissions', 'readiness', 'curriculum'] as TabKey[]).map((tab) => (
           <li key={tab} className="nav-item">
             <button
               className={`nav-link${activeTab === tab ? ' active' : ''}`}
@@ -754,6 +755,14 @@ function AdminAcceleratorPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'curriculum' && (
+        <AdminCurriculumTab
+          cohortId={selectedCohortId}
+          enrollments={enrollments.map((e) => ({ id: e.id, full_name: e.full_name, email: e.email, company: e.company }))}
+          showToast={showToast}
+        />
       )}
 
       {/* Session Create/Edit Modal */}

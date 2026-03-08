@@ -148,6 +148,13 @@ import {
   handleListCohortEnrollments,
   handleSetPortalAccess,
 } from '../controllers/acceleratorController';
+import {
+  handleAdminOverrideLessonStatus,
+  handleAdminGetLabResponses,
+  handleAdminListModules,
+  handleAdminGetParticipantProgress,
+  handleAdminExportProjectArchitect,
+} from '../controllers/curriculumController';
 import { strategyPrepUpload } from '../config/upload';
 
 const router = Router();
@@ -325,5 +332,95 @@ router.post('/api/admin/accelerator/enrollments/:enrollmentId/readiness', requir
 router.post('/api/admin/accelerator/submissions', requireAdmin, handleCreateSubmission);
 router.patch('/api/admin/accelerator/submissions/:id', requireAdmin, handleUpdateSubmission);
 router.post('/api/admin/accelerator/submissions/:id/upload', requireAdmin, strategyPrepUpload.single('file'), handleUploadSubmission);
+
+// Protected admin routes — Curriculum
+router.get('/api/admin/accelerator/cohorts/:cohortId/curriculum/modules', requireAdmin, handleAdminListModules);
+router.get('/api/admin/accelerator/enrollments/:enrollmentId/curriculum-progress', requireAdmin, handleAdminGetParticipantProgress);
+router.get('/api/admin/accelerator/enrollments/:enrollmentId/project-architect', requireAdmin, handleAdminExportProjectArchitect);
+router.put('/api/admin/accelerator/curriculum/lessons/:lessonId/override', requireAdmin, handleAdminOverrideLessonStatus);
+router.get('/api/admin/accelerator/enrollments/:enrollmentId/lab-responses', requireAdmin, handleAdminGetLabResponses);
+
+// --- Orchestration Engine Routes ---
+import {
+  handleListPromptTemplates, handleGetPromptTemplate, handleCreatePromptTemplate,
+  handleUpdatePromptTemplate, handleDeletePromptTemplate, handlePreviewPromptTemplate,
+  handleListSections as handleListOrchSections, handleGetSection as handleGetOrchSection,
+  handleCreateSection as handleCreateOrchSection, handleUpdateSection as handleUpdateOrchSection,
+  handleDeleteSection as handleDeleteOrchSection,
+  handleListArtifacts as handleListOrchArtifacts, handleGetArtifact, handleCreateArtifact,
+  handleUpdateArtifact, handleDeleteArtifact,
+  handleGetVariables, handleGetVariableGraph,
+  handleGetSessionFlow, handleGetSessionDetail as handleGetOrchSessionDetail,
+  handleGetDashboard as handleGetOrchDashboard, handleGetArtifactStatus,
+} from '../controllers/orchestrationController';
+
+// Prompt Templates
+router.get('/api/admin/orchestration/prompts', requireAdmin, handleListPromptTemplates);
+router.post('/api/admin/orchestration/prompts', requireAdmin, handleCreatePromptTemplate);
+router.get('/api/admin/orchestration/prompts/:id', requireAdmin, handleGetPromptTemplate);
+router.put('/api/admin/orchestration/prompts/:id', requireAdmin, handleUpdatePromptTemplate);
+router.delete('/api/admin/orchestration/prompts/:id', requireAdmin, handleDeletePromptTemplate);
+router.post('/api/admin/orchestration/prompts/:id/preview', requireAdmin, handlePreviewPromptTemplate);
+
+// Section Configs
+router.get('/api/admin/orchestration/sessions/:sessionId/sections', requireAdmin, handleListOrchSections);
+router.post('/api/admin/orchestration/sessions/:sessionId/sections', requireAdmin, handleCreateOrchSection);
+router.get('/api/admin/orchestration/sections/:id', requireAdmin, handleGetOrchSection);
+router.put('/api/admin/orchestration/sections/:id', requireAdmin, handleUpdateOrchSection);
+router.delete('/api/admin/orchestration/sections/:id', requireAdmin, handleDeleteOrchSection);
+
+// Artifact Definitions
+router.get('/api/admin/orchestration/sessions/:sessionId/artifacts', requireAdmin, handleListOrchArtifacts);
+router.post('/api/admin/orchestration/sessions/:sessionId/artifacts', requireAdmin, handleCreateArtifact);
+router.get('/api/admin/orchestration/artifacts/:id', requireAdmin, handleGetArtifact);
+router.put('/api/admin/orchestration/artifacts/:id', requireAdmin, handleUpdateArtifact);
+router.delete('/api/admin/orchestration/artifacts/:id', requireAdmin, handleDeleteArtifact);
+
+// Variables
+router.get('/api/admin/orchestration/enrollments/:enrollmentId/variables', requireAdmin, handleGetVariables);
+router.get('/api/admin/orchestration/enrollments/:enrollmentId/variables/graph', requireAdmin, handleGetVariableGraph);
+
+// Session Flow & Dashboard
+router.get('/api/admin/orchestration/cohorts/:cohortId/flow', requireAdmin, handleGetSessionFlow);
+router.get('/api/admin/orchestration/cohorts/:cohortId/dashboard', requireAdmin, handleGetOrchDashboard);
+router.get('/api/admin/orchestration/sessions/:sessionId/detail', requireAdmin, handleGetOrchSessionDetail);
+router.get('/api/admin/orchestration/enrollments/:enrollmentId/sessions/:sessionId/artifact-status', requireAdmin, handleGetArtifactStatus);
+
+// Analytics
+router.get('/api/admin/orchestration/analytics/completion/:cohortId', requireAdmin, async (req, res) => {
+  try {
+    const analytics = await import('../services/analyticsService');
+    const data = await analytics.getSessionCompletionRates(req.params.cohortId as string);
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/artifacts/:cohortId', requireAdmin, async (req, res) => {
+  try {
+    const analytics = await import('../services/analyticsService');
+    const data = await analytics.getArtifactCompletionMatrix(req.params.cohortId as string);
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/build-phase/:cohortId', requireAdmin, async (req, res) => {
+  try {
+    const analytics = await import('../services/analyticsService');
+    const data = await analytics.getBuildPhaseTracker(req.params.cohortId as string);
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/github/:cohortId', requireAdmin, async (req, res) => {
+  try {
+    const analytics = await import('../services/analyticsService');
+    const data = await analytics.getGitHubCommitSummary(req.params.cohortId as string);
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/presentation/:cohortId', requireAdmin, async (req, res) => {
+  try {
+    const analytics = await import('../services/analyticsService');
+    const data = await analytics.getPresentationReadiness(req.params.cohortId as string);
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
 export default router;

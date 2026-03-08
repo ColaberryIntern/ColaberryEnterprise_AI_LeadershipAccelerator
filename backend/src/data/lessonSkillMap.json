@@ -1,0 +1,37 @@
+{
+  "strategy_trust": {
+    "1": ["st_vision_01"],
+    "2": ["st_vision_01", "st_vision_02"],
+    "3": ["st_trust_01"],
+    "4": ["st_trust_01", "st_trust_02"],
+    "5": ["st_vision_02", "st_trust_02"]
+  },
+  "governance": {
+    "1": ["gov_framework_01"],
+    "2": ["gov_framework_01", "gov_framework_02"],
+    "3": ["gov_risk_01"],
+    "4": ["gov_risk_01", "gov_risk_02"],
+    "5": ["gov_framework_02", "gov_risk_02"]
+  },
+  "requirements": {
+    "1": ["req_analysis_01"],
+    "2": ["req_analysis_01", "req_analysis_02"],
+    "3": ["req_prompt_01"],
+    "4": ["req_prompt_01", "req_prompt_02"],
+    "5": ["req_analysis_02", "req_prompt_02"]
+  },
+  "build_discipline": {
+    "1": ["bd_process_01"],
+    "2": ["bd_process_01", "bd_process_02"],
+    "3": ["bd_quality_01"],
+    "4": ["bd_quality_01", "bd_quality_02"],
+    "5": ["bd_process_02", "bd_quality_02"]
+  },
+  "executive_authority": {
+    "1": ["ea_leadership_01"],
+    "2": ["ea_leadership_01", "ea_leadership_02"],
+    "3": ["ea_transformation_01"],
+    "4": ["ea_transformation_01", "ea_transformation_02"],
+    "5": ["ea_leadership_02", "ea_transformation_02"]
+  }
+}

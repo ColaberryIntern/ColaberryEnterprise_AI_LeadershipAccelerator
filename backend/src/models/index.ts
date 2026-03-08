@@ -28,6 +28,20 @@ import ICPProfile from './ICPProfile';
 import LiveSession from './LiveSession';
 import AttendanceRecord from './AttendanceRecord';
 import AssignmentSubmission from './AssignmentSubmission';
+import CurriculumModule from './CurriculumModule';
+import CurriculumLesson from './CurriculumLesson';
+import LessonInstance from './LessonInstance';
+import UserCurriculumProfile from './UserCurriculumProfile';
+import SessionGate from './SessionGate';
+import MentorConversation from './MentorConversation';
+import SessionChatMessage from './SessionChatMessage';
+import SkillMastery from './SkillMastery';
+import PromptTemplate from './PromptTemplate';
+import SectionConfig from './SectionConfig';
+import ArtifactDefinition from './ArtifactDefinition';
+import VariableStore from './VariableStore';
+import GitHubConnection from './GitHubConnection';
+import SkillDefinition from './SkillDefinition';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -166,6 +180,85 @@ AssignmentSubmission.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'e
 LiveSession.hasMany(AssignmentSubmission, { foreignKey: 'session_id', as: 'submissions' });
 AssignmentSubmission.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
 
+// Curriculum Module associations
+Cohort.hasMany(CurriculumModule, { foreignKey: 'cohort_id', as: 'curriculumModules' });
+CurriculumModule.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+// Curriculum Lesson associations
+CurriculumModule.hasMany(CurriculumLesson, { foreignKey: 'module_id', as: 'lessons' });
+CurriculumLesson.belongsTo(CurriculumModule, { foreignKey: 'module_id', as: 'module' });
+
+// Lesson Instance associations
+CurriculumLesson.hasMany(LessonInstance, { foreignKey: 'lesson_id', as: 'instances' });
+LessonInstance.belongsTo(CurriculumLesson, { foreignKey: 'lesson_id', as: 'lesson' });
+Enrollment.hasMany(LessonInstance, { foreignKey: 'enrollment_id', as: 'lessonInstances' });
+LessonInstance.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// User Curriculum Profile associations
+Enrollment.hasOne(UserCurriculumProfile, { foreignKey: 'enrollment_id', as: 'curriculumProfile' });
+UserCurriculumProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// Session Gate associations
+LiveSession.hasMany(SessionGate, { foreignKey: 'session_id', as: 'gates' });
+SessionGate.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
+SessionGate.belongsTo(CurriculumModule, { foreignKey: 'module_id', as: 'module' });
+SessionGate.belongsTo(CurriculumLesson, { foreignKey: 'lesson_id', as: 'lesson' });
+
+// Mentor Conversation associations
+Enrollment.hasMany(MentorConversation, { foreignKey: 'enrollment_id', as: 'mentorConversations' });
+MentorConversation.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+MentorConversation.belongsTo(CurriculumLesson, { foreignKey: 'lesson_id', as: 'lesson' });
+
+// Session Chat Message associations
+LiveSession.hasMany(SessionChatMessage, { foreignKey: 'session_id', as: 'chatMessages' });
+SessionChatMessage.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
+Enrollment.hasMany(SessionChatMessage, { foreignKey: 'enrollment_id', as: 'chatMessages' });
+SessionChatMessage.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// Skill Mastery associations
+Enrollment.hasMany(SkillMastery, { foreignKey: 'enrollment_id', as: 'skillMasteries' });
+SkillMastery.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- Orchestration Engine associations ---
+
+// LiveSession -> CurriculumModule (session maps to module)
+LiveSession.belongsTo(CurriculumModule, { foreignKey: 'module_id', as: 'module' });
+CurriculumModule.hasMany(LiveSession, { foreignKey: 'module_id', as: 'sessions' });
+
+// SectionConfig associations
+LiveSession.hasMany(SectionConfig, { foreignKey: 'session_id', as: 'sectionConfigs' });
+SectionConfig.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
+CurriculumLesson.hasOne(SectionConfig, { foreignKey: 'lesson_id', as: 'sectionConfig' });
+SectionConfig.belongsTo(CurriculumLesson, { foreignKey: 'lesson_id', as: 'lesson' });
+SectionConfig.belongsTo(PromptTemplate, { foreignKey: 'suggested_prompt_id', as: 'suggestedPrompt' });
+SectionConfig.belongsTo(PromptTemplate, { foreignKey: 'mentor_prompt_id', as: 'mentorPrompt' });
+
+// ArtifactDefinition associations
+LiveSession.hasMany(ArtifactDefinition, { foreignKey: 'session_id', as: 'artifactDefinitions' });
+ArtifactDefinition.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
+SectionConfig.hasMany(ArtifactDefinition, { foreignKey: 'section_id', as: 'artifactDefinitions' });
+ArtifactDefinition.belongsTo(SectionConfig, { foreignKey: 'section_id', as: 'sectionConfig' });
+ArtifactDefinition.belongsTo(PromptTemplate, { foreignKey: 'auto_generate_prompt_id', as: 'autoGeneratePrompt' });
+ArtifactDefinition.hasMany(AssignmentSubmission, { foreignKey: 'artifact_definition_id', as: 'submissions' });
+AssignmentSubmission.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
+
+// VariableStore associations
+Enrollment.hasMany(VariableStore, { foreignKey: 'enrollment_id', as: 'variables' });
+VariableStore.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+SectionConfig.hasMany(VariableStore, { foreignKey: 'section_id', as: 'variables' });
+VariableStore.belongsTo(SectionConfig, { foreignKey: 'section_id', as: 'sectionConfig' });
+LiveSession.hasMany(VariableStore, { foreignKey: 'session_id', as: 'variables' });
+VariableStore.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'sessionRef' });
+ArtifactDefinition.hasMany(VariableStore, { foreignKey: 'artifact_id', as: 'variables' });
+VariableStore.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_id', as: 'artifactDefinition' });
+
+// GitHubConnection associations
+Enrollment.hasOne(GitHubConnection, { foreignKey: 'enrollment_id', as: 'githubConnection' });
+GitHubConnection.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// SessionGate -> ArtifactDefinition
+SessionGate.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -178,4 +271,14 @@ export {
   OpportunityScore,
   ICPProfile,
   LiveSession, AttendanceRecord, AssignmentSubmission,
+  CurriculumModule, CurriculumLesson, LessonInstance,
+  UserCurriculumProfile, SessionGate, MentorConversation,
+  SessionChatMessage,
+  SkillMastery,
+  PromptTemplate,
+  SectionConfig,
+  ArtifactDefinition,
+  VariableStore,
+  GitHubConnection,
+  SkillDefinition,
 };

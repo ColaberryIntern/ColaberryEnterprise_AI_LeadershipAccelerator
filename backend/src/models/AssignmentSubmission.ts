@@ -15,6 +15,8 @@ export interface AssignmentSubmissionAttributes {
   reviewer_notes?: string;
   submitted_at?: Date;
   reviewed_at?: Date;
+  artifact_definition_id?: string;
+  version_number?: number;
   created_at?: Date;
 }
 
@@ -32,6 +34,8 @@ class AssignmentSubmission extends Model<AssignmentSubmissionAttributes> impleme
   declare reviewer_notes: string;
   declare submitted_at: Date;
   declare reviewed_at: Date;
+  declare artifact_definition_id: string;
+  declare version_number: number;
   declare created_at: Date;
 }
 
@@ -92,6 +96,16 @@ AssignmentSubmission.init(
     reviewed_at: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    artifact_definition_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'artifact_definitions', key: 'id' },
+    },
+    version_number: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
     },
     created_at: {
       type: DataTypes.DATE,

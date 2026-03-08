@@ -1,0 +1,239 @@
+{
+  "layers": [
+    {
+      "id": "strategy_trust",
+      "name": "Strategy & Trust",
+      "description": "Building strategic AI vision and establishing organizational trust",
+      "domains": [
+        {
+          "id": "st_vision",
+          "name": "AI Vision & Strategy",
+          "skills": [
+            {
+              "id": "st_vision_01",
+              "name": "AI Opportunity Assessment",
+              "description": "Identify and evaluate AI opportunities within the organization",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "st_vision_02",
+              "name": "Strategic AI Roadmapping",
+              "description": "Create phased AI adoption roadmaps aligned with business objectives",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["st_vision_01"]
+            }
+          ]
+        },
+        {
+          "id": "st_trust",
+          "name": "Trust & Adoption",
+          "skills": [
+            {
+              "id": "st_trust_01",
+              "name": "Stakeholder Communication",
+              "description": "Communicate AI value propositions to diverse stakeholders",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "st_trust_02",
+              "name": "Change Management for AI",
+              "description": "Lead organizational change management for AI adoption",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["st_trust_01"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "governance",
+      "name": "Governance & Risk",
+      "description": "Establishing AI governance frameworks and managing risks",
+      "domains": [
+        {
+          "id": "gov_framework",
+          "name": "AI Governance",
+          "skills": [
+            {
+              "id": "gov_framework_01",
+              "name": "AI Policy Development",
+              "description": "Develop organizational AI usage policies and guidelines",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "gov_framework_02",
+              "name": "Ethical AI Oversight",
+              "description": "Implement ethical review processes for AI systems",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["gov_framework_01"]
+            }
+          ]
+        },
+        {
+          "id": "gov_risk",
+          "name": "Risk Management",
+          "skills": [
+            {
+              "id": "gov_risk_01",
+              "name": "AI Risk Assessment",
+              "description": "Identify and evaluate risks in AI implementations",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "gov_risk_02",
+              "name": "Data Privacy & Compliance",
+              "description": "Ensure AI systems comply with data privacy regulations",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["gov_risk_01"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "requirements",
+      "name": "Requirements Precision",
+      "description": "Translating business needs into precise AI requirements",
+      "domains": [
+        {
+          "id": "req_analysis",
+          "name": "Requirements Analysis",
+          "skills": [
+            {
+              "id": "req_analysis_01",
+              "name": "AI Use Case Definition",
+              "description": "Define clear, measurable AI use cases from business needs",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "req_analysis_02",
+              "name": "Success Metrics Design",
+              "description": "Design KPIs and success metrics for AI initiatives",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["req_analysis_01"]
+            }
+          ]
+        },
+        {
+          "id": "req_prompt",
+          "name": "Prompt Engineering",
+          "skills": [
+            {
+              "id": "req_prompt_01",
+              "name": "Prompt Design Fundamentals",
+              "description": "Write effective prompts for large language models",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "req_prompt_02",
+              "name": "Advanced Prompt Patterns",
+              "description": "Apply chain-of-thought, few-shot, and system prompt patterns",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["req_prompt_01"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "build_discipline",
+      "name": "Build Discipline",
+      "description": "Managing AI development with engineering rigor",
+      "domains": [
+        {
+          "id": "bd_process",
+          "name": "AI Development Process",
+          "skills": [
+            {
+              "id": "bd_process_01",
+              "name": "AI Project Planning",
+              "description": "Plan and scope AI projects with realistic timelines",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "bd_process_02",
+              "name": "Vendor & Tool Evaluation",
+              "description": "Evaluate and select AI tools, platforms, and vendors",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["bd_process_01"]
+            }
+          ]
+        },
+        {
+          "id": "bd_quality",
+          "name": "Quality & Testing",
+          "skills": [
+            {
+              "id": "bd_quality_01",
+              "name": "AI Output Validation",
+              "description": "Validate and quality-check AI system outputs",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "bd_quality_02",
+              "name": "Continuous Improvement",
+              "description": "Implement feedback loops for AI system improvement",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["bd_quality_01"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "executive_authority",
+      "name": "Executive Authority",
+      "description": "Leading AI transformation with executive presence",
+      "domains": [
+        {
+          "id": "ea_leadership",
+          "name": "AI Leadership",
+          "skills": [
+            {
+              "id": "ea_leadership_01",
+              "name": "AI Team Building",
+              "description": "Build and lead cross-functional AI teams",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "ea_leadership_02",
+              "name": "Executive AI Communication",
+              "description": "Present AI initiatives to boards and C-suite",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["ea_leadership_01"]
+            }
+          ]
+        },
+        {
+          "id": "ea_transformation",
+          "name": "AI Transformation",
+          "skills": [
+            {
+              "id": "ea_transformation_01",
+              "name": "AI Culture Development",
+              "description": "Foster an AI-ready organizational culture",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": []
+            },
+            {
+              "id": "ea_transformation_02",
+              "name": "AI ROI Measurement",
+              "description": "Measure and communicate AI return on investment",
+              "proficiency_levels": ["Awareness", "Understanding", "Application", "Analysis", "Leadership"],
+              "prerequisites": ["ea_transformation_01"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

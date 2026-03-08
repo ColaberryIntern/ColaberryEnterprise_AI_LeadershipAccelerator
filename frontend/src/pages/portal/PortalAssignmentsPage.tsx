@@ -27,7 +27,7 @@ function PortalAssignmentsPage() {
   const load = () => {
     setLoading(true);
     portalApi.get('/api/portal/submissions')
-      .then((res) => setSubmissions(res.data))
+      .then((res) => setSubmissions(res.data.submissions || []))
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   };
@@ -49,7 +49,7 @@ function PortalAssignmentsPage() {
       if (file) {
         const fd = new FormData();
         fd.append('file', file);
-        await portalApi.post(`/api/portal/submissions/${res.data.id}/upload`, fd, {
+        await portalApi.post(`/api/portal/submissions/${res.data.submission.id}/upload`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
       }

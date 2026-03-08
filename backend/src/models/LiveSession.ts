@@ -17,6 +17,11 @@ export interface LiveSessionAttributes {
   recording_url?: string;
   materials_json?: any;
   curriculum_json?: any;
+  build_phase_unlock?: boolean;
+  required_prior_sessions?: any;
+  presentation_phase_flag?: boolean;
+  module_id?: string;
+  skill_area?: string;
   created_at?: Date;
 }
 
@@ -36,6 +41,11 @@ class LiveSession extends Model<LiveSessionAttributes> implements LiveSessionAtt
   declare recording_url: string;
   declare materials_json: any;
   declare curriculum_json: any;
+  declare build_phase_unlock: boolean;
+  declare required_prior_sessions: any;
+  declare presentation_phase_flag: boolean;
+  declare module_id: string;
+  declare skill_area: string;
   declare created_at: Date;
 }
 
@@ -104,6 +114,30 @@ LiveSession.init(
     },
     curriculum_json: {
       type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    build_phase_unlock: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    required_prior_sessions: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+    },
+    presentation_phase_flag: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    module_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'curriculum_modules', key: 'id' },
+    },
+    skill_area: {
+      type: DataTypes.STRING(50),
       allowNull: true,
     },
     created_at: {

@@ -35,6 +35,7 @@ import AdminICPInsightsPage from './pages/admin/AdminICPInsightsPage';
 import AdminVisitorsPage from './pages/admin/AdminVisitorsPage';
 import AdminOpportunitiesPage from './pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from './pages/admin/AdminAcceleratorPage';
+import AdminOrchestrationPage from './pages/admin/AdminOrchestrationPage';
 import ExecOverviewThankYouPage from './pages/ExecOverviewThankYouPage';
 import StrategyCallPrepPage from './pages/StrategyCallPrepPage';
 import { ParticipantAuthProvider } from './contexts/ParticipantAuthContext';
@@ -47,6 +48,8 @@ import PortalSessionsPage from './pages/portal/PortalSessionsPage';
 import PortalSessionDetailPage from './pages/portal/PortalSessionDetailPage';
 import PortalAssignmentsPage from './pages/portal/PortalAssignmentsPage';
 import PortalProgressPage from './pages/portal/PortalProgressPage';
+import PortalCurriculumPage from './pages/portal/PortalCurriculumPage';
+import PortalLessonPage from './pages/portal/PortalLessonPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -92,6 +95,7 @@ function App() {
             <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
             <Route path="/admin/events" element={<AdminEventLedgerPage />} />
             <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
+            <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
           </Route>
         </Route>
         <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
@@ -100,6 +104,8 @@ function App() {
           <Route element={<PortalProtectedRoute />}>
             <Route element={<PortalLayout />}>
               <Route path="/portal/dashboard" element={<PortalDashboardPage />} />
+              <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
+              <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
               <Route path="/portal/sessions" element={<PortalSessionsPage />} />
               <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
               <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />

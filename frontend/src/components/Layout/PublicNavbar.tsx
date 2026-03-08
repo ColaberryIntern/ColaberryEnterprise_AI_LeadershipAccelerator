@@ -46,6 +46,13 @@ function PublicNavbar() {
               </li>
             ))}
           </ul>
+          <Link
+            className="btn btn-outline-light btn-sm ms-lg-3 mt-2 mt-lg-0"
+            to="/portal/login"
+            onClick={() => setMenuOpen(false)}
+          >
+            Participant Login
+          </Link>
         </div>
       </div>
     </nav>

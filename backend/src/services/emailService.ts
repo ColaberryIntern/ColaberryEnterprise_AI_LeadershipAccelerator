@@ -620,7 +620,7 @@ function buildInterestHtml(data: InterestEmailData): string {
 }
 
 function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
-  const portalUrl = env.frontendUrl || 'http://95.216.199.47:8888';
+  const portalUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
   return `
 <!DOCTYPE html>
 <html>

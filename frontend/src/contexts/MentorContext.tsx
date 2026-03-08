@@ -1,0 +1,203 @@
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import portalApi from '../utils/portalApi';
+
+export interface LLMOption {
+  id: string;
+  name: string;
+  url: string;
+  icon: string;
+}
+
+export const LLM_OPTIONS: LLMOption[] = [
+  { id: 'chatgpt', name: 'ChatGPT', url: 'https://chat.openai.com', icon: 'bi-chat-dots' },
+  { id: 'claude', name: 'Claude', url: 'https://claude.ai', icon: 'bi-lightning' },
+  { id: 'gemini', name: 'Gemini', url: 'https://gemini.google.com', icon: 'bi-stars' },
+  { id: 'copilot', name: 'Copilot', url: 'https://copilot.microsoft.com', icon: 'bi-microsoft' },
+  { id: 'perplexity', name: 'Perplexity', url: 'https://perplexity.ai', icon: 'bi-search' },
+  { id: 'grok', name: 'Grok', url: 'https://grok.x.ai', icon: 'bi-lightning-charge' },
+  { id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com', icon: 'bi-braces' },
+  { id: 'mistral', name: 'Mistral', url: 'https://chat.mistral.ai', icon: 'bi-wind' },
+];
+
+export interface ImplementationTaskData {
+  title: string;
+  description: string;
+  deliverable: string;
+  requirements: string[];
+  artifacts: Array<{ name: string; description: string; file_types: string[]; validation_criteria: string }>;
+}
+
+export interface LessonContext {
+  lessonId: string | null;
+  lessonTitle: string;
+  currentSection: string;
+  conceptText: string;
+  promptTemplate: string;
+  implementationTaskData?: ImplementationTaskData;
+}
+
+export interface LearnerProfile {
+  company_name?: string;
+  industry?: string;
+  role?: string;
+  goal?: string;
+  ai_maturity_level?: number;
+  identified_use_case?: string;
+  personalization_context_json?: Record<string, string>;
+}
+
+interface PendingMessage {
+  message: string;
+  contextType: string;
+}
+
+interface MentorContextValue {
+  selectedLLM: LLMOption;
+  setSelectedLLMById: (id: string) => void;
+  llmOptions: LLMOption[];
+  lessonContext: LessonContext;
+  updateLessonContext: (ctx: Partial<LessonContext>) => void;
+  isMentorOpen: boolean;
+  openMentorPanel: () => void;
+  closeMentorPanel: () => void;
+  toggleMentorPanel: () => void;
+  pendingMentorMessage: PendingMessage | null;
+  sendToMentor: (message: string, contextType: string) => void;
+  clearPendingMessage: () => void;
+  pendingPromptLabMessage: string | null;
+  sendToPromptLab: (prompt: string) => void;
+  clearPendingPromptLabMessage: () => void;
+  onMentorResponded: React.MutableRefObject<((response: string) => void) | null>;
+  fireMentorResponded: (response: string) => void;
+  openLLMWithPrompt: (prompt: string) => Promise<void>;
+  learnerProfile: LearnerProfile | null;
+  updateLearnerProfile: (data: Record<string, any>) => Promise<void>;
+  buildPersonalizedPrompt: (prompt: string) => string;
+}
+
+const defaultLessonContext: LessonContext = {
+  lessonId: null,
+  lessonTitle: '',
+  currentSection: '',
+  conceptText: '',
+  promptTemplate: '',
+};
+
+const MentorContext = createContext<MentorContextValue | null>(null);
+
+export function MentorContextProvider({ children }: { children: React.ReactNode }) {
+  const [selectedLLMId, setSelectedLLMId] = useState('chatgpt');
+  const [lessonCtx, setLessonCtx] = useState<LessonContext>(defaultLessonContext);
+  const [isOpen, setIsOpen] = useState(false);
+  const [pendingMsg, setPendingMsg] = useState<PendingMessage | null>(null);
+  const [pendingLabMsg, setPendingLabMsg] = useState<string | null>(null);
+  const onMentorResponded = useRef<((response: string) => void) | null>(null);
+  const [learnerProfile, setLearnerProfile] = useState<LearnerProfile | null>(null);
+
+  const selectedLLM = LLM_OPTIONS.find(l => l.id === selectedLLMId) || LLM_OPTIONS[0];
+
+  // Fetch learner profile for personalization
+  useEffect(() => {
+    portalApi.get('/api/portal/curriculum/profile')
+      .then(res => setLearnerProfile(res.data.profile))
+      .catch(() => {});
+  }, []);
+
+  const updateLearnerProfile = useCallback(async (data: Record<string, any>) => {
+    try {
+      const res = await portalApi.put('/api/portal/curriculum/profile', data);
+      setLearnerProfile(res.data.profile);
+    } catch {}
+  }, []);
+
+  const buildPersonalizedPrompt = useCallback((prompt: string) => {
+    if (!learnerProfile) return prompt;
+    const ctx: string[] = [];
+    if (learnerProfile.company_name) ctx.push(`Company: ${learnerProfile.company_name}`);
+    if (learnerProfile.industry) ctx.push(`Industry: ${learnerProfile.industry}`);
+    if (learnerProfile.role) ctx.push(`Role: ${learnerProfile.role}`);
+    if (learnerProfile.goal) ctx.push(`Goal: ${learnerProfile.goal}`);
+    if (learnerProfile.ai_maturity_level) ctx.push(`AI Maturity: ${learnerProfile.ai_maturity_level}/5`);
+    if (learnerProfile.identified_use_case) ctx.push(`Use Case: ${learnerProfile.identified_use_case}`);
+    if (learnerProfile.personalization_context_json) {
+      for (const [key, val] of Object.entries(learnerProfile.personalization_context_json)) {
+        if (val) ctx.push(`${key.replace(/_/g, ' ')}: ${val}`);
+      }
+    }
+    return ctx.length > 0
+      ? `[Context about me: ${ctx.join(', ')}]\n\n${prompt}`
+      : prompt;
+  }, [learnerProfile]);
+
+  const updateLessonContext = useCallback((ctx: Partial<LessonContext>) => {
+    setLessonCtx(prev => ({ ...prev, ...ctx }));
+  }, []);
+
+  const openMentorPanel = useCallback(() => setIsOpen(true), []);
+  const closeMentorPanel = useCallback(() => setIsOpen(false), []);
+  const toggleMentorPanel = useCallback(() => setIsOpen(prev => !prev), []);
+
+  const sendToMentor = useCallback((message: string, contextType: string) => {
+    setPendingMsg({ message, contextType });
+    setIsOpen(true);
+  }, []);
+
+  const clearPendingMessage = useCallback(() => setPendingMsg(null), []);
+
+  const sendToPromptLab = useCallback((prompt: string) => {
+    setPendingLabMsg(prompt);
+  }, []);
+
+  const clearPendingPromptLabMessage = useCallback(() => setPendingLabMsg(null), []);
+
+  const fireMentorResponded = useCallback((response: string) => {
+    onMentorResponded.current?.(response);
+  }, []);
+
+  const openLLMWithPrompt = useCallback(async (prompt: string) => {
+    const personalized = buildPersonalizedPrompt(prompt);
+    const encoded = encodeURIComponent(personalized);
+    if (selectedLLM.id === 'chatgpt') {
+      window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
+    } else if (selectedLLM.id === 'claude') {
+      window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
+    } else {
+      try { await navigator.clipboard.writeText(personalized); } catch {}
+      window.open(selectedLLM.url, '_blank');
+    }
+  }, [selectedLLM, buildPersonalizedPrompt]);
+
+  return (
+    <MentorContext.Provider value={{
+      selectedLLM,
+      setSelectedLLMById: setSelectedLLMId,
+      llmOptions: LLM_OPTIONS,
+      lessonContext: lessonCtx,
+      updateLessonContext,
+      isMentorOpen: isOpen,
+      openMentorPanel,
+      closeMentorPanel,
+      toggleMentorPanel,
+      pendingMentorMessage: pendingMsg,
+      sendToMentor,
+      clearPendingMessage,
+      pendingPromptLabMessage: pendingLabMsg,
+      sendToPromptLab,
+      clearPendingPromptLabMessage,
+      onMentorResponded,
+      fireMentorResponded,
+      openLLMWithPrompt,
+      learnerProfile,
+      updateLearnerProfile,
+      buildPersonalizedPrompt,
+    }}>
+      {children}
+    </MentorContext.Provider>
+  );
+}
+
+export function useMentorContext() {
+  const ctx = useContext(MentorContext);
+  if (!ctx) throw new Error('useMentorContext must be used within MentorContextProvider');
+  return ctx;
+}
