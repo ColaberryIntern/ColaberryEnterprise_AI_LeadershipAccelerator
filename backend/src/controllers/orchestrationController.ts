@@ -3,6 +3,8 @@ import * as promptService from '../services/promptService';
 import * as artifactService from '../services/artifactService';
 import * as variableService from '../services/variableService';
 import * as orchestrationService from '../services/orchestrationService';
+import * as promptValidationService from '../services/promptValidationService';
+import * as curriculumManagerService from '../services/curriculumManagerService';
 import { Cohort, SectionConfig, CurriculumModule, CurriculumLesson, LiveSession, SkillDefinition, SessionGate } from '../models';
 
 // --- Prompt Template CRUD ---
@@ -381,6 +383,64 @@ export async function handleGetProgramGates(req: Request, res: Response) {
       order: [['created_at', 'ASC']],
     });
     res.json(gates);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Prompt Validation ---
+
+export async function handleValidatePrompt(req: Request, res: Response) {
+  try {
+    const result = await promptValidationService.validateCompositePrompt(
+      req.params.lessonId as string,
+      req.params.enrollmentId as string
+    );
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handlePreviewPrompt(req: Request, res: Response) {
+  try {
+    const result = await promptValidationService.dryRunCompositePrompt(
+      req.params.lessonId as string,
+      req.params.enrollmentId as string
+    );
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Curriculum Manager ---
+
+export async function handleIntegrityCheck(req: Request, res: Response) {
+  try {
+    const report = await curriculumManagerService.runIntegrityCheck();
+    res.json(report);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleDryRunSection(req: Request, res: Response) {
+  try {
+    const result = await curriculumManagerService.dryRunSectionBuild(req.params.lessonId as string);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Route Audit ---
+
+export async function handleRouteAudit(req: Request, res: Response) {
+  try {
+    const { generateRouteAudit } = await import('../utils/routeAudit');
+    const audit = generateRouteAudit(req.app);
+    res.json(audit);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

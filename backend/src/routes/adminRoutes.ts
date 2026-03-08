@@ -156,8 +156,12 @@ import {
   handleAdminExportProjectArchitect,
 } from '../controllers/curriculumController';
 import { strategyPrepUpload } from '../config/upload';
+import { auditMiddleware } from '../middlewares/auditMiddleware';
 
 const router = Router();
+
+// Apply audit middleware to all routes (only logs write operations)
+router.use(auditMiddleware);
 
 // Public auth routes
 router.post('/api/admin/login', handleAdminLogin);
@@ -404,6 +408,9 @@ import {
   handleGetProgramModules, handleGetProgramSessions, handleGetProgramFlow,
   handleGetProgramSkills, handleGetProgramGates,
   handleGetLesson, handleUpdateLesson, handleUpdateSessionFields,
+  handleValidatePrompt, handlePreviewPrompt,
+  handleIntegrityCheck, handleDryRunSection,
+  handleRouteAudit,
 } from '../controllers/orchestrationController';
 
 // Prompt Templates
@@ -451,6 +458,84 @@ router.get('/api/admin/orchestration/program/sessions', requireAdmin, handleGetP
 router.get('/api/admin/orchestration/program/flow', requireAdmin, handleGetProgramFlow);
 router.get('/api/admin/orchestration/program/skills', requireAdmin, handleGetProgramSkills);
 router.get('/api/admin/orchestration/program/gates', requireAdmin, handleGetProgramGates);
+
+// Prompt Validation & Preview
+router.get('/api/admin/orchestration/validate/prompt/:lessonId/:enrollmentId', requireAdmin, handleValidatePrompt);
+router.get('/api/admin/orchestration/preview/prompt/:lessonId/:enrollmentId', requireAdmin, handlePreviewPrompt);
+
+// Curriculum Manager — Integrity & Dry-Run
+router.get('/api/admin/orchestration/integrity', requireAdmin, handleIntegrityCheck);
+router.get('/api/admin/orchestration/dry-run/section/:lessonId', requireAdmin, handleDryRunSection);
+
+// Route Audit
+router.get('/api/admin/orchestration/route-audit', requireAdmin, handleRouteAudit);
+
+// Preflight Check
+router.get('/api/admin/orchestration/preflight', requireAdmin, async (_req, res) => {
+  try {
+    const { runPreflight } = await import('../utils/preflightCheck');
+    const result = await runPreflight();
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Documentation Generation
+router.get('/api/admin/orchestration/docs/architecture', requireAdmin, async (_req, res) => {
+  try {
+    const { generateArchitectureDoc } = await import('../utils/docGenerator');
+    res.type('text/markdown').send(generateArchitectureDoc());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/admin/orchestration/docs/api', requireAdmin, async (req, res) => {
+  try {
+    const { generateApiDoc } = await import('../utils/docGenerator');
+    res.type('text/markdown').send(generateApiDoc(req.app));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Link Scanner
+router.get('/api/admin/orchestration/link-scan', requireAdmin, async (_req, res) => {
+  try {
+    const path = await import('path');
+    const { scanFrontendApiCalls } = await import('../utils/linkScanner');
+    const frontendSrc = path.resolve(__dirname, '../../../frontend/src');
+    const calls = scanFrontendApiCalls(frontendSrc);
+    res.json({ total: calls.length, calls });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Management API — Blueprint Snapshots & System Status
+router.get('/api/admin/orchestration/management/status', requireAdmin, async (_req, res) => {
+  try {
+    const { getSystemStatus } = await import('../services/managementService');
+    res.json(await getSystemStatus());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/management/blueprint/:id/snapshot', requireAdmin, async (req, res) => {
+  try {
+    const { createSnapshot } = await import('../services/managementService');
+    const adminUser = (req as any).adminUser;
+    const snapshot = await createSnapshot(req.params.id as string, req.body.description, adminUser?.id);
+    res.status(201).json(snapshot);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/admin/orchestration/management/blueprint/:id/snapshots', requireAdmin, async (req, res) => {
+  try {
+    const { listSnapshots } = await import('../services/managementService');
+    res.json(await listSnapshots(req.params.id as string));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/management/blueprint/:id/rollback/:snapshotId', requireAdmin, async (req, res) => {
+  try {
+    const { rollbackToSnapshot } = await import('../services/managementService');
+    const blueprint = await rollbackToSnapshot(req.params.id as string, req.params.snapshotId as string);
+    res.json(blueprint);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
 // Analytics
 router.get('/api/admin/orchestration/analytics/completion/:cohortId', requireAdmin, async (req, res) => {
