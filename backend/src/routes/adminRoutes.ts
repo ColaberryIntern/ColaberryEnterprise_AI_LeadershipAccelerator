@@ -400,6 +400,76 @@ router.delete('/api/admin/orchestration/skills/:id', requireAdmin, async (req, r
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Bulk Curriculum Operations
+router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, async (_req, res) => {
+  try {
+    const { CurriculumModule, CurriculumLesson, MiniSection } = await import('../models');
+    const modules = await CurriculumModule.findAll({
+      include: [{
+        model: CurriculumLesson,
+        as: 'lessons',
+        include: [{
+          model: MiniSection,
+          as: 'miniSections',
+          where: { is_active: true },
+          required: false,
+          attributes: ['id', 'mini_section_type', 'title', 'mini_section_order',
+            'associated_skill_ids', 'associated_variable_keys', 'creates_variable_keys',
+            'creates_artifact_ids', 'concept_prompt_template_id', 'build_prompt_template_id'],
+        }],
+      }],
+      order: [['module_number', 'ASC'], [{ model: CurriculumLesson, as: 'lessons' }, 'lesson_number', 'ASC']],
+    });
+
+    const matrix = [];
+    for (const mod of modules) {
+      for (const lesson of (mod as any).lessons || []) {
+        const miniSections = lesson.miniSections || [];
+        const types = new Set(miniSections.map((ms: any) => ms.mini_section_type));
+        const hasPrompts = miniSections.some((ms: any) => ms.concept_prompt_template_id || ms.build_prompt_template_id);
+        const hasSkills = miniSections.some((ms: any) => ms.associated_skill_ids?.length > 0);
+        const hasVars = miniSections.some((ms: any) => ms.associated_variable_keys?.length > 0 || ms.creates_variable_keys?.length > 0);
+
+        let status: 'complete' | 'partial' | 'empty' = 'empty';
+        if (miniSections.length >= 5 && types.size >= 5) status = 'complete';
+        else if (miniSections.length > 0) status = 'partial';
+
+        const warnings: string[] = [];
+        if (!types.has('executive_reality_check')) warnings.push('Missing executive_reality_check');
+        if (!types.has('ai_strategy')) warnings.push('Missing ai_strategy');
+        if (!types.has('prompt_template')) warnings.push('Missing prompt_template');
+        if (!types.has('implementation_task')) warnings.push('Missing implementation_task');
+        if (!types.has('knowledge_check')) warnings.push('Missing knowledge_check');
+
+        matrix.push({
+          moduleId: mod.id,
+          moduleNumber: (mod as any).module_number,
+          moduleTitle: (mod as any).title,
+          lessonId: lesson.id,
+          lessonNumber: lesson.lesson_number,
+          lessonTitle: lesson.title,
+          miniSectionCount: miniSections.length,
+          types: Object.fromEntries([...types].map(t => [t, miniSections.filter((ms: any) => ms.mini_section_type === t).length])),
+          hasPrompts,
+          hasSkills,
+          hasVars,
+          status,
+          warnings,
+        });
+      }
+    }
+    res.json(matrix);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/bulk/validate-all', requireAdmin, async (_req, res) => {
+  try {
+    const { runIntegrityCheck } = await import('../services/curriculumManagerService');
+    const result = await runIntegrityCheck();
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // --- Variable Definition Routes ---
 import {
   handleListVariableDefinitions, handleGetVariableDefinition, handleCreateVariableDefinition,

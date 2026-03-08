@@ -10,6 +10,7 @@ import GatingControlTab from './orchestration/GatingControlTab';
 import AnalyticsTab from './orchestration/AnalyticsTab';
 import ProgramBlueprintTab from './orchestration/ProgramBlueprintTab';
 import MiniSectionControlTab from './orchestration/MiniSectionControlTab';
+import BulkConfigPanel from './orchestration/builder/BulkConfigPanel';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'skills', label: 'Skills' },
   { id: 'gating', label: 'Gating & Variables' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'bulk', label: 'Bulk Config' },
 ];
 
 export default function AdminOrchestrationPage() {
@@ -71,6 +73,7 @@ export default function AdminOrchestrationPage() {
       {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
       {activeTab === 'gating' && <GatingControlTab {...tabProps} />}
       {activeTab === 'analytics' && <AnalyticsTab {...tabProps} />}
+      {activeTab === 'bulk' && <BulkConfigPanel {...tabProps} onNavigateToLesson={handleNavigateToMiniSections} />}
     </div>
   );
 }
