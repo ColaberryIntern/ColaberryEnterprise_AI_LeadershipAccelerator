@@ -6,7 +6,7 @@ import SkillDefinition from '../models/SkillDefinition';
 import ontology from '../data/ontology.json';
 
 /* ------------------------------------------------------------------ */
-/*  Module + Lesson definitions (5 modules, 30 lessons)               */
+/*  Module + Section definitions (5 modules, 25 unified sections)     */
 /* ------------------------------------------------------------------ */
 
 const modules = [
@@ -16,12 +16,41 @@ const modules = [
     description: 'Build the strategic case for AI in your organization. Assess AI maturity, identify high-impact opportunities, and establish trust frameworks that enable responsible adoption.',
     skill_area: 'strategy_trust' as const,
     lessons: [
-      { lesson_number: 1, title: 'Executive AI Reality Check', description: 'Cut through the hype. Understand what AI can and cannot do for your organization today, and why executive AI fluency is now a competitive requirement.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'executive_ai_reality', key_points: ['AI capabilities vs hype', 'competitive pressure', 'cost of inaction', 'executive fluency imperative'], personalize_by: ['industry', 'company_size', 'ai_maturity_level'], industry_examples: true } },
-      { lesson_number: 2, title: 'Trust Before Intelligence Framework', description: 'Learn why trust architecture must precede AI deployment. Understand the governance-first approach that separates successful AI initiatives from failed ones.', lesson_type: 'concept' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'trust_framework', key_points: ['trust as prerequisite', 'governance-first approach', 'stakeholder confidence', 'failure patterns without trust'], personalize_by: ['industry', 'role', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 3, title: 'Identifying Responsible AI Opportunities', description: 'Framework for scoring AI opportunities by business impact, data readiness, risk profile, and organizational readiness. Prioritize your top candidates.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'opportunity_identification', key_points: ['opportunity scoring framework', 'business impact assessment', 'data readiness', 'risk profile evaluation'], personalize_by: ['industry', 'company_name', 'goal'], industry_examples: true } },
-      { lesson_number: 4, title: 'Industry-Specific AI Applications', description: 'Deep dive into AI applications relevant to your specific industry. Real case studies, common patterns, and lessons learned from organizations like yours.', lesson_type: 'concept' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'industry_applications', key_points: ['industry-specific use cases', 'case studies', 'common patterns', 'lessons learned'], personalize_by: ['industry', 'company_name', 'company_size', 'internal_systems'], industry_examples: true } },
-      { lesson_number: 5, title: 'Assessment: Strategy & Trust Readiness', description: 'Test your understanding of AI strategy fundamentals, trust frameworks, and opportunity identification.', lesson_type: 'assessment' as const, estimated_minutes: 20, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'strategy_trust_assessment', question_count: 10, question_types: ['multiple_choice', 'scenario_based'], covers: ['ai_reality', 'trust_framework', 'opportunity_scoring', 'industry_applications'], passing_score: 70 } },
-      { lesson_number: 6, title: 'Lab: Opportunity Mapping Form', description: "Map your organization's highest-priority AI opportunity using the structured scoring framework.", lesson_type: 'lab' as const, estimated_minutes: 40, requires_structured_input: true, structured_fields_schema: { fields: [ { name: 'business_unit', label: 'Business Unit / Department', type: 'text', required: true }, { name: 'manual_process', label: 'Manual Process to Automate', type: 'textarea', required: true }, { name: 'pain_severity', label: 'Pain Severity (1-5)', type: 'select', required: true, options: ['1 - Minor', '2 - Moderate', '3 - Significant', '4 - Major', '5 - Critical'] }, { name: 'decision_type', label: 'Decision Type', type: 'select', required: true, options: ['Routine/Repetitive', 'Semi-structured', 'Complex/Judgment-based'] }, { name: 'human_override', label: 'Human Override Requirements', type: 'textarea', required: true }, { name: 'success_metric', label: 'Primary Success Metric', type: 'text', required: true }, { name: 'risk_impact', label: 'Risk Impact if AI Fails', type: 'select', required: true, options: ['Low', 'Medium', 'High', 'Critical'] } ] }, content_template_json: { topic: 'opportunity_mapping_lab', personalize_by: ['industry', 'company_name', 'goal'] } },
+      {
+        lesson_number: 1, title: 'Executive AI Reality Check',
+        description: 'Cut through the hype. Understand what AI can and cannot do for your organization today, and why executive AI fluency is now a competitive requirement.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'executive_ai_reality', skill_area: 'strategy_trust', key_points: ['AI capabilities vs hype', 'competitive pressure', 'cost of inaction', 'executive fluency imperative'], personalize_by: ['industry', 'company_size', 'ai_maturity_level'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 2, title: 'Trust Before Intelligence Framework',
+        description: 'Learn why trust architecture must precede AI deployment. Understand the governance-first approach that separates successful AI initiatives from failed ones.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'trust_framework', skill_area: 'strategy_trust', key_points: ['trust as prerequisite', 'governance-first approach', 'stakeholder confidence', 'failure patterns without trust'], personalize_by: ['industry', 'role', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 3, title: 'Identifying Responsible AI Opportunities',
+        description: 'Framework for scoring AI opportunities by business impact, data readiness, risk profile, and organizational readiness. Prioritize your top candidates.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'opportunity_identification', skill_area: 'strategy_trust', key_points: ['opportunity scoring framework', 'business impact assessment', 'data readiness', 'risk profile evaluation'], personalize_by: ['industry', 'company_name', 'goal'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 4, title: 'Industry-Specific AI Applications',
+        description: 'Deep dive into AI applications relevant to your specific industry. Real case studies, common patterns, and lessons learned from organizations like yours.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'industry_applications', skill_area: 'strategy_trust', key_points: ['industry-specific use cases', 'case studies', 'common patterns', 'lessons learned'], personalize_by: ['industry', 'company_name', 'company_size', 'internal_systems'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 5, title: 'Strategy & Trust: Synthesis & Application',
+        description: "Apply everything you've learned. Map your organization's highest-priority AI opportunity and build your strategic trust framework.",
+        lesson_type: 'section' as const, estimated_minutes: 35, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'strategy_trust_synthesis', skill_area: 'strategy_trust', key_points: ['opportunity mapping', 'trust framework application', 'strategic case building', 'readiness assessment'], personalize_by: ['industry', 'company_name', 'goal', 'identified_use_case'], industry_examples: true, question_count: 4, reflection_prompts: ['What is your highest-priority AI opportunity?', 'What trust gaps must you address first?'] },
+      },
     ],
   },
   {
@@ -30,12 +59,41 @@ const modules = [
     description: 'Design the governance framework that makes AI safe and trustworthy. Classify risks, build guardrails, and create human-in-the-loop controls.',
     skill_area: 'governance' as const,
     lessons: [
-      { lesson_number: 1, title: 'AI Risk Taxonomy', description: 'Understand the landscape of AI risks: technical failures, data risks, ethical concerns, regulatory exposure, and reputational threats.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'risk_taxonomy', key_points: ['technical risks', 'data risks', 'ethical concerns', 'regulatory exposure', 'reputational threats'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 2, title: 'Data Classification & Sensitivity', description: 'Learn to classify data by sensitivity level and understand what data can and cannot be used with AI systems in your regulatory context.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'data_classification', key_points: ['sensitivity levels', 'PII/PHI handling', 'regulatory requirements', 'data minimization'], personalize_by: ['industry', 'company_name'], industry_examples: true } },
-      { lesson_number: 3, title: 'Failure Modes & Guardrails', description: 'Design for failure. Understand common AI failure modes and build guardrails that prevent, detect, and recover from errors.', lesson_type: 'concept' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'failure_modes_guardrails', key_points: ['hallucination patterns', 'edge case failures', 'cascading errors', 'guardrail design', 'monitoring triggers'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 4, title: 'Human-in-the-Loop Design', description: 'Design effective human oversight patterns. When humans must intervene, how to make handoffs seamless, and avoiding automation complacency.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'human_in_the_loop', key_points: ['oversight patterns', 'intervention triggers', 'handoff design', 'automation complacency', 'escalation paths'], personalize_by: ['industry', 'role', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 5, title: 'Assessment: Governance Readiness', description: 'Test your understanding of risk classification, data governance, guardrail design, and human oversight patterns.', lesson_type: 'assessment' as const, estimated_minutes: 20, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'governance_assessment', question_count: 10, question_types: ['multiple_choice', 'scenario_based'], covers: ['risk_taxonomy', 'data_classification', 'guardrails', 'human_oversight'], passing_score: 70 } },
-      { lesson_number: 6, title: 'Lab: Governance Risk Blueprint', description: 'Build a governance blueprint for your AI initiative. Define data policies, risk controls, monitoring plans, and override triggers.', lesson_type: 'lab' as const, estimated_minutes: 45, requires_structured_input: true, structured_fields_schema: { fields: [ { name: 'data_types', label: 'Data Types Used', type: 'textarea', required: true }, { name: 'regulatory_constraints', label: 'Regulatory Constraints', type: 'textarea', required: true }, { name: 'logging_requirements', label: 'Logging & Audit Requirements', type: 'textarea', required: true }, { name: 'override_triggers', label: 'Human Override Triggers', type: 'textarea', required: true }, { name: 'risk_severity', label: 'Overall Risk Severity', type: 'select', required: true, options: ['Low', 'Medium', 'High', 'Critical'] }, { name: 'monitoring_plan', label: 'Monitoring & Alerting Plan', type: 'textarea', required: true } ] }, content_template_json: { topic: 'governance_blueprint_lab', personalize_by: ['industry', 'company_name', 'identified_use_case'] } },
+      {
+        lesson_number: 1, title: 'AI Risk Taxonomy',
+        description: 'Understand the landscape of AI risks: technical failures, data risks, ethical concerns, regulatory exposure, and reputational threats.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'risk_taxonomy', skill_area: 'governance', key_points: ['technical risks', 'data risks', 'ethical concerns', 'regulatory exposure', 'reputational threats'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 2, title: 'Data Classification & Sensitivity',
+        description: 'Learn to classify data by sensitivity level and understand what data can and cannot be used with AI systems in your regulatory context.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'data_classification', skill_area: 'governance', key_points: ['sensitivity levels', 'PII/PHI handling', 'regulatory requirements', 'data minimization'], personalize_by: ['industry', 'company_name'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 3, title: 'Failure Modes & Guardrails',
+        description: 'Design for failure. Understand common AI failure modes and build guardrails that prevent, detect, and recover from errors.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'failure_modes_guardrails', skill_area: 'governance', key_points: ['hallucination patterns', 'edge case failures', 'cascading errors', 'guardrail design', 'monitoring triggers'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 4, title: 'Human-in-the-Loop Design',
+        description: 'Design effective human oversight patterns. When humans must intervene, how to make handoffs seamless, and avoiding automation complacency.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'human_in_the_loop', skill_area: 'governance', key_points: ['oversight patterns', 'intervention triggers', 'handoff design', 'automation complacency', 'escalation paths'], personalize_by: ['industry', 'role', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 5, title: 'Governance: Blueprint & Application',
+        description: 'Build a governance blueprint for your AI initiative. Define data policies, risk controls, monitoring plans, and override triggers.',
+        lesson_type: 'section' as const, estimated_minutes: 35, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'governance_blueprint', skill_area: 'governance', key_points: ['data governance policies', 'risk control framework', 'monitoring & alerting', 'override triggers', 'audit trail design'], personalize_by: ['industry', 'company_name', 'identified_use_case'], industry_examples: true, question_count: 4, reflection_prompts: ['What is the highest-risk aspect of your AI initiative?', 'How will you ensure human oversight without creating bottlenecks?'] },
+      },
     ],
   },
   {
@@ -44,12 +102,41 @@ const modules = [
     description: 'Translate business goals into precise system requirements. Define inputs, outputs, decision flows, edge cases, and success criteria.',
     skill_area: 'requirements' as const,
     lessons: [
-      { lesson_number: 1, title: 'Translating Business Goals into System Requirements', description: 'Bridge the gap between "what we want" and "what we need to build". Learn to decompose business objectives into testable system requirements.', lesson_type: 'concept' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'business_to_requirements', key_points: ['goal decomposition', 'requirement types', 'acceptance criteria', 'scope boundaries'], personalize_by: ['industry', 'identified_use_case', 'goal'], industry_examples: true } },
-      { lesson_number: 2, title: 'Input / Output Mapping', description: 'Define exactly what goes in and what comes out. Map data sources, transformations, and output formats for your AI system.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'io_mapping', key_points: ['input sources', 'data transformations', 'output formats', 'validation rules'], personalize_by: ['industry', 'identified_use_case', 'internal_systems'], industry_examples: true } },
-      { lesson_number: 3, title: 'Decision Flow Modeling', description: 'Model the decision logic your AI system must follow. Define branching paths, conditional rules, and escalation triggers.', lesson_type: 'concept' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'decision_flow', key_points: ['decision trees', 'branching logic', 'conditional rules', 'escalation paths'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 4, title: 'Edge Case & Failure State Design', description: 'Anticipate what can go wrong. Design for edge cases, define failure states, and build recovery paths.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'edge_cases', key_points: ['edge case identification', 'failure state taxonomy', 'recovery paths', 'graceful degradation'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 5, title: 'Assessment: Requirements Confidence', description: 'Test your ability to decompose business goals, map inputs/outputs, and design for edge cases.', lesson_type: 'assessment' as const, estimated_minutes: 20, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'requirements_assessment', question_count: 10, question_types: ['multiple_choice', 'scenario_based'], covers: ['goal_decomposition', 'io_mapping', 'decision_flows', 'edge_cases'], passing_score: 70 } },
-      { lesson_number: 6, title: 'Lab: Structured Requirements Document Builder', description: 'Build a complete requirements document for your AI initiative.', lesson_type: 'lab' as const, estimated_minutes: 45, requires_structured_input: true, structured_fields_schema: { fields: [ { name: 'inputs', label: 'System Inputs', type: 'textarea', required: true }, { name: 'outputs', label: 'System Outputs', type: 'textarea', required: true }, { name: 'transformations', label: 'Data Transformations', type: 'textarea', required: true }, { name: 'validation_rules', label: 'Validation Rules', type: 'textarea', required: true }, { name: 'failure_states', label: 'Failure States & Recovery', type: 'textarea', required: true }, { name: 'dependencies', label: 'External Dependencies', type: 'textarea', required: true } ] }, content_template_json: { topic: 'requirements_document_lab', personalize_by: ['industry', 'company_name', 'identified_use_case'] } },
+      {
+        lesson_number: 1, title: 'Translating Business Goals into System Requirements',
+        description: 'Bridge the gap between "what we want" and "what we need to build". Learn to decompose business objectives into testable system requirements.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'business_to_requirements', skill_area: 'requirements', key_points: ['goal decomposition', 'requirement types', 'acceptance criteria', 'scope boundaries'], personalize_by: ['industry', 'identified_use_case', 'goal'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 2, title: 'Input / Output Mapping',
+        description: 'Define exactly what goes in and what comes out. Map data sources, transformations, and output formats for your AI system.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'io_mapping', skill_area: 'requirements', key_points: ['input sources', 'data transformations', 'output formats', 'validation rules'], personalize_by: ['industry', 'identified_use_case', 'internal_systems'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 3, title: 'Decision Flow Modeling',
+        description: 'Model the decision logic your AI system must follow. Define branching paths, conditional rules, and escalation triggers.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'decision_flow', skill_area: 'requirements', key_points: ['decision trees', 'branching logic', 'conditional rules', 'escalation paths'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 4, title: 'Edge Case & Failure State Design',
+        description: 'Anticipate what can go wrong. Design for edge cases, define failure states, and build recovery paths.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'edge_cases', skill_area: 'requirements', key_points: ['edge case identification', 'failure state taxonomy', 'recovery paths', 'graceful degradation'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 5, title: 'Requirements: Document Builder & Synthesis',
+        description: 'Build a complete requirements document for your AI initiative. Synthesize inputs, outputs, decision flows, and edge cases into a coherent specification.',
+        lesson_type: 'section' as const, estimated_minutes: 35, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'requirements_synthesis', skill_area: 'requirements', key_points: ['requirements document structure', 'traceability matrix', 'validation checklist', 'stakeholder sign-off'], personalize_by: ['industry', 'company_name', 'identified_use_case'], industry_examples: true, question_count: 4, reflection_prompts: ['What requirement is most likely to be misunderstood by your team?', 'How will you validate your requirements against real user needs?'] },
+      },
     ],
   },
   {
@@ -58,12 +145,41 @@ const modules = [
     description: 'Learn the Planner-Builder-Reviewer pattern for controlled AI development. Build with discipline: one step at a time, with verification at every stage.',
     skill_area: 'build_discipline' as const,
     lessons: [
-      { lesson_number: 1, title: 'Separation of Roles', description: 'Understand why separating planning, execution, and review is critical for AI systems.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'role_separation', key_points: ['3-agent pattern', 'planner role', 'builder role', 'reviewer role'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 2, title: 'Planner vs Executor', description: 'Deep dive into the distinction between planning and execution. Why AI systems fail when these roles are combined.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'planner_vs_executor', key_points: ['planning discipline', 'execution boundaries', 'task decomposition', 'scope control'], personalize_by: ['industry', 'role'], industry_examples: true } },
-      { lesson_number: 3, title: 'One-Step Task Discipline', description: 'The discipline of doing one thing at a time. Break complex AI tasks into atomic, verifiable steps.', lesson_type: 'concept' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'one_step_discipline', key_points: ['atomic tasks', 'verifiable steps', 'independent validation', 'rollback capability'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 4, title: 'Verification & Evidence Gating', description: 'Every step must produce evidence. Learn to design verification gates that ensure quality before proceeding.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'verification_gating', key_points: ['evidence requirements', 'quality gates', 'verification patterns', 'automated checks'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 5, title: 'Assessment: Build Governance', description: 'Test your understanding of the 3-agent pattern, task decomposition, and verification discipline.', lesson_type: 'assessment' as const, estimated_minutes: 20, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'build_governance_assessment', question_count: 10, question_types: ['multiple_choice', 'scenario_based'], covers: ['role_separation', 'task_discipline', 'verification_gating'], passing_score: 70 } },
-      { lesson_number: 6, title: 'Lab: Controlled Build Simulation', description: 'Design a controlled build plan for your AI initiative.', lesson_type: 'lab' as const, estimated_minutes: 45, requires_structured_input: true, structured_fields_schema: { fields: [ { name: 'step_definition', label: 'Build Steps (one per line)', type: 'textarea', required: true }, { name: 'verification_evidence', label: 'Verification Evidence per Step', type: 'textarea', required: true }, { name: 'rollback_plan', label: 'Rollback Plan per Step', type: 'textarea', required: true } ] }, content_template_json: { topic: 'controlled_build_lab', personalize_by: ['industry', 'company_name', 'identified_use_case'] } },
+      {
+        lesson_number: 1, title: 'Separation of Roles',
+        description: 'Understand why separating planning, execution, and review is critical for AI systems.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'role_separation', skill_area: 'build_discipline', key_points: ['3-agent pattern', 'planner role', 'builder role', 'reviewer role'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 2, title: 'Planner vs Executor',
+        description: 'Deep dive into the distinction between planning and execution. Why AI systems fail when these roles are combined.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'planner_vs_executor', skill_area: 'build_discipline', key_points: ['planning discipline', 'execution boundaries', 'task decomposition', 'scope control'], personalize_by: ['industry', 'role'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 3, title: 'One-Step Task Discipline',
+        description: 'The discipline of doing one thing at a time. Break complex AI tasks into atomic, verifiable steps.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'one_step_discipline', skill_area: 'build_discipline', key_points: ['atomic tasks', 'verifiable steps', 'independent validation', 'rollback capability'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 4, title: 'Verification & Evidence Gating',
+        description: 'Every step must produce evidence. Learn to design verification gates that ensure quality before proceeding.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'verification_gating', skill_area: 'build_discipline', key_points: ['evidence requirements', 'quality gates', 'verification patterns', 'automated checks'], personalize_by: ['industry', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 5, title: 'Controlled Build: Simulation & Application',
+        description: 'Design a controlled build plan for your AI initiative. Define build steps, verification evidence, and rollback plans.',
+        lesson_type: 'section' as const, estimated_minutes: 35, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'controlled_build_simulation', skill_area: 'build_discipline', key_points: ['build plan design', 'step verification', 'rollback planning', 'quality gate enforcement'], personalize_by: ['industry', 'company_name', 'identified_use_case'], industry_examples: true, question_count: 4, reflection_prompts: ['What is the riskiest step in your build plan?', 'How will you ensure each step produces verifiable evidence?'] },
+      },
     ],
   },
   {
@@ -72,12 +188,41 @@ const modules = [
     description: 'Build your executive presentation, ROI framework, and 90-day expansion roadmap. Prepare to demonstrate and scale your AI initiative.',
     skill_area: 'executive_authority' as const,
     lessons: [
-      { lesson_number: 1, title: 'Selling AI Internally', description: 'Craft a compelling internal narrative for AI adoption.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'internal_sell', key_points: ['stakeholder mapping', 'objection handling', 'coalition building', 'narrative framing'], personalize_by: ['industry', 'company_name', 'role', 'goal'], industry_examples: true } },
-      { lesson_number: 2, title: 'Governance Communication', description: 'Communicate AI governance to non-technical stakeholders.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'governance_communication', key_points: ['non-technical translation', 'confidence building', 'risk communication', 'transparency frameworks'], personalize_by: ['industry', 'role', 'company_name'], industry_examples: true } },
-      { lesson_number: 3, title: 'ROI Framing', description: 'Build a defensible ROI model for your AI initiative.', lesson_type: 'concept' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'roi_framing', key_points: ['cost savings quantification', 'revenue impact', 'risk reduction value', 'time-to-value metrics'], personalize_by: ['industry', 'company_name', 'company_size', 'identified_use_case'], industry_examples: true } },
-      { lesson_number: 4, title: 'Scaling Strategy', description: 'Plan the path from POC to organization-wide deployment.', lesson_type: 'concept' as const, estimated_minutes: 25, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'scaling_strategy', key_points: ['POC to production', 'team enablement', 'infrastructure scaling', 'governance layering'], personalize_by: ['industry', 'company_name', 'company_size'], industry_examples: true } },
-      { lesson_number: 5, title: 'Final Demo Preparation', description: 'Prepare your executive demonstration.', lesson_type: 'reflection' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null, content_template_json: { topic: 'demo_preparation', reflection_prompts: ['What is the single most compelling outcome from your POC?', 'What objection do you expect?', 'What assumptions need validation?', 'How will you measure success in the first 30 days?'], personalize_by: ['industry', 'company_name', 'goal'] } },
-      { lesson_number: 6, title: 'Lab: 90-Day Roadmap Builder', description: 'Build your post-program roadmap.', lesson_type: 'lab' as const, estimated_minutes: 45, requires_structured_input: true, structured_fields_schema: { fields: [ { name: 'phase_1_build', label: 'Phase 1: First 30 Days', type: 'textarea', required: true }, { name: 'phase_2_expansion', label: 'Phase 2: Days 31-60', type: 'textarea', required: true }, { name: 'hiring_needs', label: 'Hiring & Resource Needs', type: 'textarea', required: true }, { name: 'risk_mitigation', label: 'Risk Mitigation Strategy', type: 'textarea', required: true }, { name: 'governance_layering', label: 'Governance Scaling Plan', type: 'textarea', required: true } ] }, content_template_json: { topic: 'roadmap_builder_lab', personalize_by: ['industry', 'company_name', 'company_size', 'identified_use_case', 'goal'] } },
+      {
+        lesson_number: 1, title: 'Selling AI Internally',
+        description: 'Craft a compelling internal narrative for AI adoption. Map stakeholders, handle objections, and build coalitions.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'internal_sell', skill_area: 'executive_authority', key_points: ['stakeholder mapping', 'objection handling', 'coalition building', 'narrative framing'], personalize_by: ['industry', 'company_name', 'role', 'goal'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 2, title: 'Governance Communication',
+        description: 'Communicate AI governance to non-technical stakeholders. Translate risk frameworks into confidence-building narratives.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'governance_communication', skill_area: 'executive_authority', key_points: ['non-technical translation', 'confidence building', 'risk communication', 'transparency frameworks'], personalize_by: ['industry', 'role', 'company_name'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 3, title: 'ROI Framing',
+        description: 'Build a defensible ROI model for your AI initiative. Quantify cost savings, revenue impact, and risk reduction.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'roi_framing', skill_area: 'executive_authority', key_points: ['cost savings quantification', 'revenue impact', 'risk reduction value', 'time-to-value metrics'], personalize_by: ['industry', 'company_name', 'company_size', 'identified_use_case'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 4, title: 'Scaling Strategy',
+        description: 'Plan the path from POC to organization-wide deployment. Team enablement, infrastructure scaling, and governance layering.',
+        lesson_type: 'section' as const, estimated_minutes: 30, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'scaling_strategy', skill_area: 'executive_authority', key_points: ['POC to production', 'team enablement', 'infrastructure scaling', 'governance layering'], personalize_by: ['industry', 'company_name', 'company_size'], industry_examples: true, question_count: 3 },
+      },
+      {
+        lesson_number: 5, title: '90-Day Roadmap & Executive Demo',
+        description: 'Build your post-program roadmap and prepare your executive demonstration. Synthesize everything into an actionable plan.',
+        lesson_type: 'section' as const, estimated_minutes: 35, requires_structured_input: false, structured_fields_schema: null,
+        completion_requirements: { quiz_pass_score: 70 },
+        content_template_json: { content_version: 'v2', topic: 'roadmap_and_demo', skill_area: 'executive_authority', key_points: ['90-day phased roadmap', 'executive presentation structure', 'demo preparation', 'success metrics'], personalize_by: ['industry', 'company_name', 'company_size', 'identified_use_case', 'goal'], industry_examples: true, question_count: 4, reflection_prompts: ['What is the single most compelling outcome from your POC?', 'What objection do you expect from your stakeholders?', 'How will you measure success in the first 30 days?'] },
+      },
     ],
   },
 ];
@@ -148,19 +293,32 @@ export async function seedProgramCurriculum(): Promise<void> {
           requires_structured_input: lessonDef.requires_structured_input,
           structured_fields_schema: lessonDef.structured_fields_schema,
           content_template_json: lessonDef.content_template_json,
+          completion_requirements: lessonDef.completion_requirements,
         },
       });
 
       if (!lessonCreated) {
         // Update in case content changed
         await CurriculumLesson.update(
-          { title: lessonDef.title, description: lessonDef.description, lesson_type: lessonDef.lesson_type, estimated_minutes: lessonDef.estimated_minutes, requires_structured_input: lessonDef.requires_structured_input, structured_fields_schema: lessonDef.structured_fields_schema, content_template_json: lessonDef.content_template_json },
+          {
+            title: lessonDef.title, description: lessonDef.description,
+            lesson_type: lessonDef.lesson_type, estimated_minutes: lessonDef.estimated_minutes,
+            requires_structured_input: lessonDef.requires_structured_input,
+            structured_fields_schema: lessonDef.structured_fields_schema,
+            content_template_json: lessonDef.content_template_json,
+            completion_requirements: lessonDef.completion_requirements,
+          },
           { where: { module_id: mod.id, lesson_number: lessonDef.lesson_number } }
         );
       } else {
         lessonsCreated++;
       }
     }
+
+    // Clean up old lesson 6 (assessment/lab) if it exists from previous seed
+    await CurriculumLesson.destroy({
+      where: { module_id: mod.id, lesson_number: 6 },
+    });
   }
 
   // --- Seed Live Sessions ---
@@ -211,5 +369,5 @@ export async function seedProgramCurriculum(): Promise<void> {
     }
   }
 
-  console.log(`[Seed] Curriculum: ${modulesCreated} modules, ${lessonsCreated} lessons, ${sessionsCreated} sessions, ${skillsCreated} skills (cohort: ${cohort.name})`);
+  console.log(`[Seed] Curriculum: ${modulesCreated} modules, ${lessonsCreated} sections, ${sessionsCreated} sessions, ${skillsCreated} skills (cohort: ${cohort.name})`);
 }

@@ -309,24 +309,27 @@ export async function completeLesson(
   if (instance.status === 'locked') throw new Error('Lesson is locked');
   if (instance.status === 'completed') return { already_completed: true };
 
-  // Validate lab completion
-  if (lesson.requires_structured_input && !instance.structured_responses_json) {
-    throw new Error('Lab submission required before completing this lesson');
-  }
+  // Validate completion requirements (unified section model)
+  const reqs = lesson.completion_requirements || {};
+  const quizPassScore = reqs.quiz_pass_score ?? (lesson.lesson_type === 'assessment' ? 70 : null);
 
-  // Validate quiz score for assessments
-  if (lesson.lesson_type === 'assessment') {
-    const score = payload.quiz_score ?? 0;
-    if (score < 70) {
+  if (quizPassScore && payload.quiz_score != null) {
+    if (payload.quiz_score < quizPassScore) {
       await instance.update({
-        quiz_score: score,
+        quiz_score: payload.quiz_score,
         quiz_responses_json: payload.quiz_responses,
         attempts: instance.attempts + 1,
       });
-      return { passed: false, score, message: 'Score below 70%. Please retry.' };
+      return { passed: false, score: payload.quiz_score, message: `Score below ${quizPassScore}%. Please retry.` };
     }
     await instance.update({
-      quiz_score: score,
+      quiz_score: payload.quiz_score,
+      quiz_responses_json: payload.quiz_responses,
+    });
+  } else if (payload.quiz_score != null) {
+    // Save quiz score even when no pass threshold is set
+    await instance.update({
+      quiz_score: payload.quiz_score,
       quiz_responses_json: payload.quiz_responses,
     });
   }

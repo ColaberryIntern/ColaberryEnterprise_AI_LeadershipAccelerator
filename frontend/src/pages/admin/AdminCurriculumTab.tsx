@@ -69,6 +69,7 @@ const SKILL_COLORS: Record<string, string> = {
 };
 
 const LESSON_TYPE_BADGES: Record<string, { bg: string; label: string }> = {
+  section: { bg: '#eef2ff', label: 'Section' },
   concept: { bg: '#e0e7ff', label: 'Concept' },
   lab: { bg: '#f3e8ff', label: 'Lab' },
   assessment: { bg: '#fef3c7', label: 'Assessment' },

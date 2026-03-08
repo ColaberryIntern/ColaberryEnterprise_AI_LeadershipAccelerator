@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 interface Props { token: string; apiUrl: string; }
 
 const typeBadge = (t: string) => {
-  const m: Record<string, string> = { concept: 'bg-primary', lab: 'bg-success', assessment: 'bg-warning text-dark', reflection: 'bg-info' };
+  const m: Record<string, string> = { section: 'bg-primary', concept: 'bg-primary', lab: 'bg-success', assessment: 'bg-warning text-dark', reflection: 'bg-info' };
   return m[t] || 'bg-secondary';
 };
 

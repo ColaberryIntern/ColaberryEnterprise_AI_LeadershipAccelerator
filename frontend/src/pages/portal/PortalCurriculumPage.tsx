@@ -55,6 +55,7 @@ const STATUS_CONFIG: Record<string, { icon: string; color: string; bg: string; l
 };
 
 const TYPE_BADGES: Record<string, { icon: string; color: string; bg: string }> = {
+  section: { icon: 'bi-journal-text', color: '#6366f1', bg: '#eef2ff' },
   concept: { icon: 'bi-book', color: '#3b82f6', bg: '#eff6ff' },
   lab: { icon: 'bi-tools', color: '#8b5cf6', bg: '#f5f3ff' },
   assessment: { icon: 'bi-clipboard-check', color: '#f59e0b', bg: '#fffbeb' },

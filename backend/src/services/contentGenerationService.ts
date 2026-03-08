@@ -69,30 +69,9 @@ export async function generateLessonContent(
     }
   }
 
-  let systemPrompt: string;
-  let userPrompt: string;
-
-  switch (lesson.lesson_type) {
-    case 'concept':
-      systemPrompt = CONCEPT_V2_SYSTEM_PROMPT;
-      userPrompt = buildConceptV2Prompt(lesson, template, personalizationContext);
-      break;
-    case 'assessment':
-      systemPrompt = ASSESSMENT_SYSTEM_PROMPT;
-      userPrompt = buildAssessmentPrompt(lesson, template, personalizationContext);
-      break;
-    case 'lab':
-      systemPrompt = LAB_SYSTEM_PROMPT;
-      userPrompt = buildLabPrompt(lesson, template, personalizationContext);
-      break;
-    case 'reflection':
-      systemPrompt = REFLECTION_SYSTEM_PROMPT;
-      userPrompt = buildReflectionPrompt(lesson, template, personalizationContext);
-      break;
-    default:
-      systemPrompt = CONCEPT_SYSTEM_PROMPT;
-      userPrompt = buildConceptPrompt(lesson, template, personalizationContext);
-  }
+  // Unified: always use V2 section prompt for all content
+  const systemPrompt = CONCEPT_V2_SYSTEM_PROMPT;
+  const userPrompt = buildConceptV2Prompt(lesson, template, personalizationContext);
 
   try {
     const response = await getOpenAI().chat.completions.create({
@@ -112,7 +91,7 @@ export async function generateLessonContent(
     const parsed = JSON.parse(content);
 
     // Validate v2 content has required fields — use fallback if truncated/malformed
-    if (lesson.lesson_type === 'concept' && (!parsed.content_version || !parsed.concept_snapshot)) {
+    if (!parsed.content_version || !parsed.concept_snapshot) {
       console.error('[ContentGeneration] Malformed v2 content, using fallback. Keys:', Object.keys(parsed));
       return buildFallbackContent(lesson);
     }
@@ -404,80 +383,50 @@ Personalize the reflection prompts to reference their specific journey, industry
 /* ------------------------------------------------------------------ */
 
 function buildFallbackContent(lesson: CurriculumLesson): any {
-  switch (lesson.lesson_type) {
-    case 'concept':
-      return {
-        content_version: 'v2',
-        concept_snapshot: {
-          title: lesson.title,
-          definition: lesson.description || 'Content is being generated. Please try again.',
-          why_it_matters: 'This concept is key to your AI leadership journey.',
-          visual_metaphor: '',
+  // Always return V2 format for unified section architecture
+  return {
+    content_version: 'v2',
+    concept_snapshot: {
+      title: lesson.title,
+      definition: lesson.description || 'Content is being generated. Please try again.',
+      why_it_matters: 'This concept is key to your AI leadership journey.',
+      visual_metaphor: '',
+    },
+    ai_strategy: {
+      description: 'AI strategy content will be personalized to your industry.',
+      when_to_use_ai: ['Data analysis and pattern recognition', 'Draft generation and iteration'],
+      human_responsibilities: ['Strategic decision-making', 'Stakeholder relationship management'],
+      suggested_prompt: 'As a leader in my industry, help me identify the top 3 AI use cases for my organization.',
+    },
+    prompt_template: {
+      template: 'As a {{role}} in {{industry}}, help me understand {{topic}}.',
+      placeholders: [
+        { name: 'role', description: 'Your job title or role', example: 'VP of Operations' },
+        { name: 'industry', description: 'Your industry', example: 'Healthcare' },
+        { name: 'topic', description: 'The concept to explore', example: 'AI-driven process optimization' },
+      ],
+      expected_output_shape: 'A structured analysis with key insights, practical recommendations, and next steps.',
+    },
+    implementation_task: {
+      title: 'Apply This Concept',
+      description: 'Apply this concept to your organization by identifying a practical use case and drafting an implementation plan.',
+      requirements: ['Identify an application area', 'Draft a plan', 'Assess feasibility'],
+      deliverable: 'A brief implementation outline.',
+      required_artifacts: [
+        {
+          name: 'Implementation Outline',
+          description: 'A document outlining how you would apply this concept in your organization.',
+          file_types: ['.pdf', '.docx', '.xlsx'],
+          validation_criteria: 'Must include at least 3 application areas with feasibility assessment.',
+          allow_screenshot: false,
         },
-        ai_strategy: {
-          description: 'AI strategy content will be personalized to your industry.',
-          when_to_use_ai: ['Data analysis and pattern recognition', 'Draft generation and iteration'],
-          human_responsibilities: ['Strategic decision-making', 'Stakeholder relationship management'],
-          suggested_prompt: 'As a leader in my industry, help me identify the top 3 AI use cases for my organization.',
-        },
-        prompt_template: {
-          template: 'As a {{role}} in {{industry}}, help me understand {{topic}}.',
-          placeholders: [
-            { name: 'role', description: 'Your job title or role', example: 'VP of Operations' },
-            { name: 'industry', description: 'Your industry', example: 'Healthcare' },
-            { name: 'topic', description: 'The concept to explore', example: 'AI-driven process optimization' },
-          ],
-          expected_output_shape: 'A structured analysis with key insights, practical recommendations, and next steps.',
-        },
-        implementation_task: {
-          title: 'Apply This Concept',
-          description: 'Apply this concept to your organization by identifying a practical use case and drafting an implementation plan.',
-          requirements: ['Identify an application area', 'Draft a plan', 'Assess feasibility'],
-          deliverable: 'A brief implementation outline.',
-          required_artifacts: [
-            {
-              name: 'Implementation Outline',
-              description: 'A document outlining how you would apply this concept in your organization.',
-              file_types: ['.pdf', '.docx', '.xlsx'],
-              validation_criteria: 'Must include at least 3 application areas with feasibility assessment.',
-              allow_screenshot: false,
-            },
-          ],
-        },
-        knowledge_checks: [],
-        reflection_questions: [
-          { question: 'How does this apply to your role?', prompt_for_deeper_thinking: 'Think about your daily responsibilities and where AI could augment your decision-making.' },
-        ],
-      };
-    case 'assessment':
-      return {
-        questions: [
-          {
-            question: 'Assessment questions are being generated. Please try again.',
-            options: ['A. Try again', 'B. Contact support', 'C. Skip', 'D. Review materials'],
-            correct_answer: 'A',
-            explanation: 'Please try starting the lesson again.',
-          },
-        ],
-      };
-    case 'lab':
-      return {
-        instructions: lesson.description || 'Complete the structured fields below.',
-        context_brief: 'This exercise helps you apply concepts to your organization.',
-        field_guidance: {},
-        example_responses: {},
-      };
-    case 'reflection':
-      return {
-        prompts: [
-          { question: 'What was your key insight from this module?', guidance: 'Think about what surprised you most.' },
-          { question: 'What would you do differently?', guidance: 'Consider your organization\'s specific context.' },
-        ],
-        synthesis_prompt: 'How do these reflections connect to your overall AI initiative?',
-      };
-    default:
-      return { content: lesson.description };
-  }
+      ],
+    },
+    knowledge_checks: [],
+    reflection_questions: [
+      { question: 'How does this apply to your role?', prompt_for_deeper_thinking: 'Think about your daily responsibilities and where AI could augment your decision-making.' },
+    ],
+  };
 }
 
 function getNestedValue(obj: any, path: string): any {

@@ -13,18 +13,19 @@ interface ConceptLessonProps {
 }
 
 export default function ConceptLesson({ content, lessonId, isCompleted, onCanCompleteChange, onQuizScoreChange, quizResponses, taskData }: ConceptLessonProps) {
-  if (content.content_version === 'v2') {
-    return (
-      <ConceptV2
-        content={content}
-        lessonId={lessonId}
-        isCompleted={isCompleted}
-        onCanCompleteChange={onCanCompleteChange}
-        onQuizScoreChange={onQuizScoreChange}
-        quizResponses={quizResponses}
-        taskData={taskData}
-      />
-    );
+  // Legacy V1 fallback only for cached content without V2 markers
+  if (content.content_version !== 'v2' && !content.concept_snapshot && content.concept_explanation) {
+    return <ConceptV1 content={content} />;
   }
-  return <ConceptV1 content={content} />;
+  return (
+    <ConceptV2
+      content={content}
+      lessonId={lessonId}
+      isCompleted={isCompleted}
+      onCanCompleteChange={onCanCompleteChange}
+      onQuizScoreChange={onQuizScoreChange}
+      quizResponses={quizResponses}
+      taskData={taskData}
+    />
+  );
 }

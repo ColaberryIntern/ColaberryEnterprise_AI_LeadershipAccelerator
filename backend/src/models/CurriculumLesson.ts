@@ -7,11 +7,12 @@ export interface CurriculumLessonAttributes {
   lesson_number: number;
   title: string;
   description?: string;
-  lesson_type: 'concept' | 'lab' | 'assessment' | 'reflection';
+  lesson_type: 'concept' | 'lab' | 'assessment' | 'reflection' | 'section';
   estimated_minutes: number;
   requires_structured_input: boolean;
   structured_fields_schema?: any;
   content_template_json?: any;
+  completion_requirements?: any;
   created_at?: Date;
 }
 
@@ -21,11 +22,12 @@ class CurriculumLesson extends Model<CurriculumLessonAttributes> implements Curr
   declare lesson_number: number;
   declare title: string;
   declare description: string;
-  declare lesson_type: 'concept' | 'lab' | 'assessment' | 'reflection';
+  declare lesson_type: 'concept' | 'lab' | 'assessment' | 'reflection' | 'section';
   declare estimated_minutes: number;
   declare requires_structured_input: boolean;
   declare structured_fields_schema: any;
   declare content_template_json: any;
+  declare completion_requirements: any;
   declare created_at: Date;
 }
 
@@ -54,9 +56,9 @@ CurriculumLesson.init(
       allowNull: true,
     },
     lesson_type: {
-      type: DataTypes.ENUM('concept', 'lab', 'assessment', 'reflection'),
+      type: DataTypes.ENUM('concept', 'lab', 'assessment', 'reflection', 'section'),
       allowNull: false,
-      defaultValue: 'concept',
+      defaultValue: 'section',
     },
     estimated_minutes: {
       type: DataTypes.INTEGER,
@@ -75,6 +77,11 @@ CurriculumLesson.init(
     content_template_json: {
       type: DataTypes.JSONB,
       allowNull: true,
+    },
+    completion_requirements: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: {},
     },
     created_at: {
       type: DataTypes.DATE,

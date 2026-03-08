@@ -94,7 +94,7 @@ export async function exportProjectArchitectData(enrollmentId: string) {
   const assessmentResults = lessonInstances
     .filter((li) => {
       const lesson = (li as any).lesson as CurriculumLesson;
-      return lesson.lesson_type === 'assessment';
+      return lesson.lesson_type === 'assessment' || lesson.lesson_type === 'section';
     })
     .map((li) => {
       const lesson = (li as any).lesson as CurriculumLesson;
