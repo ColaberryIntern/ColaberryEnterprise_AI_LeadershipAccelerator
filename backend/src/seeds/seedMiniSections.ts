@@ -7,9 +7,9 @@
  */
 
 import { sequelize } from '../config/database';
+import '../models'; // Initialize associations
 import MiniSection from '../models/MiniSection';
 import CurriculumLesson from '../models/CurriculumLesson';
-import CurriculumModule from '../models/CurriculumModule';
 const { v4: uuidv4 } = require('uuid');
 
 interface MiniSectionDef {
@@ -216,7 +216,6 @@ async function seedMiniSections() {
 
     // Get all lessons
     const lessons = await CurriculumLesson.findAll({
-      include: [{ model: CurriculumModule, as: 'module' }],
       order: [['lesson_number', 'ASC']],
     });
 
@@ -259,8 +258,7 @@ async function seedMiniSections() {
         } as any);
       }
 
-      const modNum = (lesson as any).module?.module_number || '?';
-      console.log(`  OK: M${modNum}.${lesson.lesson_number} "${lesson.title}" — 5 mini-sections created`);
+      console.log(`  OK: L${lesson.lesson_number} "${lesson.title}" — 5 mini-sections created`);
       created++;
     }
 
