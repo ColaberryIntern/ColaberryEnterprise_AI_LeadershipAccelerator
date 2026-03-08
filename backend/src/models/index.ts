@@ -42,6 +42,10 @@ import ArtifactDefinition from './ArtifactDefinition';
 import VariableStore from './VariableStore';
 import GitHubConnection from './GitHubConnection';
 import SkillDefinition from './SkillDefinition';
+import ProgramBlueprint from './ProgramBlueprint';
+import MiniSection from './MiniSection';
+import VariableDefinition from './VariableDefinition';
+import SessionChecklist from './SessionChecklist';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -180,6 +184,12 @@ AssignmentSubmission.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'e
 LiveSession.hasMany(AssignmentSubmission, { foreignKey: 'session_id', as: 'submissions' });
 AssignmentSubmission.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
 
+// Program Blueprint associations
+ProgramBlueprint.hasMany(CurriculumModule, { foreignKey: 'program_id', as: 'modules' });
+CurriculumModule.belongsTo(ProgramBlueprint, { foreignKey: 'program_id', as: 'program' });
+ProgramBlueprint.hasMany(Cohort, { foreignKey: 'program_id', as: 'cohorts' });
+Cohort.belongsTo(ProgramBlueprint, { foreignKey: 'program_id', as: 'program' });
+
 // Curriculum Module associations
 Cohort.hasMany(CurriculumModule, { foreignKey: 'cohort_id', as: 'curriculumModules' });
 CurriculumModule.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
@@ -218,6 +228,10 @@ SessionChatMessage.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enr
 // Skill Mastery associations
 Enrollment.hasMany(SkillMastery, { foreignKey: 'enrollment_id', as: 'skillMasteries' });
 SkillMastery.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// CurriculumLesson -> LiveSession (section-to-session association)
+CurriculumLesson.belongsTo(LiveSession, { foreignKey: 'associated_session_id', as: 'associatedSession' });
+LiveSession.hasMany(CurriculumLesson, { foreignKey: 'associated_session_id', as: 'associatedLessons' });
 
 // --- Orchestration Engine associations ---
 
@@ -259,6 +273,28 @@ GitHubConnection.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrol
 // SessionGate -> ArtifactDefinition
 SessionGate.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 
+// MiniSection associations
+CurriculumLesson.hasMany(MiniSection, { foreignKey: 'lesson_id', as: 'miniSections' });
+MiniSection.belongsTo(CurriculumLesson, { foreignKey: 'lesson_id', as: 'lesson' });
+MiniSection.belongsTo(PromptTemplate, { foreignKey: 'concept_prompt_template_id', as: 'conceptPrompt' });
+MiniSection.belongsTo(PromptTemplate, { foreignKey: 'build_prompt_template_id', as: 'buildPrompt' });
+MiniSection.belongsTo(PromptTemplate, { foreignKey: 'mentor_prompt_template_id', as: 'mentorPrompt' });
+
+// VariableDefinition associations
+ProgramBlueprint.hasMany(VariableDefinition, { foreignKey: 'program_id', as: 'variableDefinitions' });
+VariableDefinition.belongsTo(ProgramBlueprint, { foreignKey: 'program_id', as: 'program' });
+VariableDefinition.hasMany(VariableStore, { foreignKey: 'variable_definition_id', as: 'values' });
+VariableStore.belongsTo(VariableDefinition, { foreignKey: 'variable_definition_id', as: 'definition' });
+
+// ArtifactDefinition -> CurriculumLesson (lesson-level artifacts)
+ArtifactDefinition.belongsTo(CurriculumLesson, { foreignKey: 'lesson_id', as: 'lesson' });
+CurriculumLesson.hasMany(ArtifactDefinition, { foreignKey: 'lesson_id', as: 'artifactDefinitions' });
+ArtifactDefinition.belongsTo(PromptTemplate, { foreignKey: 'instruction_prompt_id', as: 'instructionPrompt' });
+
+// SessionChecklist associations
+LiveSession.hasMany(SessionChecklist, { foreignKey: 'session_id', as: 'checklist' });
+SessionChecklist.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -281,4 +317,8 @@ export {
   VariableStore,
   GitHubConnection,
   SkillDefinition,
+  ProgramBlueprint,
+  MiniSection,
+  VariableDefinition,
+  SessionChecklist,
 };

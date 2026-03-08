@@ -8,13 +8,17 @@ import ArtifactControlTab from './orchestration/ArtifactControlTab';
 import SkillControlTab from './orchestration/SkillControlTab';
 import GatingControlTab from './orchestration/GatingControlTab';
 import AnalyticsTab from './orchestration/AnalyticsTab';
+import ProgramBlueprintTab from './orchestration/ProgramBlueprintTab';
+import MiniSectionControlTab from './orchestration/MiniSectionControlTab';
 
 const API = process.env.REACT_APP_API_URL || '';
 
 const TABS = [
+  { id: 'blueprint', label: 'Blueprint' },
   { id: 'overview', label: 'Program Overview' },
   { id: 'sessions', label: 'Sessions' },
   { id: 'sections', label: 'Sections' },
+  { id: 'mini-sections', label: 'Mini-Sections' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'skills', label: 'Skills' },
@@ -51,9 +55,11 @@ export default function AdminOrchestrationPage() {
         ))}
       </ul>
 
+      {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
       {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
       {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
       {activeTab === 'sections' && <SectionControlTab {...tabProps} />}
+      {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} />}
       {activeTab === 'prompts' && <PromptControlTab {...tabProps} />}
       {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
       {activeTab === 'skills' && <SkillControlTab {...tabProps} />}

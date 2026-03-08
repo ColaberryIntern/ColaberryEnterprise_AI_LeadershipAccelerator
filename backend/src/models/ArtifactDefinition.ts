@@ -7,8 +7,13 @@ export interface ArtifactDefinitionAttributes {
   section_id?: string;
   name: string;
   description?: string;
-  artifact_type?: 'document' | 'screenshot' | 'file' | 'github_file';
+  artifact_type?: string;
   file_types?: string[];
+  instruction_prompt_id?: string;
+  validation_rule?: any;
+  skill_mapping?: { skill_id: string; contribution: number }[];
+  required_before?: string;
+  lesson_id?: string;
   required_for_session?: boolean;
   required_for_build_unlock?: boolean;
   required_for_presentation_unlock?: boolean;
@@ -29,8 +34,13 @@ class ArtifactDefinition extends Model<ArtifactDefinitionAttributes> implements 
   declare section_id: string;
   declare name: string;
   declare description: string;
-  declare artifact_type: 'document' | 'screenshot' | 'file' | 'github_file';
+  declare artifact_type: string;
   declare file_types: string[];
+  declare instruction_prompt_id: string;
+  declare validation_rule: any;
+  declare skill_mapping: { skill_id: string; contribution: number }[];
+  declare required_before: string;
+  declare lesson_id: string;
   declare required_for_session: boolean;
   declare required_for_build_unlock: boolean;
   declare required_for_presentation_unlock: boolean;
@@ -71,9 +81,31 @@ ArtifactDefinition.init(
       allowNull: true,
     },
     artifact_type: {
-      type: DataTypes.ENUM('document', 'screenshot', 'file', 'github_file'),
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'document',
+    },
+    instruction_prompt_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'prompt_templates', key: 'id' },
+    },
+    validation_rule: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    skill_mapping: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    required_before: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    lesson_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'curriculum_lessons', key: 'id' },
     },
     file_types: {
       type: DataTypes.JSONB,

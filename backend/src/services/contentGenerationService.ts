@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
 import CurriculumLesson from '../models/CurriculumLesson';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
-import { SectionConfig, PromptTemplate } from '../models';
+import { SectionConfig, PromptTemplate, ProgramBlueprint, MiniSection, ArtifactDefinition } from '../models';
+import CurriculumModule from '../models/CurriculumModule';
 import * as variableService from './variableService';
 
 let _openai: OpenAI | null = null;
@@ -69,9 +70,37 @@ export async function generateLessonContent(
     }
   }
 
-  // Unified: always use V2 section prompt for all content
-  const systemPrompt = CONCEPT_V2_SYSTEM_PROMPT;
-  const userPrompt = buildConceptV2Prompt(lesson, template, personalizationContext);
+  // Check for mini-sections (7-layer composite path)
+  let miniSections: MiniSection[] = [];
+  if (enrollmentId) {
+    try {
+      miniSections = await MiniSection.findAll({
+        where: { lesson_id: lesson.id, is_active: true },
+        include: [
+          { model: PromptTemplate, as: 'conceptPrompt' },
+          { model: PromptTemplate, as: 'buildPrompt' },
+          { model: PromptTemplate, as: 'mentorPrompt' },
+        ],
+        order: [['mini_section_order', 'ASC']],
+      });
+    } catch {
+      // Non-critical — fall through to V2 path
+    }
+  }
+
+  let systemPrompt: string;
+  let userPrompt: string;
+
+  if (enrollmentId && miniSections.length > 0) {
+    // 7-layer composite prompt path
+    const composite = await buildCompositePrompt(lesson, profile, enrollmentId, priorLabResponses, miniSections, personalizationContext);
+    systemPrompt = composite.systemPrompt;
+    userPrompt = composite.userPrompt;
+  } else {
+    // Existing V2 path (backward compatible)
+    systemPrompt = CONCEPT_V2_SYSTEM_PROMPT;
+    userPrompt = buildConceptV2Prompt(lesson, template, personalizationContext);
+  }
 
   try {
     const response = await getOpenAI().chat.completions.create({
@@ -376,6 +405,139 @@ LEARNER CONTEXT:
 ${context}
 
 Personalize the reflection prompts to reference their specific journey, industry, and prior work.`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  7-Layer Composite Prompt Builder                                   */
+/* ------------------------------------------------------------------ */
+
+async function buildCompositePrompt(
+  lesson: CurriculumLesson,
+  profile: UserCurriculumProfile,
+  enrollmentId: string,
+  priorLabResponses: Record<string, any>,
+  miniSections: MiniSection[],
+  personalizationContext: string
+): Promise<{ systemPrompt: string; userPrompt: string }> {
+  const parts: string[] = [];
+
+  // Layer 1: Program Blueprint
+  try {
+    const module = await CurriculumModule.findByPk(lesson.module_id);
+    if (module?.program_id) {
+      const blueprint = await ProgramBlueprint.findByPk(module.program_id);
+      if (blueprint?.default_prompt_injection_rules) {
+        const rules = blueprint.default_prompt_injection_rules;
+        parts.push('=== PROGRAM CONTEXT ===');
+        if (rules.system_context) parts.push(rules.system_context);
+        if (rules.tone) parts.push(`Tone: ${rules.tone}`);
+        if (rules.audience_level) parts.push(`Audience: ${rules.audience_level}`);
+        if (blueprint.learning_philosophy) parts.push(`Philosophy: ${blueprint.learning_philosophy}`);
+        parts.push('');
+      }
+    }
+  } catch { /* non-critical */ }
+
+  // Layer 2: Section Blueprint
+  parts.push('=== SECTION BLUEPRINT ===');
+  parts.push(`Section: ${lesson.title}`);
+  parts.push(`Description: ${lesson.description}`);
+  if (lesson.learning_goal) parts.push(`Learning Goal: ${lesson.learning_goal}`);
+  if (lesson.build_phase_flag) parts.push('Phase: BUILD (hands-on creation)');
+  if (lesson.presentation_phase_flag) parts.push('Phase: PRESENTATION (executive delivery)');
+  parts.push('');
+
+  // Layer 3: Mini-Section Structure
+  parts.push('=== MINI-SECTIONS ===');
+  parts.push('Generate content for each sub-section below. Each produces its own concept, task, and knowledge checks:');
+  for (const ms of miniSections) {
+    parts.push(`\n--- Sub-Section ${ms.mini_section_order}: ${ms.title} ---`);
+    if (ms.description) parts.push(`Description: ${ms.description}`);
+    if (ms.completion_weight !== 1.0) parts.push(`Weight: ${ms.completion_weight}`);
+
+    // Resolve concept prompt template if linked
+    const conceptPrompt = (ms as any).conceptPrompt;
+    if (conceptPrompt?.user_prompt_template) {
+      const resolved = await resolveTemplate(conceptPrompt.user_prompt_template, enrollmentId);
+      parts.push(`Concept Prompt: ${resolved}`);
+    }
+
+    // Resolve build prompt template if linked
+    const buildPrompt = (ms as any).buildPrompt;
+    if (buildPrompt?.user_prompt_template) {
+      const resolved = await resolveTemplate(buildPrompt.user_prompt_template, enrollmentId);
+      parts.push(`Build Prompt: ${resolved}`);
+    }
+
+    if (ms.knowledge_check_config?.enabled) {
+      parts.push(`Knowledge Check: ${ms.knowledge_check_config.question_count} questions, pass score ${ms.knowledge_check_config.pass_score}%`);
+    }
+
+    if (ms.associated_variable_keys?.length) {
+      parts.push(`Extract Variables: ${ms.associated_variable_keys.join(', ')}`);
+    }
+  }
+  parts.push('');
+
+  // Layer 4: Student Variables
+  parts.push('=== LEARNER CONTEXT ===');
+  parts.push(personalizationContext);
+
+  // Layer 5: Artifact Expectations
+  try {
+    const artifacts = await ArtifactDefinition.findAll({ where: { lesson_id: lesson.id } });
+    if (artifacts.length > 0) {
+      parts.push('\n=== EXPECTED ARTIFACTS ===');
+      for (const art of artifacts) {
+        parts.push(`- ${art.name} (${art.artifact_type}): ${art.description || ''}`);
+      }
+    }
+  } catch { /* non-critical */ }
+
+  // Layer 6: Session Context
+  if (lesson.associated_session_id) {
+    try {
+      const { LiveSession } = await import('../models');
+      const session = await LiveSession.findByPk(lesson.associated_session_id);
+      if (session) {
+        parts.push('\n=== SESSION CONTEXT ===');
+        parts.push(`Associated Session: ${session.title}`);
+        if (session.description) parts.push(`Session Theme: ${session.description}`);
+      }
+    } catch { /* non-critical */ }
+  }
+
+  // Layer 7: Mentor Brief
+  try {
+    const sectionConfig = await SectionConfig.findOne({
+      where: { lesson_id: lesson.id },
+      include: [{ model: PromptTemplate, as: 'mentorPrompt' }],
+    });
+    const mentorPrompt = (sectionConfig as any)?.mentorPrompt;
+    if (mentorPrompt?.user_prompt_template) {
+      const resolved = await resolveTemplate(mentorPrompt.user_prompt_template, enrollmentId);
+      parts.push('\n=== MENTOR BRIEF ===');
+      parts.push(resolved);
+    }
+  } catch { /* non-critical */ }
+
+  return {
+    systemPrompt: CONCEPT_V2_SYSTEM_PROMPT,
+    userPrompt: parts.join('\n'),
+  };
+}
+
+async function resolveTemplate(template: string, enrollmentId: string): Promise<string> {
+  try {
+    const vars = await variableService.getAllVariables(enrollmentId);
+    let resolved = template;
+    for (const [key, value] of Object.entries(vars)) {
+      resolved = resolved.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+    }
+    return resolved;
+  } catch {
+    return template;
+  }
 }
 
 /* ------------------------------------------------------------------ */

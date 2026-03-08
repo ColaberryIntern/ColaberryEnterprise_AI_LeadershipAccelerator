@@ -13,6 +13,13 @@ export interface CurriculumLessonAttributes {
   structured_fields_schema?: any;
   content_template_json?: any;
   completion_requirements?: any;
+  learning_goal?: string;
+  mandatory?: boolean;
+  build_phase_flag?: boolean;
+  presentation_phase_flag?: boolean;
+  associated_session_id?: string;
+  required_min_completion_before_session?: number;
+  sort_order?: number;
   created_at?: Date;
 }
 
@@ -28,6 +35,13 @@ class CurriculumLesson extends Model<CurriculumLessonAttributes> implements Curr
   declare structured_fields_schema: any;
   declare content_template_json: any;
   declare completion_requirements: any;
+  declare learning_goal: string;
+  declare mandatory: boolean;
+  declare build_phase_flag: boolean;
+  declare presentation_phase_flag: boolean;
+  declare associated_session_id: string;
+  declare required_min_completion_before_session: number;
+  declare sort_order: number;
   declare created_at: Date;
 }
 
@@ -82,6 +96,39 @@ CurriculumLesson.init(
       type: DataTypes.JSONB,
       allowNull: true,
       defaultValue: {},
+    },
+    learning_goal: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    mandatory: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    build_phase_flag: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    presentation_phase_flag: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    associated_session_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'live_sessions', key: 'id' },
+    },
+    required_min_completion_before_session: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    sort_order: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
     created_at: {
       type: DataTypes.DATE,

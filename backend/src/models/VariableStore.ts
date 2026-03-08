@@ -10,6 +10,8 @@ export interface VariableStoreAttributes {
   variable_key: string;
   variable_value?: string;
   scope: 'section' | 'session' | 'program' | 'artifact';
+  version?: number;
+  variable_definition_id?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -23,6 +25,8 @@ class VariableStore extends Model<VariableStoreAttributes> implements VariableSt
   declare variable_key: string;
   declare variable_value: string;
   declare scope: 'section' | 'session' | 'program' | 'artifact';
+  declare version: number;
+  declare variable_definition_id: string;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -66,6 +70,16 @@ VariableStore.init(
       type: DataTypes.ENUM('section', 'session', 'program', 'artifact'),
       allowNull: false,
       defaultValue: 'program',
+    },
+    version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    variable_definition_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'variable_definitions', key: 'id' },
     },
     created_at: {
       type: DataTypes.DATE,

@@ -340,6 +340,55 @@ router.get('/api/admin/accelerator/enrollments/:enrollmentId/project-architect',
 router.put('/api/admin/accelerator/curriculum/lessons/:lessonId/override', requireAdmin, handleAdminOverrideLessonStatus);
 router.get('/api/admin/accelerator/enrollments/:enrollmentId/lab-responses', requireAdmin, handleAdminGetLabResponses);
 
+// --- Program Blueprint Routes ---
+import {
+  handleListPrograms, handleGetProgram, handleCreateProgram,
+  handleUpdateProgram, handleDeleteProgram, handleCloneProgram,
+} from '../controllers/programBlueprintController';
+
+router.get('/api/admin/orchestration/programs', requireAdmin, handleListPrograms);
+router.post('/api/admin/orchestration/programs', requireAdmin, handleCreateProgram);
+router.get('/api/admin/orchestration/programs/:id', requireAdmin, handleGetProgram);
+router.put('/api/admin/orchestration/programs/:id', requireAdmin, handleUpdateProgram);
+router.delete('/api/admin/orchestration/programs/:id', requireAdmin, handleDeleteProgram);
+router.post('/api/admin/orchestration/programs/:id/clone', requireAdmin, handleCloneProgram);
+
+// --- Mini-Section Routes ---
+import {
+  handleListMiniSections, handleGetMiniSection, handleCreateMiniSection,
+  handleUpdateMiniSection, handleDeleteMiniSection, handleReorderMiniSections,
+} from '../controllers/miniSectionController';
+
+router.get('/api/admin/orchestration/lessons/:lessonId/mini-sections', requireAdmin, handleListMiniSections);
+router.post('/api/admin/orchestration/lessons/:lessonId/mini-sections', requireAdmin, handleCreateMiniSection);
+router.put('/api/admin/orchestration/lessons/:lessonId/mini-sections/reorder', requireAdmin, handleReorderMiniSections);
+router.get('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleGetMiniSection);
+router.put('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleUpdateMiniSection);
+router.delete('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleDeleteMiniSection);
+
+// --- Variable Definition Routes ---
+import {
+  handleListVariableDefinitions, handleGetVariableDefinition, handleCreateVariableDefinition,
+  handleUpdateVariableDefinition, handleDeleteVariableDefinition,
+} from '../controllers/variableDefinitionController';
+
+router.get('/api/admin/orchestration/variable-definitions', requireAdmin, handleListVariableDefinitions);
+router.post('/api/admin/orchestration/variable-definitions', requireAdmin, handleCreateVariableDefinition);
+router.get('/api/admin/orchestration/variable-definitions/:id', requireAdmin, handleGetVariableDefinition);
+router.put('/api/admin/orchestration/variable-definitions/:id', requireAdmin, handleUpdateVariableDefinition);
+router.delete('/api/admin/orchestration/variable-definitions/:id', requireAdmin, handleDeleteVariableDefinition);
+
+// --- Session Checklist Routes ---
+import {
+  handleListChecklistItems, handleCreateChecklistItem,
+  handleUpdateChecklistItem, handleDeleteChecklistItem,
+} from '../controllers/sessionChecklistController';
+
+router.get('/api/admin/orchestration/sessions/:sessionId/checklist', requireAdmin, handleListChecklistItems);
+router.post('/api/admin/orchestration/sessions/:sessionId/checklist', requireAdmin, handleCreateChecklistItem);
+router.put('/api/admin/orchestration/checklist/:id', requireAdmin, handleUpdateChecklistItem);
+router.delete('/api/admin/orchestration/checklist/:id', requireAdmin, handleDeleteChecklistItem);
+
 // --- Orchestration Engine Routes ---
 import {
   handleListPromptTemplates, handleGetPromptTemplate, handleCreatePromptTemplate,

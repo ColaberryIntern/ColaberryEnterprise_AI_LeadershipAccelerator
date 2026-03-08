@@ -31,6 +31,8 @@ export async function setVariable(
   if (variable.variable_value !== value) {
     variable.variable_value = value;
     variable.updated_at = new Date();
+    // Increment version on updates
+    variable.version = (variable.version || 1) + 1;
     await variable.save();
   }
 
@@ -103,9 +105,24 @@ export async function getVariableDependencyGraph(enrollmentId: string): Promise<
     key: v.variable_key,
     value: v.variable_value?.substring(0, 100),
     scope: v.scope,
+    version: v.version || 1,
     sectionId: v.section_id,
     sessionId: v.session_id,
     artifactId: v.artifact_id,
+    updatedAt: v.updated_at,
+  }));
+}
+
+export async function getVariableHistory(enrollmentId: string, key: string): Promise<any[]> {
+  const variables = await VariableStore.findAll({
+    where: { enrollment_id: enrollmentId, variable_key: key },
+    order: [['updated_at', 'DESC']],
+  });
+  return variables.map(v => ({
+    id: v.id,
+    value: v.variable_value,
+    version: v.version || 1,
+    scope: v.scope,
     updatedAt: v.updated_at,
   }));
 }

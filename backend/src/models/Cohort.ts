@@ -15,6 +15,7 @@ export interface CohortAttributes {
   cohort_type?: string;
   curriculum_version?: string;
   timezone?: string;
+  program_id?: string;
   settings_json?: any;
   created_at?: Date;
 }
@@ -33,6 +34,7 @@ class Cohort extends Model<CohortAttributes> implements CohortAttributes {
   declare cohort_type: string;
   declare curriculum_version: string;
   declare timezone: string;
+  declare program_id: string;
   declare settings_json: any;
   declare created_at: Date;
 }
@@ -97,6 +99,11 @@ Cohort.init(
       type: DataTypes.STRING(50),
       allowNull: true,
       defaultValue: 'America/New_York',
+    },
+    program_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'program_blueprints', key: 'id' },
     },
     settings_json: {
       type: DataTypes.JSONB,

@@ -4,6 +4,7 @@ import { sequelize } from '../config/database';
 export interface CurriculumModuleAttributes {
   id?: string;
   cohort_id: string;
+  program_id?: string;
   module_number: number;
   title: string;
   description?: string;
@@ -16,6 +17,7 @@ export interface CurriculumModuleAttributes {
 class CurriculumModule extends Model<CurriculumModuleAttributes> implements CurriculumModuleAttributes {
   declare id: string;
   declare cohort_id: string;
+  declare program_id: string;
   declare module_number: number;
   declare title: string;
   declare description: string;
@@ -36,6 +38,11 @@ CurriculumModule.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'cohorts', key: 'id' },
+    },
+    program_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'program_blueprints', key: 'id' },
     },
     module_number: {
       type: DataTypes.INTEGER,

@@ -3,6 +3,7 @@ import CurriculumModule from '../models/CurriculumModule';
 import CurriculumLesson from '../models/CurriculumLesson';
 import LiveSession from '../models/LiveSession';
 import SkillDefinition from '../models/SkillDefinition';
+import ProgramBlueprint from '../models/ProgramBlueprint';
 import ontology from '../data/ontology.json';
 
 /* ------------------------------------------------------------------ */
@@ -256,12 +257,50 @@ export async function seedProgramCurriculum(): Promise<void> {
   const cohortId = cohort.id;
   let modulesCreated = 0, lessonsCreated = 0, sessionsCreated = 0, skillsCreated = 0;
 
+  // --- Seed Default Program Blueprint ---
+  const [blueprint] = await ProgramBlueprint.findOrCreate({
+    where: { name: 'Enterprise AI Leadership Accelerator' },
+    defaults: {
+      name: 'Enterprise AI Leadership Accelerator',
+      description: 'A 5-module program that transforms business leaders into AI-capable executives who can identify, govern, scope, build, and present AI initiatives.',
+      goals: [
+        'Build executive AI fluency and strategic thinking',
+        'Develop governance and risk management frameworks',
+        'Master requirements engineering for AI projects',
+        'Build and demonstrate a working AI proof of capability',
+        'Present with executive authority and drive organizational adoption',
+      ],
+      target_persona: 'Senior executives (VP+, C-suite), aged 35-60, at mid-to-large enterprises. Technically curious but not engineers. Need to lead AI initiatives, not code them.',
+      learning_philosophy: 'Learn by doing. Every concept is immediately applied to the participant\'s real organization. AI tools are used throughout — not just studied. The program builds one continuous project from strategy through working demo.',
+      core_competency_domains: [
+        { domain_id: 'strategy_trust', name: 'Strategy & Trust', weight: 1.0 },
+        { domain_id: 'governance', name: 'Governance & Risk', weight: 0.9 },
+        { domain_id: 'requirements', name: 'Requirements Engineering', weight: 0.8 },
+        { domain_id: 'build_discipline', name: 'Build Discipline', weight: 0.85 },
+        { domain_id: 'executive_authority', name: 'Executive Authority', weight: 0.95 },
+      ],
+      default_prompt_injection_rules: {
+        system_context: 'You are an AI curriculum engine for an enterprise AI leadership accelerator. Your audience is senior business executives who need to lead AI initiatives. Be authoritative, practical, and industry-aware. Always connect concepts to real business outcomes.',
+        tone: 'Professional, direct, executive-appropriate. No jargon without explanation. Bloomberg meets Harvard Business Review.',
+        audience_level: 'Senior executives — VP, SVP, C-suite. Technically curious but not engineers.',
+      },
+      is_active: true,
+      version: 1,
+    } as any,
+  });
+
+  // Set program_id on cohort if not already set
+  if (!cohort.program_id) {
+    await cohort.update({ program_id: blueprint.id });
+  }
+
   // --- Seed Modules + Lessons ---
   for (const moduleDef of modules) {
     const [mod, modCreated] = await CurriculumModule.findOrCreate({
       where: { cohort_id: cohortId, module_number: moduleDef.module_number },
       defaults: {
         cohort_id: cohortId,
+        program_id: blueprint.id,
         module_number: moduleDef.module_number,
         title: moduleDef.title,
         description: moduleDef.description,
@@ -275,6 +314,7 @@ export async function seedProgramCurriculum(): Promise<void> {
       await mod.update({
         title: moduleDef.title, description: moduleDef.description,
         skill_area: moduleDef.skill_area, total_lessons: moduleDef.lessons.length,
+        program_id: blueprint.id,
       });
     } else {
       modulesCreated++;
