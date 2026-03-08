@@ -6,7 +6,7 @@
  * Run: npx ts-node src/seeds/seedMiniSections.ts
  */
 
-import sequelize from '../config/database';
+import { sequelize } from '../config/database';
 import MiniSection from '../models/MiniSection';
 import CurriculumLesson from '../models/CurriculumLesson';
 import CurriculumModule from '../models/CurriculumModule';
