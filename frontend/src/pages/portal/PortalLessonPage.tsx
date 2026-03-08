@@ -49,6 +49,7 @@ function PortalLessonPage() {
   const [completing, setCompleting] = useState(false);
   const [completionResult, setCompletionResult] = useState<any>(null);
   const [canComplete, setCanComplete] = useState(true);
+  const [conceptQuizScore, setConceptQuizScore] = useState<number | null>(null);
   const { updateLessonContext } = useMentorContext();
 
   const startLesson = useCallback(async () => {
@@ -90,6 +91,16 @@ function PortalLessonPage() {
     };
   }, [data, updateLessonContext]);
 
+  // Auto-navigate to next lesson after completion
+  useEffect(() => {
+    if (completionResult?.passed && completionResult?.next_lesson) {
+      const timer = setTimeout(() => {
+        navigate(`/portal/curriculum/lessons/${completionResult.next_lesson.id}`);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [completionResult, navigate]);
+
   const toggleReflection = (idx: number) => {
     setExpandedReflections((prev) => {
       const next = new Set(prev);
@@ -112,6 +123,14 @@ function PortalLessonPage() {
     }
   };
 
+  const getCorrectAnswer = (q: any): string => {
+    if (q.correct_answer) return q.correct_answer;
+    if (q.correct_index !== undefined && q.options[q.correct_index]) {
+      return q.options[q.correct_index].charAt(0);
+    }
+    return 'A';
+  };
+
   const handleComplete = async () => {
     setCompleting(true);
     try {
@@ -119,6 +138,18 @@ function PortalLessonPage() {
       if (Object.keys(quizAnswers).length > 0) payload.quiz_responses = quizAnswers;
       if (Object.keys(reflectionValues).length > 0) payload.reflection_responses = reflectionValues;
       if (Object.keys(labValues).length > 0) payload.structured_responses = labValues;
+
+      // Calculate quiz_score for assessment lessons
+      if (data?.lesson.lesson_type === 'assessment' && content.questions?.length > 0) {
+        const correct = content.questions.filter((q: any, i: number) => quizAnswers[i] === getCorrectAnswer(q)).length;
+        payload.quiz_score = Math.round((correct / content.questions.length) * 100);
+      }
+
+      // Include concept v2 quiz score if available
+      if (conceptQuizScore !== null) {
+        payload.quiz_score = conceptQuizScore;
+      }
+
       const res = await portalApi.put(`/api/portal/curriculum/lessons/${lessonId}/complete`, payload);
       setCompletionResult(res.data);
     } catch (err: any) {
@@ -235,13 +266,18 @@ function PortalLessonPage() {
                 </div>
               </div>
               {completionResult.next_lesson ? (
-                <button
-                  className="btn btn-sm px-3"
-                  style={{ background: '#10b981', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: 13 }}
-                  onClick={() => navigate(`/portal/curriculum/lessons/${completionResult.next_lesson.id}`)}
-                >
-                  Next Lesson <i className="bi bi-arrow-right ms-1"></i>
-                </button>
+                <div className="d-flex flex-column align-items-end gap-1">
+                  <button
+                    className="btn btn-sm px-3"
+                    style={{ background: '#10b981', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: 13 }}
+                    onClick={() => navigate(`/portal/curriculum/lessons/${completionResult.next_lesson.id}`)}
+                  >
+                    Next Lesson <i className="bi bi-arrow-right ms-1"></i>
+                  </button>
+                  <span className="small" style={{ color: '#6b7280', fontSize: 11 }}>
+                    Continuing automatically...
+                  </span>
+                </div>
               ) : (
                 <button
                   className="btn btn-sm px-3"
@@ -265,6 +301,7 @@ function PortalLessonPage() {
           lessonId={lesson.id}
           isCompleted={isCompleted}
           onCanCompleteChange={setCanComplete}
+          onQuizScoreChange={setConceptQuizScore}
           quizResponses={instance.quiz_responses_json}
           taskData={instance.structured_responses_json?.task_progress}
         />

@@ -7,11 +7,12 @@ interface ConceptLessonProps {
   lessonId: string;
   isCompleted: boolean;
   onCanCompleteChange?: (canComplete: boolean) => void;
+  onQuizScoreChange?: (score: number) => void;
   quizResponses?: any;
   taskData?: any;
 }
 
-export default function ConceptLesson({ content, lessonId, isCompleted, onCanCompleteChange, quizResponses, taskData }: ConceptLessonProps) {
+export default function ConceptLesson({ content, lessonId, isCompleted, onCanCompleteChange, onQuizScoreChange, quizResponses, taskData }: ConceptLessonProps) {
   if (content.content_version === 'v2') {
     return (
       <ConceptV2
@@ -19,6 +20,7 @@ export default function ConceptLesson({ content, lessonId, isCompleted, onCanCom
         lessonId={lessonId}
         isCompleted={isCompleted}
         onCanCompleteChange={onCanCompleteChange}
+        onQuizScoreChange={onQuizScoreChange}
         quizResponses={quizResponses}
         taskData={taskData}
       />

@@ -14,6 +14,7 @@ interface ConceptV2Props {
   lessonId: string;
   isCompleted: boolean;
   onCanCompleteChange?: (canComplete: boolean) => void;
+  onQuizScoreChange?: (score: number) => void;
   quizResponses?: Record<number, { answer: string; correct: boolean }>;
   taskData?: any;
 }
@@ -39,7 +40,7 @@ function isLegacyChecks(knowledgeChecks: any): boolean {
   return Array.isArray(knowledgeChecks) && knowledgeChecks.length > 0;
 }
 
-export default function ConceptV2({ content, lessonId, isCompleted, onCanCompleteChange, quizResponses, taskData }: ConceptV2Props) {
+export default function ConceptV2({ content, lessonId, isCompleted, onCanCompleteChange, onQuizScoreChange, quizResponses, taskData }: ConceptV2Props) {
   const { sendToMentor } = useMentorContext();
   const [quizScore, setQuizScore] = useState<number | null>(null);
   const [taskSubmitted, setTaskSubmitted] = useState(false);
@@ -62,6 +63,7 @@ export default function ConceptV2({ content, lessonId, isCompleted, onCanComplet
 
   const handleQuizComplete = (score: number) => {
     setQuizScore(score);
+    onQuizScoreChange?.(score);
   };
 
   const handleTaskSubmit = () => {
