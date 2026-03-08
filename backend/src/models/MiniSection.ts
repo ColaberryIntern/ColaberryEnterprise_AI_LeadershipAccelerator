@@ -1,9 +1,12 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
+export type MiniSectionType = 'executive_reality_check' | 'ai_strategy' | 'prompt_template' | 'implementation_task' | 'knowledge_check';
+
 export interface MiniSectionAttributes {
   id?: string;
   lesson_id: string;
+  mini_section_type: MiniSectionType;
   mini_section_order: number;
   title: string;
   description?: string;
@@ -13,6 +16,8 @@ export interface MiniSectionAttributes {
   associated_skill_ids?: string[];
   associated_variable_keys?: string[];
   associated_artifact_ids?: string[];
+  creates_variable_keys?: string[];
+  creates_artifact_ids?: string[];
   knowledge_check_config?: { enabled: boolean; question_count: number; pass_score: number };
   completion_weight?: number;
   is_active?: boolean;
@@ -24,6 +29,7 @@ export interface MiniSectionAttributes {
 class MiniSection extends Model<MiniSectionAttributes> implements MiniSectionAttributes {
   declare id: string;
   declare lesson_id: string;
+  declare mini_section_type: MiniSectionType;
   declare mini_section_order: number;
   declare title: string;
   declare description: string;
@@ -33,6 +39,8 @@ class MiniSection extends Model<MiniSectionAttributes> implements MiniSectionAtt
   declare associated_skill_ids: string[];
   declare associated_variable_keys: string[];
   declare associated_artifact_ids: string[];
+  declare creates_variable_keys: string[];
+  declare creates_artifact_ids: string[];
   declare knowledge_check_config: { enabled: boolean; question_count: number; pass_score: number };
   declare completion_weight: number;
   declare is_active: boolean;
@@ -52,6 +60,10 @@ MiniSection.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'curriculum_lessons', key: 'id' },
+    },
+    mini_section_type: {
+      type: DataTypes.ENUM('executive_reality_check', 'ai_strategy', 'prompt_template', 'implementation_task', 'knowledge_check'),
+      allowNull: false,
     },
     mini_section_order: {
       type: DataTypes.INTEGER,
@@ -89,6 +101,14 @@ MiniSection.init(
       allowNull: true,
     },
     associated_artifact_ids: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    creates_variable_keys: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    creates_artifact_ids: {
       type: DataTypes.JSONB,
       allowNull: true,
     },

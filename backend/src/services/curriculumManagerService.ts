@@ -44,6 +44,7 @@ export interface DryRunResult {
   lessonTitle: string;
   wouldUseComposite: boolean;
   miniSectionCount: number;
+  typeBreakdown: Record<string, number>;
   requiredVariables: string[];
   linkedArtifacts: { id: string; name: string; type: string }[];
   linkedSkills: string[];
@@ -262,6 +263,82 @@ export async function runIntegrityCheck(): Promise<IntegrityReport> {
     }
   }
 
+  // 10. Mini-section type constraint violations
+  const validTypes = ['executive_reality_check', 'ai_strategy', 'prompt_template', 'implementation_task', 'knowledge_check'];
+  const typeRules: Record<string, { canCreateVariables: boolean; canCreateArtifacts: boolean }> = {
+    executive_reality_check: { canCreateVariables: false, canCreateArtifacts: false },
+    ai_strategy:             { canCreateVariables: false, canCreateArtifacts: false },
+    prompt_template:         { canCreateVariables: true,  canCreateArtifacts: false },
+    implementation_task:     { canCreateVariables: false, canCreateArtifacts: true  },
+    knowledge_check:         { canCreateVariables: false, canCreateArtifacts: false },
+  };
+
+  const varDefKeys = new Set(varDefs.map(v => v.variable_key));
+  const allArtifactIds = new Set(artifacts.map(a => a.id));
+
+  for (const ms of miniSections) {
+    const type = (ms as any).mini_section_type;
+    if (!type) {
+      issues.push({ severity: 'warning', category: 'missing_type', message: `Mini-section "${ms.title}" (${ms.id}) has no type assigned`, entityType: 'MiniSection', entityId: ms.id });
+      continue;
+    }
+    if (!validTypes.includes(type)) {
+      issues.push({ severity: 'critical', category: 'invalid_type', message: `Mini-section "${ms.title}" has invalid type "${type}"`, entityType: 'MiniSection', entityId: ms.id });
+      continue;
+    }
+    const rules = typeRules[type];
+    const createsVars = (ms as any).creates_variable_keys as string[] | undefined;
+    const createsArts = (ms as any).creates_artifact_ids as string[] | undefined;
+    if (!rules.canCreateVariables && createsVars?.length) {
+      issues.push({ severity: 'critical', category: 'type_constraint_violation', message: `Mini-section "${ms.title}" (${type}) has creates_variable_keys but type cannot create variables`, entityType: 'MiniSection', entityId: ms.id });
+    }
+    if (!rules.canCreateArtifacts && createsArts?.length) {
+      issues.push({ severity: 'critical', category: 'type_constraint_violation', message: `Mini-section "${ms.title}" (${type}) has creates_artifact_ids but type cannot create artifacts`, entityType: 'MiniSection', entityId: ms.id });
+    }
+    // Orphaned creates references
+    if (createsVars?.length) {
+      for (const key of createsVars) {
+        if (!varDefKeys.has(key)) {
+          issues.push({ severity: 'warning', category: 'orphan_creates_variable', message: `Mini-section "${ms.title}" creates variable "${key}" but no VariableDefinition exists`, entityType: 'MiniSection', entityId: ms.id });
+        }
+      }
+    }
+    if (createsArts?.length) {
+      for (const id of createsArts) {
+        if (!allArtifactIds.has(id)) {
+          issues.push({ severity: 'warning', category: 'orphan_creates_artifact', message: `Mini-section "${ms.title}" creates artifact "${id}" but no ArtifactDefinition exists`, entityType: 'MiniSection', entityId: ms.id });
+        }
+      }
+    }
+  }
+
+  // 11. Curriculum order violations (variable referenced before created)
+  const lessonMiniSections = new Map<string, typeof miniSections>();
+  for (const ms of miniSections) {
+    const arr = lessonMiniSections.get(ms.lesson_id) || [];
+    arr.push(ms);
+    lessonMiniSections.set(ms.lesson_id, arr);
+  }
+  for (const [, lessonMs] of lessonMiniSections) {
+    const sorted = lessonMs.sort((a, b) => a.mini_section_order - b.mini_section_order);
+    const createdByOrder = new Map<string, number>();
+    for (const ms of sorted) {
+      if ((ms as any).mini_section_type === 'prompt_template') {
+        const keys = (ms as any).creates_variable_keys as string[] | undefined;
+        if (keys) for (const k of keys) createdByOrder.set(k, ms.mini_section_order);
+      }
+    }
+    for (const ms of sorted) {
+      if (!ms.associated_variable_keys?.length) continue;
+      for (const key of ms.associated_variable_keys) {
+        const createdAt = createdByOrder.get(key);
+        if (createdAt !== undefined && createdAt > ms.mini_section_order) {
+          issues.push({ severity: 'warning', category: 'curriculum_order_violation', message: `Variable "${key}" used at order ${ms.mini_section_order} but created at order ${createdAt}`, entityType: 'MiniSection', entityId: ms.id });
+        }
+      }
+    }
+  }
+
   // Build summary
   const summary = {
     total_issues: issues.length,
@@ -353,11 +430,19 @@ export async function dryRunSectionBuild(lessonId: string): Promise<DryRunResult
     warnings.push('No active mini-sections — will use V2 fallback prompt path');
   }
 
+  // Build type breakdown
+  const typeBreakdown: Record<string, number> = {};
+  for (const ms of miniSections) {
+    const type = (ms as any).mini_section_type || 'untyped';
+    typeBreakdown[type] = (typeBreakdown[type] || 0) + 1;
+  }
+
   return {
     lessonId,
     lessonTitle: lesson.title,
     wouldUseComposite,
     miniSectionCount: miniSections.length,
+    typeBreakdown,
     requiredVariables: [...requiredVariables],
     linkedArtifacts,
     linkedSkills: [...linkedSkills],

@@ -447,13 +447,60 @@ async function buildCompositePrompt(
   if (lesson.presentation_phase_flag) parts.push('Phase: PRESENTATION (executive delivery)');
   parts.push('');
 
-  // Layer 3: Mini-Section Structure
+  // Layer 3: Mini-Section Structure (Type-Aware)
   parts.push('=== MINI-SECTIONS ===');
-  parts.push('Generate content for each sub-section below. Each produces its own concept, task, and knowledge checks:');
+  parts.push('Generate content for each typed sub-section below. Each type maps to a specific output section:');
+  parts.push('- executive_reality_check → concept_snapshot');
+  parts.push('- ai_strategy → ai_strategy');
+  parts.push('- prompt_template → prompt_template');
+  parts.push('- implementation_task → implementation_task');
+  parts.push('- knowledge_check → knowledge_checks');
+  parts.push('');
   for (const ms of miniSections) {
     parts.push(`\n--- Sub-Section ${ms.mini_section_order}: ${ms.title} ---`);
+    parts.push(`Type: ${ms.mini_section_type || 'untyped'}`);
     if (ms.description) parts.push(`Description: ${ms.description}`);
     if (ms.completion_weight !== 1.0) parts.push(`Weight: ${ms.completion_weight}`);
+
+    // Type-specific generation instructions
+    switch (ms.mini_section_type) {
+      case 'executive_reality_check':
+        parts.push('Output: Generate the concept_snapshot section — title, definition, why_it_matters, visual_metaphor.');
+        parts.push('Focus on dynamic contextual analysis using the learner\'s variables and industry context.');
+        break;
+      case 'ai_strategy':
+        parts.push('Output: Generate the ai_strategy section — description, when_to_use_ai, human_responsibilities, suggested_prompt.');
+        parts.push('Focus on strategic AI application frameworks aligned with curriculum goals.');
+        break;
+      case 'prompt_template':
+        parts.push('Output: Generate the prompt_template section — template with {{placeholders}}, placeholders array, expected_output_shape.');
+        if (ms.creates_variable_keys?.length) {
+          parts.push(`Creates Variables: ${ms.creates_variable_keys.join(', ')}. Ensure output is structured so these can be extracted.`);
+        }
+        break;
+      case 'implementation_task':
+        parts.push('Output: Generate the implementation_task section — title, description, requirements, deliverable, getting_started, required_artifacts.');
+        if (ms.creates_artifact_ids?.length) {
+          // Load artifact definitions for richer instructions
+          try {
+            const artDefs = await ArtifactDefinition.findAll({ where: { id: ms.creates_artifact_ids } });
+            for (const art of artDefs) {
+              parts.push(`Artifact: ${art.name} (${art.artifact_type}) — ${art.description || ''}`);
+              if (art.evaluation_criteria) parts.push(`  Evaluation: ${art.evaluation_criteria}`);
+            }
+          } catch { /* non-critical */ }
+        }
+        break;
+      case 'knowledge_check':
+        parts.push('Output: Generate knowledge_checks questions for the associated skills.');
+        if (ms.knowledge_check_config?.enabled) {
+          parts.push(`Questions: ${ms.knowledge_check_config.question_count}, pass score: ${ms.knowledge_check_config.pass_score}%`);
+        }
+        if (ms.associated_skill_ids?.length) {
+          parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+        }
+        break;
+    }
 
     // Resolve concept prompt template if linked
     const conceptPrompt = (ms as any).conceptPrompt;
@@ -469,12 +516,8 @@ async function buildCompositePrompt(
       parts.push(`Build Prompt: ${resolved}`);
     }
 
-    if (ms.knowledge_check_config?.enabled) {
-      parts.push(`Knowledge Check: ${ms.knowledge_check_config.question_count} questions, pass score ${ms.knowledge_check_config.pass_score}%`);
-    }
-
     if (ms.associated_variable_keys?.length) {
-      parts.push(`Extract Variables: ${ms.associated_variable_keys.join(', ')}`);
+      parts.push(`Uses Variables: ${ms.associated_variable_keys.join(', ')}`);
     }
   }
   parts.push('');

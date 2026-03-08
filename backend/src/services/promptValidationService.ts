@@ -5,7 +5,9 @@
  */
 
 import { CurriculumLesson, MiniSection, PromptTemplate, SectionConfig, ArtifactDefinition } from '../models';
+import VariableDefinition from '../models/VariableDefinition';
 import * as variableService from './variableService';
+import { getTypeRules } from './miniSectionTypeValidationService';
 
 export interface PromptValidationResult {
   valid: boolean;
@@ -162,6 +164,61 @@ export async function validateCompositePrompt(
   for (const key of allNeededVars) {
     if (!availableKeys.has(key)) {
       result.missingVariables.push(key);
+    }
+  }
+
+  // Type-specific constraint validation
+  const typeRules = getTypeRules();
+  for (const ms of miniSections) {
+    const type = ms.mini_section_type;
+    if (!type) {
+      result.warnings.push(`Mini-section "${ms.title}" has no type assigned`);
+      continue;
+    }
+
+    const rules = typeRules[type as keyof typeof typeRules];
+    if (!rules) continue;
+
+    if (!rules.canCreateVariables && ms.creates_variable_keys?.length) {
+      result.warnings.push(`Mini-section "${ms.title}" (${type}) has creates_variable_keys but type cannot create variables`);
+    }
+    if (!rules.canCreateArtifacts && ms.creates_artifact_ids?.length) {
+      result.warnings.push(`Mini-section "${ms.title}" (${type}) has creates_artifact_ids but type cannot create artifacts`);
+    }
+
+    // Validate creates references exist
+    if (ms.creates_variable_keys?.length) {
+      const defs = await VariableDefinition.findAll({ where: { variable_key: ms.creates_variable_keys }, attributes: ['variable_key'] });
+      const found = new Set(defs.map(d => d.variable_key));
+      for (const k of ms.creates_variable_keys) {
+        if (!found.has(k)) result.warnings.push(`Mini-section "${ms.title}" creates variable "${k}" but no VariableDefinition exists`);
+      }
+    }
+    if (ms.creates_artifact_ids?.length) {
+      const defs = await ArtifactDefinition.findAll({ where: { id: ms.creates_artifact_ids }, attributes: ['id'] });
+      const found = new Set(defs.map(d => d.id));
+      for (const id of ms.creates_artifact_ids) {
+        if (!found.has(id)) result.warnings.push(`Mini-section "${ms.title}" creates artifact "${id}" but no ArtifactDefinition exists`);
+      }
+    }
+  }
+
+  // Curriculum order validation: check variable creation ordering
+  const createdVarsByOrder = new Map<number, string[]>();
+  for (const ms of miniSections) {
+    if (ms.mini_section_type === 'prompt_template' && ms.creates_variable_keys?.length) {
+      createdVarsByOrder.set(ms.mini_section_order, ms.creates_variable_keys);
+    }
+  }
+  for (const ms of miniSections) {
+    if (!ms.associated_variable_keys?.length) continue;
+    for (const key of ms.associated_variable_keys) {
+      // Check if this variable is created by a later mini-section
+      for (const [order, keys] of createdVarsByOrder) {
+        if (order > ms.mini_section_order && keys.includes(key)) {
+          result.warnings.push(`Variable "${key}" used by "${ms.title}" (order ${ms.mini_section_order}) is created at order ${order} — dependency ordering issue`);
+        }
+      }
     }
   }
 
