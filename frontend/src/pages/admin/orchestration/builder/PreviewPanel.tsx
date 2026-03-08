@@ -24,13 +24,17 @@ interface Props {
   miniSections: MiniSectionInput[];
   lessonTitle: string;
   lessonId: string;
-  externalContent?: MockV2Content | null; // From Test AI simulation (Phase 3)
+  externalContent?: MockV2Content | null;
+  compact?: boolean;
+  defaultViewMode?: 'preview' | 'json';
+  selectedMiniSectionId?: string | null;
+  onSelectSection?: (miniSectionType: string) => void;
 }
 
 type ViewMode = 'preview' | 'json';
 
-export default function PreviewPanel({ miniSections, lessonTitle, lessonId, externalContent }: Props) {
-  const [viewMode, setViewMode] = useState<ViewMode>('preview');
+export default function PreviewPanel({ miniSections, lessonTitle, lessonId, externalContent, compact, defaultViewMode, selectedMiniSectionId, onSelectSection }: Props) {
+  const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode || 'preview');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const mockContent = useMemo(
@@ -44,11 +48,14 @@ export default function PreviewPanel({ miniSections, lessonTitle, lessonId, exte
   if (miniSections.length === 0) {
     return (
       <div className="text-center py-4">
-        <i className="bi bi-eye-slash" style={{ fontSize: 32, color: 'var(--color-text-light)' }}></i>
-        <p className="text-muted small mt-2">No mini-sections to preview. Create mini-sections first.</p>
+        <i className="bi bi-eye-slash" style={{ fontSize: compact ? 24 : 32, color: 'var(--color-text-light)' }}></i>
+        <p className="text-muted small mt-2">No mini-sections to preview.</p>
       </div>
     );
   }
+
+  // Use external viewMode if provided
+  const activeViewMode = defaultViewMode || viewMode;
 
   const sections = [
     { key: 'concept_snapshot', label: 'Concept Snapshot', icon: 'bi-lightbulb', badge: 'bg-primary', data: content.concept_snapshot },
@@ -65,48 +72,60 @@ export default function PreviewPanel({ miniSections, lessonTitle, lessonId, exte
 
   return (
     <div>
-      {/* Header bar */}
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <div className="d-flex align-items-center gap-2">
-          <span className={`badge ${isExternal ? 'bg-success' : 'bg-secondary'}`} style={{ fontSize: 10 }}>
-            {isExternal ? 'AI Generated' : 'Mock Data'}
-          </span>
-          <span className="text-muted" style={{ fontSize: 11 }}>{sections.length} sections</span>
+      {/* Header bar — hide in compact mode if viewMode is externally controlled */}
+      {!compact && (
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <div className="d-flex align-items-center gap-2">
+            <span className={`badge ${isExternal ? 'bg-success' : 'bg-secondary'}`} style={{ fontSize: 10 }}>
+              {isExternal ? 'AI Generated' : 'Mock Data'}
+            </span>
+            <span className="text-muted" style={{ fontSize: 11 }}>{sections.length} sections</span>
+          </div>
+          <div className="btn-group btn-group-sm">
+            <button className={`btn ${viewMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setViewMode('preview')} style={{ fontSize: 11 }}>
+              <i className="bi bi-eye me-1"></i>Preview
+            </button>
+            <button className={`btn ${viewMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setViewMode('json')} style={{ fontSize: 11 }}>
+              <i className="bi bi-code me-1"></i>JSON
+            </button>
+          </div>
         </div>
-        <div className="btn-group btn-group-sm">
-          <button className={`btn ${viewMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
-            onClick={() => setViewMode('preview')} style={{ fontSize: 11 }}>
-            <i className="bi bi-eye me-1"></i>Preview
-          </button>
-          <button className={`btn ${viewMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`}
-            onClick={() => setViewMode('json')} style={{ fontSize: 11 }}>
-            <i className="bi bi-code me-1"></i>JSON
-          </button>
-        </div>
-      </div>
+      )}
 
-      {viewMode === 'json' ? (
-        <pre className="bg-dark text-light rounded p-3" style={{ fontSize: 11, maxHeight: 400, overflowY: 'auto' }}>
+      {/* Compact header with data badge */}
+      {compact && (
+        <div className="d-flex align-items-center gap-1 mb-1">
+          <span className={`badge ${isExternal ? 'bg-success' : 'bg-secondary'}`} style={{ fontSize: 8 }}>
+            {isExternal ? 'AI' : 'Mock'}
+          </span>
+          <span className="text-muted" style={{ fontSize: 9 }}>{sections.length} sections</span>
+        </div>
+      )}
+
+      {activeViewMode === 'json' ? (
+        <pre className="bg-dark text-light rounded p-2" style={{ fontSize: compact ? 9 : 11, maxHeight: compact ? 200 : 400, overflowY: 'auto' }}>
           {JSON.stringify(content, null, 2)}
         </pre>
       ) : (
-        <div className="d-flex flex-column gap-2">
+        <div className="d-flex flex-column gap-1">
           {sections.map(section => (
-            <div key={section.key} className="border rounded">
+            <div key={section.key} className="border rounded" style={{ fontSize: compact ? 10 : 12 }}>
               <div
-                className="d-flex align-items-center gap-2 px-2 py-1"
+                className="d-flex align-items-center gap-1 px-2 py-1"
                 style={{ cursor: 'pointer', backgroundColor: expandedSection === section.key ? 'var(--color-bg-alt, #f7fafc)' : 'transparent' }}
                 onClick={() => toggleSection(section.key)}
               >
-                <i className={`bi ${section.icon}`} style={{ fontSize: 14 }}></i>
-                <span className={`badge ${section.badge}`} style={{ fontSize: 9 }}>{section.label}</span>
-                <span style={{ fontSize: 11, marginLeft: 'auto' }}>
+                <i className={`bi ${section.icon}`} style={{ fontSize: compact ? 11 : 14 }}></i>
+                <span className={`badge ${section.badge}`} style={{ fontSize: compact ? 7 : 9 }}>{section.label}</span>
+                <span style={{ fontSize: compact ? 9 : 11, marginLeft: 'auto' }}>
                   {expandedSection === section.key ? '\u25B2' : '\u25BC'}
                 </span>
               </div>
               {expandedSection === section.key && (
                 <div className="px-2 pb-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
-                  <div className="mt-2" style={{ transform: 'scale(0.9)', transformOrigin: 'top left', maxWidth: '111%' }}>
+                  <div className="mt-1" style={{ transform: compact ? 'scale(0.85)' : 'scale(0.9)', transformOrigin: 'top left', maxWidth: compact ? '118%' : '111%' }}>
                     {renderSection(section.key, content, lessonId)}
                   </div>
                 </div>
@@ -129,25 +148,15 @@ function renderSection(key: string, content: MockV2Content, lessonId: string): R
       return content.prompt_template ? <PromptTemplate data={content.prompt_template} /> : null;
     case 'implementation_task':
       return content.implementation_task ? (
-        <ImplementationTask
-          data={content.implementation_task}
-          lessonId={lessonId}
-          onSubmit={() => {}}
-        />
+        <ImplementationTask data={content.implementation_task} lessonId={lessonId} onSubmit={() => {}} />
       ) : null;
     case 'knowledge_checks':
       return content.knowledge_checks ? (
-        <KnowledgeChecks
-          data={content.knowledge_checks}
-          lessonId={lessonId}
-        />
+        <KnowledgeChecks data={content.knowledge_checks} lessonId={lessonId} />
       ) : null;
     case 'reflection_questions':
       return content.reflection_questions ? (
-        <ReflectionQuestions
-          data={content.reflection_questions}
-          lessonId={lessonId}
-        />
+        <ReflectionQuestions data={content.reflection_questions} lessonId={lessonId} />
       ) : null;
     default:
       return null;

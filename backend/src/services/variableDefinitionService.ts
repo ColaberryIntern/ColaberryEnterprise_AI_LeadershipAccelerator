@@ -1,9 +1,10 @@
 import VariableDefinition from '../models/VariableDefinition';
 const { v4: uuidv4 } = require('uuid');
 
-export async function listVariableDefinitions(programId?: string) {
+export async function listVariableDefinitions(programId?: string, sourceType?: string) {
   const where: any = {};
   if (programId) where.program_id = programId;
+  if (sourceType) where.source_type = sourceType;
   return VariableDefinition.findAll({ where, order: [['sort_order', 'ASC'], ['variable_key', 'ASC']] });
 }
 

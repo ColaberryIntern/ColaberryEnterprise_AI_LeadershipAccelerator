@@ -3,7 +3,10 @@ import * as variableDefinitionService from '../services/variableDefinitionServic
 
 export async function handleListVariableDefinitions(req: Request, res: Response) {
   try {
-    const items = await variableDefinitionService.listVariableDefinitions(req.query.program_id as string);
+    const items = await variableDefinitionService.listVariableDefinitions(
+      req.query.program_id as string,
+      req.query.source_type as string
+    );
     res.json(items);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 }
