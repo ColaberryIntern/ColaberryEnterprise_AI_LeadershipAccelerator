@@ -361,6 +361,7 @@ router.post('/api/admin/orchestration/programs/:id/clone', requireAdmin, handleC
 import {
   handleListMiniSections, handleGetMiniSection, handleCreateMiniSection,
   handleUpdateMiniSection, handleDeleteMiniSection, handleReorderMiniSections,
+  handleGetVariableMap,
 } from '../controllers/miniSectionController';
 
 router.get('/api/admin/orchestration/lessons/:lessonId/mini-sections', requireAdmin, handleListMiniSections);
@@ -369,6 +370,35 @@ router.put('/api/admin/orchestration/lessons/:lessonId/mini-sections/reorder', r
 router.get('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleGetMiniSection);
 router.put('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleUpdateMiniSection);
 router.delete('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleDeleteMiniSection);
+router.get('/api/admin/orchestration/lessons/:lessonId/variable-map', requireAdmin, handleGetVariableMap);
+
+// Skill Definitions CRUD
+router.post('/api/admin/orchestration/skills', requireAdmin, async (req, res) => {
+  try {
+    const { SkillDefinition } = await import('../models');
+    const crypto = await import('crypto');
+    const skill = await SkillDefinition.create({ id: crypto.randomUUID(), ...req.body });
+    res.status(201).json(skill);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+router.put('/api/admin/orchestration/skills/:id', requireAdmin, async (req, res) => {
+  try {
+    const { SkillDefinition } = await import('../models');
+    const skill = await SkillDefinition.findByPk(req.params.id as string);
+    if (!skill) { res.status(404).json({ error: 'Not found' }); return; }
+    await skill.update(req.body);
+    res.json(skill);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+router.delete('/api/admin/orchestration/skills/:id', requireAdmin, async (req, res) => {
+  try {
+    const { SkillDefinition } = await import('../models');
+    const skill = await SkillDefinition.findByPk(req.params.id as string);
+    if (!skill) { res.status(404).json({ error: 'Not found' }); return; }
+    await skill.destroy();
+    res.json({ deleted: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
 // --- Variable Definition Routes ---
 import {

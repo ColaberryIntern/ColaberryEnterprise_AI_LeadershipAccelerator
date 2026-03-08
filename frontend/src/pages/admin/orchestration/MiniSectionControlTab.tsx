@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import PreviewPanel from './builder/PreviewPanel';
 import TestSimulationPanel from './builder/TestSimulationPanel';
+import VariableInspectorPanel from './builder/VariableInspectorPanel';
+import InlineVariableCreator from './builder/InlineVariableCreator';
+import InlineSkillCreator from './builder/InlineSkillCreator';
+import InlineArtifactCreator from './builder/InlineArtifactCreator';
 
 type MiniSectionType = 'executive_reality_check' | 'ai_strategy' | 'prompt_template' | 'implementation_task' | 'knowledge_check';
 
@@ -115,11 +119,11 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
   const [rightTab, setRightTab] = useState<'validation' | 'preview' | 'variables' | 'testai'>('validation');
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
   const [validating, setValidating] = useState(false);
+  const [inlineCreator, setInlineCreator] = useState<'variable' | 'skill' | 'artifact' | null>(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  // Load reference data on mount
-  useEffect(() => {
+  const refreshReferenceData = useCallback(() => {
     Promise.all([
       fetch(`${apiUrl}/api/admin/orchestration/program/modules`, { headers }).then(r => r.json()),
       fetch(`${apiUrl}/api/admin/orchestration/prompts`, { headers }).then(r => r.json()),
@@ -129,7 +133,6 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
       setModules(Array.isArray(modData) ? modData : []);
       setPrompts(Array.isArray(promptData) ? promptData : []);
       setVariables(Array.isArray(varData) ? varData : []);
-      // Skills come grouped — flatten
       const flatSkills: SkillOption[] = [];
       if (skillData?.skills) {
         for (const s of skillData.skills) {
@@ -142,7 +145,10 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
       }
       setSkills(flatSkills);
     }).catch(() => {});
-  }, []);
+  }, [apiUrl, token]);
+
+  // Load reference data on mount
+  useEffect(() => { refreshReferenceData(); }, []);
 
   // Navigate from Sections tab
   useEffect(() => {
@@ -237,14 +243,6 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
   // Get selected lesson info
   const selectedLesson = modules.flatMap(m => m.lessons || []).find(l => l.id === selectedLessonId);
 
-  // Variable dependency analysis
-  const createdVarsInLesson = miniSections
-    .filter(ms => ms.mini_section_type === 'prompt_template' && ms.creates_variable_keys?.length)
-    .flatMap(ms => (ms.creates_variable_keys || []).map(k => ({ key: k, title: ms.title, order: ms.mini_section_order })));
-  const referencedVarsInLesson = miniSections
-    .filter(ms => ms.associated_variable_keys?.length)
-    .flatMap(ms => (ms.associated_variable_keys || []).map(k => ({ key: k, title: ms.title, order: ms.mini_section_order })));
-
   const editType = editing?.mini_section_type;
   const selectedTypeInfo = TYPE_OPTIONS.find(t => t.value === editType);
 
@@ -314,6 +312,10 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
 
             {/* Multi-select: Skills */}
             <div className="col-md-6">
+              <div className="d-flex justify-content-between align-items-end mb-0">
+                <span></span>
+                <button className="btn btn-link p-0" onClick={() => setInlineCreator('skill')} style={{ fontSize: 10 }}>+ Create Skill</button>
+              </div>
               <MultiSelect
                 label="Associated Skills"
                 options={skillOptions}
@@ -324,6 +326,10 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
 
             {/* Multi-select: Variable Keys */}
             <div className="col-md-6">
+              <div className="d-flex justify-content-between align-items-end mb-0">
+                <span></span>
+                <button className="btn btn-link p-0" onClick={() => setInlineCreator('variable')} style={{ fontSize: 10 }}>+ Create Variable</button>
+              </div>
               <MultiSelect
                 label="Uses Variables"
                 options={variableOptions}
@@ -335,6 +341,10 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
             {/* Creates Variable Keys — prompt_template only */}
             {editType === 'prompt_template' && (
               <div className="col-12">
+                <div className="d-flex justify-content-between align-items-end mb-0">
+                  <span></span>
+                  <button className="btn btn-link p-0" onClick={() => setInlineCreator('variable')} style={{ fontSize: 10 }}>+ Create Variable</button>
+                </div>
                 <MultiSelect
                   label="Creates Variables"
                   options={variableOptions}
@@ -348,6 +358,10 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
             {/* Creates Artifact IDs — implementation_task only */}
             {editType === 'implementation_task' && (
               <div className="col-12">
+                <div className="d-flex justify-content-between align-items-end mb-0">
+                  <span></span>
+                  <button className="btn btn-link p-0" onClick={() => setInlineCreator('artifact')} style={{ fontSize: 10 }}>+ Create Artifact</button>
+                </div>
                 <MultiSelect
                   label="Creates Artifacts"
                   options={artifactOptions}
@@ -486,61 +500,12 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
   const renderVariablesTab = () => {
     if (!selectedLessonId) return <p className="text-muted small">Select a section first.</p>;
     return (
-      <div>
-        <h6 className="small fw-semibold mb-2" style={{ color: 'var(--color-accent, #38a169)' }}>Variables Created by This Lesson</h6>
-        {createdVarsInLesson.length === 0 ? (
-          <p className="text-muted small">No variables created. Only prompt_template type can create variables.</p>
-        ) : (
-          <div className="d-flex flex-wrap gap-1 mb-3">
-            {createdVarsInLesson.map((v, i) => {
-              const def = variables.find(vd => vd.variable_key === v.key);
-              return (
-                <span key={i} className={`badge ${def ? 'bg-success-subtle text-success border-success' : 'bg-danger-subtle text-danger border-danger'} border`} style={{ fontSize: 10 }}>
-                  {v.key} <span className="text-muted">(#{v.order} {v.title})</span>
-                  {!def && <i className="bi bi-exclamation-triangle ms-1"></i>}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        <h6 className="small fw-semibold mb-2" style={{ color: 'var(--color-primary-light, #2b6cb0)' }}>Variables Referenced by This Lesson</h6>
-        {referencedVarsInLesson.length === 0 ? (
-          <p className="text-muted small">No variables referenced.</p>
-        ) : (
-          <div className="d-flex flex-wrap gap-1 mb-3">
-            {referencedVarsInLesson.map((v, i) => {
-              const def = variables.find(vd => vd.variable_key === v.key);
-              const createdLocally = createdVarsInLesson.find(c => c.key === v.key);
-              const orderIssue = createdLocally && createdLocally.order > v.order;
-              return (
-                <span key={i} className={`badge ${orderIssue ? 'bg-danger-subtle text-danger border-danger' : def ? 'bg-info-subtle text-info border-info' : 'bg-warning-subtle text-warning border-warning'} border`} style={{ fontSize: 10 }}>
-                  {v.key} <span className="text-muted">(#{v.order})</span>
-                  {orderIssue && <i className="bi bi-exclamation-circle ms-1" title="Used before created"></i>}
-                  {!def && !createdLocally && <i className="bi bi-question-circle ms-1" title="No definition found"></i>}
-                </span>
-              );
-            })}
-          </div>
-        )}
-
-        <h6 className="small fw-semibold mb-2">Dependency Flow</h6>
-        <div style={{ fontSize: 11 }}>
-          {miniSections.map(ms => {
-            const creates = ms.creates_variable_keys || [];
-            const uses = ms.associated_variable_keys || [];
-            if (creates.length === 0 && uses.length === 0) return null;
-            return (
-              <div key={ms.id} className="mb-1 d-flex align-items-center gap-1">
-                <span className="badge bg-light text-dark border" style={{ fontSize: 9 }}>#{ms.mini_section_order}</span>
-                <span className="fw-medium">{ms.title}</span>
-                {uses.length > 0 && <span className="text-info">reads: {uses.join(', ')}</span>}
-                {creates.length > 0 && <span className="text-success">creates: {creates.join(', ')}</span>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <VariableInspectorPanel
+        lessonId={selectedLessonId}
+        miniSections={miniSections}
+        token={token}
+        apiUrl={apiUrl}
+      />
     );
   };
 
@@ -565,6 +530,44 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
   // ===================== MAIN RENDER =====================
   return (
     <div>
+      {/* Inline Creator Modals */}
+      {inlineCreator === 'variable' && (
+        <InlineVariableCreator token={token} apiUrl={apiUrl}
+          onCreated={(key) => {
+            setInlineCreator(null);
+            refreshReferenceData();
+            if (editing) {
+              setEditing({ ...editing, associated_variable_keys: [...(editing.associated_variable_keys || []), key] });
+            }
+          }}
+          onCancel={() => setInlineCreator(null)}
+        />
+      )}
+      {inlineCreator === 'skill' && (
+        <InlineSkillCreator token={token} apiUrl={apiUrl}
+          onCreated={(skillId) => {
+            setInlineCreator(null);
+            refreshReferenceData();
+            if (editing) {
+              setEditing({ ...editing, associated_skill_ids: [...(editing.associated_skill_ids || []), skillId] });
+            }
+          }}
+          onCancel={() => setInlineCreator(null)}
+        />
+      )}
+      {inlineCreator === 'artifact' && (
+        <InlineArtifactCreator token={token} apiUrl={apiUrl}
+          onCreated={(artifactId) => {
+            setInlineCreator(null);
+            refreshReferenceData();
+            if (editing) {
+              setEditing({ ...editing, creates_artifact_ids: [...(editing.creates_artifact_ids || []), artifactId] });
+            }
+          }}
+          onCancel={() => setInlineCreator(null)}
+        />
+      )}
+
       {/* Section selector bar */}
       <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
         <select className="form-select form-select-sm" style={{ maxWidth: 400 }} value={selectedLessonId} onChange={e => selectLesson(e.target.value)}>
