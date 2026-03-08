@@ -467,6 +467,30 @@ router.get('/api/admin/orchestration/preview/prompt/:lessonId/:enrollmentId', re
 router.get('/api/admin/orchestration/integrity', requireAdmin, handleIntegrityCheck);
 router.get('/api/admin/orchestration/dry-run/section/:lessonId', requireAdmin, handleDryRunSection);
 
+// Test AI Simulation
+router.post('/api/admin/orchestration/simulate/section/:lessonId', requireAdmin, async (req, res) => {
+  try {
+    const { simulateContentGeneration } = await import('../services/testSimulationService');
+    const { testProfile, testVariables } = req.body;
+    const adminUserId = (req as any).admin?.sub;
+    const result = await simulateContentGeneration(req.params.lessonId as string, testProfile, testVariables || {}, adminUserId);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/simulate/section/:lessonId/history', requireAdmin, async (req, res) => {
+  try {
+    const { listSimulations } = await import('../services/testSimulationService');
+    res.json(await listSimulations(req.params.lessonId as string));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.delete('/api/admin/orchestration/simulate/:id', requireAdmin, async (req, res) => {
+  try {
+    const { deleteSimulation } = await import('../services/testSimulationService');
+    await deleteSimulation(req.params.id as string);
+    res.json({ success: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // Route Audit
 router.get('/api/admin/orchestration/route-audit', requireAdmin, handleRouteAudit);
 

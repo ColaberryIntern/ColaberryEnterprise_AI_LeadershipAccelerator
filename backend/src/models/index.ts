@@ -48,6 +48,7 @@ import VariableDefinition from './VariableDefinition';
 import SessionChecklist from './SessionChecklist';
 import AuditLog from './AuditLog';
 import BlueprintSnapshot from './BlueprintSnapshot';
+import TestSimulationResult from './TestSimulationResult';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -341,4 +342,5 @@ export {
   SessionChecklist,
   AuditLog,
   BlueprintSnapshot,
+  TestSimulationResult,
 };

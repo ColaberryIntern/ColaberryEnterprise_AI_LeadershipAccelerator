@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import PreviewPanel from './builder/PreviewPanel';
+import TestSimulationPanel from './builder/TestSimulationPanel';
 
 type MiniSectionType = 'executive_reality_check' | 'ai_strategy' | 'prompt_template' | 'implementation_task' | 'knowledge_check';
 
@@ -552,11 +553,13 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
   );
 
   const renderTestAITab = () => (
-    <div className="text-center py-4">
-      <i className="bi bi-robot" style={{ fontSize: 32, color: 'var(--color-text-light)' }}></i>
-      <p className="text-muted small mt-2">Test AI Simulation — coming soon.</p>
-      <p className="text-muted" style={{ fontSize: 11 }}>Will execute composite prompts with test profiles and render results.</p>
-    </div>
+    <TestSimulationPanel
+      miniSections={miniSections}
+      lessonTitle={selectedLesson?.title || 'Untitled Section'}
+      lessonId={selectedLessonId}
+      token={token}
+      apiUrl={apiUrl}
+    />
   );
 
   // ===================== MAIN RENDER =====================

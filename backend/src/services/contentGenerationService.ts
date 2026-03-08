@@ -637,3 +637,153 @@ function buildFallbackContent(lesson: CurriculumLesson): any {
 function getNestedValue(obj: any, path: string): any {
   return path.split('.').reduce((o, key) => o?.[key], obj);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Exported: Composite Prompt Builder for Test Simulation             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build composite prompt for simulation — no enrollment needed.
+ * Uses test variables for template resolution instead of enrollment variable store.
+ */
+export async function buildCompositePromptForSimulation(
+  lesson: CurriculumLesson,
+  miniSections: MiniSection[],
+  personalizationContext: string,
+  testVariables: Record<string, string>
+): Promise<{ systemPrompt: string; userPrompt: string }> {
+  const parts: string[] = [];
+
+  // Layer 1: Program Blueprint
+  try {
+    const module = await CurriculumModule.findByPk(lesson.module_id);
+    if (module?.program_id) {
+      const blueprint = await ProgramBlueprint.findByPk(module.program_id);
+      if (blueprint?.default_prompt_injection_rules) {
+        const rules = blueprint.default_prompt_injection_rules;
+        parts.push('=== PROGRAM CONTEXT ===');
+        if (rules.system_context) parts.push(rules.system_context);
+        if (rules.tone) parts.push(`Tone: ${rules.tone}`);
+        if (rules.audience_level) parts.push(`Audience: ${rules.audience_level}`);
+        if (blueprint.learning_philosophy) parts.push(`Philosophy: ${blueprint.learning_philosophy}`);
+        parts.push('');
+      }
+    }
+  } catch { /* non-critical */ }
+
+  // Layer 2: Section Blueprint
+  parts.push('=== SECTION BLUEPRINT ===');
+  parts.push(`Section: ${lesson.title}`);
+  parts.push(`Description: ${lesson.description}`);
+  if (lesson.learning_goal) parts.push(`Learning Goal: ${lesson.learning_goal}`);
+  if (lesson.build_phase_flag) parts.push('Phase: BUILD (hands-on creation)');
+  if (lesson.presentation_phase_flag) parts.push('Phase: PRESENTATION (executive delivery)');
+  parts.push('');
+
+  // Layer 3: Mini-Section Structure
+  parts.push('=== MINI-SECTIONS ===');
+  parts.push('Generate content for each typed sub-section below. Each type maps to a specific output section:');
+  parts.push('- executive_reality_check → concept_snapshot');
+  parts.push('- ai_strategy → ai_strategy');
+  parts.push('- prompt_template → prompt_template');
+  parts.push('- implementation_task → implementation_task');
+  parts.push('- knowledge_check → knowledge_checks');
+  parts.push('');
+
+  for (const ms of miniSections) {
+    parts.push(`\n--- Sub-Section ${ms.mini_section_order}: ${ms.title} ---`);
+    parts.push(`Type: ${ms.mini_section_type || 'untyped'}`);
+    if (ms.description) parts.push(`Description: ${ms.description}`);
+
+    switch (ms.mini_section_type) {
+      case 'executive_reality_check':
+        parts.push('Output: Generate the concept_snapshot section — title, definition, why_it_matters, visual_metaphor.');
+        break;
+      case 'ai_strategy':
+        parts.push('Output: Generate the ai_strategy section — description, when_to_use_ai, human_responsibilities, suggested_prompt.');
+        break;
+      case 'prompt_template':
+        parts.push('Output: Generate the prompt_template section — template with {{placeholders}}, placeholders array, expected_output_shape.');
+        if (ms.creates_variable_keys?.length) {
+          parts.push(`Creates Variables: ${ms.creates_variable_keys.join(', ')}.`);
+        }
+        break;
+      case 'implementation_task':
+        parts.push('Output: Generate the implementation_task section — title, description, requirements, deliverable, getting_started, required_artifacts.');
+        if (ms.creates_artifact_ids?.length) {
+          try {
+            const artDefs = await ArtifactDefinition.findAll({ where: { id: ms.creates_artifact_ids } });
+            for (const art of artDefs) {
+              parts.push(`Artifact: ${art.name} (${art.artifact_type}) — ${art.description || ''}`);
+            }
+          } catch { /* non-critical */ }
+        }
+        break;
+      case 'knowledge_check':
+        parts.push('Output: Generate knowledge_checks questions.');
+        if (ms.knowledge_check_config?.enabled) {
+          parts.push(`Questions: ${ms.knowledge_check_config.question_count}, pass score: ${ms.knowledge_check_config.pass_score}%`);
+        }
+        if (ms.associated_skill_ids?.length) {
+          parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+        }
+        break;
+    }
+
+    // Resolve templates using test variables instead of enrollment
+    const conceptPrompt = (ms as any).conceptPrompt;
+    if (conceptPrompt?.user_prompt_template) {
+      parts.push(`Concept Prompt: ${resolveWithTestVars(conceptPrompt.user_prompt_template, testVariables)}`);
+    }
+    const buildPrompt = (ms as any).buildPrompt;
+    if (buildPrompt?.user_prompt_template) {
+      parts.push(`Build Prompt: ${resolveWithTestVars(buildPrompt.user_prompt_template, testVariables)}`);
+    }
+
+    if (ms.associated_variable_keys?.length) {
+      parts.push(`Uses Variables: ${ms.associated_variable_keys.join(', ')}`);
+    }
+  }
+  parts.push('');
+
+  // Layer 4: Learner Context
+  parts.push('=== LEARNER CONTEXT ===');
+  parts.push(personalizationContext);
+
+  // Layer 5: Artifact Expectations
+  try {
+    const artifacts = await ArtifactDefinition.findAll({ where: { lesson_id: lesson.id } });
+    if (artifacts.length > 0) {
+      parts.push('\n=== EXPECTED ARTIFACTS ===');
+      for (const art of artifacts) {
+        parts.push(`- ${art.name} (${art.artifact_type}): ${art.description || ''}`);
+      }
+    }
+  } catch { /* non-critical */ }
+
+  // Layer 6: Session Context
+  if (lesson.associated_session_id) {
+    try {
+      const { LiveSession } = await import('../models');
+      const session = await LiveSession.findByPk(lesson.associated_session_id);
+      if (session) {
+        parts.push('\n=== SESSION CONTEXT ===');
+        parts.push(`Associated Session: ${session.title}`);
+        if (session.description) parts.push(`Session Theme: ${session.description}`);
+      }
+    } catch { /* non-critical */ }
+  }
+
+  return {
+    systemPrompt: CONCEPT_V2_SYSTEM_PROMPT,
+    userPrompt: parts.join('\n'),
+  };
+}
+
+function resolveWithTestVars(template: string, vars: Record<string, string>): string {
+  let resolved = template;
+  for (const [key, value] of Object.entries(vars)) {
+    resolved = resolved.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+  }
+  return resolved;
+}
