@@ -45,7 +45,7 @@ const TYPE_BADGE_MAP: Record<string, { badge: string; label: string }> = {
   knowledge_check: { badge: 'bg-secondary', label: 'Quiz' },
 };
 
-export default function MiniSectionControlTab({ token, apiUrl }: { token: string; apiUrl: string }) {
+export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const [modules, setModules] = useState<Module[]>([]);
   const [selectedLessonId, setSelectedLessonId] = useState('');
   const [miniSections, setMiniSections] = useState<MiniSection[]>([]);
@@ -63,6 +63,13 @@ export default function MiniSectionControlTab({ token, apiUrl }: { token: string
     fetch(`${apiUrl}/api/admin/orchestration/prompts`, { headers })
       .then(r => r.json()).then(data => setPrompts(data || [])).catch(() => {});
   }, []);
+
+  // Navigate to a lesson when initialLessonId changes (from Sections tab click)
+  useEffect(() => {
+    if (initialLessonId && initialLessonId !== selectedLessonId) {
+      selectLesson(initialLessonId);
+    }
+  }, [initialLessonId]);
 
   const fetchMiniSections = async (lessonId: string) => {
     setLoading(true);

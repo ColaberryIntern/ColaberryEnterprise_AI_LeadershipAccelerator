@@ -29,6 +29,12 @@ const TABS = [
 export default function AdminOrchestrationPage() {
   const { token } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
+
+  const handleNavigateToMiniSections = (lessonId: string) => {
+    setSelectedLessonId(lessonId);
+    setActiveTab('mini-sections');
+  };
 
   const tabProps = { token: token || '', apiUrl: API };
 
@@ -58,8 +64,8 @@ export default function AdminOrchestrationPage() {
       {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
       {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
       {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
-      {activeTab === 'sections' && <SectionControlTab {...tabProps} />}
-      {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} />}
+      {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
+      {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
       {activeTab === 'prompts' && <PromptControlTab {...tabProps} />}
       {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
       {activeTab === 'skills' && <SkillControlTab {...tabProps} />}

@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 
-interface Props { token: string; apiUrl: string; }
+interface Props { token: string; apiUrl: string; onNavigateToMiniSections?: (lessonId: string) => void; }
 
-const SectionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
+const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSections }) => {
   const [modules, setModules] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -190,7 +190,9 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                       return (
                         <tr key={lesson.id}>
                           <td>{lesson.lesson_number}</td>
-                          <td className="fw-medium" style={{ maxWidth: 200 }}>{lesson.title}</td>
+                          <td className="fw-medium" style={{ maxWidth: 200, cursor: 'pointer', color: 'var(--color-primary-light, #2b6cb0)' }}
+                            onClick={() => onNavigateToMiniSections?.(lesson.id)}
+                            title="View mini-sections">{lesson.title}</td>
                           <td style={{ maxWidth: 250, fontSize: 12 }}>
                             {lesson.learning_goal
                               ? (lesson.learning_goal.length > 80 ? lesson.learning_goal.substring(0, 80) + '...' : lesson.learning_goal)
