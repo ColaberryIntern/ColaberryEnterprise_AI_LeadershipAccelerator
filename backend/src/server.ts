@@ -16,6 +16,7 @@ import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
+import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 
 // Import models to register associations before sync
 import './models';
@@ -52,6 +53,7 @@ async function start(): Promise<void> {
 
   await connectDatabase();
   await sequelize.sync({ alter: true });
+  await seedProgramCurriculum();
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {
     startScheduler();

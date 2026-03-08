@@ -1,261 +1,136 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 
-interface GatingControlTabProps {
-  token: string;
-  cohortId: string;
-  apiUrl: string;
-}
+interface Props { token: string; apiUrl: string; }
 
-interface Gate {
-  id: string;
-  gate_type: string;
-  session_id: string;
-  session_number: number;
-  session_title: string;
-  module_id: string | null;
-  lesson_id: string | null;
-  description: string;
-  is_active: boolean;
-}
-
-interface Variable {
-  key: string;
-  value: any;
-  updated_at: string;
-}
-
-interface Enrollment {
-  id: string;
-  user_name: string;
-  user_email: string;
-}
-
-const GatingControlTab: React.FC<GatingControlTabProps> = ({ token, cohortId, apiUrl }) => {
-  const [activeSection, setActiveSection] = useState<'gates' | 'variables'>('gates');
-
-  // Gates state
-  const [gates, setGates] = useState<Gate[]>([]);
+const GatingControlTab: React.FC<Props> = ({ token, apiUrl }) => {
+  const [subTab, setSubTab] = useState<'gates' | 'variables'>('gates');
+  const [gates, setGates] = useState<any[]>([]);
   const [gatesLoading, setGatesLoading] = useState(true);
-  const [gatesError, setGatesError] = useState('');
 
-  // Variables state
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  // Variables sub-tab state
+  const [cohorts, setCohorts] = useState<any[]>([]);
+  const [selectedCohortId, setSelectedCohortId] = useState('');
+  const [enrollments, setEnrollments] = useState<any[]>([]);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
-  const [variables, setVariables] = useState<Variable[]>([]);
-  const [variablesLoading, setVariablesLoading] = useState(false);
-  const [variablesError, setVariablesError] = useState('');
+  const [variables, setVariables] = useState<any[]>([]);
+  const [varsLoading, setVarsLoading] = useState(false);
 
-  // Fetch gates
   useEffect(() => {
-    const fetchGates = async () => {
-      setGatesLoading(true);
-      setGatesError('');
-      try {
-        const res = await fetch(
-          `${apiUrl}/api/admin/orchestration/cohorts/${cohortId}/gates`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!res.ok) throw new Error(`Failed to fetch gates: ${res.status}`);
-        const data = await res.json();
-        setGates(Array.isArray(data) ? data : data.gates || []);
-      } catch (err: any) {
-        setGatesError(err.message);
-      } finally {
-        setGatesLoading(false);
-      }
-    };
-    if (cohortId) fetchGates();
-  }, [token, cohortId, apiUrl]);
+    fetch(`${apiUrl}/api/admin/orchestration/program/gates`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => setGates(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setGatesLoading(false));
+  }, [token, apiUrl]);
 
-  // Fetch enrollments
+  // Load cohorts for variables sub-tab
   useEffect(() => {
-    const fetchEnrollments = async () => {
-      try {
-        const res = await fetch(
-          `${apiUrl}/api/admin/accelerator/cohorts/${cohortId}/enrollments`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!res.ok) throw new Error(`Failed to fetch enrollments: ${res.status}`);
-        const data = await res.json();
-        setEnrollments(Array.isArray(data) ? data : data.enrollments || []);
-      } catch (err: any) {
-        setVariablesError(err.message);
-      }
-    };
-    if (cohortId) fetchEnrollments();
-  }, [token, cohortId, apiUrl]);
+    if (subTab !== 'variables' || cohorts.length > 0) return;
+    fetch(`${apiUrl}/api/admin/cohorts`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : data.cohorts || [];
+        setCohorts(list);
+        if (list.length > 0) setSelectedCohortId(list[0].id);
+      })
+      .catch(() => {});
+  }, [subTab, token, apiUrl, cohorts.length]);
 
-  // Fetch variables for selected enrollment
-  const fetchVariables = useCallback(async () => {
-    if (!selectedEnrollmentId) return;
-    setVariablesLoading(true);
-    setVariablesError('');
-    try {
-      const res = await fetch(
-        `${apiUrl}/api/admin/orchestration/enrollments/${selectedEnrollmentId}/variables`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error(`Failed to fetch variables: ${res.status}`);
-      const data = await res.json();
-      const vars = data.variables || data;
-      if (Array.isArray(vars)) {
-        setVariables(vars);
-      } else if (typeof vars === 'object') {
-        setVariables(
-          Object.entries(vars).map(([key, value]) => ({
-            key,
-            value,
-            updated_at: '',
-          }))
-        );
-      }
-    } catch (err: any) {
-      setVariablesError(err.message);
-    } finally {
-      setVariablesLoading(false);
-    }
+  // Load enrollments when cohort changes
+  useEffect(() => {
+    if (!selectedCohortId) return;
+    fetch(`${apiUrl}/api/admin/accelerator/cohorts/${selectedCohortId}/enrollments`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : data.enrollments || [];
+        setEnrollments(list);
+        setSelectedEnrollmentId(list.length > 0 ? list[0].id : '');
+      })
+      .catch(() => {});
+  }, [selectedCohortId, token, apiUrl]);
+
+  // Load variables when enrollment changes
+  useEffect(() => {
+    if (!selectedEnrollmentId) { setVariables([]); return; }
+    setVarsLoading(true);
+    fetch(`${apiUrl}/api/admin/orchestration/enrollments/${selectedEnrollmentId}/variables`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => setVariables(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setVarsLoading(false));
   }, [selectedEnrollmentId, token, apiUrl]);
-
-  useEffect(() => {
-    fetchVariables();
-  }, [fetchVariables]);
-
-  const gateBadge = (gateType: string) => {
-    const map: Record<string, string> = {
-      prerequisite: 'bg-warning',
-      completion: 'bg-success',
-      artifact: 'bg-info',
-      skill: 'bg-primary',
-      manual: 'bg-secondary',
-    };
-    return map[gateType?.toLowerCase()] || 'bg-secondary';
-  };
 
   return (
     <div>
-      <ul className="nav nav-tabs mb-4">
+      <ul className="nav nav-pills mb-3">
         <li className="nav-item">
-          <button
-            className={`nav-link ${activeSection === 'gates' ? 'active' : ''}`}
-            onClick={() => setActiveSection('gates')}
-            style={{ fontSize: 13 }}
-          >
-            Session Gates
-          </button>
+          <button className={`nav-link ${subTab === 'gates' ? 'active' : ''}`} onClick={() => setSubTab('gates')} style={{ fontSize: 13 }}>Session Gates</button>
         </li>
         <li className="nav-item">
-          <button
-            className={`nav-link ${activeSection === 'variables' ? 'active' : ''}`}
-            onClick={() => setActiveSection('variables')}
-            style={{ fontSize: 13 }}
-          >
-            Variable Store
-          </button>
+          <button className={`nav-link ${subTab === 'variables' ? 'active' : ''}`} onClick={() => setSubTab('variables')} style={{ fontSize: 13 }}>Variable Store</button>
         </li>
       </ul>
 
-      {activeSection === 'gates' && (
-        <>
-          {gatesError && (
-            <div className="alert alert-danger" style={{ fontSize: 13 }}>{gatesError}</div>
-          )}
-          {gatesLoading ? (
-            <div className="text-center py-4">
-              <div className="spinner-border text-primary" role="status">
-                <span className="visually-hidden">Loading gates...</span>
-              </div>
+      {subTab === 'gates' && (
+        gatesLoading ? (
+          <div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>
+        ) : (
+          <div className="card border-0 shadow-sm">
+            <div className="card-header bg-white fw-semibold d-flex justify-content-between">
+              <span>Program Gates</span>
+              <span className="badge bg-info" style={{ fontSize: 11 }}>{gates.length} gates</span>
             </div>
-          ) : (
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">
-                Gating Rules ({gates.length})
-              </div>
-              <div className="table-responsive">
-                <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
-                  <thead className="table-light">
-                    <tr>
-                      <th style={{ fontSize: 12 }}>Gate Type</th>
-                      <th style={{ fontSize: 12 }}>Session</th>
-                      <th style={{ fontSize: 12 }}>Module</th>
-                      <th style={{ fontSize: 12 }}>Lesson</th>
-                      <th style={{ fontSize: 12 }}>Description</th>
-                      <th style={{ fontSize: 12 }}>Active</th>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
+                <thead className="table-light">
+                  <tr>
+                    <th style={{ fontSize: 12 }}>Type</th>
+                    <th style={{ fontSize: 12 }}>Session</th>
+                    <th style={{ fontSize: 12 }}>Module</th>
+                    <th style={{ fontSize: 12 }}>Lesson</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gates.map((g: any) => (
+                    <tr key={g.id}>
+                      <td><span className="badge bg-secondary" style={{ fontSize: 10 }}>{g.gate_type}</span></td>
+                      <td>{g.session?.title ? `S${g.session.session_number}: ${g.session.title}` : '-'}</td>
+                      <td>{g.module?.title ? `M${g.module.module_number}: ${g.module.title}` : '-'}</td>
+                      <td>{g.lesson?.title ? `L${g.lesson.lesson_number}: ${g.lesson.title}` : '-'}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {gates.map((g) => (
-                      <tr key={g.id}>
-                        <td>
-                          <span className={`badge ${gateBadge(g.gate_type)}`} style={{ fontSize: 11 }}>
-                            {g.gate_type}
-                          </span>
-                        </td>
-                        <td>
-                          {g.session_number ? `S${g.session_number}: ${g.session_title}` : '-'}
-                        </td>
-                        <td style={{ fontSize: 12 }}>{g.module_id || '-'}</td>
-                        <td style={{ fontSize: 12 }}>{g.lesson_id || '-'}</td>
-                        <td style={{ maxWidth: 250 }}>{g.description || '-'}</td>
-                        <td>
-                          {g.is_active ? (
-                            <span className="badge bg-success" style={{ fontSize: 11 }}>Active</span>
-                          ) : (
-                            <span className="badge bg-secondary" style={{ fontSize: 11 }}>Inactive</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {gates.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="text-center text-muted py-4">
-                          No gating rules configured for this cohort.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                  {gates.length === 0 && (
+                    <tr><td colSpan={4} className="text-center text-muted py-4">No gates defined. Gates are created when session gating rules are configured.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
-        </>
+          </div>
+        )
       )}
 
-      {activeSection === 'variables' && (
-        <>
-          {variablesError && (
-            <div className="alert alert-danger" style={{ fontSize: 13 }}>{variablesError}</div>
-          )}
-
+      {subTab === 'variables' && (
+        <div>
           <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
-            <label className="small fw-medium" style={{ fontSize: 12 }}>Enrollment:</label>
-            <select
-              className="form-select form-select-sm"
-              style={{ width: 350, fontSize: 13 }}
-              value={selectedEnrollmentId}
-              onChange={(e) => setSelectedEnrollmentId(e.target.value)}
-            >
-              <option value="">Select an enrollment...</option>
-              {enrollments.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.user_name} ({e.user_email})
-                </option>
-              ))}
+            <select className="form-select form-select-sm" style={{ width: 220 }} value={selectedCohortId} onChange={e => setSelectedCohortId(e.target.value)}>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select className="form-select form-select-sm" style={{ width: 280 }} value={selectedEnrollmentId} onChange={e => setSelectedEnrollmentId(e.target.value)}>
+              <option value="">Select participant...</option>
+              {enrollments.map((e: any) => <option key={e.id} value={e.id}>{e.user_name || e.user_email || e.id}</option>)}
             </select>
           </div>
 
-          {variablesLoading && (
-            <div className="text-center py-4">
-              <div className="spinner-border text-primary" role="status">
-                <span className="visually-hidden">Loading variables...</span>
-              </div>
-            </div>
-          )}
-
-          {!variablesLoading && selectedEnrollmentId && (
+          {varsLoading ? (
+            <div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>
+          ) : (
             <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white fw-semibold">
-                Variable Store ({variables.length} variables)
-              </div>
               <div className="table-responsive">
                 <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
                   <thead className="table-light">
@@ -266,52 +141,22 @@ const GatingControlTab: React.FC<GatingControlTabProps> = ({ token, cohortId, ap
                     </tr>
                   </thead>
                   <tbody>
-                    {variables.map((v) => (
-                      <tr key={v.key}>
-                        <td className="fw-medium font-monospace" style={{ fontSize: 12 }}>
-                          {v.key}
-                        </td>
-                        <td style={{ maxWidth: 400 }}>
-                          <pre
-                            className="mb-0"
-                            style={{
-                              fontSize: 12,
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word',
-                              background: 'transparent',
-                              border: 'none',
-                              padding: 0,
-                            }}
-                          >
-                            {typeof v.value === 'object'
-                              ? JSON.stringify(v.value, null, 2)
-                              : String(v.value)}
-                          </pre>
-                        </td>
-                        <td style={{ fontSize: 12 }}>
-                          {v.updated_at ? new Date(v.updated_at).toLocaleString() : '-'}
-                        </td>
+                    {variables.map((v: any) => (
+                      <tr key={v.key || v.id}>
+                        <td className="fw-medium">{v.key}</td>
+                        <td style={{ maxWidth: 400, fontSize: 12 }}>{typeof v.value === 'object' ? JSON.stringify(v.value).substring(0, 120) : String(v.value).substring(0, 120)}</td>
+                        <td style={{ fontSize: 12 }}>{v.updated_at ? new Date(v.updated_at).toLocaleString() : '-'}</td>
                       </tr>
                     ))}
                     {variables.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="text-center text-muted py-4">
-                          No variables found for this enrollment.
-                        </td>
-                      </tr>
+                      <tr><td colSpan={3} className="text-center text-muted py-4">{selectedEnrollmentId ? 'No variables stored for this participant.' : 'Select a participant to view variables.'}</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
-
-          {!selectedEnrollmentId && !variablesLoading && (
-            <div className="text-muted text-center py-4" style={{ fontSize: 13 }}>
-              Select an enrollment to view variable store data.
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );

@@ -3,7 +3,7 @@ import * as promptService from '../services/promptService';
 import * as artifactService from '../services/artifactService';
 import * as variableService from '../services/variableService';
 import * as orchestrationService from '../services/orchestrationService';
-import { SectionConfig } from '../models';
+import { Cohort, SectionConfig, CurriculumModule, CurriculumLesson, LiveSession, SkillDefinition, SessionGate } from '../models';
 
 // --- Prompt Template CRUD ---
 
@@ -241,6 +241,96 @@ export async function handleGetArtifactStatus(req: Request, res: Response) {
       req.params.sessionId as string
     );
     res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Program-Wide Endpoints (no cohort dependency) ---
+
+async function getFirstCohortId(): Promise<string | null> {
+  const cohort = await Cohort.findOne({ order: [['created_at', 'ASC']] });
+  return cohort ? cohort.id : null;
+}
+
+export async function handleGetProgramModules(req: Request, res: Response) {
+  try {
+    const cohortId = await getFirstCohortId();
+    if (!cohortId) return res.json([]);
+    const modules = await CurriculumModule.findAll({
+      where: { cohort_id: cohortId },
+      include: [{ model: CurriculumLesson, as: 'lessons' }],
+      order: [['module_number', 'ASC'], [{ model: CurriculumLesson, as: 'lessons' }, 'lesson_number', 'ASC']],
+    });
+    res.json(modules);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleGetProgramSessions(req: Request, res: Response) {
+  try {
+    const cohortId = await getFirstCohortId();
+    if (!cohortId) return res.json([]);
+    const sessions = await LiveSession.findAll({
+      where: { cohort_id: cohortId },
+      order: [['session_number', 'ASC']],
+    });
+    res.json(sessions);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleGetProgramFlow(req: Request, res: Response) {
+  try {
+    const cohortId = await getFirstCohortId();
+    if (!cohortId) return res.json({ sessions: [] });
+    const flow = await orchestrationService.getSessionFlow(cohortId);
+    res.json(flow);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleGetProgramSkills(req: Request, res: Response) {
+  try {
+    const skills = await SkillDefinition.findAll({
+      order: [['layer_id', 'ASC'], ['domain_id', 'ASC'], ['skill_id', 'ASC']],
+    });
+    // Group by layer_id -> domain_id for hierarchical display
+    const grouped: Record<string, { layer_id: string; domains: Record<string, any[]> }> = {};
+    for (const s of skills) {
+      const plain = (s as any).toJSON ? (s as any).toJSON() : s;
+      if (!grouped[plain.layer_id]) grouped[plain.layer_id] = { layer_id: plain.layer_id, domains: {} };
+      if (!grouped[plain.layer_id].domains[plain.domain_id]) grouped[plain.layer_id].domains[plain.domain_id] = [];
+      grouped[plain.layer_id].domains[plain.domain_id].push(plain);
+    }
+    res.json({ skills, grouped });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleGetProgramGates(req: Request, res: Response) {
+  try {
+    const cohortId = await getFirstCohortId();
+    if (!cohortId) return res.json([]);
+    // Get all sessions for this cohort, then all gates for those sessions
+    const sessions = await LiveSession.findAll({ where: { cohort_id: cohortId }, attributes: ['id'] });
+    const sessionIds = sessions.map(s => s.id);
+    if (sessionIds.length === 0) return res.json([]);
+    const { Op } = require('sequelize');
+    const gates = await SessionGate.findAll({
+      where: { session_id: { [Op.in]: sessionIds } },
+      include: [
+        { model: LiveSession, as: 'session', attributes: ['id', 'session_number', 'title'] },
+        { model: CurriculumModule, as: 'module', attributes: ['id', 'module_number', 'title'], required: false },
+        { model: CurriculumLesson, as: 'lesson', attributes: ['id', 'lesson_number', 'title'], required: false },
+      ],
+      order: [['created_at', 'ASC']],
+    });
+    res.json(gates);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

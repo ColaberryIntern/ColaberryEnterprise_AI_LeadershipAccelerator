@@ -352,6 +352,8 @@ import {
   handleGetVariables, handleGetVariableGraph,
   handleGetSessionFlow, handleGetSessionDetail as handleGetOrchSessionDetail,
   handleGetDashboard as handleGetOrchDashboard, handleGetArtifactStatus,
+  handleGetProgramModules, handleGetProgramSessions, handleGetProgramFlow,
+  handleGetProgramSkills, handleGetProgramGates,
 } from '../controllers/orchestrationController';
 
 // Prompt Templates
@@ -385,6 +387,13 @@ router.get('/api/admin/orchestration/cohorts/:cohortId/flow', requireAdmin, hand
 router.get('/api/admin/orchestration/cohorts/:cohortId/dashboard', requireAdmin, handleGetOrchDashboard);
 router.get('/api/admin/orchestration/sessions/:sessionId/detail', requireAdmin, handleGetOrchSessionDetail);
 router.get('/api/admin/orchestration/enrollments/:enrollmentId/sessions/:sessionId/artifact-status', requireAdmin, handleGetArtifactStatus);
+
+// Program-Wide (no cohort required)
+router.get('/api/admin/orchestration/program/modules', requireAdmin, handleGetProgramModules);
+router.get('/api/admin/orchestration/program/sessions', requireAdmin, handleGetProgramSessions);
+router.get('/api/admin/orchestration/program/flow', requireAdmin, handleGetProgramFlow);
+router.get('/api/admin/orchestration/program/skills', requireAdmin, handleGetProgramSkills);
+router.get('/api/admin/orchestration/program/gates', requireAdmin, handleGetProgramGates);
 
 // Analytics
 router.get('/api/admin/orchestration/analytics/completion/:cohortId', requireAdmin, async (req, res) => {

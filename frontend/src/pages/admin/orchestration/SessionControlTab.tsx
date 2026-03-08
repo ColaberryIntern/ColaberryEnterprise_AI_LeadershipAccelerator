@@ -1,126 +1,33 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 
-interface SessionControlTabProps {
-  token: string;
-  cohortId: string;
-  apiUrl: string;
-}
+interface Props { token: string; apiUrl: string; }
 
-interface Session {
-  id: string;
-  session_number: number;
-  title: string;
-  date: string;
-  type: string;
-  status: string;
-  build_phase_unlock: boolean;
-  required_prior_sessions: number[];
-  presentation_phase_flag: boolean;
-  module_id: string | null;
-}
-
-const SessionControlTab: React.FC<SessionControlTabProps> = ({ token, cohortId, apiUrl }) => {
-  const [sessions, setSessions] = useState<Session[]>([]);
+const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
+  const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Partial<Session>>({});
-  const [saving, setSaving] = useState(false);
-
-  const fetchSessions = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${apiUrl}/api/admin/accelerator/cohorts/${cohortId}/sessions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`Failed to fetch sessions: ${res.status}`);
-      const data = await res.json();
-      setSessions(Array.isArray(data) ? data : data.sessions || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load sessions');
-    } finally {
-      setLoading(false);
-    }
-  }, [token, cohortId, apiUrl]);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    if (cohortId) fetchSessions();
-  }, [cohortId, fetchSessions]);
+    fetch(`${apiUrl}/api/admin/orchestration/program/sessions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => setSessions(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token, apiUrl]);
 
-  const startEdit = (s: Session) => {
-    setEditingId(s.id);
-    setEditData({
-      build_phase_unlock: s.build_phase_unlock,
-      required_prior_sessions: s.required_prior_sessions || [],
-      presentation_phase_flag: s.presentation_phase_flag,
-      module_id: s.module_id,
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditData({});
-  };
-
-  const saveEdit = async (id: string) => {
-    setSaving(true);
-    try {
-      const res = await fetch(`${apiUrl}/api/admin/accelerator/sessions/${id}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editData),
-      });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
-      setEditingId(null);
-      setEditData({});
-      await fetchSessions();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save session');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePriorSessionsChange = (value: string) => {
-    const nums = value
-      .split(',')
-      .map((v) => parseInt(v.trim(), 10))
-      .filter((n) => !isNaN(n));
-    setEditData({ ...editData, required_prior_sessions: nums });
-  };
-
-  const statusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      active: 'bg-success',
-      upcoming: 'bg-info',
-      completed: 'bg-secondary',
-      locked: 'bg-warning',
-      draft: 'bg-warning',
-    };
-    return map[status?.toLowerCase()] || 'bg-secondary';
-  };
-
-  if (loading) {
-    return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading sessions...</span>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="text-center py-5">
+      <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
+    </div>
+  );
 
   return (
     <div>
-      {error && <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>}
-
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>Session Configuration</span>
+          <span>Live Session Configuration</span>
           <span className="badge bg-info" style={{ fontSize: 11 }}>{sessions.length} sessions</span>
         </div>
         <div className="table-responsive">
@@ -132,101 +39,64 @@ const SessionControlTab: React.FC<SessionControlTabProps> = ({ token, cohortId, 
                 <th style={{ fontSize: 12 }}>Date</th>
                 <th style={{ fontSize: 12 }}>Type</th>
                 <th style={{ fontSize: 12 }}>Status</th>
-                <th style={{ fontSize: 12 }}>Build Unlock</th>
-                <th style={{ fontSize: 12 }}>Prior Sessions</th>
-                <th style={{ fontSize: 12 }}>Presentation</th>
-                <th style={{ fontSize: 12 }}>Module ID</th>
-                <th style={{ fontSize: 12 }}>Actions</th>
+                <th style={{ fontSize: 12 }}>Agenda</th>
+                <th style={{ fontSize: 12 }}>Materials</th>
+                <th style={{ fontSize: 12 }}></th>
               </tr>
             </thead>
             <tbody>
-              {sessions.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.session_number}</td>
-                  <td>{s.title}</td>
-                  <td>{s.date ? new Date(s.date).toLocaleDateString() : '-'}</td>
-                  <td>{s.type}</td>
-                  <td>
-                    <span className={`badge ${statusBadge(s.status)}`} style={{ fontSize: 11 }}>
-                      {s.status}
-                    </span>
-                  </td>
-                  {editingId === s.id ? (
-                    <>
-                      <td>
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          checked={editData.build_phase_unlock || false}
-                          onChange={(e) =>
-                            setEditData({ ...editData, build_phase_unlock: e.target.checked })
-                          }
-                        />
+              {sessions.map(s => (
+                <React.Fragment key={s.id}>
+                  <tr>
+                    <td>{s.session_number}</td>
+                    <td className="fw-medium">{s.title}</td>
+                    <td>{s.session_date ? new Date(s.session_date).toLocaleDateString() : '-'}</td>
+                    <td><span className={`badge ${s.session_type === 'lab' ? 'bg-success' : 'bg-primary'}`} style={{ fontSize: 10 }}>{s.session_type}</span></td>
+                    <td><span className="badge bg-secondary" style={{ fontSize: 10 }}>{s.status}</span></td>
+                    <td>{(s.curriculum_json || []).length} items</td>
+                    <td>{(s.materials_json || []).length} items</td>
+                    <td>
+                      <button className="btn btn-sm btn-outline-secondary" onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
+                        {expanded === s.id ? 'Hide' : 'Details'}
+                      </button>
+                    </td>
+                  </tr>
+                  {expanded === s.id && (
+                    <tr>
+                      <td colSpan={8} className="bg-light">
+                        <div className="p-2">
+                          <p className="text-muted small mb-2">{s.description}</p>
+                          <div className="row">
+                            <div className="col-md-7">
+                              <strong style={{ fontSize: 12 }}>Agenda</strong>
+                              <table className="table table-sm mt-1 mb-0" style={{ fontSize: 12 }}>
+                                <tbody>
+                                  {(s.curriculum_json || []).map((item: any, i: number) => (
+                                    <tr key={i}>
+                                      <td style={{ width: 50 }}>{item.duration_minutes}m</td>
+                                      <td className="fw-medium">{item.title}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="col-md-5">
+                              <strong style={{ fontSize: 12 }}>Materials</strong>
+                              <ul className="list-unstyled mt-1 mb-0" style={{ fontSize: 12 }}>
+                                {(s.materials_json || []).map((m: any, i: number) => (
+                                  <li key={i}><span className="badge bg-secondary me-1" style={{ fontSize: 10 }}>{m.type}</span>{m.title}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          style={{ fontSize: 12, width: 100 }}
-                          value={(editData.required_prior_sessions || []).join(', ')}
-                          onChange={(e) => handlePriorSessionsChange(e.target.value)}
-                          placeholder="e.g. 1, 2"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          checked={editData.presentation_phase_flag || false}
-                          onChange={(e) =>
-                            setEditData({ ...editData, presentation_phase_flag: e.target.checked })
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          style={{ fontSize: 12, width: 120 }}
-                          value={editData.module_id || ''}
-                          onChange={(e) => setEditData({ ...editData, module_id: e.target.value })}
-                          placeholder="Module ID"
-                        />
-                      </td>
-                      <td>
-                        <button
-                          className="btn btn-sm btn-primary me-1"
-                          onClick={() => saveEdit(s.id)}
-                          disabled={saving}
-                        >
-                          {saving ? 'Saving...' : 'Save'}
-                        </button>
-                        <button className="btn btn-sm btn-outline-secondary" onClick={cancelEdit}>
-                          Cancel
-                        </button>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td>{s.build_phase_unlock ? 'Yes' : 'No'}</td>
-                      <td>{(s.required_prior_sessions || []).join(', ') || '-'}</td>
-                      <td>{s.presentation_phase_flag ? 'Yes' : 'No'}</td>
-                      <td style={{ fontSize: 12 }}>{s.module_id || '-'}</td>
-                      <td>
-                        <button className="btn btn-sm btn-outline-secondary" onClick={() => startEdit(s)}>
-                          Edit
-                        </button>
-                      </td>
-                    </>
+                    </tr>
                   )}
-                </tr>
+                </React.Fragment>
               ))}
               {sessions.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="text-center text-muted py-4">
-                    No sessions found for this cohort.
-                  </td>
-                </tr>
+                <tr><td colSpan={8} className="text-center text-muted py-4">No sessions found.</td></tr>
               )}
             </tbody>
           </table>
