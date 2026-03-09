@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg16
     container_name: accelerator-db
     restart: always
     environment:
@@ -26,6 +26,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@postgres:5432/${DB_NAME:-accelerator_prod}
+      INTELLIGENCE_ENGINE_URL: http://intelligence:5000
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,6 +34,26 @@ services:
       - uploads:/app/uploads
     expose:
       - "3001"
+
+  intelligence:
+    build:
+      context: ./intelligence/ai_engine
+      dockerfile: Dockerfile
+    container_name: accelerator-intelligence
+    restart: always
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@postgres:5432/${DB_NAME:-accelerator_prod}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      FLASK_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - dictionary_data:/app/intelligence
+    expose:
+      - "5000"
 
   nginx:
     build:
@@ -48,3 +69,4 @@ services:
 volumes:
   pgdata:
   uploads:
+  dictionary_data:
