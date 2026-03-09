@@ -1,0 +1,68 @@
+# Workstream 1: Marketing Website
+frontend/src/routes/publicRoutes.tsx          @workstream-marketing
+frontend/src/pages/HomePage.tsx               @workstream-marketing
+frontend/src/pages/ProgramPage.tsx            @workstream-marketing
+frontend/src/pages/PricingPage.tsx            @workstream-marketing
+frontend/src/pages/ContactPage.tsx            @workstream-marketing
+frontend/src/pages/SponsorshipPage.tsx        @workstream-marketing
+frontend/src/pages/AdvisoryPage.tsx           @workstream-marketing
+frontend/src/pages/CaseStudiesPage.tsx        @workstream-marketing
+frontend/src/pages/EnrollPage.tsx             @workstream-marketing
+frontend/src/pages/EnrollSuccessPage.tsx      @workstream-marketing
+frontend/src/pages/EnrollCancelPage.tsx       @workstream-marketing
+frontend/src/pages/ExecOverviewThankYouPage.tsx @workstream-marketing
+frontend/src/pages/StrategyCallPrepPage.tsx   @workstream-marketing
+frontend/src/pages/NotFoundPage.tsx           @workstream-marketing
+frontend/src/components/Layout/PublicLayout.tsx   @workstream-marketing
+frontend/src/components/Layout/PublicNavbar.tsx    @workstream-marketing
+frontend/src/components/Layout/PublicFooter.tsx    @workstream-marketing
+frontend/src/components/LeadCaptureForm.tsx        @workstream-marketing
+frontend/src/components/ChatWidget.tsx             @workstream-marketing
+frontend/src/components/StrategyCallModal.tsx       @workstream-marketing
+frontend/src/components/SEOHead.tsx                @workstream-marketing
+backend/src/routes/leadRoutes.ts              @workstream-marketing
+backend/src/routes/enrollmentRoutes.ts        @workstream-marketing
+backend/src/routes/calendarRoutes.ts          @workstream-marketing
+backend/src/routes/strategyPrepRoutes.ts      @workstream-marketing
+backend/src/routes/trackingRoutes.ts          @workstream-marketing
+backend/src/routes/webhookRoutes.ts           @workstream-marketing
+
+# Workstream 2: Admin Management Console
+frontend/src/routes/adminRoutes.tsx           @workstream-admin
+frontend/src/pages/admin/                     @workstream-admin
+frontend/src/components/admin/                @workstream-admin
+frontend/src/components/campaign/             @workstream-admin
+frontend/src/components/Layout/AdminLayout.tsx @workstream-admin
+frontend/src/components/ProtectedRoute.tsx    @workstream-admin
+frontend/src/contexts/AuthContext.tsx          @workstream-admin
+frontend/src/utils/api.ts                     @workstream-admin
+backend/src/routes/admin/authRoutes.ts        @workstream-admin
+backend/src/routes/admin/cohortRoutes.ts      @workstream-admin
+backend/src/routes/admin/leadRoutes.ts        @workstream-admin
+backend/src/routes/admin/campaignRoutes.ts    @workstream-admin
+backend/src/routes/admin/insightRoutes.ts     @workstream-admin
+backend/src/routes/admin/settingsRoutes.ts    @workstream-admin
+
+# Workstream 3: Student Portal + Orchestration Engine
+frontend/src/routes/portalRoutes.tsx          @workstream-portal
+frontend/src/pages/portal/                    @workstream-portal
+frontend/src/components/portal/               @workstream-portal
+frontend/src/components/Layout/PortalLayout.tsx @workstream-portal
+frontend/src/components/PortalProtectedRoute.tsx @workstream-portal
+frontend/src/contexts/ParticipantAuthContext.tsx @workstream-portal
+frontend/src/contexts/MentorContext.tsx        @workstream-portal
+frontend/src/utils/portalApi.ts               @workstream-portal
+frontend/src/pages/admin/AdminAcceleratorPage.tsx @workstream-portal
+frontend/src/pages/admin/AdminOrchestrationPage.tsx @workstream-portal
+frontend/src/pages/admin/orchestration/       @workstream-portal
+backend/src/routes/admin/acceleratorRoutes.ts @workstream-portal
+backend/src/routes/admin/orchestrationRoutes.ts @workstream-portal
+backend/src/routes/participantRoutes.ts       @workstream-portal
+
+# Shared files — require coordination across workstreams
+frontend/src/App.tsx                          @workstream-marketing @workstream-admin @workstream-portal
+backend/src/server.ts                         @workstream-marketing @workstream-admin @workstream-portal
+backend/src/routes/adminRoutes.ts             @workstream-admin @workstream-portal
+backend/src/models/                           @workstream-marketing @workstream-admin @workstream-portal
+backend/src/middlewares/                       @workstream-marketing @workstream-admin @workstream-portal
+docker-compose*.yml                           @workstream-marketing @workstream-admin @workstream-portal
