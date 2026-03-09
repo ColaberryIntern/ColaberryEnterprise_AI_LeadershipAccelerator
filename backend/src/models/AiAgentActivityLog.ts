@@ -14,6 +14,12 @@ interface AiAgentActivityLogAttributes {
   after_state?: Record<string, any>;
   result?: AgentActivityResult;
   details?: Record<string, any>;
+  // Observability fields
+  trace_id?: string;
+  duration_ms?: number;
+  execution_context?: Record<string, any>;
+  stack_trace?: string;
+  retry_of?: string;
   created_at?: Date;
 }
 
@@ -28,6 +34,11 @@ class AiAgentActivityLog extends Model<AiAgentActivityLogAttributes> implements 
   declare after_state: Record<string, any>;
   declare result: AgentActivityResult;
   declare details: Record<string, any>;
+  declare trace_id: string;
+  declare duration_ms: number;
+  declare execution_context: Record<string, any>;
+  declare stack_trace: string;
+  declare retry_of: string;
   declare created_at: Date;
 }
 
@@ -77,6 +88,27 @@ AiAgentActivityLog.init(
       type: DataTypes.JSONB,
       allowNull: true,
     },
+    // --- Observability fields ---
+    trace_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    duration_ms: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    execution_context: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    stack_trace: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    retry_of: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -92,6 +124,7 @@ AiAgentActivityLog.init(
       { fields: ['action'] },
       { fields: ['result'] },
       { fields: ['created_at'] },
+      { fields: ['trace_id'] },
     ],
   }
 );

@@ -34,6 +34,12 @@ export async function logAgentActivity(params: {
   after_state?: Record<string, any>;
   result: AgentActivityResult;
   details?: Record<string, any>;
+  // Observability fields
+  trace_id?: string;
+  duration_ms?: number;
+  execution_context?: Record<string, any>;
+  stack_trace?: string;
+  retry_of?: string;
 }): Promise<AiAgentActivityLog> {
   return AiAgentActivityLog.create({
     agent_id: params.agent_id,
@@ -45,5 +51,10 @@ export async function logAgentActivity(params: {
     after_state: params.after_state || undefined,
     result: params.result,
     details: params.details || undefined,
+    trace_id: params.trace_id || undefined,
+    duration_ms: params.duration_ms || undefined,
+    execution_context: params.execution_context || undefined,
+    stack_trace: params.stack_trace || undefined,
+    retry_of: params.retry_of || undefined,
   });
 }

@@ -13,6 +13,12 @@ interface CampaignErrorAttributes {
   resolved?: boolean;
   resolved_at?: Date;
   resolved_by?: string;
+  // Enhanced error fields
+  stack_trace?: string;
+  ai_reasoning?: string;
+  repair_attempt_id?: string;
+  retry_count?: number;
+  last_retry_at?: Date;
   created_at?: Date;
 }
 
@@ -26,6 +32,11 @@ class CampaignError extends Model<CampaignErrorAttributes> implements CampaignEr
   declare resolved: boolean;
   declare resolved_at: Date;
   declare resolved_by: string;
+  declare stack_trace: string;
+  declare ai_reasoning: string;
+  declare repair_attempt_id: string;
+  declare retry_count: number;
+  declare last_retry_at: Date;
   declare created_at: Date;
 }
 
@@ -71,6 +82,29 @@ CampaignError.init(
       type: DataTypes.STRING(50),
       allowNull: true,
     },
+    // --- Enhanced error fields ---
+    stack_trace: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    ai_reasoning: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    repair_attempt_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'ai_agent_activity_logs', key: 'id' },
+    },
+    retry_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    last_retry_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -86,6 +120,7 @@ CampaignError.init(
       { fields: ['severity'] },
       { fields: ['resolved'] },
       { fields: ['created_at'] },
+      { fields: ['repair_attempt_id'] },
     ],
   }
 );

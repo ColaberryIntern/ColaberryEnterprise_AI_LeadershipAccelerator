@@ -13,6 +13,13 @@ import {
   handleResolveError,
   handleGetEvents,
   handleRestartCampaign,
+  handleGetAgentRegistry,
+  handleGetAgentDetail,
+  handleControlAgent,
+  handleGetExecutionTrace,
+  handleGetActivityDetail,
+  handleGetErrorDetail,
+  handleGetCampaignTimeline,
 } from '../../controllers/aiOpsController';
 
 const router = Router();
@@ -42,5 +49,16 @@ router.get('/api/admin/ai-ops/events', requireAdmin, handleGetEvents);
 
 // Campaign Actions
 router.post('/api/admin/ai-ops/campaigns/:id/restart', requireAdmin, handleRestartCampaign);
+
+// --- Agent Registry (Observability) ---
+router.get('/api/admin/ai-ops/registry', requireAdmin, handleGetAgentRegistry);
+router.get('/api/admin/ai-ops/registry/:id', requireAdmin, handleGetAgentDetail);
+router.post('/api/admin/ai-ops/registry/:id/control', requireAdmin, handleControlAgent);
+
+// --- Drill-Down Details ---
+router.get('/api/admin/ai-ops/activity/:id', requireAdmin, handleGetActivityDetail);
+router.get('/api/admin/ai-ops/trace/:traceId', requireAdmin, handleGetExecutionTrace);
+router.get('/api/admin/ai-ops/errors/:id', requireAdmin, handleGetErrorDetail);
+router.get('/api/admin/ai-ops/campaigns/:id/timeline', requireAdmin, handleGetCampaignTimeline);
 
 export default router;

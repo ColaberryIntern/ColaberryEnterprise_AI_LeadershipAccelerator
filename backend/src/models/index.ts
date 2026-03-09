@@ -331,6 +331,9 @@ CampaignError.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' })
 
 AiAgentActivityLog.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
+CampaignError.belongsTo(AiAgentActivityLog, { foreignKey: 'repair_attempt_id', as: 'repairAttempt' });
+AiAgentActivityLog.hasMany(CampaignError, { foreignKey: 'repair_attempt_id', as: 'repairedErrors' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,

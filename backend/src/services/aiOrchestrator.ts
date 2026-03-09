@@ -1,78 +1,87 @@
+import { v4 as uuidv4 } from 'uuid';
 import AiAgent from '../models/AiAgent';
 import { scanAllCampaigns } from './campaignHealthScanner';
 import { runCampaignRepairAgent } from './agents/campaignRepairAgent';
 import { runContentOptimizationAgent } from './agents/contentOptimizationAgent';
 import { runConversationOptimizationAgent } from './agents/conversationOptimizationAgent';
-import { logAiEvent } from './aiEventService';
+import { logAiEvent, logAgentActivity } from './aiEventService';
+import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
 
-/**
- * Seed the 3 AI agent records on first run (idempotent).
- */
-export async function seedAgents(): Promise<void> {
-  const agents = [
-    {
-      agent_name: 'CampaignRepairAgent',
-      agent_type: 'repair' as const,
-      config: {
-        auto_retry_enabled: true,
-        max_retry_attempts: 3,
-        retry_delay_minutes: 30,
-        auto_resolve_stale_days: 7,
-      },
-    },
-    {
-      agent_name: 'ContentOptimizationAgent',
-      agent_type: 'content_optimization' as const,
-      config: {
-        auto_rewrite_enabled: true,
-        max_auto_actions_per_hour: 10,
-        open_rate_threshold: 0.10,
-        reply_rate_threshold: 0.01,
-        min_sample_size: 10,
-        cooldown_minutes: 360,
-      },
-    },
-    {
-      agent_name: 'ConversationOptimizationAgent',
-      agent_type: 'conversation_optimization' as const,
-      config: {
-        auto_enhance_enabled: true,
-        max_auto_actions_per_hour: 5,
-        dropoff_threshold: 0.80,
-        min_sent_per_step: 5,
-        cooldown_minutes: 1440,
-      },
-    },
-  ];
-
-  for (const agent of agents) {
-    const [, created] = await AiAgent.findOrCreate({
-      where: { agent_name: agent.agent_name },
-      defaults: agent,
-    });
-    if (created) {
-      console.log(`[AI Ops] Seeded agent: ${agent.agent_name}`);
-    }
-  }
-}
+// Re-export seedAgentRegistry for callers
+export { seedAgentRegistry as seedAgents };
 
 /**
  * Run health scans for all active campaigns.
  */
 export async function runHealthScans(): Promise<void> {
+  const agent = await AiAgent.findOne({ where: { agent_name: 'CampaignHealthScanner' } });
+  const traceId = uuidv4();
+  const startTime = Date.now();
+
   try {
-    await scanAllCampaigns();
+    if (agent) {
+      if (!agent.enabled) {
+        console.log('[AI Ops] CampaignHealthScanner is disabled, skipping');
+        return;
+      }
+      await agent.update({ status: 'running', updated_at: new Date() });
+    }
+
+    const results = await scanAllCampaigns();
+
+    if (agent) {
+      const durationMs = Date.now() - startTime;
+      const newAvg = agent.avg_duration_ms
+        ? Math.round((agent.avg_duration_ms * agent.run_count + durationMs) / (agent.run_count + 1))
+        : durationMs;
+
+      await agent.update({
+        status: 'idle',
+        last_run_at: new Date(),
+        run_count: agent.run_count + 1,
+        avg_duration_ms: newAvg,
+        last_result: {
+          campaigns_scanned: results.length,
+          healthy: results.filter((r) => r.status === 'healthy').length,
+          degraded: results.filter((r) => r.status === 'degraded').length,
+          critical: results.filter((r) => r.status === 'critical').length,
+          duration_ms: durationMs,
+          timestamp: new Date().toISOString(),
+        },
+        updated_at: new Date(),
+      });
+
+      await logAgentActivity({
+        agent_id: agent.id,
+        action: 'health_scan_completed',
+        result: 'success',
+        trace_id: traceId,
+        duration_ms: durationMs,
+        execution_context: { trigger: 'cron', schedule: agent.schedule },
+        details: { campaigns_scanned: results.length },
+      });
+    }
   } catch (err: any) {
     console.error('[AI Ops] Health scan failed:', err.message);
+    if (agent) {
+      await agent.update({
+        status: 'error',
+        error_count: agent.error_count + 1,
+        last_error: err.message,
+        last_error_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
     await logAiEvent('orchestrator', 'health_scan_error', undefined, undefined, {
       error: err.message,
+      trace_id: traceId,
     });
   }
 }
 
 /**
- * Run a specific agent by name, checking its status first.
+ * Run a specific agent by name, checking its status and enabled state first.
  */
 async function runAgent(
   agentName: string,
@@ -84,44 +93,97 @@ async function runAgent(
     return null;
   }
 
+  if (!agent.enabled) {
+    console.log(`[AI Ops] Agent ${agentName} is disabled, skipping`);
+    return null;
+  }
+
   if (agent.status === 'paused') {
     console.log(`[AI Ops] Agent ${agentName} is paused, skipping`);
     return null;
   }
+
+  const traceId = uuidv4();
+  const startTime = Date.now();
 
   try {
     await agent.update({ status: 'running', updated_at: new Date() });
 
     const result = await executor(agent.id, agent.config || {});
 
+    const durationMs = Date.now() - startTime;
+    const newAvg = agent.avg_duration_ms
+      ? Math.round((agent.avg_duration_ms * agent.run_count + durationMs) / (agent.run_count + 1))
+      : durationMs;
+
     await agent.update({
       status: 'idle',
       last_run_at: new Date(),
+      run_count: agent.run_count + 1,
+      avg_duration_ms: newAvg,
       last_result: {
         campaigns_processed: result.campaigns_processed,
         actions_taken: result.actions_taken.length,
         errors: result.errors.length,
-        duration_ms: result.duration_ms,
+        duration_ms: durationMs,
         timestamp: new Date().toISOString(),
       },
       updated_at: new Date(),
+    });
+
+    // Log the execution summary with trace
+    await logAgentActivity({
+      agent_id: agent.id,
+      action: 'agent_execution_completed',
+      result: result.errors.length > 0 ? 'failed' : 'success',
+      trace_id: traceId,
+      duration_ms: durationMs,
+      execution_context: {
+        trigger: 'cron',
+        schedule: agent.schedule,
+        campaigns_processed: result.campaigns_processed,
+      },
+      details: {
+        actions_taken: result.actions_taken.length,
+        errors: result.errors,
+      },
     });
 
     if (result.actions_taken.length > 0 || result.errors.length > 0) {
       console.log(
         `[AI Ops] ${agentName}: ${result.campaigns_processed} campaigns, ` +
           `${result.actions_taken.length} actions, ${result.errors.length} errors ` +
-          `(${result.duration_ms}ms)`,
+          `(${durationMs}ms)`,
       );
     }
 
     return result;
   } catch (err: any) {
-    await agent.update({ status: 'error', updated_at: new Date() });
+    const durationMs = Date.now() - startTime;
+
+    await agent.update({
+      status: 'error',
+      error_count: agent.error_count + 1,
+      last_error: err.message,
+      last_error_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    await logAgentActivity({
+      agent_id: agent.id,
+      action: 'agent_execution_failed',
+      result: 'failed',
+      trace_id: traceId,
+      duration_ms: durationMs,
+      execution_context: { trigger: 'cron', schedule: agent.schedule },
+      stack_trace: err.stack || err.message,
+    });
+
     console.error(`[AI Ops] ${agentName} failed:`, err.message);
     await logAiEvent('orchestrator', 'agent_error', 'agent', agent.id, {
       agent_name: agentName,
       error: err.message,
+      trace_id: traceId,
     });
     return null;
   }

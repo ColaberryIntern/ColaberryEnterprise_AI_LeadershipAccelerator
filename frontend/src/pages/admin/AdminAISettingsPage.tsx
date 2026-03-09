@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
+import AgentRegistryTab from './ai-settings/AgentRegistryTab';
+import ActivityDetailModal from './ai-settings/ActivityDetailModal';
+import ExecutionTraceModal from './ai-settings/ExecutionTraceModal';
+import ErrorDetailModal from './ai-settings/ErrorDetailModal';
+import CampaignTimelineModal from './ai-settings/CampaignTimelineModal';
 
 interface Agent {
   id: string;
@@ -51,6 +56,8 @@ interface ActivityRecord {
   after_state: Record<string, any> | null;
   result: string;
   details: Record<string, any> | null;
+  trace_id: string | null;
+  duration_ms: number | null;
   created_at: string;
   agent?: { agent_name: string; agent_type: string };
 }
@@ -58,21 +65,33 @@ interface ActivityRecord {
 interface Overview {
   active_agents: number;
   total_agents: number;
+  running: number;
+  idle: number;
+  paused: number;
+  disabled: number;
+  errored: number;
   avg_health_score: number;
   unresolved_errors: number;
   actions_today: number;
+  repairs_today: number;
+  campaigns_scanned: number;
   agents_summary: Array<{
     id: string;
     name: string;
     type: string;
     status: string;
+    category: string;
+    enabled: boolean;
     last_run_at: string | null;
+    run_count: number;
+    error_count: number;
   }>;
 }
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
-  { key: 'activity', label: 'Agent Activity' },
+  { key: 'registry', label: 'Agent Registry' },
+  { key: 'activity', label: 'Activity' },
   { key: 'health', label: 'Health Monitor' },
   { key: 'errors', label: 'Error Center' },
   { key: 'controls', label: 'Controls' },
@@ -97,6 +116,14 @@ const STATUS_COLORS: Record<string, string> = {
   running: 'primary',
   paused: 'warning',
   error: 'danger',
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  outbound: 'primary',
+  behavioral: 'info',
+  maintenance: 'secondary',
+  ai_ops: 'warning',
+  accelerator: 'success',
 };
 
 const RESULT_COLORS: Record<string, string> = {
@@ -128,6 +155,12 @@ function AdminAISettingsPage() {
   const [activity, setActivity] = useState<ActivityRecord[]>([]);
   const [activityTotal, setActivityTotal] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Modal state
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+  const [selectedErrorId, setSelectedErrorId] = useState<string | null>(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -252,7 +285,7 @@ function AdminAISettingsPage() {
             AI Operations
           </h4>
           <p className="text-muted small mb-0">
-            Campaign monitoring, self-healing agents, and system observability
+            Full observability and control across all {overview?.total_agents || 0} autonomous agents
           </p>
         </div>
       </div>
@@ -269,6 +302,9 @@ function AdminAISettingsPage() {
               {tab.key === 'errors' && errorsTotal > 0 && (
                 <span className="badge bg-danger ms-2">{errorsTotal}</span>
               )}
+              {tab.key === 'registry' && overview && (
+                <span className="badge bg-secondary ms-2">{overview.total_agents}</span>
+              )}
             </button>
           </li>
         ))}
@@ -283,18 +319,29 @@ function AdminAISettingsPage() {
           scanLoading={actionLoading === 'scan'}
         />
       )}
+      {activeTab === 'registry' && <AgentRegistryTab />}
       {activeTab === 'activity' && (
-        <ActivityTab activity={activity} total={activityTotal} />
+        <ActivityTab
+          activity={activity}
+          total={activityTotal}
+          onViewDetail={setSelectedActivityId}
+          onViewTrace={setSelectedTraceId}
+        />
       )}
       {activeTab === 'health' && (
         <HealthTab
           health={health}
           onScan={handleScanAll}
           scanLoading={actionLoading === 'scan'}
+          onViewTimeline={setSelectedCampaignId}
         />
       )}
       {activeTab === 'errors' && (
-        <ErrorsTab errors={errors} onResolve={handleResolveError} />
+        <ErrorsTab
+          errors={errors}
+          onResolve={handleResolveError}
+          onViewDetail={setSelectedErrorId}
+        />
       )}
       {activeTab === 'controls' && (
         <ControlsTab
@@ -305,11 +352,49 @@ function AdminAISettingsPage() {
           actionLoading={actionLoading}
         />
       )}
+
+      {/* Drill-Down Modals */}
+      {selectedActivityId && (
+        <ActivityDetailModal
+          activityId={selectedActivityId}
+          onClose={() => setSelectedActivityId(null)}
+          onViewTrace={(traceId) => {
+            setSelectedActivityId(null);
+            setSelectedTraceId(traceId);
+          }}
+        />
+      )}
+      {selectedTraceId && (
+        <ExecutionTraceModal
+          traceId={selectedTraceId}
+          onClose={() => setSelectedTraceId(null)}
+        />
+      )}
+      {selectedErrorId && (
+        <ErrorDetailModal
+          errorId={selectedErrorId}
+          onClose={() => setSelectedErrorId(null)}
+          onResolve={(id) => {
+            handleResolveError(id);
+            setSelectedErrorId(null);
+          }}
+          onViewTrace={(traceId) => {
+            setSelectedErrorId(null);
+            setSelectedTraceId(traceId);
+          }}
+        />
+      )}
+      {selectedCampaignId && (
+        <CampaignTimelineModal
+          campaignId={selectedCampaignId}
+          onClose={() => setSelectedCampaignId(null)}
+        />
+      )}
     </div>
   );
 }
 
-// ─── Overview Tab ─────────────────────────────────────────────
+// ─── Overview Tab (Enhanced) ─────────────────────────────────────
 
 function OverviewTab({
   overview,
@@ -325,11 +410,11 @@ function OverviewTab({
   if (!overview) return <p className="text-muted">No data available</p>;
 
   const kpi = (label: string, value: string | number, color: string, subtitle?: string) => (
-    <div className="col-sm-6 col-lg-3" key={label}>
+    <div className="col-6 col-md-4 col-xl" key={label}>
       <div className="card border-0 shadow-sm">
         <div className="card-body text-center py-3">
           <div className="small text-muted mb-1">{label}</div>
-          <div className="h3 fw-bold mb-0" style={{ color }}>
+          <div className="h4 fw-bold mb-0" style={{ color }}>
             {value}
           </div>
           {subtitle && <div className="small text-muted mt-1">{subtitle}</div>}
@@ -340,19 +425,23 @@ function OverviewTab({
 
   return (
     <>
+      {/* KPI Cards — 7 metrics */}
       <div className="row g-3 mb-4">
-        {kpi('Active Agents', `${overview.active_agents}/${overview.total_agents}`, 'var(--color-primary)')}
-        {kpi('Avg Health Score', overview.avg_health_score, overview.avg_health_score >= 80 ? 'var(--color-accent)' : overview.avg_health_score >= 60 ? '#e0a800' : 'var(--color-secondary)')}
-        {kpi('Unresolved Errors', overview.unresolved_errors, overview.unresolved_errors > 0 ? 'var(--color-secondary)' : 'var(--color-accent)')}
+        {kpi('Total Agents', overview.total_agents, 'var(--color-primary)')}
+        {kpi('Running', overview.running, 'var(--color-primary-light)')}
+        {kpi('Idle', overview.idle, 'var(--color-accent)')}
+        {kpi('Paused', overview.paused, '#e0a800')}
+        {kpi('Health Score', overview.avg_health_score, overview.avg_health_score >= 80 ? 'var(--color-accent)' : overview.avg_health_score >= 60 ? '#e0a800' : 'var(--color-secondary)')}
         {kpi('Actions Today', overview.actions_today, 'var(--color-primary-light)')}
+        {kpi('Repairs Today', overview.repairs_today, 'var(--color-accent)')}
       </div>
 
       <div className="row g-3">
-        {/* Active Agents */}
-        <div className="col-lg-6">
+        {/* Agent Summary by Category */}
+        <div className="col-lg-7">
           <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-              Active AI Processes
+            <div className="card-header bg-white fw-semibold">
+              All AI Agents ({overview.agents_summary.length})
             </div>
             <div className="card-body p-0">
               <div className="table-responsive">
@@ -360,9 +449,11 @@ function OverviewTab({
                   <thead className="table-light">
                     <tr>
                       <th>Agent</th>
+                      <th>Category</th>
                       <th>Status</th>
+                      <th>Runs</th>
+                      <th>Errors</th>
                       <th>Last Run</th>
-                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -370,12 +461,25 @@ function OverviewTab({
                       <tr key={a.id}>
                         <td className="fw-medium">{a.name}</td>
                         <td>
+                          <span className={`badge bg-${CATEGORY_COLORS[a.category] || 'secondary'}`}>
+                            {a.category?.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td>
                           <span className={`badge bg-${STATUS_COLORS[a.status] || 'secondary'}`}>
                             {a.status}
                           </span>
+                          {!a.enabled && <span className="badge bg-danger ms-1">off</span>}
+                        </td>
+                        <td>{a.run_count}</td>
+                        <td>
+                          {a.error_count > 0 ? (
+                            <span className="badge bg-danger">{a.error_count}</span>
+                          ) : (
+                            <span className="text-muted">0</span>
+                          )}
                         </td>
                         <td className="text-muted">{timeAgo(a.last_run_at)}</td>
-                        <td className="text-muted">{a.type}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -386,7 +490,7 @@ function OverviewTab({
         </div>
 
         {/* Campaign Health Summary */}
-        <div className="col-lg-6">
+        <div className="col-lg-5">
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
               Campaign Health
@@ -443,17 +547,19 @@ function OverviewTab({
   );
 }
 
-// ─── Activity Tab ─────────────────────────────────────────────
+// ─── Activity Tab (Enhanced with drill-down) ─────────────────────
 
 function ActivityTab({
   activity,
   total,
+  onViewDetail,
+  onViewTrace,
 }: {
   activity: ActivityRecord[];
   total: number;
+  onViewDetail: (id: string) => void;
+  onViewTrace: (traceId: string) => void;
 }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
   return (
     <div className="card border-0 shadow-sm">
       <div className="card-header bg-white fw-semibold">
@@ -468,78 +574,59 @@ function ActivityTab({
                 <th>Action</th>
                 <th>Confidence</th>
                 <th>Result</th>
+                <th>Duration</th>
                 <th>Time</th>
-                <th></th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {activity.map((a) => (
-                <React.Fragment key={a.id}>
-                  <tr>
-                    <td className="fw-medium">{a.agent?.agent_name || 'Unknown'}</td>
-                    <td>{a.action}</td>
-                    <td>
-                      {a.confidence != null ? (
-                        <span
-                          className={`badge bg-${Number(a.confidence) >= 0.8 ? 'success' : Number(a.confidence) >= 0.6 ? 'warning' : 'danger'}`}
-                        >
-                          {(Number(a.confidence) * 100).toFixed(0)}%
-                        </span>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`badge bg-${RESULT_COLORS[a.result] || 'secondary'}`}>
-                        {a.result}
+                <tr key={a.id}>
+                  <td className="fw-medium">{a.agent?.agent_name || 'Unknown'}</td>
+                  <td>{a.action}</td>
+                  <td>
+                    {a.confidence != null ? (
+                      <span
+                        className={`badge bg-${Number(a.confidence) >= 0.8 ? 'success' : Number(a.confidence) >= 0.6 ? 'warning' : 'danger'}`}
+                      >
+                        {(Number(a.confidence) * 100).toFixed(0)}%
                       </span>
-                    </td>
-                    <td className="text-muted">{timeAgo(a.created_at)}</td>
-                    <td>
-                      {(a.before_state || a.after_state || a.reason) && (
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className={`badge bg-${RESULT_COLORS[a.result] || 'secondary'}`}>
+                      {a.result}
+                    </span>
+                  </td>
+                  <td className="text-muted">
+                    {a.duration_ms != null ? (a.duration_ms < 1000 ? `${a.duration_ms}ms` : `${(a.duration_ms / 1000).toFixed(1)}s`) : '—'}
+                  </td>
+                  <td className="text-muted">{timeAgo(a.created_at)}</td>
+                  <td>
+                    <div className="d-flex gap-1">
+                      <button
+                        className="btn btn-sm btn-outline-primary py-0 px-2"
+                        onClick={() => onViewDetail(a.id)}
+                      >
+                        Detail
+                      </button>
+                      {a.trace_id && (
                         <button
-                          className="btn btn-sm btn-outline-secondary py-0 px-1"
-                          onClick={() => setExpanded(expanded === a.id ? null : a.id)}
+                          className="btn btn-sm btn-outline-secondary py-0 px-2"
+                          onClick={() => onViewTrace(a.trace_id!)}
                         >
-                          {expanded === a.id ? '−' : '+'}
+                          Trace
                         </button>
                       )}
-                    </td>
-                  </tr>
-                  {expanded === a.id && (
-                    <tr>
-                      <td colSpan={6} className="bg-light">
-                        <div className="p-2">
-                          {a.reason && (
-                            <div className="mb-2">
-                              <strong>Reason:</strong> {a.reason}
-                            </div>
-                          )}
-                          {a.before_state && (
-                            <div className="mb-2">
-                              <strong>Before:</strong>
-                              <pre className="mb-0 small bg-white p-2 rounded mt-1" style={{ maxHeight: 150, overflow: 'auto' }}>
-                                {JSON.stringify(a.before_state, null, 2)}
-                              </pre>
-                            </div>
-                          )}
-                          {a.after_state && (
-                            <div>
-                              <strong>After:</strong>
-                              <pre className="mb-0 small bg-white p-2 rounded mt-1" style={{ maxHeight: 150, overflow: 'auto' }}>
-                                {JSON.stringify(a.after_state, null, 2)}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                    </div>
+                  </td>
+                </tr>
               ))}
               {activity.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-muted text-center py-4">
+                  <td colSpan={7} className="text-muted text-center py-4">
                     No agent activity recorded yet
                   </td>
                 </tr>
@@ -552,16 +639,18 @@ function ActivityTab({
   );
 }
 
-// ─── Health Monitor Tab ───────────────────────────────────────
+// ─── Health Monitor Tab (Enhanced with timeline drill-down) ──────
 
 function HealthTab({
   health,
   onScan,
   scanLoading,
+  onViewTimeline,
 }: {
   health: HealthRecord[];
   onScan: () => void;
   scanLoading: boolean;
+  onViewTimeline: (campaignId: string) => void;
 }) {
   return (
     <>
@@ -582,7 +671,11 @@ function HealthTab({
         <div className="row g-3">
           {health.map((h) => (
             <div key={h.id} className="col-md-6 col-lg-4">
-              <div className="card border-0 shadow-sm h-100">
+              <div
+                className="card border-0 shadow-sm h-100"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onViewTimeline(h.campaign_id)}
+              >
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <h6 className="fw-semibold mb-0" style={{ fontSize: '0.9rem' }}>
@@ -593,7 +686,6 @@ function HealthTab({
                     </span>
                   </div>
 
-                  {/* Progress bar */}
                   <div className="progress mb-3" style={{ height: 6 }}>
                     <div
                       className={`progress-bar bg-${HEALTH_COLORS[h.status]}`}
@@ -601,7 +693,6 @@ function HealthTab({
                     />
                   </div>
 
-                  {/* Metrics */}
                   <div className="row g-2 small">
                     <div className="col-6">
                       <span className="text-muted">Leads:</span>{' '}
@@ -621,7 +712,6 @@ function HealthTab({
                     </div>
                   </div>
 
-                  {/* Component status */}
                   {h.components && Object.keys(h.components).length > 0 && (
                     <div className="mt-2 pt-2 border-top">
                       <div className="d-flex flex-wrap gap-1">
@@ -644,8 +734,11 @@ function HealthTab({
                     </div>
                   )}
 
-                  <div className="text-muted mt-2" style={{ fontSize: '0.75rem' }}>
-                    Last scan: {timeAgo(h.last_scan_at)}
+                  <div className="d-flex justify-content-between align-items-center mt-2">
+                    <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                      Last scan: {timeAgo(h.last_scan_at)}
+                    </span>
+                    <span className="text-primary small">View Timeline</span>
                   </div>
                 </div>
               </div>
@@ -657,14 +750,16 @@ function HealthTab({
   );
 }
 
-// ─── Error Center Tab ─────────────────────────────────────────
+// ─── Error Center Tab (Enhanced with drill-down) ─────────────────
 
 function ErrorsTab({
   errors,
   onResolve,
+  onViewDetail,
 }: {
   errors: CampaignErrorRecord[];
   onResolve: (id: string) => void;
+  onViewDetail: (id: string) => void;
 }) {
   return (
     <div className="card border-0 shadow-sm">
@@ -681,7 +776,7 @@ function ErrorsTab({
                 <th>Severity</th>
                 <th>Error</th>
                 <th>Time</th>
-                <th>Action</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -703,12 +798,20 @@ function ErrorsTab({
                   </td>
                   <td className="text-muted">{timeAgo(e.created_at)}</td>
                   <td>
-                    <button
-                      className="btn btn-sm btn-outline-success py-0 px-2"
-                      onClick={() => onResolve(e.id)}
-                    >
-                      Resolve
-                    </button>
+                    <div className="d-flex gap-1">
+                      <button
+                        className="btn btn-sm btn-outline-primary py-0 px-2"
+                        onClick={() => onViewDetail(e.id)}
+                      >
+                        Detail
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-success py-0 px-2"
+                        onClick={() => onResolve(e.id)}
+                      >
+                        Resolve
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

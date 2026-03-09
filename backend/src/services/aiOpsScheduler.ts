@@ -1,14 +1,15 @@
 import cron from 'node-cron';
-import { seedAgents, runHealthScans, runRepairAgent, runContentOptimization, runConversationOptimization } from './aiOrchestrator';
+import { seedAgentRegistry } from './agentRegistrySeed';
+import { runHealthScans, runRepairAgent, runContentOptimization, runConversationOptimization } from './aiOrchestrator';
 
 /**
  * Start all AI Operations cron jobs.
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
 export function startAIOpsScheduler(): void {
-  // Seed agent records on startup (idempotent)
-  seedAgents().catch((err) => {
-    console.error('[AI Ops] Failed to seed agents:', err.message);
+  // Seed full agent registry on startup (idempotent — 16 agents)
+  seedAgentRegistry().catch((err) => {
+    console.error('[AI Ops] Failed to seed agent registry:', err.message);
   });
 
   // Campaign health scan: every 15 minutes
@@ -39,7 +40,7 @@ export function startAIOpsScheduler(): void {
     });
   });
 
-  console.log('[AI Ops] Scheduler started:');
+  console.log('[AI Ops] Scheduler started (16 agents registered):');
   console.log('[AI Ops]   Campaign health scan: every 15 minutes');
   console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
   console.log('[AI Ops]   Content optimization: every 6 hours');

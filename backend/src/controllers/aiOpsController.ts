@@ -158,6 +158,85 @@ export async function handleGetEvents(req: Request, res: Response) {
   }
 }
 
+// --- Agent Registry ---
+
+export async function handleGetAgentRegistry(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.getAgentRegistry({
+      category: req.query.category as string,
+      status: req.query.status as string,
+      enabled: req.query.enabled as string,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleGetAgentDetail(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.getAgentDetail(String(req.params.id));
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.message === 'Agent not found' ? 404 : 500).json({ error: err.message });
+  }
+}
+
+export async function handleControlAgent(req: Request, res: Response) {
+  try {
+    const { action } = req.body;
+    if (!action) return res.status(400).json({ error: 'action is required' });
+    const result = await aiOpsService.controlAgent(String(req.params.id), action);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.message === 'Agent not found' ? 404 : 500).json({ error: err.message });
+  }
+}
+
+// --- Execution Trace ---
+
+export async function handleGetExecutionTrace(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.getExecutionTrace(String(req.params.traceId));
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Activity Detail ---
+
+export async function handleGetActivityDetail(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.getActivityDetail(String(req.params.id));
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.message === 'Activity not found' ? 404 : 500).json({ error: err.message });
+  }
+}
+
+// --- Error Detail ---
+
+export async function handleGetErrorDetail(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.getErrorDetail(String(req.params.id));
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.message === 'Error not found' ? 404 : 500).json({ error: err.message });
+  }
+}
+
+// --- Campaign Timeline ---
+
+export async function handleGetCampaignTimeline(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.getCampaignTimeline(String(req.params.id));
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.message === 'Campaign not found' ? 404 : 500).json({ error: err.message });
+  }
+}
+
 // --- Campaign Restart ---
 
 export async function handleRestartCampaign(req: Request, res: Response) {
