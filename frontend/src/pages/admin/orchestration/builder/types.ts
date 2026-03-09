@@ -150,6 +150,19 @@ export interface BackfillResult {
   incomplete: { miniSectionId: string; missingPrompts: string[] }[];
 }
 
+// Deep Reconciliation
+export interface ReconciliationReport {
+  timestamp: string;
+  duration_ms: number;
+  prompts: { generated: number; skipped: number; byType: Record<string, number> };
+  skills: { mapped: number; skipped: number };
+  variables: { mapped: number; skipped: number };
+  artifacts: { created: number; linked: number; skipped: number };
+  quality: { scored: number; avgBefore: number; avgAfter: number };
+  issues: { category: string; detail: string }[];
+  total: number;
+}
+
 // Preview confidence
 export interface PreviewConfidenceResult {
   valid: boolean;

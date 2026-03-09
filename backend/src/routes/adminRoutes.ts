@@ -585,6 +585,23 @@ router.get('/api/admin/orchestration/backfill/status', requireAdmin, async (_req
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// --- Deep Reconciliation Routes ---
+router.post('/api/admin/orchestration/deep-reconcile', requireAdmin, async (req, res) => {
+  try {
+    const { deepReconcile } = await import('../services/deepReconciliationService');
+    const dryRun = req.query.dryRun === 'true';
+    const result = await deepReconcile({ dryRun });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/deep-reconcile/preview', requireAdmin, async (_req, res) => {
+  try {
+    const { deepReconcile } = await import('../services/deepReconciliationService');
+    const result = await deepReconcile({ dryRun: true });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // --- Variable Definition Routes ---
 import {
   handleListVariableDefinitions, handleGetVariableDefinition, handleCreateVariableDefinition,
