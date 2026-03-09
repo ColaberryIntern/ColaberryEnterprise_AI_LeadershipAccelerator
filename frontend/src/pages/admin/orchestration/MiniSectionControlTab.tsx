@@ -14,6 +14,7 @@ import { Lesson } from './builder/types';
 
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
+  const [rightPanelMode, setRightPanelMode] = useState<'configure' | 'preview'>('configure');
   const [previewMode, setPreviewMode] = useState<'preview' | 'json'>('preview');
 
   return (
@@ -149,8 +150,7 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
         <div className="row g-3">
           {/* LEFT PANEL — Student Structure Mirror */}
           <div className="col-lg-4">
-            {/* Structure Tree */}
-            <div className="card border-0 shadow-sm mb-2">
+            <div className="card border-0 shadow-sm">
               <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
                 <span className="fw-semibold small">
                   <i className="bi bi-list-nested me-1"></i>
@@ -158,94 +158,115 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                 </span>
                 <span className="badge bg-info" style={{ fontSize: 10 }}>{builder.miniSections.length} items</span>
               </div>
-              <div className="card-body py-2" style={{ maxHeight: 350, overflowY: 'auto' }}>
+              <div className="card-body py-2" style={{ maxHeight: 500, overflowY: 'auto' }}>
                 <StudentStructureTree
                   miniSections={builder.miniSections}
                   selectedId={builder.selectedMiniSectionId}
-                  onSelect={builder.selectMiniSection}
+                  onSelect={(id) => { builder.selectMiniSection(id); setRightPanelMode('configure'); }}
                   onMove={builder.moveItem}
                   onDelete={builder.handleDelete}
                   isDirtyId={builder.isDirty ? builder.selectedMiniSectionId : null}
                   loading={builder.loading}
                 />
               </div>
-            </div>
-
-            {/* Compact Preview */}
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white py-1 d-flex justify-content-between align-items-center">
-                <span className="fw-semibold" style={{ fontSize: 11 }}>
+              {/* Configure / Preview toggle at bottom of left panel */}
+              <div className="card-footer bg-white py-2 d-flex gap-1">
+                <button
+                  className={`btn btn-sm flex-fill ${rightPanelMode === 'configure' ? 'btn-primary' : 'btn-outline-primary'}`}
+                  onClick={() => setRightPanelMode('configure')}
+                  style={{ fontSize: 11 }}
+                >
+                  <i className="bi bi-gear me-1"></i>Configure
+                </button>
+                <button
+                  className={`btn btn-sm flex-fill ${rightPanelMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
+                  onClick={() => setRightPanelMode('preview')}
+                  style={{ fontSize: 11 }}
+                >
                   <i className="bi bi-eye me-1"></i>Preview
-                </span>
-                <div className="btn-group btn-group-sm">
-                  <button
-                    className={`btn py-0 ${previewMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={() => setPreviewMode('preview')}
-                    style={{ fontSize: 10 }}
-                  >
-                    Preview
-                  </button>
-                  <button
-                    className={`btn py-0 ${previewMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={() => setPreviewMode('json')}
-                    style={{ fontSize: 10 }}
-                  >
-                    JSON
-                  </button>
-                </div>
-              </div>
-              <div className="card-body py-1" style={{ maxHeight: 300, overflowY: 'auto' }}>
-                <PreviewPanel
-                  miniSections={builder.miniSections}
-                  lessonTitle={builder.selectedLesson?.title || 'Untitled Section'}
-                  lessonId={builder.selectedLessonId}
-                  compact={true}
-                  defaultViewMode={previewMode}
-                />
+                </button>
               </div>
             </div>
           </div>
 
-          {/* RIGHT PANEL — Object Configuration Engine */}
+          {/* RIGHT PANEL — Configure or Preview */}
           <div className="col-lg-8">
-            <ObjectConfigEngine
-              editing={builder.editing}
-              isNew={builder.isNewItem}
-              isDirty={builder.isDirty}
-              miniSections={builder.miniSections}
-              prompts={builder.prompts}
-              skillOptions={builder.skillOptions}
-              variableOptions={builder.variableOptions}
-              artifactOptions={builder.artifactOptions}
-              variables={builder.variables}
-              systemVariables={builder.systemVariables}
-              artifacts={builder.artifacts}
-              promptBodies={builder.promptBodies}
-              fetchPromptBody={builder.fetchPromptBody}
-              dryRun={builder.dryRun}
-              variableMap={builder.variableMap}
-              validating={builder.validating}
-              onRevalidate={builder.runValidation}
-              onUpdate={builder.updateEditing}
-              onSave={builder.handleSave}
-              onCancel={builder.cancelEdit}
-              onDelete={builder.handleDelete}
-              saving={builder.saving}
-              error={builder.error}
-              onCreateVariable={() => builder.setInlineCreator('variable')}
-              onCreateSkill={() => builder.setInlineCreator('skill')}
-              onCreateArtifact={() => builder.setInlineCreator('artifact')}
-              qualityBreakdown={builder.qualityBreakdown}
-              qualityLoading={builder.qualityLoading}
-              onRefreshQuality={() => builder.fetchQualityScore()}
-              suggestions={builder.suggestions}
-              suggestionsLoading={builder.suggestionsLoading}
-              applyingSuggestion={builder.applyingSuggestion}
-              onRefreshSuggestions={() => builder.fetchSuggestions()}
-              onApplySuggestionFix={builder.applySuggestionFix}
-              onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
-              onOpenRepair={() => builder.setShowRepairModal(true)}
-            />
+            {rightPanelMode === 'configure' ? (
+              <ObjectConfigEngine
+                editing={builder.editing}
+                isNew={builder.isNewItem}
+                isDirty={builder.isDirty}
+                miniSections={builder.miniSections}
+                prompts={builder.prompts}
+                skillOptions={builder.skillOptions}
+                variableOptions={builder.variableOptions}
+                artifactOptions={builder.artifactOptions}
+                variables={builder.variables}
+                systemVariables={builder.systemVariables}
+                artifacts={builder.artifacts}
+                promptBodies={builder.promptBodies}
+                fetchPromptBody={builder.fetchPromptBody}
+                dryRun={builder.dryRun}
+                variableMap={builder.variableMap}
+                validating={builder.validating}
+                onRevalidate={builder.runValidation}
+                onUpdate={builder.updateEditing}
+                onSave={builder.handleSave}
+                onCancel={builder.cancelEdit}
+                onDelete={builder.handleDelete}
+                saving={builder.saving}
+                error={builder.error}
+                onCreateVariable={() => builder.setInlineCreator('variable')}
+                onCreateSkill={() => builder.setInlineCreator('skill')}
+                onCreateArtifact={() => builder.setInlineCreator('artifact')}
+                qualityBreakdown={builder.qualityBreakdown}
+                qualityLoading={builder.qualityLoading}
+                onRefreshQuality={() => builder.fetchQualityScore()}
+                suggestions={builder.suggestions}
+                suggestionsLoading={builder.suggestionsLoading}
+                applyingSuggestion={builder.applyingSuggestion}
+                onRefreshSuggestions={() => builder.fetchSuggestions()}
+                onApplySuggestionFix={builder.applySuggestionFix}
+                onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
+                onOpenRepair={() => builder.setShowRepairModal(true)}
+              />
+            ) : (
+              <div className="card border-0 shadow-sm">
+                <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                  <span className="fw-semibold small">
+                    <i className="bi bi-eye me-1"></i>Student Preview
+                  </span>
+                  <div className="btn-group btn-group-sm">
+                    <button
+                      className={`btn ${previewMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
+                      onClick={() => setPreviewMode('preview')}
+                      style={{ fontSize: 11 }}
+                    >
+                      <i className="bi bi-eye me-1"></i>Preview
+                    </button>
+                    <button
+                      className={`btn ${previewMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`}
+                      onClick={() => setPreviewMode('json')}
+                      style={{ fontSize: 11 }}
+                    >
+                      <i className="bi bi-code me-1"></i>JSON
+                    </button>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <PreviewPanel
+                    miniSections={builder.miniSections}
+                    lessonTitle={builder.selectedLesson?.title || 'Untitled Section'}
+                    lessonId={builder.selectedLessonId}
+                    compact={false}
+                    defaultViewMode={previewMode}
+                    selectedMiniSectionId={builder.selectedMiniSectionId}
+                    token={token}
+                    apiUrl={apiUrl}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
