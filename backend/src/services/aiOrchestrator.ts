@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import AiAgent from '../models/AiAgent';
 import { scanAllCampaigns } from './campaignHealthScanner';
 import { runCampaignRepairAgent } from './agents/campaignRepairAgent';
@@ -16,7 +16,7 @@ export { seedAgentRegistry as seedAgents };
  */
 export async function runHealthScans(): Promise<void> {
   const agent = await AiAgent.findOne({ where: { agent_name: 'CampaignHealthScanner' } });
-  const traceId = uuidv4();
+  const traceId = crypto.randomUUID();
   const startTime = Date.now();
 
   try {
@@ -103,7 +103,7 @@ async function runAgent(
     return null;
   }
 
-  const traceId = uuidv4();
+  const traceId = crypto.randomUUID();
   const startTime = Date.now();
 
   try {
