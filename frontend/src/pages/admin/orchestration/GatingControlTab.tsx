@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 
 interface Props { token: string; apiUrl: string; }
 
@@ -40,13 +40,15 @@ const GatingControlTab: React.FC<Props> = ({ token, apiUrl }) => {
     })
       .then(r => r.json())
       .then(data => setGates(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch((err) => setDefError(err.message || 'Failed to load gates'))
       .finally(() => setGatesLoading(false));
   }, [token, apiUrl]);
 
   // Load cohorts for variables sub-tab
+  const cohortsLoadedRef = useRef(false);
   useEffect(() => {
-    if (subTab !== 'variables' || cohorts.length > 0) return;
+    if (subTab !== 'variables' || cohortsLoadedRef.current) return;
+    cohortsLoadedRef.current = true;
     fetch(`${apiUrl}/api/admin/cohorts`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
@@ -54,8 +56,8 @@ const GatingControlTab: React.FC<Props> = ({ token, apiUrl }) => {
         setCohorts(list);
         if (list.length > 0) setSelectedCohortId(list[0].id);
       })
-      .catch(() => {});
-  }, [subTab, token, apiUrl, cohorts.length]);
+      .catch((err) => { cohortsLoadedRef.current = false; setDefError(err.message || 'Failed to load cohorts'); });
+  }, [subTab, token, apiUrl]);
 
   // Load enrollments when cohort changes
   useEffect(() => {
@@ -69,7 +71,7 @@ const GatingControlTab: React.FC<Props> = ({ token, apiUrl }) => {
         setEnrollments(list);
         setSelectedEnrollmentId(list.length > 0 ? list[0].id : '');
       })
-      .catch(() => {});
+      .catch((err) => setDefError(err.message || 'Failed to load enrollments'));
   }, [selectedCohortId, token, apiUrl]);
 
   // Load variables when enrollment changes

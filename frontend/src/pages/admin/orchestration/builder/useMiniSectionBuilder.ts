@@ -79,7 +79,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         flatSkills.push({ id: s.id, skill_id: s.skill_id, name: s.name, layer_id: s.layer_id, domain_id: s.domain_id });
       }
       setSkills(flatSkills);
-    } catch { /* non-critical */ }
+    } catch (err: any) { setError(err.message || 'Failed to load reference data'); }
   }, [apiUrl, token]);
 
   useEffect(() => { refreshReferenceData(); }, []);
@@ -96,7 +96,10 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     setLoading(true);
     try {
       const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/mini-sections`, { headers });
-      if (res.ok) setMiniSections(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setMiniSections(Array.isArray(data) ? data : []);
+      }
     } catch { setError('Failed to load mini-sections'); }
     setLoading(false);
   }, [apiUrl, token]);
@@ -243,7 +246,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     try {
       const res = await fetch(`${apiUrl}/api/admin/orchestration/dry-run/section/${lessonId}`, { headers });
       if (res.ok) setDryRun(await res.json());
-    } catch {}
+    } catch (err: any) { console.warn('Validation failed:', err.message); }
     setValidating(false);
   };
 
@@ -251,7 +254,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     try {
       const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/variable-map`, { headers });
       if (res.ok) setVariableMap(await res.json());
-    } catch {}
+    } catch (err: any) { console.warn('Variable map fetch failed:', err.message); }
   };
 
   // --- Quality scoring ---
@@ -268,7 +271,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         setEditing(prev => prev ? { ...prev, quality_score: data.overall, quality_details: breakdown } : null);
         setMiniSections(prev => prev.map(ms => ms.id === id ? { ...ms, quality_score: data.overall, quality_details: breakdown } : ms));
       }
-    } catch {}
+    } catch (err: any) { console.warn('Quality score fetch failed:', err.message); }
     setQualityLoading(false);
   };
 
@@ -280,7 +283,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     try {
       const res = await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${id}/suggestions`, { headers });
       if (res.ok) setSuggestions(await res.json());
-    } catch {}
+    } catch (err: any) { console.warn('Suggestions fetch failed:', err.message); }
     setSuggestionsLoading(false);
   };
 
@@ -296,7 +299,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         await fetchQualityScore(editing.id);
         await fetchSuggestions(editing.id);
       }
-    } catch {}
+    } catch (err: any) { console.warn('Suggestion fix failed:', err.message); }
     setApplyingSuggestion(null);
   };
 
@@ -310,7 +313,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         method: 'POST', headers,
       });
       if (res.ok) setDiagnosticReport(await res.json());
-    } catch {}
+    } catch (err: any) { console.warn('Diagnostic check failed:', err.message); }
     setDiagnosticLoading(false);
   };
 
@@ -332,7 +335,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
           await fetchSuggestions(id);
         }
       }
-    } catch {}
+    } catch (err: any) { console.warn('Auto-repair failed:', err.message); }
     setRepairLoading(false);
   };
 
@@ -347,7 +350,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         setPromptBodies(prev => ({ ...prev, [promptId]: body }));
         return body;
       }
-    } catch {}
+    } catch (err: any) { console.warn('Prompt body fetch failed:', err.message); }
     return null;
   };
 

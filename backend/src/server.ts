@@ -52,7 +52,11 @@ async function start(): Promise<void> {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
   await connectDatabase();
-  await sequelize.sync({ alter: true });
+  if (env.nodeEnv === 'production') {
+    await sequelize.sync(); // validate only — no schema alterations in production
+  } else {
+    await sequelize.sync({ alter: true });
+  }
   await seedProgramCurriculum();
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {

@@ -30,6 +30,11 @@ export async function initializeParticipantCurriculum(enrollmentId: string) {
     include: [{ model: CurriculumLesson, as: 'lessons', order: [['lesson_number', 'ASC']] } as any],
   });
 
+  if (modules.length === 0) {
+    console.warn(`[curriculumService] No curriculum modules found for cohort ${cohortId}. Ensure modules are linked to this cohort.`);
+    throw new Error(`No curriculum modules found for cohort ${cohortId}. Ensure modules are linked.`);
+  }
+
   for (const mod of modules) {
     const lessons = (mod as any).lessons || [];
     for (const lesson of lessons) {
@@ -227,7 +232,23 @@ export async function startLesson(enrollmentId: string, lessonId: string) {
     // Gather prior lab responses for context
     const priorLabResponses = await getPriorLabResponses(enrollmentId, lessonId);
 
-    const content = await generateLessonContent(lesson, profile, priorLabResponses, enrollmentId);
+    let content: any;
+    try {
+      content = await generateLessonContent(lesson, profile, priorLabResponses, enrollmentId);
+    } catch (genErr: any) {
+      console.error(`[curriculumService] Content generation failed for lesson ${lessonId}:`, genErr.message);
+      content = {
+        concept_snapshot: {
+          title: lesson.title,
+          sections: [{
+            heading: 'Content Temporarily Unavailable',
+            content: 'AI content generation is temporarily unavailable. Please try again in a few minutes. If the problem persists, contact your program administrator.',
+          }],
+        },
+        generation_error: true,
+        error_message: genErr.message,
+      };
+    }
 
     // Merge admin-defined artifacts if SectionConfig exists for this lesson
     if (content.implementation_task) {
@@ -437,6 +458,12 @@ export async function checkSessionReadiness(enrollmentId: string, sessionId: str
     } else if (gate.gate_type === 'readiness_score' && gate.minimum_readiness_score != null) {
       met = (enrollment.readiness_score || 0) >= gate.minimum_readiness_score;
       label = `Readiness Score ≥ ${gate.minimum_readiness_score}%`;
+    } else if (gate.gate_type === 'artifact_completion' && gate.artifact_definition_id) {
+      const submission = await AssignmentSubmission.findOne({
+        where: { enrollment_id: enrollmentId, artifact_definition_id: gate.artifact_definition_id, status: 'submitted' },
+      });
+      met = !!submission;
+      label = `Submit required artifact: ${gate.artifact_definition_id}`;
     }
 
     if (!met) allMet = false;
@@ -707,6 +734,11 @@ async function unlockNextLesson(enrollmentId: string, currentLesson: CurriculumL
   );
 
   const currentIndex = lessons.findIndex((l: any) => l.id === currentLesson.id);
+
+  if (currentIndex === -1) {
+    console.warn(`[curriculumService] Lesson ${currentLesson.id} not found in module ${mod.id}. Cannot unlock next lesson.`);
+    return;
+  }
 
   // If there's a next lesson in this module, unlock it
   if (currentIndex < lessons.length - 1) {

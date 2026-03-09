@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import crypto from 'crypto';
+import path from 'path';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListPrograms, handleGetProgram, handleCreateProgram,
@@ -35,6 +37,22 @@ import {
   handleIntegrityCheck, handleDryRunSection,
   handleRouteAudit,
 } from '../../controllers/orchestrationController';
+import { SkillDefinition, CurriculumModule, CurriculumLesson, MiniSection } from '../../models';
+import { runIntegrityCheck, runFinalValidation } from '../../services/curriculumManagerService';
+import { scoreMiniSection, scoreLessonMiniSections, scoreAllMiniSections } from '../../services/qualityScoringService';
+import { getSuggestions } from '../../services/suggestionService';
+import { autoRepairMiniSection, autoRepairLesson, autoRepairAll } from '../../services/autoRepairService';
+import { extensiveCheckMiniSection, extensiveCheckLesson, extensiveCheckAll, checkPreviewConfidence } from '../../services/extensiveCheckService';
+import { checkAIReadiness } from '../../services/aiReadinessService';
+import { backfillInlinePrompts, getBackfillStatus } from '../../services/backfillService';
+import { deepReconcile } from '../../services/deepReconciliationService';
+import { simulateContentGeneration, listSimulations, deleteSimulation } from '../../services/testSimulationService';
+import { runPreflight } from '../../utils/preflightCheck';
+import { generateArchitectureDoc, generateApiDoc } from '../../utils/docGenerator';
+import { scanFrontendApiCalls } from '../../utils/linkScanner';
+import { getSystemStatus, createSnapshot, listSnapshots, rollbackToSnapshot } from '../../services/managementService';
+import * as analytics from '../../services/analyticsService';
+import { generateHealthReport } from '../../services/healthReportService';
 
 const router = Router();
 
@@ -55,27 +73,25 @@ router.put('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleUpd
 router.delete('/api/admin/orchestration/mini-sections/:id', requireAdmin, handleDeleteMiniSection);
 router.get('/api/admin/orchestration/lessons/:lessonId/variable-map', requireAdmin, handleGetVariableMap);
 
-// Skill Definitions CRUD
+// Skill Definitions CRUD (with field whitelisting)
 router.post('/api/admin/orchestration/skills', requireAdmin, async (req, res) => {
   try {
-    const { SkillDefinition } = await import('../../models');
-    const crypto = await import('crypto');
-    const skill = await SkillDefinition.create({ id: crypto.randomUUID(), ...req.body });
+    const { skill_id, name, description, layer_id, domain_id, weights, mastery_threshold, is_active } = req.body;
+    const skill = await SkillDefinition.create({ id: crypto.randomUUID(), skill_id, name, description, layer_id, domain_id, weights, mastery_threshold, is_active });
     res.status(201).json(skill);
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 router.put('/api/admin/orchestration/skills/:id', requireAdmin, async (req, res) => {
   try {
-    const { SkillDefinition } = await import('../../models');
     const skill = await SkillDefinition.findByPk(req.params.id as string);
     if (!skill) { res.status(404).json({ error: 'Not found' }); return; }
-    await skill.update(req.body);
+    const { skill_id, name, description, layer_id, domain_id, weights, mastery_threshold, is_active } = req.body;
+    await skill.update({ skill_id, name, description, layer_id, domain_id, weights, mastery_threshold, is_active });
     res.json(skill);
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 router.delete('/api/admin/orchestration/skills/:id', requireAdmin, async (req, res) => {
   try {
-    const { SkillDefinition } = await import('../../models');
     const skill = await SkillDefinition.findByPk(req.params.id as string);
     if (!skill) { res.status(404).json({ error: 'Not found' }); return; }
     await skill.destroy();
@@ -86,7 +102,6 @@ router.delete('/api/admin/orchestration/skills/:id', requireAdmin, async (req, r
 // Bulk Curriculum Operations
 router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, async (_req, res) => {
   try {
-    const { CurriculumModule, CurriculumLesson, MiniSection } = await import('../../models');
     const modules = await CurriculumModule.findAll({
       include: [{
         model: CurriculumLesson,
@@ -153,7 +168,6 @@ router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, asyn
 
 router.post('/api/admin/orchestration/bulk/validate-all', requireAdmin, async (_req, res) => {
   try {
-    const { runIntegrityCheck } = await import('../../services/curriculumManagerService');
     const result = await runIntegrityCheck();
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -162,91 +176,78 @@ router.post('/api/admin/orchestration/bulk/validate-all', requireAdmin, async (_
 // --- Quality Scoring, Suggestions, Auto-Repair, Diagnostics Routes ---
 router.get('/api/admin/orchestration/mini-sections/:id/quality', requireAdmin, async (req, res) => {
   try {
-    const { scoreMiniSection } = await import('../../services/qualityScoringService');
     const result = await scoreMiniSection(req.params.id as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/lessons/:lessonId/quality', requireAdmin, async (req, res) => {
   try {
-    const { scoreLessonMiniSections } = await import('../../services/qualityScoringService');
     const result = await scoreLessonMiniSections(req.params.lessonId as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/bulk/quality-scan', requireAdmin, async (_req, res) => {
   try {
-    const { scoreAllMiniSections } = await import('../../services/qualityScoringService');
     const result = await scoreAllMiniSections();
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.get('/api/admin/orchestration/mini-sections/:id/suggestions', requireAdmin, async (req, res) => {
   try {
-    const { getSuggestions } = await import('../../services/suggestionService');
     const result = await getSuggestions(req.params.id as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/mini-sections/:id/auto-repair', requireAdmin, async (req, res) => {
   try {
-    const { autoRepairMiniSection } = await import('../../services/autoRepairService');
     const result = await autoRepairMiniSection(req.params.id as string, req.body?.dryRun === true);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/lessons/:lessonId/auto-repair', requireAdmin, async (req, res) => {
   try {
-    const { autoRepairLesson } = await import('../../services/autoRepairService');
     const result = await autoRepairLesson(req.params.lessonId as string, req.body?.dryRun === true);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/bulk/auto-repair-all', requireAdmin, async (req, res) => {
   try {
-    const { autoRepairAll } = await import('../../services/autoRepairService');
     const result = await autoRepairAll(req.body?.dryRun === true);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/mini-sections/:id/extensive-check', requireAdmin, async (req, res) => {
   try {
-    const { extensiveCheckMiniSection } = await import('../../services/extensiveCheckService');
     const result = await extensiveCheckMiniSection(req.params.id as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/lessons/:lessonId/extensive-check', requireAdmin, async (req, res) => {
   try {
-    const { extensiveCheckLesson } = await import('../../services/extensiveCheckService');
     const result = await extensiveCheckLesson(req.params.lessonId as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/bulk/run-all-diagnostics', requireAdmin, async (_req, res) => {
   try {
-    const { extensiveCheckAll } = await import('../../services/extensiveCheckService');
     const result = await extensiveCheckAll();
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/mini-sections/:id/preview-confidence', requireAdmin, async (req, res) => {
   try {
-    const { checkPreviewConfidence } = await import('../../services/extensiveCheckService');
     const result = await checkPreviewConfidence(req.params.id as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/lessons/:lessonId/ai-readiness', requireAdmin, async (req, res) => {
   try {
-    const { checkAIReadiness } = await import('../../services/aiReadinessService');
     const result = await checkAIReadiness(req.params.lessonId as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.post('/api/admin/orchestration/lessons/:lessonId/final-validation', requireAdmin, async (req, res) => {
   try {
-    const { runFinalValidation } = await import('../../services/curriculumManagerService');
     const result = await runFinalValidation(req.params.lessonId as string);
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -255,14 +256,12 @@ router.post('/api/admin/orchestration/lessons/:lessonId/final-validation', requi
 // --- Backfill Routes ---
 router.post('/api/admin/orchestration/backfill/inline-prompts', requireAdmin, async (_req, res) => {
   try {
-    const { backfillInlinePrompts } = await import('../../services/backfillService');
     const result = await backfillInlinePrompts();
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.get('/api/admin/orchestration/backfill/status', requireAdmin, async (_req, res) => {
   try {
-    const { getBackfillStatus } = await import('../../services/backfillService');
     const result = await getBackfillStatus();
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -271,7 +270,6 @@ router.get('/api/admin/orchestration/backfill/status', requireAdmin, async (_req
 // --- Deep Reconciliation Routes ---
 router.post('/api/admin/orchestration/deep-reconcile', requireAdmin, async (req, res) => {
   try {
-    const { deepReconcile } = await import('../../services/deepReconciliationService');
     const dryRun = req.query.dryRun === 'true';
     const result = await deepReconcile({ dryRun });
     res.json(result);
@@ -279,7 +277,6 @@ router.post('/api/admin/orchestration/deep-reconcile', requireAdmin, async (req,
 });
 router.get('/api/admin/orchestration/deep-reconcile/preview', requireAdmin, async (_req, res) => {
   try {
-    const { deepReconcile } = await import('../../services/deepReconciliationService');
     const result = await deepReconcile({ dryRun: true });
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -357,7 +354,6 @@ router.get('/api/admin/orchestration/dry-run/section/:lessonId', requireAdmin, h
 // Test AI Simulation
 router.post('/api/admin/orchestration/simulate/section/:lessonId', requireAdmin, async (req, res) => {
   try {
-    const { simulateContentGeneration } = await import('../../services/testSimulationService');
     const { testProfile, testVariables } = req.body;
     const adminUserId = (req as any).admin?.sub;
     const result = await simulateContentGeneration(req.params.lessonId as string, testProfile, testVariables || {}, adminUserId);
@@ -366,15 +362,21 @@ router.post('/api/admin/orchestration/simulate/section/:lessonId', requireAdmin,
 });
 router.get('/api/admin/orchestration/simulate/section/:lessonId/history', requireAdmin, async (req, res) => {
   try {
-    const { listSimulations } = await import('../../services/testSimulationService');
     res.json(await listSimulations(req.params.lessonId as string));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.delete('/api/admin/orchestration/simulate/:id', requireAdmin, async (req, res) => {
   try {
-    const { deleteSimulation } = await import('../../services/testSimulationService');
     await deleteSimulation(req.params.id as string);
     res.json({ success: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Health Report
+router.get('/api/admin/orchestration/health-report', requireAdmin, async (_req, res) => {
+  try {
+    const report = await generateHealthReport();
+    res.json(report);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -384,7 +386,6 @@ router.get('/api/admin/orchestration/route-audit', requireAdmin, handleRouteAudi
 // Preflight Check
 router.get('/api/admin/orchestration/preflight', requireAdmin, async (_req, res) => {
   try {
-    const { runPreflight } = await import('../../utils/preflightCheck');
     const result = await runPreflight();
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -393,14 +394,12 @@ router.get('/api/admin/orchestration/preflight', requireAdmin, async (_req, res)
 // Documentation Generation
 router.get('/api/admin/orchestration/docs/architecture', requireAdmin, async (_req, res) => {
   try {
-    const { generateArchitectureDoc } = await import('../../utils/docGenerator');
     res.type('text/markdown').send(generateArchitectureDoc());
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/api/admin/orchestration/docs/api', requireAdmin, async (req, res) => {
   try {
-    const { generateApiDoc } = await import('../../utils/docGenerator');
     res.type('text/markdown').send(generateApiDoc(req.app));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -408,8 +407,6 @@ router.get('/api/admin/orchestration/docs/api', requireAdmin, async (req, res) =
 // Link Scanner
 router.get('/api/admin/orchestration/link-scan', requireAdmin, async (_req, res) => {
   try {
-    const path = await import('path');
-    const { scanFrontendApiCalls } = await import('../../utils/linkScanner');
     const frontendSrc = path.resolve(__dirname, '../../../../frontend/src');
     const calls = scanFrontendApiCalls(frontendSrc);
     res.json({ total: calls.length, calls });
@@ -419,14 +416,12 @@ router.get('/api/admin/orchestration/link-scan', requireAdmin, async (_req, res)
 // Management API — Blueprint Snapshots & System Status
 router.get('/api/admin/orchestration/management/status', requireAdmin, async (_req, res) => {
   try {
-    const { getSystemStatus } = await import('../../services/managementService');
     res.json(await getSystemStatus());
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 router.post('/api/admin/orchestration/management/blueprint/:id/snapshot', requireAdmin, async (req, res) => {
   try {
-    const { createSnapshot } = await import('../../services/managementService');
     const adminUser = (req as any).adminUser;
     const snapshot = await createSnapshot(req.params.id as string, req.body.description, adminUser?.id);
     res.status(201).json(snapshot);
@@ -435,14 +430,12 @@ router.post('/api/admin/orchestration/management/blueprint/:id/snapshot', requir
 
 router.get('/api/admin/orchestration/management/blueprint/:id/snapshots', requireAdmin, async (req, res) => {
   try {
-    const { listSnapshots } = await import('../../services/managementService');
     res.json(await listSnapshots(req.params.id as string));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 router.post('/api/admin/orchestration/management/blueprint/:id/rollback/:snapshotId', requireAdmin, async (req, res) => {
   try {
-    const { rollbackToSnapshot } = await import('../../services/managementService');
     const blueprint = await rollbackToSnapshot(req.params.id as string, req.params.snapshotId as string);
     res.json(blueprint);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -451,35 +444,30 @@ router.post('/api/admin/orchestration/management/blueprint/:id/rollback/:snapsho
 // Analytics
 router.get('/api/admin/orchestration/analytics/completion/:cohortId', requireAdmin, async (req, res) => {
   try {
-    const analytics = await import('../../services/analyticsService');
     const data = await analytics.getSessionCompletionRates(req.params.cohortId as string);
     res.json(data);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.get('/api/admin/orchestration/analytics/artifacts/:cohortId', requireAdmin, async (req, res) => {
   try {
-    const analytics = await import('../../services/analyticsService');
     const data = await analytics.getArtifactCompletionMatrix(req.params.cohortId as string);
     res.json(data);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.get('/api/admin/orchestration/analytics/build-phase/:cohortId', requireAdmin, async (req, res) => {
   try {
-    const analytics = await import('../../services/analyticsService');
     const data = await analytics.getBuildPhaseTracker(req.params.cohortId as string);
     res.json(data);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.get('/api/admin/orchestration/analytics/github/:cohortId', requireAdmin, async (req, res) => {
   try {
-    const analytics = await import('../../services/analyticsService');
     const data = await analytics.getGitHubCommitSummary(req.params.cohortId as string);
     res.json(data);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 router.get('/api/admin/orchestration/analytics/presentation/:cohortId', requireAdmin, async (req, res) => {
   try {
-    const analytics = await import('../../services/analyticsService');
     const data = await analytics.getPresentationReadiness(req.params.cohortId as string);
     res.json(data);
   } catch (err: any) { res.status(500).json({ error: err.message }); }

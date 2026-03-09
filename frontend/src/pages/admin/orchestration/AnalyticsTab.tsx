@@ -9,6 +9,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [buildPhase, setBuildPhase] = useState<any[]>([]);
   const [presentation, setPresentation] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetch(`${apiUrl}/api/admin/cohorts`, { headers: { Authorization: `Bearer ${token}` } })
@@ -18,7 +19,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
         setCohorts(list);
         if (list.length > 0) setSelectedCohortId(list[0].id);
       })
-      .catch(() => {});
+      .catch((err) => setError(err.message || 'Failed to load cohorts'));
   }, [token, apiUrl]);
 
   useEffect(() => {
@@ -50,6 +51,8 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
           {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
+
+      {error && <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>}
 
       {!selectedCohortId ? (
         <div className="text-muted text-center py-5" style={{ fontSize: 13 }}>Select a cohort to view analytics.</div>

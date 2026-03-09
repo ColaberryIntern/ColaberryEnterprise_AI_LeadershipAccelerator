@@ -19,6 +19,7 @@ const ProgramOverviewTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [modules, setModules] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` };
@@ -30,7 +31,7 @@ const ProgramOverviewTab: React.FC<Props> = ({ token, apiUrl }) => {
         setModules(Array.isArray(mods) ? mods : []);
         setSessions(Array.isArray(sess) ? sess : []);
       })
-      .catch(() => {})
+      .catch((err) => setError(err.message || 'Failed to load program overview'))
       .finally(() => setLoading(false));
   }, [token, apiUrl]);
 
@@ -40,6 +41,10 @@ const ProgramOverviewTab: React.FC<Props> = ({ token, apiUrl }) => {
         <span className="visually-hidden">Loading...</span>
       </div>
     </div>
+  );
+
+  if (error) return (
+    <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>
   );
 
   return (

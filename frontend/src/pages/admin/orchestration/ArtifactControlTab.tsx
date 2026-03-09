@@ -46,7 +46,7 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
         (m.lessons || []).forEach((l: any) => allLessons.push({ ...l, moduleTitle: m.title, moduleNumber: m.module_number }));
       });
       setLessons(allLessons);
-    }).catch(() => {});
+    }).catch((err) => setError(err.message || 'Failed to load initial data'));
   }, [token, apiUrl]);
 
   const fetchArtifacts = useCallback(async () => {
@@ -108,10 +108,10 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
         lesson_id: form.lesson_id || null,
       };
       if (form.validation_rule) {
-        try { body.validation_rule = JSON.parse(form.validation_rule); } catch { /* skip */ }
+        try { body.validation_rule = JSON.parse(form.validation_rule); } catch { setError('Invalid JSON in validation rule — field ignored.'); }
       }
       if (form.skill_mapping) {
-        try { body.skill_mapping = JSON.parse(form.skill_mapping); } catch { /* skip */ }
+        try { body.skill_mapping = JSON.parse(form.skill_mapping); } catch { setError('Invalid JSON in skill mapping — field ignored.'); }
       }
 
       const url = editingId

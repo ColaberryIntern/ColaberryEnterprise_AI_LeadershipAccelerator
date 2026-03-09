@@ -22,6 +22,7 @@ const SkillControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [skills, setSkills] = useState<any[]>([]);
   const [grouped, setGrouped] = useState<any>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetch(`${apiUrl}/api/admin/orchestration/program/skills`, {
@@ -32,12 +33,16 @@ const SkillControlTab: React.FC<Props> = ({ token, apiUrl }) => {
         setSkills(data.skills || []);
         setGrouped(data.grouped || {});
       })
-      .catch(() => {})
+      .catch((err) => setError(err.message || 'Failed to load skill ontology'))
       .finally(() => setLoading(false));
   }, [token, apiUrl]);
 
   if (loading) return (
     <div className="text-center py-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>
+  );
+
+  if (error) return (
+    <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>
   );
 
   const layers = Object.keys(grouped);
