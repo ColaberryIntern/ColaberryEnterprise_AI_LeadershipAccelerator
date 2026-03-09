@@ -252,6 +252,133 @@ export async function getProgramSkillMastery() {
   });
 }
 
+export async function getStudentDetail(enrollmentId: string) {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) return null;
+
+  // Basic info
+  const info = {
+    enrollment_id: enrollment.id,
+    name: enrollment.full_name || enrollment.email,
+    email: enrollment.email,
+    company: enrollment.company || '',
+    status: enrollment.status || 'unknown',
+  };
+
+  // Lesson progress — show ALL curriculum lessons, not just started ones
+  const allLessons = await CurriculumLesson.findAll({ order: [['sort_order', 'ASC']] });
+  const lessonInstances = await LessonInstance.findAll({
+    where: { enrollment_id: enrollmentId },
+  });
+  const instanceMap: Record<string, any> = {};
+  for (const li of lessonInstances) instanceMap[li.lesson_id] = li;
+
+  const moduleIds = [...new Set(allLessons.map(l => l.module_id))];
+  const modules = moduleIds.length > 0
+    ? await CurriculumModule.findAll({ where: { id: moduleIds } })
+    : [];
+  const moduleMap: Record<string, any> = {};
+  for (const m of modules) moduleMap[m.id] = m;
+
+  const lessonProgress = allLessons.map(lesson => {
+    const instance = instanceMap[lesson.id];
+    const mod = moduleMap[lesson.module_id];
+    return {
+      lesson_id: lesson.id,
+      lesson_title: lesson.title || '',
+      module_name: mod?.title || '',
+      status: instance?.status || 'not_started',
+      started_at: instance?.started_at || null,
+      completed_at: instance?.completed_at || null,
+    };
+  });
+
+  // Skill mastery
+  const masteries = await SkillMastery.findAll({
+    where: { enrollment_id: enrollmentId },
+  });
+  const skillIds = masteries.map(m => (m as any).skill_id);
+  const skills = skillIds.length > 0
+    ? await SkillDefinition.findAll({ where: { skill_id: skillIds } })
+    : [];
+  const skillMap: Record<string, any> = {};
+  for (const s of skills) skillMap[s.skill_id] = s;
+
+  const skillMastery = masteries.map(m => {
+    const sid = (m as any).skill_id;
+    const skill = skillMap[sid];
+    return {
+      skill_id: sid,
+      skill_name: skill?.name || '',
+      layer_id: skill?.layer_id || '',
+      proficiency_level: (m as any).proficiency_level,
+      assessed_at: (m as any).last_demonstrated || (m as any).updated_at || null,
+    };
+  });
+
+  // Artifact submissions
+  const allArtifacts = await ArtifactDefinition.findAll({ order: [['sort_order', 'ASC']] });
+  const artifactSubmissions = [];
+  for (const artifact of allArtifacts) {
+    const submission = await AssignmentSubmission.findOne({
+      where: {
+        enrollment_id: enrollmentId,
+        artifact_definition_id: artifact.id,
+      },
+      order: [['submitted_at', 'DESC']],
+    });
+
+    artifactSubmissions.push({
+      artifact_id: artifact.id,
+      artifact_name: artifact.name,
+      artifact_type: artifact.artifact_type || 'document',
+      submitted: !!submission && ['submitted', 'reviewed'].includes(submission.status),
+      status: submission?.status || 'pending',
+      submitted_at: submission?.submitted_at || null,
+    });
+  }
+
+  return {
+    info,
+    lessonProgress,
+    skillMastery,
+    artifactSubmissions,
+  };
+}
+
+export async function getSkillDetail(skillId: string) {
+  const skill = await SkillDefinition.findOne({ where: { skill_id: skillId } });
+  if (!skill) return null;
+
+  const info = {
+    skill_id: skill.skill_id,
+    name: skill.name,
+    layer_id: skill.layer_id,
+    domain_id: skill.domain_id,
+    description: skill.description || '',
+  };
+
+  const masteries = await SkillMastery.findAll({ where: { skill_id: skillId } });
+  const enrollmentIds = masteries.map(m => m.enrollment_id);
+  const enrollments = enrollmentIds.length > 0
+    ? await Enrollment.findAll({ where: { id: enrollmentIds } })
+    : [];
+  const enrollmentMap: Record<string, any> = {};
+  for (const e of enrollments) enrollmentMap[e.id] = e;
+
+  const students = masteries.map(m => {
+    const enrollment = enrollmentMap[m.enrollment_id];
+    return {
+      enrollment_id: m.enrollment_id,
+      name: enrollment?.full_name || enrollment?.email || '',
+      proficiency_level: (m as any).proficiency_level,
+      assessed_at: (m as any).last_demonstrated || (m as any).updated_at || null,
+    };
+  });
+
+  return { info, students };
+}
+
 export async function getProgramArtifactTracker() {
   const artifacts = await ArtifactDefinition.findAll({ order: [['sort_order', 'ASC']] });
   const enrollments = await Enrollment.findAll({ where: { status: 'active' } });

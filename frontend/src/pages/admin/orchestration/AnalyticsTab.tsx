@@ -16,8 +16,35 @@ interface ArtifactTrackerData {
   students: { enrollment_id: string; name: string; email: string; submissions: Record<string, boolean> }[];
 }
 
+// Drill-down detail interfaces
+interface LessonDetail {
+  lesson_id: string; lesson_title: string; module_name: string;
+  status: string; started_at: string | null; completed_at: string | null;
+}
+interface SkillDetail {
+  skill_id: string; skill_name: string; layer_id: string;
+  proficiency_level: number; assessed_at: string | null;
+}
+interface ArtifactDetail {
+  artifact_id: string; artifact_name: string; artifact_type: string;
+  submitted: boolean; status: string | null; submitted_at: string | null;
+}
+interface StudentDetailData {
+  info: { enrollment_id: string; name: string; email: string; company: string; status: string };
+  lessonProgress: LessonDetail[];
+  skillMastery: SkillDetail[];
+  artifactSubmissions: ArtifactDetail[];
+}
+interface SkillDetailData {
+  info: { skill_id: string; name: string; layer_id: string; domain_id: string; description: string };
+  students: { enrollment_id: string; name: string; proficiency_level: number; assessed_at: string | null }[];
+}
+
 const statusBadge: Record<string, string> = {
   active: 'bg-success', completed: 'bg-primary', withdrawn: 'bg-danger', suspended: 'bg-warning text-dark',
+};
+const lessonStatusBadge: Record<string, string> = {
+  completed: 'bg-success', in_progress: 'bg-info', not_started: 'bg-secondary', locked: 'bg-dark',
 };
 
 const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
@@ -28,6 +55,14 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [artifactData, setArtifactData] = useState<ArtifactTrackerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Drill-down state
+  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
+  const [studentDetail, setStudentDetail] = useState<StudentDetailData | null>(null);
+  const [studentDetailLoading, setStudentDetailLoading] = useState(false);
+  const [expandedSkillId, setExpandedSkillId] = useState<string | null>(null);
+  const [skillDetail, setSkillDetail] = useState<SkillDetailData | null>(null);
+  const [skillDetailLoading, setSkillDetailLoading] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -59,6 +94,47 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
     } catch (err: any) { setError(err.message); }
   }, [token, apiUrl]);
 
+  // Drill-down fetchers
+  const fetchStudentDetail = useCallback(async (enrollmentId: string) => {
+    setStudentDetailLoading(true);
+    setStudentDetail(null);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/analytics/program/student-detail/${enrollmentId}`, { headers });
+      if (res.ok) setStudentDetail(await res.json());
+    } catch (err: any) { setError(err.message); }
+    setStudentDetailLoading(false);
+  }, [token, apiUrl]);
+
+  const fetchSkillDetail = useCallback(async (skillId: string) => {
+    setSkillDetailLoading(true);
+    setSkillDetail(null);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/analytics/program/skill-detail/${skillId}`, { headers });
+      if (res.ok) setSkillDetail(await res.json());
+    } catch (err: any) { setError(err.message); }
+    setSkillDetailLoading(false);
+  }, [token, apiUrl]);
+
+  const toggleStudentExpand = (enrollmentId: string) => {
+    if (expandedStudentId === enrollmentId) {
+      setExpandedStudentId(null);
+      setStudentDetail(null);
+    } else {
+      setExpandedStudentId(enrollmentId);
+      fetchStudentDetail(enrollmentId);
+    }
+  };
+
+  const toggleSkillExpand = (skillId: string) => {
+    if (expandedSkillId === skillId) {
+      setExpandedSkillId(null);
+      setSkillDetail(null);
+    } else {
+      setExpandedSkillId(skillId);
+      fetchSkillDetail(skillId);
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
     Promise.all([fetchSummary(), fetchStudents()])
@@ -78,6 +154,24 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
       <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
     </div>
   );
+
+  const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString() : '-';
+
+  // Proficiency level badge
+  const profBadge = (level: number) => {
+    if (level >= 4) return 'bg-success';
+    if (level >= 3) return 'bg-info';
+    if (level >= 2) return 'bg-warning text-dark';
+    if (level >= 1) return 'bg-secondary';
+    return 'bg-light text-muted border';
+  };
+  const profLabel = (level: number) => {
+    if (level >= 4) return 'Expert';
+    if (level >= 3) return 'Proficient';
+    if (level >= 2) return 'Developing';
+    if (level >= 1) return 'Beginner';
+    return 'Not assessed';
+  };
 
   return (
     <div>
@@ -138,7 +232,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
         ))}
       </ul>
 
-      {/* Students sub-tab */}
+      {/* ==================== STUDENTS SUB-TAB ==================== */}
       {subTab === 'students' && (
         <div className="card border-0 shadow-sm">
           <div className="card-header bg-white fw-semibold d-flex justify-content-between" style={{ fontSize: 14 }}>
@@ -149,6 +243,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
             <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
               <thead className="table-light">
                 <tr>
+                  <th style={{ fontSize: 12, width: 30 }}></th>
                   <th style={{ fontSize: 12 }}>Name</th>
                   <th style={{ fontSize: 12 }}>Email</th>
                   <th style={{ fontSize: 12 }}>Company</th>
@@ -159,28 +254,196 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
               </thead>
               <tbody>
                 {students.map(s => (
-                  <tr key={s.enrollment_id}>
-                    <td className="fw-medium">{s.name}</td>
-                    <td style={{ fontSize: 12 }}>{s.email}</td>
-                    <td style={{ fontSize: 12 }}>{s.company || '-'}</td>
-                    <td>
-                      <span className={`badge ${statusBadge[s.status] || 'bg-secondary'}`} style={{ fontSize: 10 }}>
-                        {s.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="progress flex-grow-1" style={{ height: 6 }}>
-                          <div className="progress-bar bg-success" style={{ width: `${s.pct}%` }} />
+                  <React.Fragment key={s.enrollment_id}>
+                    <tr
+                      onClick={() => toggleStudentExpand(s.enrollment_id)}
+                      style={{ cursor: 'pointer' }}
+                      className={expandedStudentId === s.enrollment_id ? 'table-active' : ''}
+                    >
+                      <td className="text-center" style={{ fontSize: 11 }}>
+                        {expandedStudentId === s.enrollment_id ? '\u25BC' : '\u25B6'}
+                      </td>
+                      <td className="fw-medium">{s.name}</td>
+                      <td style={{ fontSize: 12 }}>{s.email}</td>
+                      <td style={{ fontSize: 12 }}>{s.company || '-'}</td>
+                      <td>
+                        <span className={`badge ${statusBadge[s.status] || 'bg-secondary'}`} style={{ fontSize: 10 }}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="progress flex-grow-1" style={{ height: 6 }}>
+                            <div className="progress-bar bg-success" style={{ width: `${s.pct}%` }} />
+                          </div>
+                          <span style={{ fontSize: 11, minWidth: 50 }}>{s.lessonsCompleted}/{s.lessonsTotal}</span>
                         </div>
-                        <span style={{ fontSize: 11, minWidth: 50 }}>{s.lessonsCompleted}/{s.lessonsTotal}</span>
-                      </div>
-                    </td>
-                    <td className="fw-medium">{s.pct}%</td>
-                  </tr>
+                      </td>
+                      <td className="fw-medium">{s.pct}%</td>
+                    </tr>
+
+                    {/* Student Detail Expansion */}
+                    {expandedStudentId === s.enrollment_id && (
+                      <tr>
+                        <td colSpan={7} className="p-0">
+                          <div style={{ backgroundColor: 'var(--color-bg-alt, #f7fafc)', borderTop: '2px solid var(--color-primary-light, #2b6cb0)' }}>
+                            {studentDetailLoading ? (
+                              <div className="text-center py-4">
+                                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                  <span className="visually-hidden">Loading...</span>
+                                </div>
+                                <span className="ms-2 text-muted small">Loading student details...</span>
+                              </div>
+                            ) : studentDetail ? (
+                              <div className="p-3">
+                                {/* Three-column detail layout */}
+                                <div className="row g-3">
+
+                                  {/* Lesson Progress Column */}
+                                  <div className="col-md-5">
+                                    <div className="card border-0 shadow-sm h-100">
+                                      <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                                        <span className="fw-semibold" style={{ fontSize: 12 }}>Lesson Progress</span>
+                                        <span className="badge bg-info" style={{ fontSize: 9 }}>
+                                          {studentDetail.lessonProgress.filter(l => l.status === 'completed').length}/{studentDetail.lessonProgress.length}
+                                        </span>
+                                      </div>
+                                      <div className="card-body p-0" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                        <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
+                                          <thead className="table-light">
+                                            <tr>
+                                              <th style={{ fontSize: 10 }}>Lesson</th>
+                                              <th style={{ fontSize: 10 }}>Module</th>
+                                              <th style={{ fontSize: 10 }}>Status</th>
+                                              <th style={{ fontSize: 10 }}>Completed</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {studentDetail.lessonProgress.map(l => (
+                                              <tr key={l.lesson_id}>
+                                                <td className="fw-medium">{l.lesson_title}</td>
+                                                <td className="text-muted">{l.module_name}</td>
+                                                <td>
+                                                  <span className={`badge ${lessonStatusBadge[l.status] || 'bg-secondary'}`} style={{ fontSize: 9 }}>
+                                                    {l.status}
+                                                  </span>
+                                                </td>
+                                                <td className="text-muted">{formatDate(l.completed_at)}</td>
+                                              </tr>
+                                            ))}
+                                            {studentDetail.lessonProgress.length === 0 && (
+                                              <tr><td colSpan={4} className="text-center text-muted py-3">No lesson data</td></tr>
+                                            )}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Skill Mastery Column */}
+                                  <div className="col-md-3">
+                                    <div className="card border-0 shadow-sm h-100">
+                                      <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                                        <span className="fw-semibold" style={{ fontSize: 12 }}>Skills</span>
+                                        <span className="badge bg-info" style={{ fontSize: 9 }}>
+                                          {studentDetail.skillMastery.length}
+                                        </span>
+                                      </div>
+                                      <div className="card-body p-0" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                        <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
+                                          <thead className="table-light">
+                                            <tr>
+                                              <th style={{ fontSize: 10 }}>Skill</th>
+                                              <th style={{ fontSize: 10 }}>Level</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {studentDetail.skillMastery.map(sk => (
+                                              <tr key={sk.skill_id}>
+                                                <td>
+                                                  <div className="fw-medium">{sk.skill_name}</div>
+                                                  <div className="text-muted" style={{ fontSize: 9 }}>{sk.layer_id}</div>
+                                                </td>
+                                                <td>
+                                                  <span className={`badge ${profBadge(sk.proficiency_level)}`} style={{ fontSize: 9 }}>
+                                                    {sk.proficiency_level} - {profLabel(sk.proficiency_level)}
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                            {studentDetail.skillMastery.length === 0 && (
+                                              <tr><td colSpan={2} className="text-center text-muted py-3">No skill data</td></tr>
+                                            )}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Artifact Submissions Column */}
+                                  <div className="col-md-4">
+                                    <div className="card border-0 shadow-sm h-100">
+                                      <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                                        <span className="fw-semibold" style={{ fontSize: 12 }}>Artifacts</span>
+                                        <span className="badge bg-info" style={{ fontSize: 9 }}>
+                                          {studentDetail.artifactSubmissions.filter(a => a.submitted).length}/{studentDetail.artifactSubmissions.length}
+                                        </span>
+                                      </div>
+                                      <div className="card-body p-0" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                        <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
+                                          <thead className="table-light">
+                                            <tr>
+                                              <th style={{ fontSize: 10 }}>Artifact</th>
+                                              <th style={{ fontSize: 10 }}>Type</th>
+                                              <th style={{ fontSize: 10 }}>Status</th>
+                                              <th style={{ fontSize: 10 }}>Date</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {studentDetail.artifactSubmissions.map(a => (
+                                              <tr key={a.artifact_id}>
+                                                <td className="fw-medium">{a.artifact_name}</td>
+                                                <td>
+                                                  <span className="badge bg-light text-muted border" style={{ fontSize: 9 }}>
+                                                    {a.artifact_type}
+                                                  </span>
+                                                </td>
+                                                <td>
+                                                  {a.submitted ? (
+                                                    <span className={`badge ${a.status === 'reviewed' ? 'bg-success' : 'bg-info'}`} style={{ fontSize: 9 }}>
+                                                      {a.status || 'submitted'}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="badge bg-light text-muted border" style={{ fontSize: 9 }}>pending</span>
+                                                  )}
+                                                </td>
+                                                <td className="text-muted">{formatDate(a.submitted_at)}</td>
+                                              </tr>
+                                            ))}
+                                            {studentDetail.artifactSubmissions.length === 0 && (
+                                              <tr><td colSpan={4} className="text-center text-muted py-3">No artifact data</td></tr>
+                                            )}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center text-muted py-4" style={{ fontSize: 12 }}>
+                                Unable to load student details.
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
                 {students.length === 0 && (
-                  <tr><td colSpan={6} className="text-center text-muted py-4">No enrollments found.</td></tr>
+                  <tr><td colSpan={7} className="text-center text-muted py-4">No enrollments found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -188,7 +451,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
         </div>
       )}
 
-      {/* Skills sub-tab */}
+      {/* ==================== SKILLS SUB-TAB ==================== */}
       {subTab === 'skills' && (
         <div className="card border-0 shadow-sm">
           <div className="card-header bg-white fw-semibold d-flex justify-content-between" style={{ fontSize: 14 }}>
@@ -199,6 +462,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
             <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
               <thead className="table-light">
                 <tr>
+                  <th style={{ fontSize: 12, width: 30 }}></th>
                   <th style={{ fontSize: 12 }}>Skill ID</th>
                   <th style={{ fontSize: 12 }}>Name</th>
                   <th style={{ fontSize: 12 }}>Layer</th>
@@ -209,22 +473,102 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
               </thead>
               <tbody>
                 {skills.map(s => (
-                  <tr key={s.skill_id}>
-                    <td className="font-monospace" style={{ fontSize: 11 }}>{s.skill_id}</td>
-                    <td className="fw-medium">{s.name}</td>
-                    <td><span className="badge bg-secondary" style={{ fontSize: 10 }}>{s.layer_id}</span></td>
-                    <td style={{ fontSize: 12 }}>{s.domain_id}</td>
-                    <td>{s.studentsTracked}</td>
-                    <td>
-                      <span className={`badge ${s.avgLevel >= 3 ? 'bg-success' : s.avgLevel >= 1 ? 'bg-warning text-dark' : 'bg-secondary'}`}
-                        style={{ fontSize: 10 }}>
-                        {s.avgLevel}
-                      </span>
-                    </td>
-                  </tr>
+                  <React.Fragment key={s.skill_id}>
+                    <tr
+                      onClick={() => toggleSkillExpand(s.skill_id)}
+                      style={{ cursor: 'pointer' }}
+                      className={expandedSkillId === s.skill_id ? 'table-active' : ''}
+                    >
+                      <td className="text-center" style={{ fontSize: 11 }}>
+                        {expandedSkillId === s.skill_id ? '\u25BC' : '\u25B6'}
+                      </td>
+                      <td className="font-monospace" style={{ fontSize: 11 }}>{s.skill_id}</td>
+                      <td className="fw-medium">{s.name}</td>
+                      <td><span className="badge bg-secondary" style={{ fontSize: 10 }}>{s.layer_id}</span></td>
+                      <td style={{ fontSize: 12 }}>{s.domain_id}</td>
+                      <td>{s.studentsTracked}</td>
+                      <td>
+                        <span className={`badge ${s.avgLevel >= 3 ? 'bg-success' : s.avgLevel >= 1 ? 'bg-warning text-dark' : 'bg-secondary'}`}
+                          style={{ fontSize: 10 }}>
+                          {s.avgLevel}
+                        </span>
+                      </td>
+                    </tr>
+
+                    {/* Skill Detail Expansion */}
+                    {expandedSkillId === s.skill_id && (
+                      <tr>
+                        <td colSpan={7} className="p-0">
+                          <div style={{ backgroundColor: 'var(--color-bg-alt, #f7fafc)', borderTop: '2px solid var(--color-primary-light, #2b6cb0)' }}>
+                            {skillDetailLoading ? (
+                              <div className="text-center py-4">
+                                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                  <span className="visually-hidden">Loading...</span>
+                                </div>
+                                <span className="ms-2 text-muted small">Loading skill details...</span>
+                              </div>
+                            ) : skillDetail ? (
+                              <div className="p-3">
+                                {skillDetail.info.description && (
+                                  <p className="text-muted mb-3" style={{ fontSize: 12 }}>{skillDetail.info.description}</p>
+                                )}
+                                <div className="card border-0 shadow-sm">
+                                  <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                                    <span className="fw-semibold" style={{ fontSize: 12 }}>Per-Student Mastery</span>
+                                    <span className="badge bg-info" style={{ fontSize: 9 }}>
+                                      {skillDetail.students.length} students
+                                    </span>
+                                  </div>
+                                  <div className="card-body p-0" style={{ maxHeight: 250, overflowY: 'auto' }}>
+                                    <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
+                                      <thead className="table-light">
+                                        <tr>
+                                          <th style={{ fontSize: 10 }}>Student</th>
+                                          <th style={{ fontSize: 10 }}>Proficiency Level</th>
+                                          <th style={{ fontSize: 10 }}>Last Assessed</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {skillDetail.students.map(st => (
+                                          <tr key={st.enrollment_id}>
+                                            <td className="fw-medium">{st.name}</td>
+                                            <td>
+                                              <div className="d-flex align-items-center gap-2">
+                                                <div className="progress flex-grow-1" style={{ height: 6, maxWidth: 80 }}>
+                                                  <div
+                                                    className={`progress-bar ${profBadge(st.proficiency_level).replace('bg-', 'bg-')}`}
+                                                    style={{ width: `${(st.proficiency_level / 5) * 100}%` }}
+                                                  />
+                                                </div>
+                                                <span className={`badge ${profBadge(st.proficiency_level)}`} style={{ fontSize: 9 }}>
+                                                  {st.proficiency_level} - {profLabel(st.proficiency_level)}
+                                                </span>
+                                              </div>
+                                            </td>
+                                            <td className="text-muted">{formatDate(st.assessed_at)}</td>
+                                          </tr>
+                                        ))}
+                                        {skillDetail.students.length === 0 && (
+                                          <tr><td colSpan={3} className="text-center text-muted py-3">No students tracked for this skill yet.</td></tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center text-muted py-4" style={{ fontSize: 12 }}>
+                                Unable to load skill details.
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
                 {skills.length === 0 && (
-                  <tr><td colSpan={6} className="text-center text-muted py-4">No skill mastery data yet.</td></tr>
+                  <tr><td colSpan={7} className="text-center text-muted py-4">No skill mastery data yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -232,7 +576,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
         </div>
       )}
 
-      {/* Artifacts sub-tab */}
+      {/* ==================== ARTIFACTS SUB-TAB ==================== */}
       {subTab === 'artifacts' && (
         <div className="card border-0 shadow-sm">
           <div className="card-header bg-white fw-semibold d-flex justify-content-between" style={{ fontSize: 14 }}>
@@ -251,27 +595,42 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                       {a.name}
                     </th>
                   ))}
+                  <th style={{ fontSize: 11 }}>Total</th>
                 </tr>
               </thead>
               <tbody>
-                {artifactData?.students.map(s => (
-                  <tr key={s.enrollment_id}>
-                    <td className="fw-medium" style={{ position: 'sticky', left: 0, backgroundColor: '#fff', zIndex: 1, fontSize: 11 }}>
-                      {s.name}
-                    </td>
-                    {artifactData.artifacts.map(a => (
-                      <td key={a.id} className="text-center">
-                        {s.submissions[a.id]
-                          ? <span className="text-success" style={{ fontSize: 14 }}>&#10003;</span>
-                          : <span className="text-muted" style={{ fontSize: 14 }}>&#8212;</span>
-                        }
+                {artifactData?.students.map(s => {
+                  const submittedCount = artifactData.artifacts.filter(a => s.submissions[a.id]).length;
+                  return (
+                    <tr
+                      key={s.enrollment_id}
+                      onClick={() => { setSubTab('students'); toggleStudentExpand(s.enrollment_id); }}
+                      style={{ cursor: 'pointer' }}
+                      title={`Click to see ${s.name}'s full detail`}
+                    >
+                      <td className="fw-medium" style={{ position: 'sticky', left: 0, backgroundColor: '#fff', zIndex: 1, fontSize: 11 }}>
+                        {s.name}
                       </td>
-                    ))}
-                  </tr>
-                ))}
+                      {artifactData.artifacts.map(a => (
+                        <td key={a.id} className="text-center">
+                          {s.submissions[a.id]
+                            ? <span className="text-success" style={{ fontSize: 14 }}>&#10003;</span>
+                            : <span className="text-muted" style={{ fontSize: 14 }}>&#8212;</span>
+                          }
+                        </td>
+                      ))}
+                      <td className="fw-medium text-center">
+                        <span className={`badge ${submittedCount === artifactData.artifacts.length ? 'bg-success' : submittedCount > 0 ? 'bg-warning text-dark' : 'bg-secondary'}`}
+                          style={{ fontSize: 10 }}>
+                          {submittedCount}/{artifactData.artifacts.length}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {(!artifactData || artifactData.students.length === 0) && (
                   <tr>
-                    <td colSpan={(artifactData?.artifacts.length || 0) + 1} className="text-center text-muted py-4">
+                    <td colSpan={(artifactData?.artifacts.length || 0) + 2} className="text-center text-muted py-4">
                       No artifact submission data yet.
                     </td>
                   </tr>
@@ -279,6 +638,11 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
               </tbody>
             </table>
           </div>
+          {artifactData && artifactData.students.length > 0 && (
+            <div className="card-footer bg-white text-muted" style={{ fontSize: 10 }}>
+              Click any student row to see their full progress detail.
+            </div>
+          )}
         </div>
       )}
     </div>
