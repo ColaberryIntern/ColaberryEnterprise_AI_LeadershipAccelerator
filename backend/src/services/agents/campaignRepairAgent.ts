@@ -121,8 +121,6 @@ export async function runCampaignRepairAgent(agentId: string): Promise<AgentExec
             action: 'detect_stalled_campaign',
             reason: `${incompleteLeads} active leads but no pending scheduled actions`,
             confidence: 0.85,
-            before_state: undefined,
-            after_state: undefined,
             result: 'success',
             details: { incomplete_leads: incompleteLeads },
           });
@@ -132,8 +130,8 @@ export async function runCampaignRepairAgent(agentId: string): Promise<AgentExec
             action: 'detect_stalled_campaign',
             reason: `Flagged stalled campaign with ${incompleteLeads} active leads`,
             confidence: 0.85,
-            before_state: undefined,
-            after_state: undefined,
+            before_state: null,
+            after_state: null,
             result: 'success',
           });
         }
