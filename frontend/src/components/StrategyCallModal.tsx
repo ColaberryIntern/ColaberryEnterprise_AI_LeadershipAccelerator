@@ -195,7 +195,7 @@ export default function StrategyCallModal({
           </p>
           {dates.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-muted">No available slots in the next 21 days. Please check back later.</p>
+              <p className="text-muted">No available slots in the next 3 weeks. Please check back later.</p>
             </div>
           ) : (
             <div className="d-flex flex-wrap gap-2">
@@ -411,10 +411,10 @@ export default function StrategyCallModal({
           {/* Cohort reminder */}
           <div className="border-top pt-3 mt-3 text-center">
             <p className="small text-muted mb-1">
-              The March 31 Enterprise AI Cohort begins soon.
+              The next Enterprise AI Cohort begins soon.
             </p>
             <p className="small text-muted mb-0">
-              Many strategy call participants join this cohort.
+              Many strategy call participants join the upcoming cohort.
             </p>
           </div>
 

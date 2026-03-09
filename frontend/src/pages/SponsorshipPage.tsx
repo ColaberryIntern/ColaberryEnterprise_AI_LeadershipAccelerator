@@ -1,6 +1,7 @@
 import React from 'react';
 import SEOHead from '../components/SEOHead';
 import LeadCaptureForm from '../components/LeadCaptureForm';
+import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 
 function SponsorshipPage() {
   return (
@@ -70,7 +71,7 @@ function SponsorshipPage() {
                 <p className="text-muted text-center mb-3">"Enterprise AI Accelerator"</p>
                 <ul className="list-unstyled">
                   <li className="mb-2"><strong>💰 Cost:</strong> $4,500 per participant</li>
-                  <li className="mb-2"><strong>⏳ Timeline:</strong> 5 days, 2 weeks</li>
+                  <li className="mb-2"><strong>⏳ Timeline:</strong> {PROGRAM_SCHEDULE.sponsorshipTimeline}</li>
                   <li className="mb-2"><strong>📄 Output:</strong> POC + Roadmap + Exec Deck + Templates</li>
                   <li className="mb-2"><strong>🏗️ Internal capability built:</strong> ✅ Entire leadership team</li>
                 </ul>
@@ -181,7 +182,7 @@ function SponsorshipPage() {
               '☐ Executive sponsor identified (CTO, CIO, or CDO)',
               '☐ Budget line confirmed (Learning & Development or Technology Innovation)',
               '☐ Participants nominated (recommend 2+ for peer reinforcement)',
-              '☐ 2-week calendar block coordinated for participant availability',
+              `☐ ${PROGRAM_SCHEDULE.totalWeeks}-week calendar block coordinated for participant availability`,
               '☐ IT pre-approval obtained for POC infrastructure access',
               '☐ Success metrics defined (what does success look like in 90 days?)',
             ].map((item) => (
@@ -207,6 +208,7 @@ function SponsorshipPage() {
             submitLabel="📥 Download Sponsorship Kit"
             successMessage="✅ Your Sponsorship Kit has been sent to your email. Expect it within minutes."
             className="text-dark"
+            captureUtm={true}
           />
           {/* TODO: Trigger automated email sequence via CRM (future) */}
         </div>

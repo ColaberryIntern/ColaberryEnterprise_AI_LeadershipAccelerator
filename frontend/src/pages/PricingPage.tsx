@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 
 function PricingPage() {
   return (
@@ -40,7 +41,7 @@ function PricingPage() {
               <p className="text-muted mb-4">per participant | corporate group pricing available</p>
               <ul className="list-unstyled text-start fs-5 mb-4">
                 {[
-                  '5-Day Intensive Accelerator (10 structured sessions over 2 weeks)',
+                  `${PROGRAM_SCHEDULE.totalSessions}-Session Intensive Accelerator (${PROGRAM_SCHEDULE.shortDescription})`,
                   'Working AI Proof of Concept (POC)',
                   '90-Day AI Execution Roadmap',
                   'Executive AI Presentation Deck',
@@ -123,7 +124,7 @@ function PricingPage() {
           {[
             {
               q: 'What is the time commitment for participants?',
-              a: 'The accelerator runs across 5 focused days spread over 2 weeks — typically Monday/Wednesday/Friday scheduling. Each day is a structured 6-hour working session. Total participant time: approximately 30 hours.',
+              a: PROGRAM_SCHEDULE.pricingDescription,
             },
             {
               q: 'Can multiple team members enroll together?',

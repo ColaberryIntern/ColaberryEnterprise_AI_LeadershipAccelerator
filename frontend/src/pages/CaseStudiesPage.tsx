@@ -30,10 +30,10 @@ function CaseStudiesPage() {
       challenge:
         'A regional bank\'s VP of Technology was tasked by the board with delivering an AI strategy within 60 days. The organization had been quoted $400K+ by two consulting firms. The internal team lacked the architectural vocabulary to evaluate proposals or build independently.',
       approach:
-        'The VP and two senior architects completed the 5-Day Executive Accelerator. During Day 3, they built a loan processing optimization POC using their actual (anonymized) data patterns. Day 5 produced a board-ready 90-Day AI Roadmap.',
+        'The VP and two senior architects completed the Executive Accelerator. During Session 3, they built a loan processing optimization POC using their actual (anonymized) data patterns. Session 5 produced a board-ready 90-Day AI Roadmap.',
       outcomes: [
         '🏗️ Working loan processing AI POC delivered on Day 3',
-        '📅 Board-approved 90-Day AI Roadmap presented within 2 weeks of accelerator',
+        '📅 Board-approved 90-Day AI Roadmap presented within 3 weeks of accelerator',
         '💰 $380,000 in consulting fees avoided',
         '⚡ Roadmap execution began 4 months earlier than projected external consulting timeline',
       ],

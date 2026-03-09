@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import api from '../utils/api';
+import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 
 interface Cohort {
   id: string;
@@ -35,19 +37,50 @@ function EnrollPage() {
   const [submitting, setSubmitting] = useState(false);
   const [invoiceSubmitted, setInvoiceSubmitted] = useState(false);
 
+  const [cohortError, setCohortError] = useState(false);
+  const [utm, setUtm] = useState({ utm_source: '', utm_campaign: '' });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setUtm({
+      utm_source: params.get('utm_source') || '',
+      utm_campaign: params.get('utm_campaign') || '',
+    });
+  }, []);
+
   useEffect(() => {
     api
       .get('/api/cohorts')
       .then((res) => {
-        const openCohorts = (res.data.cohorts || []).filter(
-          (c: Cohort) => c.seats_taken < c.max_seats
+        const today = new Date().toISOString().split('T')[0];
+        const allCohorts = res.data.cohorts || [];
+        const openCohorts = allCohorts.filter(
+          (c: Cohort) => c.seats_taken < c.max_seats && c.start_date >= today
         );
+
+        if (allCohorts.length > 0 && openCohorts.length === 0) {
+          console.warn('[EnrollPage] Cohorts exist but none pass filters:', {
+            total: allCohorts.length,
+            reasons: allCohorts.map((c: Cohort) => ({
+              id: c.id,
+              name: c.name,
+              start_date: c.start_date,
+              seats_remaining: c.max_seats - c.seats_taken,
+              pastDate: c.start_date < today,
+              full: c.seats_taken >= c.max_seats,
+            })),
+          });
+        }
+
         setCohorts(openCohorts);
         if (openCohorts.length === 1) {
           setFormData((prev) => ({ ...prev, cohort_id: openCohorts[0].id }));
         }
       })
-      .catch(() => setCohorts([]))
+      .catch(() => {
+        setCohorts([]);
+        setCohortError(true);
+      })
       .finally(() => setLoadingCohorts(false));
   }, []);
 
@@ -83,14 +116,20 @@ function EnrollPage() {
 
     setSubmitting(true);
     try {
+      const trackingData = {
+        ...utm,
+        page_url: window.location.href,
+        form_type: 'enrollment',
+      };
       if (paymentOption === 'credit_card') {
         const res = await api.post('/api/create-checkout-session', {
           ...formData,
+          ...trackingData,
         });
         // Redirect to Stripe Checkout
         window.location.href = res.data.url;
       } else {
-        await api.post('/api/create-invoice-request', { ...formData });
+        await api.post('/api/create-invoice-request', { ...formData, ...trackingData });
         setInvoiceSubmitted(true);
       }
     } catch (err: any) {
@@ -149,7 +188,7 @@ function EnrollPage() {
             Enroll in the Enterprise AI Leadership Accelerator
           </h1>
           <p className="lead">
-            $4,500 per participant — pay by credit card or request a corporate invoice
+            {PROGRAM_SCHEDULE.price} per participant — pay by credit card or request a corporate invoice
           </p>
         </div>
       </section>
@@ -185,11 +224,16 @@ function EnrollPage() {
                   </label>
                   {loadingCohorts ? (
                     <div className="text-muted">Loading available cohorts...</div>
+                  ) : cohortError ? (
+                    <div className="alert alert-warning">
+                      Unable to load cohort information. Please try again later or{' '}
+                      <Link to="/contact">contact us</Link> directly.
+                    </div>
                   ) : cohorts.length === 0 ? (
                     <div className="alert alert-info">
-                      No cohorts are currently accepting enrollment. Please check back
+                      No upcoming cohorts are currently available. Please check back
                       soon or{' '}
-                      <a href="/contact">contact us</a> for upcoming dates.
+                      <Link to="/contact">contact us</Link> for private cohort options.
                     </div>
                   ) : (
                     <select

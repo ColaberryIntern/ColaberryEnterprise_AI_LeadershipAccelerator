@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 
 /** Intersection Observer hook for fade-in-on-scroll */
 function useFadeIn() {
@@ -39,7 +40,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "What's the time commitment?",
-    answer: '5 live sessions, 2 hours each, held on Tuesdays and Thursdays over 3 weeks. Between sessions, expect 2-4 hours of applied work on your own AI initiative using your organization\'s tools and data.',
+    answer: `${PROGRAM_SCHEDULE.shortDescription}. Between sessions, expect 2-4 hours of applied work on your own AI initiative using your organization's tools and data.`,
   },
   {
     question: 'Do I need technical experience?',
@@ -123,16 +124,15 @@ function ProgramPage() {
       <section className="section-spacer" aria-label="Journey Overview">
         <div className="container">
           <FadeIn>
-            <h2 className="text-center mb-3">Your Transformation in 21 Days</h2>
+            <h2 className="text-center mb-3">Your Transformation in {PROGRAM_SCHEDULE.totalWeeks} Weeks</h2>
             <p className="text-center text-muted mb-4" style={{ maxWidth: '680px', margin: '0 auto' }}>
               A structured progression that turns enterprise leaders into AI architects
               inside their organization.
             </p>
             <div className="d-flex justify-content-center gap-3 flex-wrap mb-5">
-              <span className="badge bg-primary px-3 py-2">5 Sessions</span>
-              <span className="badge bg-primary px-3 py-2">3 Weeks</span>
-              <span className="badge bg-primary px-3 py-2">2 Hours Each</span>
-              <span className="badge bg-secondary px-3 py-2">Tue &amp; Thu</span>
+              {PROGRAM_SCHEDULE.summaryBadges.map((badge: string, i: number) => (
+                <span key={badge} className={`badge ${i < 3 ? 'bg-primary' : 'bg-secondary'} px-3 py-2`}>{badge}</span>
+              ))}
             </div>
           </FadeIn>
           <FadeIn>
@@ -174,7 +174,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 1 — Tuesday</span>
+                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[0]}</span>
                   <h3 className="h5 mb-0">🧭 The Enterprise AI Mandate</h3>
                 </div>
                 <div className="row g-4">
@@ -200,7 +200,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 2 — Thursday</span>
+                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[1]}</span>
                   <h3 className="h5 mb-0">🏗 Architecture &amp; 3-Agent Environment Setup</h3>
                 </div>
                 <div className="row g-4">
@@ -288,7 +288,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 3 — Tuesday</span>
+                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[2]}</span>
                   <h3 className="h5 mb-0">💻 Guided POC Launch</h3>
                 </div>
                 <ul className="text-muted mb-3">
@@ -310,7 +310,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 4 — Thursday</span>
+                  <span className="badge bg-secondary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[3]}</span>
                   <h3 className="h5 mb-0">📊 Refinement &amp; Executive Positioning</h3>
                 </div>
                 <div className="row g-4">
@@ -385,7 +385,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm border-start border-4 border-primary mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-primary me-3 fs-6">Day 5 — Thursday (Presentations)</span>
+                  <span className="badge bg-primary me-3 fs-6">{PROGRAM_SCHEDULE.dayLabels[4]}</span>
                   <h3 className="h5 mb-0">🎤 Executive Demonstrations &amp; Expansion Strategy</h3>
                 </div>
                 <p className="text-muted mb-3">
@@ -476,7 +476,7 @@ function ProgramPage() {
       <section className="section-spacer-alt" aria-label="Outcomes">
         <div className="container">
           <FadeIn>
-            <h2 className="text-center mb-5">📦 What You Will Have in 21 Days</h2>
+            <h2 className="text-center mb-5">📦 What You Will Have in {PROGRAM_SCHEDULE.totalWeeks} Weeks</h2>
           </FadeIn>
           <div className="row g-4">
             {[
@@ -572,7 +572,7 @@ function ProgramPage() {
         <div className="container py-4">
           <h2 className="text-light mb-3">🚀 Begin Your Enterprise AI Execution Journey</h2>
           <p className="mb-4" style={{ maxWidth: '600px', margin: '0 auto' }}>
-            21 days from strategic alignment to a working Proof of Capability,
+            {PROGRAM_SCHEDULE.totalWeeks} weeks from strategic alignment to a working Proof of Capability,
             executive deck, and 90-day expansion roadmap.
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
