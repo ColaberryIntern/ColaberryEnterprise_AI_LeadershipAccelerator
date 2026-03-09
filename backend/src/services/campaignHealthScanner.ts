@@ -94,7 +94,7 @@ export async function scanCampaign(campaign: Campaign): Promise<ScanResult> {
     where: {
       campaign_id: campaign.id,
       ai_generated: false,
-      ai_instructions: { [Op.ne]: null },
+      ai_instructions: { [Op.ne]: null as any },
       status: 'failed',
       created_at: { [Op.gte]: last24h },
     },
@@ -173,7 +173,7 @@ export async function scanCampaign(campaign: Campaign): Promise<ScanResult> {
 
   // AI generation success (15 points)
   if (aiAttempted > 0) {
-    const aiSuccessRate = Math.max(0, 1 - (aiFailed / aiAttempted));
+    const aiSuccessRate = Math.max(0, 1 - (Number(aiFailed) / aiAttempted));
     score += 15 * aiSuccessRate;
   } else {
     score += 15; // No AI attempts = no penalty
@@ -200,14 +200,14 @@ export async function scanCampaign(campaign: Campaign): Promise<ScanResult> {
   const healthScore = Math.round(Math.min(100, Math.max(0, score)));
   const status: HealthStatus = healthScore >= 80 ? 'healthy' : healthScore >= 60 ? 'degraded' : 'critical';
 
-  const metrics = {
+  const metrics: Record<string, number> = {
     open_rate: Math.round(openRate * 10000) / 100,
     reply_rate: Math.round(replyRate * 10000) / 100,
     bounce_rate: Math.round(bounceRate * 10000) / 100,
     sent_24h: sentCount,
     failed_24h: failedCount,
     ai_attempted_24h: aiAttempted,
-    ai_failed_24h: aiFailed,
+    ai_failed_24h: Number(aiFailed),
   };
 
   // --- Upsert health record ---

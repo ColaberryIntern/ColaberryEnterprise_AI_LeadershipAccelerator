@@ -29,7 +29,7 @@ export async function handleGetAgents(req: Request, res: Response) {
 
 export async function handleUpdateAgent(req: Request, res: Response) {
   try {
-    const agent = await aiOpsService.updateAgent(req.params.id, req.body);
+    const agent = await aiOpsService.updateAgent(String(req.params.id), req.body);
     res.json(agent);
   } catch (err: any) {
     res.status(err.message === 'Agent not found' ? 404 : 500).json({ error: err.message });
@@ -38,7 +38,7 @@ export async function handleUpdateAgent(req: Request, res: Response) {
 
 export async function handleRunAgent(req: Request, res: Response) {
   try {
-    const agent = await AiAgent.findByPk(req.params.id);
+    const agent = await AiAgent.findByPk(String(req.params.id));
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
     let result;
@@ -104,7 +104,7 @@ export async function handleTriggerScan(req: Request, res: Response) {
 
 export async function handleTriggerCampaignScan(req: Request, res: Response) {
   try {
-    const campaign = await Campaign.findByPk(req.params.campaignId);
+    const campaign = await Campaign.findByPk(String(req.params.campaignId));
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
     const result = await scanCampaign(campaign);
     res.json(result);
@@ -133,7 +133,7 @@ export async function handleGetErrors(req: Request, res: Response) {
 
 export async function handleResolveError(req: Request, res: Response) {
   try {
-    const error = await aiOpsService.resolveError(req.params.id);
+    const error = await aiOpsService.resolveError(String(req.params.id));
     res.json(error);
   } catch (err: any) {
     res.status(err.message === 'Error not found' ? 404 : 500).json({ error: err.message });
@@ -162,7 +162,7 @@ export async function handleGetEvents(req: Request, res: Response) {
 
 export async function handleRestartCampaign(req: Request, res: Response) {
   try {
-    const result = await aiOpsService.restartCampaignActions(req.params.id);
+    const result = await aiOpsService.restartCampaignActions(String(req.params.id));
     res.json(result);
   } catch (err: any) {
     res.status(err.message === 'Campaign not found' ? 404 : 500).json({ error: err.message });
