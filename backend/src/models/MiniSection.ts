@@ -13,6 +13,23 @@ export interface MiniSectionAttributes {
   concept_prompt_template_id?: string;
   build_prompt_template_id?: string;
   mentor_prompt_template_id?: string;
+  // Inline prompt fields
+  concept_prompt_system?: string;
+  concept_prompt_user?: string;
+  build_prompt_system?: string;
+  build_prompt_user?: string;
+  mentor_prompt_system?: string;
+  mentor_prompt_user?: string;
+  kc_prompt_system?: string;
+  kc_prompt_user?: string;
+  reflection_prompt_system?: string;
+  reflection_prompt_user?: string;
+  prompt_source?: 'inline' | 'template' | 'hybrid';
+  // Quality tracking
+  quality_score?: number;
+  quality_details?: Record<string, any>;
+  last_validated_at?: Date;
+  // Existing fields
   associated_skill_ids?: string[];
   associated_variable_keys?: string[];
   associated_artifact_ids?: string[];
@@ -36,6 +53,20 @@ class MiniSection extends Model<MiniSectionAttributes> implements MiniSectionAtt
   declare concept_prompt_template_id: string;
   declare build_prompt_template_id: string;
   declare mentor_prompt_template_id: string;
+  declare concept_prompt_system: string;
+  declare concept_prompt_user: string;
+  declare build_prompt_system: string;
+  declare build_prompt_user: string;
+  declare mentor_prompt_system: string;
+  declare mentor_prompt_user: string;
+  declare kc_prompt_system: string;
+  declare kc_prompt_user: string;
+  declare reflection_prompt_system: string;
+  declare reflection_prompt_user: string;
+  declare prompt_source: 'inline' | 'template' | 'hybrid';
+  declare quality_score: number;
+  declare quality_details: Record<string, any>;
+  declare last_validated_at: Date;
   declare associated_skill_ids: string[];
   declare associated_variable_keys: string[];
   declare associated_artifact_ids: string[];
@@ -92,6 +123,66 @@ MiniSection.init(
       allowNull: true,
       references: { model: 'prompt_templates', key: 'id' },
     },
+    // Inline prompt fields
+    concept_prompt_system: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    concept_prompt_user: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    build_prompt_system: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    build_prompt_user: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    mentor_prompt_system: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    mentor_prompt_user: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    kc_prompt_system: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    kc_prompt_user: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    reflection_prompt_system: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    reflection_prompt_user: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    prompt_source: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'template',
+    },
+    // Quality tracking
+    quality_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    quality_details: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    last_validated_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // Existing fields
     associated_skill_ids: {
       type: DataTypes.JSONB,
       allowNull: true,

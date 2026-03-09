@@ -7,6 +7,9 @@ import TestSimulationPanel from './builder/TestSimulationPanel';
 import InlineVariableCreator from './builder/InlineVariableCreator';
 import InlineSkillCreator from './builder/InlineSkillCreator';
 import InlineArtifactCreator from './builder/InlineArtifactCreator';
+import BackfillButton from './builder/BackfillButton';
+import DiagnosticReportModal from './builder/DiagnosticReportModal';
+import AutoRepairModal from './builder/AutoRepairModal';
 import { Lesson } from './builder/types';
 
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
@@ -81,6 +84,26 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
         </div>
       )}
 
+      {/* Diagnostic Report Modal */}
+      {builder.showDiagnosticModal && (
+        <DiagnosticReportModal
+          report={builder.diagnosticReport}
+          loading={builder.diagnosticLoading}
+          onClose={() => builder.setShowDiagnosticModal(false)}
+          onRun={() => builder.runDiagnostic()}
+        />
+      )}
+
+      {/* Auto-Repair Modal */}
+      {builder.showRepairModal && (
+        <AutoRepairModal
+          result={builder.repairResult}
+          loading={builder.repairLoading}
+          onClose={() => builder.setShowRepairModal(false)}
+          onRun={(dryRun) => builder.runAutoRepair(dryRun)}
+        />
+      )}
+
       {/* Section Selector Bar */}
       <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
         <select
@@ -106,6 +129,10 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
             <button className="btn btn-sm btn-outline-info" onClick={() => builder.setShowSimulation(true)}>
               <i className="bi bi-robot me-1"></i>Simulate AI
             </button>
+            <BackfillButton token={token} apiUrl={apiUrl} onComplete={() => {
+              builder.refreshReferenceData();
+              if (builder.selectedLessonId) builder.selectLesson(builder.selectedLessonId);
+            }} />
           </>
         )}
       </div>
@@ -208,6 +235,16 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
               onCreateVariable={() => builder.setInlineCreator('variable')}
               onCreateSkill={() => builder.setInlineCreator('skill')}
               onCreateArtifact={() => builder.setInlineCreator('artifact')}
+              qualityBreakdown={builder.qualityBreakdown}
+              qualityLoading={builder.qualityLoading}
+              onRefreshQuality={() => builder.fetchQualityScore()}
+              suggestions={builder.suggestions}
+              suggestionsLoading={builder.suggestionsLoading}
+              applyingSuggestion={builder.applyingSuggestion}
+              onRefreshSuggestions={() => builder.fetchSuggestions()}
+              onApplySuggestionFix={builder.applySuggestionFix}
+              onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
+              onOpenRepair={() => builder.setShowRepairModal(true)}
             />
           </div>
         </div>

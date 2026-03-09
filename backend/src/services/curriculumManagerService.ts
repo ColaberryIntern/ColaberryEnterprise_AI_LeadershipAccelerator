@@ -451,3 +451,50 @@ export async function dryRunSectionBuild(lessonId: string): Promise<DryRunResult
     warnings,
   };
 }
+
+/**
+ * Final validation: combines quality scoring, diagnostics, and AI readiness
+ * into a single pass/fail determination for deployment readiness.
+ */
+export async function runFinalValidation(lessonId: string): Promise<{
+  passed: boolean;
+  qualityCheck: { passed: boolean; average: number; belowThreshold: string[] };
+  diagnosticCheck: { passed: boolean; failures: number; warnings: number };
+  readinessCheck: { passed: boolean; score: number; blockers: string[] };
+  summary: string;
+}> {
+  // Quality scoring
+  const { scoreLessonMiniSections } = await import('./qualityScoringService');
+  const qualityResult = await scoreLessonMiniSections(lessonId);
+  const belowThreshold = qualityResult.scores
+    .filter(s => s.overall < 60)
+    .map(s => `${s.miniSectionId} (${s.overall})`);
+  const qualityPassed = qualityResult.average >= 60 && belowThreshold.length === 0;
+
+  // Diagnostics
+  const { extensiveCheckLesson } = await import('./extensiveCheckService');
+  const diagnostics = await extensiveCheckLesson(lessonId);
+  const failures = diagnostics.filter(d => d.overallStatus === 'fail').length;
+  const warnings = diagnostics.filter(d => d.overallStatus === 'warning').length;
+  const diagnosticPassed = failures === 0;
+
+  // AI Readiness
+  const { checkAIReadiness } = await import('./aiReadinessService');
+  const readiness = await checkAIReadiness(lessonId);
+  const readinessPassed = readiness.readinessScore >= 80;
+
+  const passed = qualityPassed && diagnosticPassed && readinessPassed;
+
+  const parts: string[] = [];
+  if (!qualityPassed) parts.push(`Quality: avg ${qualityResult.average}, ${belowThreshold.length} below threshold`);
+  if (!diagnosticPassed) parts.push(`Diagnostics: ${failures} failure(s)`);
+  if (!readinessPassed) parts.push(`Readiness: ${readiness.readinessScore}% (need 80%)`);
+
+  return {
+    passed,
+    qualityCheck: { passed: qualityPassed, average: qualityResult.average, belowThreshold },
+    diagnosticCheck: { passed: diagnosticPassed, failures, warnings },
+    readinessCheck: { passed: readinessPassed, score: readiness.readinessScore, blockers: readiness.blockers },
+    summary: passed ? 'All checks passed — ready for deployment' : `Blocked: ${parts.join('; ')}`,
+  };
+}

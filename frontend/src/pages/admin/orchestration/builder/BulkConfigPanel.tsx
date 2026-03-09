@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getScoreColor } from './types';
 
 interface MatrixRow {
   moduleId: string;
@@ -14,6 +15,8 @@ interface MatrixRow {
   hasVars: boolean;
   status: 'complete' | 'partial' | 'empty';
   warnings: string[];
+  avgQualityScore?: number;
+  miniSectionScores?: { id: string; title: string; score: number | null }[];
 }
 
 interface Props {
@@ -41,7 +44,10 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
   const [loading, setLoading] = useState(true);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
-  const [filter, setFilter] = useState<'all' | 'complete' | 'partial' | 'empty'>('all');
+  const [filter, setFilter] = useState<'all' | 'complete' | 'partial' | 'empty' | 'low-score'>('all');
+  const [sortBy, setSortBy] = useState<'default' | 'score-asc' | 'score-desc'>('default');
+  const [bulkAction, setBulkAction] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<any>(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -65,7 +71,47 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
     setValidating(false);
   };
 
-  const filtered = filter === 'all' ? matrix : matrix.filter(r => r.status === filter);
+  const runBulkQualityScan = async () => {
+    setBulkAction('quality-scan');
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/bulk/quality-scan`, { method: 'POST', headers });
+      if (res.ok) setBulkResult({ type: 'quality-scan', data: await res.json() });
+    } catch {}
+    setBulkAction(null);
+    fetchMatrix();
+  };
+
+  const runBulkAutoRepair = async () => {
+    setBulkAction('auto-repair');
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/bulk/auto-repair-all`, { method: 'POST', headers, body: JSON.stringify({ dryRun: false }) });
+      if (res.ok) setBulkResult({ type: 'auto-repair', data: await res.json() });
+    } catch {}
+    setBulkAction(null);
+    fetchMatrix();
+  };
+
+  const runBulkDiagnostics = async () => {
+    setBulkAction('diagnostics');
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/bulk/run-all-diagnostics`, { method: 'POST', headers });
+      if (res.ok) setBulkResult({ type: 'diagnostics', data: await res.json() });
+    } catch {}
+    setBulkAction(null);
+  };
+
+  let filtered = filter === 'all' ? matrix
+    : filter === 'low-score' ? matrix.filter(r => (r.avgQualityScore ?? 0) < 70)
+    : matrix.filter(r => r.status === filter);
+
+  if (sortBy === 'score-asc') filtered = [...filtered].sort((a, b) => (a.avgQualityScore ?? 0) - (b.avgQualityScore ?? 0));
+  else if (sortBy === 'score-desc') filtered = [...filtered].sort((a, b) => (b.avgQualityScore ?? 0) - (a.avgQualityScore ?? 0));
+
+  const avgScore = matrix.length > 0
+    ? Math.round(matrix.reduce((sum, r) => sum + (r.avgQualityScore ?? 0), 0) / matrix.filter(r => r.avgQualityScore != null).length) || 0
+    : 0;
+  const lowScoreCount = matrix.filter(r => (r.avgQualityScore ?? 0) < 70).length;
+
   const stats = {
     total: matrix.length,
     complete: matrix.filter(r => r.status === 'complete').length,
@@ -118,6 +164,20 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
             <div className="text-muted" style={{ fontSize: 10 }}>Mini-Sections</div>
           </div>
         </div>
+        <div className="card border-0 shadow-sm" style={{ minWidth: 100 }}>
+          <div className="card-body py-2 px-3 text-center">
+            <div className={`fw-bold ${avgScore >= 70 ? 'text-success' : avgScore >= 40 ? 'text-warning' : 'text-danger'}`} style={{ fontSize: 20 }}>{avgScore}</div>
+            <div className="text-muted" style={{ fontSize: 10 }}>Avg Score</div>
+          </div>
+        </div>
+        {lowScoreCount > 0 && (
+          <div className="card border-0 shadow-sm" style={{ minWidth: 100 }}>
+            <div className="card-body py-2 px-3 text-center">
+              <div className="fw-bold text-danger" style={{ fontSize: 20 }}>{lowScoreCount}</div>
+              <div className="text-muted" style={{ fontSize: 10 }}>Below 70</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Controls */}
@@ -130,6 +190,14 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
             </button>
           ))}
         </div>
+        <button
+          className={`btn btn-sm ${filter === 'low-score' ? 'btn-danger' : 'btn-outline-danger'}`}
+          onClick={() => setFilter(filter === 'low-score' ? 'all' : 'low-score')}
+          style={{ fontSize: 11 }}
+        >
+          Score &lt; 70 ({lowScoreCount})
+        </button>
+        <div className="vr"></div>
         <button className="btn btn-sm btn-outline-success" onClick={runValidateAll} disabled={validating}>
           {validating ? (
             <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Validating...</>
@@ -137,10 +205,50 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
             <><i className="bi bi-check-circle me-1"></i>Validate All</>
           )}
         </button>
+        <button className="btn btn-sm btn-outline-info" onClick={runBulkQualityScan} disabled={!!bulkAction}>
+          {bulkAction === 'quality-scan' ? (
+            <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Scoring...</>
+          ) : (
+            <><i className="bi bi-graph-up me-1"></i>Score All</>
+          )}
+        </button>
+        <button className="btn btn-sm btn-outline-warning" onClick={runBulkAutoRepair} disabled={!!bulkAction}>
+          {bulkAction === 'auto-repair' ? (
+            <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Repairing...</>
+          ) : (
+            <><i className="bi bi-wrench me-1"></i>Repair All</>
+          )}
+        </button>
+        <button className="btn btn-sm btn-outline-primary" onClick={runBulkDiagnostics} disabled={!!bulkAction}>
+          {bulkAction === 'diagnostics' ? (
+            <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Diagnosing...</>
+          ) : (
+            <><i className="bi bi-clipboard2-pulse me-1"></i>Diagnose All</>
+          )}
+        </button>
         <button className="btn btn-sm btn-outline-secondary" onClick={fetchMatrix}>
           <i className="bi bi-arrow-clockwise me-1"></i>Refresh
         </button>
+        <select className="form-select form-select-sm" style={{ width: 130, fontSize: 10 }} value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
+          <option value="default">Default Order</option>
+          <option value="score-asc">Score (Low→High)</option>
+          <option value="score-desc">Score (High→Low)</option>
+        </select>
       </div>
+
+      {/* Bulk Action Result */}
+      {bulkResult && (
+        <div className="alert alert-info py-2 mb-3" style={{ fontSize: 11 }}>
+          <div className="d-flex justify-content-between align-items-center">
+            <strong>
+              {bulkResult.type === 'quality-scan' && `Quality Scan: ${bulkResult.data.total} scored, avg ${bulkResult.data.average}`}
+              {bulkResult.type === 'auto-repair' && `Auto-Repair: ${bulkResult.data.repaired}/${bulkResult.data.total} repaired`}
+              {bulkResult.type === 'diagnostics' && `Diagnostics: ${bulkResult.data.total} checked, ${bulkResult.data.passed} passed, ${bulkResult.data.failed} failed`}
+            </strong>
+            <button className="btn-close" style={{ fontSize: 8 }} onClick={() => setBulkResult(null)} />
+          </div>
+        </div>
+      )}
 
       {/* Validation Result */}
       {validationResult && (
@@ -172,6 +280,7 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
               <th style={{ fontSize: 10 }}>IT</th>
               <th style={{ fontSize: 10 }}>KC</th>
               <th style={{ fontSize: 10 }}>Links</th>
+              <th style={{ fontSize: 10 }}>Score</th>
               <th style={{ fontSize: 10 }}>Status</th>
             </tr>
           </thead>
@@ -205,6 +314,15 @@ export default function BulkConfigPanel({ token, apiUrl, onNavigateToLesson }: P
                     {row.hasSkills && <span className="badge bg-info-subtle text-info border" style={{ fontSize: 7 }}>S</span>}
                     {row.hasVars && <span className="badge bg-warning-subtle text-dark border" style={{ fontSize: 7 }}>V</span>}
                   </div>
+                </td>
+                <td className="text-center">
+                  {row.avgQualityScore != null ? (
+                    <span className={`badge ${getScoreColor(row.avgQualityScore)}`} style={{ fontSize: 9 }}>
+                      {Math.round(row.avgQualityScore)}
+                    </span>
+                  ) : (
+                    <span className="text-muted" style={{ fontSize: 9 }}>--</span>
+                  )}
                 </td>
                 <td>
                   <span className={`badge ${STATUS_COLORS[row.status]}`} style={{ fontSize: 8 }}>

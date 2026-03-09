@@ -20,6 +20,14 @@ interface MiniSectionInput {
   knowledge_check_config?: { enabled: boolean; question_count: number; pass_score: number } | null;
 }
 
+interface PreviewConfidence {
+  valid: boolean;
+  confidence: number;
+  unresolvedPlaceholders: string[];
+  missingVariables: string[];
+  warnings: string[];
+}
+
 interface Props {
   miniSections: MiniSectionInput[];
   lessonTitle: string;
@@ -29,13 +37,30 @@ interface Props {
   defaultViewMode?: 'preview' | 'json';
   selectedMiniSectionId?: string | null;
   onSelectSection?: (miniSectionType: string) => void;
+  token?: string;
+  apiUrl?: string;
 }
 
 type ViewMode = 'preview' | 'json';
 
-export default function PreviewPanel({ miniSections, lessonTitle, lessonId, externalContent, compact, defaultViewMode, selectedMiniSectionId, onSelectSection }: Props) {
+export default function PreviewPanel({ miniSections, lessonTitle, lessonId, externalContent, compact, defaultViewMode, selectedMiniSectionId, onSelectSection, token, apiUrl }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode || 'preview');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState<PreviewConfidence | null>(null);
+  const [confidenceLoading, setConfidenceLoading] = useState(false);
+
+  const checkConfidence = async (msId: string) => {
+    if (!token || !apiUrl) return;
+    setConfidenceLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${msId}/preview-confidence`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      if (res.ok) setConfidence(await res.json());
+    } catch {}
+    setConfidenceLoading(false);
+  };
 
   const mockContent = useMemo(
     () => generateMockV2Content(miniSections, lessonTitle),
@@ -101,6 +126,42 @@ export default function PreviewPanel({ miniSections, lessonTitle, lessonId, exte
             {isExternal ? 'AI' : 'Mock'}
           </span>
           <span className="text-muted" style={{ fontSize: 9 }}>{sections.length} sections</span>
+        </div>
+      )}
+
+      {/* Preview Confidence Check */}
+      {!compact && token && apiUrl && selectedMiniSectionId && (
+        <div className="mb-2 d-flex align-items-center gap-2">
+          <button
+            className="btn btn-sm btn-outline-primary"
+            onClick={() => checkConfidence(selectedMiniSectionId)}
+            disabled={confidenceLoading}
+            style={{ fontSize: 10 }}
+          >
+            {confidenceLoading ? (
+              <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Checking...</>
+            ) : (
+              <><i className="bi bi-shield-check me-1"></i>Check Confidence</>
+            )}
+          </button>
+          {confidence && (
+            <>
+              <span className={`badge ${confidence.valid ? 'bg-success' : 'bg-danger'}`} style={{ fontSize: 9 }}>
+                {confidence.valid ? 'Preview Valid' : 'Preview Failed'}
+              </span>
+              <span className="badge bg-light text-dark border" style={{ fontSize: 9 }}>
+                {confidence.confidence}% confidence
+              </span>
+              {confidence.unresolvedPlaceholders.length > 0 && (
+                <span className="text-danger" style={{ fontSize: 9 }} title={confidence.unresolvedPlaceholders.join(', ')}>
+                  <i className="bi bi-exclamation-triangle me-1"></i>{confidence.unresolvedPlaceholders.length} unresolved
+                </span>
+              )}
+              {confidence.warnings.map((w, i) => (
+                <span key={i} className="text-warning" style={{ fontSize: 9 }}><i className="bi bi-info-circle me-1"></i>{w}</span>
+              ))}
+            </>
+          )}
         </div>
       )}
 

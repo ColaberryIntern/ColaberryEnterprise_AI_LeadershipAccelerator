@@ -1,5 +1,5 @@
 import React from 'react';
-import { MiniSection, TYPE_BADGE_MAP, TYPE_ICONS, TYPE_STUDENT_LABEL } from './types';
+import { MiniSection, TYPE_BADGE_MAP, TYPE_ICONS, TYPE_STUDENT_LABEL, getScoreColor } from './types';
 
 interface Props {
   miniSections: MiniSection[];
@@ -91,6 +91,11 @@ export default function StudentStructureTree({ miniSections, selectedId, onSelec
               <div className="d-flex align-items-center gap-1">
                 <span className={`badge ${typeInfo.badge} flex-shrink-0`} style={{ fontSize: 8 }}>{studentLabel}</span>
                 {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 7 }}>unsaved</span>}
+                {ms.quality_score != null && (
+                  <span className={`badge ${getScoreColor(ms.quality_score)} flex-shrink-0`} style={{ fontSize: 7 }} title={`Quality: ${Math.round(ms.quality_score)}/100`}>
+                    {Math.round(ms.quality_score)}
+                  </span>
+                )}
               </div>
               <span className="text-truncate fw-medium" style={{ fontSize: 11 }}>{ms.title}</span>
             </div>

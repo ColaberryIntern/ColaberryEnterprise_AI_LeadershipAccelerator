@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { MiniSection, MiniSectionType, TYPE_OPTIONS, PromptBody, DryRunResult, VariableOption, VariableMapData } from './types';
+import { MiniSection, MiniSectionType, TYPE_OPTIONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult } from './types';
 import PromptSection from './PromptSection';
 import VariableSection from './VariableSection';
 import SkillSection from './SkillSection';
 import ArtifactSection from './ArtifactSection';
 import KnowledgeCheckSection from './KnowledgeCheckSection';
 import ValidationSection from './ValidationSection';
+import QualityScoreSection from './QualityScoreSection';
+import SuggestionSection from './SuggestionSection';
 import { PromptOption } from './types';
 
 interface Props {
@@ -39,6 +41,17 @@ interface Props {
   onCreateVariable: () => void;
   onCreateSkill: () => void;
   onCreateArtifact: () => void;
+  // Quality & diagnostics
+  qualityBreakdown: QualityBreakdown | null;
+  qualityLoading: boolean;
+  onRefreshQuality: () => void;
+  suggestions: Suggestion[];
+  suggestionsLoading: boolean;
+  applyingSuggestion: string | null;
+  onRefreshSuggestions: () => void;
+  onApplySuggestionFix: (s: Suggestion) => void;
+  onOpenDiagnostic: () => void;
+  onOpenRepair: () => void;
 }
 
 interface AccordionState {
@@ -49,12 +62,14 @@ interface AccordionState {
   artifacts: boolean;
   kc: boolean;
   validation: boolean;
+  quality: boolean;
+  suggestions: boolean;
 }
 
 export default function ObjectConfigEngine(props: Props) {
   const { editing, isNew, isDirty, miniSections, saving, error } = props;
   const [expanded, setExpanded] = useState<AccordionState>({
-    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false,
+    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
   });
 
   if (!editing) {
@@ -103,6 +118,11 @@ export default function ObjectConfigEngine(props: Props) {
         <div className="d-flex align-items-center gap-2">
           <span className="fw-semibold small">{isNew ? 'New Mini-Section' : 'Configure'}</span>
           {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 8 }}>unsaved changes</span>}
+          {editing.quality_score != null && (
+            <span className={`badge ${editing.quality_score >= 90 ? 'bg-info' : editing.quality_score >= 70 ? 'bg-success' : editing.quality_score >= 40 ? 'bg-warning text-dark' : 'bg-danger'}`} style={{ fontSize: 9 }}>
+              Score: {Math.round(editing.quality_score)}
+            </span>
+          )}
         </div>
         {selectedTypeInfo && (
           <span className={`badge ${selectedTypeInfo.badge}`} style={{ fontSize: 9 }}>{selectedTypeInfo.studentLabel}</span>
@@ -162,8 +182,11 @@ export default function ObjectConfigEngine(props: Props) {
         {renderAccordion('prompts', 'Prompts', 'bi-chat-left-text', (
           <PromptSection
             editing={editing}
+            miniSections={miniSections}
             prompts={props.prompts}
             promptBodies={props.promptBodies}
+            systemVariables={props.systemVariables}
+            variables={props.variables}
             fetchPromptBody={props.fetchPromptBody}
             onUpdate={props.onUpdate}
           />
@@ -219,6 +242,40 @@ export default function ObjectConfigEngine(props: Props) {
             onRevalidate={props.onRevalidate}
           />
         ))}
+
+        {/* Quality Score Section */}
+        {renderAccordion('quality', 'Quality Score', 'bi-graph-up', (
+          <QualityScoreSection
+            miniSectionId={editing.id}
+            qualityBreakdown={props.qualityBreakdown}
+            loading={props.qualityLoading}
+            onRefresh={props.onRefreshQuality}
+          />
+        ), !!editing.id)}
+
+        {/* Suggestions Section */}
+        {renderAccordion('suggestions', 'Improve to 100', 'bi-lightbulb', (
+          <SuggestionSection
+            miniSectionId={editing.id}
+            suggestions={props.suggestions}
+            loading={props.suggestionsLoading}
+            applying={props.applyingSuggestion}
+            onRefresh={props.onRefreshSuggestions}
+            onApplyFix={props.onApplySuggestionFix}
+          />
+        ), !!editing.id)}
+
+        {/* Diagnostic & Repair buttons */}
+        {editing.id && (
+          <div className="d-flex gap-2 mt-2 mb-1">
+            <button className="btn btn-sm btn-outline-primary flex-grow-1" onClick={props.onOpenDiagnostic}>
+              <i className="bi bi-clipboard2-pulse me-1"></i>Full Diagnostic
+            </button>
+            <button className="btn btn-sm btn-outline-warning flex-grow-1" onClick={props.onOpenRepair}>
+              <i className="bi bi-wrench-adjustable me-1"></i>Auto-Repair
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Footer */}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   MiniSection, MiniSectionType, Module, Lesson, PromptOption,
   SkillOption, VariableOption, ArtifactOption, DryRunResult, PromptBody, VariableMapData,
+  QualityBreakdown, Suggestion, DiagnosticReport, RepairResult,
 } from './types';
 
 interface BuilderProps {
@@ -32,6 +33,19 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
   // Validation
   const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
   const [variableMap, setVariableMap] = useState<VariableMapData | null>(null);
+
+  // Quality & diagnostics state
+  const [qualityBreakdown, setQualityBreakdown] = useState<QualityBreakdown | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [applyingSuggestion, setApplyingSuggestion] = useState<string | null>(null);
+  const [diagnosticReport, setDiagnosticReport] = useState<DiagnosticReport | null>(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [repairResult, setRepairResult] = useState<RepairResult | null>(null);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
+  const [showRepairModal, setShowRepairModal] = useState(false);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -95,6 +109,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     setOriginalEditing('');
     setDryRun(null);
     setVariableMap(null);
+    clearQualityState();
     if (id) {
       fetchMiniSections(id);
       runValidation(id);
@@ -104,11 +119,21 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     }
   };
 
+  const clearQualityState = () => {
+    setQualityBreakdown(null);
+    setSuggestions([]);
+    setDiagnosticReport(null);
+    setRepairResult(null);
+    setShowDiagnosticModal(false);
+    setShowRepairModal(false);
+  };
+
   const selectMiniSection = (id: string | null) => {
     if (isDirty && id !== selectedMiniSectionId) {
       if (!window.confirm('You have unsaved changes. Discard?')) return;
     }
     setSelectedMiniSectionId(id);
+    clearQualityState();
     if (id) {
       const ms = miniSections.find(m => m.id === id);
       if (ms) {
@@ -116,6 +141,9 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         setEditing(copy);
         setOriginalEditing(JSON.stringify(copy));
         setError('');
+        if (ms.quality_details) {
+          setQualityBreakdown(ms.quality_details as QualityBreakdown);
+        }
       }
     } else {
       setEditing(null);
@@ -137,6 +165,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     setEditing(newMs);
     setOriginalEditing(JSON.stringify(newMs));
     setError('');
+    clearQualityState();
   };
 
   const updateEditing = (updates: Partial<MiniSection>) => {
@@ -172,6 +201,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         setSelectedMiniSectionId(null);
         setEditing(null);
         setOriginalEditing('');
+        clearQualityState();
       }
       await fetchMiniSections(selectedLessonId);
       runValidation(selectedLessonId);
@@ -224,6 +254,88 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     } catch {}
   };
 
+  // --- Quality scoring ---
+  const fetchQualityScore = async (msId?: string) => {
+    const id = msId || selectedMiniSectionId;
+    if (!id) return;
+    setQualityLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${id}/quality`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const breakdown: QualityBreakdown = { overall: data.overall, grade: data.grade, categories: data.categories };
+        setQualityBreakdown(breakdown);
+        setEditing(prev => prev ? { ...prev, quality_score: data.overall, quality_details: breakdown } : null);
+        setMiniSections(prev => prev.map(ms => ms.id === id ? { ...ms, quality_score: data.overall, quality_details: breakdown } : ms));
+      }
+    } catch {}
+    setQualityLoading(false);
+  };
+
+  // --- Suggestions ---
+  const fetchSuggestions = async (msId?: string) => {
+    const id = msId || selectedMiniSectionId;
+    if (!id) return;
+    setSuggestionsLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${id}/suggestions`, { headers });
+      if (res.ok) setSuggestions(await res.json());
+    } catch {}
+    setSuggestionsLoading(false);
+  };
+
+  const applySuggestionFix = async (suggestion: Suggestion) => {
+    if (!suggestion.autoFixable || !suggestion.fixAction || !editing?.id) return;
+    setApplyingSuggestion(suggestion.id);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${editing.id}/auto-repair`, {
+        method: 'POST', headers, body: JSON.stringify({ dryRun: false }),
+      });
+      if (res.ok) {
+        await fetchMiniSections(selectedLessonId);
+        await fetchQualityScore(editing.id);
+        await fetchSuggestions(editing.id);
+      }
+    } catch {}
+    setApplyingSuggestion(null);
+  };
+
+  // --- Diagnostics ---
+  const runDiagnostic = async (msId?: string) => {
+    const id = msId || selectedMiniSectionId;
+    if (!id) return;
+    setDiagnosticLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${id}/extensive-check`, {
+        method: 'POST', headers,
+      });
+      if (res.ok) setDiagnosticReport(await res.json());
+    } catch {}
+    setDiagnosticLoading(false);
+  };
+
+  // --- Auto-repair ---
+  const runAutoRepair = async (dryRun: boolean, msId?: string) => {
+    const id = msId || selectedMiniSectionId;
+    if (!id) return;
+    setRepairLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${id}/auto-repair`, {
+        method: 'POST', headers, body: JSON.stringify({ dryRun }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setRepairResult(result);
+        if (!dryRun) {
+          await fetchMiniSections(selectedLessonId);
+          await fetchQualityScore(id);
+          await fetchSuggestions(id);
+        }
+      }
+    } catch {}
+    setRepairLoading(false);
+  };
+
   // --- Prompt body caching ---
   const fetchPromptBody = async (promptId: string) => {
     if (promptBodies[promptId]) return promptBodies[promptId];
@@ -267,6 +379,14 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     dryRun, variableMap, validating,
     runValidation: () => selectedLessonId && runValidation(selectedLessonId),
     fetchVariableMap: () => selectedLessonId && fetchVariableMap(selectedLessonId),
+
+    // Quality & diagnostics
+    qualityBreakdown, qualityLoading, fetchQualityScore,
+    suggestions, suggestionsLoading, applyingSuggestion, fetchSuggestions, applySuggestionFix,
+    diagnosticReport, diagnosticLoading, runDiagnostic,
+    showDiagnosticModal, setShowDiagnosticModal,
+    repairResult, repairLoading, runAutoRepair,
+    showRepairModal, setShowRepairModal,
 
     // UI state
     loading, saving, error, setError,

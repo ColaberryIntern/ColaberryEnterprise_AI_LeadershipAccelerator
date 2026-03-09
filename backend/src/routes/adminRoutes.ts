@@ -415,7 +415,8 @@ router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, asyn
           required: false,
           attributes: ['id', 'mini_section_type', 'title', 'mini_section_order',
             'associated_skill_ids', 'associated_variable_keys', 'creates_variable_keys',
-            'creates_artifact_ids', 'concept_prompt_template_id', 'build_prompt_template_id'],
+            'creates_artifact_ids', 'concept_prompt_template_id', 'build_prompt_template_id',
+            'quality_score', 'last_validated_at', 'concept_prompt_system', 'build_prompt_system'],
         }],
       }],
       order: [['module_number', 'ASC'], [{ model: CurriculumLesson, as: 'lessons' }, 'lesson_number', 'ASC']],
@@ -426,7 +427,7 @@ router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, asyn
       for (const lesson of (mod as any).lessons || []) {
         const miniSections = lesson.miniSections || [];
         const types = new Set(miniSections.map((ms: any) => ms.mini_section_type));
-        const hasPrompts = miniSections.some((ms: any) => ms.concept_prompt_template_id || ms.build_prompt_template_id);
+        const hasPrompts = miniSections.some((ms: any) => ms.concept_prompt_template_id || ms.build_prompt_template_id || ms.concept_prompt_system || ms.build_prompt_system);
         const hasSkills = miniSections.some((ms: any) => ms.associated_skill_ids?.length > 0);
         const hasVars = miniSections.some((ms: any) => ms.associated_variable_keys?.length > 0 || ms.creates_variable_keys?.length > 0);
 
@@ -440,6 +441,9 @@ router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, asyn
         if (!types.has('prompt_template')) warnings.push('Missing prompt_template');
         if (!types.has('implementation_task')) warnings.push('Missing implementation_task');
         if (!types.has('knowledge_check')) warnings.push('Missing knowledge_check');
+
+        const qualityScores = miniSections.map((ms: any) => ms.quality_score).filter((s: any) => s != null);
+        const avgQualityScore = qualityScores.length > 0 ? Math.round(qualityScores.reduce((a: number, b: number) => a + b, 0) / qualityScores.length) : null;
 
         matrix.push({
           moduleId: mod.id,
@@ -455,6 +459,8 @@ router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, asyn
           hasVars,
           status,
           warnings,
+          avgQualityScore,
+          miniSectionScores: miniSections.map((ms: any) => ({ id: ms.id, title: ms.title, score: ms.quality_score })),
         });
       }
     }
@@ -466,6 +472,115 @@ router.post('/api/admin/orchestration/bulk/validate-all', requireAdmin, async (_
   try {
     const { runIntegrityCheck } = await import('../services/curriculumManagerService');
     const result = await runIntegrityCheck();
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Quality Scoring, Suggestions, Auto-Repair, Diagnostics Routes ---
+router.get('/api/admin/orchestration/mini-sections/:id/quality', requireAdmin, async (req, res) => {
+  try {
+    const { scoreMiniSection } = await import('../services/qualityScoringService');
+    const result = await scoreMiniSection(req.params.id as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/lessons/:lessonId/quality', requireAdmin, async (req, res) => {
+  try {
+    const { scoreLessonMiniSections } = await import('../services/qualityScoringService');
+    const result = await scoreLessonMiniSections(req.params.lessonId as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/bulk/quality-scan', requireAdmin, async (_req, res) => {
+  try {
+    const { scoreAllMiniSections } = await import('../services/qualityScoringService');
+    const result = await scoreAllMiniSections();
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/mini-sections/:id/suggestions', requireAdmin, async (req, res) => {
+  try {
+    const { getSuggestions } = await import('../services/suggestionService');
+    const result = await getSuggestions(req.params.id as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/mini-sections/:id/auto-repair', requireAdmin, async (req, res) => {
+  try {
+    const { autoRepairMiniSection } = await import('../services/autoRepairService');
+    const result = await autoRepairMiniSection(req.params.id as string, req.body?.dryRun === true);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/lessons/:lessonId/auto-repair', requireAdmin, async (req, res) => {
+  try {
+    const { autoRepairLesson } = await import('../services/autoRepairService');
+    const result = await autoRepairLesson(req.params.lessonId as string, req.body?.dryRun === true);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/bulk/auto-repair-all', requireAdmin, async (req, res) => {
+  try {
+    const { autoRepairAll } = await import('../services/autoRepairService');
+    const result = await autoRepairAll(req.body?.dryRun === true);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/mini-sections/:id/extensive-check', requireAdmin, async (req, res) => {
+  try {
+    const { extensiveCheckMiniSection } = await import('../services/extensiveCheckService');
+    const result = await extensiveCheckMiniSection(req.params.id as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/lessons/:lessonId/extensive-check', requireAdmin, async (req, res) => {
+  try {
+    const { extensiveCheckLesson } = await import('../services/extensiveCheckService');
+    const result = await extensiveCheckLesson(req.params.lessonId as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/bulk/run-all-diagnostics', requireAdmin, async (_req, res) => {
+  try {
+    const { extensiveCheckAll } = await import('../services/extensiveCheckService');
+    const result = await extensiveCheckAll();
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/mini-sections/:id/preview-confidence', requireAdmin, async (req, res) => {
+  try {
+    const { checkPreviewConfidence } = await import('../services/extensiveCheckService');
+    const result = await checkPreviewConfidence(req.params.id as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/lessons/:lessonId/ai-readiness', requireAdmin, async (req, res) => {
+  try {
+    const { checkAIReadiness } = await import('../services/aiReadinessService');
+    const result = await checkAIReadiness(req.params.lessonId as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.post('/api/admin/orchestration/lessons/:lessonId/final-validation', requireAdmin, async (req, res) => {
+  try {
+    const { runFinalValidation } = await import('../services/curriculumManagerService');
+    const result = await runFinalValidation(req.params.lessonId as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Backfill Routes ---
+router.post('/api/admin/orchestration/backfill/inline-prompts', requireAdmin, async (_req, res) => {
+  try {
+    const { backfillInlinePrompts } = await import('../services/backfillService');
+    const result = await backfillInlinePrompts();
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/backfill/status', requireAdmin, async (_req, res) => {
+  try {
+    const { getBackfillStatus } = await import('../services/backfillService');
+    const result = await getBackfillStatus();
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

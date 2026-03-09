@@ -502,18 +502,66 @@ async function buildCompositePrompt(
         break;
     }
 
-    // Resolve concept prompt template if linked
-    const conceptPrompt = (ms as any).conceptPrompt;
-    if (conceptPrompt?.user_prompt_template) {
-      const resolved = await resolveTemplate(conceptPrompt.user_prompt_template, enrollmentId);
-      parts.push(`Concept Prompt: ${resolved}`);
+    // Resolve prompts: prefer inline fields, fall back to FK templates
+    // Concept prompt
+    const conceptInlineSystem = (ms as any).concept_prompt_system;
+    const conceptInlineUser = (ms as any).concept_prompt_user;
+    if (conceptInlineUser || conceptInlineSystem) {
+      if (conceptInlineSystem) parts.push(`Concept System: ${conceptInlineSystem}`);
+      if (conceptInlineUser) {
+        const resolved = await resolveTemplate(conceptInlineUser, enrollmentId);
+        parts.push(`Concept Prompt: ${resolved}`);
+      }
+    } else {
+      const conceptPrompt = (ms as any).conceptPrompt;
+      if (conceptPrompt?.user_prompt_template) {
+        const resolved = await resolveTemplate(conceptPrompt.user_prompt_template, enrollmentId);
+        parts.push(`Concept Prompt: ${resolved}`);
+      }
     }
 
-    // Resolve build prompt template if linked
-    const buildPrompt = (ms as any).buildPrompt;
-    if (buildPrompt?.user_prompt_template) {
-      const resolved = await resolveTemplate(buildPrompt.user_prompt_template, enrollmentId);
-      parts.push(`Build Prompt: ${resolved}`);
+    // Build prompt
+    const buildInlineSystem = (ms as any).build_prompt_system;
+    const buildInlineUser = (ms as any).build_prompt_user;
+    if (buildInlineUser || buildInlineSystem) {
+      if (buildInlineSystem) parts.push(`Build System: ${buildInlineSystem}`);
+      if (buildInlineUser) {
+        const resolved = await resolveTemplate(buildInlineUser, enrollmentId);
+        parts.push(`Build Prompt: ${resolved}`);
+      }
+    } else {
+      const buildPrompt = (ms as any).buildPrompt;
+      if (buildPrompt?.user_prompt_template) {
+        const resolved = await resolveTemplate(buildPrompt.user_prompt_template, enrollmentId);
+        parts.push(`Build Prompt: ${resolved}`);
+      }
+    }
+
+    // Mentor prompt
+    const mentorInlineSystem = (ms as any).mentor_prompt_system;
+    const mentorInlineUser = (ms as any).mentor_prompt_user;
+    if (mentorInlineUser || mentorInlineSystem) {
+      if (mentorInlineSystem) parts.push(`Mentor System: ${mentorInlineSystem}`);
+      if (mentorInlineUser) {
+        const resolved = await resolveTemplate(mentorInlineUser, enrollmentId);
+        parts.push(`Mentor Prompt: ${resolved}`);
+      }
+    } else {
+      const mentorPrompt = (ms as any).mentorPrompt;
+      if (mentorPrompt?.user_prompt_template) {
+        const resolved = await resolveTemplate(mentorPrompt.user_prompt_template, enrollmentId);
+        parts.push(`Mentor Prompt: ${resolved}`);
+      }
+    }
+
+    // KC and Reflection prompts (inline only, no FK equivalent)
+    if ((ms as any).kc_prompt_user) {
+      const resolved = await resolveTemplate((ms as any).kc_prompt_user, enrollmentId);
+      parts.push(`Knowledge Check Prompt: ${resolved}`);
+    }
+    if ((ms as any).reflection_prompt_user) {
+      const resolved = await resolveTemplate((ms as any).reflection_prompt_user, enrollmentId);
+      parts.push(`Reflection Prompt: ${resolved}`);
     }
 
     if (ms.associated_variable_keys?.length) {
@@ -730,14 +778,48 @@ export async function buildCompositePromptForSimulation(
         break;
     }
 
-    // Resolve templates using test variables instead of enrollment
-    const conceptPrompt = (ms as any).conceptPrompt;
-    if (conceptPrompt?.user_prompt_template) {
-      parts.push(`Concept Prompt: ${resolveWithTestVars(conceptPrompt.user_prompt_template, testVariables)}`);
+    // Resolve prompts: prefer inline fields, fall back to FK templates
+    const conceptInlineUser = (ms as any).concept_prompt_user;
+    const conceptInlineSystem = (ms as any).concept_prompt_system;
+    if (conceptInlineUser || conceptInlineSystem) {
+      if (conceptInlineSystem) parts.push(`Concept System: ${conceptInlineSystem}`);
+      if (conceptInlineUser) parts.push(`Concept Prompt: ${resolveWithTestVars(conceptInlineUser, testVariables)}`);
+    } else {
+      const conceptPrompt = (ms as any).conceptPrompt;
+      if (conceptPrompt?.user_prompt_template) {
+        parts.push(`Concept Prompt: ${resolveWithTestVars(conceptPrompt.user_prompt_template, testVariables)}`);
+      }
     }
-    const buildPrompt = (ms as any).buildPrompt;
-    if (buildPrompt?.user_prompt_template) {
-      parts.push(`Build Prompt: ${resolveWithTestVars(buildPrompt.user_prompt_template, testVariables)}`);
+
+    const buildInlineUser = (ms as any).build_prompt_user;
+    const buildInlineSystem = (ms as any).build_prompt_system;
+    if (buildInlineUser || buildInlineSystem) {
+      if (buildInlineSystem) parts.push(`Build System: ${buildInlineSystem}`);
+      if (buildInlineUser) parts.push(`Build Prompt: ${resolveWithTestVars(buildInlineUser, testVariables)}`);
+    } else {
+      const buildPrompt = (ms as any).buildPrompt;
+      if (buildPrompt?.user_prompt_template) {
+        parts.push(`Build Prompt: ${resolveWithTestVars(buildPrompt.user_prompt_template, testVariables)}`);
+      }
+    }
+
+    const mentorInlineUser = (ms as any).mentor_prompt_user;
+    const mentorInlineSystem = (ms as any).mentor_prompt_system;
+    if (mentorInlineUser || mentorInlineSystem) {
+      if (mentorInlineSystem) parts.push(`Mentor System: ${mentorInlineSystem}`);
+      if (mentorInlineUser) parts.push(`Mentor Prompt: ${resolveWithTestVars(mentorInlineUser, testVariables)}`);
+    } else {
+      const mentorPrompt = (ms as any).mentorPrompt;
+      if (mentorPrompt?.user_prompt_template) {
+        parts.push(`Mentor Prompt: ${resolveWithTestVars(mentorPrompt.user_prompt_template, testVariables)}`);
+      }
+    }
+
+    if ((ms as any).kc_prompt_user) {
+      parts.push(`Knowledge Check Prompt: ${resolveWithTestVars((ms as any).kc_prompt_user, testVariables)}`);
+    }
+    if ((ms as any).reflection_prompt_user) {
+      parts.push(`Reflection Prompt: ${resolveWithTestVars((ms as any).reflection_prompt_user, testVariables)}`);
     }
 
     if (ms.associated_variable_keys?.length) {

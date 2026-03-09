@@ -67,6 +67,8 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
   const [showPrompt, setShowPrompt] = useState(false);
   const [history, setHistory] = useState<SimulationHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [readiness, setReadiness] = useState<any>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -84,6 +86,15 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
       const res = await fetch(`${apiUrl}/api/admin/orchestration/simulate/section/${lessonId}/history`, { headers });
       if (res.ok) setHistory(await res.json());
     } catch { /* non-critical */ }
+  };
+
+  const checkReadiness = async () => {
+    setReadinessLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/ai-readiness`, { method: 'POST', headers });
+      if (res.ok) setReadiness(await res.json());
+    } catch {}
+    setReadinessLoading(false);
   };
 
   const runSimulation = async () => {
@@ -195,8 +206,15 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
         </div>
       )}
 
-      {/* Run Button */}
-      <div className="d-flex gap-2 mb-3">
+      {/* Run Button + Readiness Check */}
+      <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
+        <button className="btn btn-sm btn-outline-info" onClick={checkReadiness} disabled={readinessLoading}>
+          {readinessLoading ? (
+            <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Checking...</>
+          ) : (
+            <><i className="bi bi-shield-check me-1"></i>Readiness Check</>
+          )}
+        </button>
         <button className="btn btn-sm btn-success" onClick={runSimulation} disabled={running}>
           {running ? (
             <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Running...</>
@@ -208,6 +226,40 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
           <i className="bi bi-clock-history me-1"></i>History ({history.length})
         </button>
       </div>
+
+      {/* Readiness Result */}
+      {readiness && (
+        <div className={`alert ${readiness.readinessScore >= 80 ? 'alert-success' : readiness.readinessScore >= 50 ? 'alert-warning' : 'alert-danger'} py-2 mb-3`} style={{ fontSize: 11 }}>
+          <div className="d-flex justify-content-between align-items-center mb-1">
+            <strong>AI Readiness: {readiness.readinessScore}%</strong>
+            <button className="btn-close" style={{ fontSize: 8 }} onClick={() => setReadiness(null)} />
+          </div>
+          <div className="d-flex gap-2 mb-1 flex-wrap">
+            {Object.entries(readiness.stages || {}).map(([key, stage]: [string, any]) => (
+              <span key={key} className={`badge ${stage.ready ? 'bg-success' : 'bg-danger'}`} style={{ fontSize: 8 }}>
+                {key.replace(/([A-Z])/g, ' $1').trim()}
+                {stage.ready ? ' \u2713' : ' \u2717'}
+              </span>
+            ))}
+          </div>
+          {readiness.blockers?.length > 0 && (
+            <div className="mt-1">
+              <strong style={{ fontSize: 10 }}>Blockers:</strong>
+              <ul className="mb-0 ps-3" style={{ fontSize: 10 }}>
+                {readiness.blockers.map((b: string, i: number) => <li key={i}>{b}</li>)}
+              </ul>
+            </div>
+          )}
+          {readiness.recommendations?.length > 0 && (
+            <div className="mt-1">
+              <strong style={{ fontSize: 10 }}>Recommendations:</strong>
+              <ul className="mb-0 ps-3" style={{ fontSize: 10 }}>
+                {readiness.recommendations.map((r: string, i: number) => <li key={i}>{r}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Result */}
       {result && (

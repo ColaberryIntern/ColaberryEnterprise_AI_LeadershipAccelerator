@@ -12,6 +12,23 @@ export interface MiniSection {
   concept_prompt_template_id: string;
   build_prompt_template_id: string;
   mentor_prompt_template_id: string;
+  // Inline prompt fields
+  concept_prompt_system?: string;
+  concept_prompt_user?: string;
+  build_prompt_system?: string;
+  build_prompt_user?: string;
+  mentor_prompt_system?: string;
+  mentor_prompt_user?: string;
+  kc_prompt_system?: string;
+  kc_prompt_user?: string;
+  reflection_prompt_system?: string;
+  reflection_prompt_user?: string;
+  prompt_source?: 'inline' | 'template' | 'hybrid';
+  // Quality tracking
+  quality_score?: number;
+  quality_details?: QualityBreakdown;
+  last_validated_at?: string;
+  // Existing fields
   associated_skill_ids: string[];
   associated_variable_keys: string[];
   associated_artifact_ids: string[];
@@ -60,6 +77,116 @@ export interface VariableMapData {
   referenced: { key: string; miniSectionTitle: string; order: number; definitionExists: boolean }[];
   warnings: string[];
 }
+
+// Quality scoring interfaces
+export interface QualityCategory {
+  name: string;
+  score: number;
+  maxScore: number;
+  details: string[];
+}
+
+export interface QualityBreakdown {
+  overall: number;
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  categories: QualityCategory[];
+}
+
+// Suggestion engine interfaces
+export interface Suggestion {
+  id: string;
+  miniSectionId: string;
+  category: 'prompt' | 'variable' | 'skill' | 'artifact' | 'validation' | 'testing';
+  severity: 'critical' | 'warning' | 'info';
+  description: string;
+  autoFixable: boolean;
+  fixAction?: string;
+  fixParams?: Record<string, any>;
+  targetSection?: string;
+}
+
+// Diagnostic report interfaces
+export interface DiagnosticCheck {
+  label: string;
+  status: 'pass' | 'warning' | 'fail';
+  message: string;
+}
+
+export interface DiagnosticCategory {
+  name: string;
+  status: 'pass' | 'warning' | 'fail';
+  details: DiagnosticCheck[];
+}
+
+export interface DiagnosticReport {
+  miniSectionId: string;
+  timestamp: string;
+  overallStatus: 'pass' | 'warning' | 'fail';
+  categories: DiagnosticCategory[];
+  score: number;
+}
+
+// Auto-repair interfaces
+export interface RepairFix {
+  action: string;
+  field: string;
+  oldValue: any;
+  newValue: any;
+}
+
+export interface RepairResult {
+  miniSectionId: string;
+  appliedFixes: RepairFix[];
+  skippedFixes: { action: string; reason: string }[];
+  previousScore: number;
+  newQualityScore: number;
+}
+
+// Backfill interfaces
+export interface BackfillResult {
+  backfilled: number;
+  alreadyHadInline: number;
+  brokenReferences: { miniSectionId: string; field: string; templateId: string }[];
+  incomplete: { miniSectionId: string; missingPrompts: string[] }[];
+}
+
+// Preview confidence
+export interface PreviewConfidenceResult {
+  valid: boolean;
+  confidence: number;
+  unresolvedPlaceholders: string[];
+  missingVariables: string[];
+  warnings: string[];
+}
+
+// AI readiness
+export interface AIReadinessStage {
+  ready: boolean;
+  issues: string[];
+}
+
+export interface AIReadinessResult {
+  lessonId: string;
+  readinessScore: number;
+  stages: {
+    promptExecution: AIReadinessStage;
+    artifactCreation: AIReadinessStage;
+    knowledgeScoring: AIReadinessStage;
+    skillUpdates: AIReadinessStage;
+    variableFlow: AIReadinessStage;
+  };
+  blockers: string[];
+  recommendations: string[];
+}
+
+// Prompt type mapping for inline editors
+export const PROMPT_PAIRS: { key: string; systemField: keyof MiniSection; userField: keyof MiniSection; fkField: keyof MiniSection; label: string; applicableTypes: MiniSectionType[] }[] = [
+  { key: 'concept', systemField: 'concept_prompt_system', userField: 'concept_prompt_user', fkField: 'concept_prompt_template_id', label: 'Concept Prompt', applicableTypes: ['executive_reality_check', 'ai_strategy', 'prompt_template'] },
+  { key: 'build', systemField: 'build_prompt_system', userField: 'build_prompt_user', fkField: 'build_prompt_template_id', label: 'Build Prompt', applicableTypes: ['prompt_template', 'implementation_task'] },
+  { key: 'mentor', systemField: 'mentor_prompt_system', userField: 'mentor_prompt_user', fkField: 'mentor_prompt_template_id', label: 'Mentor Prompt', applicableTypes: ['executive_reality_check', 'ai_strategy', 'prompt_template', 'implementation_task', 'knowledge_check'] },
+  { key: 'kc', systemField: 'kc_prompt_system', userField: 'kc_prompt_user', fkField: 'concept_prompt_template_id', label: 'Knowledge Check Prompt', applicableTypes: ['knowledge_check'] },
+  { key: 'reflection', systemField: 'reflection_prompt_system', userField: 'reflection_prompt_user', fkField: 'concept_prompt_template_id', label: 'Reflection Prompt', applicableTypes: ['knowledge_check'] },
+];
 
 export const TYPE_OPTIONS: { value: MiniSectionType; label: string; badge: string; studentLabel: string; description: string }[] = [
   { value: 'executive_reality_check', label: 'Executive Reality Check', badge: 'bg-primary', studentLabel: 'Concept Snapshot', description: 'Contextual analysis using student variables. Cannot create variables or artifacts.' },
@@ -112,4 +239,22 @@ export function computeAvailableVars(
     }
   }
   return available;
+}
+
+/** Score color based on quality score value */
+export function getScoreColor(score: number | undefined | null): string {
+  if (score == null) return 'bg-light text-muted';
+  if (score >= 90) return 'bg-info';
+  if (score >= 70) return 'bg-success';
+  if (score >= 40) return 'bg-warning text-dark';
+  return 'bg-danger';
+}
+
+/** Grade letter from score */
+export function getGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
+  if (score >= 90) return 'A';
+  if (score >= 75) return 'B';
+  if (score >= 60) return 'C';
+  if (score >= 45) return 'D';
+  return 'F';
 }
