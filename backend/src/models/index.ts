@@ -49,6 +49,11 @@ import SessionChecklist from './SessionChecklist';
 import AuditLog from './AuditLog';
 import BlueprintSnapshot from './BlueprintSnapshot';
 import TestSimulationResult from './TestSimulationResult';
+import AiAgent from './AiAgent';
+import AiAgentActivityLog from './AiAgentActivityLog';
+import CampaignHealth from './CampaignHealth';
+import CampaignError from './CampaignError';
+import AiSystemEvent from './AiSystemEvent';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -314,6 +319,18 @@ SessionChecklist.belongsTo(LiveSession, { foreignKey: 'session_id', as: 'session
 ProgramBlueprint.hasMany(BlueprintSnapshot, { foreignKey: 'blueprint_id', as: 'snapshots', onDelete: 'CASCADE' });
 BlueprintSnapshot.belongsTo(ProgramBlueprint, { foreignKey: 'blueprint_id', as: 'blueprint' });
 
+// --- AI Operations Layer associations ---
+AiAgent.hasMany(AiAgentActivityLog, { foreignKey: 'agent_id', as: 'activityLogs' });
+AiAgentActivityLog.belongsTo(AiAgent, { foreignKey: 'agent_id', as: 'agent' });
+
+Campaign.hasOne(CampaignHealth, { foreignKey: 'campaign_id', as: 'health' });
+CampaignHealth.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
+Campaign.hasMany(CampaignError, { foreignKey: 'campaign_id', as: 'campaignErrors' });
+CampaignError.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
+AiAgentActivityLog.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -343,4 +360,9 @@ export {
   AuditLog,
   BlueprintSnapshot,
   TestSimulationResult,
+  AiAgent,
+  AiAgentActivityLog,
+  CampaignHealth,
+  CampaignError,
+  AiSystemEvent,
 };

@@ -1026,4 +1026,8 @@ export function startScheduler(): void {
   console.log('[Scheduler] Accelerator: session reminders every 30 min (24h + 1h before)');
   console.log('[Scheduler] Accelerator: session lifecycle (live/completed) every 5 min');
   console.log('[Scheduler] Accelerator: post-session absence detection + readiness recompute');
+
+  // AI Operations Layer scheduler
+  const { startAIOpsScheduler } = require('./aiOpsScheduler');
+  startAIOpsScheduler();
 }

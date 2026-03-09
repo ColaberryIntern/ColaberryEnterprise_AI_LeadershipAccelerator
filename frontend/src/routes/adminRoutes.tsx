@@ -22,6 +22,7 @@ import AdminVisitorsPage from '../pages/admin/AdminVisitorsPage';
 import AdminOpportunitiesPage from '../pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from '../pages/admin/AdminAcceleratorPage';
 import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
+import AdminAISettingsPage from '../pages/admin/AdminAISettingsPage';
 
 const adminRoutes = (
   <>
@@ -47,6 +48,7 @@ const adminRoutes = (
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
+        <Route path="/admin/ai-settings" element={<AdminAISettingsPage />} />
       </Route>
     </Route>
   </>
