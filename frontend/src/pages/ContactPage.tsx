@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import SEOHead from '../components/SEOHead';
+import LeadCaptureForm from '../components/LeadCaptureForm';
+import StrategyCallModal from '../components/StrategyCallModal';
 
 interface FormErrors {
   [key: string]: string;
 }
 
 function ContactPage() {
+  const navigate = useNavigate();
+  const [showBooking, setShowBooking] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -96,9 +100,96 @@ function ContactPage() {
         </div>
       </section>
 
-      {/* Contact Form */}
+      {/* Executive AI Briefing Download */}
+      <section className="section-alt py-5" aria-label="Download Executive AI Briefing">
+        <div className="container" style={{ maxWidth: '1100px' }}>
+          <div className="bg-white rounded-4 shadow p-4 p-md-5">
+            <div className="text-center mb-5">
+              <h2 className="mb-3" style={{ fontSize: '2rem' }}>Executive AI Accelerator Briefing</h2>
+              <p className="text-muted mb-0" style={{ maxWidth: '680px', margin: '0 auto', fontSize: '1.1rem' }}>
+                Get the full program overview — curriculum, ROI framework, and enterprise case studies
+                delivered to your inbox.
+              </p>
+            </div>
+
+            <div className="row g-4 mb-5">
+              {[
+                { icon: '📅', title: '21-Day Execution Roadmap', description: 'Clear day-by-day transformation path' },
+                { icon: '💰', title: 'ROI & Cost Framework', description: 'Internal build vs consulting math' },
+                { icon: '🏢', title: 'Enterprise Case Studies', description: 'Documented deployment results' },
+                { icon: '🧱', title: 'AI Architecture Blueprint', description: 'Learn / Build / Manage model' },
+              ].map((item) => (
+                <div className="col-md-6 col-lg-3" key={item.title}>
+                  <div className="card card-lift h-100 border text-center p-3">
+                    <div className="fs-2 mb-2" aria-hidden="true">{item.icon}</div>
+                    <div className="fw-bold small mb-1">{item.title}</div>
+                    <div className="text-muted" style={{ fontSize: '0.8rem' }}>{item.description}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <LeadCaptureForm
+              formType="contact_executive_briefing"
+              fields={['name', 'email', 'company', 'title', 'phone', 'company_size']}
+              submitLabel="Get Executive Briefing →"
+              buttonClassName="btn btn-hero-primary btn-lg w-100"
+              captureUtm={true}
+              onSuccess={(data) => navigate('/executive-overview/thank-you', { state: data })}
+              className="mb-4"
+            />
+
+            <div className="text-center mt-4 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+              <p className="fw-semibold small mb-1">Enterprise Data Respect Policy</p>
+              <p className="text-muted small mb-0">
+                We never sell your information. Your data is used solely to deliver requested materials.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Strategy Call CTA */}
+      <section
+        className="text-light text-center"
+        aria-label="Schedule Strategy Call"
+        style={{
+          background: 'linear-gradient(135deg, #0f1b2d 0%, #1a365d 50%, #1e3a5f 100%)',
+          padding: '5rem 0',
+        }}
+      >
+        <div className="container" style={{ maxWidth: '750px' }}>
+          <h2 className="text-light mb-3" style={{ fontSize: '2rem' }}>
+            Ready to Deploy AI in the Next 30 Days?
+          </h2>
+          <p className="mb-4" style={{ opacity: 0.85, fontSize: '1.1rem' }}>
+            Schedule a 30-minute executive strategy session to align roadmap,
+            architecture, and internal capability.
+          </p>
+          <p className="mb-4 small" style={{ opacity: 0.6 }}>
+            Most executives schedule this call immediately after reviewing the briefing.
+          </p>
+          <button
+            className="btn btn-hero-primary btn-lg px-5"
+            onClick={() => setShowBooking(true)}
+          >
+            Schedule Executive Strategy Call →
+          </button>
+          <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
+            <span className="small">✓ 30-minute focused session</span>
+            <span className="small">✓ No obligation</span>
+            <span className="small">✓ Architecture-first discussion</span>
+          </div>
+        </div>
+      </section>
+
+      {/* General Contact Form */}
       <section className="section" aria-label="Contact Form">
         <div className="container content-narrow">
+          <h2 className="text-center mb-2">Talk to Our Enterprise AI Team</h2>
+          <p className="text-center text-muted mb-4">
+            Have a specific question or need? Send us a message and we'll respond within one business day.
+          </p>
           {submitted ? (
             <div className="text-center py-5" role="alert">
               <h2 className="text-success mb-3">✅ Message Received</h2>
@@ -117,63 +208,63 @@ function ContactPage() {
               )}
               <div className="row g-3">
                 <div className="col-md-6">
-                  <label htmlFor="name" className="form-label">
+                  <label htmlFor="contact-name" className="form-label">
                     Full Name <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
                     className={`form-control ${errors.name ? 'is-invalid' : ''}`}
-                    id="name"
+                    id="contact-name"
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
                     required
                     aria-required="true"
-                    aria-describedby={errors.name ? 'name-error' : undefined}
+                    aria-describedby={errors.name ? 'contact-name-error' : undefined}
                   />
                   {errors.name && (
-                    <div className="invalid-feedback" id="name-error">{errors.name}</div>
+                    <div className="invalid-feedback" id="contact-name-error">{errors.name}</div>
                   )}
                 </div>
                 <div className="col-md-6">
-                  <label htmlFor="email" className="form-label">
+                  <label htmlFor="contact-email" className="form-label">
                     Email <span className="text-danger">*</span>
                   </label>
                   <input
                     type="email"
                     className={`form-control ${errors.email ? 'is-invalid' : ''}`}
-                    id="email"
+                    id="contact-email"
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
                     required
                     aria-required="true"
-                    aria-describedby={errors.email ? 'email-error' : undefined}
+                    aria-describedby={errors.email ? 'contact-email-error' : undefined}
                   />
                   {errors.email && (
-                    <div className="invalid-feedback" id="email-error">{errors.email}</div>
+                    <div className="invalid-feedback" id="contact-email-error">{errors.email}</div>
                   )}
                 </div>
                 <div className="col-md-6">
-                  <label htmlFor="company" className="form-label">
+                  <label htmlFor="contact-company" className="form-label">
                     Company
                   </label>
                   <input
                     type="text"
                     className="form-control"
-                    id="company"
+                    id="contact-company"
                     name="company"
                     value={formData.company}
                     onChange={handleChange}
                   />
                 </div>
                 <div className="col-md-6">
-                  <label htmlFor="role" className="form-label">
+                  <label htmlFor="contact-role" className="form-label">
                     Your Role
                   </label>
                   <select
                     className="form-select"
-                    id="role"
+                    id="contact-role"
                     name="role"
                     value={formData.role}
                     onChange={handleChange}
@@ -187,13 +278,13 @@ function ContactPage() {
                   </select>
                 </div>
                 <div className="col-md-6">
-                  <label htmlFor="phone" className="form-label">
+                  <label htmlFor="contact-phone" className="form-label">
                     Phone Number
                   </label>
                   <input
                     type="tel"
                     className="form-control"
-                    id="phone"
+                    id="contact-phone"
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
@@ -201,12 +292,12 @@ function ContactPage() {
                   />
                 </div>
                 <div className="col-md-6">
-                  <label htmlFor="interest_area" className="form-label">
+                  <label htmlFor="contact-interest" className="form-label">
                     What brings you here?
                   </label>
                   <select
                     className="form-select"
-                    id="interest_area"
+                    id="contact-interest"
                     name="interest_area"
                     value={formData.interest_area}
                     onChange={handleChange}
@@ -222,12 +313,12 @@ function ContactPage() {
                   </select>
                 </div>
                 <div className="col-12">
-                  <label htmlFor="message" className="form-label">
+                  <label htmlFor="contact-message" className="form-label">
                     Message
                   </label>
                   <textarea
                     className="form-control"
-                    id="message"
+                    id="contact-message"
                     name="message"
                     rows={4}
                     value={formData.message}
@@ -239,7 +330,7 @@ function ContactPage() {
                     <input
                       type="checkbox"
                       className={`form-check-input ${errors.consent ? 'is-invalid' : ''}`}
-                      id="consent"
+                      id="contact-consent"
                       checked={consentChecked}
                       onChange={(e) => {
                         setConsentChecked(e.target.checked);
@@ -248,7 +339,7 @@ function ContactPage() {
                         }
                       }}
                     />
-                    <label className="form-check-label small" htmlFor="consent">
+                    <label className="form-check-label small" htmlFor="contact-consent">
                       I agree to be contacted by Colaberry about the Enterprise AI Leadership Accelerator <span className="text-danger">*</span>
                     </label>
                     {errors.consent && (
@@ -286,14 +377,18 @@ function ContactPage() {
             <div className="col-md-4">
               <h3 className="h5">📞 Strategy Call</h3>
               <p className="text-muted">Book a 30-minute strategy call with our Enterprise AI team.</p>
-              {/* TODO: Replace href with Calendly or booking integration URL */}
-              <Link to="/contact" className="btn btn-outline-primary btn-sm">
+              <button
+                className="btn btn-outline-primary btn-sm"
+                onClick={() => setShowBooking(true)}
+              >
                 Book a Call
-              </Link>
+              </button>
             </div>
           </div>
         </div>
       </section>
+
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
     </>
   );
 }

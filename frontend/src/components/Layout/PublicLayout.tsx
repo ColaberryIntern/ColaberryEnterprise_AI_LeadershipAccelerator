@@ -5,6 +5,7 @@ import PublicFooter from './PublicFooter';
 import { initTracker } from '../../utils/tracker';
 
 const ChatWidget = lazy(() => import('../ChatWidget'));
+const MarketingMonitorPanel = lazy(() => import('../MarketingMonitorPanel'));
 
 function PublicLayout() {
   useEffect(() => { initTracker(); }, []);
@@ -21,6 +22,9 @@ function PublicLayout() {
       <PublicFooter />
       <Suspense fallback={null}>
         <ChatWidget />
+      </Suspense>
+      <Suspense fallback={null}>
+        <MarketingMonitorPanel />
       </Suspense>
     </div>
   );

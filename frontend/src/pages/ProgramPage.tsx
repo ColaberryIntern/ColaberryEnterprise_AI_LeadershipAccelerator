@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 
@@ -28,6 +28,65 @@ function FadeIn({ children, className = '' }: { children: React.ReactNode; class
   return (
     <div ref={ref} className={`fade-in-section ${className}`}>
       {children}
+    </div>
+  );
+}
+
+const FAQ_ITEMS = [
+  {
+    question: 'What LLM or AI tools do I need?',
+    answer: 'You can use any enterprise LLM your company approves — ChatGPT, Claude, Gemini, or another platform. There is no requirement to use a specific tool. You bring your own credentials and API access.',
+  },
+  {
+    question: "What's the time commitment?",
+    answer: '5 live sessions, 2 hours each, held on Tuesdays and Thursdays over 3 weeks. Between sessions, expect 2-4 hours of applied work on your own AI initiative using your organization\'s tools and data.',
+  },
+  {
+    question: 'Do I need technical experience?',
+    answer: 'No. This program is designed for enterprise leaders — directors, VPs, CTOs, and CDOs — who need to deploy AI capability, not write code. The 3-Agent Model gives you an execution framework that works regardless of your technical background.',
+  },
+  {
+    question: 'What do I walk away with?',
+    answer: 'Concrete, executive-ready artifacts: a working AI Proof of Capability scoped to your organization, an executive presentation deck for internal buy-in, a 90-Day AI expansion roadmap, and reusable architecture templates.',
+  },
+  {
+    question: 'Is my company data safe?',
+    answer: 'Yes. You use your own LLM with your own credentials throughout the program. No company data is shared with Colaberry\'s systems or other participants. All work stays within your organization\'s security perimeter.',
+  },
+  {
+    question: "What's the class format?",
+    answer: 'Live virtual sessions with hands-on exercises. Each session combines instruction with guided execution — you build your actual AI initiative during the program, not hypothetical examples.',
+  },
+];
+
+function FAQAccordion() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  return (
+    <div className="accordion accordion-flush" id="programFAQ">
+      {FAQ_ITEMS.map((item, i) => (
+        <div className="accordion-item" key={i}>
+          <h3 className="accordion-header">
+            <button
+              className={`accordion-button ${openIndex === i ? '' : 'collapsed'}`}
+              type="button"
+              onClick={() => setOpenIndex(openIndex === i ? null : i)}
+              aria-expanded={openIndex === i}
+              aria-controls={`faq-collapse-${i}`}
+            >
+              {item.question}
+            </button>
+          </h3>
+          <div
+            id={`faq-collapse-${i}`}
+            className={`accordion-collapse collapse ${openIndex === i ? 'show' : ''}`}
+          >
+            <div className="accordion-body text-muted">
+              {item.answer}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -65,10 +124,16 @@ function ProgramPage() {
         <div className="container">
           <FadeIn>
             <h2 className="text-center mb-3">Your Transformation in 21 Days</h2>
-            <p className="text-center text-muted mb-5" style={{ maxWidth: '680px', margin: '0 auto' }}>
+            <p className="text-center text-muted mb-4" style={{ maxWidth: '680px', margin: '0 auto' }}>
               A structured progression that turns enterprise leaders into AI architects
-              inside their organization — not a class schedule.
+              inside their organization.
             </p>
+            <div className="d-flex justify-content-center gap-3 flex-wrap mb-5">
+              <span className="badge bg-primary px-3 py-2">5 Sessions</span>
+              <span className="badge bg-primary px-3 py-2">3 Weeks</span>
+              <span className="badge bg-primary px-3 py-2">2 Hours Each</span>
+              <span className="badge bg-secondary px-3 py-2">Tue &amp; Thu</span>
+            </div>
           </FadeIn>
           <FadeIn>
             <div className="timeline-horizontal">
@@ -109,7 +174,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 1</span>
+                  <span className="badge bg-secondary me-3 fs-6">Day 1 — Tuesday</span>
                   <h3 className="h5 mb-0">🧭 The Enterprise AI Mandate</h3>
                 </div>
                 <div className="row g-4">
@@ -135,7 +200,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 2</span>
+                  <span className="badge bg-secondary me-3 fs-6">Day 2 — Thursday</span>
                   <h3 className="h5 mb-0">🏗 Architecture &amp; 3-Agent Environment Setup</h3>
                 </div>
                 <div className="row g-4">
@@ -161,8 +226,8 @@ function ProgramPage() {
                       <div className="col-md-4">
                         <div className="agent-card card-lift">
                           <span className="agent-card-icon" aria-hidden="true">🧠</span>
-                          <div className="fw-bold mb-1">CustomGPT</div>
-                          <small className="text-muted">Architect &amp; learning mentor</small>
+                          <div className="fw-bold mb-1">Your Custom LLM</div>
+                          <small className="text-muted">ChatGPT, Claude, Gemini, or your company's approved LLM</small>
                         </div>
                       </div>
                     </div>
@@ -189,7 +254,7 @@ function ProgramPage() {
               <div className="row g-2">
                 <div className="col-md-6">
                   <ul className="text-muted small mb-0">
-                    <li className="deliverable-item">Secure LLM access (company-approved key)</li>
+                    <li className="deliverable-item">Secure LLM access — use any LLM your organization approves (ChatGPT, Claude, Gemini, etc.)</li>
                     <li className="deliverable-item">Confirm tech stack and data access</li>
                     <li className="deliverable-item">Identify internal stakeholders</li>
                   </ul>
@@ -197,7 +262,7 @@ function ProgramPage() {
                 <div className="col-md-6">
                   <ul className="text-muted small mb-0">
                     <li className="deliverable-item">Complete architecture documentation</li>
-                    <li className="deliverable-item">Complete CustomGPT learning phase</li>
+                    <li className="deliverable-item">Complete custom LLM learning phase</li>
                   </ul>
                 </div>
               </div>
@@ -223,7 +288,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 3</span>
+                  <span className="badge bg-secondary me-3 fs-6">Day 3 — Tuesday</span>
                   <h3 className="h5 mb-0">💻 Guided POC Launch</h3>
                 </div>
                 <ul className="text-muted mb-3">
@@ -245,7 +310,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-secondary me-3 fs-6">Day 4</span>
+                  <span className="badge bg-secondary me-3 fs-6">Day 4 — Thursday</span>
                   <h3 className="h5 mb-0">📊 Refinement &amp; Executive Positioning</h3>
                 </div>
                 <div className="row g-4">
@@ -320,7 +385,7 @@ function ProgramPage() {
             <div className="card border-0 shadow-sm border-start border-4 border-primary mb-4 card-lift">
               <div className="card-body p-4 p-lg-5">
                 <div className="d-flex align-items-center mb-3">
-                  <span className="badge bg-primary me-3 fs-6">Day 5</span>
+                  <span className="badge bg-primary me-3 fs-6">Day 5 — Thursday (Presentations)</span>
                   <h3 className="h5 mb-0">🎤 Executive Demonstrations &amp; Expansion Strategy</h3>
                 </div>
                 <p className="text-muted mb-3">
@@ -460,6 +525,41 @@ function ProgramPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Security & Governance */}
+      <section className="section-spacer-alt" aria-label="Security and Governance">
+        <div className="container" style={{ maxWidth: '800px' }}>
+          <FadeIn>
+            <h2 className="text-center mb-4">🛡 Security &amp; Governance</h2>
+            <div className="card border-0 shadow-sm p-4">
+              <h3 className="h6 mb-3" style={{ color: 'var(--color-primary)' }}>Bring Your Own LLM</h3>
+              <p className="text-muted mb-3">
+                Participants use their organization's approved AI platform throughout the program. We support
+                ChatGPT, Claude, Gemini, and other enterprise LLMs — you choose the tool that meets your
+                company's security and compliance requirements.
+              </p>
+              <ul className="text-muted mb-0">
+                <li>Your data stays in your environment — no information is shared with Colaberry's systems</li>
+                <li>Use your own API keys and credentials under your organization's policies</li>
+                <li>All exercises are designed to work with any major enterprise LLM</li>
+                <li>Governance frameworks are tailored to your regulatory environment</li>
+              </ul>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="section-spacer" aria-label="Frequently Asked Questions">
+        <div className="container" style={{ maxWidth: '800px' }}>
+          <FadeIn>
+            <h2 className="text-center mb-4">Frequently Asked Questions</h2>
+          </FadeIn>
+          <FadeIn>
+            <FAQAccordion />
+          </FadeIn>
         </div>
       </section>
 
