@@ -1,0 +1,48 @@
+import { Router } from 'express';
+import { requireAdmin } from '../../middlewares/authMiddleware';
+import {
+  handleGetHealth,
+  handleListDatasets,
+  handleGetDataset,
+  handleListProcesses,
+  handleGetConfig,
+  handleUpdateConfig,
+  handleTriggerDiscovery,
+  handleGetDictionary,
+  handleQueryOrchestrator,
+  handleGetExecutiveSummary,
+  handleGetRankedInsights,
+  handleGetEntityNetwork,
+  handleGetQAHistory,
+} from '../../controllers/intelligenceController';
+
+const router = Router();
+
+// Health
+router.get('/api/admin/intelligence/health', requireAdmin, handleGetHealth);
+
+// Dataset Registry
+router.get('/api/admin/intelligence/datasets', requireAdmin, handleListDatasets);
+router.get('/api/admin/intelligence/datasets/:id', requireAdmin, handleGetDataset);
+
+// System Processes
+router.get('/api/admin/intelligence/processes', requireAdmin, handleListProcesses);
+
+// Configuration
+router.get('/api/admin/intelligence/config', requireAdmin, handleGetConfig);
+router.put('/api/admin/intelligence/config', requireAdmin, handleUpdateConfig);
+
+// Discovery
+router.post('/api/admin/intelligence/discovery/run', requireAdmin, handleTriggerDiscovery);
+router.get('/api/admin/intelligence/discovery/dictionary', requireAdmin, handleGetDictionary);
+
+// AI Query
+router.post('/api/admin/intelligence/query', requireAdmin, handleQueryOrchestrator);
+router.get('/api/admin/intelligence/executive-summary', requireAdmin, handleGetExecutiveSummary);
+router.get('/api/admin/intelligence/insights', requireAdmin, handleGetRankedInsights);
+router.get('/api/admin/intelligence/entity-network', requireAdmin, handleGetEntityNetwork);
+
+// Q&A History
+router.get('/api/admin/intelligence/qa-history', requireAdmin, handleGetQAHistory);
+
+export default router;

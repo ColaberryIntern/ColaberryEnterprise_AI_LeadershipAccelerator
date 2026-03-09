@@ -1,0 +1,26 @@
+# Intelligence OS Configuration
+# Copy to config.yaml and fill in your values
+
+# --- REQUIRED ---
+PROJECT_NAME: "ColaberryEnterprise"
+DATABASE_URL: "postgres://user:pass@localhost:5432/colaberry"
+OPENAI_API_KEY: "sk-..."
+
+# --- DOMAIN CONFIGURATION ---
+PRIMARY_ENTITY: "cohort"
+PRIMARY_ENTITY_PLURAL: "cohorts"
+GROUP_ENTITY: "program"
+GROUP_ENTITY_PLURAL: "programs"
+DOMAIN_DESCRIPTION: >
+  Enterprise AI Leadership Accelerator platform.
+  Key metrics: enrollment, revenue, campaign performance, student progress.
+  Primary concerns: cohort health, campaign effectiveness, student engagement.
+
+# --- OPTIONAL OVERRIDES ---
+PRIMARY_ENTITY_TABLE: null
+PRIMARY_ENTITY_ID_COLUMN: null
+PRIMARY_ENTITY_NAME_COLUMN: null
+GEO_LAT_COLUMN: null
+GEO_LNG_COLUMN: null
+TIMESTAMP_COLUMN: null
+TEXT_COLUMNS: []

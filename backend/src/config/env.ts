@@ -57,6 +57,9 @@ export const env = {
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 
+  // Intelligence Engine
+  intelligenceEngineUrl: process.env.INTELLIGENCE_ENGINE_URL || 'http://localhost:5000',
+
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 };
