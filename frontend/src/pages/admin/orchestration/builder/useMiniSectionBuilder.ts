@@ -60,11 +60,12 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
   // --- Reference data ---
   const refreshReferenceData = useCallback(async () => {
     try {
-      const [modData, promptData, varData, skillData] = await Promise.all([
+      const [modData, promptData, varData, skillData, artifactData] = await Promise.all([
         fetch(`${apiUrl}/api/admin/orchestration/program/modules`, { headers }).then(r => r.json()),
         fetch(`${apiUrl}/api/admin/orchestration/prompts`, { headers }).then(r => r.json()),
         fetch(`${apiUrl}/api/admin/orchestration/variable-definitions`, { headers }).then(r => r.json()),
         fetch(`${apiUrl}/api/admin/orchestration/program/skills`, { headers }).then(r => r.json()),
+        fetch(`${apiUrl}/api/admin/orchestration/program/artifacts`, { headers }).then(r => r.json()),
       ]);
       setModules(Array.isArray(modData) ? modData : []);
       setPrompts(Array.isArray(promptData) ? promptData : []);
@@ -79,6 +80,11 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         flatSkills.push({ id: s.id, skill_id: s.skill_id, name: s.name, layer_id: s.layer_id, domain_id: s.domain_id });
       }
       setSkills(flatSkills);
+
+      const artList: ArtifactOption[] = (Array.isArray(artifactData) ? artifactData : []).map((a: any) => ({
+        id: a.id, name: a.name, artifact_type: a.artifact_type, produces_variable_keys: a.produces_variable_keys || [],
+      }));
+      setArtifacts(artList);
     } catch (err: any) { setError(err.message || 'Failed to load reference data'); }
   }, [apiUrl, token]);
 
@@ -359,7 +365,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
   const isDirty = editing ? JSON.stringify(editing) !== originalEditing : false;
   const isNewItem = editing ? !editing.id : false;
 
-  const skillOptions = skills.map(s => ({ value: s.skill_id, label: s.name, sub: s.domain_id }));
+  const skillOptions = skills.map(s => ({ value: s.id, label: `${s.skill_id}: ${s.name}`, sub: s.domain_id }));
   const variableOptions = variables.map(v => ({ value: v.variable_key, label: v.display_name || v.variable_key, sub: v.scope }));
   const artifactOptions = artifacts.map(a => ({ value: a.id, label: a.name, sub: a.artifact_type }));
 

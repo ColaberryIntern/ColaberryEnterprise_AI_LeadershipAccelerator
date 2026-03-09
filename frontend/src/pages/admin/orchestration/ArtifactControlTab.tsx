@@ -30,6 +30,7 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
+  const [viewAll, setViewAll] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -50,11 +51,14 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   }, [token, apiUrl]);
 
   const fetchArtifacts = useCallback(async () => {
-    if (!selectedSessionId) return;
+    if (!viewAll && !selectedSessionId) return;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/api/admin/orchestration/sessions/${selectedSessionId}/artifacts`, {
+      const url = viewAll
+        ? `${apiUrl}/api/admin/orchestration/program/artifacts`
+        : `${apiUrl}/api/admin/orchestration/sessions/${selectedSessionId}/artifacts`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
@@ -62,7 +66,7 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
       setArtifacts(Array.isArray(data) ? data : []);
     } catch (err: any) { setError(err.message); }
     finally { setLoading(false); }
-  }, [token, apiUrl, selectedSessionId]);
+  }, [token, apiUrl, selectedSessionId, viewAll]);
 
   useEffect(() => { fetchArtifacts(); }, [fetchArtifacts]);
 
@@ -150,10 +154,15 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
     <div>
       <div className="d-flex gap-2 mb-3 align-items-center">
         <label className="form-label small fw-medium mb-0">Session:</label>
-        <select className="form-select form-select-sm" style={{ width: 300 }} value={selectedSessionId} onChange={e => setSelectedSessionId(e.target.value)}>
+        <select className="form-select form-select-sm" style={{ width: 300 }} value={selectedSessionId}
+          onChange={e => setSelectedSessionId(e.target.value)} disabled={viewAll}>
           {sessions.map(s => <option key={s.id} value={s.id}>Session {s.session_number}: {s.title}</option>)}
         </select>
-        <button className="btn btn-sm btn-primary ms-auto" onClick={handleCreate}>+ Add Artifact</button>
+        <button className={`btn btn-sm ${viewAll ? 'btn-primary' : 'btn-outline-secondary'}`}
+          onClick={() => setViewAll(!viewAll)}>
+          {viewAll ? 'Viewing All' : 'View All'}
+        </button>
+        <button className="btn btn-sm btn-primary ms-auto" onClick={handleCreate} disabled={viewAll}>+ Add Artifact</button>
       </div>
 
       {error && <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>}

@@ -7,6 +7,8 @@ import {
   GitHubConnection,
   CurriculumLesson,
   CurriculumModule,
+  SkillMastery,
+  SkillDefinition,
 } from '../models';
 
 export async function getSessionCompletionRates(cohortId: string) {
@@ -186,4 +188,98 @@ export async function getPresentationReadiness(cohortId: string) {
   }
 
   return readiness;
+}
+
+// --- Program-wide analytics (not cohort-scoped) ---
+
+export async function getProgramEnrollmentSummary() {
+  const enrollments = await Enrollment.findAll();
+  const byStatus: Record<string, number> = {};
+  for (const e of enrollments) {
+    const s = (e as any).status || 'unknown';
+    byStatus[s] = (byStatus[s] || 0) + 1;
+  }
+  return { total: enrollments.length, byStatus };
+}
+
+export async function getProgramStudentProgress() {
+  const enrollments = await Enrollment.findAll();
+  const totalLessons = await CurriculumLesson.count();
+
+  const results = [];
+  for (const enrollment of enrollments) {
+    const completedInstances = await LessonInstance.count({
+      where: { enrollment_id: enrollment.id, status: 'completed' },
+    });
+
+    results.push({
+      enrollment_id: enrollment.id,
+      name: enrollment.full_name || enrollment.email,
+      email: enrollment.email,
+      company: (enrollment as any).company || '',
+      status: (enrollment as any).status || 'unknown',
+      lessonsCompleted: completedInstances,
+      lessonsTotal: totalLessons,
+      pct: totalLessons > 0 ? Math.round((completedInstances / totalLessons) * 100) : 0,
+    });
+  }
+
+  return results;
+}
+
+export async function getProgramSkillMastery() {
+  const skills = await SkillDefinition.findAll({ where: { is_active: true }, order: [['layer_id', 'ASC'], ['domain_id', 'ASC']] });
+  const masteries = await SkillMastery.findAll();
+
+  const masteryMap: Record<string, { total: number; sum: number }> = {};
+  for (const m of masteries) {
+    const sid = (m as any).skill_id;
+    if (!masteryMap[sid]) masteryMap[sid] = { total: 0, sum: 0 };
+    masteryMap[sid].total++;
+    masteryMap[sid].sum += (m as any).proficiency_level || 0;
+  }
+
+  return skills.map(s => {
+    const data = masteryMap[s.skill_id] || { total: 0, sum: 0 };
+    return {
+      skill_id: s.skill_id,
+      name: s.name,
+      layer_id: s.layer_id,
+      domain_id: s.domain_id,
+      studentsTracked: data.total,
+      avgLevel: data.total > 0 ? Math.round((data.sum / data.total) * 10) / 10 : 0,
+    };
+  });
+}
+
+export async function getProgramArtifactTracker() {
+  const artifacts = await ArtifactDefinition.findAll({ order: [['sort_order', 'ASC']] });
+  const enrollments = await Enrollment.findAll({ where: { status: 'active' } });
+
+  const students = [];
+  for (const enrollment of enrollments) {
+    const submissions: Record<string, boolean> = {};
+    for (const artifact of artifacts) {
+      const sub = await AssignmentSubmission.findOne({
+        where: {
+          enrollment_id: enrollment.id,
+          artifact_definition_id: artifact.id,
+          status: ['submitted', 'reviewed'],
+        },
+      });
+      submissions[artifact.id] = !!sub;
+    }
+
+    students.push({
+      enrollment_id: enrollment.id,
+      name: enrollment.full_name || enrollment.email,
+      email: enrollment.email,
+      submissions,
+    });
+  }
+
+  return {
+    artifacts: artifacts.map(a => ({ id: a.id, name: a.name, artifact_type: (a as any).artifact_type })),
+    students,
+  };
 }

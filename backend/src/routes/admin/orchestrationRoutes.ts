@@ -319,6 +319,15 @@ router.get('/api/admin/orchestration/artifacts/:id', requireAdmin, handleGetArti
 router.put('/api/admin/orchestration/artifacts/:id', requireAdmin, handleUpdateArtifact);
 router.delete('/api/admin/orchestration/artifacts/:id', requireAdmin, handleDeleteArtifact);
 
+// All artifacts (no session filter)
+router.get('/api/admin/orchestration/program/artifacts', requireAdmin, async (_req, res) => {
+  try {
+    const { listArtifactDefinitions } = require('../../services/artifactService');
+    const artifacts = await listArtifactDefinitions();
+    res.json(artifacts);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // Variables
 router.get('/api/admin/orchestration/enrollments/:enrollmentId/variables', requireAdmin, handleGetVariables);
 router.get('/api/admin/orchestration/enrollments/:enrollmentId/variables/graph', requireAdmin, handleGetVariableGraph);
@@ -469,6 +478,32 @@ router.get('/api/admin/orchestration/analytics/github/:cohortId', requireAdmin, 
 router.get('/api/admin/orchestration/analytics/presentation/:cohortId', requireAdmin, async (req, res) => {
   try {
     const data = await analytics.getPresentationReadiness(req.params.cohortId as string);
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Program-wide analytics (not cohort-scoped)
+router.get('/api/admin/orchestration/analytics/program/summary', requireAdmin, async (_req, res) => {
+  try {
+    const data = await analytics.getProgramEnrollmentSummary();
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/program/student-progress', requireAdmin, async (_req, res) => {
+  try {
+    const data = await analytics.getProgramStudentProgress();
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/program/skill-mastery', requireAdmin, async (_req, res) => {
+  try {
+    const data = await analytics.getProgramSkillMastery();
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/program/artifact-tracker', requireAdmin, async (_req, res) => {
+  try {
+    const data = await analytics.getProgramArtifactTracker();
     res.json(data);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

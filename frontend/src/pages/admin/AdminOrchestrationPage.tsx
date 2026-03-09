@@ -3,7 +3,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import ProgramOverviewTab from './orchestration/ProgramOverviewTab';
 import SessionControlTab from './orchestration/SessionControlTab';
 import SectionControlTab from './orchestration/SectionControlTab';
-import PromptControlTab from './orchestration/PromptControlTab';
 import ArtifactControlTab from './orchestration/ArtifactControlTab';
 import SkillControlTab from './orchestration/SkillControlTab';
 import GatingControlTab from './orchestration/GatingControlTab';
@@ -21,7 +20,6 @@ const TABS = [
   { id: 'sessions', label: 'Sessions' },
   { id: 'sections', label: 'Sections' },
   { id: 'mini-sections', label: 'Mini-Sections' },
-  { id: 'prompts', label: 'Prompts' },
   { id: 'artifacts', label: 'Artifacts' },
   { id: 'skills', label: 'Skills' },
   { id: 'gating', label: 'Gating & Variables' },
@@ -70,7 +68,6 @@ export default function AdminOrchestrationPage() {
       {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
       {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
       {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
-      {activeTab === 'prompts' && <PromptControlTab {...tabProps} />}
       {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
       {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
       {activeTab === 'gating' && <GatingControlTab {...tabProps} />}
