@@ -1,0 +1,30 @@
+# Intelligence OS - Python AI Engine Dependencies
+flask==3.1.0
+gunicorn==23.0.0
+flask-cors==5.0.0
+
+# Database
+psycopg2-binary==2.9.10
+pgvector==0.3.6
+
+# AI / LLM
+openai==1.82.0
+
+# ML Models
+scikit-learn==1.6.1
+pandas==2.2.3
+numpy==1.26.4
+xgboost==2.1.4
+shap==0.46.0
+hdbscan==0.8.40
+
+# NLP
+nltk==3.9.1
+
+# Configuration
+pyyaml==6.0.2
+python-dotenv==1.0.1
+
+# Testing
+pytest==8.3.4
+pytest-cov==6.0.0

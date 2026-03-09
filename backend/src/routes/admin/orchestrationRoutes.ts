@@ -507,5 +507,19 @@ router.get('/api/admin/orchestration/analytics/program/artifact-tracker', requir
     res.json(data);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
+router.get('/api/admin/orchestration/analytics/program/student-detail/:enrollmentId', requireAdmin, async (req, res) => {
+  try {
+    const data = await analytics.getStudentDetail(req.params.enrollmentId as string);
+    if (!data) { res.status(404).json({ error: 'Enrollment not found' }); return; }
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+router.get('/api/admin/orchestration/analytics/program/skill-detail/:skillId', requireAdmin, async (req, res) => {
+  try {
+    const data = await analytics.getSkillDetail(req.params.skillId as string);
+    if (!data) { res.status(404).json({ error: 'Skill not found' }); return; }
+    res.json(data);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
 export default router;

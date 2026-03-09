@@ -54,6 +54,11 @@ import AiAgentActivityLog from './AiAgentActivityLog';
 import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
+import DatasetRegistry from './DatasetRegistry';
+import SystemProcess from './SystemProcess';
+import EntitySummary from './EntitySummary';
+import QAHistory from './QAHistory';
+import IntelligenceConfig from './IntelligenceConfig';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -368,4 +373,9 @@ export {
   CampaignHealth,
   CampaignError,
   AiSystemEvent,
+  DatasetRegistry,
+  SystemProcess,
+  EntitySummary,
+  QAHistory,
+  IntelligenceConfig,
 };

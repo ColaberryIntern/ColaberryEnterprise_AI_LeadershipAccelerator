@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  intelligence_engine:
+    build:
+      context: ./ai_engine
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - DATABASE_URL=${DATABASE_URL:-postgresql://accelerator:accelerator@pgvector:5432/accelerator_dev}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    volumes:
+      - ./ai_engine:/app
+      - dictionary_data:/app/intelligence
+    restart: unless-stopped
+
+  pgvector:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: accelerator
+      POSTGRES_PASSWORD: accelerator
+      POSTGRES_DB: accelerator_dev
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accelerator -d accelerator_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgvector_data:
+  dictionary_data:

@@ -23,6 +23,9 @@ import AdminOpportunitiesPage from '../pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from '../pages/admin/AdminAcceleratorPage';
 import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
 import AdminAISettingsPage from '../pages/admin/AdminAISettingsPage';
+import IntelligenceOSPage from '../pages/admin/intelligence/IntelligenceOSPage';
+import IntelligenceDiscoveryPage from '../pages/admin/intelligence/IntelligenceDiscoveryPage';
+import IntelligenceSettingsPage from '../pages/admin/intelligence/IntelligenceSettingsPage';
 
 const adminRoutes = (
   <>
@@ -49,6 +52,9 @@ const adminRoutes = (
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
         <Route path="/admin/ai-settings" element={<AdminAISettingsPage />} />
+        <Route path="/admin/intelligence" element={<IntelligenceOSPage />} />
+        <Route path="/admin/intelligence/discovery" element={<IntelligenceDiscoveryPage />} />
+        <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
       </Route>
     </Route>
   </>
