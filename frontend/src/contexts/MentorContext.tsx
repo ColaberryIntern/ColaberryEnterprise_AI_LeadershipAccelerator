@@ -196,8 +196,42 @@ export function MentorContextProvider({ children }: { children: React.ReactNode 
   );
 }
 
+// Fallback context for admin preview — no-op methods, mock learner profile
+const PREVIEW_FALLBACK: MentorContextValue = {
+  selectedLLM: LLM_OPTIONS[0],
+  setSelectedLLMById: () => {},
+  llmOptions: LLM_OPTIONS,
+  lessonContext: defaultLessonContext,
+  updateLessonContext: () => {},
+  isMentorOpen: false,
+  openMentorPanel: () => {},
+  closeMentorPanel: () => {},
+  toggleMentorPanel: () => {},
+  pendingMentorMessage: null,
+  sendToMentor: () => {},
+  clearPendingMessage: () => {},
+  pendingPromptLabMessage: null,
+  sendToPromptLab: () => {},
+  clearPendingPromptLabMessage: () => {},
+  onMentorResponded: { current: null },
+  fireMentorResponded: () => {},
+  openLLMWithPrompt: async () => {},
+  learnerProfile: {
+    company_name: 'Preview Corp',
+    industry: 'Technology',
+    role: 'Director of Strategy',
+    goal: 'Implement AI Strategy',
+    ai_maturity_level: 3,
+    identified_use_case: 'Process Automation',
+  },
+  updateLearnerProfile: async () => {},
+  buildPersonalizedPrompt: (p: string) => p,
+};
+
 export function useMentorContext() {
   const ctx = useContext(MentorContext);
-  if (!ctx) throw new Error('useMentorContext must be used within MentorContextProvider');
+  if (!ctx) {
+    return PREVIEW_FALLBACK;
+  }
   return ctx;
 }
