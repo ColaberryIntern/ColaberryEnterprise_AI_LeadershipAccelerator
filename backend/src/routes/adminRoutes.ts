@@ -10,6 +10,7 @@ import acceleratorRoutes from './admin/acceleratorRoutes';
 import orchestrationRoutes from './admin/orchestrationRoutes';
 import aiOpsRoutes from './admin/aiOpsRoutes';
 import intelligenceRoutes from './admin/intelligenceRoutes';
+import campaignTestRoutes from './admin/campaignTestRoutes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use(acceleratorRoutes);
 router.use(orchestrationRoutes);
 router.use(aiOpsRoutes);
 router.use(intelligenceRoutes);
+router.use(campaignTestRoutes);
 
 export default router;

@@ -7,6 +7,7 @@ import ErrorDetailModal from './ai-settings/ErrorDetailModal';
 import CampaignTimelineModal from './ai-settings/CampaignTimelineModal';
 import AgentDetailModal from './ai-settings/AgentDetailModal';
 import OrchestrationHealthSection from './ai-settings/OrchestrationHealthSection';
+import CampaignQATab from './ai-settings/CampaignQATab';
 
 interface Agent {
   id: string;
@@ -100,6 +101,7 @@ const TABS = [
   { key: 'health', label: 'Health Monitor' },
   { key: 'errors', label: 'Error Center' },
   { key: 'controls', label: 'Controls' },
+  { key: 'campaign-qa', label: 'Campaign QA' },
 ];
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -365,6 +367,7 @@ function AdminAISettingsPage() {
           onSelectAgent={setSelectedAgentId}
         />
       )}
+      {activeTab === 'campaign-qa' && <CampaignQATab />}
 
       {/* Drill-Down Modals */}
       {selectedActivityId && (

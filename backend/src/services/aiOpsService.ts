@@ -5,6 +5,7 @@ import CampaignHealth from '../models/CampaignHealth';
 import CampaignError from '../models/CampaignError';
 import AiSystemEvent from '../models/AiSystemEvent';
 import { Campaign, ScheduledEmail } from '../models';
+import { calculateNextRun, formatNextRun } from '../utils/cronNextRun';
 
 // --- Overview (enhanced) ---
 
@@ -203,7 +204,16 @@ export async function getAgentRegistry(params?: { category?: string; status?: st
   if (params?.status) where.status = params.status;
   if (params?.enabled !== undefined) where.enabled = params.enabled === 'true';
 
-  return AiAgent.findAll({ where, order: [['category', 'ASC'], ['agent_name', 'ASC']] });
+  const agents = await AiAgent.findAll({ where, order: [['category', 'ASC'], ['agent_name', 'ASC']] });
+
+  return agents.map((a) => {
+    const plain = a.toJSON() as Record<string, any>;
+    if (a.schedule) {
+      plain.next_run_at = calculateNextRun(a.schedule);
+      plain.next_run_label = formatNextRun(a.schedule);
+    }
+    return plain;
+  });
 }
 
 export async function getAgentDetail(agentId: string) {
@@ -226,8 +236,14 @@ export async function getAgentDetail(agentId: string) {
     where: { agent_id: agentId, result: 'failed', created_at: { [Op.gte]: todayStart } },
   });
 
+  const agentPlain = agent.toJSON() as Record<string, any>;
+  if (agent.schedule) {
+    agentPlain.next_run_at = calculateNextRun(agent.schedule);
+    agentPlain.next_run_label = formatNextRun(agent.schedule);
+  }
+
   return {
-    agent,
+    agent: agentPlain,
     recent_activity: recentActivity,
     actions_today: actionsToday,
     errors_today: errorsToday,

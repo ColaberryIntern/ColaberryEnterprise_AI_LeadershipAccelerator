@@ -22,6 +22,7 @@ interface CampaignAttributes {
   started_at?: Date;
   completed_at?: Date;
   interest_group?: string;
+  qa_status?: string;
   created_by?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -45,6 +46,7 @@ class Campaign extends Model<CampaignAttributes> implements CampaignAttributes {
   declare started_at: Date;
   declare completed_at: Date;
   declare interest_group: string;
+  declare qa_status: string;
   declare created_by: string;
   declare created_at: Date;
   declare updated_at: Date;
@@ -144,6 +146,11 @@ Campaign.init(
     interest_group: {
       type: DataTypes.STRING(100),
       allowNull: true,
+    },
+    qa_status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: 'untested',
     },
     created_by: {
       type: DataTypes.UUID,

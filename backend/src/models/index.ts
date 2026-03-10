@@ -60,6 +60,8 @@ import EntitySummary from './EntitySummary';
 import QAHistory from './QAHistory';
 import IntelligenceConfig from './IntelligenceConfig';
 import OrchestrationHealth from './OrchestrationHealth';
+import CampaignTestRun from './CampaignTestRun';
+import CampaignTestStep from './CampaignTestStep';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -344,6 +346,13 @@ AiAgentActivityLog.hasMany(CampaignError, { foreignKey: 'repair_attempt_id', as:
 AiAgent.hasMany(OrchestrationHealth, { foreignKey: 'agent_id', as: 'orchestrationHealthSnapshots' });
 OrchestrationHealth.belongsTo(AiAgent, { foreignKey: 'agent_id', as: 'agent' });
 
+// Campaign Test Run associations
+Campaign.hasMany(CampaignTestRun, { foreignKey: 'campaign_id', as: 'testRuns' });
+CampaignTestRun.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+CampaignTestRun.belongsTo(Lead, { foreignKey: 'test_lead_id', as: 'testLead' });
+CampaignTestRun.hasMany(CampaignTestStep, { foreignKey: 'test_run_id', as: 'steps' });
+CampaignTestStep.belongsTo(CampaignTestRun, { foreignKey: 'test_run_id', as: 'testRun' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -384,4 +393,6 @@ export {
   QAHistory,
   IntelligenceConfig,
   OrchestrationHealth,
+  CampaignTestRun,
+  CampaignTestStep,
 };

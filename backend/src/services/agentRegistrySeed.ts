@@ -261,10 +261,37 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       max_repairs_per_run: 10,
     },
   },
+  // --- Campaign QA & Self-Healing agents ---
+  {
+    agent_name: 'CampaignQAAgent',
+    agent_type: 'campaign_qa',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/campaignQAAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 */6 * * *',
+    category: 'ai_ops',
+    description:
+      'Runs end-to-end tests on all active campaigns every 6 hours. Creates test leads, tests email/SMS/voice channels, verifies AI generation, and computes QA scores (0-100).',
+  },
+  {
+    agent_name: 'CampaignSelfHealingAgent',
+    agent_type: 'self_healing',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/campaignSelfHealingAgent.ts',
+    trigger_type: 'cron',
+    schedule: '15,45 * * * *',
+    category: 'ai_ops',
+    description:
+      'Detects failures from QA test runs and attempts repairs: retries failed emails, re-triggers SMS/voice, and re-tests after repair. Runs every 30 minutes offset from repair agent.',
+    config: {
+      auto_heal_enabled: true,
+      max_retry_attempts: 3,
+    },
+  },
 ];
 
 /**
- * Seed the full agent registry (20 agents). Idempotent — uses findOrCreate
+ * Seed the full agent registry (22 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
 export async function seedAgentRegistry(): Promise<void> {

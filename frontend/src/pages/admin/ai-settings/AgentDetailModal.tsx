@@ -22,6 +22,8 @@ interface AgentDetail {
     source_file: string | null;
     config: Record<string, any> | null;
     last_result: Record<string, any> | null;
+    next_run_at: string | null;
+    next_run_label: string | null;
   };
   recent_activity: Array<{
     id: string;
@@ -196,6 +198,9 @@ export default function AgentDetailModal({
                       <div className="card-body py-2 text-center">
                         <div className="small text-muted">Schedule</div>
                         <code className="small">{detail.agent.schedule || '—'}</code>
+                        {detail.agent.next_run_label && (
+                          <div className="small text-primary mt-1">Next: {detail.agent.next_run_label}</div>
+                        )}
                       </div>
                     </div>
                   </div>

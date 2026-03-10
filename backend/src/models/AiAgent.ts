@@ -19,7 +19,9 @@ export type AiAgentType =
   | 'orchestration_health'
   | 'student_monitor'
   | 'prompt_monitor'
-  | 'orchestration_repair';
+  | 'orchestration_repair'
+  | 'campaign_qa'
+  | 'self_healing';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';

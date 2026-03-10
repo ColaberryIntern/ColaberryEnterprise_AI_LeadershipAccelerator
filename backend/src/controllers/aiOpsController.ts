@@ -10,6 +10,8 @@ import {
   runStudentProgress,
   runPromptMonitor,
   runOrchestrationRepair,
+  runCampaignQA,
+  runSelfHealing,
 } from '../services/aiOrchestrator';
 import AiAgent from '../models/AiAgent';
 import Campaign from '../models/Campaign';
@@ -55,6 +57,8 @@ const AGENT_EXECUTORS: Record<string, (() => Promise<any>) | undefined> = {
   student_monitor: runStudentProgress,
   prompt_monitor: runPromptMonitor,
   orchestration_repair: runOrchestrationRepair,
+  campaign_qa: runCampaignQA,
+  self_healing: runSelfHealing,
 };
 
 export async function handleRunAgent(req: Request, res: Response) {

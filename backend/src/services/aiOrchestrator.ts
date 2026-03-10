@@ -8,6 +8,8 @@ import { runOrchestrationHealthAgent } from './agents/orchestrationHealthAgent';
 import { runStudentProgressMonitor } from './agents/studentProgressMonitor';
 import { runPromptMonitorAgent } from './agents/promptMonitorAgent';
 import { runOrchestrationAutoRepairAgent } from './agents/orchestrationAutoRepairAgent';
+import { runCampaignQAAgent } from './agents/campaignQAAgent';
+import { runCampaignSelfHealingAgent } from './agents/campaignSelfHealingAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -240,4 +242,18 @@ export async function runPromptMonitor(): Promise<AgentExecutionResult | null> {
  */
 export async function runOrchestrationRepair(): Promise<AgentExecutionResult | null> {
   return runAgent('OrchestrationAutoRepairAgent', runOrchestrationAutoRepairAgent);
+}
+
+/**
+ * Run the Campaign QA Agent.
+ */
+export async function runCampaignQA(): Promise<AgentExecutionResult | null> {
+  return runAgent('CampaignQAAgent', runCampaignQAAgent);
+}
+
+/**
+ * Run the Campaign Self-Healing Agent.
+ */
+export async function runSelfHealing(): Promise<AgentExecutionResult | null> {
+  return runAgent('CampaignSelfHealingAgent', runCampaignSelfHealingAgent);
 }

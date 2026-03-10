@@ -9,6 +9,8 @@ import {
   runStudentProgress,
   runPromptMonitor,
   runOrchestrationRepair,
+  runCampaignQA,
+  runSelfHealing,
 } from './aiOrchestrator';
 
 /**
@@ -16,7 +18,7 @@ import {
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
 export function startAIOpsScheduler(): void {
-  // Seed full agent registry on startup (idempotent — 16 agents)
+  // Seed full agent registry on startup (idempotent — 22 agents)
   seedAgentRegistry().catch((err) => {
     console.error('[AI Ops] Failed to seed agent registry:', err.message);
   });
@@ -77,7 +79,21 @@ export function startAIOpsScheduler(): void {
     });
   });
 
-  console.log('[AI Ops] Scheduler started (20 agents registered):');
+  // Campaign QA Agent: every 6 hours
+  cron.schedule('0 */6 * * *', () => {
+    runCampaignQA().catch((err) => {
+      console.error('[AI Ops] Campaign QA agent cron error:', err);
+    });
+  });
+
+  // Campaign Self-Healing Agent: every 30 minutes (offset from repair agent)
+  cron.schedule('15,45 * * * *', () => {
+    runSelfHealing().catch((err) => {
+      console.error('[AI Ops] Self-healing agent cron error:', err);
+    });
+  });
+
+  console.log('[AI Ops] Scheduler started (22 agents registered):');
   console.log('[AI Ops]   Campaign health scan: every 15 minutes');
   console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
   console.log('[AI Ops]   Content optimization: every 6 hours');
@@ -86,4 +102,6 @@ export function startAIOpsScheduler(): void {
   console.log('[AI Ops]   Student progress monitor: every 2 minutes');
   console.log('[AI Ops]   Prompt monitor: every minute');
   console.log('[AI Ops]   Orchestration auto-repair: every 5 minutes (offset)');
+  console.log('[AI Ops]   Campaign QA agent: every 6 hours');
+  console.log('[AI Ops]   Campaign self-healing: every 30 minutes');
 }

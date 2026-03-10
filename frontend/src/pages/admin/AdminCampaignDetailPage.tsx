@@ -127,6 +127,10 @@ function AdminCampaignDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Campaign test state
+  const [testRunning, setTestRunning] = useState(false);
+  const [testResult, setTestResult] = useState<{ score: number | null; status: string } | null>(null);
+
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   const fetchCampaign = async () => {
@@ -179,6 +183,21 @@ function AdminCampaignDetailPage() {
       fetchCampaign();
     } catch (err) {
       showToast(`Failed to ${action} campaign.`, 'error');
+    }
+  };
+
+  const handleRunCampaignTest = async () => {
+    setTestRunning(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/admin/testing/campaigns/${id}/run`, { method: 'POST', headers });
+      const data = await res.json();
+      setTestResult({ score: data.score, status: data.status });
+      showToast(`Campaign test ${data.status}: score ${data.score}/100`, data.status === 'passed' ? 'success' : 'error');
+    } catch (err) {
+      showToast('Campaign test failed to run.', 'error');
+    } finally {
+      setTestRunning(false);
     }
   };
 
@@ -293,6 +312,18 @@ function AdminCampaignDetailPage() {
             <button className="btn btn-info btn-sm" onClick={() => handleLifecycle('complete')}>
               Complete
             </button>
+          )}
+          <button
+            className="btn btn-outline-info btn-sm"
+            onClick={handleRunCampaignTest}
+            disabled={testRunning}
+          >
+            {testRunning ? 'Testing...' : 'Run Campaign Test'}
+          </button>
+          {testResult && (
+            <span className={`badge bg-${testResult.status === 'passed' ? 'success' : testResult.status === 'partial' ? 'warning' : 'danger'} align-self-center`}>
+              QA: {testResult.score}/100
+            </span>
           )}
           <button className="btn btn-outline-danger btn-sm" onClick={() => setShowDeleteConfirm(true)}>
             Delete

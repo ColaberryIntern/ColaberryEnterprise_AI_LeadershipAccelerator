@@ -20,6 +20,8 @@ interface RegistryAgent {
   last_error_at: string | null;
   module: string | null;
   source_file: string | null;
+  next_run_at: string | null;
+  next_run_label: string | null;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -133,6 +135,7 @@ export default function AgentRegistryTab() {
                   <th>Status</th>
                   <th>Enabled</th>
                   <th>Last Run</th>
+                  <th>Next Run</th>
                   <th>Runs</th>
                   <th>Errors</th>
                   <th>Actions</th>
@@ -166,6 +169,7 @@ export default function AgentRegistryTab() {
                       </span>
                     </td>
                     <td className="text-muted">{timeAgo(agent.last_run_at)}</td>
+                    <td className="text-muted">{agent.next_run_label || '—'}</td>
                     <td>{agent.run_count}</td>
                     <td>
                       {agent.error_count > 0 ? (
@@ -206,7 +210,7 @@ export default function AgentRegistryTab() {
                 ))}
                 {agents.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="text-muted text-center py-4">
+                    <td colSpan={11} className="text-muted text-center py-4">
                       No agents found
                     </td>
                   </tr>
