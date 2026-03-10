@@ -87,10 +87,11 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     if (ctx.step_goal) customer.call_objective = ctx.step_goal;
   }
 
-  // Build the request body
+  // Build the request body — Synthflow V2 requires phone and name at top level
   const requestBody: Record<string, any> = {
     model_id: agentId,
-    phone_number: actualPhone,
+    phone: actualPhone,
+    name: params.name,
     customer,
   };
 
