@@ -66,37 +66,34 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     // If settings DB fails, don't block the call
   }
 
-  // Build customer object with all context for the AI agent
-  const customer: Record<string, any> = {
-    name: params.name,
-  };
+  // Build custom_variables array per Synthflow V2 API docs
+  const customVariables: { key: string; value: string }[] = [];
 
-  // Pass structured context as customer variables so the AI agent
-  // can reference lead data, cohort info, and prior conversation
   if (params.context) {
     const ctx = params.context;
-    if (ctx.lead_company) customer.company = ctx.lead_company;
-    if (ctx.lead_title) customer.title = ctx.lead_title;
-    if (ctx.lead_email) customer.email = ctx.lead_email;
-    if (ctx.lead_score) customer.lead_score = ctx.lead_score;
-    if (ctx.lead_interest) customer.interest_area = ctx.lead_interest;
-    if (ctx.cohort_name) customer.next_cohort = ctx.cohort_name;
-    if (ctx.cohort_start_date) customer.cohort_start_date = ctx.cohort_start_date;
-    if (ctx.cohort_seats_remaining != null) customer.seats_remaining = ctx.cohort_seats_remaining;
-    if (ctx.conversation_history) customer.conversation_history = ctx.conversation_history;
-    if (ctx.step_goal) customer.call_objective = ctx.step_goal;
+    if (ctx.lead_company) customVariables.push({ key: 'company', value: ctx.lead_company });
+    if (ctx.lead_title) customVariables.push({ key: 'title', value: ctx.lead_title });
+    if (ctx.lead_email) customVariables.push({ key: 'email', value: ctx.lead_email });
+    if (ctx.lead_score) customVariables.push({ key: 'lead_score', value: String(ctx.lead_score) });
+    if (ctx.lead_interest) customVariables.push({ key: 'interest_area', value: ctx.lead_interest });
+    if (ctx.cohort_name) customVariables.push({ key: 'next_cohort', value: ctx.cohort_name });
+    if (ctx.cohort_start_date) customVariables.push({ key: 'cohort_start_date', value: ctx.cohort_start_date });
+    if (ctx.cohort_seats_remaining != null) customVariables.push({ key: 'seats_remaining', value: String(ctx.cohort_seats_remaining) });
+    if (ctx.conversation_history) customVariables.push({ key: 'conversation_history', value: ctx.conversation_history });
+    if (ctx.step_goal) customVariables.push({ key: 'call_objective', value: ctx.step_goal });
   }
 
-  // Build the request body — Synthflow V2 requires phone and name at top level
+  // Build the request body per Synthflow V2 API docs
   const requestBody: Record<string, any> = {
     model_id: agentId,
     phone: actualPhone,
     name: params.name,
-    customer,
   };
 
-  // If a dynamic prompt is provided, pass it as the system prompt / instructions
-  // so the AI agent gets per-call context instead of using a static script
+  if (customVariables.length > 0) {
+    requestBody.custom_variables = customVariables;
+  }
+
   if (params.prompt) {
     requestBody.prompt = params.prompt;
   }
