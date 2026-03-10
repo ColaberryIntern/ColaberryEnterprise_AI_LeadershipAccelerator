@@ -78,7 +78,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           label: config.label,
           color: config.color,
           bgLight: config.bgLight,
-          val: 3 + (cat.total_rows / maxRows) * 10,
+          val: 6 + (cat.total_rows / maxRows) * 18,
           table_count: cat.table_count,
           total_rows: cat.total_rows,
           matched_tables: cat.matched_tables,
@@ -100,8 +100,8 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
 
-    fg.d3Force('charge')?.strength(-250);
-    fg.d3Force('link')?.distance(55);
+    fg.d3Force('charge')?.strength(-400);
+    fg.d3Force('link')?.distance(80);
 
     const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
     fg.d3Force(
@@ -123,7 +123,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
   // Zoom to fit after stabilization
   useEffect(() => {
     const timer = setTimeout(() => {
-      graphRef.current?.zoomToFit(400, 30);
+      graphRef.current?.zoomToFit(400, 10);
     }, 1200);
     return () => clearTimeout(timer);
   }, []);
@@ -132,10 +132,10 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const n = node as GraphNode;
-      const radius = n.isHub ? 18 : 10 + n.val * 0.4;
+      const radius = n.isHub ? 28 : 16 + n.val * 0.6;
       const isHovered = hoveredNode?.id === n.id;
       const isSelected = selectedEntity?.type === n.id;
-      const fontSize = Math.max(9 / globalScale, 2.5);
+      const fontSize = Math.max(11 / globalScale, 3);
 
       // Selection ring
       if (isSelected) {
@@ -272,7 +272,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={(node: any, color, ctx) => {
             const n = node as GraphNode;
-            const radius = n.isHub ? 18 : 10 + n.val * 0.4;
+            const radius = n.isHub ? 28 : 16 + n.val * 0.6;
             ctx.beginPath();
             ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
             ctx.fillStyle = color;
@@ -317,7 +317,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           <button
             className="btn btn-sm btn-outline-secondary"
             style={{ width: 26, height: 26, padding: 0, fontSize: '0.6rem', background: 'rgba(255,255,255,0.9)' }}
-            onClick={() => graphRef.current?.zoomToFit(400, 30)}
+            onClick={() => graphRef.current?.zoomToFit(400, 10)}
             title="Reset view"
             aria-label="Reset view"
           >

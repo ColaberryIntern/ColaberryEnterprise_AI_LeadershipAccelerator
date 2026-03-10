@@ -90,72 +90,74 @@ function AdminLayout() {
         />
       )}
 
-      {/* Sidebar — hidden on immersive pages */}
-      <aside
-        className={`admin-sidebar${sidebarOpen ? ' open' : ''}${isImmersive ? ' d-none' : ''}`}
-        role="navigation"
-        aria-label="Admin navigation"
-      >
-        {/* Brand */}
-        <div className="admin-sidebar-brand">
-          <img
-            src="/colaberry-icon.png"
-            alt=""
-            width="32"
-            height="32"
-            className="logo-light"
-          />
-          <span className="text-white fw-bold" style={{ fontSize: '1rem' }}>
-            Colaberry Admin
-          </span>
-        </div>
+      {/* Sidebar — fully unmounted on immersive pages */}
+      {!isImmersive && (
+        <aside
+          className={`admin-sidebar${sidebarOpen ? ' open' : ''}`}
+          role="navigation"
+          aria-label="Admin navigation"
+        >
+          {/* Brand */}
+          <div className="admin-sidebar-brand">
+            <img
+              src="/colaberry-icon.png"
+              alt=""
+              width="32"
+              height="32"
+              className="logo-light"
+            />
+            <span className="text-white fw-bold" style={{ fontSize: '1rem' }}>
+              Colaberry Admin
+            </span>
+          </div>
 
-        {/* Nav Links */}
-        <nav className="admin-nav-section">
-          <div className="admin-nav-label">Main</div>
-          {adminNavLinks.slice(0, 9).map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
-              onClick={() => setSidebarOpen(false)}
-              aria-current={isActive(link.path) ? 'page' : undefined}
+          {/* Nav Links */}
+          <nav className="admin-nav-section">
+            <div className="admin-nav-label">Main</div>
+            {adminNavLinks.slice(0, 9).map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+                aria-current={isActive(link.path) ? 'page' : undefined}
+              >
+                <AdminIcon name={link.icon} />
+                {link.label}
+              </Link>
+            ))}
+
+            <div className="admin-nav-label mt-3">Tools</div>
+            {adminNavLinks.slice(9).map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+                aria-current={isActive(link.path) ? 'page' : undefined}
+              >
+                <AdminIcon name={link.icon} />
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Footer */}
+          <div className="admin-sidebar-footer">
+            <button
+              className="btn btn-sm w-100"
+              onClick={handleLogout}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                color: 'rgba(255,255,255,0.7)',
+                border: '1px solid rgba(255,255,255,0.15)',
+              }}
             >
-              <AdminIcon name={link.icon} />
-              {link.label}
-            </Link>
-          ))}
-
-          <div className="admin-nav-label mt-3">Tools</div>
-          {adminNavLinks.slice(9).map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
-              onClick={() => setSidebarOpen(false)}
-              aria-current={isActive(link.path) ? 'page' : undefined}
-            >
-              <AdminIcon name={link.icon} />
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Footer */}
-        <div className="admin-sidebar-footer">
-          <button
-            className="btn btn-sm w-100"
-            onClick={handleLogout}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              color: 'rgba(255,255,255,0.7)',
-              border: '1px solid rgba(255,255,255,0.15)',
-            }}
-          >
-            Logout
-          </button>
-        </div>
-      </aside>
+              Logout
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* Main Content */}
       <div
