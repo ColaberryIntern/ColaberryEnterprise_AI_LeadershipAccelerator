@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleRunCampaignTest,
   handleGetTestRuns,
@@ -9,15 +10,15 @@ import {
 const router = Router();
 
 // Campaign QA dashboard summary
-router.get('/testing/summary', handleGetQASummary);
+router.get('/api/admin/testing/summary', requireAdmin, handleGetQASummary);
 
 // Run full campaign test
-router.post('/testing/campaigns/:id/run', handleRunCampaignTest);
+router.post('/api/admin/testing/campaigns/:id/run', requireAdmin, handleRunCampaignTest);
 
 // List test runs for a campaign
-router.get('/testing/campaigns/:id/runs', handleGetTestRuns);
+router.get('/api/admin/testing/campaigns/:id/runs', requireAdmin, handleGetTestRuns);
 
 // Get single test run detail with steps
-router.get('/testing/runs/:runId', handleGetTestRunDetail);
+router.get('/api/admin/testing/runs/:runId', requireAdmin, handleGetTestRunDetail);
 
 export default router;
