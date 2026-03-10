@@ -1,7 +1,8 @@
 import cron from 'node-cron';
 import { Op } from 'sequelize';
 import nodemailer from 'nodemailer';
-import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall , Enrollment } from '../models';
+import { v4 as uuidv4 } from 'uuid';
+import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
 import { env } from '../config/env';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
@@ -22,6 +23,83 @@ import {
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
+
+/**
+ * Instrumentation wrapper for cron jobs.
+ * Checks the agent registry for enabled/paused status, generates a trace_id,
+ * measures duration, logs to ai_agent_activity_logs, and updates agent metrics.
+ */
+async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Promise<void> {
+  let agent: InstanceType<typeof AiAgent> | null = null;
+  try {
+    agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+  } catch {
+    // If registry lookup fails, run the job anyway (don't break existing behavior)
+    await fn();
+    return;
+  }
+
+  // If agent not in registry, run untracked
+  if (!agent) {
+    await fn();
+    return;
+  }
+
+  // Check enabled and paused status
+  if (!agent.enabled || agent.status === 'paused') return;
+
+  const traceId = uuidv4();
+  const start = Date.now();
+  let result: 'success' | 'failed' = 'success';
+  let errorMsg: string | null = null;
+  let stackTrace: string | null = null;
+
+  try {
+    await agent.update({ status: 'running' });
+    await fn();
+  } catch (err: any) {
+    result = 'failed';
+    errorMsg = err.message || String(err);
+    stackTrace = err.stack || null;
+  }
+
+  const duration = Date.now() - start;
+  const newRunCount = (agent.run_count || 0) + 1;
+  const newAvgDuration = agent.avg_duration_ms
+    ? Math.round((agent.avg_duration_ms * (newRunCount - 1) + duration) / newRunCount)
+    : duration;
+
+  const updateFields: Record<string, any> = {
+    status: 'idle',
+    run_count: newRunCount,
+    avg_duration_ms: newAvgDuration,
+    last_run_at: new Date(),
+  };
+  if (result === 'failed') {
+    updateFields.error_count = (agent.error_count || 0) + 1;
+    updateFields.last_error = errorMsg;
+    updateFields.last_error_at = new Date();
+  }
+
+  try {
+    await agent.update(updateFields);
+    await AiAgentActivityLog.create({
+      id: uuidv4(),
+      agent_id: agent.id,
+      action: agentName,
+      result,
+      confidence: null,
+      reason: result === 'failed' ? errorMsg : `Completed in ${duration}ms`,
+      details: null,
+      trace_id: traceId,
+      duration_ms: duration,
+      stack_trace: stackTrace,
+      created_at: new Date(),
+    } as any);
+  } catch (logErr: any) {
+    console.error(`[Scheduler] Failed to log instrumentation for ${agentName}:`, logErr.message);
+  }
+}
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -746,21 +824,21 @@ async function detectNoShows(): Promise<void> {
 export function startScheduler(): void {
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
-    processScheduledActions().catch((err) => {
+    instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
       console.error('[Scheduler] Unexpected error:', err);
     });
   });
 
   // Detect no-show strategy calls every 15 minutes
   cron.schedule('*/15 * * * *', () => {
-    detectNoShows().catch((err) => {
+    instrumentCronJob('NoShowDetector', () => detectNoShows()).catch((err) => {
       console.error('[Scheduler] No-show detection error:', err);
     });
   });
 
   // Compute ICP insights daily at 2 AM, then auto-refresh active ICP profiles
-  cron.schedule('0 2 * * *', async () => {
-    try {
+  cron.schedule('0 2 * * *', () => {
+    instrumentCronJob('ICPInsightComputer', async () => {
       console.log('[Scheduler] Running daily ICP insight computation...');
       await computeInsights(90);
 
@@ -779,53 +857,53 @@ export function startScheduler(): void {
         }
         console.log('[Scheduler] ICP profile stats refresh complete');
       }
-    } catch (err) {
+    }).catch((err) => {
       console.error('[Scheduler] ICP insight computation error:', err);
-    }
+    });
   });
 
   // Behavioral signal detection: analyze closed sessions every 10 minutes
-  cron.schedule('*/10 * * * *', async () => {
-    try {
+  cron.schedule('*/10 * * * *', () => {
+    instrumentCronJob('BehavioralSignalDetector', async () => {
       if (!env.enableVisitorTracking) return;
       const signalsDetected = await detectSignalsForRecentSessions();
       if (signalsDetected > 0) {
         console.log(`[Scheduler] Detected ${signalsDetected} behavioral signal(s) from recent sessions`);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Behavioral signal detection error:', err.message);
-    }
+    });
   });
 
   // Intent score recomputation: update scores for visitors with recent signals every 15 minutes
-  cron.schedule('7,22,37,52 * * * *', async () => {
-    try {
+  cron.schedule('7,22,37,52 * * * *', () => {
+    instrumentCronJob('IntentScoreRecomputer', async () => {
       if (!env.enableVisitorTracking) return;
       const scored = await recomputeRecentIntentScores();
       if (scored > 0) {
         console.log(`[Scheduler] Recomputed intent scores for ${scored} visitor(s)`);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Intent score recomputation error:', err.message);
-    }
+    });
   });
 
   // Behavioral trigger evaluation: every 10 minutes (after signal detection)
-  cron.schedule('5,15,25,35,45,55 * * * *', async () => {
-    try {
+  cron.schedule('5,15,25,35,45,55 * * * *', () => {
+    instrumentCronJob('BehavioralTriggerEvaluator', async () => {
       if (!env.enableVisitorTracking) return;
       const enrolled = await evaluateBehavioralTriggers();
       if (enrolled > 0) {
         console.log(`[Scheduler] Behavioral triggers enrolled ${enrolled} lead(s)`);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Behavioral trigger evaluation error:', err.message);
-    }
+    });
   });
 
   // Visitor data retention: delete page_events older than 90 days
-  cron.schedule('0 3 * * *', async () => {
-    try {
+  cron.schedule('0 3 * * *', () => {
+    instrumentCronJob('PageEventCleanup', async () => {
       const { PageEvent } = require('../models');
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 90);
@@ -835,14 +913,14 @@ export function startScheduler(): void {
       if (deleted > 0) {
         console.log(`[Scheduler] Cleaned up ${deleted} page events older than 90 days`);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Page event cleanup failed:', err.message);
-    }
+    });
   });
 
   // Chat message retention: delete chat_messages older than 180 days
-  cron.schedule('30 3 * * *', async () => {
-    try {
+  cron.schedule('30 3 * * *', () => {
+    instrumentCronJob('ChatMessageCleanup', async () => {
       const { ChatMessage } = require('../models');
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 180);
@@ -852,9 +930,9 @@ export function startScheduler(): void {
       if (deleted > 0) {
         console.log(`[Scheduler] Cleaned up ${deleted} chat messages older than 180 days`);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Chat message cleanup failed:', err.message);
-    }
+    });
   });
 
   console.log('[Scheduler] AI-powered multi-channel campaign scheduler started (every 5 minutes)');
@@ -869,21 +947,21 @@ export function startScheduler(): void {
   console.log('[Scheduler] Chat message retention cleanup: daily at 3:30 AM (180-day retention)');
 
   // Opportunity score recomputation — every 20 minutes (offset from other jobs)
-  cron.schedule('3,23,43 * * * *', async () => {
-    try {
+  cron.schedule('3,23,43 * * * *', () => {
+    instrumentCronJob('OpportunityScoreRecomputer', async () => {
       const scored = await recomputeActiveOpportunityScores();
       if (scored > 0) {
         console.log(`[Scheduler] Recomputed opportunity scores for ${scored} lead(s)`);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Opportunity score recomputation error:', err.message);
-    }
+    });
   });
   console.log('[Scheduler] Opportunity score recomputation: every 20 minutes');
 
   // Email digest — check every hour at :00
-  cron.schedule('0 * * * *', async () => {
-    try {
+  cron.schedule('0 * * * *', () => {
+    instrumentCronJob('EmailDigest', async () => {
       const { getSetting } = require('./settingsService');
       const enabled = await getSetting('digest_enabled');
       if (!enabled) return;
@@ -902,17 +980,17 @@ export function startScheduler(): void {
       const data = await compileDigestData(frequency);
       await sendDigestEmail(data);
       console.log(`[Scheduler] ${frequency} digest email sent successfully`);
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Digest email failed:', err.message);
-    }
+    });
   });
   console.log('[Scheduler] Email digest: hourly check (sends at configured hour/day)');
 
   // -- Accelerator Session Lifecycle --
 
   // Session reminders: check every 30 minutes
-  cron.schedule('*/30 * * * *', async () => {
-    try {
+  cron.schedule('*/30 * * * *', () => {
+    instrumentCronJob('SessionReminders', async () => {
       // 24-hour reminders
       const upcoming24h = await getUpcomingSessions(24);
       for (const session of upcoming24h) {
@@ -960,14 +1038,14 @@ export function startScheduler(): void {
           console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
         }
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Session reminder error:', err.message);
-    }
+    });
   });
 
   // Auto-mark sessions as live (15 min before start) and completed (30 min after end)
-  cron.schedule('*/5 * * * *', async () => {
-    try {
+  cron.schedule('*/5 * * * *', () => {
+    instrumentCronJob('SessionLifecycle', async () => {
       const toLive = await getSessionsToMarkLive();
       for (const session of toLive) {
         await session.update({ status: 'live' });
@@ -1018,9 +1096,9 @@ export function startScheduler(): void {
         );
         console.log(`[Scheduler] Readiness scores recomputed for cohort ${session.cohort_id}`);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[Scheduler] Session lifecycle error:', err.message);
-    }
+    });
   });
 
   console.log('[Scheduler] Accelerator: session reminders every 30 min (24h + 1h before)');

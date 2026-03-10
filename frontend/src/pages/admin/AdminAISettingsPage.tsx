@@ -425,12 +425,14 @@ function OverviewTab({
 
   return (
     <>
-      {/* KPI Cards — 7 metrics */}
+      {/* KPI Cards — 9 metrics */}
       <div className="row g-3 mb-4">
         {kpi('Total Agents', overview.total_agents, 'var(--color-primary)')}
         {kpi('Running', overview.running, 'var(--color-primary-light)')}
         {kpi('Idle', overview.idle, 'var(--color-accent)')}
         {kpi('Paused', overview.paused, '#e0a800')}
+        {kpi('Disabled', overview.disabled, 'var(--color-text-light)')}
+        {kpi('Errored', overview.errored, 'var(--color-secondary)')}
         {kpi('Health Score', overview.avg_health_score, overview.avg_health_score >= 80 ? 'var(--color-accent)' : overview.avg_health_score >= 60 ? '#e0a800' : 'var(--color-secondary)')}
         {kpi('Actions Today', overview.actions_today, 'var(--color-primary-light)')}
         {kpi('Repairs Today', overview.repairs_today, 'var(--color-accent)')}
