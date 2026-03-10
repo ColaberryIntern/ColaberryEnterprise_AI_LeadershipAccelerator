@@ -23,6 +23,7 @@ import {
   handleGetHighIntentVisitors,
   handleGetIntentDistribution,
   handleGetSignalDefinitions,
+  handleListSessions,
   handleListChatConversations,
   handleGetChatConversation,
   handleGetChatStats,
@@ -64,6 +65,7 @@ router.get('/api/admin/visitors/:id', requireAdmin, handleGetVisitorProfile);
 router.get('/api/admin/visitors/:id/sessions', requireAdmin, handleGetVisitorSessions);
 router.get('/api/admin/visitors/:id/signals', requireAdmin, handleGetVisitorSignals);
 router.get('/api/admin/visitors/:id/intent', requireAdmin, handleGetVisitorIntent);
+router.get('/api/admin/sessions', requireAdmin, handleListSessions);
 router.get('/api/admin/sessions/:id/events', requireAdmin, handleGetSessionEvents);
 
 // Journey & Opportunities

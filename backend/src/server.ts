@@ -57,11 +57,7 @@ async function start(): Promise<void> {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
   await connectDatabase();
-  if (env.nodeEnv === 'production') {
-    await sequelize.sync(); // validate only — no schema alterations in production
-  } else {
-    await sequelize.sync({ alter: true });
-  }
+  await sequelize.sync({ alter: true });
   await seedProgramCurriculum();
 
   // Intelligence OS: ensure tables exist and start autonomous discovery

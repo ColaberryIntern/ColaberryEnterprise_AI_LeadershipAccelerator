@@ -9,7 +9,7 @@ import {
 import { getVisitorSignals, getVisitorSignalSummary, getSignalDefinitions } from '../services/behavioralSignalService';
 import { getHighIntentVisitors, getIntentScoreForVisitor, getIntentDistribution } from '../services/intentScoringService';
 import { listConversations, getConversationDetail, getChatStats } from '../services/chatService';
-import { VisitorSession, PageEvent, IntentScore } from '../models';
+import { Visitor, VisitorSession, PageEvent, IntentScore, Lead } from '../models';
 
 // ---------------------------------------------------------------------------
 // 1. List Visitors (paginated)         GET /api/admin/visitors
@@ -119,6 +119,54 @@ export async function handleGetVisitorSessions(req: Request, res: Response, next
       order: [['started_at', 'DESC']],
     });
     res.json(sessions);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 6b. List Sessions (paginated)        GET /api/admin/sessions
+// ---------------------------------------------------------------------------
+
+export async function handleListSessions(req: Request, res: Response, next: NextFunction) {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const { rows, count } = await VisitorSession.findAndCountAll({
+      order: [['started_at', 'DESC']],
+      limit,
+      offset,
+      include: [
+        {
+          model: Visitor,
+          as: 'visitor',
+          attributes: ['id', 'fingerprint', 'lead_id'],
+          include: [{ model: Lead, as: 'lead', attributes: ['id', 'name'], required: false }],
+        },
+      ],
+    });
+
+    const sessions = rows.map((s: any) => ({
+      id: s.id,
+      visitor_id: s.visitor_id,
+      visitor_name: s.visitor?.lead?.name || null,
+      lead_name: s.visitor?.lead?.name || null,
+      started_at: s.started_at,
+      ended_at: s.ended_at,
+      duration: s.duration_seconds,
+      pageview_count: s.pageview_count,
+      event_count: s.event_count,
+      entry_page: s.entry_page,
+      exit_page: s.exit_page,
+      is_bounce: s.is_bounce,
+      referrer_domain: s.utm_source || null,
+      utm_source: s.utm_source,
+      device_type: s.device_type,
+    }));
+
+    res.json({ sessions, total: count, page, totalPages: Math.ceil(count / limit) });
   } catch (error) {
     next(error);
   }
