@@ -20,6 +20,8 @@ import {
   handleGetActivityDetail,
   handleGetErrorDetail,
   handleGetCampaignTimeline,
+  handleDiscoverAgents,
+  handleGetAgentHealthScores,
 } from '../../controllers/aiOpsController';
 
 const router = Router();
@@ -60,5 +62,9 @@ router.get('/api/admin/ai-ops/activity/:id', requireAdmin, handleGetActivityDeta
 router.get('/api/admin/ai-ops/trace/:traceId', requireAdmin, handleGetExecutionTrace);
 router.get('/api/admin/ai-ops/errors/:id', requireAdmin, handleGetErrorDetail);
 router.get('/api/admin/ai-ops/campaigns/:id/timeline', requireAdmin, handleGetCampaignTimeline);
+
+// --- Agent Discovery & Health Scores ---
+router.post('/api/admin/ai-ops/discover', requireAdmin, handleDiscoverAgents);
+router.get('/api/admin/ai-ops/health/agents', requireAdmin, handleGetAgentHealthScores);
 
 export default router;

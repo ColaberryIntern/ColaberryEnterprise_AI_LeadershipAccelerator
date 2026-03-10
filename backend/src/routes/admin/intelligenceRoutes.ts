@@ -14,6 +14,10 @@ import {
   handleGetRankedInsights,
   handleGetEntityNetwork,
   handleGetQAHistory,
+  handleGetKPIs,
+  handleGetAnomalies,
+  handleGetForecasts,
+  handleGetRiskEntities,
 } from '../../controllers/intelligenceController';
 
 const router = Router();
@@ -44,5 +48,11 @@ router.get('/api/admin/intelligence/entity-network', requireAdmin, handleGetEnti
 
 // Q&A History
 router.get('/api/admin/intelligence/qa-history', requireAdmin, handleGetQAHistory);
+
+// Analytics
+router.get('/api/admin/intelligence/kpis', requireAdmin, handleGetKPIs);
+router.get('/api/admin/intelligence/anomalies', requireAdmin, handleGetAnomalies);
+router.get('/api/admin/intelligence/forecasts', requireAdmin, handleGetForecasts);
+router.get('/api/admin/intelligence/risk-entities', requireAdmin, handleGetRiskEntities);
 
 export default router;

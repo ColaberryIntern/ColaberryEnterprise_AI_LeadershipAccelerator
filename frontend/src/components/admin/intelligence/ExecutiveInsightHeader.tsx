@@ -1,66 +1,16 @@
 import React from 'react';
 
-interface KPIData {
-  [key: string]: any;
-}
-
-interface ExecutiveInsightHeaderProps {
-  summary: KPIData | null;
+interface Props {
+  kpis: {
+    risk_level?: { score: number; label: string; delta: number };
+    active_alerts?: { count: number; delta: number };
+    lead_trend?: { value: string; delta: number; total: number };
+    system_health?: { score: number; label: string };
+    agent_health?: { running: number; errored: number; total: number };
+    process_activity?: { count_24h: number; delta: number };
+  } | null;
   loading?: boolean;
 }
-
-interface KPICardConfig {
-  label: string;
-  accent: string;
-  render: (data: KPIData) => { value: string; subtitle: string };
-}
-
-const kpiRegistry: Record<string, KPICardConfig> = {
-  risk_level: {
-    label: 'Risk Level',
-    accent: 'var(--color-secondary)',
-    render: (d) => ({
-      value: d.risk_level || d.risk_label || 'N/A',
-      subtitle: d.risk_score != null ? `Score: ${d.risk_score}/100` : '',
-    }),
-  },
-  active_alerts: {
-    label: 'Active Alerts',
-    accent: '#e53e3e',
-    render: (d) => ({
-      value: String(d.active_alerts ?? d.alert_count ?? 0),
-      subtitle: d.alert_detail || 'High/critical alerts',
-    }),
-  },
-  revenue_trend: {
-    label: 'Revenue Trend (30D)',
-    accent: (undefined as any), // computed dynamically
-    render: (d) => {
-      const val = d.revenue_trend ?? d.revenue_delta ?? 0;
-      const pct = typeof val === 'number' ? val : parseFloat(val) || 0;
-      return {
-        value: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`,
-        subtitle: pct >= 0 ? 'growing' : 'declining',
-      };
-    },
-  },
-  complaint_spike: {
-    label: 'Complaint Spike',
-    accent: '#dd6b20',
-    render: (d) => ({
-      value: String(d.complaint_spike ?? d.complaint_count ?? 0),
-      subtitle: d.complaint_category || 'Product Quality',
-    }),
-  },
-  inventory_risk: {
-    label: 'Inventory Risk',
-    accent: '#805ad5',
-    render: (d) => ({
-      value: d.inventory_risk ?? d.at_risk_count ?? 'N/A',
-      subtitle: d.inventory_detail || 'At-risk stores',
-    }),
-  },
-};
 
 const riskColors: Record<string, string> = {
   critical: '#e53e3e',
@@ -69,14 +19,27 @@ const riskColors: Record<string, string> = {
   low: '#38a169',
 };
 
-function getRiskBadgeColor(level: string): string {
-  return riskColors[level?.toLowerCase()] || '#718096';
+function getRiskBadgeColor(label: string): string {
+  return riskColors[label?.toLowerCase()] || '#718096';
+}
+
+function DeltaBadge({ delta, suffix = '' }: { delta: number; suffix?: string }) {
+  if (delta === 0) return null;
+  const positive = delta > 0;
+  return (
+    <span
+      className={`badge ${positive ? 'bg-success' : 'bg-danger'}`}
+      style={{ fontSize: '0.6rem', fontWeight: 600 }}
+    >
+      {positive ? '\u2191' : '\u2193'} {Math.abs(delta)}{suffix}
+    </span>
+  );
 }
 
 function SkeletonCards() {
   return (
     <div className="d-flex gap-3 flex-wrap">
-      {Array.from({ length: 5 }).map((_, i) => (
+      {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
           className="card border-0 shadow-sm flex-fill"
@@ -95,65 +58,155 @@ function SkeletonCards() {
   );
 }
 
-export default function ExecutiveInsightHeader({ summary, loading }: ExecutiveInsightHeaderProps) {
-  if (loading) return <SkeletonCards />;
-  if (!summary) return null;
+interface KPICardProps {
+  label: string;
+  accent: string;
+  children: React.ReactNode;
+}
 
-  const keys = Object.keys(kpiRegistry).filter(
-    (k) => summary[k] != null || summary[k.replace(/_/g, '')] != null
+function KPICard({ label, accent, children }: KPICardProps) {
+  return (
+    <div
+      className="card border-0 shadow-sm flex-fill"
+      style={{
+        minWidth: '150px',
+        maxWidth: '220px',
+        borderLeft: `4px solid ${accent}`,
+      }}
+    >
+      <div className="card-body p-3">
+        <small
+          className="text-muted fw-medium text-uppercase"
+          style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}
+        >
+          {label}
+        </small>
+        {children}
+      </div>
+    </div>
   );
+}
 
-  // No matching KPI keys found — don't render empty cards
-  if (keys.length === 0) return null;
+export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
+  if (loading) return <SkeletonCards />;
+  if (!kpis) return null;
+
+  const {
+    risk_level,
+    active_alerts,
+    lead_trend,
+    system_health,
+    agent_health,
+    process_activity,
+  } = kpis;
+
+  // Count how many KPIs have data
+  const hasData = [risk_level, active_alerts, lead_trend, system_health, agent_health, process_activity].some(Boolean);
+  if (!hasData) return null;
 
   return (
     <div className="d-flex gap-3 flex-wrap">
-      {keys.map((key) => {
-        const cfg = kpiRegistry[key];
-        const { value, subtitle } = cfg.render(summary);
-        const accent =
-          key === 'revenue_trend'
-            ? (parseFloat(summary.revenue_trend ?? '0') >= 0 ? 'var(--color-accent)' : 'var(--color-secondary)')
-            : cfg.accent;
-
-        return (
-          <div
-            key={key}
-            className="card border-0 shadow-sm flex-fill"
-            style={{
-              minWidth: '150px',
-              maxWidth: '220px',
-              borderLeft: `4px solid ${accent}`,
-            }}
-          >
-            <div className="card-body p-3">
-              <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
-                {cfg.label}
-              </small>
-              <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
-                {key === 'risk_level' ? (
-                  <span
-                    className="badge"
-                    style={{
-                      background: getRiskBadgeColor(value),
-                      fontSize: '0.8rem',
-                    }}
-                  >
-                    {value.toUpperCase()}
-                  </span>
-                ) : (
-                  value
-                )}
-              </div>
-              {subtitle && (
-                <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                  {subtitle}
-                </small>
-              )}
-            </div>
+      {/* System Risk Level */}
+      {risk_level && (
+        <KPICard label="System Risk Level" accent={getRiskBadgeColor(risk_level.label)}>
+          <div className="d-flex align-items-center gap-2 mt-1">
+            <span
+              className="badge"
+              style={{
+                background: getRiskBadgeColor(risk_level.label),
+                fontSize: '0.8rem',
+              }}
+            >
+              {risk_level.label.toUpperCase()}
+            </span>
+            <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+              {risk_level.score}/100
+            </small>
           </div>
-        );
-      })}
+          {risk_level.delta !== 0 && (
+            <div className="mt-1">
+              <DeltaBadge delta={risk_level.delta} />
+            </div>
+          )}
+        </KPICard>
+      )}
+
+      {/* Active Alerts */}
+      {active_alerts && (
+        <KPICard label="Active Alerts" accent="#e53e3e">
+          <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+            {active_alerts.count}
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <small className="text-muted" style={{ fontSize: '0.7rem' }}>High/critical alerts</small>
+            <DeltaBadge delta={active_alerts.delta} />
+          </div>
+        </KPICard>
+      )}
+
+      {/* Lead Trend */}
+      {lead_trend && (
+        <KPICard label="Lead Trend" accent={lead_trend.delta >= 0 ? 'var(--color-accent)' : 'var(--color-secondary)'}>
+          <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+            {lead_trend.value}
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <DeltaBadge delta={lead_trend.delta} suffix="%" />
+            {lead_trend.total != null && (
+              <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                of {lead_trend.total} total
+              </small>
+            )}
+          </div>
+        </KPICard>
+      )}
+
+      {/* System Health */}
+      {system_health && (
+        <KPICard
+          label="System Health"
+          accent={system_health.score >= 80 ? '#38a169' : system_health.score >= 50 ? '#d69e2e' : '#e53e3e'}
+        >
+          <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+            {system_health.score}<small className="fw-normal text-muted">/100</small>
+          </div>
+          <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+            {system_health.label}
+          </small>
+        </KPICard>
+      )}
+
+      {/* Agent Status */}
+      {agent_health && (
+        <KPICard
+          label="Agent Status"
+          accent={agent_health.errored > 0 ? '#dd6b20' : '#38a169'}
+        >
+          <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+            {agent_health.running}<small className="fw-normal text-muted"> running</small>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+              of {agent_health.total} total
+            </small>
+            {agent_health.errored > 0 && (
+              <span className="badge bg-danger" style={{ fontSize: '0.6rem' }}>
+                {agent_health.errored} errored
+              </span>
+            )}
+          </div>
+        </KPICard>
+      )}
+
+      {/* Process Activity */}
+      {process_activity && (
+        <KPICard label="Process Activity" accent="#805ad5">
+          <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+            {process_activity.count_24h}<small className="fw-normal text-muted"> (24h)</small>
+          </div>
+          <DeltaBadge delta={process_activity.delta} />
+        </KPICard>
+      )}
     </div>
   );
 }

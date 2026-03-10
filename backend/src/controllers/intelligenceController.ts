@@ -218,3 +218,35 @@ export async function handleGetQAHistory(req: Request, res: Response, next: Next
     next(error);
   }
 }
+
+export async function handleGetKPIs(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { getIntelligenceKPIs } = await import('../intelligence/services/analyticsService');
+    const data = await getIntelligenceKPIs();
+    res.json(data);
+  } catch (error) { next(error); }
+}
+
+export async function handleGetAnomalies(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { getAnomalies } = await import('../intelligence/services/analyticsService');
+    const data = await getAnomalies();
+    res.json(data);
+  } catch (error) { next(error); }
+}
+
+export async function handleGetForecasts(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { getForecasts } = await import('../intelligence/services/analyticsService');
+    const data = await getForecasts();
+    res.json(data);
+  } catch (error) { next(error); }
+}
+
+export async function handleGetRiskEntities(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { getRiskEntities } = await import('../intelligence/services/analyticsService');
+    const data = await getRiskEntities();
+    res.json(data);
+  } catch (error) { next(error); }
+}

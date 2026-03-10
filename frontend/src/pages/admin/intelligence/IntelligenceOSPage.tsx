@@ -7,6 +7,10 @@ import {
   triggerDiscovery,
   getExecutiveSummary,
   getRankedInsights,
+  getKPIs,
+  getAnomalies,
+  getForecasts,
+  getRiskEntities,
   HealthStatus,
   EntityNetwork,
   EntityNode,
@@ -14,6 +18,8 @@ import {
   QueryResponse,
   VisualizationSpec,
 } from '../../../services/intelligenceApi';
+import IntelligenceAnalyticsGrid from '../../../components/admin/intelligence/IntelligenceAnalyticsGrid';
+import InvestigationPanel from '../../../components/admin/intelligence/InvestigationPanel';
 import ExecutiveInsightHeader from '../../../components/admin/intelligence/ExecutiveInsightHeader';
 import ChartTypeSelector from '../../../components/admin/intelligence/ChartTypeSelector';
 import ChartRenderer from '../../../components/admin/intelligence/ChartRenderer';
@@ -460,6 +466,15 @@ function DynamicCanvas({
   summaryLoading,
   autoInsights,
   onFollowUpClick,
+  kpis,
+  anomalies,
+  forecasts,
+  riskEntities,
+  entityNetwork,
+  analyticsLoading,
+  investigationTarget,
+  onInvestigate,
+  onCloseInvestigation,
 }: {
   visualizations: VisualizationSpec[];
   insights: QueryResponse | null;
@@ -467,6 +482,15 @@ function DynamicCanvas({
   summaryLoading: boolean;
   autoInsights: any[];
   onFollowUpClick: (question: string) => void;
+  kpis: any;
+  anomalies: any[];
+  forecasts: any;
+  riskEntities: any[];
+  entityNetwork: EntityNetwork | null;
+  analyticsLoading: boolean;
+  investigationTarget: any;
+  onInvestigate: (anomaly: any) => void;
+  onCloseInvestigation: () => void;
 }) {
   const [activeChartType, setActiveChartType] = useState<string | null>(null);
   const [narrativeExpanded, setNarrativeExpanded] = useState(false);
@@ -563,7 +587,7 @@ function DynamicCanvas({
   return (
     <div className="p-3" style={{ overflowY: 'auto', height: '100%' }}>
       {/* Section 1: Executive KPI Header */}
-      <ExecutiveInsightHeader summary={summary} loading={summaryLoading} />
+      <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} />
 
       {/* Section 2: Narrative Summary */}
       {narrativeText && (
@@ -615,15 +639,34 @@ function DynamicCanvas({
         ))}
       </div>
 
-      {/* Section 4: Auto-Insights Grid */}
+      {/* Section 4: Intelligence Analytics Grid */}
+      {(!analyticsLoading || anomalies.length > 0 || riskEntities.length > 0) && (
+        <div className="mt-3">
+          <h6 className="fw-semibold small mb-2" style={{ color: 'var(--color-primary)' }}>
+            Intelligence Analytics
+          </h6>
+          <IntelligenceAnalyticsGrid
+            anomalies={anomalies}
+            forecasts={forecasts}
+            riskEntities={riskEntities}
+            entityNetwork={entityNetwork}
+            loading={analyticsLoading}
+          />
+        </div>
+      )}
+
+      {/* Section 5: Auto-Insights Grid */}
       {autoInsights.length > 0 && (
         <div className="mt-3">
           <h6 className="fw-semibold small mb-2" style={{ color: 'var(--color-primary)' }}>
             Key Insights
           </h6>
-          <AutoInsightsGrid insights={autoInsights} onInsightClick={onFollowUpClick} />
+          <AutoInsightsGrid insights={autoInsights} onInsightClick={onFollowUpClick} onInvestigate={onInvestigate} />
         </div>
       )}
+
+      {/* Section 6: Investigation Panel */}
+      <InvestigationPanel anomaly={investigationTarget} onClose={onCloseInvestigation} />
 
       {/* Section 5: Follow-up Questions */}
       {insights?.follow_ups && insights.follow_ups.length > 0 && (
@@ -1053,6 +1096,14 @@ function IntelligenceOSContent() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [externalQuery, setExternalQuery] = useState<string | null>(null);
 
+  // Analytics state
+  const [kpis, setKpis] = useState<any>(null);
+  const [anomalies, setAnomalies] = useState<any[]>([]);
+  const [forecasts, setForecasts] = useState<any>(null);
+  const [riskEntities, setRiskEntities] = useState<any[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [investigationTarget, setInvestigationTarget] = useState<any>(null);
+
   // Panel state
   const { isCompact, isMedium } = useBreakpoint();
   const [leftOpen, setLeftOpen] = useState(true);
@@ -1108,6 +1159,15 @@ function IntelligenceOSContent() {
         setIsProcessing(false);
       });
 
+    // Load analytics data (KPIs, anomalies, forecasts, risk entities)
+    setAnalyticsLoading(true);
+    Promise.all([
+      getKPIs().then((r) => setKpis(r.data)).catch(() => {}),
+      getAnomalies().then((r) => setAnomalies(r.data || [])).catch(() => {}),
+      getForecasts().then((r) => setForecasts(r.data)).catch(() => {}),
+      getRiskEntities().then((r) => setRiskEntities(r.data || [])).catch(() => {}),
+    ]).finally(() => setAnalyticsLoading(false));
+
     // Auto-load ranked insights
     getRankedInsights()
       .then((r) => {
@@ -1137,9 +1197,8 @@ function IntelligenceOSContent() {
   // Health polling every 60 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      getHealth()
-        .then((r) => setHealth(r.data))
-        .catch(() => {});
+      getHealth().then((r) => setHealth(r.data)).catch(() => {});
+      getKPIs().then((r) => setKpis(r.data)).catch(() => {});
     }, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -1176,6 +1235,10 @@ function IntelligenceOSContent() {
     setIsProcessing(true);
   }, []);
 
+  const handleInvestigate = useCallback((anomaly: any) => {
+    setInvestigationTarget(anomaly);
+  }, []);
+
   // ── Compact (mobile) layout ──
   if (isCompact) {
     return (
@@ -1198,6 +1261,15 @@ function IntelligenceOSContent() {
               summaryLoading={summaryLoading}
               autoInsights={autoInsights}
               onFollowUpClick={handleFollowUpClick}
+              kpis={kpis}
+              anomalies={anomalies}
+              forecasts={forecasts}
+              riskEntities={riskEntities}
+              entityNetwork={network}
+              analyticsLoading={analyticsLoading}
+              investigationTarget={investigationTarget}
+              onInvestigate={handleInvestigate}
+              onCloseInvestigation={() => setInvestigationTarget(null)}
             />
           )}
           {mobileTab === 'assistant' && (
@@ -1249,6 +1321,15 @@ function IntelligenceOSContent() {
             summaryLoading={summaryLoading}
             autoInsights={autoInsights}
             onFollowUpClick={handleFollowUpClick}
+            kpis={kpis}
+            anomalies={anomalies}
+            forecasts={forecasts}
+            riskEntities={riskEntities}
+            entityNetwork={network}
+            analyticsLoading={analyticsLoading}
+            investigationTarget={investigationTarget}
+            onInvestigate={handleInvestigate}
+            onCloseInvestigation={() => setInvestigationTarget(null)}
           />
         </div>
 

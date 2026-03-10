@@ -232,6 +232,14 @@ function AdminAISettingsPage() {
     ]).finally(() => setLoading(false));
   }, [fetchOverview, fetchAgents, fetchHealth, fetchErrors, fetchActivity]);
 
+  // 10-second polling for overview stats
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchOverview();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchOverview]);
+
   const handleRunAgent = async (agentId: string) => {
     setActionLoading(agentId);
     try {
@@ -257,8 +265,11 @@ function AdminAISettingsPage() {
   const handleScanAll = async () => {
     setActionLoading('scan');
     try {
-      await api.post('/api/admin/ai-ops/health/scan');
-      await Promise.allSettled([fetchHealth(), fetchOverview(), fetchErrors()]);
+      await Promise.allSettled([
+        api.post('/api/admin/ai-ops/health/scan'),
+        api.post('/api/admin/ai-ops/discover'),
+      ]);
+      await Promise.allSettled([fetchHealth(), fetchOverview(), fetchErrors(), fetchAgents()]);
     } catch (err) {
       console.error('Failed to trigger scan:', err);
     } finally {

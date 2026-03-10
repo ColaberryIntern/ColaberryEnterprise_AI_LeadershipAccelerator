@@ -266,3 +266,21 @@ export async function handleRestartCampaign(req: Request, res: Response) {
     res.status(err.message === 'Campaign not found' ? 404 : 500).json({ error: err.message });
   }
 }
+
+export async function handleDiscoverAgents(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.scanAndDiscoverAgents();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleGetAgentHealthScores(req: Request, res: Response) {
+  try {
+    const result = await aiOpsService.getAgentHealthScores();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}

@@ -125,4 +125,10 @@ export const getEntityNetwork = () => api.get<EntityNetwork>('/entity-network');
 export const getQAHistory = (params?: { limit?: number; offset?: number }) =>
   api.get<{ rows: any[]; count: number }>('/qa-history', { params });
 
+// Analytics
+export const getKPIs = () => api.get('/kpis');
+export const getAnomalies = () => api.get('/anomalies');
+export const getForecasts = () => api.get('/forecasts');
+export const getRiskEntities = () => api.get('/risk-entities');
+
 export default api;

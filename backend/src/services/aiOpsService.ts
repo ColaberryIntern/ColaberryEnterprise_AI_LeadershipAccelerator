@@ -407,3 +407,41 @@ export async function restartCampaignActions(campaignId: string) {
 
   return { campaign_id: campaignId, requeued: updated };
 }
+
+// --- Agent Discovery & Health Scores ---
+
+export async function scanAndDiscoverAgents() {
+  const { AGENT_REGISTRY, seedAgentRegistry } = await import('./agentRegistrySeed');
+
+  await seedAgentRegistry();
+
+  const totalRegistered = await AiAgent.count();
+  const newAgents = totalRegistered - AGENT_REGISTRY.length;
+
+  return {
+    synced: true,
+    total_registered: totalRegistered,
+    new_agents: Math.max(0, newAgents),
+  };
+}
+
+export async function getAgentHealthScores() {
+  const agents = await AiAgent.findAll();
+
+  return agents.map((a) => {
+    const errorRate = a.run_count > 0 ? a.error_count / a.run_count : 0;
+    const healthScore = Math.max(
+      0,
+      Math.round(100 - (a.error_count / Math.max(a.run_count, 1)) * 200 - (a.status === 'error' ? 30 : 0)),
+    );
+
+    return {
+      agent_id: a.id,
+      agent_name: a.agent_name,
+      health_score: healthScore,
+      status: a.status,
+      error_rate: Math.round(errorRate * 100) / 100,
+      category: a.category,
+    };
+  });
+}

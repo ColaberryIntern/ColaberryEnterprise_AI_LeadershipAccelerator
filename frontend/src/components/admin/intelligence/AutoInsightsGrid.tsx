@@ -11,6 +11,7 @@ interface Insight {
 interface AutoInsightsGridProps {
   insights: Insight[];
   onInsightClick?: (title: string) => void;
+  onInvestigate?: (insight: any) => void;
   loading?: boolean;
 }
 
@@ -44,7 +45,7 @@ function SkeletonCards() {
   );
 }
 
-export default function AutoInsightsGrid({ insights, onInsightClick, loading }: AutoInsightsGridProps) {
+export default function AutoInsightsGrid({ insights, onInsightClick, onInvestigate, loading }: AutoInsightsGridProps) {
   if (loading) return <SkeletonCards />;
   if (!insights?.length) return null;
 
@@ -112,6 +113,18 @@ export default function AutoInsightsGrid({ insights, onInsightClick, loading }: 
                 </small>
               )}
             </div>
+            {onInvestigate && (
+              <button
+                className="btn btn-sm btn-outline-primary mt-2"
+                style={{ fontSize: '0.68rem' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInvestigate(insight);
+                }}
+              >
+                Investigate
+              </button>
+            )}
           </div>
         </div>
       ))}
