@@ -543,6 +543,7 @@ function OverviewTab({
                         <th>Score</th>
                         <th>Leads</th>
                         <th>Errors</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -562,6 +563,7 @@ function OverviewTab({
                               <span className="text-muted">0</span>
                             )}
                           </td>
+                          <td className="text-primary">View ›</td>
                         </tr>
                       ))}
                     </tbody>
@@ -612,7 +614,25 @@ function ActivityTab({
               {activity.map((a) => (
                 <tr key={a.id}>
                   <td className="fw-medium">{a.agent?.agent_name || 'Unknown'}</td>
-                  <td>{a.action}</td>
+                  <td>
+                    {a.action === 'scan_completed_no_issues' ? (
+                      <span className="text-muted">No issues detected</span>
+                    ) : (a.details as any)?.actions?.length > 0 ? (
+                      <span title={a.action}>
+                        {(() => {
+                          const actionCounts: Record<string, number> = {};
+                          ((a.details as any).actions as any[]).forEach((act: any) => {
+                            actionCounts[act.action] = (actionCounts[act.action] || 0) + 1;
+                          });
+                          return Object.entries(actionCounts)
+                            .map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`)
+                            .join(', ');
+                        })()}
+                      </span>
+                    ) : (
+                      <span>{a.action}</span>
+                    )}
+                  </td>
                   <td>
                     {a.confidence != null ? (
                       <span

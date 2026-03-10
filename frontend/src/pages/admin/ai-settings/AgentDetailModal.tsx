@@ -286,9 +286,35 @@ export default function AgentDetailModal({
                 {detail.agent.last_result && (
                   <div className="mb-4">
                     <label className="form-label small fw-medium text-muted">Last Execution Result</label>
-                    <pre className="small bg-light p-3 rounded mb-0" style={{ maxHeight: 200, overflow: 'auto' }}>
-                      {JSON.stringify(detail.agent.last_result, null, 2)}
-                    </pre>
+                    <div className="bg-light p-3 rounded small">
+                      {(() => {
+                        const r = detail.agent.last_result!;
+                        if (r.campaigns_scanned != null) {
+                          return (
+                            <div className="d-flex flex-wrap gap-3">
+                              <span>Scanned <strong>{r.campaigns_scanned}</strong> campaign(s)</span>
+                              {r.healthy != null && <span className="badge bg-success">{r.healthy} healthy</span>}
+                              {r.degraded != null && r.degraded > 0 && <span className="badge bg-warning text-dark">{r.degraded} degraded</span>}
+                              {r.critical != null && r.critical > 0 && <span className="badge bg-danger">{r.critical} critical</span>}
+                              <span className="text-muted">{formatDuration(r.duration_ms)}</span>
+                            </div>
+                          );
+                        }
+                        if (r.campaigns_processed != null) {
+                          const actionCount = r.actions_taken ?? 0;
+                          const errorCount = r.errors ?? 0;
+                          return (
+                            <div className="d-flex flex-wrap gap-3">
+                              <span>Processed <strong>{r.campaigns_processed}</strong> item(s)</span>
+                              <span>{actionCount > 0 ? <strong>{actionCount} action(s) taken</strong> : <span className="text-muted">No issues detected</span>}</span>
+                              {errorCount > 0 && <span className="badge bg-danger">{errorCount} error(s)</span>}
+                              <span className="text-muted">{formatDuration(r.duration_ms)}</span>
+                            </div>
+                          );
+                        }
+                        return <pre className="mb-0" style={{ maxHeight: 200, overflow: 'auto' }}>{JSON.stringify(r, null, 2)}</pre>;
+                      })()}
+                    </div>
                   </div>
                 )}
 
@@ -316,7 +342,15 @@ export default function AgentDetailModal({
                         <tbody>
                           {detail.recent_activity.map((a) => (
                             <tr key={a.id}>
-                              <td>{a.action}</td>
+                              <td>
+                                {a.action === 'scan_completed_no_issues' ? (
+                                  <span className="text-muted">No issues detected</span>
+                                ) : a.action === 'agent_execution_completed' ? (
+                                  <span className="text-muted">Completed (no details)</span>
+                                ) : (
+                                  <span>{a.action}</span>
+                                )}
+                              </td>
                               <td className="text-muted">{a.campaign?.name || '—'}</td>
                               <td>
                                 <span className={`badge bg-${RESULT_COLORS[a.result] || 'secondary'}`}>

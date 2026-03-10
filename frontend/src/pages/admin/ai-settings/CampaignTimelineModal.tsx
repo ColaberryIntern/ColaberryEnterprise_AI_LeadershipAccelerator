@@ -106,7 +106,11 @@ export default function CampaignTimelineModal({
                 </div>
               </div>
             ) : !timeline || timeline.timeline.length === 0 ? (
-              <p className="text-muted">No timeline data found for this campaign.</p>
+              <div className="text-center py-5">
+                <div className="text-muted mb-2" style={{ fontSize: 32 }}>—</div>
+                <p className="text-muted mb-1">No activity recorded for this campaign yet.</p>
+                <p className="text-muted small">Timeline entries appear when agents scan, detect issues, or take repair actions on this campaign.</p>
+              </div>
             ) : (
               <div className="position-relative" style={{ paddingLeft: 30 }}>
                 {/* Vertical line */}

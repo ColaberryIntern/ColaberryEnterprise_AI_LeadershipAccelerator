@@ -151,13 +151,58 @@ export default function ActivityDetailModal({
                   </div>
                 )}
 
-                {/* Details */}
+                {/* Actions Taken */}
+                {(detail.details as any)?.actions?.length > 0 && (
+                  <div className="mb-4">
+                    <label className="form-label small fw-medium text-muted">
+                      Actions Taken ({(detail.details as any).actions.length})
+                    </label>
+                    <div className="table-responsive">
+                      <table className="table table-sm table-hover mb-0 small">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Action</th>
+                            <th>Reason</th>
+                            <th>Confidence</th>
+                            <th>Result</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {((detail.details as any).actions as any[]).map((act: any, idx: number) => (
+                            <tr key={idx}>
+                              <td className="fw-medium">{act.action?.replace(/_/g, ' ')}</td>
+                              <td className="text-muted" style={{ maxWidth: 300 }}>{act.reason || '—'}</td>
+                              <td>
+                                {act.confidence != null ? (
+                                  <span className={`badge bg-${act.confidence >= 0.8 ? 'success' : act.confidence >= 0.6 ? 'warning' : 'danger'}`}>
+                                    {(act.confidence * 100).toFixed(0)}%
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td>
+                                <span className={`badge bg-${RESULT_COLORS[act.result] || 'secondary'}`}>
+                                  {act.result || '—'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Other Details (raw fallback) */}
                 {detail.details && Object.keys(detail.details).length > 0 && (
                   <div className="mb-4">
-                    <label className="form-label small fw-medium text-muted">Execution Details</label>
-                    <pre className="small bg-light p-3 rounded mb-0" style={{ maxHeight: 200, overflow: 'auto' }}>
-                      {JSON.stringify(detail.details, null, 2)}
-                    </pre>
+                    <details>
+                      <summary className="form-label small fw-medium text-muted" style={{ cursor: 'pointer' }}>
+                        Raw Execution Details
+                      </summary>
+                      <pre className="small bg-light p-3 rounded mb-0 mt-1" style={{ maxHeight: 200, overflow: 'auto' }}>
+                        {JSON.stringify(detail.details, null, 2)}
+                      </pre>
+                    </details>
                   </div>
                 )}
 

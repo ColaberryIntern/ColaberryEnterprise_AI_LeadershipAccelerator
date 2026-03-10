@@ -137,10 +137,14 @@ async function runAgent(
       updated_at: new Date(),
     });
 
-    // Log the execution summary with trace
+    // Log the execution summary with trace — include full action details
+    const actionSummary = result.actions_taken.length > 0
+      ? `${result.actions_taken.length} action(s): ${[...new Set(result.actions_taken.map(a => a.action))].join(', ')}`
+      : 'scan_completed_no_issues';
+
     await logAgentActivity({
       agent_id: agent.id,
-      action: 'agent_execution_completed',
+      action: actionSummary,
       result: result.errors.length > 0 ? 'failed' : 'success',
       trace_id: traceId,
       duration_ms: durationMs,
@@ -151,6 +155,7 @@ async function runAgent(
       },
       details: {
         actions_taken: result.actions_taken.length,
+        actions: result.actions_taken.slice(0, 50),
         errors: result.errors,
       },
     });
