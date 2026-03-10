@@ -12,6 +12,7 @@ import aiOpsRoutes from './admin/aiOpsRoutes';
 import intelligenceRoutes from './admin/intelligenceRoutes';
 import campaignTestRoutes from './admin/campaignTestRoutes';
 import campaignSimulationRoutes from './admin/campaignSimulationRoutes';
+import marketingRoutes from './admin/marketingRoutes';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use(aiOpsRoutes);
 router.use(intelligenceRoutes);
 router.use(campaignTestRoutes);
 router.use(campaignSimulationRoutes);
+router.use(marketingRoutes);
 
 export default router;
