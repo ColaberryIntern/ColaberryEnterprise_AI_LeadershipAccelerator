@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
+import { forceX, forceY } from 'd3-force';
 import { BusinessEntityNetwork } from '../../../services/intelligenceApi';
 import { BUSINESS_CATEGORIES, formatRowCount } from './entityPanel/businessEntityConfig';
 import { useIntelligenceContext } from '../../../contexts/IntelligenceContext';
@@ -108,17 +109,16 @@ export default function InteractiveBusinessGraph({ hierarchy, onNodeClick }: Pro
     fg.d3Force('link')?.distance(80);
 
     // Custom Y force to stratify nodes by level
-    const d3 = require('d3-force');
     const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
     fg.d3Force(
       'y',
-      d3.forceY((node: GraphNode) => {
-        const normalizedLevel = node.level / Math.max(maxLevel, 1);
+      forceY((node: any) => {
+        const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
         return -dimensions.height * 0.35 + normalizedLevel * dimensions.height * 0.7;
       }).strength(0.3)
     );
 
-    fg.d3Force('x', d3.forceX(0).strength(0.05));
+    fg.d3Force('x', forceX(0).strength(0.05));
 
     // Reheat
     fg.d3ReheatSimulation();
