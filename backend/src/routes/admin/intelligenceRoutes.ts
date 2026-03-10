@@ -18,6 +18,7 @@ import {
   handleGetAnomalies,
   handleGetForecasts,
   handleGetRiskEntities,
+  handleGetBusinessHierarchy,
 } from '../../controllers/intelligenceController';
 
 const router = Router();
@@ -54,5 +55,8 @@ router.get('/api/admin/intelligence/kpis', requireAdmin, handleGetKPIs);
 router.get('/api/admin/intelligence/anomalies', requireAdmin, handleGetAnomalies);
 router.get('/api/admin/intelligence/forecasts', requireAdmin, handleGetForecasts);
 router.get('/api/admin/intelligence/risk-entities', requireAdmin, handleGetRiskEntities);
+
+// Business Hierarchy
+router.get('/api/admin/intelligence/business-hierarchy', requireAdmin, handleGetBusinessHierarchy);
 
 export default router;

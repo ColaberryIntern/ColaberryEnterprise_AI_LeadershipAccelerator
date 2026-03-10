@@ -4,6 +4,7 @@ import { useIntelligenceQuery } from '../../../hooks/useIntelligenceQuery';
 import {
   getHealth,
   getEntityNetwork,
+  getBusinessHierarchy,
   triggerDiscovery,
   getExecutiveSummary,
   getRankedInsights,
@@ -15,6 +16,7 @@ import {
   EntityNetwork,
   EntityNode,
   EntityEdge,
+  BusinessEntityNetwork,
   QueryResponse,
   VisualizationSpec,
 } from '../../../services/intelligenceApi';
@@ -24,6 +26,7 @@ import ExecutiveInsightHeader from '../../../components/admin/intelligence/Execu
 import ChartTypeSelector from '../../../components/admin/intelligence/ChartTypeSelector';
 import ChartRenderer from '../../../components/admin/intelligence/ChartRenderer';
 import AutoInsightsGrid from '../../../components/admin/intelligence/AutoInsightsGrid';
+import EntityNavigationPanel from '../../../components/admin/intelligence/entityPanel/EntityNavigationPanel';
 
 // ─── Adaptive Execution Steps ─────────────────────────────────────────────────
 const EXECUTION_STEPS = [
@@ -1060,7 +1063,7 @@ function MobileTabBar({
   onTabChange: (tab: 'map' | 'canvas' | 'assistant') => void;
 }) {
   const tabs = [
-    { key: 'map' as const, label: 'Entity Map' },
+    { key: 'map' as const, label: 'Navigation' },
     { key: 'canvas' as const, label: 'Dashboard' },
     { key: 'assistant' as const, label: 'AI Assistant' },
   ];
@@ -1104,6 +1107,10 @@ function IntelligenceOSContent() {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [investigationTarget, setInvestigationTarget] = useState<any>(null);
 
+  // Business hierarchy state
+  const [businessHierarchy, setBusinessHierarchy] = useState<BusinessEntityNetwork | null>(null);
+  const [hierarchyLoading, setHierarchyLoading] = useState(true);
+
   // Panel state
   const { isCompact, isMedium } = useBreakpoint();
   const [leftOpen, setLeftOpen] = useState(true);
@@ -1133,6 +1140,13 @@ function IntelligenceOSContent() {
       .then((r) => setHealth(r.data))
       .catch(() => {});
     loadNetwork();
+
+    // Load business hierarchy
+    setHierarchyLoading(true);
+    getBusinessHierarchy()
+      .then((r) => setBusinessHierarchy(r.data))
+      .catch(() => {})
+      .finally(() => setHierarchyLoading(false));
 
     // Auto-load executive summary
     setSummaryLoading(true);
@@ -1250,7 +1264,7 @@ function IntelligenceOSContent() {
         <div className="flex-grow-1" style={{ minHeight: 0, overflow: 'hidden' }}>
           {mobileTab === 'map' && (
             <div style={{ height: '100%', overflowY: 'auto' }}>
-              <EntityMapPanel network={network} onRefresh={loadNetwork} />
+              <EntityNavigationPanel network={network} businessHierarchy={businessHierarchy} hierarchyLoading={hierarchyLoading} onRefresh={loadNetwork} />
             </div>
           )}
           {mobileTab === 'canvas' && (
@@ -1295,7 +1309,7 @@ function IntelligenceOSContent() {
 
       <div className="d-flex flex-grow-1" style={{ minHeight: 0 }}>
         {/* Left Toggle */}
-        <PanelToggle label="ENTITIES" side="left" isOpen={leftOpen} onClick={() => setLeftOpen(!leftOpen)} />
+        <PanelToggle label="NAV" side="left" isOpen={leftOpen} onClick={() => setLeftOpen(!leftOpen)} />
 
         {/* Left Panel: Entity Map */}
         <div
@@ -1308,7 +1322,7 @@ function IntelligenceOSContent() {
           }}
         >
           <div style={{ width: 260, height: '100%' }}>
-            <EntityMapPanel network={network} onRefresh={loadNetwork} />
+            <EntityNavigationPanel network={network} businessHierarchy={businessHierarchy} hierarchyLoading={hierarchyLoading} onRefresh={loadNetwork} />
           </div>
         </div>
 

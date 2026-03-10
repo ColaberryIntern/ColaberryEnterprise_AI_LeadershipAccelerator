@@ -131,4 +131,31 @@ export const getAnomalies = () => api.get('/anomalies');
 export const getForecasts = () => api.get('/forecasts');
 export const getRiskEntities = () => api.get('/risk-entities');
 
+// Business Hierarchy
+export interface BusinessCategory {
+  id: string;
+  label: string;
+  color: string;
+  tables: string[];
+  matched_tables: string[];
+  total_rows: number;
+  table_count: number;
+}
+
+export interface HierarchyEdge {
+  source: string;
+  target: string;
+  relationship: string;
+}
+
+export interface BusinessEntityNetwork {
+  categories: BusinessCategory[];
+  hierarchy_edges: HierarchyEdge[];
+  hub_entity: string;
+  total_tables: number;
+  total_rows: number;
+}
+
+export const getBusinessHierarchy = () => api.get<BusinessEntityNetwork>('/business-hierarchy');
+
 export default api;

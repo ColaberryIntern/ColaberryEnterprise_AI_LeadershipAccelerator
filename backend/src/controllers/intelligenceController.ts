@@ -250,3 +250,11 @@ export async function handleGetRiskEntities(req: Request, res: Response, next: N
     res.json(data);
   } catch (error) { next(error); }
 }
+
+export async function handleGetBusinessHierarchy(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { buildBusinessEntityHierarchy } = await import('../intelligence/services/businessEntityService');
+    const data = await buildBusinessEntityHierarchy();
+    res.json(data);
+  } catch (error) { next(error); }
+}
