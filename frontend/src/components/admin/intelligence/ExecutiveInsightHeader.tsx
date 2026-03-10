@@ -10,7 +10,43 @@ interface Props {
     process_activity?: { count_24h: number; delta: number };
   } | null;
   loading?: boolean;
+  entityType?: string;
 }
+
+const ENTITY_LABELS: Record<string, Record<string, string>> = {
+  campaigns: {
+    risk_level: 'Campaign Error Rate',
+    active_alerts: 'Unresolved Errors',
+    lead_trend: 'Leads This Week',
+    system_health: 'Campaign Health',
+    agent_health: 'Campaign Status',
+    process_activity: 'Total Errors',
+  },
+  leads: {
+    risk_level: 'Pipeline Risk',
+    active_alerts: 'Stalled Leads',
+    lead_trend: 'New Leads',
+    system_health: 'Conversion Rate',
+    agent_health: 'Lead Activity',
+    process_activity: 'Engagements (7d)',
+  },
+  students: {
+    risk_level: 'Dropout Risk',
+    active_alerts: 'Inactive Students',
+    lead_trend: 'Enrollments',
+    system_health: 'Completion Rate',
+    agent_health: 'Cohort Status',
+    process_activity: 'Attendance (7d)',
+  },
+  agents: {
+    risk_level: 'Agent Error Rate',
+    active_alerts: 'Errored Agents',
+    lead_trend: 'Executions (24h)',
+    system_health: 'Orchestration Health',
+    agent_health: 'Agent Status',
+    process_activity: 'Executions (24h)',
+  },
+};
 
 const riskColors: Record<string, string> = {
   critical: '#e53e3e',
@@ -87,7 +123,7 @@ function KPICard({ label, accent, children }: KPICardProps) {
   );
 }
 
-export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
+export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Props) {
   if (loading) return <SkeletonCards />;
   if (!kpis) return null;
 
@@ -100,6 +136,9 @@ export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
     process_activity,
   } = kpis;
 
+  const labels = entityType ? ENTITY_LABELS[entityType] || {} : {};
+  const lbl = (key: string, fallback: string) => labels[key] || fallback;
+
   // Count how many KPIs have data
   const hasData = [risk_level, active_alerts, lead_trend, system_health, agent_health, process_activity].some(Boolean);
   if (!hasData) return null;
@@ -108,7 +147,7 @@ export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
     <div className="d-flex gap-3 flex-wrap">
       {/* System Risk Level */}
       {risk_level && (
-        <KPICard label="System Risk Level" accent={getRiskBadgeColor(risk_level.label)}>
+        <KPICard label={lbl('risk_level', 'System Risk Level')} accent={getRiskBadgeColor(risk_level.label)}>
           <div className="d-flex align-items-center gap-2 mt-1">
             <span
               className="badge"
@@ -133,7 +172,7 @@ export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
 
       {/* Active Alerts */}
       {active_alerts && (
-        <KPICard label="Active Alerts" accent="#e53e3e">
+        <KPICard label={lbl('active_alerts', 'Active Alerts')} accent="#e53e3e">
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {active_alerts.count}
           </div>
@@ -146,7 +185,7 @@ export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
 
       {/* Lead Trend */}
       {lead_trend && (
-        <KPICard label="Lead Trend" accent={lead_trend.delta >= 0 ? 'var(--color-accent)' : 'var(--color-secondary)'}>
+        <KPICard label={lbl('lead_trend', 'Lead Trend')} accent={lead_trend.delta >= 0 ? 'var(--color-accent)' : 'var(--color-secondary)'}>
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {lead_trend.value}
           </div>
@@ -164,7 +203,7 @@ export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
       {/* System Health */}
       {system_health && (
         <KPICard
-          label="System Health"
+          label={lbl('system_health', 'System Health')}
           accent={system_health.score >= 80 ? '#38a169' : system_health.score >= 50 ? '#d69e2e' : '#e53e3e'}
         >
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
@@ -179,7 +218,7 @@ export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
       {/* Agent Status */}
       {agent_health && (
         <KPICard
-          label="Agent Status"
+          label={lbl('agent_health', 'Agent Status')}
           accent={agent_health.errored > 0 ? '#dd6b20' : '#38a169'}
         >
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
@@ -200,7 +239,7 @@ export default function ExecutiveInsightHeader({ kpis, loading }: Props) {
 
       {/* Process Activity */}
       {process_activity && (
-        <KPICard label="Process Activity" accent="#805ad5">
+        <KPICard label={lbl('process_activity', 'Process Activity')} accent="#805ad5">
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {process_activity.count_24h}<small className="fw-normal text-muted"> (24h)</small>
           </div>

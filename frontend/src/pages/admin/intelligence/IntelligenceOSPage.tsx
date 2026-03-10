@@ -273,7 +273,7 @@ function DynamicCanvas({
   return (
     <div className="p-3" style={{ overflowY: 'auto', height: '100%' }}>
       {/* Section 1: Executive KPI Header */}
-      <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} />
+      <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} entityType={entityType} />
 
       {/* Section 2: Narrative Summary */}
       {narrativeText && (
@@ -921,10 +921,14 @@ function IntelligenceOSContent() {
       .catch(() => {});
   }, [loadNetwork]);
 
-  // Scope-aware analytics re-fetch when entity is selected
+  // Scope-aware analytics re-fetch when entity is selected or reset to global
+  const scopeKeyRef = useRef('global');
   useEffect(() => {
-    if (scope.level === 'global') return;
-    const params = { entity_type: scope.entity_type };
+    const scopeKey = scope.level === 'global' ? 'global' : scope.entity_type || 'global';
+    if (scopeKey === scopeKeyRef.current) return; // no change
+    scopeKeyRef.current = scopeKey;
+
+    const params = scope.level === 'global' ? undefined : { entity_type: scope.entity_type };
     setAnalyticsLoading(true);
     Promise.all([
       getKPIs(params).then((r) => setKpis(r.data)).catch(() => {}),
