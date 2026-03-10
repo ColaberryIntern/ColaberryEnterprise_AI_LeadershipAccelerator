@@ -21,6 +21,9 @@ interface VisitorAttributes {
   utm_medium?: string | null;
   referrer_domain?: string | null;
   campaign_id?: string | null;
+  campaign_type?: string | null;
+  platform?: string | null;
+  creative?: string | null;
   metadata?: Record<string, any> | null;
   created_at?: Date;
 }
@@ -45,6 +48,9 @@ class Visitor extends Model<VisitorAttributes> implements VisitorAttributes {
   declare utm_medium: string | null;
   declare referrer_domain: string | null;
   declare campaign_id: string | null;
+  declare campaign_type: string | null;
+  declare platform: string | null;
+  declare creative: string | null;
   declare metadata: Record<string, any> | null;
   declare created_at: Date;
 }
@@ -131,6 +137,18 @@ Visitor.init(
       allowNull: true,
     },
     campaign_id: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    campaign_type: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    platform: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    creative: {
       type: DataTypes.STRING(100),
       allowNull: true,
     },

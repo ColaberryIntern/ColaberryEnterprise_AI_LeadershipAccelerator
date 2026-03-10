@@ -134,6 +134,42 @@ export async function handleBookCall(
       }
     }
 
+    // Boost intent score for strategy call booking (score → 90+, very_high)
+    if (leadId) {
+      (async () => {
+        try {
+          const { Visitor, IntentScore } = require('../models');
+          const visitor = await Visitor.findOne({ where: { lead_id: leadId } });
+          if (visitor) {
+            const now = new Date();
+            const existing = await IntentScore.findOne({ where: { visitor_id: visitor.id } });
+            if (existing) {
+              if (existing.score < 90) {
+                await existing.update({
+                  score: 90,
+                  intent_level: 'very_high',
+                  score_updated_at: now,
+                  updated_at: now,
+                });
+              }
+            } else {
+              await IntentScore.create({
+                visitor_id: visitor.id,
+                lead_id: leadId,
+                score: 90,
+                intent_level: 'very_high',
+                signals_count: 0,
+                score_updated_at: now,
+              });
+            }
+            console.log('[Calendar] Intent boosted to 90 for visitor:', visitor.id);
+          }
+        } catch (err) {
+          console.error('[Calendar] Intent boost failed (non-blocking):', err);
+        }
+      })();
+    }
+
     // Send confirmation email and capture HTML for campaign record
     let confirmationHtml = '';
     try {
