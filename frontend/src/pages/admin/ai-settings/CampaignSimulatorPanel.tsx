@@ -1,0 +1,442 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import api from '../../../utils/api';
+import SimulationTimeline from './SimulationTimeline';
+import type { SimStep } from './SimulationTimeline';
+
+type SpeedMode = 'normal' | 'fast' | 'ultra' | 'instant';
+
+interface SimulationState {
+  id: string;
+  campaign_id: string;
+  speed_mode: SpeedMode;
+  status: 'running' | 'paused' | 'completed' | 'cancelled' | 'failed';
+  current_step_index: number;
+  total_steps: number;
+  started_at: string;
+  paused_at: string | null;
+  completed_at: string | null;
+  summary: {
+    channels_used?: string[];
+    steps_passed?: number;
+    steps_failed?: number;
+    steps_skipped?: number;
+    total_duration_ms?: number;
+    ai_tokens_used?: number;
+  } | null;
+  steps: SimStep[];
+}
+
+const SPEED_OPTIONS: { value: SpeedMode; label: string; desc: string }[] = [
+  { value: 'normal', label: 'Normal', desc: '5 min/day' },
+  { value: 'fast', label: 'Fast', desc: '90s/day' },
+  { value: 'ultra', label: 'Ultra', desc: '30s/day' },
+  { value: 'instant', label: 'Instant', desc: 'Manual' },
+];
+
+const OUTCOME_OPTIONS = [
+  { value: 'interested', label: 'Interested' },
+  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'meeting_booked', label: 'Meeting Booked' },
+  { value: 'no_response', label: 'No Response' },
+  { value: 'unsubscribed', label: 'Unsubscribed' },
+];
+
+export default function CampaignSimulatorPanel({
+  campaignId,
+  campaignName,
+  onClose,
+}: {
+  campaignId: string;
+  campaignName: string;
+  onClose: () => void;
+}) {
+  const [speedMode, setSpeedMode] = useState<SpeedMode>('fast');
+  const [simulation, setSimulation] = useState<SimulationState | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [responseOutcome, setResponseOutcome] = useState('interested');
+  const [responseText, setResponseText] = useState('');
+  const pollRef = useRef<number | null>(null);
+
+  const isActive = simulation && (simulation.status === 'running' || simulation.status === 'paused');
+
+  const fetchState = useCallback(async (simId: string) => {
+    try {
+      const { data } = await api.get(`/api/admin/simulations/${simId}`);
+      setSimulation(data);
+      // Stop polling if completed
+      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'failed') {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      }
+    } catch (err: any) {
+      console.error('Poll error:', err);
+    }
+  }, []);
+
+  // Start polling when simulation is active
+  useEffect(() => {
+    if (simulation && isActive && !pollRef.current) {
+      pollRef.current = window.setInterval(() => {
+        fetchState(simulation.id);
+      }, 2000);
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [simulation?.id, isActive, fetchState]);
+
+  async function handleStart() {
+    setStarting(true);
+    setError(null);
+    try {
+      const { data } = await api.post(`/api/admin/simulations/campaigns/${campaignId}/start`, {
+        speed_mode: speedMode,
+      });
+      setSimulation(data);
+      // Immediately fetch full state with steps
+      await fetchState(data.id);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  async function handleAction(action: string, body?: Record<string, any>) {
+    if (!simulation) return;
+    try {
+      await api.post(`/api/admin/simulations/${simulation.id}/${action}`, body || {});
+      await fetchState(simulation.id);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message);
+    }
+  }
+
+  async function handleRespond() {
+    await handleAction('respond', { outcome: responseOutcome, response_text: responseText });
+    setResponseText('');
+  }
+
+  const currentStep = simulation?.steps?.find((s) => s.step_index === simulation.current_step_index);
+
+  return (
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+      <div className="modal-dialog modal-xl modal-dialog-scrollable">
+        <div className="modal-content">
+          {/* Header */}
+          <div className="modal-header">
+            <div>
+              <h5 className="modal-title fw-bold mb-0">Campaign Time-Warp Simulator</h5>
+              <small className="text-muted">{campaignName}</small>
+            </div>
+            <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
+          </div>
+
+          <div className="modal-body">
+            {error && (
+              <div className="alert alert-danger alert-dismissible fade show py-2 small" role="alert">
+                {error}
+                <button type="button" className="btn-close btn-close-sm" onClick={() => setError(null)} aria-label="Close" />
+              </div>
+            )}
+
+            {/* Pre-start: Speed mode selection */}
+            {!simulation && (
+              <div className="text-center py-4">
+                <p className="text-muted mb-3">
+                  Run through your entire campaign as a lead would experience it — with compressed time delays.
+                </p>
+                <div className="d-flex justify-content-center gap-2 mb-4">
+                  {SPEED_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      className={`btn btn-sm ${speedMode === opt.value ? 'btn-primary' : 'btn-outline-secondary'}`}
+                      onClick={() => setSpeedMode(opt.value)}
+                    >
+                      <div className="fw-medium">{opt.label}</div>
+                      <div style={{ fontSize: '0.65rem' }}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleStart}
+                  disabled={starting}
+                >
+                  {starting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-1" role="status">
+                        <span className="visually-hidden">Starting...</span>
+                      </span>
+                      Starting Simulation...
+                    </>
+                  ) : (
+                    'Start Simulation'
+                  )}
+                </button>
+              </div>
+            )}
+
+            {/* Active simulation */}
+            {simulation && (
+              <div className="row g-3">
+                {/* Left: Timeline */}
+                <div className="col-lg-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="small fw-semibold">Steps</span>
+                    <span className={`badge bg-${simulation.status === 'running' ? 'primary' : simulation.status === 'paused' ? 'warning' : simulation.status === 'completed' ? 'success' : 'secondary'}`}>
+                      {simulation.status}
+                    </span>
+                  </div>
+                  <SimulationTimeline
+                    steps={simulation.steps || []}
+                    currentStepIndex={simulation.current_step_index}
+                    onJump={isActive ? (idx) => handleAction('jump', { step_index: idx }) : undefined}
+                  />
+                </div>
+
+                {/* Right: Step Inspector */}
+                <div className="col-lg-8">
+                  {currentStep ? (
+                    <div className="card border-0 shadow-sm">
+                      <div className="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span className="fw-semibold small">
+                          Step {currentStep.step_index + 1} of {simulation.total_steps}
+                          <span className="badge bg-secondary ms-2" style={{ fontSize: '0.6rem' }}>
+                            {currentStep.channel}
+                          </span>
+                        </span>
+                        <span className="small text-muted">
+                          {currentStep.duration_ms != null ? `${(currentStep.duration_ms / 1000).toFixed(1)}s` : ''}
+                        </span>
+                      </div>
+                      <div className="card-body small">
+                        {/* Step definition */}
+                        {currentStep.definition && (
+                          <div className="mb-3">
+                            {currentStep.definition.step_goal && (
+                              <div className="mb-1">
+                                <strong>Goal:</strong> {currentStep.definition.step_goal}
+                              </div>
+                            )}
+                            {currentStep.definition.ai_instructions && (
+                              <div className="mb-1 text-muted">
+                                <strong>AI Instructions:</strong>{' '}
+                                <span className="text-truncate d-inline-block" style={{ maxWidth: 400 }}>
+                                  {currentStep.definition.ai_instructions}
+                                </span>
+                              </div>
+                            )}
+                            <div className="text-muted">
+                              <strong>Delay:</strong> {currentStep.original_delay_days} day(s)
+                              {currentStep.compressed_delay_ms > 0 && (
+                                <span className="ms-1">
+                                  (compressed to {currentStep.compressed_delay_ms < 60000
+                                    ? `${Math.round(currentStep.compressed_delay_ms / 1000)}s`
+                                    : `${Math.round(currentStep.compressed_delay_ms / 60000)}m`})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Waiting indicator */}
+                        {currentStep.status === 'waiting' && (
+                          <div className="alert alert-info py-2 d-flex align-items-center gap-2">
+                            <span className="spinner-border spinner-border-sm" role="status">
+                              <span className="visually-hidden">Waiting...</span>
+                            </span>
+                            Waiting for compressed delay...
+                          </div>
+                        )}
+
+                        {/* Executing indicator */}
+                        {currentStep.status === 'executing' && (
+                          <div className="alert alert-primary py-2 d-flex align-items-center gap-2">
+                            <span className="spinner-border spinner-border-sm" role="status">
+                              <span className="visually-hidden">Executing...</span>
+                            </span>
+                            Generating AI content and sending...
+                          </div>
+                        )}
+
+                        {/* AI Content (after execution) */}
+                        {currentStep.ai_content && (
+                          <div className="mb-3">
+                            <div className="fw-semibold mb-1">AI-Generated Content</div>
+                            {currentStep.ai_content.subject && (
+                              <div className="mb-1">
+                                <strong>Subject:</strong> {currentStep.ai_content.subject}
+                              </div>
+                            )}
+                            <div className="bg-light p-2 rounded" style={{ maxHeight: 200, overflow: 'auto' }}>
+                              <div dangerouslySetInnerHTML={{ __html: currentStep.ai_content.body || '' }} />
+                            </div>
+                            <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                              {currentStep.ai_content.tokens_used} tokens | {currentStep.ai_content.model}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Delivery details */}
+                        {currentStep.details && !currentStep.details.skipped && (
+                          <div className="mb-3">
+                            <div className="fw-semibold mb-1">Delivery</div>
+                            <div className="text-muted">
+                              Sent to: {currentStep.details.to || '—'}
+                              {currentStep.details.messageId && (
+                                <span className="ms-2">ID: {currentStep.details.messageId}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Error */}
+                        {currentStep.error_message && (
+                          <div className="alert alert-danger py-2 small">
+                            {currentStep.error_message}
+                          </div>
+                        )}
+
+                        {/* Lead response (recorded) */}
+                        {currentStep.lead_response && (
+                          <div className="mb-3">
+                            <div className="fw-semibold mb-1">Lead Response</div>
+                            <span className="badge bg-info">{currentStep.lead_response.outcome}</span>
+                            {currentStep.lead_response.response_text && (
+                              <div className="text-muted mt-1">{currentStep.lead_response.response_text}</div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Response form (when step is sent and no response yet) */}
+                        {currentStep.status === 'sent' && !currentStep.lead_response && (
+                          <div className="border-top pt-3 mt-3">
+                            <div className="fw-semibold mb-2">Respond as Lead</div>
+                            <div className="d-flex gap-2 align-items-end">
+                              <div>
+                                <label className="form-label small fw-medium">Outcome</label>
+                                <select
+                                  className="form-select form-select-sm"
+                                  value={responseOutcome}
+                                  onChange={(e) => setResponseOutcome(e.target.value)}
+                                >
+                                  {OUTCOME_OPTIONS.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="flex-grow-1">
+                                <label className="form-label small fw-medium">Response (optional)</label>
+                                <input
+                                  type="text"
+                                  className="form-control form-control-sm"
+                                  placeholder="Lead's reply..."
+                                  value={responseText}
+                                  onChange={(e) => setResponseText(e.target.value)}
+                                />
+                              </div>
+                              <button className="btn btn-sm btn-primary" onClick={handleRespond}>
+                                Respond
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : simulation.status === 'completed' ? (
+                    /* Completion summary */
+                    <div className="card border-0 shadow-sm">
+                      <div className="card-header bg-white fw-semibold">Simulation Complete</div>
+                      <div className="card-body">
+                        {simulation.summary && (
+                          <div className="row g-3 text-center">
+                            <div className="col-4">
+                              <div className="small text-muted">Passed</div>
+                              <div className="h5 fw-bold text-success">{simulation.summary.steps_passed}</div>
+                            </div>
+                            <div className="col-4">
+                              <div className="small text-muted">Failed</div>
+                              <div className="h5 fw-bold text-danger">{simulation.summary.steps_failed}</div>
+                            </div>
+                            <div className="col-4">
+                              <div className="small text-muted">Skipped</div>
+                              <div className="h5 fw-bold text-warning">{simulation.summary.steps_skipped}</div>
+                            </div>
+                            <div className="col-4">
+                              <div className="small text-muted">Channels</div>
+                              <div className="d-flex gap-1 justify-content-center">
+                                {simulation.summary.channels_used?.map((ch) => (
+                                  <span key={ch} className="badge bg-info">{ch}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="col-4">
+                              <div className="small text-muted">Duration</div>
+                              <div className="fw-bold">
+                                {simulation.summary.total_duration_ms != null
+                                  ? `${(simulation.summary.total_duration_ms / 1000).toFixed(1)}s`
+                                  : '—'}
+                              </div>
+                            </div>
+                            <div className="col-4">
+                              <div className="small text-muted">AI Tokens</div>
+                              <div className="fw-bold">{simulation.summary.ai_tokens_used || 0}</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted">
+                      Select a step from the timeline to inspect it.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer controls */}
+          <div className="modal-footer d-flex justify-content-between">
+            <div className="d-flex gap-2">
+              {simulation && isActive && (
+                <>
+                  {simulation.status === 'running' ? (
+                    <button className="btn btn-sm btn-outline-warning" onClick={() => handleAction('pause')}>
+                      Pause
+                    </button>
+                  ) : (
+                    <button className="btn btn-sm btn-outline-primary" onClick={() => handleAction('resume')}>
+                      Resume
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-outline-secondary" onClick={() => handleAction('skip')}>
+                    Skip Step
+                  </button>
+                  {simulation.speed_mode === 'instant' && (
+                    <button className="btn btn-sm btn-primary" onClick={() => handleAction('advance')}>
+                      Advance
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-outline-danger" onClick={() => handleAction('cancel')}>
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

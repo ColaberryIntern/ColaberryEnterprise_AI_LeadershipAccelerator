@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../../utils/api';
 import CampaignTestReportModal from './CampaignTestReportModal';
+import CampaignSimulatorPanel from './CampaignSimulatorPanel';
 
 interface QASummary {
   campaigns_tested_today: number;
@@ -54,10 +55,30 @@ function timeAgo(dateStr: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+interface CampaignOption {
+  id: string;
+  name: string;
+}
+
+interface SimulationHistoryItem {
+  id: string;
+  campaign_id: string;
+  speed_mode: string;
+  status: string;
+  total_steps: number;
+  current_step_index: number;
+  started_at: string;
+  completed_at: string | null;
+  summary: Record<string, any> | null;
+}
+
 function CampaignQATab() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<QASummary | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [selectedSimCampaign, setSelectedSimCampaign] = useState<CampaignOption | null>(null);
+  const [simHistory, setSimHistory] = useState<SimulationHistoryItem[]>([]);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -68,10 +89,20 @@ function CampaignQATab() {
     }
   }, []);
 
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      const { data } = await api.get('/api/admin/campaigns');
+      const list = (data.campaigns || data || []).map((c: any) => ({ id: c.id, name: c.name }));
+      setCampaigns(list);
+    } catch (err) {
+      console.error('Failed to fetch campaigns:', err);
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    fetchSummary().finally(() => setLoading(false));
-  }, [fetchSummary]);
+    Promise.all([fetchSummary(), fetchCampaigns()]).finally(() => setLoading(false));
+  }, [fetchSummary, fetchCampaigns]);
 
   if (loading) {
     return (
@@ -228,11 +259,51 @@ function CampaignQATab() {
         </div>
       </div>
 
+      {/* Time-Warp Simulator Section */}
+      <div className="mt-4">
+        <div className="card border-0 shadow-sm">
+          <div className="card-header bg-white d-flex justify-content-between align-items-center">
+            <span className="fw-semibold">Time-Warp Simulator</span>
+            <div className="d-flex gap-2 align-items-center">
+              <select
+                className="form-select form-select-sm"
+                style={{ maxWidth: 250 }}
+                value=""
+                onChange={(e) => {
+                  const c = campaigns.find((c) => c.id === e.target.value);
+                  if (c) setSelectedSimCampaign(c);
+                }}
+              >
+                <option value="">Select campaign to simulate...</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="card-body">
+            <p className="text-muted small mb-0">
+              Run through an entire campaign as a lead would experience it — with compressed time delays.
+              Select a campaign above to start a simulation.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Test Report Modal */}
       {selectedRunId && (
         <CampaignTestReportModal
           runId={selectedRunId}
           onClose={() => setSelectedRunId(null)}
+        />
+      )}
+
+      {/* Simulator Modal */}
+      {selectedSimCampaign && (
+        <CampaignSimulatorPanel
+          campaignId={selectedSimCampaign.id}
+          campaignName={selectedSimCampaign.name}
+          onClose={() => setSelectedSimCampaign(null)}
         />
       )}
     </>

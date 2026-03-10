@@ -62,6 +62,8 @@ import IntelligenceConfig from './IntelligenceConfig';
 import OrchestrationHealth from './OrchestrationHealth';
 import CampaignTestRun from './CampaignTestRun';
 import CampaignTestStep from './CampaignTestStep';
+import CampaignSimulation from './CampaignSimulation';
+import CampaignSimulationStep from './CampaignSimulationStep';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -353,6 +355,14 @@ CampaignTestRun.belongsTo(Lead, { foreignKey: 'test_lead_id', as: 'testLead' });
 CampaignTestRun.hasMany(CampaignTestStep, { foreignKey: 'test_run_id', as: 'steps' });
 CampaignTestStep.belongsTo(CampaignTestRun, { foreignKey: 'test_run_id', as: 'testRun' });
 
+// Campaign Simulation associations
+Campaign.hasMany(CampaignSimulation, { foreignKey: 'campaign_id', as: 'simulations' });
+CampaignSimulation.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+CampaignSimulation.belongsTo(FollowUpSequence, { foreignKey: 'sequence_id', as: 'sequence' });
+CampaignSimulation.belongsTo(Lead, { foreignKey: 'test_lead_id', as: 'testLead' });
+CampaignSimulation.hasMany(CampaignSimulationStep, { foreignKey: 'simulation_id', as: 'steps' });
+CampaignSimulationStep.belongsTo(CampaignSimulation, { foreignKey: 'simulation_id', as: 'simulation' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -395,4 +405,6 @@ export {
   OrchestrationHealth,
   CampaignTestRun,
   CampaignTestStep,
+  CampaignSimulation,
+  CampaignSimulationStep,
 };

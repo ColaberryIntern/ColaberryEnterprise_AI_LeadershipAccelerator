@@ -11,6 +11,7 @@ import orchestrationRoutes from './admin/orchestrationRoutes';
 import aiOpsRoutes from './admin/aiOpsRoutes';
 import intelligenceRoutes from './admin/intelligenceRoutes';
 import campaignTestRoutes from './admin/campaignTestRoutes';
+import campaignSimulationRoutes from './admin/campaignSimulationRoutes';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use(orchestrationRoutes);
 router.use(aiOpsRoutes);
 router.use(intelligenceRoutes);
 router.use(campaignTestRoutes);
+router.use(campaignSimulationRoutes);
 
 export default router;
