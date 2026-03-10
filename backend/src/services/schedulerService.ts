@@ -813,6 +813,7 @@ function wrapEmailHtml(body: string): string {
   <div class="footer">
     <p>Colaberry Enterprise AI Division<br>
     AI Leadership | Architecture | Implementation | Advisory</p>
+    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
   </div>
 </body>
 </html>

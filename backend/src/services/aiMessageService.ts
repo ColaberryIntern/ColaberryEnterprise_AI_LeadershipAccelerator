@@ -85,7 +85,8 @@ Never include unsubscribe links or footer — those are added automatically.`,
 
     sms: `You are writing a short SMS message for Colaberry Enterprise AI Division.
 OUTPUT FORMAT — respond with ONLY the SMS text, no JSON, no quotes.
-Max 160 characters. Be direct with a clear CTA. Include a way to reply (e.g., "Reply YES").
+Max 140 characters (an opt-out footer is appended automatically — do NOT include one).
+Be direct with a clear CTA. Include a way to reply (e.g., "Reply YES").
 No hashtags, no emojis unless natural.`,
 
     voice: `You are writing AI agent instructions for a voice call (Synthflow AI).
@@ -216,9 +217,13 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
     }
   }
 
-  // SMS and voice return plain text
+  // SMS: append opt-out; voice returns plain text
+  const smsBody = params.channel === 'sms'
+    ? `${content}\n\nReply STOP to opt out.`
+    : content;
+
   return {
-    body: content,
+    body: smsBody,
     tokens_used: tokensUsed,
     model,
   };
