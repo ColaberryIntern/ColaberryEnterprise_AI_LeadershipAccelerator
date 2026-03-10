@@ -77,19 +77,22 @@ function AdminLayout() {
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  // Intelligence OS page gets full-screen treatment (no sidebar, no padding)
+  const isImmersive = location.pathname === '/admin/intelligence';
+
   return (
     <div className="d-flex min-vh-100">
       {/* Sidebar Backdrop (mobile) */}
-      {sidebarOpen && (
+      {sidebarOpen && !isImmersive && (
         <div
           className="admin-sidebar-backdrop"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — hidden on immersive pages */}
       <aside
-        className={`admin-sidebar${sidebarOpen ? ' open' : ''}`}
+        className={`admin-sidebar${sidebarOpen ? ' open' : ''}${isImmersive ? ' d-none' : ''}`}
         role="navigation"
         aria-label="Admin navigation"
       >
@@ -155,23 +158,28 @@ function AdminLayout() {
       </aside>
 
       {/* Main Content */}
-      <div className="admin-content flex-grow-1">
-        {/* Mobile Header */}
-        <div className="admin-mobile-header">
-          <button
-            className="btn btn-sm btn-outline-secondary admin-sidebar-toggle"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Toggle sidebar"
-          >
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-              <path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
-            </svg>
-          </button>
-          <span className="fw-bold" style={{ color: 'var(--color-primary)' }}>Colaberry Admin</span>
-        </div>
+      <div
+        className={`${isImmersive ? '' : 'admin-content'} flex-grow-1`}
+        style={isImmersive ? { minHeight: '100vh', background: '#f0f2f5' } : undefined}
+      >
+        {/* Mobile Header — hidden on immersive pages */}
+        {!isImmersive && (
+          <div className="admin-mobile-header">
+            <button
+              className="btn btn-sm btn-outline-secondary admin-sidebar-toggle"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="Toggle sidebar"
+            >
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
+              </svg>
+            </button>
+            <span className="fw-bold" style={{ color: 'var(--color-primary)' }}>Colaberry Admin</span>
+          </div>
+        )}
 
         {/* Page Content */}
-        <div className="container-fluid px-4 py-4">
+        <div className={isImmersive ? '' : 'container-fluid px-4 py-4'}>
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

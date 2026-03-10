@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IntelligenceProvider, useIntelligenceContext } from '../../../contexts/IntelligenceContext';
 import { useIntelligenceQuery } from '../../../hooks/useIntelligenceQuery';
 import {
@@ -87,23 +88,51 @@ function useBreakpoint() {
 
 // ─── System Health Bar ────────────────────────────────────────────────────────
 function SystemHealthBar({ health }: { health: HealthStatus | null }) {
-  if (!health) return null;
-  const isOnline = health.engine_status === 'online';
+  const navigate = useNavigate();
 
   return (
     <div
       className="d-flex gap-3 align-items-center px-3 py-2 border-bottom"
-      style={{ background: 'var(--color-bg-alt)', flexShrink: 0 }}
+      style={{ background: 'var(--color-primary)', flexShrink: 0, color: '#fff' }}
     >
-      <span className={`badge ${isOnline ? 'bg-success' : 'bg-danger'}`}>
-        Engine: {health.engine_status}
+      {/* Back button */}
+      <button
+        className="btn btn-sm d-flex align-items-center gap-1"
+        onClick={() => navigate('/admin/dashboard')}
+        style={{
+          color: 'rgba(255,255,255,0.85)',
+          border: '1px solid rgba(255,255,255,0.25)',
+          background: 'rgba(255,255,255,0.1)',
+          fontSize: '0.75rem',
+          padding: '3px 10px',
+        }}
+        aria-label="Back to Admin Dashboard"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <path fillRule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
+        </svg>
+        Admin
+      </button>
+
+      {/* Title */}
+      <span className="fw-bold" style={{ fontSize: '0.85rem', letterSpacing: '0.5px' }}>
+        Intelligence OS
       </span>
-      <small className="text-muted">{health.datasets_count} datasets</small>
-      <small className="text-muted">{health.processes_count_24h} processes (24h)</small>
-      {health.last_discovery && (
-        <small className="text-muted ms-auto">
-          Last scan: {new Date(health.last_discovery).toLocaleDateString()}
-        </small>
+
+      {/* Health indicators */}
+      {health && (
+        <>
+          <span className={`badge ${health.engine_status === 'online' ? 'bg-success' : 'bg-danger'}`} style={{ fontSize: '0.6rem' }}>
+            {health.engine_status}
+          </span>
+          <small style={{ opacity: 0.7, fontSize: '0.7rem' }}>{health.datasets_count} datasets</small>
+          <small style={{ opacity: 0.7, fontSize: '0.7rem' }}>{health.processes_count_24h} processes (24h)</small>
+          {health.last_discovery && (
+            <small style={{ opacity: 0.6, fontSize: '0.65rem' }} className="ms-auto">
+              Last scan: {new Date(health.last_discovery).toLocaleDateString()}
+            </small>
+          )}
+        </>
       )}
     </div>
   );
@@ -986,7 +1015,7 @@ function IntelligenceOSContent() {
   // ── Compact (mobile) layout ──
   if (isCompact) {
     return (
-      <div className="d-flex flex-column" style={{ height: 'calc(100vh - 60px)' }}>
+      <div className="d-flex flex-column intel-page-enter" style={{ height: '100vh' }}>
         <SystemHealthBar health={health} />
         <ContextBreadcrumb />
         <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
@@ -1034,7 +1063,7 @@ function IntelligenceOSContent() {
 
   // ── Desktop layout ──
   return (
-    <div className="d-flex flex-column" style={{ height: 'calc(100vh - 60px)' }}>
+    <div className="d-flex flex-column intel-page-enter" style={{ height: '100vh' }}>
       <SystemHealthBar health={health} />
       <ContextBreadcrumb />
 
