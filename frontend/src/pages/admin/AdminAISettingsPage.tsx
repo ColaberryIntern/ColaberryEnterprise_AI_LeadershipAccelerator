@@ -5,6 +5,7 @@ import ActivityDetailModal from './ai-settings/ActivityDetailModal';
 import ExecutionTraceModal from './ai-settings/ExecutionTraceModal';
 import ErrorDetailModal from './ai-settings/ErrorDetailModal';
 import CampaignTimelineModal from './ai-settings/CampaignTimelineModal';
+import AgentDetailModal from './ai-settings/AgentDetailModal';
 
 interface Agent {
   id: string;
@@ -161,6 +162,7 @@ function AdminAISettingsPage() {
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [selectedErrorId, setSelectedErrorId] = useState<string | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -317,6 +319,8 @@ function AdminAISettingsPage() {
           health={health}
           onScan={handleScanAll}
           scanLoading={actionLoading === 'scan'}
+          onSelectAgent={setSelectedAgentId}
+          onSelectCampaign={setSelectedCampaignId}
         />
       )}
       {activeTab === 'registry' && <AgentRegistryTab />}
@@ -350,6 +354,7 @@ function AdminAISettingsPage() {
           onToggleAgent={handleToggleAgent}
           onScan={handleScanAll}
           actionLoading={actionLoading}
+          onSelectAgent={setSelectedAgentId}
         />
       )}
 
@@ -390,6 +395,13 @@ function AdminAISettingsPage() {
           onClose={() => setSelectedCampaignId(null)}
         />
       )}
+      {selectedAgentId && (
+        <AgentDetailModal
+          agentId={selectedAgentId}
+          onClose={() => setSelectedAgentId(null)}
+          onRefresh={() => { Promise.allSettled([fetchOverview(), fetchAgents()]); }}
+        />
+      )}
     </div>
   );
 }
@@ -401,11 +413,15 @@ function OverviewTab({
   health,
   onScan,
   scanLoading,
+  onSelectAgent,
+  onSelectCampaign,
 }: {
   overview: Overview | null;
   health: HealthRecord[];
   onScan: () => void;
   scanLoading: boolean;
+  onSelectAgent: (id: string) => void;
+  onSelectCampaign: (id: string) => void;
 }) {
   if (!overview) return <p className="text-muted">No data available</p>;
 
@@ -460,7 +476,7 @@ function OverviewTab({
                   </thead>
                   <tbody>
                     {overview.agents_summary.map((a) => (
-                      <tr key={a.id}>
+                      <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => onSelectAgent(a.id)}>
                         <td className="fw-medium">{a.name}</td>
                         <td>
                           <span className={`badge bg-${CATEGORY_COLORS[a.category] || 'secondary'}`}>
@@ -520,7 +536,7 @@ function OverviewTab({
                     </thead>
                     <tbody>
                       {health.slice(0, 10).map((h) => (
-                        <tr key={h.id}>
+                        <tr key={h.id} style={{ cursor: 'pointer' }} onClick={() => onSelectCampaign(h.campaign_id)}>
                           <td className="fw-medium">{h.campaign?.name || h.campaign_id.substring(0, 8)}</td>
                           <td>
                             <span className={`badge bg-${HEALTH_COLORS[h.status] || 'secondary'}`}>
@@ -840,12 +856,14 @@ function ControlsTab({
   onToggleAgent,
   onScan,
   actionLoading,
+  onSelectAgent,
 }: {
   agents: Agent[];
   onRunAgent: (id: string) => void;
   onToggleAgent: (agent: Agent) => void;
   onScan: () => void;
   actionLoading: string | null;
+  onSelectAgent: (id: string) => void;
 }) {
   return (
     <>
@@ -883,7 +901,7 @@ function ControlsTab({
               </thead>
               <tbody>
                 {agents.map((agent) => (
-                  <tr key={agent.id}>
+                  <tr key={agent.id} style={{ cursor: 'pointer' }} onClick={() => onSelectAgent(agent.id)}>
                     <td className="fw-medium">{agent.agent_name}</td>
                     <td className="text-muted small">{agent.agent_type}</td>
                     <td>
@@ -903,7 +921,7 @@ function ControlsTab({
                       )}
                     </td>
                     <td>
-                      <div className="d-flex gap-1">
+                      <div className="d-flex gap-1" onClick={(e) => e.stopPropagation()}>
                         <button
                           className="btn btn-sm btn-outline-primary py-0 px-2"
                           onClick={() => onRunAgent(agent.id)}
