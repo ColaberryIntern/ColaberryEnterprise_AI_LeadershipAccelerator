@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
-import { Lead, InteractionOutcome, Campaign, CampaignLead, CampaignSimulation, CampaignSimulationStep } from '../models';
+import { Lead, InteractionOutcome, Campaign, CampaignLead, CampaignSimulation, CampaignSimulationStep, FollowUpSequence } from '../models';
 import { logActivity } from '../services/activityService';
-import { addContactNote } from '../services/ghlService';
-import { logCommunication } from '../services/communicationLogService';
+import { addContactNote, sendSmsViaGhl } from '../services/ghlService';
+import { logCommunication, getLeadComms } from '../services/communicationLogService';
+import { generateMessage } from '../services/aiMessageService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
 
 export async function handleGhlSmsReply(req: Request, res: Response): Promise<void> {
@@ -117,13 +118,87 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
       console.warn(`[GHL Webhook] Failed to resume simulation:`, simErr.message);
     }
 
+    // --- Compose AI reply and push to GHL ---
+    let smsComposed: string | null = null;
+    try {
+      // Build conversation history from recent SMS comms
+      const recentComms = await getLeadComms(lead.id, { channel: 'sms', limit: 10 });
+      const conversationHistory = recentComms
+        .reverse() // oldest first
+        .map((c: any) => `[${c.direction === 'outbound' ? 'Us' : 'Lead'}]: ${(c.body || '').substring(0, 200)}`)
+        .join('\n');
+
+      // Get campaign context for AI instructions
+      let aiInstructions = 'Write a helpful follow-up SMS reply. Be conversational, brief, and include a clear next step.';
+      let campaignContext: any = undefined;
+      if (campaignId) {
+        const campaign = await Campaign.findByPk(campaignId, { include: [{ model: FollowUpSequence, as: 'sequence' }] });
+        if (campaign) {
+          const seq = (campaign as any).sequence;
+          campaignContext = { type: campaign.type, name: campaign.name };
+          if (seq?.system_prompt) campaignContext.system_prompt = seq.system_prompt;
+          // Use campaign-level AI instructions if available
+          if (seq?.steps) {
+            const smsStep = (seq.steps as any[]).find((s: any) => s.channel === 'sms');
+            if (smsStep?.ai_instructions) aiInstructions = smsStep.ai_instructions;
+          }
+        }
+      }
+
+      const aiResult = await generateMessage({
+        channel: 'sms',
+        ai_instructions: `${aiInstructions}\n\nThe lead just replied with: "${message}"\nCompose a reply to their message.`,
+        lead: {
+          name: lead.name,
+          company: lead.company,
+          title: lead.title,
+          industry: lead.industry,
+          email: lead.email,
+          phone: lead.phone,
+          interest_area: lead.interest_area,
+        },
+        conversationHistory,
+        campaignContext,
+      });
+
+      smsComposed = aiResult.body;
+      console.log(`[GHL Webhook] AI composed reply (${smsComposed.length} chars): ${smsComposed.substring(0, 100)}`);
+
+      // Push composed reply to GHL — updates cory_sms_composed which triggers GHL send workflow
+      const ghlResult = await sendSmsViaGhl(contactId, smsComposed);
+      if (ghlResult.success) {
+        console.log(`[GHL Webhook] Reply pushed to GHL contact ${contactId}`);
+
+        // Log outbound reply to communication log
+        logCommunication({
+          lead_id: lead.id,
+          campaign_id: campaignId,
+          channel: 'sms',
+          direction: 'outbound',
+          delivery_mode: 'live',
+          status: 'sent',
+          to_address: phone || null,
+          from_address: null,
+          body: smsComposed,
+          provider: 'ghl',
+          metadata: { ghl_contact_id: contactId, ai_generated: true, tokens_used: aiResult.tokens_used, model: aiResult.model },
+        }).catch((err) => console.warn('[GHL Webhook] Outbound comm log failed:', err.message));
+
+        await addContactNote(contactId, `🤖 AI Reply Sent:\n${smsComposed}`).catch(() => {});
+      } else {
+        console.error(`[GHL Webhook] Failed to push reply to GHL: ${ghlResult.error}`);
+      }
+    } catch (aiErr: any) {
+      console.error(`[GHL Webhook] AI reply generation failed: ${aiErr.message}`);
+      // Non-fatal — the inbound SMS is still logged even if we can't auto-reply
+    }
+
     console.log(`[GHL Webhook] Reply processed for lead ${lead.id} (${lead.name})`);
-    // Return sms_composed in response so GHL can map it to cory_sms_composed via "Save Response"
     res.status(200).json({
       received: true,
       matched: true,
       lead_id: lead.id,
-      sms_composed: message,
+      sms_composed: smsComposed,
     });
   } catch (error: any) {
     console.error('[GHL Webhook] Error processing SMS reply:', error.message);
