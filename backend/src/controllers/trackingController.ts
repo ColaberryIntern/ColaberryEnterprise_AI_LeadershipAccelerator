@@ -85,6 +85,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       utm_source,
       utm_campaign,
       utm_medium,
+      campaign_id,
       timestamp,
     } = req.body;
 
@@ -106,6 +107,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       utm_campaign,
       utm_medium,
       referrer_domain,
+      campaign_id,
     });
 
     const sessionId = await getOrCreateSession(visitorId, {
@@ -163,6 +165,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       utm_source,
       utm_campaign,
       utm_medium,
+      campaign_id,
     } = req.body;
 
     if (!fingerprint || typeof fingerprint !== 'string' || fingerprint.length > 64) {
@@ -186,6 +189,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       utm_campaign,
       utm_medium,
       referrer_domain,
+      campaign_id,
     });
 
     const firstEvent = events[0];

@@ -20,6 +20,7 @@ interface Visitor {
   last_seen_at: string;
   utm_source?: string;
   referrer_domain?: string;
+  campaign_id?: string;
   device_type?: string;
   city?: string;
   region?: string;
@@ -635,13 +636,14 @@ function AdminVisitorsPage() {
                   <th>Pageviews</th>
                   <th>First Seen</th>
                   <th>Last Seen</th>
+                  <th>Campaign</th>
                   <th>Source</th>
                 </tr>
               </thead>
               <tbody>
                 {allVisitors.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center text-muted py-4">
+                    <td colSpan={9} className="text-center text-muted py-4">
                       {hasFilters ? 'No visitors match the current filters.' : 'No visitor data yet.'}
                     </td>
                   </tr>
@@ -659,6 +661,7 @@ function AdminVisitorsPage() {
                       <td>{v.total_pageviews ?? 0}</td>
                       <td className="text-nowrap small">{formatDate(v.first_seen_at)}</td>
                       <td className="text-nowrap small">{formatRelative(v.last_seen_at)}</td>
+                      <td className="small">{v.campaign_id || '-'}</td>
                       <td className="small">{v.utm_source || v.referrer_domain || 'Direct'}</td>
                     </tr>
                   ))
@@ -1118,6 +1121,10 @@ function AdminVisitorsPage() {
                   <div className="col-sm-6">
                     <div className="small text-muted">Source</div>
                     <div className="fw-medium">{v.utm_source || v.referrer_domain || 'Direct'}</div>
+                  </div>
+                  <div className="col-sm-6">
+                    <div className="small text-muted">Campaign</div>
+                    <div className="fw-medium">{v.campaign_id || '-'}</div>
                   </div>
                 </div>
 

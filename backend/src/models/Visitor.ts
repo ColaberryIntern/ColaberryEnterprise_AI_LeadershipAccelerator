@@ -20,6 +20,7 @@ interface VisitorAttributes {
   utm_campaign?: string | null;
   utm_medium?: string | null;
   referrer_domain?: string | null;
+  campaign_id?: string | null;
   metadata?: Record<string, any> | null;
   created_at?: Date;
 }
@@ -43,6 +44,7 @@ class Visitor extends Model<VisitorAttributes> implements VisitorAttributes {
   declare utm_campaign: string | null;
   declare utm_medium: string | null;
   declare referrer_domain: string | null;
+  declare campaign_id: string | null;
   declare metadata: Record<string, any> | null;
   declare created_at: Date;
 }
@@ -126,6 +128,10 @@ Visitor.init(
     },
     referrer_domain: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    campaign_id: {
+      type: DataTypes.STRING(100),
       allowNull: true,
     },
     metadata: {

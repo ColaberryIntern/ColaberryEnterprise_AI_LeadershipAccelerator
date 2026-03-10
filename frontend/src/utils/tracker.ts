@@ -82,16 +82,29 @@ function flush(useBeacon = false) {
   const info = browserInfo();
   const events = buffer.splice(0);
 
+  // Attach campaign_id as top-level field for visitor attribution
+  let campaign_id: string | undefined;
+  try {
+    const raw = localStorage.getItem('cb_campaign_id');
+    if (raw) {
+      const stored = JSON.parse(raw);
+      const age = Date.now() - new Date(stored.storedAt).getTime();
+      if (age <= 30 * 24 * 60 * 60 * 1000 && stored.campaignId) {
+        campaign_id = stored.campaignId;
+      }
+    }
+  } catch { /* silent */ }
+
   if (useBeacon) {
-    const payload = JSON.stringify({ fingerprint: fp, ...info, events });
+    const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, events });
     try { navigator.sendBeacon(`${API}/api/t/batch`, payload); } catch { /* silent */ }
     return;
   }
 
   const url = events.length === 1 ? `${API}/api/t/event` : `${API}/api/t/batch`;
   const body = events.length === 1
-    ? { fingerprint: fp, ...info, ...events[0] }
-    : { fingerprint: fp, ...info, events };
+    ? { fingerprint: fp, ...info, campaign_id, ...events[0] }
+    : { fingerprint: fp, ...info, campaign_id, events };
 
   fetch(url, {
     method: 'POST',

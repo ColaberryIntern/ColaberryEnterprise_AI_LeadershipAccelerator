@@ -47,6 +47,7 @@ export async function findOrCreateVisitor(
     utm_campaign?: string;
     utm_medium?: string;
     referrer_domain?: string;
+    campaign_id?: string;
   }
 ): Promise<string> {
   const now = new Date();
@@ -68,6 +69,7 @@ export async function findOrCreateVisitor(
       utm_campaign: data.utm_campaign || null,
       utm_medium: data.utm_medium || null,
       referrer_domain: data.referrer_domain || null,
+      campaign_id: data.campaign_id || null,
     } as any,
   });
 
@@ -75,6 +77,10 @@ export async function findOrCreateVisitor(
     const updates: Record<string, any> = { last_seen_at: now };
     if (data.ip_address) updates.ip_address = data.ip_address;
     if (data.user_agent) updates.user_agent = data.user_agent;
+    // First-touch attribution: only set campaign_id if not already set
+    if (data.campaign_id && !visitor.campaign_id) {
+      updates.campaign_id = data.campaign_id;
+    }
     await visitor.update(updates);
   }
 
