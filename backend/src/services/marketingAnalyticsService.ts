@@ -1,5 +1,6 @@
 import { sequelize } from '../config/database';
 import { QueryTypes } from 'sequelize';
+import { logAgentExecution } from './governanceService';
 
 const PRICE_PER_ENROLLMENT = 4500;
 
@@ -27,6 +28,7 @@ export async function getCampaignMetrics(filters?: {
   start?: string;
   end?: string;
 }): Promise<CampaignMetric[]> {
+  const startTime = Date.now();
   const dateFilter = buildDateFilter(filters);
 
   const query = `
@@ -56,7 +58,7 @@ export async function getCampaignMetrics(filters?: {
     type: QueryTypes.SELECT,
   }) as any[];
 
-  return rows.map((row) => {
+  const result = rows.map((row) => {
     const visitors = Number(row.visitors_count) || 0;
     const highIntent = Number(row.high_intent_count) || 0;
     const leads = Number(row.leads_count) || 0;
@@ -84,6 +86,11 @@ export async function getCampaignMetrics(filters?: {
       creative: row.creative || null,
     };
   });
+
+  // Governance logging (fire-and-forget)
+  logAgentExecution('revenue_aggregator', 'success', Date.now() - startTime).catch(() => {});
+
+  return result;
 }
 
 function buildDateFilter(filters?: { start?: string; end?: string }): {

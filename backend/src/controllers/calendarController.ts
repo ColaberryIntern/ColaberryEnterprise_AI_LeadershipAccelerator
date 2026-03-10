@@ -137,8 +137,10 @@ export async function handleBookCall(
     // Boost intent score for strategy call booking (score → 90+, very_high)
     if (leadId) {
       (async () => {
+        const boostStart = Date.now();
         try {
           const { Visitor, IntentScore } = require('../models');
+          const { logAgentExecution } = require('../services/governanceService');
           const visitor = await Visitor.findOne({ where: { lead_id: leadId } });
           if (visitor) {
             const now = new Date();
@@ -164,8 +166,13 @@ export async function handleBookCall(
             }
             console.log('[Calendar] Intent boosted to 90 for visitor:', visitor.id);
           }
+          logAgentExecution('calendar_intent_booster', 'success', Date.now() - boostStart).catch(() => {});
         } catch (err) {
           console.error('[Calendar] Intent boost failed (non-blocking):', err);
+          try {
+            const { logAgentExecution } = require('../services/governanceService');
+            logAgentExecution('calendar_intent_booster', 'failed', Date.now() - boostStart, String(err)).catch(() => {});
+          } catch (_) {}
         }
       })();
     }

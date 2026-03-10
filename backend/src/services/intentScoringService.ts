@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { BehavioralSignal, IntentScore, Visitor } from '../models';
+import { logAgentExecution } from './governanceService';
 
 /**
  * Time-decay half-life in days. A signal loses half its weight every 7 days.
@@ -42,6 +43,7 @@ function getIntentLevel(score: number): string {
  * Returns the updated IntentScore record.
  */
 export async function computeIntentScore(visitorId: string): Promise<IntentScore | null> {
+  const startTime = Date.now();
   const visitor = await Visitor.findByPk(visitorId);
   if (!visitor) return null;
 
@@ -79,6 +81,7 @@ export async function computeIntentScore(visitorId: string): Promise<IntentScore
         updated_at: now,
       });
     }
+    logAgentExecution('intent_scorer', 'success', Date.now() - startTime).catch(() => {});
     return intentScore;
   }
 
@@ -134,7 +137,7 @@ export async function computeIntentScore(visitorId: string): Promise<IntentScore
     return existing;
   }
 
-  return IntentScore.create({
+  const result = await IntentScore.create({
     visitor_id: visitorId,
     lead_id: visitor.lead_id || null,
     score: finalScore,
@@ -144,6 +147,11 @@ export async function computeIntentScore(visitorId: string): Promise<IntentScore
     last_signal_at: lastSignalAt,
     score_updated_at: now,
   } as any);
+
+  // Governance logging (fire-and-forget)
+  logAgentExecution('intent_scorer', 'success', Date.now() - startTime).catch(() => {});
+
+  return result;
 }
 
 /**
