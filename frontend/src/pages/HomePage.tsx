@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm } from '../utils/formValidation';
+import { getUTMParams } from '../services/utmService';
+import ArtifactValueBlock from '../components/ArtifactValueBlock';
+import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import api from '../utils/api';
 
 function HomePage() {
@@ -13,16 +16,6 @@ function HomePage() {
   const [briefingSubmitting, setBriefingSubmitting] = useState(false);
   const [briefingErrors, setBriefingErrors] = useState<Record<string, string>>({});
   const [briefingServerError, setBriefingServerError] = useState('');
-  const [utm, setUtm] = useState({ utmSource: '', utmCampaign: '', utmMedium: '' });
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setUtm({
-      utmSource: params.get('utm_source') || '',
-      utmCampaign: params.get('utm_campaign') || '',
-      utmMedium: params.get('utm_medium') || '',
-    });
-  }, []);
 
   const [briefingForm, setBriefingForm] = useState({
     fullName: '',
@@ -75,7 +68,7 @@ function HomePage() {
         primaryObjective: briefingForm.primaryObjective ? [briefingForm.primaryObjective] : undefined,
         timeline: briefingForm.timeline,
         formType: 'executive_overview_download',
-        ...utm,
+        ...getUTMParams(),
         pageOrigin: window.location.href,
       };
       const payload = toLeadPayload(lead);
@@ -129,6 +122,7 @@ function HomePage() {
             height="56"
             className="mb-4 logo-hero"
           />
+          <CohortUrgencyBadge className="mb-3" />
           <h1 className="display-4 fw-bold text-light mb-4">
             Build AI Solutions Inside Your Organization —<br />
             Without Hiring a Consulting Firm
@@ -310,6 +304,8 @@ function HomePage() {
               ))}
             </div>
 
+            <ArtifactValueBlock />
+
             {/* Structured Briefing Form */}
             {briefingServerError && (
               <div className="alert alert-danger" role="alert">{briefingServerError}</div>
@@ -450,7 +446,7 @@ function HomePage() {
         </div>
       </section>
 
-      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/" />
     </>
   );
 }

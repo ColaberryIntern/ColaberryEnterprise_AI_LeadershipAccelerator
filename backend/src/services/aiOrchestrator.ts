@@ -4,6 +4,10 @@ import { scanAllCampaigns } from './campaignHealthScanner';
 import { runCampaignRepairAgent } from './agents/campaignRepairAgent';
 import { runContentOptimizationAgent } from './agents/contentOptimizationAgent';
 import { runConversationOptimizationAgent } from './agents/conversationOptimizationAgent';
+import { runOrchestrationHealthAgent } from './agents/orchestrationHealthAgent';
+import { runStudentProgressMonitor } from './agents/studentProgressMonitor';
+import { runPromptMonitorAgent } from './agents/promptMonitorAgent';
+import { runOrchestrationAutoRepairAgent } from './agents/orchestrationAutoRepairAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -208,4 +212,32 @@ export async function runContentOptimization(): Promise<AgentExecutionResult | n
  */
 export async function runConversationOptimization(): Promise<AgentExecutionResult | null> {
   return runAgent('ConversationOptimizationAgent', runConversationOptimizationAgent);
+}
+
+/**
+ * Run the Orchestration Health Agent.
+ */
+export async function runOrchestrationHealth(): Promise<AgentExecutionResult | null> {
+  return runAgent('OrchestrationHealthAgent', runOrchestrationHealthAgent);
+}
+
+/**
+ * Run the Student Progress Monitor.
+ */
+export async function runStudentProgress(): Promise<AgentExecutionResult | null> {
+  return runAgent('StudentProgressMonitor', runStudentProgressMonitor);
+}
+
+/**
+ * Run the Prompt Monitor Agent.
+ */
+export async function runPromptMonitor(): Promise<AgentExecutionResult | null> {
+  return runAgent('PromptMonitorAgent', runPromptMonitorAgent);
+}
+
+/**
+ * Run the Orchestration Auto-Repair Agent.
+ */
+export async function runOrchestrationRepair(): Promise<AgentExecutionResult | null> {
+  return runAgent('OrchestrationAutoRepairAgent', runOrchestrationAutoRepairAgent);
 }

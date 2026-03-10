@@ -1,5 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
 
+interface MonitoringAgent {
+  id: string;
+  agent_name: string;
+  status: string;
+  enabled: boolean;
+  last_run_at: string | null;
+  error_count: number;
+}
+
+interface LatestSnapshot {
+  health_score: number | null;
+  status: string;
+  scan_timestamp: string | null;
+}
+
 interface Props { token: string; apiUrl: string; }
 
 interface Finding {
@@ -49,10 +64,30 @@ const countLabels: Record<string, string> = {
   sessionGates: 'Session Gates',
 };
 
+const agentStatusColor: Record<string, string> = {
+  idle: 'secondary',
+  running: 'primary',
+  paused: 'warning',
+  error: 'danger',
+};
+
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return 'Never';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 const HealthDashboardTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [report, setReport] = useState<HealthReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [monitorAgents, setMonitorAgents] = useState<MonitoringAgent[]>([]);
+  const [latestSnapshot, setLatestSnapshot] = useState<LatestSnapshot | null>(null);
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
@@ -68,7 +103,22 @@ const HealthDashboardTab: React.FC<Props> = ({ token, apiUrl }) => {
     setLoading(false);
   }, [token, apiUrl]);
 
-  useEffect(() => { fetchReport(); }, [fetchReport]);
+  const fetchMonitoringData = useCallback(async () => {
+    try {
+      const [agentsRes, snapRes] = await Promise.allSettled([
+        fetch(`${apiUrl}/api/admin/orchestration/monitoring/agents`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => r.ok ? r.json() : []),
+        fetch(`${apiUrl}/api/admin/orchestration/health-snapshots/latest`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => r.ok ? r.json() : null),
+      ]);
+      if (agentsRes.status === 'fulfilled') setMonitorAgents(agentsRes.value);
+      if (snapRes.status === 'fulfilled') setLatestSnapshot(snapRes.value);
+    } catch { /* silent */ }
+  }, [token, apiUrl]);
+
+  useEffect(() => { fetchReport(); fetchMonitoringData(); }, [fetchReport, fetchMonitoringData]);
 
   if (loading && !report) return (
     <div className="text-center py-5">
@@ -90,6 +140,37 @@ const HealthDashboardTab: React.FC<Props> = ({ token, apiUrl }) => {
 
   return (
     <div>
+      {/* Automated Monitoring Status */}
+      {(monitorAgents.length > 0 || latestSnapshot) && (
+        <div className="card border-0 shadow-sm mb-3">
+          <div className="card-body py-2">
+            <div className="d-flex flex-wrap align-items-center gap-3">
+              {monitorAgents.map((a) => (
+                <div key={a.id} className="d-flex align-items-center gap-1" style={{ fontSize: 12 }}>
+                  <span className={`badge bg-${agentStatusColor[a.status] || 'secondary'}`} style={{ fontSize: 10 }}>
+                    {a.status}
+                  </span>
+                  <span className="fw-medium">{a.agent_name.replace('Agent', '')}</span>
+                  <span className="text-muted">{timeAgo(a.last_run_at)}</span>
+                  {a.error_count > 0 && (
+                    <span className="badge bg-danger" style={{ fontSize: 9 }}>{a.error_count} err</span>
+                  )}
+                </div>
+              ))}
+              {latestSnapshot && latestSnapshot.health_score != null && (
+                <div className="ms-auto d-flex align-items-center gap-2" style={{ fontSize: 12 }}>
+                  <span className="text-muted">Automated scan:</span>
+                  <span className={`badge bg-${statusColor[latestSnapshot.status] === statusColor.healthy ? 'success' : latestSnapshot.status === 'degraded' ? 'warning' : 'danger'}`}>
+                    {latestSnapshot.health_score}/100
+                  </span>
+                  <span className="text-muted">{timeAgo(latestSnapshot.scan_timestamp)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
           <span className="fw-semibold" style={{ fontSize: 14 }}>System Health</span>

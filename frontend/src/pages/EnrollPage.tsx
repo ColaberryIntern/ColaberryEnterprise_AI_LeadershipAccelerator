@@ -3,17 +3,9 @@ import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import api from '../utils/api';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
-
-interface Cohort {
-  id: string;
-  name: string;
-  start_date: string;
-  core_day: string;
-  core_time: string;
-  optional_lab_day: string | null;
-  max_seats: number;
-  seats_taken: number;
-}
+import { getUTMPayloadFields } from '../services/utmService';
+import { Cohort } from '../models/Cohort';
+import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 
 interface FormErrors {
   [key: string]: string;
@@ -38,15 +30,6 @@ function EnrollPage() {
   const [invoiceSubmitted, setInvoiceSubmitted] = useState(false);
 
   const [cohortError, setCohortError] = useState(false);
-  const [utm, setUtm] = useState({ utm_source: '', utm_campaign: '' });
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setUtm({
-      utm_source: params.get('utm_source') || '',
-      utm_campaign: params.get('utm_campaign') || '',
-    });
-  }, []);
 
   useEffect(() => {
     api
@@ -117,8 +100,7 @@ function EnrollPage() {
     setSubmitting(true);
     try {
       const trackingData = {
-        ...utm,
-        page_url: window.location.href,
+        ...getUTMPayloadFields(),
         form_type: 'enrollment',
       };
       if (paymentOption === 'credit_card') {
@@ -190,6 +172,13 @@ function EnrollPage() {
           <p className="lead">
             {PROGRAM_SCHEDULE.price} per participant — pay by credit card or request a corporate invoice
           </p>
+          {cohorts.length > 0 && (
+            <CohortUrgencyBadge
+              startDate={cohorts[0].start_date}
+              seatsRemaining={cohorts[0].max_seats - cohorts[0].seats_taken}
+              className="mt-3"
+            />
+          )}
         </div>
       </section>
 

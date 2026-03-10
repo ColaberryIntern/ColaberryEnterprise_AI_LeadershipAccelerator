@@ -157,6 +157,11 @@ export function getVisitorFingerprint(): string | null {
   return localStorage.getItem(FP_KEY);
 }
 
+export function trackEvent(eventType: string, props: Record<string, unknown> = {}): void {
+  if (!shouldTrack()) return;
+  push(eventType, props);
+}
+
 export function initTracker(): void {
   if (initialized || !shouldTrack()) return;
   initialized = true;

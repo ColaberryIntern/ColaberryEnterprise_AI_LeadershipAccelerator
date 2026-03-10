@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm, ValidationRules } from '../utils/formValidation';
+import { getUTMParams } from '../services/utmService';
 import api from '../utils/api';
 
 const VALIDATION_RULES: ValidationRules = {
@@ -24,17 +25,6 @@ function ContactPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
   const [sendBriefing, setSendBriefing] = useState(false);
-
-  // UTM capture
-  const [utm, setUtm] = useState({ utmSource: '', utmCampaign: '', utmMedium: '' });
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    setUtm({
-      utmSource: params.get('utm_source') || '',
-      utmCampaign: params.get('utm_campaign') || '',
-      utmMedium: params.get('utm_medium') || '',
-    });
-  }, []);
 
   const [form, setForm] = useState({
     fullName: '',
@@ -92,7 +82,7 @@ function ContactPage() {
       const lead: EnterpriseLead = {
         ...form,
         formType: sendBriefing ? 'enterprise_inquiry_with_briefing' : 'enterprise_inquiry',
-        ...utm,
+        ...getUTMParams(),
         pageOrigin: window.location.href,
       };
       await api.post('/api/leads', toLeadPayload(lead));
@@ -540,7 +530,7 @@ function ContactPage() {
         </div>
       </section>
 
-      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/contact" />
     </>
   );
 }

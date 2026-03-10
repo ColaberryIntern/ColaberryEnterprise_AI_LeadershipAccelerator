@@ -213,10 +213,58 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       cooldown_minutes: 1440,
     },
   },
+  // --- Orchestration monitoring agents ---
+  {
+    agent_name: 'OrchestrationHealthAgent',
+    agent_type: 'orchestration_health',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/orchestrationHealthAgent.ts',
+    trigger_type: 'cron',
+    schedule: '*/5 * * * *',
+    category: 'accelerator',
+    description:
+      'Computes orchestration health score (0-100) from curriculum, prompt, artifact, student, and gating checks. Stores time-series snapshots and detects status changes (healthy/degraded/critical).',
+  },
+  {
+    agent_name: 'StudentProgressMonitor',
+    agent_type: 'student_monitor',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/studentProgressMonitor.ts',
+    trigger_type: 'cron',
+    schedule: '*/2 * * * *',
+    category: 'accelerator',
+    description:
+      'Monitors active enrollments for stuck students (>48h on a lesson), missing required artifacts, and gating deadlocks where prerequisites are met but gates remain locked.',
+  },
+  {
+    agent_name: 'PromptMonitorAgent',
+    agent_type: 'prompt_monitor',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/promptMonitorAgent.ts',
+    trigger_type: 'cron',
+    schedule: '*/1 * * * *',
+    category: 'accelerator',
+    description:
+      'Detects inactive prompts still referenced by mini-sections, broken FK references to non-existent prompt templates, and recent prompt execution errors.',
+  },
+  {
+    agent_name: 'OrchestrationAutoRepairAgent',
+    agent_type: 'orchestration_repair',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/orchestrationAutoRepairAgent.ts',
+    trigger_type: 'cron',
+    schedule: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *',
+    category: 'accelerator',
+    description:
+      'Reads recent findings from monitoring agents and applies safe auto-repairs: re-activating inactive prompts still in use, nullifying broken FK references. Max 10 repairs per run.',
+    config: {
+      max_repairs_per_run: 10,
+    },
+  },
 ];
 
 /**
- * Seed the full agent registry (16 agents). Idempotent — uses findOrCreate
+ * Seed the full agent registry (20 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
 export async function seedAgentRegistry(): Promise<void> {

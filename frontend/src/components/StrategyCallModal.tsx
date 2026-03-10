@@ -3,6 +3,8 @@ import Modal from './ui/Modal';
 import { useCalendarAvailability } from '../hooks/useCalendarAvailability';
 import { downloadICS } from '../utils/ics';
 import api from '../utils/api';
+import { getUTMPayloadFields } from '../services/utmService';
+import { trackEvent } from '../utils/tracker';
 
 interface StrategyCallModalProps {
   show: boolean;
@@ -11,6 +13,7 @@ interface StrategyCallModalProps {
   initialEmail?: string;
   initialCompany?: string;
   initialPhone?: string;
+  pageOrigin?: string;
 }
 
 type Step = 'date' | 'time' | 'details' | 'submitting' | 'success';
@@ -73,6 +76,7 @@ export default function StrategyCallModal({
   initialEmail = '',
   initialCompany = '',
   initialPhone = '',
+  pageOrigin,
 }: StrategyCallModalProps) {
   const { dates, loading, error: availError, refetch } = useCalendarAvailability();
   const [step, setStep] = useState<Step>('date');
@@ -133,6 +137,10 @@ export default function StrategyCallModal({
 
     setStep('submitting');
     try {
+      trackEvent('book_strategy_call_click', {
+        page_origin: pageOrigin || window.location.pathname,
+      });
+
       const visitorFp = localStorage.getItem('cb_visitor_fp');
       const res = await api.post('/api/calendar/book', {
         name: name.trim(),
@@ -145,6 +153,18 @@ export default function StrategyCallModal({
       });
       setBookingResult(res.data.booking);
       setStep('success');
+
+      // Shadow lead for attribution (calendar/book doesn't accept UTM)
+      const utmFields = getUTMPayloadFields();
+      api.post('/api/leads', {
+        name: name.trim(),
+        email: email.trim(),
+        company: company.trim(),
+        phone: phone.trim(),
+        form_type: 'strategy_call',
+        ...utmFields,
+        visitor_fingerprint: visitorFp || undefined,
+      }).catch(() => {});
     } catch (err: any) {
       setStep('details');
       if (err.response?.status === 409) {

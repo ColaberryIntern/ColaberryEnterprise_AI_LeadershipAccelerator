@@ -59,6 +59,7 @@ import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
 import QAHistory from './QAHistory';
 import IntelligenceConfig from './IntelligenceConfig';
+import OrchestrationHealth from './OrchestrationHealth';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -339,6 +340,10 @@ AiAgentActivityLog.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 CampaignError.belongsTo(AiAgentActivityLog, { foreignKey: 'repair_attempt_id', as: 'repairAttempt' });
 AiAgentActivityLog.hasMany(CampaignError, { foreignKey: 'repair_attempt_id', as: 'repairedErrors' });
 
+// Orchestration Health associations
+AiAgent.hasMany(OrchestrationHealth, { foreignKey: 'agent_id', as: 'orchestrationHealthSnapshots' });
+OrchestrationHealth.belongsTo(AiAgent, { foreignKey: 'agent_id', as: 'agent' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -378,4 +383,5 @@ export {
   EntitySummary,
   QAHistory,
   IntelligenceConfig,
+  OrchestrationHealth,
 };

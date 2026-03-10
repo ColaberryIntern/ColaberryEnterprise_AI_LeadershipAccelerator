@@ -53,6 +53,10 @@ import { scanFrontendApiCalls } from '../../utils/linkScanner';
 import { getSystemStatus, createSnapshot, listSnapshots, rollbackToSnapshot } from '../../services/managementService';
 import * as analytics from '../../services/analyticsService';
 import { generateHealthReport } from '../../services/healthReportService';
+import OrchestrationHealth from '../../models/OrchestrationHealth';
+import AiAgent from '../../models/AiAgent';
+import { Op } from 'sequelize';
+import { runOrchestrationHealth } from '../../services/aiOrchestrator';
 
 const router = Router();
 
@@ -386,6 +390,50 @@ router.get('/api/admin/orchestration/health-report', requireAdmin, async (_req, 
   try {
     const report = await generateHealthReport();
     res.json(report);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Orchestration Monitoring Routes ---
+
+// Health snapshots time-series (default last 24 hours)
+router.get('/api/admin/orchestration/health-snapshots', requireAdmin, async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours as string) || 24;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const snapshots = await OrchestrationHealth.findAll({
+      where: { scan_timestamp: { [Op.gte]: since } },
+      order: [['scan_timestamp', 'DESC']],
+    });
+    res.json(snapshots);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Latest health snapshot
+router.get('/api/admin/orchestration/health-snapshots/latest', requireAdmin, async (_req, res) => {
+  try {
+    const latest = await OrchestrationHealth.findOne({
+      order: [['scan_timestamp', 'DESC']],
+    });
+    res.json(latest || { health_score: null, status: 'no_data', findings: [], component_scores: {} });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Monitoring agents (accelerator category)
+router.get('/api/admin/orchestration/monitoring/agents', requireAdmin, async (_req, res) => {
+  try {
+    const agents = await AiAgent.findAll({
+      where: { category: 'accelerator' },
+      order: [['agent_name', 'ASC']],
+    });
+    res.json(agents);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Trigger on-demand health scan
+router.post('/api/admin/orchestration/monitoring/scan', requireAdmin, async (_req, res) => {
+  try {
+    const result = await runOrchestrationHealth();
+    res.json(result || { error: 'Agent not found or disabled' });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

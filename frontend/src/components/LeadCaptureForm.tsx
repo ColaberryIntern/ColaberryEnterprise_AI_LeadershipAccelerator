@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import api from '../utils/api';
+import { getUTMPayloadFields } from '../services/utmService';
 
 interface FormErrors {
   [key: string]: string;
@@ -25,6 +26,7 @@ interface LeadCaptureFormProps {
   className?: string;
   buttonClassName?: string;
   showConsent?: boolean;
+  /** @deprecated UTM is now always captured via utmService */
   captureUtm?: boolean;
   onSuccess?: (data?: { name: string; email: string; company: string; phone: string }) => void;
 }
@@ -56,17 +58,6 @@ function LeadCaptureForm({
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState('');
-  const [utmParams, setUtmParams] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (captureUtm) {
-      const params = new URLSearchParams(window.location.search);
-      const utm: Record<string, string> = {};
-      if (params.get('utm_source')) utm.utm_source = params.get('utm_source')!;
-      if (params.get('utm_campaign')) utm.utm_campaign = params.get('utm_campaign')!;
-      setUtmParams(utm);
-    }
-  }, [captureUtm]);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -116,11 +107,8 @@ function LeadCaptureForm({
       if (showConsent) {
         payload.consent_contact = consentChecked;
       }
-      if (captureUtm) {
-        if (utmParams.utm_source) payload.utm_source = utmParams.utm_source;
-        if (utmParams.utm_campaign) payload.utm_campaign = utmParams.utm_campaign;
-        payload.page_url = window.location.href;
-      }
+      const utmFields = getUTMPayloadFields();
+      Object.assign(payload, utmFields);
       const visitorFp = localStorage.getItem('cb_visitor_fp');
       if (visitorFp) {
         payload.visitor_fingerprint = visitorFp;

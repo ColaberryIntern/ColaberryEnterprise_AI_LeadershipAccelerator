@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
+import ArtifactValueBlock from '../components/ArtifactValueBlock';
 
 /** Intersection Observer hook for fade-in-on-scroll */
 function useFadeIn() {
@@ -156,6 +157,8 @@ function ProgramPage() {
           </FadeIn>
         </div>
       </section>
+
+      <ArtifactValueBlock />
 
       <hr className="week-divider" />
 

@@ -3,12 +3,13 @@ import { Outlet } from 'react-router-dom';
 import PublicNavbar from './PublicNavbar';
 import PublicFooter from './PublicFooter';
 import { initTracker } from '../../utils/tracker';
+import { captureUTMFromURL } from '../../services/utmService';
 
 const ChatWidget = lazy(() => import('../ChatWidget'));
 const MarketingMonitorPanel = lazy(() => import('../MarketingMonitorPanel'));
 
 function PublicLayout() {
-  useEffect(() => { initTracker(); }, []);
+  useEffect(() => { initTracker(); captureUTMFromURL(); }, []);
 
   return (
     <div className="d-flex flex-column min-vh-100">

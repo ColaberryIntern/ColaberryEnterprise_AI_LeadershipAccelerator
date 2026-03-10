@@ -1,6 +1,15 @@
 import cron from 'node-cron';
 import { seedAgentRegistry } from './agentRegistrySeed';
-import { runHealthScans, runRepairAgent, runContentOptimization, runConversationOptimization } from './aiOrchestrator';
+import {
+  runHealthScans,
+  runRepairAgent,
+  runContentOptimization,
+  runConversationOptimization,
+  runOrchestrationHealth,
+  runStudentProgress,
+  runPromptMonitor,
+  runOrchestrationRepair,
+} from './aiOrchestrator';
 
 /**
  * Start all AI Operations cron jobs.
@@ -40,9 +49,41 @@ export function startAIOpsScheduler(): void {
     });
   });
 
-  console.log('[AI Ops] Scheduler started (16 agents registered):');
+  // Orchestration Health Agent: every 5 minutes
+  cron.schedule('*/5 * * * *', () => {
+    runOrchestrationHealth().catch((err) => {
+      console.error('[AI Ops] Orchestration health cron error:', err);
+    });
+  });
+
+  // Student Progress Monitor: every 2 minutes
+  cron.schedule('*/2 * * * *', () => {
+    runStudentProgress().catch((err) => {
+      console.error('[AI Ops] Student progress monitor cron error:', err);
+    });
+  });
+
+  // Prompt Monitor Agent: every minute
+  cron.schedule('*/1 * * * *', () => {
+    runPromptMonitor().catch((err) => {
+      console.error('[AI Ops] Prompt monitor cron error:', err);
+    });
+  });
+
+  // Orchestration Auto-Repair Agent: every 5 minutes (offset from health scan)
+  cron.schedule('3,8,13,18,23,28,33,38,43,48,53,58 * * * *', () => {
+    runOrchestrationRepair().catch((err) => {
+      console.error('[AI Ops] Orchestration repair cron error:', err);
+    });
+  });
+
+  console.log('[AI Ops] Scheduler started (20 agents registered):');
   console.log('[AI Ops]   Campaign health scan: every 15 minutes');
   console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
   console.log('[AI Ops]   Content optimization: every 6 hours');
   console.log('[AI Ops]   Conversation optimization: daily at 4 AM');
+  console.log('[AI Ops]   Orchestration health: every 5 minutes');
+  console.log('[AI Ops]   Student progress monitor: every 2 minutes');
+  console.log('[AI Ops]   Prompt monitor: every minute');
+  console.log('[AI Ops]   Orchestration auto-repair: every 5 minutes (offset)');
 }

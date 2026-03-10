@@ -2,6 +2,9 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
+import ArtifactValueBlock from '../components/ArtifactValueBlock';
+import ExecutiveTestimonial from '../components/ExecutiveTestimonial';
+import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 
 function PricingPage() {
   return (
@@ -19,6 +22,7 @@ function PricingPage() {
       >
         <div className="container text-center py-4">
           <img src="/colaberry-icon.png" alt="" width="44" height="44" className="mb-3 logo-hero" />
+          <CohortUrgencyBadge className="mb-3" />
           <h1 className="display-5 fw-bold text-light">Executive Accelerator Pricing</h1>
           <p className="lead">
             Transparent, single-tier pricing with enterprise sponsorship pathways
@@ -69,6 +73,8 @@ function PricingPage() {
         </div>
       </section>
 
+      <ArtifactValueBlock />
+
       {/* Corporate Group Pricing */}
       <section className="section-alt" aria-label="Corporate Group Pricing">
         <div className="container">
@@ -95,6 +101,14 @@ function PricingPage() {
           </div>
         </div>
       </section>
+
+      <ExecutiveTestimonial
+        quote="This program gave our leadership team the confidence and concrete framework to move from AI experimentation to production deployment. We built our first internal AI tool during the accelerator."
+        name="VP of Technology"
+        title="Director-Level Participant"
+        industry="Financial Services"
+        companySize="1,000+ employees"
+      />
 
       {/* Enterprise Sponsorship Pathway */}
       <section className="section" aria-label="Enterprise Sponsorship">

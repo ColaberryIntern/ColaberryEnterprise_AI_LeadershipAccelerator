@@ -6,6 +6,7 @@ import ExecutionTraceModal from './ai-settings/ExecutionTraceModal';
 import ErrorDetailModal from './ai-settings/ErrorDetailModal';
 import CampaignTimelineModal from './ai-settings/CampaignTimelineModal';
 import AgentDetailModal from './ai-settings/AgentDetailModal';
+import OrchestrationHealthSection from './ai-settings/OrchestrationHealthSection';
 
 interface Agent {
   id: string;
@@ -333,12 +334,16 @@ function AdminAISettingsPage() {
         />
       )}
       {activeTab === 'health' && (
-        <HealthTab
-          health={health}
-          onScan={handleScanAll}
-          scanLoading={actionLoading === 'scan'}
-          onViewTimeline={setSelectedCampaignId}
-        />
+        <>
+          <HealthTab
+            health={health}
+            onScan={handleScanAll}
+            scanLoading={actionLoading === 'scan'}
+            onViewTimeline={setSelectedCampaignId}
+          />
+          <hr className="my-4" />
+          <OrchestrationHealthSection />
+        </>
       )}
       {activeTab === 'errors' && (
         <ErrorsTab

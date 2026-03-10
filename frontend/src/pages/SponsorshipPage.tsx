@@ -208,7 +208,7 @@ function SponsorshipPage() {
             submitLabel="📥 Download Sponsorship Kit"
             successMessage="✅ Your Sponsorship Kit has been sent to your email. Expect it within minutes."
             className="text-dark"
-            captureUtm={true}
+            captureUtm
           />
           {/* TODO: Trigger automated email sequence via CRM (future) */}
         </div>

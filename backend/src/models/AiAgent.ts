@@ -15,7 +15,11 @@ export type AiAgentType =
   | 'session_manager'
   | 'maintenance'
   | 'digest'
-  | 'reminder';
+  | 'reminder'
+  | 'orchestration_health'
+  | 'student_monitor'
+  | 'prompt_monitor'
+  | 'orchestration_repair';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
