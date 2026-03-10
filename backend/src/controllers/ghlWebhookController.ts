@@ -7,9 +7,13 @@ import { respondAsLead } from '../services/testing/campaignSimulator';
 
 export async function handleGhlSmsReply(req: Request, res: Response): Promise<void> {
   try {
+    // Log full payload for debugging GHL variable mapping
+    console.log(`[GHL Webhook] Raw payload:`, JSON.stringify(req.body, null, 2));
+
     const { contactId, phone, message, campaignTag } = req.body;
 
     if (!contactId || !message) {
+      console.warn(`[GHL Webhook] Missing fields — contactId: "${contactId || ''}", message: "${message || ''}", keys: ${Object.keys(req.body).join(', ')}`);
       res.status(400).json({ error: 'contactId and message are required' });
       return;
     }
