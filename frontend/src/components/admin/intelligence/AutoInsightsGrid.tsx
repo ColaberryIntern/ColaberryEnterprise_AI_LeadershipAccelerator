@@ -31,7 +31,7 @@ function SkeletonCards() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem' }}>
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="card border-0 shadow-sm">
+        <div key={i} className="intel-card-float">
           <div className="card-body p-3">
             <div className="placeholder-glow">
               <span className="placeholder col-10 placeholder-sm mb-2 d-block" />
@@ -56,11 +56,10 @@ export default function AutoInsightsGrid({ insights, onInsightClick, onInvestiga
       {visible.map((insight, i) => (
         <div
           key={i}
-          className="card border-0 shadow-sm"
+          className="intel-card-float intel-fade-in"
           style={{
             borderLeft: `4px solid ${getSeverityColor(insight.severity)}`,
             cursor: onInsightClick ? 'pointer' : 'default',
-            transition: 'box-shadow 0.2s ease',
           }}
           onClick={() => onInsightClick?.(insight.title)}
           onMouseEnter={(e) => {

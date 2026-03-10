@@ -19,6 +19,7 @@ import {
   handleGetForecasts,
   handleGetRiskEntities,
   handleGetBusinessHierarchy,
+  handleDataAccessReport,
 } from '../../controllers/intelligenceController';
 
 const router = Router();
@@ -58,5 +59,8 @@ router.get('/api/admin/intelligence/risk-entities', requireAdmin, handleGetRiskE
 
 // Business Hierarchy
 router.get('/api/admin/intelligence/business-hierarchy', requireAdmin, handleGetBusinessHierarchy);
+
+// Data Access Verification
+router.get('/api/admin/intelligence/data-access-report', requireAdmin, handleDataAccessReport);
 
 export default router;

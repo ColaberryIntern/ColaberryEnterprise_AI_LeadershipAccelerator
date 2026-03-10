@@ -46,7 +46,7 @@ function linearSlope(values: number[]): number {
 
 // ---- KPIs ----
 
-export async function getIntelligenceKPIs() {
+export async function getIntelligenceKPIs(entityType?: string) {
   const now = new Date();
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
@@ -151,7 +151,7 @@ export async function getIntelligenceKPIs() {
 
 // ---- Anomalies ----
 
-export async function getAnomalies() {
+export async function getAnomalies(entityType?: string) {
   const severityOrder: Record<string, number> = { critical: 0, error: 1, warning: 2, info: 3 };
 
   // 1. Unresolved campaign errors
@@ -207,7 +207,20 @@ export async function getAnomalies() {
   }
 
   // Combine and sort
-  const all = [...errorAnomalies, ...agentAnomalies, ...orchAnomalies];
+  let all = [...errorAnomalies, ...agentAnomalies, ...orchAnomalies];
+
+  // Filter by entity type if scoped
+  if (entityType) {
+    const typeMap: Record<string, string[]> = {
+      campaigns: ['campaign'],
+      agents: ['agent'],
+      system: ['system'],
+      leads: ['campaign', 'opportunity'],
+    };
+    const allowedTypes = typeMap[entityType] || [entityType];
+    all = all.filter((a) => allowedTypes.includes(a.entity_type));
+  }
+
   all.sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9));
 
   return all.slice(0, 20);
@@ -215,7 +228,7 @@ export async function getAnomalies() {
 
 // ---- Forecasts ----
 
-export async function getForecasts() {
+export async function getForecasts(entityType?: string) {
   // Lead forecast
   const leadWeeks: { week: string; count: string }[] = await sequelize.query(
     `SELECT DATE_TRUNC('week', created_at) as week, COUNT(*) as count
@@ -289,7 +302,7 @@ function buildForecast(
 
 // ---- Risk Entities ----
 
-export async function getRiskEntities() {
+export async function getRiskEntities(entityType?: string) {
   // 1. Low-health campaigns
   const unhealthyCampaigns = await CampaignHealth.findAll({
     where: { health_score: { [Op.lt]: 70 } },
@@ -342,7 +355,19 @@ export async function getRiskEntities() {
     last_activity: a.last_run_at,
   }));
 
-  const all = [...campaignRisks, ...oppRisks, ...agentRisks];
+  let all = [...campaignRisks, ...oppRisks, ...agentRisks];
+
+  // Filter by entity type if scoped
+  if (entityType) {
+    const typeMap: Record<string, string[]> = {
+      campaigns: ['campaign'],
+      leads: ['opportunity'],
+      agents: ['agent'],
+    };
+    const allowedTypes = typeMap[entityType] || [entityType];
+    all = all.filter((a) => allowedTypes.includes(a.entity_type));
+  }
+
   all.sort((a, b) => b.risk_score - a.risk_score);
 
   return all.slice(0, 20);

@@ -42,7 +42,7 @@ function SkeletonCards() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="card border-0 shadow-sm flex-fill"
+          className="intel-card-float flex-fill"
           style={{ minWidth: '150px', maxWidth: '220px' }}
         >
           <div className="card-body p-3">
@@ -67,7 +67,7 @@ interface KPICardProps {
 function KPICard({ label, accent, children }: KPICardProps) {
   return (
     <div
-      className="card border-0 shadow-sm flex-fill"
+      className="intel-card-float flex-fill"
       style={{
         minWidth: '150px',
         maxWidth: '220px',

@@ -45,8 +45,8 @@ function getRiskBarColor(score: number): string {
 
 function PanelCard({ title, children, minHeight = 300 }: { title: string; children: React.ReactNode; minHeight?: number }) {
   return (
-    <div className="card border-0 shadow-sm" style={{ minHeight }}>
-      <div className="card-header bg-white fw-semibold small border-bottom" style={{ color: 'var(--color-primary)' }}>
+    <div className="intel-card-float intel-fade-in" style={{ minHeight }}>
+      <div className="card-header bg-white fw-semibold small border-bottom" style={{ color: 'var(--color-primary)', borderRadius: '10px 10px 0 0' }}>
         {title}
       </div>
       <div className="card-body p-3 d-flex flex-column justify-content-center">

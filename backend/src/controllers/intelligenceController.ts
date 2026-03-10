@@ -222,7 +222,7 @@ export async function handleGetQAHistory(req: Request, res: Response, next: Next
 export async function handleGetKPIs(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getIntelligenceKPIs } = await import('../intelligence/services/analyticsService');
-    const data = await getIntelligenceKPIs();
+    const data = await getIntelligenceKPIs(req.query.entity_type as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
@@ -230,7 +230,7 @@ export async function handleGetKPIs(req: Request, res: Response, next: NextFunct
 export async function handleGetAnomalies(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getAnomalies } = await import('../intelligence/services/analyticsService');
-    const data = await getAnomalies();
+    const data = await getAnomalies(req.query.entity_type as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
@@ -238,7 +238,7 @@ export async function handleGetAnomalies(req: Request, res: Response, next: Next
 export async function handleGetForecasts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getForecasts } = await import('../intelligence/services/analyticsService');
-    const data = await getForecasts();
+    const data = await getForecasts(req.query.entity_type as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
@@ -246,7 +246,7 @@ export async function handleGetForecasts(req: Request, res: Response, next: Next
 export async function handleGetRiskEntities(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getRiskEntities } = await import('../intelligence/services/analyticsService');
-    const data = await getRiskEntities();
+    const data = await getRiskEntities(req.query.entity_type as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
@@ -255,6 +255,14 @@ export async function handleGetBusinessHierarchy(req: Request, res: Response, ne
   try {
     const { buildBusinessEntityHierarchy } = await import('../intelligence/services/businessEntityService');
     const data = await buildBusinessEntityHierarchy();
+    res.json(data);
+  } catch (error) { next(error); }
+}
+
+export async function handleDataAccessReport(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { verifyDataAccess } = await import('../intelligence/services/dataAccessService');
+    const data = await verifyDataAccess();
     res.json(data);
   } catch (error) { next(error); }
 }

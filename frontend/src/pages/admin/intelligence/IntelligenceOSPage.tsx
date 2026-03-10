@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import { IntelligenceProvider, useIntelligenceContext } from '../../../contexts/IntelligenceContext';
 import { useIntelligenceQuery } from '../../../hooks/useIntelligenceQuery';
 import {
@@ -26,13 +26,20 @@ import ChartRenderer from '../../../components/admin/intelligence/ChartRenderer'
 import AutoInsightsGrid from '../../../components/admin/intelligence/AutoInsightsGrid';
 import EntityNavigationPanel from '../../../components/admin/intelligence/entityPanel/EntityNavigationPanel';
 
+const InteractiveBusinessGraph = lazy(() => import('../../../components/admin/intelligence/InteractiveBusinessGraph'));
+
 // ─── Adaptive Execution Steps ─────────────────────────────────────────────────
 const EXECUTION_STEPS = [
   'Classifying intent...',
-  'Planning data sources...',
-  'Executing queries...',
+  'Building entity context...',
+  'Generating SQL query...',
+  'Executing database query...',
   'Running ML models...',
-  'Generating analysis...',
+  'Searching vector store...',
+  'Analyzing agent logs...',
+  'Synthesizing insights...',
+  'Building visualizations...',
+  'Generating follow-ups...',
 ];
 
 function useExecutionSteps(isProcessing: boolean) {
@@ -44,16 +51,16 @@ function useExecutionSteps(isProcessing: boolean) {
     if (isProcessing) {
       setStep(0);
       startRef.current = Date.now();
-      // Adaptive: 2s for first 3, then 4s
+      // Adaptive timing: fast for early steps, slower for ML/vector, fast for final
       let count = 0;
       const tick = () => {
         count++;
         setStep((s) => Math.min(s + 1, EXECUTION_STEPS.length));
         if (intervalRef.current) clearInterval(intervalRef.current);
-        const nextDelay = count < 3 ? 2000 : 4000;
+        const nextDelay = count <= 4 ? 1500 : count <= 7 ? 2500 : 1500;
         intervalRef.current = setInterval(tick, nextDelay);
       };
-      intervalRef.current = setInterval(tick, 2000);
+      intervalRef.current = setInterval(tick, 1500);
     } else {
       setStep(0);
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -415,9 +422,34 @@ function AIAssistantPanel({
     if (scope.level === 'entity' && scope.entity_name) {
       return [
         `What are the risk factors for ${scope.entity_name}?`,
-        `Show ${scope.entity_name} revenue trends`,
+        `Show ${scope.entity_name} performance trends`,
         `Analyze ${scope.entity_name} patterns`,
       ];
+    }
+    const scopeQuestions: Record<string, string[]> = {
+      campaigns: [
+        'What campaigns have the highest error rate?',
+        'Show campaign conversion funnel',
+        'Which campaigns are at risk?',
+      ],
+      leads: [
+        'Which leads are most likely to convert?',
+        'Show lead temperature distribution',
+        'What is the pipeline stage breakdown?',
+      ],
+      students: [
+        'What is the average completion rate?',
+        'Which students are at dropout risk?',
+        'Show cohort distribution',
+      ],
+      agents: [
+        'Which agents have the most errors?',
+        'Show automation impact metrics',
+        'What is the agent execution frequency?',
+      ],
+    };
+    if (scope.level !== 'global' && scope.entity_type && scopeQuestions[scope.entity_type]) {
+      return scopeQuestions[scope.entity_type];
     }
     return [
       'Give me an executive summary',
@@ -471,7 +503,11 @@ function AIAssistantPanel({
       setMessages((prev) => [...prev, userMsg]);
       setInput('');
       setQueryCount((c) => c + 1);
-      await query(question, scope.level !== 'global' ? scope : undefined);
+      // Auto-prepend entity context when scoped
+      const contextPrefix = scope.level !== 'global' && scope.entity_name
+        ? `[Analyzing: ${scope.entity_name}] `
+        : '';
+      await query(contextPrefix + question, scope.level !== 'global' ? scope : undefined);
     },
     [input, query, scope, loading]
   );
@@ -764,6 +800,7 @@ function MobileTabBar({
 
 // ─── Main Content ─────────────────────────────────────────────────────────────
 function IntelligenceOSContent() {
+  const { scope } = useIntelligenceContext();
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [network, setNetwork] = useState<EntityNetwork | null>(null);
   const [visualizations, setVisualizations] = useState<VisualizationSpec[]>([]);
@@ -792,6 +829,7 @@ function IntelligenceOSContent() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [mobileTab, setMobileTab] = useState<'map' | 'canvas' | 'assistant'>('canvas');
+  const [viewMode, setViewMode] = useState<'dashboard' | 'graph'>('dashboard');
 
   // Auto-collapse left panel on medium screens
   useEffect(() => {
@@ -883,6 +921,21 @@ function IntelligenceOSContent() {
       })
       .catch(() => {});
   }, [loadNetwork]);
+
+  // Scope-aware analytics re-fetch when entity is selected
+  useEffect(() => {
+    if (scope.level === 'global') return;
+    const params = { entity_type: scope.entity_type };
+    setAnalyticsLoading(true);
+    Promise.all([
+      getKPIs(params).then((r) => setKpis(r.data)).catch(() => {}),
+      getAnomalies(params).then((r) => setAnomalies(r.data || [])).catch(() => {}),
+      getForecasts(params).then((r) => setForecasts(r.data)).catch(() => {}),
+      getRiskEntities(params).then((r) => setRiskEntities(r.data || [])).catch(() => {}),
+    ]).finally(() => setAnalyticsLoading(false));
+    // Auto-switch to dashboard to show entity analytics
+    setViewMode('dashboard');
+  }, [scope]);
 
   // Health polling every 60 seconds
   useEffect(() => {
@@ -994,7 +1047,7 @@ function IntelligenceOSContent() {
             minWidth: leftOpen ? 260 : 0,
             transition: 'width 0.3s ease, min-width 0.3s ease',
             overflow: 'hidden',
-            borderRight: leftOpen ? '1px solid var(--color-border)' : 'none',
+            borderRight: leftOpen ? '1px solid rgba(226, 232, 240, 0.5)' : 'none',
           }}
         >
           <div style={{ width: 260, height: '100%' }}>
@@ -1002,25 +1055,65 @@ function IntelligenceOSContent() {
           </div>
         </div>
 
-        {/* Center Panel: Dynamic Canvas */}
-        <div className="flex-grow-1" style={{ minWidth: 0, overflow: 'hidden' }}>
-          <DynamicCanvas
-            visualizations={visualizations}
-            insights={insights}
-            summary={summary}
-            summaryLoading={summaryLoading}
-            autoInsights={autoInsights}
-            onFollowUpClick={handleFollowUpClick}
-            kpis={kpis}
-            anomalies={anomalies}
-            forecasts={forecasts}
-            riskEntities={riskEntities}
-            entityNetwork={network}
-            analyticsLoading={analyticsLoading}
-            investigationTarget={investigationTarget}
-            onInvestigate={handleInvestigate}
-            onCloseInvestigation={() => setInvestigationTarget(null)}
-          />
+        {/* Center Panel: Dynamic Canvas or Interactive Graph */}
+        <div className="flex-grow-1 intel-gradient-bg d-flex flex-column" style={{ minWidth: 0, overflow: 'hidden' }}>
+          {/* View Mode Toggle */}
+          <div className="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style={{ flexShrink: 0, borderColor: 'rgba(226,232,240,0.5)' }}>
+            <button
+              className={`btn btn-sm ${viewMode === 'dashboard' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              style={{ fontSize: '0.7rem', padding: '2px 10px' }}
+              onClick={() => setViewMode('dashboard')}
+            >
+              Dashboard
+            </button>
+            <button
+              className={`btn btn-sm ${viewMode === 'graph' ? 'btn-primary' : 'btn-outline-secondary'}`}
+              style={{ fontSize: '0.7rem', padding: '2px 10px' }}
+              onClick={() => setViewMode('graph')}
+            >
+              Entity Graph
+            </button>
+            {scope.level !== 'global' && scope.entity_name && (
+              <span className="badge bg-secondary ms-2" style={{ fontSize: '0.65rem' }}>
+                Viewing: {scope.entity_name}
+              </span>
+            )}
+          </div>
+
+          <div className="flex-grow-1" style={{ minHeight: 0, overflow: viewMode === 'graph' ? 'hidden' : 'auto' }}>
+            {viewMode === 'graph' && businessHierarchy ? (
+              <Suspense fallback={
+                <div className="d-flex align-items-center justify-content-center h-100">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading graph...</span>
+                  </div>
+                </div>
+              }>
+                <InteractiveBusinessGraph
+                  hierarchy={businessHierarchy}
+                  onNodeClick={() => setViewMode('dashboard')}
+                />
+              </Suspense>
+            ) : (
+              <DynamicCanvas
+                visualizations={visualizations}
+                insights={insights}
+                summary={summary}
+                summaryLoading={summaryLoading}
+                autoInsights={autoInsights}
+                onFollowUpClick={handleFollowUpClick}
+                kpis={kpis}
+                anomalies={anomalies}
+                forecasts={forecasts}
+                riskEntities={riskEntities}
+                entityNetwork={network}
+                analyticsLoading={analyticsLoading}
+                investigationTarget={investigationTarget}
+                onInvestigate={handleInvestigate}
+                onCloseInvestigation={() => setInvestigationTarget(null)}
+              />
+            )}
+          </div>
         </div>
 
         {/* Right Panel: AI Assistant */}
@@ -1030,7 +1123,7 @@ function IntelligenceOSContent() {
             minWidth: rightOpen ? 380 : 0,
             transition: 'width 0.3s ease, min-width 0.3s ease',
             overflow: 'hidden',
-            borderLeft: rightOpen ? '1px solid var(--color-border)' : 'none',
+            borderLeft: rightOpen ? '1px solid rgba(226, 232, 240, 0.5)' : 'none',
           }}
         >
           <div style={{ width: 380, height: '100%' }}>

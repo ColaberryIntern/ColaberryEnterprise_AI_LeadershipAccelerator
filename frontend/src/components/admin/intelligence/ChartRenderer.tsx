@@ -84,8 +84,8 @@ export default function ChartRenderer({ visualization }: ChartRendererProps) {
   const kpis = extractKPIs(visualization);
 
   return (
-    <div className="card border-0 shadow-sm">
-      <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
+    <div className="intel-card-float intel-fade-in">
+      <div className="card-header bg-white d-flex justify-content-between align-items-center py-2" style={{ borderRadius: '10px 10px 0 0' }}>
         <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>{title}</span>
         {kpis.length > 0 && (
           <div className="d-flex gap-1 flex-wrap">

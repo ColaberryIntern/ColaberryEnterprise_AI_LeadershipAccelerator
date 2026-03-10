@@ -615,3 +615,62 @@ a:hover {
     display: none;
   }
 }
+
+/* ─── Intelligence OS Panel System ───────────────────────────────────────────── */
+
+.intel-panel {
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.5);
+  transition: box-shadow 0.3s ease;
+  background: var(--color-bg);
+}
+
+.intel-panel:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.intel-card-float {
+  border-radius: 10px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: var(--color-bg);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.intel-card-float:hover {
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.09);
+  transform: translateY(-1px);
+}
+
+.intel-fade-in {
+  animation: intelFadeIn 0.4s ease-out;
+}
+
+@keyframes intelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.intel-gradient-bg {
+  background: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-alt) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intel-fade-in {
+    animation: none;
+  }
+  .intel-panel,
+  .intel-card-float {
+    transition: none;
+  }
+  .intel-card-float:hover {
+    transform: none;
+  }
+}
