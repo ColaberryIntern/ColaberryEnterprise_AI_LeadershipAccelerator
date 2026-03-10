@@ -1134,6 +1134,29 @@ function IntelligenceOSContent() {
       .catch(() => {});
   }, [loadNetwork]);
 
+  // Health polling every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getHealth()
+        .then((r) => setHealth(r.data))
+        .catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Auto-trigger discovery if 0 datasets on first load
+  useEffect(() => {
+    if (health && health.datasets_count === 0) {
+      triggerDiscovery().catch(() => {});
+      // Re-poll health + network after discovery completes
+      const timer = setTimeout(() => {
+        getHealth().then((r) => setHealth(r.data)).catch(() => {});
+        loadNetwork();
+      }, 15000);
+      return () => clearTimeout(timer);
+    }
+  }, [health, loadNetwork]);
+
   const handleVisualizationsUpdate = useCallback((viz: VisualizationSpec[]) => {
     setVisualizations(viz);
     setLastRefresh(new Date().toLocaleString());

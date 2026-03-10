@@ -5,6 +5,13 @@ import SystemProcess from '../models/SystemProcess';
 import IntelligenceConfig from '../models/IntelligenceConfig';
 import QAHistory from '../models/QAHistory';
 import { intelligenceProxy } from '../services/intelligenceProxyService';
+import { runDiscoveryAgent } from '../intelligence/agents/datasetRegistrationAgent';
+import {
+  handleQuery,
+  handleExecutiveSummary,
+  handleRankedInsights,
+  handleEntityNetwork,
+} from '../intelligence/orchestrator/queryEngine';
 
 export async function handleGetHealth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -102,13 +109,19 @@ export async function handleUpdateConfig(req: Request, res: Response, next: Next
 
 export async function handleTriggerDiscovery(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await intelligenceProxy.runDiscovery();
-    res.json(result.data);
+    // Run TypeScript discovery (populates dataset_registry directly)
+    const tsResult = await runDiscoveryAgent();
+
+    // Also try Python discovery for data_dictionary.json (non-blocking)
+    intelligenceProxy.runDiscovery().catch(() => {});
+
+    res.json({
+      status: 'completed',
+      tables_discovered: tsResult?.tables_discovered || 0,
+      relationships_found: tsResult?.relationships_found || 0,
+      hub_entity: tsResult?.hub_entity || null,
+    });
   } catch (error: any) {
-    if (error?.code === 'ECONNREFUSED') {
-      res.status(503).json({ error: 'Intelligence engine is not running' });
-      return;
-    }
     next(error);
   }
 }
@@ -119,7 +132,18 @@ export async function handleGetDictionary(req: Request, res: Response, next: Nex
     res.json(result.data);
   } catch (error: any) {
     if (error?.code === 'ECONNREFUSED') {
-      res.status(503).json({ error: 'Intelligence engine is not running' });
+      // Fallback: build dictionary from dataset_registry
+      const datasets = await DatasetRegistry.findAll();
+      const dictionary: Record<string, any> = { tables: {} };
+      for (const ds of datasets) {
+        dictionary.tables[ds.table_name] = {
+          row_count: ds.row_count,
+          column_count: ds.column_count,
+          semantic_types: ds.semantic_types,
+          relationships: ds.relationships,
+        };
+      }
+      res.json(dictionary);
       return;
     }
     next(error);
@@ -134,65 +158,49 @@ export async function handleQueryOrchestrator(req: Request, res: Response, next:
       return;
     }
 
-    const result = await intelligenceProxy.queryOrchestrator({ question, scope });
+    const data = await handleQuery(question, scope);
 
     // Store Q&A history
     await QAHistory.create({
       question,
-      answer: result.data?.narrative || '',
-      intent: result.data?.intent || '',
-      entities: result.data?.entities || {},
-      execution_path: result.data?.execution_path || '',
-      sources: result.data?.sources || [],
+      answer: data?.narrative || '',
+      intent: data?.intent || '',
+      entities: (data as any)?.entities || {},
+      execution_path: data?.execution_path || '',
+      sources: data?.sources || [],
       user_id: (req as any).user?.id || null,
       scope: scope || {},
     });
 
-    res.json(result.data);
+    res.json(data);
   } catch (error: any) {
-    if (error?.code === 'ECONNREFUSED') {
-      res.status(503).json({ error: 'Intelligence engine is not running' });
-      return;
-    }
     next(error);
   }
 }
 
 export async function handleGetExecutiveSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await intelligenceProxy.getExecutiveSummary();
-    res.json(result.data);
+    const data = await handleExecutiveSummary();
+    res.json(data);
   } catch (error: any) {
-    if (error?.code === 'ECONNREFUSED') {
-      res.status(503).json({ error: 'Intelligence engine is not running' });
-      return;
-    }
     next(error);
   }
 }
 
 export async function handleGetRankedInsights(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await intelligenceProxy.getRankedInsights();
-    res.json(result.data);
+    const data = await handleRankedInsights();
+    res.json(data);
   } catch (error: any) {
-    if (error?.code === 'ECONNREFUSED') {
-      res.status(503).json({ error: 'Intelligence engine is not running' });
-      return;
-    }
     next(error);
   }
 }
 
 export async function handleGetEntityNetwork(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = await intelligenceProxy.getEntityNetwork();
-    res.json(result.data);
+    const data = await handleEntityNetwork();
+    res.json(data);
   } catch (error: any) {
-    if (error?.code === 'ECONNREFUSED') {
-      res.status(503).json({ error: 'Intelligence engine is not running' });
-      return;
-    }
     next(error);
   }
 }

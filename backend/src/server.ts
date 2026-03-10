@@ -17,6 +17,8 @@ import participantRoutes from './routes/participantRoutes';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
+import cron from 'node-cron';
+import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 
 // Import models to register associations before sync
 import './models';
@@ -35,6 +37,9 @@ app.use(webhookRoutes);
 
 // Global JSON parser for all other routes
 app.use(express.json());
+
+// Intelligence process observation middleware (before routes)
+app.use(intelligenceMiddleware());
 
 app.use(healthRoutes);
 app.use(leadRoutes);
@@ -58,6 +63,20 @@ async function start(): Promise<void> {
     await sequelize.sync({ alter: true });
   }
   await seedProgramCurriculum();
+
+  // Intelligence OS: ensure tables exist and start autonomous discovery
+  await ensureIntelligenceTables();
+  setTimeout(() => {
+    runDiscoveryAgent().catch((err) =>
+      console.error('[Intelligence] Startup discovery failed:', err?.message)
+    );
+  }, 5000);
+  cron.schedule('*/10 * * * *', () => {
+    runDiscoveryAgent().catch((err) =>
+      console.error('[Intelligence] Scheduled discovery failed:', err?.message)
+    );
+  });
+
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {
     startScheduler();
