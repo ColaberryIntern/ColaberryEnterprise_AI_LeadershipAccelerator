@@ -7,6 +7,7 @@ import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
+import AlumniChampionPage from './pages/AlumniChampionPage';
 
 function App() {
   return (
@@ -14,11 +15,12 @@ function App() {
       <ToastProvider>
       <ScrollToTop />
       <Routes>
+        <Route path="/alumni-ai-champion" element={<AlumniChampionPage />} />
+        {adminRoutes}
+        {portalRoutes}
         <Route element={<PublicLayout />}>
           {publicRoutes}
         </Route>
-        {adminRoutes}
-        {portalRoutes}
       </Routes>
       </ToastProvider>
     </AuthProvider>

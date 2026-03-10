@@ -62,6 +62,16 @@ function browserInfo() {
 }
 
 function push(event_type: string, props: Record<string, unknown> = {}) {
+  try {
+    const raw = localStorage.getItem('cb_campaign_id');
+    if (raw) {
+      const stored = JSON.parse(raw);
+      const age = Date.now() - new Date(stored.storedAt).getTime();
+      if (age <= 30 * 24 * 60 * 60 * 1000 && stored.campaignId) {
+        props.campaign_id = stored.campaignId;
+      }
+    }
+  } catch { /* silent */ }
   buffer.push({ event_type, timestamp: new Date().toISOString(), ...props });
 }
 

@@ -4,12 +4,13 @@ import PublicNavbar from './PublicNavbar';
 import PublicFooter from './PublicFooter';
 import { initTracker } from '../../utils/tracker';
 import { captureUTMFromURL } from '../../services/utmService';
+import { captureCampaignFromURL } from '../../services/campaignAttributionService';
 
 const ChatWidget = lazy(() => import('../ChatWidget'));
 const MarketingMonitorPanel = lazy(() => import('../MarketingMonitorPanel'));
 
 function PublicLayout() {
-  useEffect(() => { initTracker(); captureUTMFromURL(); }, []);
+  useEffect(() => { initTracker(); captureUTMFromURL(); captureCampaignFromURL(); }, []);
 
   return (
     <div className="d-flex flex-column min-vh-100">
