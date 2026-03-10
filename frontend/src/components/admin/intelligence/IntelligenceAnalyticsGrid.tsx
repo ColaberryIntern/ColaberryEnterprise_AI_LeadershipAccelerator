@@ -16,6 +16,8 @@ import {
   AreaChart,
   Area,
   Cell,
+  PieChart,
+  Pie,
 } from 'recharts';
 import IntelNetworkGraph from './charts/IntelNetworkGraph';
 
@@ -25,6 +27,7 @@ interface Props {
   riskEntities: any[];
   entityNetwork: any;
   loading?: boolean;
+  entityType?: string;
 }
 
 const RISK_COLORS: Record<string, string> = {
@@ -34,14 +37,73 @@ const RISK_COLORS: Record<string, string> = {
   low: '#38a169',
 };
 
-const SEVERITY_COLOR_SCALE = ['#38a169', '#6db84d', '#a3c930', '#d69e2e', '#dd6b20', '#e53e3e'];
-
 function getRiskBarColor(score: number): string {
   if (score >= 80) return RISK_COLORS.critical;
   if (score >= 60) return RISK_COLORS.high;
   if (score >= 40) return RISK_COLORS.medium;
   return RISK_COLORS.low;
 }
+
+// ─── Entity-Specific Panel Configuration ─────────────────────────────────────
+interface PanelConfig {
+  id: string;
+  title: string;
+  component: string;
+}
+
+const ENTITY_PANELS: Record<string, PanelConfig[]> = {
+  campaigns: [
+    { id: 'risk', title: 'Campaign Performance Ranking', component: 'risk_bar' },
+    { id: 'radar', title: 'Campaign Factor Analysis', component: 'radar' },
+    { id: 'heatmap', title: 'Campaign Anomaly Matrix', component: 'heatmap' },
+    { id: 'forecast', title: 'Lead Generation Forecast', component: 'forecast' },
+    { id: 'funnel', title: 'Conversion Funnel', component: 'funnel' },
+    { id: 'alerts', title: 'Campaign Alert Patterns', component: 'alerts' },
+  ],
+  leads: [
+    { id: 'risk', title: 'Pipeline Stage Distribution', component: 'risk_bar' },
+    { id: 'radar', title: 'Lead Quality Factors', component: 'radar' },
+    { id: 'heatmap', title: 'Lead Activity Heatmap', component: 'heatmap' },
+    { id: 'forecast', title: 'Lead Conversion Forecast', component: 'forecast' },
+    { id: 'funnel', title: 'Conversion Probability', component: 'funnel' },
+    { id: 'alerts', title: 'Lead Alert Patterns', component: 'alerts' },
+  ],
+  students: [
+    { id: 'risk', title: 'Student Progress Ranking', component: 'risk_bar' },
+    { id: 'radar', title: 'Completion Factor Analysis', component: 'radar' },
+    { id: 'heatmap', title: 'Student Activity Heatmap', component: 'heatmap' },
+    { id: 'forecast', title: 'Enrollment Forecast', component: 'forecast' },
+    { id: 'funnel', title: 'Cohort Distribution', component: 'funnel' },
+    { id: 'alerts', title: 'At-Risk Student Alerts', component: 'alerts' },
+  ],
+  agents: [
+    { id: 'risk', title: 'Agent Error Rate Ranking', component: 'risk_bar' },
+    { id: 'radar', title: 'Automation Impact Analysis', component: 'radar' },
+    { id: 'heatmap', title: 'Agent Performance Heatmap', component: 'heatmap' },
+    { id: 'forecast', title: 'Agent Activity Forecast', component: 'forecast' },
+    { id: 'funnel', title: 'Execution Distribution', component: 'funnel' },
+    { id: 'alerts', title: 'Agent Alert Patterns', component: 'alerts' },
+  ],
+  visitors: [
+    { id: 'risk', title: 'Visitor Intent Ranking', component: 'risk_bar' },
+    { id: 'radar', title: 'Visitor Behavior Analysis', component: 'radar' },
+    { id: 'heatmap', title: 'Visitor Activity Heatmap', component: 'heatmap' },
+    { id: 'forecast', title: 'Traffic Forecast', component: 'forecast' },
+    { id: 'network', title: 'Visitor Journey Network', component: 'network' },
+    { id: 'alerts', title: 'Visitor Alert Patterns', component: 'alerts' },
+  ],
+};
+
+const DEFAULT_PANELS: PanelConfig[] = [
+  { id: 'heatmap', title: 'Performance Anomaly Heatmap', component: 'heatmap' },
+  { id: 'risk', title: 'Top Risk Entities', component: 'risk_bar' },
+  { id: 'radar', title: 'Risk Factor Comparison', component: 'radar' },
+  { id: 'forecast', title: '30-Day Lead Forecast', component: 'forecast' },
+  { id: 'network', title: 'Entity Relationship Network', component: 'network' },
+  { id: 'alerts', title: 'Emerging Alert Patterns', component: 'alerts' },
+];
+
+// ─── Shared Components ──────────────────────────────────────────────────────
 
 function PanelCard({ title, children, minHeight = 300 }: { title: string; children: React.ReactNode; minHeight?: number }) {
   return (
@@ -67,7 +129,7 @@ function LoadingSkeleton() {
   );
 }
 
-/* Panel 1: Performance Anomaly Heatmap */
+/* Panel: Performance Anomaly Heatmap */
 function AnomalyHeatmap({ anomalies }: { anomalies: any[] }) {
   const { entityTypes, metrics, grid } = useMemo(() => {
     if (!anomalies?.length) return { entityTypes: [] as string[], metrics: [] as string[], grid: {} as Record<string, number> };
@@ -113,7 +175,6 @@ function AnomalyHeatmap({ anomalies }: { anomalies: any[] }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       <svg width={svgWidth} height={svgHeight} style={{ fontFamily: 'inherit' }}>
-        {/* Metric labels (top) */}
         {metrics.map((m, mi) => (
           <text
             key={`ml-${mi}`}
@@ -126,7 +187,6 @@ function AnomalyHeatmap({ anomalies }: { anomalies: any[] }) {
             {m.length > 8 ? m.slice(0, 8) + '..' : m}
           </text>
         ))}
-        {/* Entity type rows */}
         {entityTypes.map((et, ei) => (
           <g key={`row-${ei}`}>
             <text
@@ -163,7 +223,7 @@ function AnomalyHeatmap({ anomalies }: { anomalies: any[] }) {
   );
 }
 
-/* Panel 2: Top Risk Entities */
+/* Panel: Top Risk Entities (bar chart) */
 function TopRiskEntities({ riskEntities }: { riskEntities: any[] }) {
   if (!riskEntities?.length) {
     return <small className="text-muted">No risk entities available</small>;
@@ -207,7 +267,7 @@ function TopRiskEntities({ riskEntities }: { riskEntities: any[] }) {
   );
 }
 
-/* Panel 3: Risk Factor Comparison (Radar) */
+/* Panel: Risk Factor Comparison (Radar) */
 function RiskFactorRadar({ riskEntities }: { riskEntities: any[] }) {
   const radarData = useMemo(() => {
     if (!riskEntities?.length) return [];
@@ -262,7 +322,7 @@ function RiskFactorRadar({ riskEntities }: { riskEntities: any[] }) {
   );
 }
 
-/* Panel 4: 30-Day Lead Forecast */
+/* Panel: Forecast (area chart) */
 function LeadForecast({ forecasts }: { forecasts: any }) {
   const data = forecasts?.leads_30d;
 
@@ -308,8 +368,8 @@ function LeadForecast({ forecasts }: { forecasts: any }) {
   );
 }
 
-/* Panel 5: Entity Network (wraps IntelNetworkGraph) */
-function EntityNetwork({ entityNetwork }: { entityNetwork: any }) {
+/* Panel: Entity Network */
+function EntityNetworkPanel({ entityNetwork }: { entityNetwork: any }) {
   if (!entityNetwork?.nodes?.length && !entityNetwork?.edges?.length) {
     return <small className="text-muted">No network data available</small>;
   }
@@ -322,7 +382,51 @@ function EntityNetwork({ entityNetwork }: { entityNetwork: any }) {
   );
 }
 
-/* Panel 6: Emerging Alert Patterns */
+/* Panel: Conversion Funnel / Distribution (pie chart) */
+function ConversionFunnel({ riskEntities, entityType }: { riskEntities: any[]; entityType?: string }) {
+  const data = useMemo(() => {
+    if (!riskEntities?.length) return [];
+    const sorted = [...riskEntities]
+      .sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0))
+      .slice(0, 6);
+    return sorted.map((e) => ({
+      name: e.entity || e.name || e.id || 'Unknown',
+      value: e.risk_score || 0,
+    }));
+  }, [riskEntities]);
+
+  if (!data.length) {
+    return <small className="text-muted">No distribution data available</small>;
+  }
+
+  const COLORS = ['#1a365d', '#2b6cb0', '#38a169', '#805ad5', '#dd6b20', '#e53e3e'];
+
+  return (
+    <ResponsiveContainer width="100%" height={250}>
+      <PieChart>
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          innerRadius={50}
+          outerRadius={90}
+          dataKey="value"
+          nameKey="name"
+          paddingAngle={2}
+          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+          labelLine={false}
+        >
+          {data.map((_, i) => (
+            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip contentStyle={{ background: '#fff', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 11 }} />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* Panel: Alert Patterns (stacked bar) */
 function AlertPatterns({ anomalies }: { anomalies: any[] }) {
   const chartData = useMemo(() => {
     if (!anomalies?.length) return [];
@@ -369,38 +473,62 @@ function AlertPatterns({ anomalies }: { anomalies: any[] }) {
   );
 }
 
-export default function IntelligenceAnalyticsGrid({ anomalies, forecasts, riskEntities, entityNetwork, loading }: Props) {
+// ─── Panel Renderer ─────────────────────────────────────────────────────────
+
+function renderPanel(
+  config: PanelConfig,
+  props: { anomalies: any[]; forecasts: any; riskEntities: any[]; entityNetwork: any; loading?: boolean; entityType?: string },
+) {
+  const { loading } = props;
+
+  const content = (() => {
+    if (loading) return <LoadingSkeleton />;
+    switch (config.component) {
+      case 'heatmap':
+        return <AnomalyHeatmap anomalies={props.anomalies} />;
+      case 'risk_bar':
+        return <TopRiskEntities riskEntities={props.riskEntities} />;
+      case 'radar':
+        return <RiskFactorRadar riskEntities={props.riskEntities} />;
+      case 'forecast':
+        return <LeadForecast forecasts={props.forecasts} />;
+      case 'network':
+        return <EntityNetworkPanel entityNetwork={props.entityNetwork} />;
+      case 'funnel':
+        return <ConversionFunnel riskEntities={props.riskEntities} entityType={props.entityType} />;
+      case 'alerts':
+        return <AlertPatterns anomalies={props.anomalies} />;
+      default:
+        return <small className="text-muted">Unknown panel type</small>;
+    }
+  })();
+
+  return (
+    <PanelCard key={config.id} title={config.title}>
+      {content}
+    </PanelCard>
+  );
+}
+
+// ─── Main Export ─────────────────────────────────────────────────────────────
+
+export default function IntelligenceAnalyticsGrid({ anomalies, forecasts, riskEntities, entityNetwork, loading, entityType }: Props) {
+  const panels = entityType && ENTITY_PANELS[entityType]
+    ? ENTITY_PANELS[entityType]
+    : DEFAULT_PANELS;
+
   return (
     <div
+      className="intel-analytics-grid"
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
         gap: '1rem',
       }}
     >
-      <PanelCard title="Performance Anomaly Heatmap">
-        {loading ? <LoadingSkeleton /> : <AnomalyHeatmap anomalies={anomalies} />}
-      </PanelCard>
-
-      <PanelCard title="Top Risk Entities">
-        {loading ? <LoadingSkeleton /> : <TopRiskEntities riskEntities={riskEntities} />}
-      </PanelCard>
-
-      <PanelCard title="Risk Factor Comparison">
-        {loading ? <LoadingSkeleton /> : <RiskFactorRadar riskEntities={riskEntities} />}
-      </PanelCard>
-
-      <PanelCard title="30-Day Lead Forecast">
-        {loading ? <LoadingSkeleton /> : <LeadForecast forecasts={forecasts} />}
-      </PanelCard>
-
-      <PanelCard title="Entity Relationship Network">
-        {loading ? <LoadingSkeleton /> : <EntityNetwork entityNetwork={entityNetwork} />}
-      </PanelCard>
-
-      <PanelCard title="Emerging Alert Patterns">
-        {loading ? <LoadingSkeleton /> : <AlertPatterns anomalies={anomalies} />}
-      </PanelCard>
+      {panels.map((panel) =>
+        renderPanel(panel, { anomalies, forecasts, riskEntities, entityNetwork, loading, entityType })
+      )}
     </div>
   );
 }

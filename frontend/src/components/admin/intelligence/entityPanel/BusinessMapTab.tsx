@@ -46,7 +46,7 @@ interface Props {
 }
 
 export default function BusinessMapTab({ hierarchy, loading }: Props) {
-  const { drillDown } = useIntelligenceContext();
+  const { drillDown, selectedEntity } = useIntelligenceContext();
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 240, height: 400 });
@@ -100,8 +100,8 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
 
-    fg.d3Force('charge')?.strength(-200);
-    fg.d3Force('link')?.distance(50);
+    fg.d3Force('charge')?.strength(-250);
+    fg.d3Force('link')?.distance(55);
 
     const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
     fg.d3Force(
@@ -109,9 +109,13 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       forceY((node: any) => {
         const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
         return -dimensions.height * 0.3 + normalizedLevel * dimensions.height * 0.6;
-      }).strength(0.4)
+      }).strength(0.35)
     );
-    fg.d3Force('x', forceX(0).strength(0.08));
+    fg.d3Force('x', forceX(0).strength(0.06));
+
+    // Smoother physics (cast to access d3 simulation methods)
+    (fg as any).d3AlphaDecay?.(0.015);
+    (fg as any).d3VelocityDecay?.(0.25);
 
     fg.d3ReheatSimulation();
   }, [graphData, dimensions.height]);
@@ -130,7 +134,19 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       const n = node as GraphNode;
       const radius = n.isHub ? 18 : 10 + n.val * 0.4;
       const isHovered = hoveredNode?.id === n.id;
+      const isSelected = selectedEntity?.type === n.id;
       const fontSize = Math.max(9 / globalScale, 2.5);
+
+      // Selection ring
+      if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(n.x!, n.y!, radius + 6, 0, 2 * Math.PI);
+        ctx.strokeStyle = n.color;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       if (isHovered) {
         ctx.beginPath();
@@ -141,10 +157,10 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
 
       ctx.beginPath();
       ctx.arc(n.x!, n.y!, radius, 0, 2 * Math.PI);
-      ctx.fillStyle = n.bgLight;
+      ctx.fillStyle = isSelected ? n.bgLight : n.bgLight;
       ctx.fill();
       ctx.strokeStyle = n.color;
-      ctx.lineWidth = n.isHub ? 2.5 : 1.5;
+      ctx.lineWidth = isSelected ? 3 : n.isHub ? 2.5 : 1.5;
       ctx.stroke();
 
       ctx.font = `${n.isHub ? 'bold' : '600'} ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
@@ -170,7 +186,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       ctx.fillStyle = '#fff';
       ctx.fillText(String(n.table_count), badgeX, badgeY + 0.5);
     },
-    [hoveredNode]
+    [hoveredNode, selectedEntity]
   );
 
   // Custom link rendering
@@ -265,13 +281,14 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           linkCanvasObject={paintLink}
           onNodeHover={handleNodeHover}
           onNodeClick={handleNodeClick}
-          cooldownTicks={100}
+          cooldownTicks={150}
+          warmupTicks={30}
           enableNodeDrag={true}
           enableZoomInteraction={true}
           enablePanInteraction={true}
           backgroundColor="transparent"
           minZoom={0.3}
-          maxZoom={6}
+          maxZoom={8}
         />
 
         {/* Compact zoom controls */}

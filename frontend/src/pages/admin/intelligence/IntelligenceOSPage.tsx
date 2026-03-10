@@ -159,6 +159,7 @@ function DynamicCanvas({
   investigationTarget,
   onInvestigate,
   onCloseInvestigation,
+  entityType,
 }: {
   visualizations: VisualizationSpec[];
   insights: QueryResponse | null;
@@ -175,6 +176,7 @@ function DynamicCanvas({
   investigationTarget: any;
   onInvestigate: (anomaly: any) => void;
   onCloseInvestigation: () => void;
+  entityType?: string;
 }) {
   const [activeChartType, setActiveChartType] = useState<string | null>(null);
   const [narrativeExpanded, setNarrativeExpanded] = useState(false);
@@ -327,7 +329,7 @@ function DynamicCanvas({
       {(!analyticsLoading || anomalies.length > 0 || riskEntities.length > 0) && (
         <div className="mt-3">
           <h6 className="fw-semibold small mb-2" style={{ color: 'var(--color-primary)' }}>
-            Intelligence Analytics
+            {entityType ? `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} Analytics` : 'Intelligence Analytics'}
           </h6>
           <IntelligenceAnalyticsGrid
             anomalies={anomalies}
@@ -335,6 +337,7 @@ function DynamicCanvas({
             riskEntities={riskEntities}
             entityNetwork={entityNetwork}
             loading={analyticsLoading}
+            entityType={entityType}
           />
         </div>
       )}
@@ -798,7 +801,7 @@ function MobileTabBar({
 
 // ─── Main Content ─────────────────────────────────────────────────────────────
 function IntelligenceOSContent() {
-  const { scope } = useIntelligenceContext();
+  const { scope, selectedEntity } = useIntelligenceContext();
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [network, setNetwork] = useState<EntityNetwork | null>(null);
   const [visualizations, setVisualizations] = useState<VisualizationSpec[]>([]);
@@ -1007,6 +1010,7 @@ function IntelligenceOSContent() {
               investigationTarget={investigationTarget}
               onInvestigate={handleInvestigate}
               onCloseInvestigation={() => setInvestigationTarget(null)}
+              entityType={selectedEntity?.type}
             />
           )}
           {mobileTab === 'assistant' && (
@@ -1036,15 +1040,15 @@ function IntelligenceOSContent() {
 
         {/* Left Panel: Entity Map */}
         <div
+          className="intel-panel-slide"
           style={{
-            width: leftOpen ? 260 : 0,
-            minWidth: leftOpen ? 260 : 0,
-            transition: 'width 0.3s ease, min-width 0.3s ease',
+            width: leftOpen ? 320 : 0,
+            minWidth: leftOpen ? 320 : 0,
             overflow: 'hidden',
             borderRight: leftOpen ? '1px solid rgba(226, 232, 240, 0.5)' : 'none',
           }}
         >
-          <div style={{ width: 260, height: '100%' }}>
+          <div style={{ width: 320, height: '100%' }}>
             <EntityNavigationPanel network={network} businessHierarchy={businessHierarchy} hierarchyLoading={hierarchyLoading} onRefresh={loadNetwork} />
           </div>
         </div>
@@ -1052,11 +1056,20 @@ function IntelligenceOSContent() {
         {/* Center Panel: Intelligence Dashboard */}
         <div className="flex-grow-1 intel-gradient-bg d-flex flex-column" style={{ minWidth: 0, overflow: 'hidden' }}>
           {/* Scope indicator */}
-          {scope.level !== 'global' && scope.entity_name && (
-            <div className="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style={{ flexShrink: 0, borderColor: 'rgba(226,232,240,0.5)' }}>
-              <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>
-                Viewing: {scope.entity_name}
+          {selectedEntity && (
+            <div
+              className="d-flex align-items-center gap-2 px-3 py-2 border-bottom intel-fade-in"
+              style={{ flexShrink: 0, borderColor: 'rgba(226,232,240,0.5)', background: 'rgba(26, 54, 93, 0.03)' }}
+            >
+              <span
+                className="badge"
+                style={{ fontSize: '0.68rem', background: 'var(--color-primary)', color: '#fff' }}
+              >
+                {selectedEntity.name}
               </span>
+              <small className="text-muted" style={{ fontSize: '0.65rem' }}>
+                Context: {selectedEntity.type} &middot; All dashboard charts filtered
+              </small>
             </div>
           )}
 
@@ -1077,21 +1090,22 @@ function IntelligenceOSContent() {
               investigationTarget={investigationTarget}
               onInvestigate={handleInvestigate}
               onCloseInvestigation={() => setInvestigationTarget(null)}
+              entityType={selectedEntity?.type}
             />
           </div>
         </div>
 
         {/* Right Panel: AI Assistant */}
         <div
+          className="intel-panel-slide"
           style={{
-            width: rightOpen ? 380 : 0,
-            minWidth: rightOpen ? 380 : 0,
-            transition: 'width 0.3s ease, min-width 0.3s ease',
+            width: rightOpen ? 400 : 0,
+            minWidth: rightOpen ? 400 : 0,
             overflow: 'hidden',
             borderLeft: rightOpen ? '1px solid rgba(226, 232, 240, 0.5)' : 'none',
           }}
         >
-          <div style={{ width: 380, height: '100%' }}>
+          <div style={{ width: 400, height: '100%' }}>
             <AIAssistantPanel
               onVisualizationsUpdate={handleVisualizationsUpdate}
               onSummaryUpdate={handleSummaryUpdate}

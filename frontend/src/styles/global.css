@@ -659,8 +659,26 @@ a:hover {
 }
 
 .intel-gradient-bg {
-  background: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-alt) 100%);
+  background: linear-gradient(135deg, var(--color-bg) 0%, var(--color-bg-alt) 40%, rgba(43, 108, 176, 0.02) 100%);
 }
+
+/* Smooth panel slide transitions */
+.intel-panel-slide {
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Responsive analytics grid with fluid behavior */
+.intel-analytics-grid > div {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Staggered fade-in for grid panels */
+.intel-analytics-grid > div:nth-child(1) { animation-delay: 0s; }
+.intel-analytics-grid > div:nth-child(2) { animation-delay: 0.05s; }
+.intel-analytics-grid > div:nth-child(3) { animation-delay: 0.1s; }
+.intel-analytics-grid > div:nth-child(4) { animation-delay: 0.15s; }
+.intel-analytics-grid > div:nth-child(5) { animation-delay: 0.2s; }
+.intel-analytics-grid > div:nth-child(6) { animation-delay: 0.25s; }
 
 @media (prefers-reduced-motion: reduce) {
   .intel-fade-in {
@@ -672,5 +690,12 @@ a:hover {
   }
   .intel-card-float:hover {
     transform: none;
+  }
+  .intel-panel-slide {
+    transition: none;
+  }
+  .intel-analytics-grid > div {
+    transition: none;
+    animation-delay: 0s !important;
   }
 }

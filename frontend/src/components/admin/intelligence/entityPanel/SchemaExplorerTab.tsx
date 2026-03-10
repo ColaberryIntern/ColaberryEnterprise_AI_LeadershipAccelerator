@@ -25,7 +25,7 @@ function SchemaForceGraph({
   onNodeClick,
 }: {
   nodes: EntityNode[];
-  edges: { source: string; target: string }[];
+  edges: { source: string; target: string; type?: string; confidence?: number }[];
   onNodeClick: (node: EntityNode) => void;
 }) {
   const graphRef = useRef<ForceGraphMethods>();
@@ -59,8 +59,10 @@ function SchemaForceGraph({
   useEffect(() => {
     const fg = graphRef.current;
     if (!fg) return;
-    fg.d3Force('charge')?.strength(-60);
-    fg.d3Force('link')?.distance(30);
+    fg.d3Force('charge')?.strength(-80);
+    fg.d3Force('link')?.distance(40);
+    (fg as any).d3AlphaDecay?.(0.02);
+    (fg as any).d3VelocityDecay?.(0.3);
   }, [graphData]);
 
   useEffect(() => {
@@ -105,6 +107,34 @@ function SchemaForceGraph({
     [hoveredId, maxRows]
   );
 
+  const paintLink = useCallback(
+    (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const src = link.source as SchemaGraphNode;
+      const tgt = link.target as SchemaGraphNode;
+      if (!src.x || !tgt.x) return;
+
+      ctx.beginPath();
+      ctx.moveTo(src.x!, src.y!);
+      ctx.lineTo(tgt.x!, tgt.y!);
+      ctx.strokeStyle = 'rgba(160, 174, 192, 0.4)';
+      ctx.lineWidth = 0.8 / globalScale;
+      ctx.stroke();
+
+      // Show relationship type label at midpoint when zoomed in
+      if (globalScale > 1.5 && link.type) {
+        const midX = (src.x! + tgt.x!) / 2;
+        const midY = (src.y! + tgt.y!) / 2;
+        const fontSize = Math.max(6 / globalScale, 2);
+        ctx.font = `${fontSize}px -apple-system, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(113, 128, 150, 0.7)';
+        ctx.fillText(link.type, midX, midY - 2 / globalScale);
+      }
+    },
+    []
+  );
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ForceGraph2D
@@ -121,14 +151,14 @@ function SchemaForceGraph({
           ctx.fillStyle = color;
           ctx.fill();
         }}
-        linkColor={() => 'rgba(160, 174, 192, 0.35)'}
-        linkWidth={0.5}
+        linkCanvasObject={paintLink}
         onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
         onNodeClick={(node: any) => {
           const n = nodes.find((nd) => nd.id === (node as SchemaGraphNode).id);
           if (n) onNodeClick(n);
         }}
-        cooldownTicks={80}
+        cooldownTicks={120}
+        warmupTicks={20}
         enableNodeDrag={true}
         enableZoomInteraction={true}
         enablePanInteraction={true}
