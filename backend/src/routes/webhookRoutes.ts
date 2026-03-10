@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import express from 'express';
 import { handleStripeWebhook } from '../controllers/webhookController';
-import { handleMandrillWebhook, handleMandrillWebhookHead } from '../controllers/mandrillWebhookController';
+import { handleMandrillWebhook, handleMandrillWebhookHead, handleMandrillInbound } from '../controllers/mandrillWebhookController';
 import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
 
@@ -14,6 +14,10 @@ router.post('/api/webhook', handleStripeWebhook);
 // Mandrill webhook — uses URL-encoded body (mandrill_events=<JSON>)
 router.head('/api/webhook/mandrill', handleMandrillWebhookHead);
 router.post('/api/webhook/mandrill', express.urlencoded({ extended: false }), handleMandrillWebhook);
+
+// Mandrill inbound email reply webhook — URL-encoded body
+router.head('/api/webhook/mandrill/inbound', handleMandrillWebhookHead);
+router.post('/api/webhook/mandrill/inbound', express.urlencoded({ extended: false }), handleMandrillInbound);
 
 // GHL SMS reply webhook — JSON body from GHL Workflow
 router.post('/api/webhook/ghl/sms-reply', express.json(), handleGhlSmsReply);

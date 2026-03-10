@@ -169,12 +169,16 @@ export async function sendSmsViaGhl(
   contactId: string,
   message: string
 ): Promise<GHLResult> {
+  console.log(`[GHL] Updating cory_sms_composed for contact ${contactId} (${message.length} chars)`);
+
   const result = await updateContact(contactId, {
     customField: { cory_sms_composed: message },
   });
 
   if (result.success) {
-    console.log(`[GHL] SMS composed field updated for contact ${contactId}`);
+    console.log(`[GHL] SMS composed field updated for contact ${contactId} — triggers GHL workflow`);
+  } else {
+    console.error(`[GHL] Failed to update cory_sms_composed for contact ${contactId}: ${result.error}`);
   }
   return result;
 }
@@ -186,10 +190,11 @@ export async function sendSmsViaGhl(
 export async function syncLeadToGhl(
   lead: InstanceType<typeof Lead>,
   interestGroup?: string,
-  force = false
+  force = false,
+  bypassEnabledCheck = false
 ): Promise<SyncResult> {
   const enabled = await getSetting('ghl_enabled');
-  if (!enabled) return { contactId: null, isTestMode: false };
+  if (!enabled && !bypassEnabledCheck) return { contactId: null, isTestMode: false };
 
   const testOverrides = await getTestOverrides();
   const isTestMode = !!(testOverrides.enabled);

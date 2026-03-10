@@ -261,39 +261,67 @@ export async function executeSimulationStep(
         ? testOverrides.phone
         : lead.phone;
       if (targetPhone) {
-        // Ensure lead has a GHL contact ID (same pattern as campaignService.ts)
+        // In simulation/test mode, bypass the ghl_enabled gate to force real delivery
+        const isSimTestMode = !!testOverrides.enabled;
         const ghlEnabled = await getSetting('ghl_enabled');
-        if (ghlEnabled && !lead.ghl_contact_id) {
+
+        // Sync lead to GHL if needed (bypass enabled check in test mode)
+        if (!lead.ghl_contact_id) {
           try {
-            const syncResult = await syncLeadToGhl(lead);
-            if (syncResult.contactId && !syncResult.isTestMode) {
+            const syncResult = await syncLeadToGhl(lead, undefined, false, isSimTestMode);
+            if (syncResult.contactId) {
+              // Persist contact ID for test leads too (they need it for SMS delivery)
               await lead.update({ ghl_contact_id: syncResult.contactId });
               await lead.reload();
+              console.log(`[Simulator] Synced test lead ${lead.id} to GHL contact ${syncResult.contactId}`);
             }
           } catch (syncErr: any) {
             console.warn(`[Simulator] GHL sync failed for test lead: ${syncErr.message}`);
           }
         }
 
-        if (ghlEnabled && lead.ghl_contact_id) {
-          // Use GHL contact ID — same as production scheduler
+        if (lead.ghl_contact_id) {
+          // Send via GHL — same as production scheduler
           const smsResult = await sendSmsViaGhl(lead.ghl_contact_id, aiResult.body);
-          deliveryDetails = {
-            to: targetPhone,
-            ghl_contact_id: lead.ghl_contact_id,
-            delivery_mode: testOverrides.enabled ? 'test_redirect' : 'live',
-            provider: 'ghl',
-            result: smsResult,
-          };
-        } else {
-          // GHL not available — log as simulated
+          if (smsResult.success) {
+            deliveryDetails = {
+              to: targetPhone,
+              ghl_contact_id: lead.ghl_contact_id,
+              cory_sms_composed: aiResult.body,
+              delivery_mode: isSimTestMode ? 'test_redirect' : 'live',
+              provider: 'ghl',
+              result: smsResult,
+            };
+          } else {
+            // GHL API call failed — mark as failed, not simulated
+            deliveryDetails = {
+              failed: true,
+              to: targetPhone,
+              ghl_contact_id: lead.ghl_contact_id,
+              delivery_mode: isSimTestMode ? 'test_redirect' : 'live',
+              provider: 'ghl',
+              reason: smsResult.error || 'GHL API call failed',
+              result: smsResult,
+            };
+          }
+        } else if (!ghlEnabled && !isSimTestMode) {
+          // GHL globally disabled and not in test mode — simulated fallback
           deliveryDetails = {
             simulated: true,
             to: targetPhone,
             delivery_mode: 'simulated',
             provider: 'ghl',
-            reason: !ghlEnabled ? 'GHL not enabled' : 'No GHL contact ID',
+            reason: 'GHL not enabled',
             message_preview: aiResult.body.substring(0, 200),
+          };
+        } else {
+          // Sync failed — explicit failure with clear error
+          deliveryDetails = {
+            failed: true,
+            to: targetPhone,
+            delivery_mode: isSimTestMode ? 'test_redirect' : 'live',
+            provider: 'ghl',
+            reason: 'GHL sync failed — could not obtain contact ID. Check GHL API key is configured.',
           };
         }
       } else {
@@ -343,14 +371,16 @@ export async function executeSimulationStep(
     const durationMs = Date.now() - startTime;
 
     // Determine final step status based on delivery outcome
+    const wasFailed = deliveryDetails.failed === true;
     const wasSkipped = deliveryDetails.skipped === true;
-    const stepStatus = wasSkipped ? 'skipped' : 'sent';
+    const stepStatus = wasFailed ? 'failed' : wasSkipped ? 'skipped' : 'sent';
 
     await simStep.update({
       status: stepStatus,
       executed_at: new Date(),
       duration_ms: durationMs,
       details: deliveryDetails,
+      ...(wasFailed ? { error_message: deliveryDetails.reason || 'Delivery failed' } : {}),
     } as any);
 
     // Log to unified communication log

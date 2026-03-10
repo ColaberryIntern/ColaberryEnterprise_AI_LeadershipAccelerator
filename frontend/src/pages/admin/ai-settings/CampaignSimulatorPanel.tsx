@@ -352,6 +352,23 @@ export default function CampaignSimulatorPanel({
                                 {currentStep.details.call_id && (
                                   <span className="ms-2 small">Call: {currentStep.details.call_id}</span>
                                 )}
+                                {currentStep.details.ghl_contact_id && (
+                                  <div className="mt-1 small text-muted">
+                                    GHL Contact: <code>{currentStep.details.ghl_contact_id}</code>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* cory_sms_composed field (SMS via GHL) */}
+                            {currentStep.details?.cory_sms_composed && (
+                              <div className="mt-2">
+                                <div className="small fw-medium text-muted mb-1">
+                                  cory_sms_composed <span className="text-muted" style={{ fontSize: '0.6rem' }}>(triggers GHL workflow)</span>
+                                </div>
+                                <div className="bg-light p-2 rounded small" style={{ maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                                  {currentStep.details.cory_sms_composed}
+                                </div>
                               </div>
                             )}
 

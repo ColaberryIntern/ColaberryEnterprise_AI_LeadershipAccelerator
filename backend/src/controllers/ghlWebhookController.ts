@@ -114,7 +114,13 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
     }
 
     console.log(`[GHL Webhook] Reply processed for lead ${lead.id} (${lead.name})`);
-    res.status(200).json({ received: true, matched: true, lead_id: lead.id });
+    // Return sms_composed in response so GHL can map it to cory_sms_composed via "Save Response"
+    res.status(200).json({
+      received: true,
+      matched: true,
+      lead_id: lead.id,
+      sms_composed: message,
+    });
   } catch (error: any) {
     console.error('[GHL Webhook] Error processing SMS reply:', error.message);
     res.status(500).json({ error: 'Internal server error' });
