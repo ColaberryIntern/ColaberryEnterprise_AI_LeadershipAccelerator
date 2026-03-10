@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../../../utils/api';
 import SimulationTimeline from './SimulationTimeline';
 import type { SimStep } from './SimulationTimeline';
+import CommunicationLogPanel from '../../../components/CommunicationLogPanel';
 
 type SpeedMode = 'normal' | 'fast' | 'ultra' | 'instant';
 
@@ -56,6 +57,7 @@ export default function CampaignSimulatorPanel({
   const [error, setError] = useState<string | null>(null);
   const [responseOutcome, setResponseOutcome] = useState('interested');
   const [responseText, setResponseText] = useState('');
+  const [showCommLog, setShowCommLog] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   const isActive = simulation && (simulation.status === 'running' || simulation.status === 'paused');
@@ -285,15 +287,101 @@ export default function CampaignSimulatorPanel({
                         )}
 
                         {/* Delivery details */}
-                        {currentStep.details && !currentStep.details.skipped && (
+                        {currentStep.details && (
                           <div className="mb-3">
-                            <div className="fw-semibold mb-1">Delivery</div>
-                            <div className="text-muted">
-                              Sent to: {currentStep.details.to || '—'}
-                              {currentStep.details.messageId && (
-                                <span className="ms-2">ID: {currentStep.details.messageId}</span>
+                            <div className="fw-semibold mb-1 d-flex align-items-center gap-2">
+                              Delivery
+                              {/* Channel health dot */}
+                              <span
+                                className="rounded-circle d-inline-block"
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  backgroundColor: currentStep.details.skipped || currentStep.details.simulated
+                                    ? '#ffc107'
+                                    : currentStep.status === 'failed'
+                                    ? '#dc3545'
+                                    : '#198754',
+                                }}
+                                title={currentStep.details.skipped ? 'Skipped' : currentStep.details.simulated ? 'Simulated' : currentStep.status === 'failed' ? 'Failed' : 'Delivered'}
+                              />
+                              {/* Delivery mode badge */}
+                              {currentStep.details.delivery_mode && (
+                                <span
+                                  className={`badge bg-${
+                                    currentStep.details.delivery_mode === 'live'
+                                      ? 'success'
+                                      : currentStep.details.delivery_mode === 'test_redirect'
+                                      ? 'warning'
+                                      : 'secondary'
+                                  }`}
+                                  style={{ fontSize: '0.55rem' }}
+                                >
+                                  {currentStep.details.delivery_mode === 'live'
+                                    ? 'LIVE'
+                                    : currentStep.details.delivery_mode === 'test_redirect'
+                                    ? 'TEST'
+                                    : 'SIMULATED'}
+                                </span>
                               )}
                             </div>
+                            {currentStep.details.skipped ? (
+                              <div className="text-warning small">
+                                Skipped: {currentStep.details.reason || 'Unknown reason'}
+                              </div>
+                            ) : currentStep.details.simulated ? (
+                              <div className="text-muted small">
+                                Simulated — {currentStep.details.reason || 'Provider not available'}
+                                {currentStep.details.message_preview && (
+                                  <div className="bg-light p-2 rounded mt-1" style={{ maxHeight: 100, overflow: 'auto' }}>
+                                    {currentStep.details.message_preview}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-muted">
+                                Sent to: {currentStep.details.to || '—'}
+                                {currentStep.details.provider && (
+                                  <span className="badge bg-light text-dark ms-2" style={{ fontSize: '0.55rem' }}>
+                                    {currentStep.details.provider}
+                                  </span>
+                                )}
+                                {currentStep.details.messageId && (
+                                  <span className="ms-2 small">ID: {currentStep.details.messageId}</span>
+                                )}
+                                {currentStep.details.call_id && (
+                                  <span className="ms-2 small">Call: {currentStep.details.call_id}</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Voice transcript viewer */}
+                            {currentStep.details.transcript && (
+                              <div className="mt-2">
+                                <div className="small fw-medium text-muted mb-1">Voice Transcript</div>
+                                <div
+                                  className="bg-light p-2 rounded small"
+                                  style={{ maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap' }}
+                                >
+                                  {typeof currentStep.details.transcript === 'string'
+                                    ? currentStep.details.transcript
+                                    : JSON.stringify(currentStep.details.transcript, null, 2)}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Provider response (collapsible) */}
+                            {currentStep.details.result && (
+                              <details className="mt-1">
+                                <summary className="small text-muted" style={{ cursor: 'pointer' }}>Raw Provider Response</summary>
+                                <pre
+                                  className="small bg-light p-2 rounded mt-1 mb-0"
+                                  style={{ maxHeight: 150, overflowY: 'auto', fontSize: '0.65rem' }}
+                                >
+                                  {JSON.stringify(currentStep.details.result, null, 2)}
+                                </pre>
+                              </details>
+                            )}
                           </div>
                         )}
 
@@ -356,46 +444,101 @@ export default function CampaignSimulatorPanel({
                       <div className="card-header bg-white fw-semibold">Simulation Complete</div>
                       <div className="card-body">
                         {simulation.summary && (
-                          <div className="row g-3 text-center">
-                            <div className="col-4">
-                              <div className="small text-muted">Passed</div>
-                              <div className="h5 fw-bold text-success">{simulation.summary.steps_passed}</div>
-                            </div>
-                            <div className="col-4">
-                              <div className="small text-muted">Failed</div>
-                              <div className="h5 fw-bold text-danger">{simulation.summary.steps_failed}</div>
-                            </div>
-                            <div className="col-4">
-                              <div className="small text-muted">Skipped</div>
-                              <div className="h5 fw-bold text-warning">{simulation.summary.steps_skipped}</div>
-                            </div>
-                            <div className="col-4">
-                              <div className="small text-muted">Channels</div>
-                              <div className="d-flex gap-1 justify-content-center">
-                                {simulation.summary.channels_used?.map((ch) => (
-                                  <span key={ch} className="badge bg-info">{ch}</span>
-                                ))}
+                          <>
+                            <div className="row g-3 text-center">
+                              <div className="col-4">
+                                <div className="small text-muted">Passed</div>
+                                <div className="h5 fw-bold text-success">{simulation.summary.steps_passed}</div>
+                              </div>
+                              <div className="col-4">
+                                <div className="small text-muted">Failed</div>
+                                <div className="h5 fw-bold text-danger">{simulation.summary.steps_failed}</div>
+                              </div>
+                              <div className="col-4">
+                                <div className="small text-muted">Skipped</div>
+                                <div className="h5 fw-bold text-warning">{simulation.summary.steps_skipped}</div>
+                              </div>
+                              <div className="col-4">
+                                <div className="small text-muted">Channels</div>
+                                <div className="d-flex gap-1 justify-content-center">
+                                  {simulation.summary.channels_used?.map((ch) => (
+                                    <span key={ch} className="badge bg-info">{ch}</span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="col-4">
+                                <div className="small text-muted">Duration</div>
+                                <div className="fw-bold">
+                                  {simulation.summary.total_duration_ms != null
+                                    ? `${(simulation.summary.total_duration_ms / 1000).toFixed(1)}s`
+                                    : '\u2014'}
+                                </div>
+                              </div>
+                              <div className="col-4">
+                                <div className="small text-muted">AI Tokens</div>
+                                <div className="fw-bold">{simulation.summary.ai_tokens_used || 0}</div>
                               </div>
                             </div>
-                            <div className="col-4">
-                              <div className="small text-muted">Duration</div>
-                              <div className="fw-bold">
-                                {simulation.summary.total_duration_ms != null
-                                  ? `${(simulation.summary.total_duration_ms / 1000).toFixed(1)}s`
-                                  : '—'}
-                              </div>
-                            </div>
-                            <div className="col-4">
-                              <div className="small text-muted">AI Tokens</div>
-                              <div className="fw-bold">{simulation.summary.ai_tokens_used || 0}</div>
-                            </div>
-                          </div>
+
+                            {/* Channel health breakdown */}
+                            {(() => {
+                              const channelStats: Record<string, { sent: number; skipped: number; failed: number; simulated: number }> = {};
+                              (simulation.steps || []).forEach((s) => {
+                                if (!channelStats[s.channel]) channelStats[s.channel] = { sent: 0, skipped: 0, failed: 0, simulated: 0 };
+                                if (s.status === 'sent' || s.status === 'responded') channelStats[s.channel].sent++;
+                                else if (s.status === 'skipped') channelStats[s.channel].skipped++;
+                                else if (s.status === 'failed') channelStats[s.channel].failed++;
+                                if (s.details?.simulated) channelStats[s.channel].simulated++;
+                              });
+                              const entries = Object.entries(channelStats);
+                              if (entries.length === 0) return null;
+                              const anyFullSkip = entries.some(([_k, v]) => v.sent === 0 && (v.skipped > 0 || v.failed > 0));
+                              return (
+                                <div className="mt-3 pt-3 border-top">
+                                  <div className="small fw-semibold mb-2">Channel Health</div>
+                                  {anyFullSkip && (
+                                    <div className="alert alert-warning py-1 small mb-2">
+                                      One or more channels had 0% delivery success.
+                                    </div>
+                                  )}
+                                  <div className="d-flex gap-3">
+                                    {entries.map(([ch, v]) => (
+                                      <div key={ch} className="text-center">
+                                        <div className="small fw-medium text-uppercase">{ch}</div>
+                                        <div className="small">
+                                          <span className="text-success">{v.sent}</span>
+                                          {' / '}
+                                          <span className="text-warning">{v.skipped}</span>
+                                          {' / '}
+                                          <span className="text-danger">{v.failed}</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.6rem' }} className="text-muted">sent/skip/fail</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </>
                         )}
                       </div>
                     </div>
                   ) : (
                     <div className="text-center py-4 text-muted">
                       Select a step from the timeline to inspect it.
+                    </div>
+                  )}
+
+                  {/* Communication Log */}
+                  {simulation && (
+                    <div className="mt-3">
+                      <button
+                        className={`btn btn-sm ${showCommLog ? 'btn-outline-primary' : 'btn-outline-secondary'} w-100 mb-2`}
+                        onClick={() => setShowCommLog(!showCommLog)}
+                      >
+                        {showCommLog ? 'Hide' : 'Show'} Communication Log
+                      </button>
+                      {showCommLog && <CommunicationLogPanel simulationId={simulation.id} />}
                     </div>
                   )}
                 </div>

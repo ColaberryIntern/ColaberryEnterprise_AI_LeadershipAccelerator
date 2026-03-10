@@ -11,6 +11,7 @@ import {
   getSimulationState,
   getSimulationHistory,
 } from '../services/testing/campaignSimulator';
+import { getSimulationComms } from '../services/communicationLogService';
 import type { SpeedMode } from '../services/testing/timeWarpEngine';
 
 export async function handleStartSimulation(req: Request, res: Response) {
@@ -105,6 +106,16 @@ export async function handleGetSimulationHistory(req: Request, res: Response) {
     const campaignId = req.params.id as string;
     const history = await getSimulationHistory(campaignId);
     res.json(history);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function handleGetSimulationComms(req: Request, res: Response) {
+  try {
+    const simId = req.params.simId as string;
+    const comms = await getSimulationComms(simId);
+    res.json(comms);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

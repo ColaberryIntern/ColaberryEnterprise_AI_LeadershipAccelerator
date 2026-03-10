@@ -11,6 +11,7 @@ import {
   handleAdvanceStep,
   handleCancelSimulation,
   handleGetSimulationHistory,
+  handleGetSimulationComms,
 } from '../../controllers/campaignSimulationController';
 
 const router = Router();
@@ -29,6 +30,9 @@ router.post('/api/admin/simulations/:simId/jump', requireAdmin, handleJumpToStep
 router.post('/api/admin/simulations/:simId/respond', requireAdmin, handleRespondAsLead);
 router.post('/api/admin/simulations/:simId/advance', requireAdmin, handleAdvanceStep);
 router.post('/api/admin/simulations/:simId/cancel', requireAdmin, handleCancelSimulation);
+
+// Communication log for a simulation
+router.get('/api/admin/simulations/:simId/comms', requireAdmin, handleGetSimulationComms);
 
 // Simulation history for a campaign
 router.get('/api/admin/simulations/campaigns/:id/history', requireAdmin, handleGetSimulationHistory);

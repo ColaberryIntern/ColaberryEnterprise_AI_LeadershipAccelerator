@@ -10,9 +10,11 @@ import {
 import { createTestLead } from './testLeadGenerator';
 import { getTestOverrides } from '../settingsService';
 import { generateMessage } from '../aiMessageService';
-import { sendSmsViaGhl } from '../ghlService';
+import { sendSmsViaGhl, syncLeadToGhl } from '../ghlService';
 import { triggerVoiceCall } from '../synthflowService';
+import { getSetting } from '../settingsService';
 import { env } from '../../config/env';
+import { logCommunication } from '../communicationLogService';
 import type { SpeedMode } from './timeWarpEngine';
 import { calculateCompressedDelay } from './timeWarpEngine';
 import type { SequenceStep } from '../../models/FollowUpSequence';
@@ -259,8 +261,41 @@ export async function executeSimulationStep(
         ? testOverrides.phone
         : lead.phone;
       if (targetPhone) {
-        const smsResult = await sendSmsViaGhl(targetPhone, aiResult.body);
-        deliveryDetails = { to: targetPhone, result: smsResult };
+        // Ensure lead has a GHL contact ID (same pattern as campaignService.ts)
+        const ghlEnabled = await getSetting('ghl_enabled');
+        if (ghlEnabled && !lead.ghl_contact_id) {
+          try {
+            const syncResult = await syncLeadToGhl(lead);
+            if (syncResult.contactId && !syncResult.isTestMode) {
+              await lead.update({ ghl_contact_id: syncResult.contactId });
+              await lead.reload();
+            }
+          } catch (syncErr: any) {
+            console.warn(`[Simulator] GHL sync failed for test lead: ${syncErr.message}`);
+          }
+        }
+
+        if (ghlEnabled && lead.ghl_contact_id) {
+          // Use GHL contact ID — same as production scheduler
+          const smsResult = await sendSmsViaGhl(lead.ghl_contact_id, aiResult.body);
+          deliveryDetails = {
+            to: targetPhone,
+            ghl_contact_id: lead.ghl_contact_id,
+            delivery_mode: testOverrides.enabled ? 'test_redirect' : 'live',
+            provider: 'ghl',
+            result: smsResult,
+          };
+        } else {
+          // GHL not available — log as simulated
+          deliveryDetails = {
+            simulated: true,
+            to: targetPhone,
+            delivery_mode: 'simulated',
+            provider: 'ghl',
+            reason: !ghlEnabled ? 'GHL not enabled' : 'No GHL contact ID',
+            message_preview: aiResult.body.substring(0, 200),
+          };
+        }
       } else {
         deliveryDetails = { skipped: true, reason: 'No phone number' };
       }
@@ -282,7 +317,24 @@ export async function executeSimulationStep(
             step_goal: stepDef.step_goal,
           },
         });
-        deliveryDetails = { to: targetPhone, result: voiceResult };
+
+        // Detect skipped voice calls (disabled, no API key, no agent ID)
+        if (voiceResult.data?.skipped) {
+          deliveryDetails = {
+            skipped: true,
+            reason: voiceResult.data.reason || 'Voice call skipped',
+            delivery_mode: 'simulated',
+            provider: 'synthflow',
+          };
+        } else {
+          deliveryDetails = {
+            to: targetPhone,
+            delivery_mode: testOverrides.enabled ? 'test_redirect' : 'live',
+            provider: 'synthflow',
+            call_id: voiceResult.data?.call_id || voiceResult.data?.id || null,
+            result: voiceResult,
+          };
+        }
       } else {
         deliveryDetails = { skipped: true, reason: 'No phone number' };
       }
@@ -290,12 +342,37 @@ export async function executeSimulationStep(
 
     const durationMs = Date.now() - startTime;
 
+    // Determine final step status based on delivery outcome
+    const wasSkipped = deliveryDetails.skipped === true;
+    const stepStatus = wasSkipped ? 'skipped' : 'sent';
+
     await simStep.update({
-      status: 'sent',
+      status: stepStatus,
       executed_at: new Date(),
       duration_ms: durationMs,
       details: deliveryDetails,
     } as any);
+
+    // Log to unified communication log
+    logCommunication({
+      lead_id: sim.test_lead_id,
+      campaign_id: sim.campaign_id,
+      simulation_id: simulationId,
+      simulation_step_id: simStep.id,
+      channel,
+      direction: 'outbound',
+      delivery_mode: deliveryDetails.delivery_mode || (deliveryDetails.simulated ? 'simulated' : deliveryDetails.skipped ? 'simulated' : 'live'),
+      status: stepStatus === 'skipped' ? 'skipped' : (deliveryDetails.simulated ? 'simulated' : 'sent'),
+      to_address: deliveryDetails.to || null,
+      from_address: channel === 'email' ? env.emailFrom : null,
+      subject: aiResult.subject || null,
+      body: aiResult.body,
+      provider: deliveryDetails.provider || (channel === 'email' ? 'smtp' : null),
+      provider_message_id: deliveryDetails.messageId || deliveryDetails.call_id || null,
+      provider_response: deliveryDetails.result || null,
+      error_message: null,
+      metadata: { step_index: stepIndex, speed_mode: sim.speed_mode },
+    }).catch((err: any) => console.warn('[Simulator] Comm log failed:', err.message));
 
     console.log(`[Simulator] Step ${stepIndex} (${channel}) completed in ${durationMs}ms for simulation ${simulationId}`);
 

@@ -17,6 +17,7 @@ import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting, getTestOverrides } from './settingsService';
 import { sendSmsViaGhl, addContactNote } from './ghlService';
+import { logCommunication } from './communicationLogService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
@@ -513,6 +514,23 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   // Record interaction outcome for ICP intelligence
   await recordActionOutcome(action, 'sent');
 
+  // Unified communication log
+  logCommunication({
+    lead_id: action.lead_id,
+    campaign_id: action.campaign_id || null,
+    channel: 'email',
+    delivery_mode: 'live',
+    status: 'sent',
+    to_address: action.to_email,
+    from_address: env.emailFrom,
+    subject: action.subject,
+    body: action.body,
+    provider: 'smtp',
+    provider_message_id: info.messageId,
+    provider_response: { accepted: info.accepted, rejected: info.rejected },
+    metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false },
+  }).catch((err) => console.warn('[Scheduler] Comm log failed:', err.message));
+
   console.log(`[Scheduler] Email sent to ${action.to_email}: ${action.subject} (AI: ${action.ai_generated || false})`);
 
   // Auto-advance pipeline: new_lead → contacted
@@ -626,6 +644,22 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
     // Record interaction outcome for ICP intelligence
     await recordActionOutcome(action, 'sent', { voice_call: true });
 
+    // Unified communication log
+    logCommunication({
+      lead_id: action.lead_id,
+      campaign_id: action.campaign_id || null,
+      channel: 'voice',
+      delivery_mode: 'live',
+      status: 'sent',
+      to_address: phone,
+      subject: action.subject,
+      body: prompt || null,
+      provider: 'synthflow',
+      provider_message_id: result.data?.call_id || result.data?.id || null,
+      provider_response: result.data,
+      metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false },
+    }).catch((err) => console.warn('[Scheduler] Comm log failed:', err.message));
+
     console.log(`[Scheduler] Voice call initiated for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
 
     // Auto-advance pipeline: new_lead → contacted
@@ -695,6 +729,20 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
 
   // Record interaction outcome for ICP intelligence
   await recordActionOutcome(action, 'sent', { sms: true });
+
+  // Unified communication log
+  logCommunication({
+    lead_id: action.lead_id,
+    campaign_id: action.campaign_id || null,
+    channel: 'sms',
+    delivery_mode: (ghlEnabled && lead?.ghl_contact_id) ? 'live' : 'simulated',
+    status: 'sent',
+    to_address: phone,
+    body: action.body || null,
+    provider: 'ghl',
+    provider_response: { ghl_sent: !!(ghlEnabled && lead?.ghl_contact_id) },
+    metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false },
+  }).catch((err) => console.warn('[Scheduler] Comm log failed:', err.message));
 
   console.log(`[Scheduler] SMS action processed for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
 

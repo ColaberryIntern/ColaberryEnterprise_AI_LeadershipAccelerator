@@ -3,6 +3,7 @@ import express from 'express';
 import { handleStripeWebhook } from '../controllers/webhookController';
 import { handleMandrillWebhook, handleMandrillWebhookHead } from '../controllers/mandrillWebhookController';
 import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
+import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
 
 const router = Router();
 
@@ -16,5 +17,8 @@ router.post('/api/webhook/mandrill', express.urlencoded({ extended: false }), ha
 
 // GHL SMS reply webhook — JSON body from GHL Workflow
 router.post('/api/webhook/ghl/sms-reply', express.json(), handleGhlSmsReply);
+
+// Synthflow voice call completion webhook — JSON body from Synthflow
+router.post('/api/webhook/synthflow/call-complete', express.json(), handleSynthflowCallComplete);
 
 export default router;

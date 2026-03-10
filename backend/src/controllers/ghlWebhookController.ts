@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
-import { Lead, InteractionOutcome, Campaign, CampaignLead } from '../models';
+import { Lead, InteractionOutcome, Campaign, CampaignLead, CampaignSimulation, CampaignSimulationStep } from '../models';
 import { logActivity } from '../services/activityService';
 import { addContactNote } from '../services/ghlService';
+import { logCommunication } from '../services/communicationLogService';
+import { respondAsLead } from '../services/testing/campaignSimulator';
 
 export async function handleGhlSmsReply(req: Request, res: Response): Promise<void> {
   try {
@@ -75,6 +77,41 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
       contactId,
       `📩 SMS Reply Received:\n${message}`
     ).catch(() => {});
+
+    // Log inbound SMS to unified communication log
+    logCommunication({
+      lead_id: lead.id,
+      campaign_id: campaignId,
+      channel: 'sms',
+      direction: 'inbound',
+      delivery_mode: 'live',
+      status: 'delivered',
+      to_address: null,
+      from_address: phone || null,
+      body: message,
+      provider: 'ghl',
+      metadata: { ghl_contact_id: contactId, campaign_tag: campaignTag || null },
+    }).catch((err) => console.warn('[GHL Webhook] Comm log failed:', err.message));
+
+    // Check if lead has an active simulation — resume it with the reply
+    try {
+      const activeSim = await CampaignSimulation.findOne({
+        where: { test_lead_id: lead.id, status: 'running' },
+        order: [['started_at', 'DESC']],
+      });
+      if (activeSim) {
+        const currentStep = await CampaignSimulationStep.findOne({
+          where: { simulation_id: activeSim.id, status: 'sent', channel: 'sms' },
+          order: [['step_index', 'DESC']],
+        });
+        if (currentStep) {
+          await respondAsLead(activeSim.id, 'replied', message);
+          console.log(`[GHL Webhook] Resumed simulation ${activeSim.id} with SMS reply`);
+        }
+      }
+    } catch (simErr: any) {
+      console.warn(`[GHL Webhook] Failed to resume simulation:`, simErr.message);
+    }
 
     console.log(`[GHL Webhook] Reply processed for lead ${lead.id} (${lead.name})`);
     res.status(200).json({ received: true, matched: true, lead_id: lead.id });
