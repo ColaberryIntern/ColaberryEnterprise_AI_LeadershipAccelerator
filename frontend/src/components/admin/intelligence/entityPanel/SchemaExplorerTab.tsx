@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
 import { useIntelligenceContext } from '../../../../contexts/IntelligenceContext';
 import {
   triggerDiscovery,
@@ -6,9 +7,19 @@ import {
   EntityNode,
 } from '../../../../services/intelligenceApi';
 
-const MAX_GRAPH_NODES = 50;
+const MAX_GRAPH_NODES = 80;
 
-function EntityGraph({
+interface SchemaGraphNode {
+  id: string;
+  label: string;
+  row_count: number;
+  column_count: number;
+  is_hub: boolean;
+  x?: number;
+  y?: number;
+}
+
+function SchemaForceGraph({
   nodes,
   edges,
   onNodeClick,
@@ -17,89 +28,176 @@ function EntityGraph({
   edges: { source: string; target: string }[];
   onNodeClick: (node: EntityNode) => void;
 }) {
-  const size = 240;
-  const cx = size / 2;
-  const cy = size / 2;
+  const graphRef = useRef<ForceGraphMethods>();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 240, height: 300 });
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const hubNodes = nodes.filter((n) => n.is_hub);
-  const regularNodes = nodes.filter((n) => !n.is_hub);
-
-  const nodePositions = useMemo(() => {
-    const positions: Record<string, { x: number; y: number }> = {};
-    const innerRadius = size * 0.15;
-    const outerRadius = size * 0.38;
-
-    hubNodes.forEach((node, i) => {
-      const angle = (2 * Math.PI * i) / Math.max(hubNodes.length, 1) - Math.PI / 2;
-      positions[node.id] = {
-        x: cx + innerRadius * Math.cos(angle),
-        y: cy + innerRadius * Math.sin(angle),
-      };
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setDimensions({ width: Math.max(width, 200), height: Math.max(height, 200) });
     });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
-    regularNodes.forEach((node, i) => {
-      const angle = (2 * Math.PI * i) / Math.max(regularNodes.length, 1) - Math.PI / 2;
-      positions[node.id] = {
-        x: cx + outerRadius * Math.cos(angle),
-        y: cy + outerRadius * Math.sin(angle),
-      };
-    });
+  const graphData = useMemo(() => {
+    const graphNodes: SchemaGraphNode[] = nodes.map((n) => ({
+      id: n.id,
+      label: n.label,
+      row_count: n.row_count,
+      column_count: n.column_count,
+      is_hub: n.is_hub,
+    }));
+    const nodeIds = new Set(graphNodes.map((n) => n.id));
+    const graphEdges = edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+    return { nodes: graphNodes, links: graphEdges };
+  }, [nodes, edges]);
 
-    return positions;
-  }, [nodes, hubNodes, regularNodes, cx, cy, size]);
+  useEffect(() => {
+    const fg = graphRef.current;
+    if (!fg) return;
+    fg.d3Force('charge')?.strength(-60);
+    fg.d3Force('link')?.distance(30);
+  }, [graphData]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      graphRef.current?.zoomToFit(400, 20);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const maxRows = Math.max(...nodes.map((n) => n.row_count), 1);
 
+  const paintNode = useCallback(
+    (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const n = node as SchemaGraphNode;
+      const baseR = n.is_hub ? 10 : 3 + (n.row_count / maxRows) * 6;
+      const isHovered = hoveredId === n.id;
+
+      if (isHovered) {
+        ctx.beginPath();
+        ctx.arc(n.x!, n.y!, baseR + 3, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(26, 54, 93, 0.1)';
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, baseR, 0, 2 * Math.PI);
+      ctx.fillStyle = n.is_hub ? 'var(--color-primary)' : '#a0aec0';
+      ctx.fill();
+      ctx.strokeStyle = n.is_hub ? 'var(--color-primary)' : '#cbd5e0';
+      ctx.lineWidth = n.is_hub ? 1.5 : 0.5;
+      ctx.stroke();
+
+      if (n.is_hub || globalScale > 2) {
+        const fontSize = Math.max(7 / globalScale, 2);
+        ctx.font = `${n.is_hub ? 'bold' : ''} ${fontSize}px -apple-system, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = n.is_hub ? '#1a365d' : '#2d3748';
+        ctx.fillText(n.label, n.x!, n.y! + baseR + 2 / globalScale);
+      }
+    },
+    [hoveredId, maxRows]
+  );
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block', margin: '0 auto' }}>
-      {edges.map((edge, i) => {
-        const from = nodePositions[edge.source];
-        const to = nodePositions[edge.target];
-        if (!from || !to) return null;
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <ForceGraph2D
+        ref={graphRef}
+        width={dimensions.width}
+        height={dimensions.height}
+        graphData={graphData}
+        nodeCanvasObject={paintNode}
+        nodePointerAreaPaint={(node: any, color, ctx) => {
+          const n = node as SchemaGraphNode;
+          const r = n.is_hub ? 12 : 5 + (n.row_count / maxRows) * 6;
+          ctx.beginPath();
+          ctx.arc(n.x!, n.y!, r + 3, 0, 2 * Math.PI);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }}
+        linkColor={() => 'rgba(160, 174, 192, 0.35)'}
+        linkWidth={0.5}
+        onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
+        onNodeClick={(node: any) => {
+          const n = nodes.find((nd) => nd.id === (node as SchemaGraphNode).id);
+          if (n) onNodeClick(n);
+        }}
+        cooldownTicks={80}
+        enableNodeDrag={true}
+        enableZoomInteraction={true}
+        enablePanInteraction={true}
+        backgroundColor="transparent"
+        minZoom={0.3}
+        maxZoom={10}
+      />
+
+      {/* Zoom controls */}
+      <div
+        className="d-flex flex-column gap-1"
+        style={{ position: 'absolute', bottom: 6, right: 6, zIndex: 10 }}
+      >
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          style={{ width: 24, height: 24, padding: 0, fontSize: '0.8rem', background: 'rgba(255,255,255,0.9)' }}
+          onClick={() => { const fg = graphRef.current; if (fg) fg.zoom(Math.min(fg.zoom() * 1.4, 10), 300); }}
+          aria-label="Zoom in"
+        >
+          +
+        </button>
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          style={{ width: 24, height: 24, padding: 0, fontSize: '0.8rem', background: 'rgba(255,255,255,0.9)' }}
+          onClick={() => { const fg = graphRef.current; if (fg) fg.zoom(Math.max(fg.zoom() * 0.7, 0.3), 300); }}
+          aria-label="Zoom out"
+        >
+          −
+        </button>
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          style={{ width: 24, height: 24, padding: 0, fontSize: '0.55rem', background: 'rgba(255,255,255,0.9)' }}
+          onClick={() => graphRef.current?.zoomToFit(400, 20)}
+          aria-label="Reset view"
+        >
+          ⟳
+        </button>
+      </div>
+
+      {/* Tooltip */}
+      {hoveredId && (() => {
+        const n = nodes.find((nd) => nd.id === hoveredId);
+        if (!n) return null;
         return (
-          <line
-            key={`e-${i}`}
-            x1={from.x}
-            y1={from.y}
-            x2={to.x}
-            y2={to.y}
-            stroke="var(--color-border)"
-            strokeWidth={0.8}
-            opacity={0.5}
-          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              zIndex: 20,
+              background: 'rgba(255,255,255,0.95)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 8,
+              padding: '6px 10px',
+              fontSize: '0.68rem',
+              pointerEvents: 'none',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              maxWidth: 200,
+            }}
+          >
+            <div className="fw-semibold" style={{ color: n.is_hub ? '#1a365d' : '#2d3748' }}>
+              {n.label}
+              {n.is_hub && <span className="badge bg-warning text-dark ms-1" style={{ fontSize: '0.55rem' }}>HUB</span>}
+            </div>
+            <div className="text-muted">{n.row_count.toLocaleString()} rows &middot; {n.column_count} cols</div>
+          </div>
         );
-      })}
-      {nodes.map((node) => {
-        const pos = nodePositions[node.id];
-        if (!pos) return null;
-        const r = node.is_hub ? 10 : 3 + (node.row_count / maxRows) * 6;
-        return (
-          <g key={node.id} style={{ cursor: 'pointer' }} onClick={() => onNodeClick(node)}>
-            <circle
-              cx={pos.x}
-              cy={pos.y}
-              r={r}
-              fill={node.is_hub ? 'var(--color-primary)' : '#a0aec0'}
-              stroke="white"
-              strokeWidth={1}
-            />
-            {node.is_hub && (
-              <text
-                x={pos.x}
-                y={pos.y + r + 10}
-                textAnchor="middle"
-                fontSize={8}
-                fill="var(--color-text)"
-                fontWeight={600}
-              >
-                {node.label}
-              </text>
-            )}
-            <title>{`${node.label} — ${node.row_count.toLocaleString()} rows, ${node.column_count} cols`}</title>
-          </g>
-        );
-      })}
-    </svg>
+      })()}
+    </div>
   );
 }
 
@@ -201,32 +299,19 @@ export default function SchemaExplorerTab({ network, onRefresh }: Props) {
         />
       </div>
 
-      <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
+      <div className="flex-grow-1" style={{ overflowY: useGraph ? 'hidden' : 'auto', minHeight: 0 }}>
         {useGraph ? (
-          <div className="p-2">
-            <EntityGraph
-              nodes={network.nodes}
-              edges={network.edges}
-              onNodeClick={handleNodeClick}
-            />
-            <div className="d-flex gap-3 justify-content-center mt-1" style={{ fontSize: '0.6rem' }}>
-              <span className="d-flex align-items-center gap-1">
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-primary)', display: 'inline-block' }} />
-                Hub
-              </span>
-              <span className="d-flex align-items-center gap-1">
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#a0aec0', display: 'inline-block' }} />
-                Table
-              </span>
-              <span className="text-muted">{network.edges.length} relationships</span>
-            </div>
-          </div>
+          <SchemaForceGraph
+            nodes={network.nodes}
+            edges={network.edges}
+            onNodeClick={handleNodeClick}
+          />
         ) : (
           <div className="p-2">
             {filteredNodes.map((node) => (
               <div
                 key={node.id}
-                className="card border-0 shadow-sm mb-2"
+                className="intel-card-float mb-2"
                 style={{
                   cursor: 'pointer',
                   borderLeft: node.is_hub

@@ -1,33 +1,221 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
+import { forceX, forceY } from 'd3-force';
 import { useIntelligenceContext } from '../../../../contexts/IntelligenceContext';
-import { BusinessEntityNetwork, BusinessCategory } from '../../../../services/intelligenceApi';
+import { BusinessEntityNetwork } from '../../../../services/intelligenceApi';
 import { BUSINESS_CATEGORIES, formatRowCount } from './businessEntityConfig';
+import GraphTooltip from '../GraphTooltip';
+
+// Hierarchy level mapping for vertical positioning
+const LEVEL_MAP: Record<string, number> = {
+  agents: 0,
+  campaigns: 1,
+  system: 1,
+  leads: 2,
+  visitors: 3,
+  students: 3,
+  cohorts: 4,
+  curriculum: 4,
+  other: 5,
+};
+
+interface GraphNode {
+  id: string;
+  label: string;
+  color: string;
+  bgLight: string;
+  val: number;
+  table_count: number;
+  total_rows: number;
+  matched_tables: string[];
+  level: number;
+  isHub: boolean;
+  x?: number;
+  y?: number;
+}
+
+interface GraphLink {
+  source: string;
+  target: string;
+  relationship: string;
+}
 
 interface Props {
   hierarchy: BusinessEntityNetwork | null;
   loading?: boolean;
 }
 
-// Fixed positions for a clean hierarchical layout within 260px width
-const NODE_LAYOUT: Record<string, { x: number; y: number; level: number }> = {
-  agents:     { x: 120, y: 30,  level: 0 },
-  campaigns:  { x: 55,  y: 100, level: 1 },
-  system:     { x: 190, y: 100, level: 1 },
-  leads:      { x: 120, y: 175, level: 2 },
-  visitors:   { x: 40,  y: 250, level: 3 },
-  students:   { x: 200, y: 250, level: 3 },
-  cohorts:    { x: 55,  y: 330, level: 4 },
-  curriculum: { x: 190, y: 330, level: 4 },
-  other:      { x: 120, y: 400, level: 5 },
-};
-
 export default function BusinessMapTab({ hierarchy, loading }: Props) {
   const { drillDown } = useIntelligenceContext();
+  const graphRef = useRef<ForceGraphMethods>();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 240, height: 400 });
+  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  const categoryMap = useMemo(() => {
-    if (!hierarchy) return new Map<string, BusinessCategory>();
-    return new Map(hierarchy.categories.map((c) => [c.id, c]));
+  // Measure container
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setDimensions({ width: Math.max(width, 200), height: Math.max(height, 200) });
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Build graph data from hierarchy
+  const graphData = useMemo(() => {
+    if (!hierarchy) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
+    const maxRows = Math.max(...hierarchy.categories.map((c) => c.total_rows), 1);
+
+    const nodes: GraphNode[] = hierarchy.categories
+      .filter((c) => c.table_count > 0)
+      .map((cat) => {
+        const config = BUSINESS_CATEGORIES[cat.id] || BUSINESS_CATEGORIES.other;
+        return {
+          id: cat.id,
+          label: config.label,
+          color: config.color,
+          bgLight: config.bgLight,
+          val: 3 + (cat.total_rows / maxRows) * 10,
+          table_count: cat.table_count,
+          total_rows: cat.total_rows,
+          matched_tables: cat.matched_tables,
+          level: LEVEL_MAP[cat.id] ?? 5,
+          isHub: cat.id === hierarchy.hub_entity,
+        };
+      });
+
+    const nodeIds = new Set(nodes.map((n) => n.id));
+    const links: GraphLink[] = hierarchy.hierarchy_edges
+      .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
+      .map((e) => ({ source: e.source, target: e.target, relationship: e.relationship }));
+
+    return { nodes, links };
   }, [hierarchy]);
+
+  // Configure forces for compact layout
+  useEffect(() => {
+    const fg = graphRef.current;
+    if (!fg || !graphData.nodes.length) return;
+
+    fg.d3Force('charge')?.strength(-200);
+    fg.d3Force('link')?.distance(50);
+
+    const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
+    fg.d3Force(
+      'y',
+      forceY((node: any) => {
+        const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
+        return -dimensions.height * 0.3 + normalizedLevel * dimensions.height * 0.6;
+      }).strength(0.4)
+    );
+    fg.d3Force('x', forceX(0).strength(0.08));
+
+    fg.d3ReheatSimulation();
+  }, [graphData, dimensions.height]);
+
+  // Zoom to fit after stabilization
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      graphRef.current?.zoomToFit(400, 30);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Custom node rendering (compact for sidebar)
+  const paintNode = useCallback(
+    (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const n = node as GraphNode;
+      const radius = n.isHub ? 18 : 10 + n.val * 0.4;
+      const isHovered = hoveredNode?.id === n.id;
+      const fontSize = Math.max(9 / globalScale, 2.5);
+
+      if (isHovered) {
+        ctx.beginPath();
+        ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
+        ctx.fillStyle = n.bgLight;
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, radius, 0, 2 * Math.PI);
+      ctx.fillStyle = n.bgLight;
+      ctx.fill();
+      ctx.strokeStyle = n.color;
+      ctx.lineWidth = n.isHub ? 2.5 : 1.5;
+      ctx.stroke();
+
+      ctx.font = `${n.isHub ? 'bold' : '600'} ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = n.color;
+      ctx.fillText(n.label, n.x!, n.y! - 2);
+
+      const smallFont = Math.max(7 / globalScale, 2);
+      ctx.font = `${smallFont}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      ctx.fillStyle = '#718096';
+      ctx.fillText(formatRowCount(n.total_rows), n.x!, n.y! + fontSize * 0.8);
+
+      // Table count badge
+      const badgeRadius = Math.max(6 / globalScale, 2.5);
+      const badgeX = n.x! + radius * 0.7;
+      const badgeY = n.y! - radius * 0.7;
+      ctx.beginPath();
+      ctx.arc(badgeX, badgeY, badgeRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = n.color;
+      ctx.fill();
+      ctx.font = `bold ${Math.max(6 / globalScale, 2)}px sans-serif`;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(String(n.table_count), badgeX, badgeY + 0.5);
+    },
+    [hoveredNode]
+  );
+
+  // Custom link rendering
+  const paintLink = useCallback(
+    (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const src = link.source as GraphNode;
+      const tgt = link.target as GraphNode;
+      if (!src.x || !tgt.x) return;
+
+      ctx.beginPath();
+      ctx.setLineDash([3, 2]);
+      ctx.moveTo(src.x!, src.y!);
+      ctx.lineTo(tgt.x!, tgt.y!);
+      ctx.strokeStyle = 'rgba(160, 174, 192, 0.5)';
+      ctx.lineWidth = 1 / globalScale;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const midX = (src.x! + tgt.x!) / 2;
+      const midY = (src.y! + tgt.y!) / 2;
+      const labelSize = Math.max(7 / globalScale, 2);
+      ctx.font = `${labelSize}px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(113, 128, 150, 0.6)';
+      ctx.fillText((link as GraphLink).relationship, midX, midY - 2 / globalScale);
+    },
+    []
+  );
+
+  const handleNodeHover = useCallback((node: any) => {
+    setHoveredNode(node as GraphNode | null);
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleNodeClick = useCallback(
+    (node: any) => {
+      const n = node as GraphNode;
+      drillDown(n.id, 'all', n.label);
+    },
+    [drillDown]
+  );
 
   if (loading || !hierarchy) {
     return (
@@ -39,23 +227,6 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       </div>
     );
   }
-
-  const maxRows = Math.max(...hierarchy.categories.map((c) => c.total_rows), 1);
-
-  const handleClick = (catId: string, label: string) => {
-    drillDown(catId, 'all', label);
-  };
-
-  // Filter to categories that have matched tables
-  const visibleCategories = hierarchy.categories.filter((c) => c.table_count > 0);
-
-  // Compute SVG height based on categories present
-  const positions = visibleCategories.map((cat) => {
-    const pos = NODE_LAYOUT[cat.id] || { x: 120, y: 400, level: 5 };
-    return { ...cat, ...pos };
-  });
-  const maxY = Math.max(...positions.map((p) => p.y), 200);
-  const svgHeight = maxY + 60;
 
   return (
     <div className="d-flex flex-column h-100">
@@ -70,115 +241,77 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
         </div>
       </div>
 
-      <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
-        <svg
-          width="100%"
-          viewBox={`0 0 240 ${svgHeight}`}
-          style={{ display: 'block' }}
+      <div
+        ref={containerRef}
+        className="flex-grow-1"
+        style={{ position: 'relative', minHeight: 0 }}
+        onMouseMove={handleMouseMove}
+        aria-label="Business entity relationship graph — interactive. Use the Entities tab for an accessible list."
+      >
+        <ForceGraph2D
+          ref={graphRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          graphData={graphData}
+          nodeCanvasObject={paintNode}
+          nodePointerAreaPaint={(node: any, color, ctx) => {
+            const n = node as GraphNode;
+            const radius = n.isHub ? 18 : 10 + n.val * 0.4;
+            ctx.beginPath();
+            ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+          }}
+          linkCanvasObject={paintLink}
+          onNodeHover={handleNodeHover}
+          onNodeClick={handleNodeClick}
+          cooldownTicks={100}
+          enableNodeDrag={true}
+          enableZoomInteraction={true}
+          enablePanInteraction={true}
+          backgroundColor="transparent"
+          minZoom={0.3}
+          maxZoom={6}
+        />
+
+        {/* Compact zoom controls */}
+        <div
+          className="d-flex flex-column gap-1"
+          style={{ position: 'absolute', bottom: 8, right: 8, zIndex: 10 }}
         >
-          {/* Edges */}
-          {hierarchy.hierarchy_edges.map((edge, i) => {
-            const fromPos = NODE_LAYOUT[edge.source];
-            const toPos = NODE_LAYOUT[edge.target];
-            if (!fromPos || !toPos) return null;
-            const fromCat = categoryMap.get(edge.source);
-            const toCat = categoryMap.get(edge.target);
-            if (!fromCat?.table_count || !toCat?.table_count) return null;
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            style={{ width: 26, height: 26, padding: 0, fontSize: '0.85rem', background: 'rgba(255,255,255,0.9)' }}
+            onClick={() => { const fg = graphRef.current; if (fg) fg.zoom(Math.min(fg.zoom() * 1.4, 6), 300); }}
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            style={{ width: 26, height: 26, padding: 0, fontSize: '0.85rem', background: 'rgba(255,255,255,0.9)' }}
+            onClick={() => { const fg = graphRef.current; if (fg) fg.zoom(Math.max(fg.zoom() * 0.7, 0.3), 300); }}
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            style={{ width: 26, height: 26, padding: 0, fontSize: '0.6rem', background: 'rgba(255,255,255,0.9)' }}
+            onClick={() => graphRef.current?.zoomToFit(400, 30)}
+            title="Reset view"
+            aria-label="Reset view"
+          >
+            ⟳
+          </button>
+        </div>
 
-            return (
-              <g key={`edge-${i}`}>
-                <line
-                  x1={fromPos.x}
-                  y1={fromPos.y + 16}
-                  x2={toPos.x}
-                  y2={toPos.y - 16}
-                  stroke="var(--color-border)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4,3"
-                  opacity={0.6}
-                />
-                <text
-                  x={(fromPos.x + toPos.x) / 2}
-                  y={(fromPos.y + 16 + toPos.y - 16) / 2 - 4}
-                  textAnchor="middle"
-                  fontSize={7}
-                  fill="var(--color-text-light)"
-                  opacity={0.7}
-                >
-                  {edge.relationship}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Nodes */}
-          {positions.map((cat) => {
-            const config = BUSINESS_CATEGORIES[cat.id] || BUSINESS_CATEGORIES.other;
-            const isHub = cat.id === hierarchy.hub_entity;
-            const nodeRadius = isHub ? 24 : 16 + (cat.total_rows / maxRows) * 8;
-
-            return (
-              <g
-                key={cat.id}
-                style={{ cursor: 'pointer' }}
-                onClick={() => handleClick(cat.id, cat.label)}
-              >
-                {/* Node circle */}
-                <circle
-                  cx={cat.x}
-                  cy={cat.y}
-                  r={nodeRadius}
-                  fill={config.bgLight}
-                  stroke={config.color}
-                  strokeWidth={isHub ? 2.5 : 1.5}
-                />
-
-                {/* Category label */}
-                <text
-                  x={cat.x}
-                  y={cat.y - 2}
-                  textAnchor="middle"
-                  fontSize={isHub ? 9 : 7.5}
-                  fontWeight={isHub ? 700 : 600}
-                  fill={config.color}
-                >
-                  {cat.label}
-                </text>
-
-                {/* Row count */}
-                <text
-                  x={cat.x}
-                  y={cat.y + 9}
-                  textAnchor="middle"
-                  fontSize={7}
-                  fill="var(--color-text-light)"
-                >
-                  {formatRowCount(cat.total_rows)}
-                </text>
-
-                {/* Table count badge */}
-                <circle
-                  cx={cat.x + nodeRadius - 2}
-                  cy={cat.y - nodeRadius + 2}
-                  r={7}
-                  fill={config.color}
-                />
-                <text
-                  x={cat.x + nodeRadius - 2}
-                  y={cat.y - nodeRadius + 5}
-                  textAnchor="middle"
-                  fontSize={7}
-                  fill="white"
-                  fontWeight={600}
-                >
-                  {cat.table_count}
-                </text>
-
-                <title>{`${cat.label}: ${cat.table_count} tables, ${cat.total_rows.toLocaleString()} rows\nTables: ${cat.matched_tables.join(', ')}`}</title>
-              </g>
-            );
-          })}
-        </svg>
+        {/* Hover tooltip */}
+        {hoveredNode && (
+          <GraphTooltip node={hoveredNode} position={mousePos} />
+        )}
       </div>
     </div>
   );

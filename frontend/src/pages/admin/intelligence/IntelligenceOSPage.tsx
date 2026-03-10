@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { IntelligenceProvider, useIntelligenceContext } from '../../../contexts/IntelligenceContext';
 import { useIntelligenceQuery } from '../../../hooks/useIntelligenceQuery';
 import {
@@ -25,8 +25,6 @@ import ChartTypeSelector from '../../../components/admin/intelligence/ChartTypeS
 import ChartRenderer from '../../../components/admin/intelligence/ChartRenderer';
 import AutoInsightsGrid from '../../../components/admin/intelligence/AutoInsightsGrid';
 import EntityNavigationPanel from '../../../components/admin/intelligence/entityPanel/EntityNavigationPanel';
-
-const InteractiveBusinessGraph = lazy(() => import('../../../components/admin/intelligence/InteractiveBusinessGraph'));
 
 // ─── Adaptive Execution Steps ─────────────────────────────────────────────────
 const EXECUTION_STEPS = [
@@ -829,8 +827,6 @@ function IntelligenceOSContent() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [mobileTab, setMobileTab] = useState<'map' | 'canvas' | 'assistant'>('canvas');
-  const [viewMode, setViewMode] = useState<'dashboard' | 'graph'>('dashboard');
-
   // Auto-collapse left panel on medium screens
   useEffect(() => {
     if (isMedium && !isCompact) {
@@ -933,8 +929,6 @@ function IntelligenceOSContent() {
       getForecasts(params).then((r) => setForecasts(r.data)).catch(() => {}),
       getRiskEntities(params).then((r) => setRiskEntities(r.data || [])).catch(() => {}),
     ]).finally(() => setAnalyticsLoading(false));
-    // Auto-switch to dashboard to show entity analytics
-    setViewMode('dashboard');
   }, [scope]);
 
   // Health polling every 60 seconds
@@ -1055,64 +1049,35 @@ function IntelligenceOSContent() {
           </div>
         </div>
 
-        {/* Center Panel: Dynamic Canvas or Interactive Graph */}
+        {/* Center Panel: Intelligence Dashboard */}
         <div className="flex-grow-1 intel-gradient-bg d-flex flex-column" style={{ minWidth: 0, overflow: 'hidden' }}>
-          {/* View Mode Toggle */}
-          <div className="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style={{ flexShrink: 0, borderColor: 'rgba(226,232,240,0.5)' }}>
-            <button
-              className={`btn btn-sm ${viewMode === 'dashboard' ? 'btn-primary' : 'btn-outline-secondary'}`}
-              style={{ fontSize: '0.7rem', padding: '2px 10px' }}
-              onClick={() => setViewMode('dashboard')}
-            >
-              Dashboard
-            </button>
-            <button
-              className={`btn btn-sm ${viewMode === 'graph' ? 'btn-primary' : 'btn-outline-secondary'}`}
-              style={{ fontSize: '0.7rem', padding: '2px 10px' }}
-              onClick={() => setViewMode('graph')}
-            >
-              Entity Graph
-            </button>
-            {scope.level !== 'global' && scope.entity_name && (
-              <span className="badge bg-secondary ms-2" style={{ fontSize: '0.65rem' }}>
+          {/* Scope indicator */}
+          {scope.level !== 'global' && scope.entity_name && (
+            <div className="d-flex align-items-center gap-2 px-3 py-2 border-bottom" style={{ flexShrink: 0, borderColor: 'rgba(226,232,240,0.5)' }}>
+              <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>
                 Viewing: {scope.entity_name}
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="flex-grow-1" style={{ minHeight: 0, overflow: viewMode === 'graph' ? 'hidden' : 'auto' }}>
-            {viewMode === 'graph' && businessHierarchy ? (
-              <Suspense fallback={
-                <div className="d-flex align-items-center justify-content-center h-100">
-                  <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading graph...</span>
-                  </div>
-                </div>
-              }>
-                <InteractiveBusinessGraph
-                  hierarchy={businessHierarchy}
-                  onNodeClick={() => setViewMode('dashboard')}
-                />
-              </Suspense>
-            ) : (
-              <DynamicCanvas
-                visualizations={visualizations}
-                insights={insights}
-                summary={summary}
-                summaryLoading={summaryLoading}
-                autoInsights={autoInsights}
-                onFollowUpClick={handleFollowUpClick}
-                kpis={kpis}
-                anomalies={anomalies}
-                forecasts={forecasts}
-                riskEntities={riskEntities}
-                entityNetwork={network}
-                analyticsLoading={analyticsLoading}
-                investigationTarget={investigationTarget}
-                onInvestigate={handleInvestigate}
-                onCloseInvestigation={() => setInvestigationTarget(null)}
-              />
-            )}
+          <div className="flex-grow-1" style={{ minHeight: 0, overflow: 'auto' }}>
+            <DynamicCanvas
+              visualizations={visualizations}
+              insights={insights}
+              summary={summary}
+              summaryLoading={summaryLoading}
+              autoInsights={autoInsights}
+              onFollowUpClick={handleFollowUpClick}
+              kpis={kpis}
+              anomalies={anomalies}
+              forecasts={forecasts}
+              riskEntities={riskEntities}
+              entityNetwork={network}
+              analyticsLoading={analyticsLoading}
+              investigationTarget={investigationTarget}
+              onInvestigate={handleInvestigate}
+              onCloseInvestigation={() => setInvestigationTarget(null)}
+            />
           </div>
         </div>
 

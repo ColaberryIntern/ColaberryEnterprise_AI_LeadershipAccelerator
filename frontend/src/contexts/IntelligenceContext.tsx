@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
 export type ScopeLevel = 'global' | 'group' | 'entity' | 'metric';
 
@@ -10,8 +10,15 @@ export interface IntelligenceScope {
   metric?: string;
 }
 
+export interface SelectedEntity {
+  type: string;
+  id: string;
+  name: string;
+}
+
 interface IntelligenceContextType {
   scope: IntelligenceScope;
+  selectedEntity: SelectedEntity | null;
   setScope: (scope: IntelligenceScope) => void;
   drillDown: (entity_type: string, entity_id: string, entity_name?: string) => void;
   drillUp: () => void;
@@ -23,6 +30,7 @@ const defaultScope: IntelligenceScope = { level: 'global' };
 
 const IntelligenceContext = createContext<IntelligenceContextType>({
   scope: defaultScope,
+  selectedEntity: null,
   setScope: () => {},
   drillDown: () => {},
   drillUp: () => {},
@@ -63,8 +71,17 @@ export function IntelligenceProvider({ children }: { children: ReactNode }) {
     setScopeHistory([defaultScope]);
   }, []);
 
+  const selectedEntity = useMemo<SelectedEntity | null>(() => {
+    if (scope.level === 'global' || !scope.entity_type) return null;
+    return {
+      type: scope.entity_type,
+      id: scope.entity_id || scope.entity_type,
+      name: scope.entity_name || scope.entity_type,
+    };
+  }, [scope]);
+
   return (
-    <IntelligenceContext.Provider value={{ scope, setScope, drillDown, drillUp, resetScope, scopeHistory }}>
+    <IntelligenceContext.Provider value={{ scope, selectedEntity, setScope, drillDown, drillUp, resetScope, scopeHistory }}>
       {children}
     </IntelligenceContext.Provider>
   );
