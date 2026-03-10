@@ -13,6 +13,9 @@ interface Agent {
   agent_name: string;
   agent_type: string;
   status: string;
+  enabled: boolean;
+  schedule: string | null;
+  category: string;
   config: Record<string, any>;
   last_run_at: string | null;
   last_result: Record<string, any> | null;
@@ -893,12 +896,14 @@ function ControlsTab({
         <div className="card-header bg-white fw-semibold">Agent Controls</div>
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover mb-0">
+            <table className="table table-hover mb-0 small">
               <thead className="table-light">
                 <tr>
                   <th>Agent</th>
-                  <th>Type</th>
+                  <th>Category</th>
+                  <th>Active</th>
                   <th>Status</th>
+                  <th>Schedule</th>
                   <th>Last Run</th>
                   <th>Last Result</th>
                   <th>Actions</th>
@@ -908,14 +913,28 @@ function ControlsTab({
                 {agents.map((agent) => (
                   <tr key={agent.id} style={{ cursor: 'pointer' }} onClick={() => onSelectAgent(agent.id)}>
                     <td className="fw-medium">{agent.agent_name}</td>
-                    <td className="text-muted small">{agent.agent_type}</td>
+                    <td>
+                      <span className={`badge bg-${CATEGORY_COLORS[agent.category] || 'secondary'}`}>
+                        {agent.category?.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td>
+                      {agent.enabled ? (
+                        <span className="badge bg-success">On</span>
+                      ) : (
+                        <span className="badge bg-danger">Off</span>
+                      )}
+                    </td>
                     <td>
                       <span className={`badge bg-${STATUS_COLORS[agent.status] || 'secondary'}`}>
                         {agent.status}
                       </span>
                     </td>
-                    <td className="text-muted small">{timeAgo(agent.last_run_at)}</td>
-                    <td className="small">
+                    <td className="text-muted" style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                      {agent.schedule || '—'}
+                    </td>
+                    <td className="text-muted">{timeAgo(agent.last_run_at)}</td>
+                    <td>
                       {agent.last_result ? (
                         <span>
                           {agent.last_result.actions_taken || 0} actions,{' '}

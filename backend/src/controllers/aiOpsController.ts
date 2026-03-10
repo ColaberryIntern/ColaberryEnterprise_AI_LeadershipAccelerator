@@ -1,7 +1,16 @@
 import { Request, Response } from 'express';
 import * as aiOpsService from '../services/aiOpsService';
 import { scanAllCampaigns, scanCampaign } from '../services/campaignHealthScanner';
-import { runRepairAgent, runContentOptimization, runConversationOptimization } from '../services/aiOrchestrator';
+import {
+  runHealthScans,
+  runRepairAgent,
+  runContentOptimization,
+  runConversationOptimization,
+  runOrchestrationHealth,
+  runStudentProgress,
+  runPromptMonitor,
+  runOrchestrationRepair,
+} from '../services/aiOrchestrator';
 import AiAgent from '../models/AiAgent';
 import Campaign from '../models/Campaign';
 
@@ -36,26 +45,32 @@ export async function handleUpdateAgent(req: Request, res: Response) {
   }
 }
 
+// Map agent_type to executor function
+const AGENT_EXECUTORS: Record<string, (() => Promise<any>) | undefined> = {
+  health_scanner: runHealthScans,
+  repair: runRepairAgent,
+  content_optimization: runContentOptimization,
+  conversation_optimization: runConversationOptimization,
+  orchestration_health: runOrchestrationHealth,
+  student_monitor: runStudentProgress,
+  prompt_monitor: runPromptMonitor,
+  orchestration_repair: runOrchestrationRepair,
+};
+
 export async function handleRunAgent(req: Request, res: Response) {
   try {
     const agent = await AiAgent.findByPk(String(req.params.id));
     if (!agent) return res.status(404).json({ error: 'Agent not found' });
 
-    let result;
-    switch (agent.agent_type) {
-      case 'repair':
-        result = await runRepairAgent();
-        break;
-      case 'content_optimization':
-        result = await runContentOptimization();
-        break;
-      case 'conversation_optimization':
-        result = await runConversationOptimization();
-        break;
-      default:
-        return res.status(400).json({ error: `Unknown agent type: ${agent.agent_type}` });
+    const executor = AGENT_EXECUTORS[agent.agent_type];
+    if (!executor) {
+      // Agent types that only run on cron (no manual trigger available)
+      return res.status(400).json({
+        error: `Agent type "${agent.agent_type}" can only run on its cron schedule (${agent.schedule})`,
+      });
     }
 
+    const result = await executor();
     res.json(result || { message: 'Agent is paused or not found' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
