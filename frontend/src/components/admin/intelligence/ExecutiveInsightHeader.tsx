@@ -103,58 +103,8 @@ export default function ExecutiveInsightHeader({ summary, loading }: ExecutiveIn
     (k) => summary[k] != null || summary[k.replace(/_/g, '')] != null
   );
 
-  if (keys.length === 0 && summary) {
-    // Fallback: render all KPIs with whatever data we have
-    return (
-      <div className="d-flex gap-3 flex-wrap">
-        {Object.entries(kpiRegistry).map(([key, cfg]) => {
-          const { value, subtitle } = cfg.render(summary);
-          const accent =
-            key === 'revenue_trend'
-              ? (parseFloat(summary.revenue_trend ?? '0') >= 0 ? 'var(--color-accent)' : 'var(--color-secondary)')
-              : cfg.accent;
-
-          return (
-            <div
-              key={key}
-              className="card border-0 shadow-sm flex-fill"
-              style={{
-                minWidth: '150px',
-                maxWidth: '220px',
-                borderLeft: `4px solid ${accent}`,
-              }}
-            >
-              <div className="card-body p-3">
-                <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
-                  {cfg.label}
-                </small>
-                <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
-                  {key === 'risk_level' ? (
-                    <span
-                      className="badge"
-                      style={{
-                        background: getRiskBadgeColor(value),
-                        fontSize: '0.8rem',
-                      }}
-                    >
-                      {value.toUpperCase()}
-                    </span>
-                  ) : (
-                    value
-                  )}
-                </div>
-                {subtitle && (
-                  <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                    {subtitle}
-                  </small>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+  // No matching KPI keys found — don't render empty cards
+  if (keys.length === 0) return null;
 
   return (
     <div className="d-flex gap-3 flex-wrap">
