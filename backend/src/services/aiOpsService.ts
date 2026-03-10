@@ -411,17 +411,17 @@ export async function restartCampaignActions(campaignId: string) {
 // --- Agent Discovery & Health Scores ---
 
 export async function scanAndDiscoverAgents() {
-  const { AGENT_REGISTRY, seedAgentRegistry } = await import('./agentRegistrySeed');
+  const countBefore = await AiAgent.count();
+  const { seedAgentRegistry } = await import('./agentRegistrySeed');
 
   await seedAgentRegistry();
 
   const totalRegistered = await AiAgent.count();
-  const newAgents = totalRegistered - AGENT_REGISTRY.length;
 
   return {
     synced: true,
     total_registered: totalRegistered,
-    new_agents: Math.max(0, newAgents),
+    new_agents: Math.max(0, totalRegistered - countBefore),
   };
 }
 
