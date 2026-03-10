@@ -32,7 +32,15 @@ app.use(helmet());
 app.use(cors());
 
 // CRITICAL: Stripe webhook needs raw body BEFORE express.json() parses it.
-app.use('/api/webhook', express.raw({ type: 'application/json' }));
+// Use exact path match so other /api/webhook/* routes get normal JSON parsing.
+app.use('/api/webhook', (req, res, next) => {
+  // Only apply raw body parsing to the exact Stripe webhook path
+  if (req.path === '/' || req.path === '') {
+    express.raw({ type: 'application/json' })(req, res, next);
+  } else {
+    next();
+  }
+});
 app.use(webhookRoutes);
 
 // Global JSON parser for all other routes
