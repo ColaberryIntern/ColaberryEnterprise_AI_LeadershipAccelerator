@@ -49,6 +49,9 @@ export async function runFullDiscovery(): Promise<DiscoveryResult> {
   // Step 6: Fire-and-forget Python discovery to keep data_dictionary.json updated
   intelligenceProxy.runDiscovery().catch(() => {});
 
+  // Step 7: Trigger embedding pipeline to populate vector store
+  intelligenceProxy.embedPipeline().catch(() => {});
+
   return {
     tables_discovered: tablesWritten,
     relationships_found: relResult.relationships.length,

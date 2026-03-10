@@ -1,5 +1,6 @@
 import { intelligenceProxy } from '../../services/intelligenceProxyService';
 import { generateLocalSummary } from '../services/executiveSummaryService';
+import { handleLocalQuery } from '../services/localQueryEngine';
 import { buildEntityNetwork, EntityNetwork } from '../services/entityGraphService';
 
 interface QueryResponse {
@@ -62,14 +63,8 @@ export async function handleQuery(
     }
   }
 
-  // Local fallback: return executive summary for any question
-  const local = await generateLocalSummary();
-  return {
-    ...local,
-    question,
-    narrative: `[Local mode] ${local.narrative}`,
-    execution_path: 'local_fallback → aggregate',
-  };
+  // Local fallback: smart query engine parses question and runs targeted SQL
+  return handleLocalQuery(question);
 }
 
 /**
@@ -115,13 +110,8 @@ export async function handleRankedInsights(): Promise<QueryResponse> {
     }
   }
 
-  // Local fallback
-  const summary = await generateLocalSummary();
-  return {
-    ...summary,
-    question: 'What are the top insights?',
-    intent: 'ranked_insights',
-  };
+  // Local fallback: use smart query engine for ranked insights
+  return handleLocalQuery('What are the top insights across leads, enrollments, and campaigns?');
 }
 
 /**
