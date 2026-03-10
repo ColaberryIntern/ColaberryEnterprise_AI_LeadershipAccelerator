@@ -10,9 +10,9 @@ export async function createTestLead(campaignId: string): Promise<InstanceType<t
   const testEmail = testOverrides.email || 'test@colaberry.com';
   const testPhone = testOverrides.phone || '';
 
-  // Reuse existing test lead if one exists
+  // Reuse existing lead with this email (regardless of source)
   const existing = await Lead.findOne({
-    where: { email: testEmail, source: 'campaign_test' },
+    where: { email: testEmail },
   });
 
   if (existing) {
