@@ -740,15 +740,6 @@ function AIAssistantPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Handle external queries (from follow-up clicks / auto-insights)
-  useEffect(() => {
-    if (externalQuery && externalQuery !== processedExternalRef.current) {
-      processedExternalRef.current = externalQuery;
-      handleSend(externalQuery);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalQuery]);
-
   const handleSend = useCallback(
     async (text?: string) => {
       const question = text || input.trim();
@@ -762,6 +753,14 @@ function AIAssistantPanel({
     },
     [input, query, scope, loading]
   );
+
+  // Handle external queries (from follow-up clicks / auto-insights)
+  useEffect(() => {
+    if (externalQuery && externalQuery !== processedExternalRef.current) {
+      processedExternalRef.current = externalQuery;
+      handleSend(externalQuery);
+    }
+  }, [externalQuery, handleSend]);
 
   return (
     <div className="d-flex flex-column h-100">
