@@ -1113,9 +1113,8 @@ function IntelligenceOSContent() {
         }
       }
     }
-  // Run once on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Run once on mount — searchParams is stable from useSearchParams
+  }, [searchParams]);
 
   const loadNetwork = useCallback(() => {
     getEntityNetwork()
