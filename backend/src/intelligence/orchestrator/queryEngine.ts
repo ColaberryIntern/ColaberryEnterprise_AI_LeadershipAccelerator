@@ -69,11 +69,12 @@ export async function handleQuery(
 
 /**
  * Handle executive summary with fallback.
+ * Accepts optional entity_type to scope the summary.
  */
-export async function handleExecutiveSummary(): Promise<QueryResponse> {
+export async function handleExecutiveSummary(entityType?: string): Promise<QueryResponse> {
   const pyAvailable = await isPythonAvailable();
 
-  if (pyAvailable) {
+  if (pyAvailable && !entityType) {
     try {
       const result = await Promise.race([
         intelligenceProxy.getExecutiveSummary(),
@@ -87,7 +88,7 @@ export async function handleExecutiveSummary(): Promise<QueryResponse> {
     }
   }
 
-  return generateLocalSummary();
+  return generateLocalSummary(entityType);
 }
 
 /**

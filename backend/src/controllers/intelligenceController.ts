@@ -180,7 +180,7 @@ export async function handleQueryOrchestrator(req: Request, res: Response, next:
 
 export async function handleGetExecutiveSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = await handleExecutiveSummary();
+    const data = await handleExecutiveSummary(req.query.entity_type as string | undefined);
     res.json(data);
   } catch (error: any) {
     next(error);

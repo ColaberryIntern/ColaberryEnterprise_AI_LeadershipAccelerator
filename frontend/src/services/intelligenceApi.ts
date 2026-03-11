@@ -117,8 +117,10 @@ export const getDictionary = () => api.get('/discovery/dictionary');
 export const queryOrchestrator = (question: string, scope?: Record<string, any>) =>
   api.post<QueryResponse>('/query', { question, scope });
 
-export const getExecutiveSummary = () => api.get<QueryResponse>('/executive-summary');
-export const getRankedInsights = () => api.get<QueryResponse>('/insights');
+export const getExecutiveSummary = (params?: { entity_type?: string }) =>
+  api.get<QueryResponse>('/executive-summary', { params });
+export const getRankedInsights = (params?: { entity_type?: string }) =>
+  api.get<QueryResponse>('/insights', { params });
 export const getEntityNetwork = () => api.get<EntityNetwork>('/entity-network');
 
 // Q&A History

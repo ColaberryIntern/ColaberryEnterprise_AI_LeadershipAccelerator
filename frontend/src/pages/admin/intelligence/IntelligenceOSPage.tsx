@@ -950,28 +950,69 @@ function IntelligenceOSContent() {
       .catch(() => {});
   }, [loadNetwork]);
 
-  // Scope-aware analytics re-fetch when entity is selected or reset to global
+  // Unified scoped data loader — reloads ALL analytics + executive summary
+  const loadScopedAnalytics = useCallback((entityType?: string) => {
+    const params = entityType ? { entity_type: entityType } : undefined;
+    console.log('[Intelligence OS] Loading analytics for scope:', entityType || 'global');
+
+    setAnalyticsLoading(true);
+    setSummaryLoading(true);
+    setIsProcessing(true);
+
+    // Fetch all 6 data sources with entity scope
+    Promise.all([
+      getKPIs(params).then((r) => setKpis(r.data)).catch(() => {}),
+      getAnomalies(params).then((r) => setAnomalies(r.data || [])).catch(() => {}),
+      getForecasts(params).then((r) => setForecasts(r.data)).catch(() => {}),
+      getRiskEntities(params).then((r) => setRiskEntities(r.data || [])).catch(() => {}),
+      getExecutiveSummary(params).then((r) => {
+        const data = r.data;
+        if (data.narrative) setInsights(data);
+        if (data.visualizations?.length) setVisualizations(data.visualizations);
+        if (data.data) setSummary(data.data);
+      }).catch(() => {}),
+      getRankedInsights(params).then((r) => {
+        const data = r.data;
+        if (data.data && Array.isArray(data.data)) {
+          setAutoInsights(data.data);
+        } else if (data.visualizations?.length) {
+          const viz = data.visualizations[0];
+          if (viz?.data?.length) {
+            setAutoInsights(
+              viz.data.slice(0, 6).map((d: Record<string, any>) => ({
+                title: d.title || d.label || d.name || 'Insight',
+                severity: d.severity || d.risk_level || d.priority,
+                description: d.description || d.detail || d.narrative,
+                metric_value: d.metric_value || d.value || d.score,
+                trend: d.trend || d.direction,
+              }))
+            );
+          }
+        }
+      }).catch(() => {}),
+    ]).finally(() => {
+      setAnalyticsLoading(false);
+      setSummaryLoading(false);
+      setIsProcessing(false);
+      setLastRefresh(new Date().toLocaleString());
+    });
+  }, []);
+
+  // Scope-aware reload: when entity is selected or reset to global
   const scopeKeyRef = useRef('global');
   useEffect(() => {
     const scopeKey = scope.level === 'global' ? 'global' : scope.entity_type || 'global';
     if (scopeKey === scopeKeyRef.current) return; // no change
     scopeKeyRef.current = scopeKey;
 
-    const params = scope.level === 'global' ? undefined : { entity_type: scope.entity_type };
-    setAnalyticsLoading(true);
-    Promise.all([
-      getKPIs(params).then((r) => setKpis(r.data)).catch(() => {}),
-      getAnomalies(params).then((r) => setAnomalies(r.data || [])).catch(() => {}),
-      getForecasts(params).then((r) => setForecasts(r.data)).catch(() => {}),
-      getRiskEntities(params).then((r) => setRiskEntities(r.data || [])).catch(() => {}),
-    ]).finally(() => setAnalyticsLoading(false));
-  }, [scope]);
+    const entityType = scope.level === 'global' ? undefined : scope.entity_type;
+    loadScopedAnalytics(entityType);
+  }, [scope, loadScopedAnalytics]);
 
-  // Health polling every 60 seconds
+  // Health polling every 60 seconds (health only — KPIs managed by scope loader)
   useEffect(() => {
     const interval = setInterval(() => {
       getHealth().then((r) => setHealth(r.data)).catch(() => {});
-      getKPIs().then((r) => setKpis(r.data)).catch(() => {});
     }, 60000);
     return () => clearInterval(interval);
   }, []);
