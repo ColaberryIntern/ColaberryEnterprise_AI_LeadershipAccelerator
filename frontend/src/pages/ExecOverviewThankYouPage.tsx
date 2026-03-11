@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
+import ROIHighlightSection from '../components/ROIHighlightSection';
 import api from '../utils/api';
 
 interface LocationState {
@@ -108,6 +109,11 @@ function ExecOverviewThankYouPage() {
               </>
             )}
           </div>
+
+          <ROIHighlightSection
+            headline="Model the Financial Case for Your Organization."
+            subtext="Use your real numbers to prepare for internal approval."
+          />
 
           <div className="card border-0 shadow-sm p-4 text-start" style={{ background: 'var(--color-warning-bg, #fff3cd)' }}>
             <div className="d-flex align-items-start">

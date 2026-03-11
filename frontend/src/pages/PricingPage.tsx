@@ -5,6 +5,7 @@ import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ExecutiveTestimonial from '../components/ExecutiveTestimonial';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
+import ROIHighlightSection from '../components/ROIHighlightSection';
 
 function PricingPage() {
   return (
@@ -72,6 +73,12 @@ function PricingPage() {
           </div>
         </div>
       </section>
+
+      <ROIHighlightSection
+        headline="Reframe Cost as Investment."
+        subtext="See how quickly the program pays for itself."
+        presetValues={{ employees: 20, hours: 4 }}
+      />
 
       <ArtifactValueBlock />
 

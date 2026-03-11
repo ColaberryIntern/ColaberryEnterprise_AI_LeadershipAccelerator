@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
+import ROIHighlightSection from '../components/ROIHighlightSection';
 
 /** Intersection Observer hook for fade-in-on-scroll */
 function useFadeIn() {
@@ -503,6 +504,12 @@ function ProgramPage() {
           </div>
         </div>
       </section>
+
+      <ROIHighlightSection
+        headline="Before Sponsoring a Leader, Model the ROI."
+        subtext="Run your own enterprise scenario and quantify the impact."
+        presetValues={{ employees: 50, hours: 5 }}
+      />
 
       {/* Who Should Attend */}
       <section className="section-spacer" aria-label="Who Should Attend">

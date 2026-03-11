@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 
 /* ── Calculation ─────────────────────────────────────────────────── */
@@ -142,11 +142,17 @@ function MetricCard({
 /* ── Page component ──────────────────────────────────────────────── */
 
 function ExecutiveROICalculatorPage() {
-  const [employees, setEmployees] = useState(15);
-  const [hoursSaved, setHoursSaved] = useState(5);
-  const [hourlyCost, setHourlyCost] = useState(70);
-  const [weeks, setWeeks] = useState(52);
-  const [investment, setInvestment] = useState(15000);
+  const [searchParams] = useSearchParams();
+  const p = (key: string, fallback: number) => {
+    const v = Number(searchParams.get(key));
+    return v > 0 ? v : fallback;
+  };
+
+  const [employees, setEmployees] = useState(() => p('employees', 15));
+  const [hoursSaved, setHoursSaved] = useState(() => p('hours', 5));
+  const [hourlyCost, setHourlyCost] = useState(() => p('cost', 70));
+  const [weeks, setWeeks] = useState(() => p('weeks', 52));
+  const [investment, setInvestment] = useState(() => p('investment', 15000));
 
   const roi = useMemo(
     () => calculateROI(employees, hoursSaved, hourlyCost, weeks, investment),
@@ -305,15 +311,20 @@ function ExecutiveROICalculatorPage() {
       <section className="section-alt text-center">
         <div className="container" style={{ maxWidth: '600px' }}>
           <h2 className="h4 fw-bold mb-3" style={{ color: 'var(--color-primary)' }}>
-            Ready to Turn ROI Into Action?
+            Ready to Capture This ROI?
           </h2>
           <p className="text-muted mb-4">
-            Download the Executive Briefing to see the full program curriculum,
-            enterprise case studies, and ROI framework.
+            Download the Executive Briefing or schedule a strategic alignment call
+            to discuss how the program maps to your organization.
           </p>
-          <Link to="/" className="btn btn-primary btn-lg">
-            Download Executive Briefing &rarr;
-          </Link>
+          <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center">
+            <Link to="/" className="btn btn-primary btn-lg">
+              Download Executive Briefing &rarr;
+            </Link>
+            <Link to="/executive-overview/thank-you" className="btn btn-outline-primary btn-lg">
+              Schedule Strategic Alignment
+            </Link>
+          </div>
         </div>
       </section>
     </>

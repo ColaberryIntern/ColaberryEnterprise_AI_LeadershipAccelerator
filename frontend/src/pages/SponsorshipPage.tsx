@@ -2,6 +2,7 @@ import React from 'react';
 import SEOHead from '../components/SEOHead';
 import LeadCaptureForm from '../components/LeadCaptureForm';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
+import ROIHighlightSection from '../components/ROIHighlightSection';
 
 function SponsorshipPage() {
   return (
@@ -105,6 +106,12 @@ function SponsorshipPage() {
           </div>
         </div>
       </section>
+
+      <ROIHighlightSection
+        headline="Run Your Organization's ROI Scenario."
+        subtext="Quantify the return of building internal execution capability."
+        presetValues={{ employees: 75, hours: 6 }}
+      />
 
       {/* Security Overview */}
       <section className="section" aria-label="Security and Governance">

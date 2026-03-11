@@ -8,6 +8,7 @@ import { validateForm } from '../utils/formValidation';
 import { getUTMParams } from '../services/utmService';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
+import ROIHighlightSection from '../components/ROIHighlightSection';
 import api from '../utils/api';
 
 function HomePage() {
@@ -195,6 +196,12 @@ function HomePage() {
           </div>
         </div>
       </section>
+
+      <ROIHighlightSection
+        headline="See the Financial Impact in 60 Seconds."
+        subtext="Small workflow automation gains compound into enterprise-level financial results."
+        presetValues={{ employees: 25, hours: 5 }}
+      />
 
       {/* Why Enterprise Leaders Choose Colaberry */}
       <section className="section-alt" aria-label="Why Colaberry">
