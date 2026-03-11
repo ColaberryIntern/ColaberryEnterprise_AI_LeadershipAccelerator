@@ -49,7 +49,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
   const { drillDown, selectedEntity } = useIntelligenceContext();
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 240, height: 400 });
+  const [dimensions, setDimensions] = useState({ width: 400, height: 600 });
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -78,7 +78,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           label: config.label,
           color: config.color,
           bgLight: config.bgLight,
-          val: 6 + (cat.total_rows / maxRows) * 18,
+          val: 8 + (cat.total_rows / maxRows) * 22,
           table_count: cat.table_count,
           total_rows: cat.total_rows,
           matched_tables: cat.matched_tables,
@@ -100,18 +100,18 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
 
-    fg.d3Force('charge')?.strength(-400);
-    fg.d3Force('link')?.distance(80);
+    fg.d3Force('charge')?.strength(-500);
+    fg.d3Force('link')?.distance(100);
 
     const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
     fg.d3Force(
       'y',
       forceY((node: any) => {
         const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
-        return -dimensions.height * 0.3 + normalizedLevel * dimensions.height * 0.6;
+        return -dimensions.height * 0.35 + normalizedLevel * dimensions.height * 0.75;
       }).strength(0.35)
     );
-    fg.d3Force('x', forceX(0).strength(0.06));
+    fg.d3Force('x', forceX(0).strength(0.05));
 
     // Smoother physics (cast to access d3 simulation methods)
     (fg as any).d3AlphaDecay?.(0.015);

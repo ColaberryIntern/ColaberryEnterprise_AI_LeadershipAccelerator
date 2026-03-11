@@ -1401,13 +1401,13 @@ function IntelligenceOSContent() {
         <div
           className="intel-panel-slide"
           style={{
-            width: leftOpen ? 320 : 0,
-            minWidth: leftOpen ? 320 : 0,
+            width: leftOpen ? 420 : 0,
+            minWidth: leftOpen ? 420 : 0,
             overflow: 'hidden',
             borderRight: leftOpen ? '1px solid rgba(226, 232, 240, 0.5)' : 'none',
           }}
         >
-          <div style={{ width: 320, height: '100%' }}>
+          <div style={{ width: 420, height: '100%' }}>
             <EntityNavigationPanel network={network} businessHierarchy={businessHierarchy} hierarchyLoading={hierarchyLoading} onRefresh={loadNetwork} />
           </div>
         </div>

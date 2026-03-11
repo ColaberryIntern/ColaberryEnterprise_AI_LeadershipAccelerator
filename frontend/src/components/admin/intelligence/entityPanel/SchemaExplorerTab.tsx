@@ -7,7 +7,7 @@ import {
   EntityNode,
 } from '../../../../services/intelligenceApi';
 
-const MAX_GRAPH_NODES = 80;
+const MAX_GRAPH_NODES = 120;
 
 interface SchemaGraphNode {
   id: string;
@@ -30,7 +30,7 @@ function SchemaForceGraph({
 }) {
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 240, height: 300 });
+  const [dimensions, setDimensions] = useState({ width: 400, height: 500 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,8 +59,8 @@ function SchemaForceGraph({
   useEffect(() => {
     const fg = graphRef.current;
     if (!fg) return;
-    fg.d3Force('charge')?.strength(-80);
-    fg.d3Force('link')?.distance(40);
+    fg.d3Force('charge')?.strength(-120);
+    fg.d3Force('link')?.distance(55);
     (fg as any).d3AlphaDecay?.(0.02);
     (fg as any).d3VelocityDecay?.(0.3);
   }, [graphData]);
@@ -77,7 +77,7 @@ function SchemaForceGraph({
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const n = node as SchemaGraphNode;
-      const baseR = n.is_hub ? 10 : 3 + (n.row_count / maxRows) * 6;
+      const baseR = n.is_hub ? 12 : 4 + (n.row_count / maxRows) * 8;
       const isHovered = hoveredId === n.id;
 
       if (isHovered) {
