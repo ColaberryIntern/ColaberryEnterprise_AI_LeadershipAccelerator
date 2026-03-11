@@ -25,7 +25,7 @@ router.get('/api/admin/intelligence/departments', async (_req: Request, res: Res
 // Department detail (all 7 sections)
 router.get('/api/admin/intelligence/departments/:id', async (req: Request, res: Response) => {
   try {
-    const detail = await getDepartmentDetail(req.params.id);
+    const detail = await getDepartmentDetail(req.params.id as string);
     if (!detail) return res.status(404).json({ error: 'Department not found' });
     res.json(detail);
   } catch (err: any) {
@@ -50,7 +50,7 @@ router.get('/api/admin/intelligence/initiatives', async (req: Request, res: Resp
 // Initiative detail
 router.get('/api/admin/intelligence/initiatives/:id', async (req: Request, res: Response) => {
   try {
-    const initiative = await getInitiativeDetail(req.params.id);
+    const initiative = await getInitiativeDetail(req.params.id as string);
     if (!initiative) return res.status(404).json({ error: 'Initiative not found' });
     res.json(initiative);
   } catch (err: any) {
