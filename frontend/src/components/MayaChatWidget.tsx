@@ -135,7 +135,6 @@ const MayaChatWidget: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitorId, isAdminPage, doNotTrack, isOpen, conversationId]);
 
   const handleOpen = useCallback(async (triggerType = 'visitor_initiated', triggerContext?: any) => {
