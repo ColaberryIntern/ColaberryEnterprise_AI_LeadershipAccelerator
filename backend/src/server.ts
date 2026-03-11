@@ -66,7 +66,12 @@ async function start(): Promise<void> {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
   await connectDatabase();
-  await sequelize.sync({ alter: true });
+  try {
+    await sequelize.sync({ alter: true });
+  } catch (err: any) {
+    console.warn('[DB] sync({ alter: true }) failed, falling back to create-only sync:', err?.message);
+    await sequelize.sync();
+  }
   await seedProgramCurriculum();
   await seedDepartments();
 
