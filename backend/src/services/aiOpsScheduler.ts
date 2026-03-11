@@ -12,6 +12,9 @@ import {
   runCampaignQA,
   runSelfHealing,
 } from './aiOrchestrator';
+import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
+import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
+import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
 
 /**
  * Start all AI Operations cron jobs.
@@ -93,7 +96,30 @@ export function startAIOpsScheduler(): void {
     });
   });
 
-  console.log('[AI Ops] Scheduler started (22 agents registered):');
+  // --- Intelligence Layer Crons ---
+
+  // Autonomous Engine: every 10 minutes (offset from existing agents)
+  cron.schedule('5,15,25,35,45,55 * * * *', () => {
+    runAutonomousCycle().catch((err) => {
+      console.error('[AI Ops] Autonomous cycle cron error:', err);
+    });
+  });
+
+  // AI COO Strategic Cycle: every 30 minutes
+  cron.schedule('0,30 * * * *', () => {
+    runStrategicCycle().catch((err) => {
+      console.error('[AI Ops] Strategic cycle cron error:', err);
+    });
+  });
+
+  // Meta-Agent Loop: hourly at :02
+  cron.schedule('2 * * * *', () => {
+    runMetaAgentLoop().catch((err) => {
+      console.error('[AI Ops] Meta-agent loop cron error:', err);
+    });
+  });
+
+  console.log('[AI Ops] Scheduler started (43 agents registered):');
   console.log('[AI Ops]   Campaign health scan: every 15 minutes');
   console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
   console.log('[AI Ops]   Content optimization: every 6 hours');
@@ -104,4 +130,7 @@ export function startAIOpsScheduler(): void {
   console.log('[AI Ops]   Orchestration auto-repair: every 5 minutes (offset)');
   console.log('[AI Ops]   Campaign QA agent: every 6 hours');
   console.log('[AI Ops]   Campaign self-healing: every 30 minutes');
+  console.log('[AI Ops]   Autonomous engine: every 10 minutes');
+  console.log('[AI Ops]   AI COO strategic cycle: every 30 minutes');
+  console.log('[AI Ops]   Meta-agent loop: hourly at :02');
 }

@@ -19,6 +19,19 @@ export {
   isPythonAvailable,
 } from './orchestrator/queryEngine';
 
+// Autonomous Operations
+export { runAutonomousCycle, simulateAutonomousCycle } from './autonomy/autonomousEngine';
+
+// Strategy
+export { runStrategicCycle } from './strategy/aiCOO';
+
+// Meta-Agents
+export { runMetaAgentLoop } from './meta/metaAgentLoop';
+
+// Knowledge & Memory
+export { getKnowledgeGraph } from './knowledge/knowledgeGraph';
+export { getVectorMemory } from './memory/vectorMemory';
+
 // Table sync utility
 import { sequelize } from '../config/database';
 import DatasetRegistry from '../models/DatasetRegistry';
@@ -26,6 +39,9 @@ import SystemProcess from '../models/SystemProcess';
 import IntelligenceConfig from '../models/IntelligenceConfig';
 import QAHistory from '../models/QAHistory';
 import AiSystemEvent from '../models/AiSystemEvent';
+import IntelligenceDecision from '../models/IntelligenceDecision';
+import IntelligenceMemory from '../models/IntelligenceMemory';
+import AgentPerformanceMetric from '../models/AgentPerformanceMetric';
 
 /**
  * Ensure pgvector and uuid-ossp extensions are available.
@@ -47,7 +63,10 @@ async function ensureVectorExtensions(): Promise<void> {
 export async function ensureIntelligenceTables(): Promise<void> {
   await ensureVectorExtensions();
 
-  const models = [DatasetRegistry, SystemProcess, IntelligenceConfig, QAHistory, AiSystemEvent];
+  const models = [
+    DatasetRegistry, SystemProcess, IntelligenceConfig, QAHistory, AiSystemEvent,
+    IntelligenceDecision, IntelligenceMemory, AgentPerformanceMetric,
+  ];
 
   for (const model of models) {
     try {

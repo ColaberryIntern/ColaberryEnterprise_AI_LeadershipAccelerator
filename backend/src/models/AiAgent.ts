@@ -2,6 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
 export type AiAgentType =
+  // Existing operational agents
   | 'repair'
   | 'content_optimization'
   | 'conversation_optimization'
@@ -21,11 +22,36 @@ export type AiAgentType =
   | 'prompt_monitor'
   | 'orchestration_repair'
   | 'campaign_qa'
-  | 'self_healing';
+  | 'self_healing'
+  // Intelligence layer agents
+  | 'planner'
+  | 'critic'
+  | 'memory'
+  // Autonomous operations agents
+  | 'problem_discovery'
+  | 'root_cause'
+  | 'action_planner'
+  | 'impact_estimator'
+  | 'risk_evaluator'
+  | 'execution'
+  | 'monitor'
+  | 'audit'
+  // Strategic agents
+  | 'strategic_intelligence'
+  | 'revenue_optimization'
+  | 'cost_optimization'
+  | 'growth_experiment'
+  | 'resource_allocator'
+  | 'governance'
+  // Meta-agents
+  | 'architecture_analyzer'
+  | 'prompt_optimizer'
+  | 'performance_tracker'
+  | 'experiment_runner';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta';
 
 interface AiAgentAttributes {
   id?: string;

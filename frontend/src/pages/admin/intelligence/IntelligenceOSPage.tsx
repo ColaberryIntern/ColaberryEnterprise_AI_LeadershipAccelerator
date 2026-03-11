@@ -13,6 +13,8 @@ import {
   getAnomalies,
   getForecasts,
   getRiskEntities,
+  simulateAutonomyCycle,
+  runAutonomyCycle,
   HealthStatus,
   EntityNetwork,
   BusinessEntityNetwork,
@@ -712,8 +714,41 @@ function AIAssistantPanel({
                     {/* Recommended Actions */}
                     {msg.narrativeSections.recommended_actions?.length > 0 && (
                       <div className="mb-2">
-                        <div className="fw-semibold mb-1" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
-                          Recommended Actions
+                        <div className="d-flex align-items-center justify-content-between mb-1">
+                          <div className="fw-semibold" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
+                            Recommended Actions
+                          </div>
+                          <div className="d-flex gap-1">
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              style={{ fontSize: '0.65rem', padding: '2px 8px' }}
+                              onClick={async () => {
+                                try {
+                                  const res = await simulateAutonomyCycle();
+                                  const recs = res.data?.recommendations || [];
+                                  alert(recs.length > 0
+                                    ? `Simulation: ${recs.length} action(s) would execute.\n${recs.map((r: any) => `${r.action} (risk: ${r.risk_score}, conf: ${r.confidence_score})`).join('\n')}`
+                                    : 'Simulation: No problems detected.');
+                                } catch { alert('Simulation failed.'); }
+                              }}
+                            >
+                              Simulate
+                            </button>
+                            <button
+                              className="btn btn-sm btn-primary"
+                              style={{ fontSize: '0.65rem', padding: '2px 8px' }}
+                              onClick={async () => {
+                                if (!window.confirm('Run autonomous cycle now? Safe actions (risk < 40) will auto-execute.')) return;
+                                try {
+                                  const res = await runAutonomyCycle();
+                                  const d = res.data;
+                                  alert(`Cycle complete: ${d.problems_detected} problems, ${d.decisions_created} decisions (${d.auto_executed} auto-executed, ${d.proposed} proposed)`);
+                                } catch { alert('Cycle failed.'); }
+                              }}
+                            >
+                              Execute
+                            </button>
+                          </div>
                         </div>
                         <div
                           className="ps-2 ms-1"

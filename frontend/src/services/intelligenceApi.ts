@@ -196,4 +196,16 @@ export interface BusinessEntityNetwork {
 
 export const getBusinessHierarchy = () => api.get<BusinessEntityNetwork>('/business-hierarchy');
 
+// ─── Autonomy endpoints ──────────────────────────────────────────────────────
+
+export const getAutonomyDashboard = () => api.get('/autonomy/dashboard');
+export const getAutonomyDecisions = (params?: { status?: string; limit?: number }) =>
+  api.get('/autonomy/decisions', { params });
+export const simulateAutonomyCycle = () => api.post('/autonomy/simulate');
+export const executeDecision = (decisionId: string) =>
+  api.post(`/autonomy/decisions/${decisionId}/execute`);
+export const rejectDecision = (decisionId: string) =>
+  api.post(`/autonomy/decisions/${decisionId}/reject`);
+export const runAutonomyCycle = () => api.post('/autonomy/run-cycle');
+
 export default api;

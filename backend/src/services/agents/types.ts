@@ -7,6 +7,10 @@ export interface AgentAction {
   after_state: Record<string, any> | null;
   result: 'success' | 'failed' | 'skipped';
   details?: Record<string, any>;
+  /** Target entity type for non-campaign actions */
+  entity_type?: 'campaign' | 'lead' | 'agent' | 'system' | 'config';
+  /** Target entity identifier */
+  entity_id?: string;
 }
 
 export interface AgentExecutionResult {
@@ -15,4 +19,6 @@ export interface AgentExecutionResult {
   actions_taken: AgentAction[];
   errors: string[];
   duration_ms: number;
+  /** Number of entities scanned/processed (for non-campaign agents) */
+  entities_processed?: number;
 }

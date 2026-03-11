@@ -16,6 +16,7 @@ import marketingRoutes from './admin/marketingRoutes';
 import governanceRoutes from './admin/governanceRoutes';
 import campaignIntelligenceRoutes from './admin/campaignIntelligenceRoutes';
 import alumniRoutes from './admin/alumniRoutes';
+import autonomyRoutes from './admin/autonomyRoutes';
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use(marketingRoutes);
 router.use(governanceRoutes);
 router.use(campaignIntelligenceRoutes);
 router.use(alumniRoutes);
+router.use(autonomyRoutes);
 
 export default router;
