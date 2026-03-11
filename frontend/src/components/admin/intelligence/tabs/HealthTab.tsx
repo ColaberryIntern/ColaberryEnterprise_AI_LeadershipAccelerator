@@ -68,7 +68,7 @@ export default function HealthTab({ entityFilter }: HealthTabProps) {
       setHealth(filtered);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterKey]);
 
   useEffect(() => {
     setLoading(true);

@@ -73,7 +73,7 @@ export default function ActivityTab({ entityFilter }: ActivityTabProps) {
       setTotal(data.total);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterKey]);
 
   useEffect(() => {
     setLoading(true);

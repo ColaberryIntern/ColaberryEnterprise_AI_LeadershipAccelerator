@@ -98,7 +98,7 @@ export default function ErrorsTab({ onErrorCountChange, entityFilter }: ErrorsTa
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [filterKey, onErrorCountChange]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterKey, onErrorCountChange]);
 
   useEffect(() => {
     setLoading(true);
