@@ -34,6 +34,7 @@ export interface CoryResponse {
   trace_id: string;
   intent: string;
   assistant_response?: any;
+  suggested_questions?: string[];
 }
 
 export interface CoryStatusReport {

@@ -1,4 +1,5 @@
 import React, { Suspense, lazy } from 'react';
+import CoryBadge from './CoryBadge';
 
 const IntelLineChart = lazy(() => import('./charts/IntelLineChart'));
 const IntelBarChart = lazy(() => import('./charts/IntelBarChart'));
@@ -56,6 +57,7 @@ interface VisualizationSpec {
 
 interface ChartRendererProps {
   visualization: VisualizationSpec;
+  onCoryClick?: (context: string) => void;
 }
 
 function isDataEmpty(data: any): boolean {
@@ -78,15 +80,26 @@ function extractKPIs(viz: VisualizationSpec): { label: string; value: string; co
   return kpis;
 }
 
-export default function ChartRenderer({ visualization }: ChartRendererProps) {
+export default function ChartRenderer({ visualization, onCoryClick }: ChartRendererProps) {
   const { chart_type, title, data, config } = visualization;
   const ChartComponent = CHART_MAP[chart_type];
   const kpis = extractKPIs(visualization);
 
+  const handleCoryClick = onCoryClick
+    ? () => {
+        const dataSample = Array.isArray(data) ? data.slice(0, 5) : [];
+        const summary = dataSample.map((d) => Object.entries(d).map(([k, v]) => `${k}: ${v}`).join(', ')).join('; ');
+        onCoryClick(`Analyze the "${title}" chart (${chart_type} chart). Data sample: ${summary}. Give me a full executive report with flagged KPIs, key findings, risk assessment, and recommended actions.`);
+      }
+    : undefined;
+
   return (
     <div className="intel-card-float intel-fade-in">
       <div className="card-header bg-white d-flex justify-content-between align-items-center py-2" style={{ borderRadius: '10px 10px 0 0' }}>
-        <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>{title}</span>
+        <div className="d-flex align-items-center gap-2">
+          <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>{title}</span>
+          {handleCoryClick && <CoryBadge onClick={handleCoryClick} tooltip={`Ask Cory about ${title}`} size={18} />}
+        </div>
         {kpis.length > 0 && (
           <div className="d-flex gap-1 flex-wrap">
             {kpis.map((kpi, i) => (

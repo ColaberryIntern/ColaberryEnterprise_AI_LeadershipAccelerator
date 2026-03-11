@@ -1,4 +1,5 @@
 import React from 'react';
+import CoryBadge from './CoryBadge';
 
 interface Props {
   kpis: {
@@ -11,6 +12,7 @@ interface Props {
   } | null;
   loading?: boolean;
   entityType?: string;
+  onCoryClick?: (context: string) => void;
 }
 
 const ENTITY_LABELS: Record<string, Record<string, string>> = {
@@ -98,9 +100,10 @@ interface KPICardProps {
   label: string;
   accent: string;
   children: React.ReactNode;
+  onCoryClick?: () => void;
 }
 
-function KPICard({ label, accent, children }: KPICardProps) {
+function KPICard({ label, accent, children, onCoryClick }: KPICardProps) {
   return (
     <div
       className="intel-card-float flex-fill"
@@ -108,9 +111,15 @@ function KPICard({ label, accent, children }: KPICardProps) {
         minWidth: '150px',
         maxWidth: '220px',
         borderLeft: `4px solid ${accent}`,
+        position: 'relative',
       }}
     >
       <div className="card-body p-3">
+        {onCoryClick && (
+          <div style={{ position: 'absolute', top: 8, right: 8 }}>
+            <CoryBadge onClick={onCoryClick} tooltip={`Ask Cory about ${label}`} size={18} />
+          </div>
+        )}
         <small
           className="text-muted fw-medium text-uppercase"
           style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}
@@ -123,7 +132,7 @@ function KPICard({ label, accent, children }: KPICardProps) {
   );
 }
 
-export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Props) {
+export default function ExecutiveInsightHeader({ kpis, loading, entityType, onCoryClick }: Props) {
   if (loading) return <SkeletonCards />;
   if (!kpis) return null;
 
@@ -147,7 +156,8 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Pr
     <div className="d-flex gap-3 flex-wrap">
       {/* System Risk Level */}
       {risk_level && (
-        <KPICard label={lbl('risk_level', 'System Risk Level')} accent={getRiskBadgeColor(risk_level.label)}>
+        <KPICard label={lbl('risk_level', 'System Risk Level')} accent={getRiskBadgeColor(risk_level.label)}
+          onCoryClick={onCoryClick ? () => onCoryClick(`Analyze the System Risk Level KPI: score is ${risk_level.score}/100, level is ${risk_level.label}, delta ${risk_level.delta}. Give me a full executive report with flagged KPIs, risk assessment, and recommended actions.`) : undefined}>
           <div className="d-flex align-items-center gap-2 mt-1">
             <span
               className="badge"
@@ -172,7 +182,8 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Pr
 
       {/* Active Alerts */}
       {active_alerts && (
-        <KPICard label={lbl('active_alerts', 'Active Alerts')} accent="#e53e3e">
+        <KPICard label={lbl('active_alerts', 'Active Alerts')} accent="#e53e3e"
+          onCoryClick={onCoryClick ? () => onCoryClick(`Analyze the Active Alerts KPI: ${active_alerts.count} high/critical alerts, delta ${active_alerts.delta}. Give me a full executive report with what's causing these alerts, severity breakdown, and recommended actions.`) : undefined}>
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {active_alerts.count}
           </div>
@@ -185,7 +196,8 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Pr
 
       {/* Lead Trend */}
       {lead_trend && (
-        <KPICard label={lbl('lead_trend', 'Lead Trend')} accent={lead_trend.delta >= 0 ? 'var(--color-accent)' : 'var(--color-secondary)'}>
+        <KPICard label={lbl('lead_trend', 'Lead Trend')} accent={lead_trend.delta >= 0 ? 'var(--color-accent)' : 'var(--color-secondary)'}
+          onCoryClick={onCoryClick ? () => onCoryClick(`Analyze the Lead Trend KPI: current value ${lead_trend.value}, delta ${lead_trend.delta}%, total ${lead_trend.total}. Give me a full executive report with pipeline health, conversion insights, and growth recommendations.`) : undefined}>
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {lead_trend.value}
           </div>
@@ -205,6 +217,7 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Pr
         <KPICard
           label={lbl('system_health', 'System Health')}
           accent={system_health.score >= 80 ? '#38a169' : system_health.score >= 50 ? '#d69e2e' : '#e53e3e'}
+          onCoryClick={onCoryClick ? () => onCoryClick(`Analyze the System Health KPI: score ${system_health.score}/100, status "${system_health.label}". Give me a full executive report with health breakdown, bottlenecks, and optimization recommendations.`) : undefined}
         >
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {system_health.score}<small className="fw-normal text-muted">/100</small>
@@ -220,6 +233,7 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Pr
         <KPICard
           label={lbl('agent_health', 'Agent Status')}
           accent={agent_health.errored > 0 ? '#dd6b20' : '#38a169'}
+          onCoryClick={onCoryClick ? () => onCoryClick(`Analyze the Agent Status KPI: ${agent_health.running} running, ${agent_health.errored} errored, ${agent_health.total} total agents. Give me a full executive report with agent fleet health, error analysis, and which agents need attention.`) : undefined}
         >
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {agent_health.running}<small className="fw-normal text-muted"> running</small>
@@ -239,7 +253,8 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType }: Pr
 
       {/* Process Activity */}
       {process_activity && (
-        <KPICard label={lbl('process_activity', 'Process Activity')} accent="#805ad5">
+        <KPICard label={lbl('process_activity', 'Process Activity')} accent="#805ad5"
+          onCoryClick={onCoryClick ? () => onCoryClick(`Analyze the Process Activity KPI: ${process_activity.count_24h} processes in 24h, delta ${process_activity.delta}. Give me a full executive report with activity trends, anomalies, and efficiency recommendations.`) : undefined}>
           <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
             {process_activity.count_24h}<small className="fw-normal text-muted"> (24h)</small>
           </div>

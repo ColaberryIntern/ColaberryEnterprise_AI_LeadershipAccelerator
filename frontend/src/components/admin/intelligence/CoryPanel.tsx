@@ -30,6 +30,7 @@ interface ChatMessage {
   agentsDispatched?: string[];
   actionsTaken?: string[];
   intent?: string;
+  suggestedQuestions?: string[];
 }
 
 interface CoryPanelProps {
@@ -175,6 +176,7 @@ export default function CoryPanel({
             agentsDispatched: coryResult.agents_dispatched,
             actionsTaken: coryResult.actions_taken,
             intent: coryResult.intent,
+            suggestedQuestions: coryResult.suggested_questions,
           };
           setMessages((prev) => [...prev, msg]);
           if (ar.visualizations?.length) onVisualizationsUpdate(ar.visualizations);
@@ -189,6 +191,7 @@ export default function CoryPanel({
             agentsDispatched: coryResult.agents_dispatched,
             actionsTaken: coryResult.actions_taken,
             intent: coryResult.intent,
+            suggestedQuestions: coryResult.suggested_questions,
           };
           setMessages((prev) => [...prev, msg]);
         }
@@ -205,11 +208,12 @@ export default function CoryPanel({
     [input, loading, queryLoading, scope, onVisualizationsUpdate, onSummaryUpdate],
   );
 
-  // Handle external queries
+  // Handle external queries (strip timestamp suffix used for uniqueness)
   useEffect(() => {
     if (externalQuery && externalQuery !== processedExternalRef.current) {
       processedExternalRef.current = externalQuery;
-      handleSend(externalQuery);
+      const cleanQuery = externalQuery.replace(/\|\d+$/, '');
+      handleSend(cleanQuery);
     }
   }, [externalQuery, handleSend]);
 
@@ -421,14 +425,15 @@ export default function CoryPanel({
               </div>
             )}
 
-            {/* Follow-up suggestions */}
-            {msg.role === 'assistant' && msg.recommendations && msg.recommendations.length > 0 && (
+            {/* Suggested next questions — show on the last assistant message only */}
+            {msg.role === 'assistant' && i === messages.length - 1 && msg.suggestedQuestions && msg.suggestedQuestions.length > 0 && !loading && (
               <div className="mt-2 d-flex flex-column gap-1">
-                {msg.recommendations.slice(0, 3).map((rec, ri) => (
-                  <button key={ri} className="btn btn-sm text-start border rounded-2 w-100"
+                {msg.suggestedQuestions.slice(0, 2).map((q, qi) => (
+                  <button key={qi} className="btn btn-sm text-start border rounded-2 w-100 d-flex align-items-center gap-2"
                     style={{ fontSize: '0.72rem', padding: '6px 10px', background: 'rgba(26, 54, 93, 0.03)', color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
-                    onClick={() => handleSend(rec)}>
-                    {rec}
+                    onClick={() => handleSend(q)}>
+                    <span style={{ color: 'var(--color-primary)', fontWeight: 600, flexShrink: 0 }}>&#9654;</span>
+                    {q}
                   </button>
                 ))}
               </div>

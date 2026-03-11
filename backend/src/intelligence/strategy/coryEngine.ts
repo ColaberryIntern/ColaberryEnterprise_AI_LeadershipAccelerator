@@ -49,6 +49,7 @@ export interface CoryResponse {
   trace_id: string;
   intent: CoryIntent;
   assistant_response?: AssistantResponse;
+  suggested_questions?: string[];
 }
 
 export interface CoryStatusReport {
@@ -275,6 +276,9 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
   // Step 5: Report to user in Cory's voice
   const message = await formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse);
 
+  // Generate 2 contextual follow-up questions
+  const suggested_questions = await generateSuggestedQuestions(cmd.command, intent, actionsPerformed, briefings);
+
   return {
     message,
     briefings: briefings.length > 0 ? briefings : undefined,
@@ -283,6 +287,7 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
     trace_id: traceId,
     intent,
     assistant_response: assistantResponse,
+    suggested_questions,
   };
 }
 
@@ -337,6 +342,57 @@ async function formatCoryResponse(
   if (topBriefing.action_taken) parts.push(topBriefing.action_taken);
   if (topBriefing.expected_impact) parts.push(`Expected impact: ${topBriefing.expected_impact}`);
   return parts.join('. ') + '.';
+}
+
+// ─── Suggested Questions ─────────────────────────────────────────────────────
+
+/** Intent-based fallback questions when LLM is unavailable */
+const FALLBACK_SUGGESTIONS: Record<CoryIntent, string[]> = {
+  briefing: ['What actions should we prioritize today?', 'Show me department health'],
+  analyze: ['What are the biggest risks right now?', 'How can we improve conversion rates?'],
+  hire_agent: ['Show me the current agent roster', 'Give me a status briefing'],
+  retire_agent: ['Which agents need attention?', 'Show me department health'],
+  launch_experiment: ['What experiments are currently running?', 'Give me a status briefing'],
+  department_status: ['Which department needs the most attention?', 'What experiments are running?'],
+  agent_status: ['Which agents have the highest error rates?', 'Give me a status briefing'],
+  optimize: ['What are our biggest growth opportunities?', 'Show me the reasoning timeline'],
+  general_query: ['Give me a status briefing', 'What are our biggest growth opportunities?'],
+};
+
+/**
+ * Generate 2 contextual follow-up questions based on the current conversation.
+ */
+async function generateSuggestedQuestions(
+  userCommand: string,
+  intent: CoryIntent,
+  actions: string[],
+  briefings: ExecutiveBriefing[],
+): Promise<string[]> {
+  try {
+    const context = [
+      `User asked: "${userCommand}"`,
+      `Intent: ${intent}`,
+      `Actions: ${actions.join('; ')}`,
+      briefings.length > 0
+        ? `Key findings: ${briefings.slice(0, 3).map((b) => b.analysis || b.action_taken || b.problem_detected).filter(Boolean).join('; ')}`
+        : '',
+    ].filter(Boolean).join('\n');
+
+    const result = await chatCompletion(
+      `You are Cory, an AI COO. Based on the conversation context, suggest exactly 2 natural follow-up questions the executive user would likely want to ask next. Questions should be concise (under 10 words each), actionable, and different from what was just asked. Return JSON: { "questions": ["...", "..."] }`,
+      context,
+      { json: true, maxTokens: 100, temperature: 0.4 },
+    );
+
+    if (result) {
+      const parsed = JSON.parse(result);
+      if (Array.isArray(parsed.questions) && parsed.questions.length >= 2) {
+        return parsed.questions.slice(0, 2);
+      }
+    }
+  } catch { /* fall through to fallback */ }
+
+  return FALLBACK_SUGGESTIONS[intent] || FALLBACK_SUGGESTIONS.general_query;
 }
 
 // ─── Status + Narrative ──────────────────────────────────────────────────────

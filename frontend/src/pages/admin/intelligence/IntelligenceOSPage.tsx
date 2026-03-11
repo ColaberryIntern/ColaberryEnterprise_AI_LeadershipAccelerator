@@ -193,6 +193,7 @@ function DynamicCanvas({
   onInvestigate,
   onCloseInvestigation,
   entityType,
+  onCoryClick,
 }: {
   visualizations: VisualizationSpec[];
   insights: QueryResponse | null;
@@ -200,6 +201,7 @@ function DynamicCanvas({
   summaryLoading: boolean;
   autoInsights: any[];
   onFollowUpClick: (question: string) => void;
+  onCoryClick: (context: string) => void;
   kpis: any;
   anomalies: any[];
   forecasts: any;
@@ -306,7 +308,7 @@ function DynamicCanvas({
   return (
     <div className="p-3" style={{ overflowY: 'auto', height: '100%' }}>
       {/* Section 1: Executive KPI Header */}
-      <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} entityType={entityType} />
+      <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} entityType={entityType} onCoryClick={onCoryClick} />
 
       {/* Section 2: Narrative Summary */}
       {narrativeText && (
@@ -354,7 +356,7 @@ function DynamicCanvas({
         }}
       >
         {filteredViz.map((viz, i) => (
-          <ChartRenderer key={i} visualization={viz} />
+          <ChartRenderer key={i} visualization={viz} onCoryClick={onCoryClick} />
         ))}
       </div>
 
@@ -1259,6 +1261,12 @@ function IntelligenceOSContent() {
     setIsProcessing(true);
   }, []);
 
+  const handleCoryClick = useCallback((context: string) => {
+    setExternalQuery(context + '|' + Date.now());
+    setRightOpen(true); // Ensure Cory panel is visible
+    setIsProcessing(true);
+  }, []);
+
   const handleInvestigate = useCallback((anomaly: any) => {
     setInvestigationTarget(anomaly);
   }, []);
@@ -1285,6 +1293,7 @@ function IntelligenceOSContent() {
               summaryLoading={summaryLoading}
               autoInsights={autoInsights}
               onFollowUpClick={handleFollowUpClick}
+              onCoryClick={handleCoryClick}
               kpis={kpis}
               anomalies={anomalies}
               forecasts={forecasts}
@@ -1366,6 +1375,7 @@ function IntelligenceOSContent() {
                 summaryLoading={summaryLoading}
                 autoInsights={autoInsights}
                 onFollowUpClick={handleFollowUpClick}
+                onCoryClick={handleCoryClick}
                 kpis={kpis}
                 anomalies={anomalies}
                 forecasts={forecasts}
