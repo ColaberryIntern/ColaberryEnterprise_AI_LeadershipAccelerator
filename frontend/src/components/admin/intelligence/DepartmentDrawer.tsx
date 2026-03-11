@@ -15,10 +15,12 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'secondary',
 };
 
+const ALL_SECTION_KEYS = ['overview', 'achievements', 'risks', 'building', 'maintenance', 'objectives', 'kpis'];
+
 export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwitchToCory }: Props) {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedSection, setExpandedSection] = useState<string>('overview');
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
 
   const fetchDetail = useCallback(async () => {
     if (!departmentId) return;
@@ -44,8 +46,19 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
     return () => document.removeEventListener('keydown', handleEsc);
   }, [isOpen, onClose]);
 
+  const allExpanded = expandedSections.size === ALL_SECTION_KEYS.length;
+
   const toggleSection = (key: string) => {
-    setExpandedSection((prev) => (prev === key ? '' : key));
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setExpandedSections(allExpanded ? new Set() : new Set(ALL_SECTION_KEYS));
   };
 
   const overview = detail?.overview;
@@ -93,6 +106,14 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
               <button
                 className="btn btn-sm px-2 py-0"
                 style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.3)' }}
+                onClick={toggleAll}
+                title={allExpanded ? 'Collapse All' : 'Expand All'}
+              >
+                {allExpanded ? 'Collapse' : 'Expand'}
+              </button>
+              <button
+                className="btn btn-sm px-2 py-0"
+                style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.3)' }}
                 onClick={onSwitchToCory}
                 title="Switch to Cory"
               >
@@ -126,7 +147,7 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
                   <div key={section.key} className="border-bottom">
                     <button
                       className="btn w-100 text-start px-3 py-2 d-flex justify-content-between align-items-center"
-                      style={{ fontSize: '0.78rem', background: expandedSection === section.key ? 'var(--color-bg-alt)' : 'transparent' }}
+                      style={{ fontSize: '0.78rem', background: expandedSections.has(section.key) ? 'var(--color-bg-alt)' : 'transparent' }}
                       onClick={() => toggleSection(section.key)}
                     >
                       <span className="fw-semibold">{section.label}</span>
@@ -134,11 +155,11 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
                         {section.count != null && section.count > 0 && (
                           <span className="badge bg-secondary" style={{ fontSize: '0.6rem' }}>{section.count}</span>
                         )}
-                        <span style={{ fontSize: '0.65rem' }}>{expandedSection === section.key ? '▾' : '▸'}</span>
+                        <span style={{ fontSize: '0.65rem' }}>{expandedSections.has(section.key) ? '▾' : '▸'}</span>
                       </span>
                     </button>
 
-                    {expandedSection === section.key && (
+                    {expandedSections.has(section.key) && (
                       <div className="px-3 pb-3">
                         {section.key === 'overview' && overview && (
                           <div>
