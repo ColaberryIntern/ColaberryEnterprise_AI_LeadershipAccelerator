@@ -55,7 +55,7 @@ const DEPT_COLORS: Record<string, string> = {
 
 // ─── Orchestration Tab ───────────────────────────────────────────────────────
 
-function OrchestrationGraph({ onAgentClick }: { onAgentClick?: (agentId: string) => void }) {
+function OrchestrationGraph({ onAgentClick, entityFilter }: { onAgentClick?: (agentId: string) => void; entityFilter?: { type: string; id: string; name: string } | null }) {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -75,21 +75,28 @@ function OrchestrationGraph({ onAgentClick }: { onAgentClick?: (agentId: string)
 
   if (loading) return <div className="text-center p-4 text-muted">Loading agent graph...</div>;
 
+  // Filter agents by department if entity filter is active
+  const filteredAgents = entityFilter?.type === 'department'
+    ? agents.filter((a) => (a.department || '').toLowerCase() === entityFilter.name.toLowerCase())
+    : agents;
+
   // Group by department
-  const departments = ['Intelligence', 'Operations', 'Growth', 'Maintenance', 'Security'];
+  const departments = entityFilter?.type === 'department'
+    ? [entityFilter.name]
+    : ['Intelligence', 'Operations', 'Growth', 'Maintenance', 'Security'];
   const grouped: Record<string, AgentInfo[]> = {};
   for (const dept of departments) grouped[dept] = [];
-  for (const agent of agents) {
+  for (const agent of filteredAgents) {
     const dept = agent.department || 'Operations';
     if (!grouped[dept]) grouped[dept] = [];
     grouped[dept].push(agent);
   }
 
-  // Compute fleet stats from agents
-  const total = agents.length;
-  const running = agents.filter((a) => a.status === 'running').length;
-  const errored = agents.filter((a) => a.status === 'error').length;
-  const paused = agents.filter((a) => a.status === 'paused').length;
+  // Compute fleet stats from filtered agents
+  const total = filteredAgents.length;
+  const running = filteredAgents.filter((a) => a.status === 'running').length;
+  const errored = filteredAgents.filter((a) => a.status === 'error').length;
+  const paused = filteredAgents.filter((a) => a.status === 'paused').length;
   const idle = total - running - errored - paused;
 
   return (
@@ -186,7 +193,7 @@ function OrchestrationGraph({ onAgentClick }: { onAgentClick?: (agentId: string)
 
 // ─── Timeline Tab ────────────────────────────────────────────────────────────
 
-function ReasoningTimeline() {
+function ReasoningTimeline({ entityFilter }: { entityFilter?: { type: string; id: string; name: string } | null }) {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -279,7 +286,7 @@ function ReasoningTimeline() {
 
 // ─── Impact Tab ──────────────────────────────────────────────────────────────
 
-function ImpactMetrics() {
+function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: string; name: string } | null }) {
   const [status, setStatus] = useState<CoryStatusReport | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -290,12 +297,26 @@ function ImpactMetrics() {
   if (loading) return <div className="text-center p-4 text-muted">Loading metrics...</div>;
   if (!status) return <div className="text-center p-4 text-muted">Unable to load metrics.</div>;
 
+  // Filter departments if entity filter active
+  const filteredDepts = entityFilter?.type === 'department'
+    ? status.departments.filter((d) => d.department.toLowerCase() === entityFilter.name.toLowerCase())
+    : status.departments;
+
+  const filteredFleet = entityFilter?.type === 'department'
+    ? {
+        total: filteredDepts.reduce((s, d) => s + d.agent_count, 0),
+        healthy: filteredDepts.reduce((s, d) => s + d.healthy, 0),
+        errored: filteredDepts.reduce((s, d) => s + d.errored, 0),
+        paused: filteredDepts.reduce((s, d) => s + d.paused, 0),
+      }
+    : status.agent_fleet;
+
   const kpis = [
     { label: 'Problems Solved', value: status.decisions_24h.executed, color: 'var(--color-accent)' },
     { label: 'Experiments Running', value: status.experiments_running, color: '#805ad5' },
     { label: 'Avg Confidence', value: `${status.avg_confidence}%`, color: 'var(--color-primary-light)' },
     { label: 'System Risk', value: status.system_risk_level, color: status.system_risk_level === 'high' ? 'var(--color-secondary)' : status.system_risk_level === 'moderate' ? '#d69e2e' : 'var(--color-accent)' },
-    { label: 'Active Agents', value: status.agent_fleet.healthy, color: 'var(--color-primary)' },
+    { label: 'Active Agents', value: filteredFleet.healthy, color: 'var(--color-primary)' },
   ];
 
   return (
@@ -318,19 +339,19 @@ function ImpactMetrics() {
         <div className="card-body p-3">
           <div className="d-flex gap-3 mb-2">
             <div className="text-center">
-              <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>{status.agent_fleet.total}</div>
+              <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>{filteredFleet.total}</div>
               <small className="text-muted" style={{ fontSize: '0.65rem' }}>Total</small>
             </div>
             <div className="text-center">
-              <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-accent)' }}>{status.agent_fleet.healthy}</div>
+              <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-accent)' }}>{filteredFleet.healthy}</div>
               <small className="text-muted" style={{ fontSize: '0.65rem' }}>Healthy</small>
             </div>
             <div className="text-center">
-              <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-secondary)' }}>{status.agent_fleet.errored}</div>
+              <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-secondary)' }}>{filteredFleet.errored}</div>
               <small className="text-muted" style={{ fontSize: '0.65rem' }}>Errored</small>
             </div>
             <div className="text-center">
-              <div className="fw-bold" style={{ fontSize: '1.1rem', color: '#d69e2e' }}>{status.agent_fleet.paused}</div>
+              <div className="fw-bold" style={{ fontSize: '1.1rem', color: '#d69e2e' }}>{filteredFleet.paused}</div>
               <small className="text-muted" style={{ fontSize: '0.65rem' }}>Paused</small>
             </div>
           </div>
@@ -382,7 +403,7 @@ function ImpactMetrics() {
                 </tr>
               </thead>
               <tbody>
-                {status.departments.map((d) => (
+                {filteredDepts.map((d) => (
                   <tr key={d.department}>
                     <td>
                       <span className="d-inline-block rounded-circle me-1" style={{ width: 8, height: 8, background: DEPT_COLORS[d.department] || '#718096' }} />
@@ -432,8 +453,8 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
   return (
     <div className="d-flex flex-column h-100">
       {/* Tab Bar */}
-      <div className="px-3 pt-2" style={{ flexShrink: 0, overflowX: 'auto' }}>
-        <ul className="nav nav-tabs flex-nowrap" style={{ fontSize: '0.78rem' }}>
+      <div className="px-3 pt-2" style={{ flexShrink: 0 }}>
+        <ul className="nav nav-tabs flex-wrap" style={{ fontSize: '0.78rem' }}>
           {tabs.map((tab) => (
             <li key={tab.key} className="nav-item">
               <button
@@ -473,14 +494,14 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
       {/* Tab Content */}
       <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
         {activeTab === 'dashboard' && children}
-        {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} />}
+        {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} entityFilter={entityFilter} />}
         {activeTab === 'activity' && <ActivityTab entityFilter={entityFilter} />}
         {activeTab === 'health' && <HealthTab entityFilter={entityFilter} />}
         {activeTab === 'errors' && <ErrorsTab onErrorCountChange={setErrorCount} entityFilter={entityFilter} />}
         {activeTab === 'qa' && <QAScanTab entityFilter={entityFilter} />}
         {activeTab === 'safety' && <SafetyTab entityFilter={entityFilter} />}
-        {activeTab === 'timeline' && <ReasoningTimeline />}
-        {activeTab === 'impact' && <ImpactMetrics />}
+        {activeTab === 'timeline' && <ReasoningTimeline entityFilter={entityFilter} />}
+        {activeTab === 'impact' && <ImpactMetrics entityFilter={entityFilter} />}
         {activeTab === 'initiatives' && <InitiativesTab entityFilter={entityFilter} />}
         {activeTab === 'roadmap' && <RoadmapTab entityFilter={entityFilter} />}
         {activeTab === 'dept-timeline' && <DeptTimelineTab entityFilter={entityFilter} />}

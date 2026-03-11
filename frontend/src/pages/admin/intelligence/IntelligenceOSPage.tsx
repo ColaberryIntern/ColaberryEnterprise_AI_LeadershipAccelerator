@@ -1405,7 +1405,7 @@ function IntelligenceOSContent() {
       <SystemHealthBar health={health} />
       <ContextBreadcrumb />
 
-      <div className="d-flex flex-grow-1" style={{ minHeight: 0 }}>
+      <div className="d-flex flex-grow-1" style={{ minHeight: 0, overflow: 'hidden' }}>
         {/* Left Toggle */}
         <PanelToggle label="NAV" side="left" isOpen={leftOpen} onClick={() => setLeftOpen(!leftOpen)} />
 
