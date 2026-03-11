@@ -47,11 +47,12 @@ export interface AlumniRecord {
 export async function fetchAlumniFromCCPP(): Promise<AlumniRecord[]> {
   const db = await connectMssql();
   const result = await db.request().query<AlumniRecord>(`
-    SELECT Firstname, LastName, Email, PhoneNumber, HiredDate
+    SELECT DISTINCT Firstname, LastName, Email, PhoneNumber, HiredDate
     FROM CCPP.dbo.vw_QS_MetricsDashboard_ActiveUsers
     WHERE grouporderid = 1
       AND PhoneNumber IS NOT NULL
       AND Email IS NOT NULL
+    ORDER BY HiredDate DESC
   `);
   console.log(`[AlumniData] Fetched ${result.recordset.length} alumni from CCPP`);
   return result.recordset;
