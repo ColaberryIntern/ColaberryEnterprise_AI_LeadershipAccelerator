@@ -13,6 +13,7 @@ import LeadsOutreachTab from '../../components/campaign/LeadsOutreachTab';
 import CRMTab from '../../components/campaign/CRMTab';
 import SettingsTab from '../../components/campaign/SettingsTab';
 import ICPLeadsTab from '../../components/campaign/ICPLeadsTab';
+import EvolutionTab from '../../components/campaign/EvolutionTab';
 
 interface CampaignDetail {
   id: string;
@@ -35,6 +36,9 @@ interface CampaignDetail {
   goals?: string;
   gtm_notes?: string;
   settings?: Record<string, any>;
+  campaign_mode?: string;
+  ramp_state?: any;
+  evolution_config?: any;
 }
 
 interface CampaignLead {
@@ -84,7 +88,7 @@ interface AnalyticsData {
   lead_outcomes: any[];
 }
 
-type TabKey = 'overview' | 'analytics' | 'targeting' | 'icp_leads' | 'gtm' | 'leads' | 'crm' | 'settings';
+type TabKey = 'overview' | 'analytics' | 'targeting' | 'icp_leads' | 'gtm' | 'leads' | 'crm' | 'evolution' | 'settings';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -94,6 +98,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'gtm', label: 'Strategy & Prompts' },
   { key: 'leads', label: 'Leads & Outreach' },
   { key: 'crm', label: 'CRM' },
+  { key: 'evolution', label: 'AI Control' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -333,7 +338,11 @@ function AdminCampaignDetailPage() {
 
       {/* Tab Navigation */}
       <ul className="nav nav-tabs nav-tabs-scrollable mb-4">
-        {TABS.filter((tab) => tab.key !== 'targeting' || campaign.type === 'cold_outbound').map((tab) => (
+        {TABS.filter((tab) => {
+          if (tab.key === 'targeting' && campaign.type !== 'cold_outbound') return false;
+          if (tab.key === 'evolution' && campaign.campaign_mode !== 'autonomous') return false;
+          return true;
+        }).map((tab) => (
           <li key={tab.key} className="nav-item">
             <button
               className={`nav-link ${activeTab === tab.key ? 'active' : ''}`}
@@ -421,10 +430,34 @@ function AdminCampaignDetailPage() {
         />
       )}
 
+      {activeTab === 'evolution' && campaign.campaign_mode === 'autonomous' && (
+        <EvolutionTab
+          campaignId={id!}
+          headers={headers}
+          rampState={campaign.ramp_state}
+          evolutionConfig={campaign.evolution_config}
+          onRefresh={fetchCampaign}
+        />
+      )}
+
       {activeTab === 'settings' && (
         <SettingsTab
           campaignId={id!}
           headers={headers}
+          campaignMode={campaign.campaign_mode}
+          campaignStatus={campaign.status}
+          onModeChange={async (mode) => {
+            try {
+              await fetch(`/api/admin/campaigns/${id}`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({ campaign_mode: mode }),
+              });
+              setCampaign({ ...campaign, campaign_mode: mode });
+            } catch (err) {
+              console.error('Failed to update campaign mode:', err);
+            }
+          }}
         />
       )}
 

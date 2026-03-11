@@ -18,6 +18,9 @@ interface Campaign {
   budget_spent: number;
   started_at: string | null;
   created_at: string;
+  campaign_mode?: string;
+  ramp_state?: any;
+  evolution_config?: any;
 }
 
 interface Sequence {
@@ -198,9 +201,19 @@ function AdminCampaignsPage() {
                         {c.status}
                       </span>
                     </div>
-                    <span className="badge bg-light text-dark border mb-2">
-                      {TYPE_LABELS[c.type] || c.type}
-                    </span>
+                    <div className="d-flex gap-1 mb-2 flex-wrap">
+                      <span className="badge bg-light text-dark border">
+                        {TYPE_LABELS[c.type] || c.type}
+                      </span>
+                      {c.campaign_mode === 'autonomous' && (
+                        <span className="badge bg-info text-white">Autonomous</span>
+                      )}
+                      {c.campaign_mode === 'autonomous' && c.ramp_state && c.ramp_state.status !== 'complete' && (
+                        <span className="badge bg-outline-primary border text-primary">
+                          Phase {c.ramp_state.current_phase}/{c.ramp_state.phase_sizes?.length || 4}
+                        </span>
+                      )}
+                    </div>
                     {c.description && (
                       <p className="text-muted small mb-2" style={{ WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {c.description}

@@ -129,6 +129,30 @@ export async function recordOutcome(params: RecordOutcomeParams): Promise<void> 
         console.error(`[InteractionService] CampaignLead tracking error:`, trackErr.message);
       }
     }
+
+    // Update variant counters for autonomous campaign A/B testing
+    if (params.scheduled_email_id) {
+      try {
+        const se = await ScheduledEmail.findByPk(params.scheduled_email_id, { attributes: ['metadata'], raw: true }) as any;
+        const variantId = se?.metadata?.variant_id;
+        if (variantId) {
+          const { CampaignVariant } = require('../models');
+          const fieldMap: Record<string, string> = {
+            opened: 'opens',
+            replied: 'replies',
+            bounced: 'bounces',
+            converted: 'conversions',
+            booked_meeting: 'conversions',
+          };
+          const field = fieldMap[params.outcome];
+          if (field) {
+            await CampaignVariant.increment(field, { where: { id: variantId } });
+          }
+        }
+      } catch (variantErr: any) {
+        // Non-critical
+      }
+    }
   } catch (err: any) {
     // Non-blocking — don't fail sends because of tracking errors
     console.error(`[InteractionService] Failed to record outcome:`, err.message);

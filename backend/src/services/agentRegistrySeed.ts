@@ -274,6 +274,28 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Runs end-to-end tests on all active campaigns every 6 hours. Creates test leads, tests email/SMS/voice channels, verifies AI generation, and computes QA scores (0-100).',
   },
   {
+    agent_name: 'AutonomousRampEvaluator',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/autonomousRampService.ts',
+    trigger_type: 'cron',
+    schedule: '0 */2 * * *',
+    category: 'outbound',
+    description:
+      'Evaluates health scores for active autonomous campaigns every 2 hours. Advances ramp phases when health >= 70, holds at 50-69, and pauses for review below 50.',
+  },
+  {
+    agent_name: 'CampaignEvolutionEngine',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/campaignEvolutionService.ts',
+    trigger_type: 'cron',
+    schedule: '0 */4 * * *',
+    category: 'outbound',
+    description:
+      'Generates and evaluates AI message variants for autonomous campaigns every 4 hours. Creates A/B test variants, scores performance, promotes winners, and retires underperformers.',
+  },
+  {
     agent_name: 'CampaignSelfHealingAgent',
     agent_type: 'self_healing',
     module: 'aiOpsScheduler',
@@ -495,7 +517,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
 ];
 
 /**
- * Seed the full agent registry (43 agents). Idempotent — uses findOrCreate
+ * Seed the full agent registry (45 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
 export async function seedAgentRegistry(): Promise<void> {

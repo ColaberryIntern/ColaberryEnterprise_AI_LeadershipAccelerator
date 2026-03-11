@@ -200,15 +200,41 @@ export async function scanCampaign(campaign: Campaign): Promise<ScanResult> {
   const healthScore = Math.round(Math.min(100, Math.max(0, score)));
   const status: HealthStatus = healthScore >= 80 ? 'healthy' : healthScore >= 60 ? 'degraded' : 'critical';
 
-  const metrics: Record<string, number> = {
+  // Compute additional rates for autonomous campaign support
+  let unsubscribeRate = 0;
+  let conversionRate = 0;
+  if (totalSent7d >= 5) {
+    const unsubCount = await InteractionOutcome.count({
+      where: { campaign_id: campaign.id, outcome: 'unsubscribed', created_at: { [Op.gte]: last7d } },
+    });
+    const convertCount = await InteractionOutcome.count({
+      where: { campaign_id: campaign.id, outcome: 'converted', created_at: { [Op.gte]: last7d } },
+    });
+    unsubscribeRate = unsubCount / totalSent7d;
+    conversionRate = convertCount / totalSent7d;
+  }
+
+  const metrics: Record<string, any> = {
     open_rate: Math.round(openRate * 10000) / 100,
     reply_rate: Math.round(replyRate * 10000) / 100,
     bounce_rate: Math.round(bounceRate * 10000) / 100,
+    unsubscribe_rate: Math.round(unsubscribeRate * 10000) / 100,
+    conversion_rate: Math.round(conversionRate * 10000) / 100,
     sent_24h: sentCount,
     failed_24h: failedCount,
     ai_attempted_24h: aiAttempted,
     ai_failed_24h: Number(aiFailed),
   };
+
+  // Add autonomous campaign signals
+  if ((campaign as any).campaign_mode === 'autonomous') {
+    const { CampaignVariant } = require('../models');
+    metrics.ramp_phase = (campaign as any).ramp_state?.current_phase || 0;
+    metrics.ramp_status = (campaign as any).ramp_state?.status || 'none';
+    metrics.active_variants = await CampaignVariant.count({
+      where: { campaign_id: campaign.id, status: { [Op.in]: ['active', 'testing', 'promoted'] } },
+    });
+  }
 
   // --- Upsert health record ---
   const existing = await CampaignHealth.findOne({

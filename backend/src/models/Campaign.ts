@@ -3,6 +3,7 @@ import { sequelize } from '../config/database';
 
 export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'behavioral_trigger';
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
+export type CampaignMode = 'standard' | 'autonomous';
 
 interface CampaignAttributes {
   id?: string;
@@ -23,6 +24,9 @@ interface CampaignAttributes {
   completed_at?: Date;
   interest_group?: string;
   qa_status?: string;
+  campaign_mode?: CampaignMode;
+  ramp_state?: Record<string, any> | null;
+  evolution_config?: Record<string, any> | null;
   created_by?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -47,6 +51,9 @@ class Campaign extends Model<CampaignAttributes> implements CampaignAttributes {
   declare completed_at: Date;
   declare interest_group: string;
   declare qa_status: string;
+  declare campaign_mode: CampaignMode;
+  declare ramp_state: Record<string, any> | null;
+  declare evolution_config: Record<string, any> | null;
   declare created_by: string;
   declare created_at: Date;
   declare updated_at: Date;
@@ -151,6 +158,21 @@ Campaign.init(
       type: DataTypes.STRING(20),
       allowNull: true,
       defaultValue: 'untested',
+    },
+    campaign_mode: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'standard',
+    },
+    ramp_state: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: null,
+    },
+    evolution_config: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: null,
     },
     created_by: {
       type: DataTypes.UUID,

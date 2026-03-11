@@ -49,9 +49,12 @@ const TIMEZONES = [
 interface Props {
   campaignId: string;
   headers: Record<string, string>;
+  campaignMode?: string;
+  campaignStatus?: string;
+  onModeChange?: (mode: string) => void;
 }
 
-export default function SettingsTab({ campaignId, headers }: Props) {
+export default function SettingsTab({ campaignId, headers, campaignMode, campaignStatus, onModeChange }: Props) {
   const [settings, setSettings] = useState<CampaignSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,6 +150,54 @@ export default function SettingsTab({ campaignId, headers }: Props) {
           </div>
         </div>
       )}
+
+      {/* Campaign Mode */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold">Campaign Mode</div>
+        <div className="card-body">
+          <div className="d-flex gap-4">
+            <div className="form-check">
+              <input
+                className="form-check-input"
+                type="radio"
+                name="campaignMode"
+                id="mode-standard"
+                value="standard"
+                checked={campaignMode !== 'autonomous'}
+                onChange={() => onModeChange?.('standard')}
+                disabled={campaignStatus !== 'draft'}
+              />
+              <label className="form-check-label" htmlFor="mode-standard">
+                <span className="fw-medium">Standard</span>
+                <br />
+                <small className="text-muted">Deterministic execution. All leads enrolled at activation. No AI variant testing.</small>
+              </label>
+            </div>
+            <div className="form-check">
+              <input
+                className="form-check-input"
+                type="radio"
+                name="campaignMode"
+                id="mode-autonomous"
+                value="autonomous"
+                checked={campaignMode === 'autonomous'}
+                onChange={() => onModeChange?.('autonomous')}
+                disabled={campaignStatus !== 'draft'}
+              />
+              <label className="form-check-label" htmlFor="mode-autonomous">
+                <span className="fw-medium">Autonomous</span>
+                <br />
+                <small className="text-muted">AI-driven gradual ramp-up, health-gated phases, and self-evolving message variants.</small>
+              </label>
+            </div>
+          </div>
+          {campaignStatus !== 'draft' && (
+            <div className="alert alert-warning py-2 mt-3 mb-0">
+              <small>Campaign mode can only be changed while the campaign is in draft status.</small>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Inheritance Notice */}
       <div className="alert alert-info py-2 mb-4 d-flex align-items-center gap-2">

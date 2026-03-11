@@ -165,17 +165,45 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
 
     // Load campaign context if linked
     let campaignContext: any = undefined;
+    let campaignRef: any = null;
     if (action.campaign_id) {
-      const campaign = await Campaign.findByPk(action.campaign_id);
-      if (campaign) {
+      campaignRef = await Campaign.findByPk(action.campaign_id);
+      if (campaignRef) {
         campaignContext = {
-          type: campaign.type,
-          name: campaign.name,
+          type: campaignRef.type,
+          name: campaignRef.name,
           step_goal: action.metadata?.step_goal || undefined,
           step_number: action.step_index,
           total_steps: undefined, // Could be loaded from sequence if needed
-          system_prompt: campaign.ai_system_prompt || undefined,
+          system_prompt: campaignRef.ai_system_prompt || undefined,
         };
+      }
+    }
+
+    // Autonomous mode: variant selection
+    if (campaignRef && (campaignRef as any).campaign_mode === 'autonomous') {
+      try {
+        const { selectVariantForSend } = require('./campaignEvolutionService');
+        const variant = await selectVariantForSend(action.campaign_id, action.step_index, channel);
+        if (variant) {
+          // Use variant's override instructions if available
+          if (variant.ai_instructions_override) {
+            (action as any).ai_instructions = variant.ai_instructions_override;
+          }
+          // Track which variant was used
+          const meta = { ...(action.metadata || {}), variant_id: variant.id, variant_label: variant.variant_label };
+          await action.update({ metadata: meta });
+          await variant.increment('sends');
+        }
+        // Increment sends_since_last_evolution
+        const evoConfig = (campaignRef as any).evolution_config;
+        if (evoConfig) {
+          evoConfig.sends_since_last_evolution = (evoConfig.sends_since_last_evolution || 0) + 1;
+          await campaignRef.update({ evolution_config: evoConfig });
+        }
+      } catch (evoErr: any) {
+        // Non-critical — proceed with original content
+        console.warn(`[Scheduler] Variant selection failed for ${action.id}:`, evoErr.message);
       }
     }
 
@@ -1167,6 +1195,30 @@ export function startScheduler(): void {
   });
 
   console.log('[Scheduler] Alumni: lifecycle processor daily at 6 AM CT (11 UTC)');
+
+  // ── Autonomous Ramp Evaluator (every 2 hours) ─────────────────────────
+  const { runRampEvaluator } = require('./autonomousRampService');
+
+  cron.schedule('0 */2 * * *', () => {
+    instrumentCronJob('AutonomousRampEvaluator', async () => {
+      await runRampEvaluator();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Autonomous ramp evaluator error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Autonomous ramp evaluator: every 2 hours');
+
+  // ── Campaign Evolution Engine (every 4 hours) ─────────────────────────
+  const { runEvolutionEngine } = require('./campaignEvolutionService');
+
+  cron.schedule('0 */4 * * *', () => {
+    instrumentCronJob('CampaignEvolutionEngine', async () => {
+      await runEvolutionEngine();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Campaign evolution engine error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Campaign evolution engine: every 4 hours');
 
   // AI Operations Layer scheduler
   const { startAIOpsScheduler } = require('./aiOpsScheduler');

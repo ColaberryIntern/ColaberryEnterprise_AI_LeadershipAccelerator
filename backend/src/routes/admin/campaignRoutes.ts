@@ -1,5 +1,13 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
+import { getRampStatus, manualAdvanceRamp } from '../../services/autonomousRampService';
+import {
+  freezeEvolution,
+  unfreezeEvolution,
+  approveVariant,
+  rejectVariant,
+} from '../../services/campaignEvolutionService';
+import { CampaignVariant } from '../../models';
 import {
   handleListCampaigns,
   handleCreateCampaign,
@@ -96,5 +104,73 @@ router.get('/api/admin/apollo/quota', requireAdmin, handleApolloQuota);
 
 // AI Preview
 router.post('/api/admin/ai/preview', requireAdmin, handleAIPreview);
+
+// ── Autonomous Campaign Endpoints ────────────────────────────────────────
+
+router.get('/api/admin/campaigns/:id/ramp-status', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await getRampStatus(req.params.id as string);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/ramp-advance', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const rampState = await manualAdvanceRamp(req.params.id as string);
+    res.json({ ok: true, ramp_state: rampState });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/campaigns/:id/variants', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const variants = await CampaignVariant.findAll({
+      where: { campaign_id: req.params.id as string },
+      order: [['step_index', 'ASC'], ['variant_label', 'ASC']],
+    });
+    res.json(variants);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/variants/:vid/approve', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await approveVariant(req.params.vid as string);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/variants/:vid/reject', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await rejectVariant(req.params.vid as string);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/evolution/freeze', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await freezeEvolution(req.params.id as string);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/evolution/unfreeze', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await unfreezeEvolution(req.params.id as string);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 export default router;

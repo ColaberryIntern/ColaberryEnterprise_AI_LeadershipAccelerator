@@ -122,7 +122,8 @@ export async function updateCampaign(id: string, updates: Record<string, any>) {
 
   const allowedFields = [
     'name', 'description', 'type', 'sequence_id', 'targeting_criteria',
-    'channel_config', 'budget_total', 'ai_system_prompt',
+    'channel_config', 'budget_total', 'ai_system_prompt', 'campaign_mode',
+    'settings', 'goals', 'gtm_notes', 'evolution_config',
   ];
   const filtered: Record<string, any> = {};
   for (const key of allowedFields) {
@@ -167,6 +168,17 @@ export async function activateCampaign(id: string) {
     started_at: campaign.started_at || new Date(),
     updated_at: new Date(),
   } as any);
+
+  // Autonomous mode: initialize ramp (gradual enrollment) instead of all-at-once
+  if ((campaign as any).campaign_mode === 'autonomous') {
+    try {
+      const { initializeRamp } = require('./autonomousRampService');
+      await initializeRamp(campaign.id);
+      console.log(`[Campaign] Autonomous ramp initialized for ${campaign.name}`);
+    } catch (err: any) {
+      console.error(`[Campaign] Failed to initialize ramp for ${campaign.id}:`, err.message);
+    }
+  }
 
   return campaign;
 }
