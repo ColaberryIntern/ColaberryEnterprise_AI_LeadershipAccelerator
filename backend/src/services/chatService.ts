@@ -157,7 +157,7 @@ export async function startConversation(params: {
 
     // Update visitor type in memory
     if (memory.visitor_type !== visitorType) {
-      await memory.update({ visitor_type: visitorType });
+      await memory.update({ visitor_type: visitorType as any });
     }
   } catch (memErr) {
     console.warn('[Chat] Admissions memory unavailable (visitor may not exist yet):', (memErr as Error).message);
