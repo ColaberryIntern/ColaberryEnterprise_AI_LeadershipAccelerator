@@ -20,6 +20,7 @@ import {
   handleGetRiskEntities,
   handleGetBusinessHierarchy,
   handleDataAccessReport,
+  handleAssistantQuery,
 } from '../../controllers/intelligenceController';
 
 const router = Router();
@@ -62,5 +63,8 @@ router.get('/api/admin/intelligence/business-hierarchy', requireAdmin, handleGet
 
 // Data Access Verification
 router.get('/api/admin/intelligence/data-access-report', requireAdmin, handleDataAccessReport);
+
+// Deterministic AI Assistant Pipeline
+router.post('/api/admin/intelligence/assistant', requireAdmin, handleAssistantQuery);
 
 export default router;

@@ -266,3 +266,30 @@ export async function handleDataAccessReport(req: Request, res: Response, next: 
     res.json(data);
   } catch (error) { next(error); }
 }
+
+export async function handleAssistantQuery(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { question, entity_type } = req.body;
+    if (!question) {
+      res.status(400).json({ error: 'question is required' });
+      return;
+    }
+    const { runAssistantPipeline } = await import('../intelligence/assistant/assistantEngine');
+    const data = await runAssistantPipeline(question, entity_type);
+
+    // Store in Q&A history
+    const QAHistory = (await import('../models/QAHistory')).default;
+    await QAHistory.create({
+      question,
+      answer: data.narrative || '',
+      intent: data.intent || '',
+      entities: { entity_type: entity_type || 'global' },
+      execution_path: data.execution_path || '',
+      sources: data.sources || [],
+      user_id: (req as any).user?.id || null,
+      scope: { entity_type: entity_type || 'global' },
+    });
+
+    res.json(data);
+  } catch (error) { next(error); }
+}
