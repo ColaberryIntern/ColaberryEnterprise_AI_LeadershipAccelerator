@@ -15,6 +15,7 @@ import {
   getRiskEntities,
   simulateAutonomyCycle,
   runAutonomyCycle,
+  getDepartmentDetail,
   HealthStatus,
   EntityNetwork,
   BusinessEntityNetwork,
@@ -29,6 +30,7 @@ import ChartRenderer from '../../../components/admin/intelligence/ChartRenderer'
 import AutoInsightsGrid from '../../../components/admin/intelligence/AutoInsightsGrid';
 import EntityNavigationPanel from '../../../components/admin/intelligence/entityPanel/EntityNavigationPanel';
 import CoryPanel from '../../../components/admin/intelligence/CoryPanel';
+import CoryBadge from '../../../components/admin/intelligence/CoryBadge';
 import CoryOrb from '../../../components/admin/intelligence/CoryOrb';
 import CoryOverlay from '../../../components/admin/intelligence/CoryOverlay';
 import DepartmentDrawer from '../../../components/admin/intelligence/DepartmentDrawer';
@@ -179,6 +181,194 @@ function ContextBreadcrumb() {
   );
 }
 
+// ─── Department KPI Header ────────────────────────────────────────────────────
+function DepartmentKPIHeader({
+  detail,
+  loading,
+  onCoryClick,
+}: {
+  detail: any;
+  loading: boolean;
+  onCoryClick?: (context: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="d-flex gap-3 flex-wrap">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="intel-card-float flex-fill" style={{ minWidth: 140, maxWidth: 220 }}>
+            <div className="card-body p-3">
+              <div className="placeholder-glow">
+                <span className="placeholder col-8 placeholder-sm mb-2 d-block" />
+                <span className="placeholder col-5 placeholder-lg mb-1 d-block" />
+                <span className="placeholder col-6 placeholder-xs d-block" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!detail) return null;
+
+  const overview = detail.overview || {};
+  const deptKpis: { name: string; value: number; unit: string; trend: string }[] = detail.kpis || [];
+  const objectives: { title: string; progress: number }[] = detail.strategic_objectives || [];
+  const deptColor = overview.color || 'var(--color-primary)';
+
+  const trendIcon = (trend: string) => {
+    if (trend === 'up') return { symbol: '\u2191', color: 'var(--color-accent)', label: 'Improving' };
+    if (trend === 'down') return { symbol: '\u2193', color: 'var(--color-secondary)', label: 'Declining' };
+    return { symbol: '\u2192', color: '#718096', label: 'Stable' };
+  };
+
+  return (
+    <div>
+      {/* Top row: Department summary scores */}
+      <div className="d-flex gap-3 flex-wrap mb-3">
+        {/* Health Score */}
+        <div
+          className="intel-card-float flex-fill"
+          style={{ minWidth: 130, maxWidth: 200, borderLeft: `4px solid ${overview.health_score >= 70 ? 'var(--color-accent)' : overview.health_score >= 40 ? '#d69e2e' : 'var(--color-secondary)'}` }}
+        >
+          <div className="card-body p-3">
+            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+              Health Score
+            </small>
+            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: overview.health_score >= 70 ? 'var(--color-accent)' : overview.health_score >= 40 ? '#d69e2e' : 'var(--color-secondary)' }}>
+              {Math.round(overview.health_score)}<small className="fw-normal text-muted">/100</small>
+            </div>
+          </div>
+        </div>
+
+        {/* Innovation Score */}
+        <div
+          className="intel-card-float flex-fill"
+          style={{ minWidth: 130, maxWidth: 200, borderLeft: `4px solid ${deptColor}` }}
+        >
+          <div className="card-body p-3">
+            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+              Innovation Score
+            </small>
+            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: deptColor }}>
+              {Math.round(overview.innovation_score)}<small className="fw-normal text-muted">/100</small>
+            </div>
+          </div>
+        </div>
+
+        {/* Team Size */}
+        <div
+          className="intel-card-float flex-fill"
+          style={{ minWidth: 130, maxWidth: 200, borderLeft: '4px solid var(--color-primary)' }}
+        >
+          <div className="card-body p-3">
+            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+              Team Size
+            </small>
+            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+              {overview.team_size}
+            </div>
+          </div>
+        </div>
+
+        {/* Active Initiatives */}
+        <div
+          className="intel-card-float flex-fill"
+          style={{ minWidth: 130, maxWidth: 200, borderLeft: '4px solid #805ad5' }}
+        >
+          <div className="card-body p-3">
+            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+              Active Initiatives
+            </small>
+            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: '#805ad5' }}>
+              {detail.building?.length || 0}
+            </div>
+            <small className="text-muted" style={{ fontSize: '0.65rem' }}>
+              of {(detail.building?.length || 0) + (detail.achievements?.length || 0) + (detail.maintenance?.length || 0)} total
+            </small>
+          </div>
+        </div>
+      </div>
+
+      {/* Department-specific KPIs */}
+      {deptKpis.length > 0 && (
+        <div className="d-flex gap-3 flex-wrap mb-3">
+          {deptKpis.map((kpi, i) => {
+            const t = trendIcon(kpi.trend);
+            return (
+              <div
+                key={i}
+                className="intel-card-float flex-fill"
+                style={{ minWidth: 150, maxWidth: 240, borderLeft: `4px solid ${deptColor}`, position: 'relative' }}
+              >
+                <div className="card-body p-3">
+                  {onCoryClick && (
+                    <div style={{ position: 'absolute', top: 8, right: 8 }}>
+                      <CoryBadge
+                        onClick={() => onCoryClick(`Analyze the ${overview.name} department KPI "${kpi.name}": current value is ${kpi.value}${kpi.unit}, trend is ${kpi.trend}. Give me a full analysis with context, risks, and recommendations.`)}
+                        tooltip={`Ask Cory about ${kpi.name}`}
+                        size={18}
+                      />
+                    </div>
+                  )}
+                  <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+                    {kpi.name}
+                  </small>
+                  <div className="d-flex align-items-baseline gap-2 mt-1">
+                    <span className="fw-bold" style={{ fontSize: '1.25rem', color: deptColor }}>
+                      {kpi.value}{kpi.unit === '%' ? '%' : ''}
+                    </span>
+                    {kpi.unit !== '%' && kpi.unit && (
+                      <small className="text-muted" style={{ fontSize: '0.7rem' }}>{kpi.unit}</small>
+                    )}
+                  </div>
+                  <div className="d-flex align-items-center gap-1 mt-1">
+                    <span
+                      className="badge"
+                      style={{ fontSize: '0.6rem', fontWeight: 600, background: t.color, color: '#fff' }}
+                    >
+                      {t.symbol} {t.label}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Strategic Objectives progress */}
+      {objectives.length > 0 && (
+        <div className="card border-0 shadow-sm mb-3">
+          <div className="card-header bg-white fw-semibold small d-flex align-items-center gap-2" style={{ color: deptColor }}>
+            Strategic Objectives
+            <span className="badge bg-light text-muted border" style={{ fontSize: '0.6rem' }}>{objectives.length}</span>
+          </div>
+          <div className="card-body py-2 px-3">
+            {objectives.map((obj, i) => (
+              <div key={i} className="mb-2">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <small className="fw-medium" style={{ fontSize: '0.72rem' }}>{obj.title}</small>
+                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>{obj.progress}%</small>
+                </div>
+                <div className="progress" style={{ height: 5 }}>
+                  <div
+                    className="progress-bar"
+                    style={{
+                      width: `${obj.progress}%`,
+                      background: obj.progress >= 70 ? 'var(--color-accent)' : obj.progress >= 40 ? '#d69e2e' : deptColor,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Dynamic Canvas ───────────────────────────────────────────────────────────
 function DynamicCanvas({
   visualizations,
@@ -198,6 +388,7 @@ function DynamicCanvas({
   onCloseInvestigation,
   entityType,
   onCoryClick,
+  selectedEntity,
 }: {
   visualizations: VisualizationSpec[];
   insights: QueryResponse | null;
@@ -216,9 +407,27 @@ function DynamicCanvas({
   onInvestigate: (anomaly: any) => void;
   onCloseInvestigation: () => void;
   entityType?: string;
+  selectedEntity?: { type: string; id: string; name: string } | null;
 }) {
   const [activeChartType, setActiveChartType] = useState<string | null>(null);
   const [narrativeExpanded, setNarrativeExpanded] = useState(false);
+  const [deptDetail, setDeptDetail] = useState<any>(null);
+  const [deptLoading, setDeptLoading] = useState(false);
+
+  // Fetch department detail when a department is selected
+  useEffect(() => {
+    if (selectedEntity?.type === 'department' && selectedEntity.id) {
+      setDeptLoading(true);
+      getDepartmentDetail(selectedEntity.id)
+        .then((r) => setDeptDetail(r.data))
+        .catch(() => setDeptDetail(null))
+        .finally(() => setDeptLoading(false));
+    } else {
+      setDeptDetail(null);
+    }
+  }, [selectedEntity]);
+
+  const isDeptView = selectedEntity?.type === 'department' && deptDetail;
 
   const applicableTypes = useMemo(() => {
     if (!visualizations.length) return null;
@@ -311,8 +520,12 @@ function DynamicCanvas({
 
   return (
     <div className="p-3" style={{ overflowY: 'auto', height: '100%' }}>
-      {/* Section 1: Executive KPI Header */}
-      <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} entityType={entityType} onCoryClick={onCoryClick} />
+      {/* Section 1: Department KPI Header (when dept selected) or Executive KPI Header */}
+      {isDeptView ? (
+        <DepartmentKPIHeader detail={deptDetail} loading={deptLoading} onCoryClick={onCoryClick} />
+      ) : (
+        <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} entityType={entityType} onCoryClick={onCoryClick} />
+      )}
 
       {/* Section 2: Narrative Summary */}
       {narrativeText && (
@@ -1364,6 +1577,7 @@ function IntelligenceOSContent() {
               onInvestigate={handleInvestigate}
               onCloseInvestigation={() => setInvestigationTarget(null)}
               entityType={selectedEntity?.type}
+              selectedEntity={selectedEntity}
             />
           )}
           {mobileTab === 'assistant' && (
@@ -1464,6 +1678,7 @@ function IntelligenceOSContent() {
                 onInvestigate={handleInvestigate}
                 onCloseInvestigation={() => setInvestigationTarget(null)}
                 entityType={selectedEntity?.type}
+                selectedEntity={selectedEntity}
               />
             </CoryCenterTabs>
           </div>
