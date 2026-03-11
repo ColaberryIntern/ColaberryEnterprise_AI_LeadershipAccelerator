@@ -1704,6 +1704,7 @@ function IntelligenceOSContent() {
 
   const handleFollowUpClick = useCallback((question: string) => {
     setExternalQuery(question + '|' + Date.now()); // Append timestamp to ensure uniqueness
+    setCoryOverlayOpen(true); // Open Cory panel so user can see the response
     setIsProcessing(true);
   }, []);
 
