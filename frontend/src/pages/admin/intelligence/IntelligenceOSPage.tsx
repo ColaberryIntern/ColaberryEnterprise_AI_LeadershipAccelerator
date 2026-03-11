@@ -1090,28 +1090,38 @@ function IntelligenceOSContent() {
     if (searchParams.get('cory') === 'open') {
       setCoryOverlayOpen(true);
       const contextPath = searchParams.get('context');
+      // Context-aware greetings based on where the user came from
+      const PAGE_GREETINGS: Record<string, string> = {
+        '/': 'Hey! I saw you were on the homepage. Anything catching your eye — enrollment trends, marketing numbers, or the lead pipeline?',
+        '/program': 'Hey! Coming from the Program page — want me to pull up curriculum engagement or session completion rates?',
+        '/pricing': 'Hey! You were looking at Pricing. Want me to dig into conversion rates or how the pricing strategy is performing?',
+        '/sponsorship': 'Hey! Coming from Sponsorship — want to look at sponsor engagement or ROI?',
+        '/enroll': 'Hey! You were on Enrollment. Want me to check the funnel metrics or see where people are dropping off?',
+        '/admin/dashboard': 'Hey! Coming from the Dashboard. Want the full executive briefing or something specific?',
+        '/admin/campaigns': 'Hey! You were in Campaigns. Want me to break down performance or flag anything that needs attention?',
+        '/admin/leads': 'Hey! Coming from Lead Management. Want a pipeline health check or help finding stalled leads?',
+        '/admin/revenue': 'Hey! You were on Revenue. Need a trend analysis or want to look at the forecast?',
+        '/admin/marketing': 'Hey! Coming from Marketing. Ready for an intel briefing on what\'s working?',
+        '/admin/accelerator': 'Hey! You were in the Accelerator. Want to check student engagement or see who might be at risk?',
+        '/admin/orchestration': 'Hey! Coming from Orchestration. Want to review the blueprint status or check section health?',
+        '/admin/visitors': 'Hey! You were tracking Visitors. Want me to analyze traffic patterns or attribution?',
+        '/admin/pipeline': 'Hey! Coming from the Pipeline view. Want to look at conversion rates across stages?',
+        '/portal': 'Hey! You were in the Participant Portal. Want to check on student progress or spot anyone who needs follow-up?',
+      };
+      let greeting = '';
       if (contextPath) {
-        const PAGE_GREETINGS: Record<string, string> = {
-          '/': 'I see you were on the homepage. Want me to analyze enrollment trends, marketing performance, or lead pipeline health?',
-          '/program': 'You were viewing the Program page. Need insights on curriculum engagement or session completion rates?',
-          '/pricing': 'You were on Pricing. Shall I analyze conversion rates or pricing strategy effectiveness?',
-          '/admin/dashboard': 'Coming from the Admin Dashboard. Ready for a full executive briefing?',
-          '/admin/campaigns': 'You were in Campaign Management. Want me to analyze outbound performance or suggest optimizations?',
-          '/admin/leads': 'Coming from Lead Management. Shall I run a pipeline health assessment?',
-          '/admin/revenue': 'You were on Revenue. Need a revenue trend analysis or forecast?',
-          '/admin/marketing': 'Coming from Marketing. Ready for a marketing intelligence briefing?',
-          '/admin/accelerator': 'You were in the Accelerator. Need student engagement or completion insights?',
-        };
-        let greeting = PAGE_GREETINGS[contextPath];
+        greeting = PAGE_GREETINGS[contextPath] || '';
         if (!greeting) {
           for (const [prefix, msg] of Object.entries(PAGE_GREETINGS)) {
             if (contextPath.startsWith(prefix) && prefix !== '/') { greeting = msg; break; }
           }
         }
-        if (greeting) {
-          setExternalQuery(greeting + '|' + Date.now());
-        }
       }
+      // Fallback: casual hallway greeting
+      if (!greeting) {
+        greeting = 'Hey! How\'s it going? Anything I can help you with today?';
+      }
+      setExternalQuery(greeting + '|' + Date.now());
     }
   // Run once on mount — searchParams is stable from useSearchParams
   }, [searchParams]);
@@ -1447,21 +1457,23 @@ function IntelligenceOSContent() {
           </div>
         </div>
 
+        {/* Right Panel: Cory AI COO (pushes content, no overlay) */}
+        <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
+          <CoryPanel
+            onVisualizationsUpdate={handleVisualizationsUpdate}
+            onSummaryUpdate={handleSummaryUpdate}
+            onInsightsUpdate={handleInsightsUpdate}
+            externalQuery={externalQuery}
+          />
+        </CoryOverlay>
+
       </div>
 
-      {/* Cory Floating Orb + Overlay */}
+      {/* Cory Floating Orb */}
       <CoryOrb
         onClick={() => setCoryOverlayOpen(!coryOverlayOpen)}
         isOpen={coryOverlayOpen}
       />
-      <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
-        <CoryPanel
-          onVisualizationsUpdate={handleVisualizationsUpdate}
-          onSummaryUpdate={handleSummaryUpdate}
-          onInsightsUpdate={handleInsightsUpdate}
-          externalQuery={externalQuery}
-        />
-      </CoryOverlay>
 
       {/* Agent Detail Drawer */}
       <AgentDetailDrawer agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} />

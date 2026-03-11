@@ -6,6 +6,10 @@ interface CoryOverlayProps {
   children: React.ReactNode;
 }
 
+/**
+ * Inline Cory panel — renders as a flex column that pushes the center content
+ * instead of overlaying/blurring it. The user can see their data while talking to Cory.
+ */
 export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -19,73 +23,50 @@ export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayPr
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Focus trap: focus panel when opened
+  // Focus panel when opened
   useEffect(() => {
     if (isOpen && panelRef.current) {
       panelRef.current.focus();
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.25)',
-          backdropFilter: 'blur(2px)',
-          zIndex: 1040,
-        }}
-        aria-hidden="true"
-      />
-
-      {/* Slide-in Panel */}
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Cory AI COO Assistant"
-        tabIndex={-1}
-        className="cory-overlay-slide"
-        style={{
-          position: 'fixed',
-          top: 0,
-          right: 0,
-          width: 420,
-          maxWidth: '100vw',
-          height: '100vh',
-          zIndex: 1050,
-          background: 'rgba(255, 255, 255, 0.97)',
-          backdropFilter: 'blur(12px)',
-          borderLeft: '1px solid var(--color-border)',
-          boxShadow: '-8px 0 30px rgba(0, 0, 0, 0.12)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
+    <div
+      ref={panelRef}
+      role="complementary"
+      aria-label="Cory AI COO Assistant"
+      tabIndex={-1}
+      className="intel-panel-slide"
+      style={{
+        width: isOpen ? 400 : 0,
+        minWidth: isOpen ? 400 : 0,
+        overflow: 'hidden',
+        borderLeft: isOpen ? '1px solid var(--color-border)' : 'none',
+        transition: 'width 0.25s ease, min-width 0.25s ease',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: '#fff',
+      }}
+    >
+      <div style={{ width: 400, height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
         <div
           className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom"
           style={{ flexShrink: 0, background: 'var(--color-primary)', color: '#fff' }}
         >
           <div className="d-flex align-items-center gap-2">
-            <span
-              className="d-inline-flex align-items-center justify-content-center rounded-circle"
+            <img
+              src="/cory-avatar.png"
+              alt="Cory"
               style={{
                 width: 28,
                 height: 28,
-                background: 'rgba(255,255,255,0.2)',
-                fontSize: '0.85rem',
-                fontWeight: 700,
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '2px solid rgba(255,255,255,0.3)',
               }}
-            >
-              C
-            </span>
+            />
             <span className="fw-semibold" style={{ fontSize: '0.85rem' }}>
               Cory — AI COO
             </span>
@@ -111,6 +92,6 @@ export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayPr
           {children}
         </div>
       </div>
-    </>
+    </div>
   );
 }
