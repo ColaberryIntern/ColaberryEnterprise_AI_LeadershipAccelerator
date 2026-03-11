@@ -33,7 +33,7 @@ import CoryPanel from '../../../components/admin/intelligence/CoryPanel';
 import CoryBadge from '../../../components/admin/intelligence/CoryBadge';
 import CoryOrb from '../../../components/admin/intelligence/CoryOrb';
 import CoryOverlay from '../../../components/admin/intelligence/CoryOverlay';
-import DepartmentDrawer from '../../../components/admin/intelligence/DepartmentDrawer';
+import InitiativeStoryModal from '../../../components/admin/intelligence/InitiativeStoryModal';
 import AgentDetailDrawer from '../../../components/admin/intelligence/AgentDetailDrawer';
 import CoryCenterTabs from '../../../components/admin/intelligence/CoryCenterTabs';
 
@@ -365,7 +365,185 @@ function DepartmentKPIHeader({
           </div>
         </div>
       )}
+
+      {/* Department Sections: Building, Achievements, Risks, Maintenance */}
+      <DepartmentSectionsGrid detail={detail} deptColor={deptColor} onCoryClick={onCoryClick} />
     </div>
+  );
+}
+
+// Priority color map for initiative badges
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: 'danger',
+  high: 'warning',
+  medium: 'info',
+  low: 'secondary',
+};
+
+// ─── Department Sections Grid ─────────────────────────────────────────────────
+function DepartmentSectionsGrid({
+  detail,
+  deptColor,
+  onCoryClick,
+}: {
+  detail: any;
+  deptColor: string;
+  onCoryClick?: (context: string) => void;
+}) {
+  const [storyInitiativeId, setStoryInitiativeId] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>('building');
+
+  const building: any[] = detail?.building || [];
+  const achievements: any[] = detail?.achievements || [];
+  const risks: any[] = detail?.risks || [];
+  const maintenance: any[] = detail?.maintenance || [];
+  const deptName = detail?.overview?.name || 'Department';
+
+  const sections = [
+    { key: 'building', label: 'Building', count: building.length, accent: deptColor, icon: '▸' },
+    { key: 'achievements', label: 'Achievements', count: achievements.length, accent: 'var(--color-accent)', icon: '★' },
+    { key: 'risks', label: 'Risks', count: risks.length, accent: 'var(--color-secondary)', icon: '⚠' },
+    { key: 'maintenance', label: 'Maintenance', count: maintenance.length, accent: '#805ad5', icon: '⟳' },
+  ];
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+        {sections.map((section) => {
+          const isExpanded = expandedSection === section.key;
+          return (
+            <div
+              key={section.key}
+              className="card border-0 shadow-sm"
+              style={{ borderLeft: `4px solid ${section.accent}` }}
+            >
+              <div
+                className="card-header bg-white d-flex justify-content-between align-items-center"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setExpandedSection(isExpanded ? null : section.key)}
+              >
+                <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: 'var(--color-primary)' }}>
+                  <span style={{ fontSize: '0.7rem' }}>{section.icon}</span>
+                  {section.label}
+                  {section.count > 0 && (
+                    <span className="badge bg-light text-muted border" style={{ fontSize: '0.6rem' }}>{section.count}</span>
+                  )}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-light)' }}>
+                  {isExpanded ? '▾' : '▸'}
+                </span>
+              </div>
+
+              {isExpanded && (
+                <div className="card-body py-2 px-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
+                  {/* Building Section */}
+                  {section.key === 'building' && (
+                    building.length > 0 ? building.map((init: any) => (
+                      <div
+                        key={init.id}
+                        className="mb-3 p-2 rounded-2"
+                        style={{ cursor: 'pointer', transition: 'background 0.15s' }}
+                        onClick={() => setStoryInitiativeId(init.id)}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                      >
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <span className="fw-medium small" style={{ color: 'var(--color-primary-light)' }}>{init.title}</span>
+                          <span className={`badge bg-${PRIORITY_COLORS[init.priority] || 'secondary'}`} style={{ fontSize: '0.55rem' }}>
+                            {init.priority}
+                          </span>
+                        </div>
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <div className="progress flex-grow-1" style={{ height: 6 }}>
+                            <div
+                              className={`progress-bar bg-${init.progress >= 80 ? 'success' : 'primary'}`}
+                              style={{ width: `${init.progress}%` }}
+                            />
+                          </div>
+                          <span className="text-muted" style={{ fontSize: '0.65rem' }}>{init.progress}%</span>
+                        </div>
+                        {init.owner && <div className="text-muted" style={{ fontSize: '0.65rem' }}>Owner: {init.owner}</div>}
+                      </div>
+                    )) : <div className="text-muted small py-2">No active initiatives.</div>
+                  )}
+
+                  {/* Achievements Section */}
+                  {section.key === 'achievements' && (
+                    achievements.length > 0 ? achievements.map((a: any) => (
+                      <div key={a.id} className="mb-2 small p-2 rounded-2" style={{ background: 'var(--color-bg-alt)' }}>
+                        <div className="fw-medium">{a.title}</div>
+                        {a.description && <div className="text-muted" style={{ fontSize: '0.7rem' }}>{a.description}</div>}
+                      </div>
+                    )) : <div className="text-muted small py-2">No achievements yet.</div>
+                  )}
+
+                  {/* Risks Section */}
+                  {section.key === 'risks' && (
+                    risks.length > 0 ? risks.map((r: any, i: number) => (
+                      <div
+                        key={r.id || i}
+                        className="mb-2 small p-2 rounded-2"
+                        style={{
+                          cursor: r.event_type === 'initiative_risk' ? 'pointer' : 'default',
+                          transition: 'background 0.15s',
+                        }}
+                        onClick={() => r.event_type === 'initiative_risk' && setStoryInitiativeId(r.id)}
+                        onMouseEnter={(e) => { if (r.event_type === 'initiative_risk') (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                      >
+                        <div className="d-flex align-items-center gap-1">
+                          {r.severity && (
+                            <span className={`badge bg-${PRIORITY_COLORS[r.severity] || 'secondary'}`} style={{ fontSize: '0.55rem' }}>
+                              {r.severity}
+                            </span>
+                          )}
+                          <span className="fw-medium" style={r.event_type === 'initiative_risk' ? { color: 'var(--color-primary-light)' } : {}}>{r.title}</span>
+                        </div>
+                        {r.description && <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>{r.description}</div>}
+                      </div>
+                    )) : <div className="text-muted small py-2">No active risks.</div>
+                  )}
+
+                  {/* Maintenance Section */}
+                  {section.key === 'maintenance' && (
+                    maintenance.length > 0 ? maintenance.map((init: any) => (
+                      <div
+                        key={init.id}
+                        className="mb-2 small p-2 rounded-2"
+                        style={{ cursor: 'pointer', transition: 'background 0.15s' }}
+                        onClick={() => setStoryInitiativeId(init.id)}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                      >
+                        <div className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>{init.title}</div>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>Status: On Hold · {init.owner || 'Unassigned'}</div>
+                      </div>
+                    )) : <div className="text-muted small py-2">No maintenance items.</div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {onCoryClick && building.length > 0 && (
+        <div className="mt-2 mb-3">
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            style={{ fontSize: '0.7rem', borderRadius: 20 }}
+            onClick={() => onCoryClick(`Give me a full status report on ${deptName}'s active initiatives: ${building.map((b: any) => b.title).join(', ')}. Include progress assessment, risks, and recommendations.`)}
+          >
+            Ask Cory about {deptName} initiatives
+          </button>
+        </div>
+      )}
+
+      <InitiativeStoryModal
+        initiativeId={storyInitiativeId}
+        onClose={() => setStoryInitiativeId(null)}
+      />
+    </>
   );
 }
 
@@ -527,8 +705,8 @@ function DynamicCanvas({
         <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} entityType={entityType} onCoryClick={onCoryClick} />
       )}
 
-      {/* Section 2: Narrative Summary */}
-      {narrativeText && (
+      {/* Section 2: Narrative Summary (global level only) */}
+      {narrativeText && !isDeptView && (
         <div className="card border-0 shadow-sm mb-3 mt-3">
           <div className="card-header bg-white fw-semibold small d-flex justify-content-between align-items-center"
             style={{ color: 'var(--color-primary)' }}
@@ -1287,8 +1465,6 @@ function IntelligenceOSContent() {
   const { isCompact, isMedium } = useBreakpoint();
   const [leftOpen, setLeftOpen] = useState(true);
   const [coryOverlayOpen, setCoryOverlayOpen] = useState(false);
-  const [deptDrawerOpen, setDeptDrawerOpen] = useState(false);
-  const [deptDrawerId, setDeptDrawerId] = useState<string | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'map' | 'canvas' | 'assistant'>('canvas');
   // Auto-collapse left panel on medium screens
@@ -1300,14 +1476,7 @@ function IntelligenceOSContent() {
     }
   }, [isMedium, isCompact]);
 
-  // Auto-open Department Drawer when a department is selected
-  useEffect(() => {
-    if (selectedEntity?.type === 'department' && selectedEntity.id) {
-      setDeptDrawerId(selectedEntity.id);
-      setDeptDrawerOpen(true);
-      setCoryOverlayOpen(false);
-    }
-  }, [selectedEntity]);
+  // Department content now shown in center panel — no drawer auto-open
 
   // Auto-open Cory if arriving via ?cory=open (from GlobalCoryWidget click)
   const [searchParams] = useSearchParams();
@@ -1684,8 +1853,8 @@ function IntelligenceOSContent() {
           </div>
         </div>
 
-        {/* Right Panel: Cory AI COO or Department Drawer — both always rendered, only one open */}
-        <CoryOverlay isOpen={coryOverlayOpen && !deptDrawerOpen} onClose={() => setCoryOverlayOpen(false)}>
+        {/* Right Panel: Cory AI COO */}
+        <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
           <CoryPanel
             onVisualizationsUpdate={handleVisualizationsUpdate}
             onSummaryUpdate={handleSummaryUpdate}
@@ -1694,26 +1863,11 @@ function IntelligenceOSContent() {
           />
         </CoryOverlay>
 
-        <DepartmentDrawer
-          departmentId={deptDrawerId || ''}
-          isOpen={deptDrawerOpen}
-          onClose={() => setDeptDrawerOpen(false)}
-          onSwitchToCory={() => {
-            setDeptDrawerOpen(false);
-            setCoryOverlayOpen(true);
-          }}
-        />
-
       </div>
 
       {/* Cory Floating Orb */}
       <CoryOrb
-        onClick={() => {
-          if (deptDrawerOpen) {
-            setDeptDrawerOpen(false);
-          }
-          setCoryOverlayOpen(!coryOverlayOpen);
-        }}
+        onClick={() => setCoryOverlayOpen(!coryOverlayOpen)}
         isOpen={coryOverlayOpen}
       />
 
