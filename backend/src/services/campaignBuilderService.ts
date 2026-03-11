@@ -8,6 +8,9 @@ import {
 import { importApolloResults } from './apolloService';
 import { Campaign } from '../models';
 import type { SequenceStep } from '../models/FollowUpSequence';
+import OpenAI from 'openai';
+import { env } from '../config/env';
+import { getSetting } from './settingsService';
 
 // ── Sequence Templates ──────────────────────────────────────────────────
 
@@ -415,4 +418,120 @@ Rules:
 - Keep emails concise (under 150 words for cold outreach)
 - Use professional but approachable language
 - Include clear but soft CTAs`;
+}
+
+// ── NLP Campaign Builder ────────────────────────────────────────────────
+
+export interface NLPCampaignConfig {
+  name: string;
+  description: string;
+  campaign_type: 'cold_outbound' | 'warm_nurture' | 'event_follow_up' | 'reengagement';
+  sequence_template: SequenceTemplate;
+  target_audience: {
+    industries: string[];
+    titles: string[];
+    seniorities: string[];
+    company_size_min?: number;
+    company_size_max?: number;
+    locations: string[];
+  };
+  channels: {
+    email: boolean;
+    voice: boolean;
+    sms: boolean;
+  };
+  tone: string;
+  num_steps: number;
+  estimated_duration_days: number;
+  ai_system_prompt: string;
+}
+
+/**
+ * Parse a natural language campaign description into a structured campaign config.
+ * Example: "Create a 3-step email nurture for enterprise CTOs in healthcare"
+ * → Returns structured NLPCampaignConfig ready for buildColdCampaign()
+ */
+export async function parseNaturalLanguageCampaign(
+  description: string,
+): Promise<NLPCampaignConfig> {
+  const apiKey = env.openaiApiKey;
+  if (!apiKey) throw new Error('OpenAI API key not configured');
+
+  const client = new OpenAI({ apiKey });
+  const model = (await getSetting('ai_model')) || env.aiModel;
+
+  const systemPrompt = `You are an expert campaign strategist for Colaberry Enterprise AI Division.
+
+Given a natural language description of a desired campaign, extract a structured campaign configuration.
+
+OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences:
+{
+  "name": "Short campaign name (max 60 chars)",
+  "description": "1-2 sentence campaign description",
+  "campaign_type": "cold_outbound" | "warm_nurture" | "event_follow_up" | "reengagement",
+  "sequence_template": "standard_cold" | "aggressive" | "gentle",
+  "target_audience": {
+    "industries": ["array of target industries"],
+    "titles": ["array of target job titles"],
+    "seniorities": ["from: c_suite, vp, director, manager, senior"],
+    "company_size_min": number or null,
+    "company_size_max": number or null,
+    "locations": ["array of locations, default ['United States']"]
+  },
+  "channels": {
+    "email": true/false,
+    "voice": true/false,
+    "sms": true/false
+  },
+  "tone": "professional/consultative/aggressive/warm/educational",
+  "num_steps": number (3-8),
+  "estimated_duration_days": number,
+  "ai_system_prompt": "Campaign-specific system prompt for AI message generation"
+}
+
+RULES:
+- Infer as much as possible from the description
+- Default to cold_outbound if campaign type is unclear
+- Default to standard_cold template
+- Always include at least email channel
+- If voice is mentioned, enable it
+- If the user mentions urgency or aggression, use the aggressive template
+- If the user mentions gentle/educational/nurture, use the gentle template
+- Generate a relevant ai_system_prompt that captures the campaign's intent`;
+
+  const response = await client.chat.completions.create({
+    model,
+    max_tokens: 1000,
+    temperature: 0.5,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Parse this campaign description:\n\n"${description}"` },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content?.trim() || '';
+
+  try {
+    const cleaned = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    return JSON.parse(cleaned) as NLPCampaignConfig;
+  } catch {
+    // Return sensible defaults
+    return {
+      name: description.substring(0, 60),
+      description,
+      campaign_type: 'cold_outbound',
+      sequence_template: 'standard_cold',
+      target_audience: {
+        industries: ['Technology', 'Financial Services'],
+        titles: ['CTO', 'VP of Engineering', 'Director of AI'],
+        seniorities: ['c_suite', 'vp', 'director'],
+        locations: ['United States'],
+      },
+      channels: { email: true, voice: false, sms: false },
+      tone: 'professional',
+      num_steps: 6,
+      estimated_duration_days: 16,
+      ai_system_prompt: buildDefaultColdPrompt(description.substring(0, 60)),
+    };
+  }
 }

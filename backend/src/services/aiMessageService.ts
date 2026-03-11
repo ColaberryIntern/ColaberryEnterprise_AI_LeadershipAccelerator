@@ -380,3 +380,111 @@ export async function generatePreview(
     },
   });
 }
+
+// ── Message Effectiveness Scoring ───────────────────────────────────────
+
+export interface MessageMetrics {
+  open_rate?: number;
+  click_rate?: number;
+  reply_rate?: number;
+  conversion_rate?: number;
+  bounce_rate?: number;
+  unsubscribe_rate?: number;
+}
+
+export interface MessageScore {
+  effectiveness_score: number; // 0-100
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  breakdown: {
+    deliverability: number;   // 0-25
+    engagement: number;       // 0-35
+    conversion: number;       // 0-25
+    retention: number;        // 0-15
+  };
+  suggestions: string[];
+}
+
+/**
+ * Score a message's effectiveness based on post-send metrics.
+ * Returns a 0-100 score with grade and improvement suggestions.
+ */
+export function scoreMessageEffectiveness(metrics: MessageMetrics): MessageScore {
+  const suggestions: string[] = [];
+
+  // Deliverability (25 points) — inverse of bounce rate
+  const bounceRate = metrics.bounce_rate || 0;
+  let deliverability = 25;
+  if (bounceRate > 0.1) {
+    deliverability = 5;
+    suggestions.push('High bounce rate — verify email addresses before sending');
+  } else if (bounceRate > 0.05) {
+    deliverability = 15;
+    suggestions.push('Moderate bounce rate — consider email verification');
+  } else if (bounceRate > 0.02) {
+    deliverability = 20;
+  }
+
+  // Engagement (35 points) — open rate + click/reply
+  let engagement = 0;
+  const openRate = metrics.open_rate || 0;
+  const clickRate = metrics.click_rate || 0;
+  const replyRate = metrics.reply_rate || 0;
+
+  // Open score (15 of 35)
+  if (openRate >= 0.35) engagement += 15;
+  else if (openRate >= 0.25) engagement += 12;
+  else if (openRate >= 0.15) engagement += 8;
+  else if (openRate >= 0.08) engagement += 4;
+  else {
+    suggestions.push('Low open rate — test shorter, more personalized subject lines');
+  }
+
+  // Reply/click score (20 of 35)
+  const interactionRate = Math.max(clickRate, replyRate);
+  if (interactionRate >= 0.08) engagement += 20;
+  else if (interactionRate >= 0.05) engagement += 15;
+  else if (interactionRate >= 0.02) engagement += 10;
+  else if (interactionRate >= 0.01) engagement += 5;
+  else if (openRate >= 0.15) {
+    suggestions.push('Good opens but low interaction — strengthen the CTA and value proposition');
+  }
+
+  // Conversion (25 points)
+  let conversion = 0;
+  const convRate = metrics.conversion_rate || 0;
+  if (convRate >= 0.05) conversion = 25;
+  else if (convRate >= 0.03) conversion = 20;
+  else if (convRate >= 0.01) conversion = 12;
+  else if (convRate > 0) conversion = 5;
+  else if (replyRate >= 0.03) {
+    suggestions.push('Replies happening but no conversions — improve follow-up process');
+  }
+
+  // Retention (15 points) — inverse of unsubscribe rate
+  let retention = 15;
+  const unsubRate = metrics.unsubscribe_rate || 0;
+  if (unsubRate > 0.05) {
+    retention = 0;
+    suggestions.push('High unsubscribe rate — reduce send frequency or improve targeting');
+  } else if (unsubRate > 0.02) {
+    retention = 5;
+    suggestions.push('Moderate unsubscribes — review message relevance');
+  } else if (unsubRate > 0.01) {
+    retention = 10;
+  }
+
+  const effectiveness_score = deliverability + engagement + conversion + retention;
+
+  const grade: MessageScore['grade'] =
+    effectiveness_score >= 80 ? 'A' :
+    effectiveness_score >= 65 ? 'B' :
+    effectiveness_score >= 50 ? 'C' :
+    effectiveness_score >= 35 ? 'D' : 'F';
+
+  return {
+    effectiveness_score,
+    grade,
+    breakdown: { deliverability, engagement, conversion, retention },
+    suggestions,
+  };
+}

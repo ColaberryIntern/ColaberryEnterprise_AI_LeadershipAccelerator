@@ -1,5 +1,5 @@
-import { Op, fn, col, literal } from 'sequelize';
-import { Lead, Activity, Appointment } from '../models';
+import { Op, fn, col, literal, QueryTypes } from 'sequelize';
+import { Lead, Activity, Appointment, InteractionOutcome, CampaignLead } from '../models';
 import { sequelize } from '../config/database';
 import { getCampaignAttribution } from './campaignAnalyticsService';
 
@@ -138,5 +138,106 @@ export async function getRevenueDashboard() {
     upcomingAppointments,
     recentActivities,
     campaignAttribution,
+  };
+}
+
+// ── Multi-Touch Attribution ─────────────────────────────────────────────
+
+export interface TouchpointAttribution {
+  channel: string;
+  campaign_id?: string;
+  campaign_name?: string;
+  step_index?: number;
+  outcome: string;
+  timestamp: string;
+  credit: number; // 0-1 (linear share)
+}
+
+export interface LeadAttribution {
+  lead_id: number;
+  lead_name: string;
+  pipeline_stage: string;
+  total_touchpoints: number;
+  total_revenue: number;
+  touchpoints: TouchpointAttribution[];
+  first_touch: TouchpointAttribution | null;
+  last_touch: TouchpointAttribution | null;
+  channel_credit: Record<string, number>; // channel → total credit share
+  campaign_credit: Record<string, number>; // campaign_id → total credit share
+}
+
+/**
+ * Calculate multi-touch attribution for a lead.
+ * Uses linear attribution: equal credit assigned to each touchpoint.
+ */
+export async function calculateMultiTouchAttribution(leadId: number): Promise<LeadAttribution> {
+  const lead = await Lead.findByPk(leadId, { raw: true }) as any;
+  if (!lead) throw new Error('Lead not found');
+
+  // Get all interaction outcomes for this lead
+  const outcomes = await InteractionOutcome.findAll({
+    where: { lead_id: leadId },
+    order: [['created_at', 'ASC']],
+    raw: true,
+  }) as any[];
+
+  // Get campaign names for enrolled campaigns
+  const campaignEnrollments = await CampaignLead.findAll({
+    where: { lead_id: leadId },
+    attributes: ['campaign_id'],
+    raw: true,
+  }) as any[];
+
+  const campaignIds = [...new Set(outcomes.map((o: any) => o.campaign_id).filter(Boolean))];
+  const campaignNames: Record<string, string> = {};
+  if (campaignIds.length > 0) {
+    const campaigns = await sequelize.query(
+      `SELECT id, name FROM campaigns WHERE id IN (:ids)`,
+      { replacements: { ids: campaignIds }, type: QueryTypes.SELECT },
+    ) as any[];
+    for (const c of campaigns) {
+      campaignNames[c.id] = c.name;
+    }
+  }
+
+  const totalTouchpoints = outcomes.length;
+  const creditPerTouch = totalTouchpoints > 0 ? 1 / totalTouchpoints : 0;
+
+  // Calculate revenue based on pipeline stage
+  const isEnrolled = lead.pipeline_stage === 'enrolled';
+  const totalRevenue = isEnrolled ? PRICE_PER_ENROLLMENT : 0;
+
+  const touchpoints: TouchpointAttribution[] = outcomes.map((o: any) => ({
+    channel: o.channel,
+    campaign_id: o.campaign_id || undefined,
+    campaign_name: o.campaign_id ? campaignNames[o.campaign_id] : undefined,
+    step_index: o.step_index,
+    outcome: o.outcome,
+    timestamp: o.created_at,
+    credit: creditPerTouch,
+  }));
+
+  // Aggregate credit by channel and campaign
+  const channelCredit: Record<string, number> = {};
+  const campaignCredit: Record<string, number> = {};
+
+  for (const tp of touchpoints) {
+    channelCredit[tp.channel] = (channelCredit[tp.channel] || 0) + tp.credit;
+    if (tp.campaign_id) {
+      campaignCredit[tp.campaign_id] = (campaignCredit[tp.campaign_id] || 0) + tp.credit;
+    }
+  }
+
+  return {
+    lead_id: leadId,
+    lead_name: lead.name,
+    pipeline_stage: lead.pipeline_stage,
+    total_touchpoints: totalTouchpoints,
+    total_revenue: totalRevenue,
+    touchpoints,
+    first_touch: touchpoints[0] || null,
+    last_touch: touchpoints[touchpoints.length - 1] || null,
+    channel_credit: channelCredit,
+    campaign_credit: campaignCredit,
   };
 }

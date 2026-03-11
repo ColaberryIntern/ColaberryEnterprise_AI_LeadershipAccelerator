@@ -3,6 +3,8 @@ import { sequelize } from '../config/database';
 
 export type CampaignLeadStatus = 'enrolled' | 'active' | 'paused' | 'completed' | 'removed';
 
+export type LifecycleStatus = 'active' | 'inactive' | 're_engaging' | 'enrolled' | 'dnd' | 'bounced';
+
 export interface CampaignLeadAttributes {
   id?: string;
   campaign_id: string;
@@ -18,6 +20,9 @@ export interface CampaignLeadAttributes {
   next_action_at?: Date;
   touchpoint_count?: number;
   response_count?: number;
+  campaign_cycle_number?: number;
+  lifecycle_status?: LifecycleStatus;
+  last_campaign_entry?: Date;
 }
 
 class CampaignLead extends Model<CampaignLeadAttributes> implements CampaignLeadAttributes {
@@ -35,6 +40,9 @@ class CampaignLead extends Model<CampaignLeadAttributes> implements CampaignLead
   declare next_action_at: Date;
   declare touchpoint_count: number;
   declare response_count: number;
+  declare campaign_cycle_number: number;
+  declare lifecycle_status: LifecycleStatus;
+  declare last_campaign_entry: Date;
 }
 
 CampaignLead.init(
@@ -102,6 +110,20 @@ CampaignLead.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+    },
+    campaign_cycle_number: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    lifecycle_status: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'active',
+    },
+    last_campaign_entry: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {

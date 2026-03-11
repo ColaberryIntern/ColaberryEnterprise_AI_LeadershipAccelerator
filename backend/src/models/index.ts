@@ -65,6 +65,7 @@ import CampaignTestStep from './CampaignTestStep';
 import CampaignSimulation from './CampaignSimulation';
 import CampaignSimulationStep from './CampaignSimulationStep';
 import CommunicationLog from './CommunicationLog';
+import CampaignInsight from './CampaignInsight';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -377,6 +378,10 @@ CommunicationLog.belongsTo(CampaignSimulation, { foreignKey: 'simulation_id', as
 CampaignSimulationStep.hasMany(CommunicationLog, { foreignKey: 'simulation_step_id', as: 'communicationLogs' });
 CommunicationLog.belongsTo(CampaignSimulationStep, { foreignKey: 'simulation_step_id', as: 'simulationStep' });
 
+// Campaign Insight associations
+Campaign.hasMany(CampaignInsight, { foreignKey: 'campaign_id', as: 'insights' });
+CampaignInsight.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -422,4 +427,5 @@ export {
   CampaignSimulation,
   CampaignSimulationStep,
   CommunicationLog,
+  CampaignInsight,
 };

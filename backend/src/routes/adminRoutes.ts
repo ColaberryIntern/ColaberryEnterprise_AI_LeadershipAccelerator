@@ -14,6 +14,8 @@ import campaignTestRoutes from './admin/campaignTestRoutes';
 import campaignSimulationRoutes from './admin/campaignSimulationRoutes';
 import marketingRoutes from './admin/marketingRoutes';
 import governanceRoutes from './admin/governanceRoutes';
+import campaignIntelligenceRoutes from './admin/campaignIntelligenceRoutes';
+import alumniRoutes from './admin/alumniRoutes';
 
 const router = Router();
 
@@ -32,5 +34,7 @@ router.use(campaignTestRoutes);
 router.use(campaignSimulationRoutes);
 router.use(marketingRoutes);
 router.use(governanceRoutes);
+router.use(campaignIntelligenceRoutes);
+router.use(alumniRoutes);
 
 export default router;

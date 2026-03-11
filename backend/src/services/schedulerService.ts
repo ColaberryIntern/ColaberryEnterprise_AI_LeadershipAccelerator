@@ -1154,6 +1154,20 @@ export function startScheduler(): void {
   console.log('[Scheduler] Accelerator: session lifecycle (live/completed) every 5 min');
   console.log('[Scheduler] Accelerator: post-session absence detection + readiness recompute');
 
+  // ── Alumni Lifecycle Processor (daily 6 AM CT / 11 UTC) ──────────────
+  const { detectInactiveLeads, detectReengagementComplete } = require('./campaignLifecycleService');
+
+  cron.schedule('0 11 * * *', () => {
+    instrumentCronJob('AlumniLifecycleProcessor', async () => {
+      await detectInactiveLeads();
+      await detectReengagementComplete();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Alumni lifecycle error:', err.message);
+    });
+  });
+
+  console.log('[Scheduler] Alumni: lifecycle processor daily at 6 AM CT (11 UTC)');
+
   // AI Operations Layer scheduler
   const { startAIOpsScheduler } = require('./aiOpsScheduler');
   startAIOpsScheduler();
