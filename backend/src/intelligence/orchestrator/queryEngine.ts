@@ -19,25 +19,34 @@ interface QueryResponse {
   execution_path: string;
 }
 
-// Cached Python health check
+// Cached Python health check with in-flight deduplication
 let pythonHealthy: boolean | null = null;
 let healthCheckTime = 0;
+let _healthCheckPromise: Promise<boolean> | null = null;
 const HEALTH_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export async function isPythonAvailable(): Promise<boolean> {
-  const now = Date.now();
-  if (pythonHealthy !== null && now - healthCheckTime < HEALTH_TTL_MS) {
+  // Return cached result if still fresh
+  if (pythonHealthy !== null && Date.now() - healthCheckTime < HEALTH_TTL_MS) {
     return pythonHealthy;
   }
 
-  try {
-    await intelligenceProxy.getHealth();
-    pythonHealthy = true;
-  } catch {
-    pythonHealthy = false;
+  // Deduplicate: if a health check is already in-flight, reuse its promise
+  if (!_healthCheckPromise) {
+    _healthCheckPromise = (async () => {
+      try {
+        await intelligenceProxy.getHealth();
+        pythonHealthy = true;
+      } catch {
+        pythonHealthy = false;
+      }
+      healthCheckTime = Date.now();
+      _healthCheckPromise = null;
+      return pythonHealthy!;
+    })();
   }
-  healthCheckTime = now;
-  return pythonHealthy;
+
+  return _healthCheckPromise;
 }
 
 /**

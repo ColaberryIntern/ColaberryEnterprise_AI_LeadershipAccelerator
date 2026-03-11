@@ -3,18 +3,24 @@ import { env } from '../config/env';
 
 class IntelligenceProxyService {
   private client: AxiosInstance;
+  private healthClient: AxiosInstance;
 
   constructor() {
     const baseURL = process.env.INTELLIGENCE_ENGINE_URL || 'http://localhost:5000';
     this.client = axios.create({
       baseURL,
-      timeout: 60000,
+      timeout: 15000,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    this.healthClient = axios.create({
+      baseURL,
+      timeout: 3000,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
   async getHealth(): Promise<AxiosResponse> {
-    return this.client.get('/health');
+    return this.healthClient.get('/health');
   }
 
   async runDiscovery(): Promise<AxiosResponse> {
