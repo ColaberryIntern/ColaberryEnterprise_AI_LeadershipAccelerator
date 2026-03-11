@@ -1469,29 +1469,25 @@ function IntelligenceOSContent() {
           </div>
         </div>
 
-        {/* Right Panel: Cory AI COO or Department Drawer */}
-        {!deptDrawerOpen && (
-          <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
-            <CoryPanel
-              onVisualizationsUpdate={handleVisualizationsUpdate}
-              onSummaryUpdate={handleSummaryUpdate}
-              onInsightsUpdate={handleInsightsUpdate}
-              externalQuery={externalQuery}
-            />
-          </CoryOverlay>
-        )}
-
-        {deptDrawerId && (
-          <DepartmentDrawer
-            departmentId={deptDrawerId}
-            isOpen={deptDrawerOpen}
-            onClose={() => setDeptDrawerOpen(false)}
-            onSwitchToCory={() => {
-              setDeptDrawerOpen(false);
-              setCoryOverlayOpen(true);
-            }}
+        {/* Right Panel: Cory AI COO or Department Drawer — both always rendered, only one open */}
+        <CoryOverlay isOpen={coryOverlayOpen && !deptDrawerOpen} onClose={() => setCoryOverlayOpen(false)}>
+          <CoryPanel
+            onVisualizationsUpdate={handleVisualizationsUpdate}
+            onSummaryUpdate={handleSummaryUpdate}
+            onInsightsUpdate={handleInsightsUpdate}
+            externalQuery={externalQuery}
           />
-        )}
+        </CoryOverlay>
+
+        <DepartmentDrawer
+          departmentId={deptDrawerId || ''}
+          isOpen={deptDrawerOpen}
+          onClose={() => setDeptDrawerOpen(false)}
+          onSwitchToCory={() => {
+            setDeptDrawerOpen(false);
+            setCoryOverlayOpen(true);
+          }}
+        />
 
       </div>
 
