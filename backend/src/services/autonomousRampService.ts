@@ -31,6 +31,40 @@ export interface EvolutionConfig {
 
 const DEFAULT_PHASE_SIZES = [20, 80, 200, -1]; // -1 = remaining
 
+// ── Type-Aware Ramp Profiles ────────────────────────────────────────────
+
+interface RampProfile {
+  phase_sizes: number[];
+  advance_threshold: number;
+  hold_threshold: number;
+  evaluation_window_hours: number;
+}
+
+const RAMP_PROFILES: Record<string, RampProfile> = {
+  default: {
+    phase_sizes: [20, 80, 200, -1],
+    advance_threshold: 70,
+    hold_threshold: 50,
+    evaluation_window_hours: 24,
+  },
+  alumni: {
+    phase_sizes: [15, 30, 75, 150, -1],
+    advance_threshold: 65,
+    hold_threshold: 50,
+    evaluation_window_hours: 24,
+  },
+  alumni_re_engagement: {
+    phase_sizes: [10, 25, 50, -1],
+    advance_threshold: 65,
+    hold_threshold: 50,
+    evaluation_window_hours: 24,
+  },
+};
+
+function getRampProfile(campaignType: string): RampProfile {
+  return RAMP_PROFILES[campaignType] || RAMP_PROFILES.default;
+}
+
 const DEFAULT_EVOLUTION_CONFIG: EvolutionConfig = {
   enabled: true,
   evolution_frequency_sends: 100,
@@ -51,10 +85,16 @@ export async function initializeRamp(campaignId: string): Promise<RampState> {
   const campaign = await Campaign.findByPk(campaignId) as any;
   if (!campaign) throw new Error('Campaign not found');
 
+  const profile = getRampProfile(campaign.type);
+  const leadsPerPhase: Record<string, number> = {};
+  for (let i = 1; i <= profile.phase_sizes.length; i++) {
+    leadsPerPhase[String(i)] = 0;
+  }
+
   const rampState: RampState = {
     current_phase: 1,
-    phase_sizes: DEFAULT_PHASE_SIZES,
-    leads_enrolled_per_phase: { '1': 0, '2': 0, '3': 0, '4': 0 },
+    phase_sizes: profile.phase_sizes,
+    leads_enrolled_per_phase: leadsPerPhase,
     phase_started_at: new Date().toISOString(),
     phase_health_score: null,
     status: 'ramping',
@@ -99,11 +139,13 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
     return { decision: 'pause_for_review', health_score: rampState.phase_health_score };
   }
 
-  // Check if current phase has enough data (at least 24h since phase started)
+  const profile = getRampProfile(campaign.type);
+
+  // Check if current phase has enough data (evaluation window)
   const phaseStarted = rampState.phase_started_at ? new Date(rampState.phase_started_at) : null;
   if (phaseStarted) {
     const hoursSinceStart = (Date.now() - phaseStarted.getTime()) / (1000 * 60 * 60);
-    if (hoursSinceStart < 24) {
+    if (hoursSinceStart < profile.evaluation_window_hours) {
       return { decision: 'hold', health_score: null };
     }
   }
@@ -119,10 +161,50 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
     return { decision: 'no_data', health_score: null };
   }
 
+  // Alumni safety thresholds — pause if exceeded
+  const isAlumni = ['alumni', 'alumni_re_engagement'].includes(campaign.type);
+  if (isAlumni && health?.metrics) {
+    const m = health.metrics;
+    const safetyViolations: string[] = [];
+    if ((m.unsubscribe_rate || 0) >= 1.5) safetyViolations.push(`unsubscribe_rate=${m.unsubscribe_rate}%`);
+    if ((m.bounce_rate || 0) >= 5.0) safetyViolations.push(`bounce_rate=${m.bounce_rate}%`);
+    if ((m.sms_failure_rate || 0) >= 10.0) safetyViolations.push(`sms_failure_rate=${m.sms_failure_rate}%`);
+
+    if (safetyViolations.length > 0) {
+      const campaignFull = await Campaign.findByPk(campaignId) as any;
+      rampState.status = 'paused_for_review';
+      rampState.phase_health_score = healthScore;
+      rampState.evaluation_history.push({
+        phase: rampState.current_phase,
+        health_score: healthScore,
+        decision: `safety_pause: ${safetyViolations.join(', ')}`,
+        at: new Date().toISOString(),
+      });
+      await campaignFull.update({ ramp_state: rampState, updated_at: new Date() });
+
+      // Supervisor logging for alumni
+      const { logSupervisorDecision } = require('./alumniCampaignSupervisor');
+      await logSupervisorDecision({
+        campaign_id: campaignId,
+        campaign_name: campaign.name,
+        campaign_type: campaign.type,
+        ramp_phase: rampState.current_phase,
+        health_score: healthScore,
+        action: 'safety_pause',
+        reasoning: `Safety threshold exceeded: ${safetyViolations.join(', ')}`,
+        safety_flags: safetyViolations,
+        metrics: m,
+      });
+
+      console.log(`[Ramp] Campaign ${campaignId}: SAFETY PAUSE — ${safetyViolations.join(', ')}`);
+      return { decision: 'pause_for_review', health_score: healthScore };
+    }
+  }
+
   // Decision logic
   const campaignFull = await Campaign.findByPk(campaignId) as any;
 
-  if (healthScore >= 70) {
+  if (healthScore >= profile.advance_threshold) {
     // Advance to next phase
     const nextPhase = rampState.current_phase + 1;
     if (nextPhase > rampState.phase_sizes.length) {
@@ -159,14 +241,34 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
     rampState.leads_enrolled_per_phase[String(nextPhase)] = enrolledCount;
     await campaignFull.update({ ramp_state: rampState });
 
+    if (isAlumni) {
+      const { logSupervisorDecision } = require('./alumniCampaignSupervisor');
+      await logSupervisorDecision({
+        campaign_id: campaignId, campaign_name: campaign.name, campaign_type: campaign.type,
+        ramp_phase: nextPhase, health_score: healthScore, action: 'advance',
+        reasoning: `Health score ${healthScore} meets advance threshold ${profile.advance_threshold} — strong engagement metrics`,
+        safety_flags: [], metrics: health?.metrics || {},
+      });
+    }
+
     console.log(`[Ramp] Campaign ${campaignId}: advanced to phase ${nextPhase}, ${enrolledCount} leads enrolled (score: ${healthScore})`);
     return { decision: 'advance', health_score: healthScore };
 
-  } else if (healthScore >= 50) {
+  } else if (healthScore >= profile.hold_threshold) {
     // Hold — wait for next evaluation
     rampState.phase_health_score = healthScore;
     rampState.status = 'evaluating';
     await campaignFull.update({ ramp_state: rampState, updated_at: new Date() });
+
+    if (isAlumni) {
+      const { logSupervisorDecision } = require('./alumniCampaignSupervisor');
+      await logSupervisorDecision({
+        campaign_id: campaignId, campaign_name: campaign.name, campaign_type: campaign.type,
+        ramp_phase: rampState.current_phase, health_score: healthScore, action: 'hold',
+        reasoning: `Health score ${healthScore} below advance threshold ${profile.advance_threshold} — maintaining current phase`,
+        safety_flags: [], metrics: health?.metrics || {},
+      });
+    }
 
     console.log(`[Ramp] Campaign ${campaignId}: holding at phase ${rampState.current_phase} (score: ${healthScore})`);
     return { decision: 'hold', health_score: healthScore };
@@ -182,6 +284,16 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
       at: new Date().toISOString(),
     });
     await campaignFull.update({ ramp_state: rampState, updated_at: new Date() });
+
+    if (isAlumni) {
+      const { logSupervisorDecision } = require('./alumniCampaignSupervisor');
+      await logSupervisorDecision({
+        campaign_id: campaignId, campaign_name: campaign.name, campaign_type: campaign.type,
+        ramp_phase: rampState.current_phase, health_score: healthScore, action: 'pause',
+        reasoning: `Health score ${healthScore} below hold threshold ${profile.hold_threshold} — paused for admin review`,
+        safety_flags: [], metrics: health?.metrics || {},
+      });
+    }
 
     console.log(`[Ramp] Campaign ${campaignId}: PAUSED for review at phase ${rampState.current_phase} (score: ${healthScore})`);
     return { decision: 'pause_for_review', health_score: healthScore };

@@ -44,6 +44,7 @@ interface LeadAttributes {
   sponsorship_kit_requested?: boolean;
   sponsorship_readiness_score?: number | null;
   sponsorship_stage?: string | null;
+  alumni_context?: Record<string, any> | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -91,6 +92,7 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare sponsorship_kit_requested: boolean;
   declare sponsorship_readiness_score: number | null;
   declare sponsorship_stage: string | null;
+  declare alumni_context: Record<string, any> | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -276,6 +278,10 @@ Lead.init(
     },
     sponsorship_stage: {
       type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    alumni_context: {
+      type: DataTypes.JSONB,
       allowNull: true,
     },
     created_at: {

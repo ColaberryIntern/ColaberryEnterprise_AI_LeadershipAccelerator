@@ -3,6 +3,7 @@ import { createCampaign } from './campaignService';
 import { createSequence } from './sequenceService';
 import { enrollLeadsInCampaign } from './campaignService';
 import { importAlumniAsLeads } from './alumniDataService';
+import { initializeRamp } from './autonomousRampService';
 import type { SequenceStep } from '../models/FollowUpSequence';
 
 // ── Constants ────────────────────────────────────────────────────────────
@@ -215,7 +216,7 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
   const championCampaign = await createCampaign({
     name: 'Colaberry Alumni AI Champion Campaign',
     description: 'Primary alumni outreach: AI Agents training (alumni discount) + $250 referral commission. Multi-channel email+SMS over 10 days.',
-    type: 'warm_nurture',
+    type: 'alumni',
     sequence_id: championSeq.id,
     ai_system_prompt: AI_CHAMPION_SYSTEM_PROMPT,
     channel_config: {
@@ -239,7 +240,7 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
   const reengageCampaign = await createCampaign({
     name: 'Colaberry Alumni Re-Engagement Campaign',
     description: 'Auto-triggered when alumni go inactive for 30 days after completing champion campaign. 4-step re-engagement over 6 days.',
-    type: 're_engagement',
+    type: 'alumni_re_engagement',
     sequence_id: reengageSeq.id,
     ai_system_prompt: RE_ENGAGEMENT_SYSTEM_PROMPT,
     channel_config: {
@@ -308,6 +309,14 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
     );
   }
 
+  // 9. Set autonomous mode on both campaigns
+  await (championCampaign as any).update({ campaign_mode: 'autonomous' });
+  await (reengageCampaign as any).update({ campaign_mode: 'autonomous' });
+
+  // 10. Initialize ramp for both
+  await initializeRamp(championCampaign.id);
+  await initializeRamp(reengageCampaign.id);
+
   console.log(`[AlumniCampaign] Seed complete: champion=${championCampaign.id}, reengagement=${reengageCampaign.id}, enrolled=${enrolledCount}`);
 
   return {
@@ -321,4 +330,73 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
     },
     leads_enrolled: enrolledCount,
   };
+}
+
+// ── Migrate Existing Alumni Campaigns to Autonomous ─────────────────────
+
+export interface MigrationResult {
+  updated: string[];
+  errors: string[];
+}
+
+/**
+ * Migrate existing alumni campaigns from warm_nurture/re_engagement types
+ * to alumni/alumni_re_engagement with autonomous mode enabled.
+ */
+export async function migrateExistingAlumniCampaigns(): Promise<MigrationResult> {
+  const result: MigrationResult = { updated: [], errors: [] };
+
+  // Find champion campaign by name
+  const champion = await Campaign.findOne({
+    where: { name: 'Colaberry Alumni AI Champion Campaign' },
+  }) as any;
+
+  if (champion) {
+    try {
+      const updates: Record<string, any> = {};
+      if (champion.type !== 'alumni') updates.type = 'alumni';
+      if (champion.campaign_mode !== 'autonomous') updates.campaign_mode = 'autonomous';
+
+      if (Object.keys(updates).length > 0) {
+        await champion.update(updates);
+        result.updated.push(`${champion.id} (Alumni AI Champion → type=alumni, mode=autonomous)`);
+      }
+
+      // Initialize ramp if active and no ramp_state
+      if (champion.status === 'active' && !champion.ramp_state) {
+        await initializeRamp(champion.id);
+        result.updated.push(`${champion.id} (ramp initialized)`);
+      }
+    } catch (err: any) {
+      result.errors.push(`Champion: ${err.message}`);
+    }
+  }
+
+  // Find re-engagement campaign by name
+  const reengage = await Campaign.findOne({
+    where: { name: 'Colaberry Alumni Re-Engagement Campaign' },
+  }) as any;
+
+  if (reengage) {
+    try {
+      const updates: Record<string, any> = {};
+      if (reengage.type !== 'alumni_re_engagement') updates.type = 'alumni_re_engagement';
+      if (reengage.campaign_mode !== 'autonomous') updates.campaign_mode = 'autonomous';
+
+      if (Object.keys(updates).length > 0) {
+        await reengage.update(updates);
+        result.updated.push(`${reengage.id} (Alumni Re-Engagement → type=alumni_re_engagement, mode=autonomous)`);
+      }
+
+      if (reengage.status === 'active' && !reengage.ramp_state) {
+        await initializeRamp(reengage.id);
+        result.updated.push(`${reengage.id} (ramp initialized)`);
+      }
+    } catch (err: any) {
+      result.errors.push(`Re-Engagement: ${err.message}`);
+    }
+  }
+
+  console.log(`[AlumniCampaign] Migration complete: ${result.updated.length} updates, ${result.errors.length} errors`);
+  return result;
 }

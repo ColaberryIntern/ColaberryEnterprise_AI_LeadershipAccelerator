@@ -35,6 +35,8 @@ export interface GenerateMessageParams {
     // ICP intelligence (from campaign's ICP profile)
     pain_indicators?: string[];
     buying_signals?: string[];
+    // Alumni context (derived from MSSQL data)
+    alumni_context?: Record<string, any> | null;
   };
   conversationHistory?: string;
   campaignContext?: {
@@ -110,7 +112,15 @@ IMPORTANT RULES:
 - Reference their actual context (title, company, industry) naturally
 - If this is a cold outreach, be respectful and value-driven, not pushy
 - If there's conversation history, reference prior interactions naturally
-- Adapt tone to the lead's seniority level`;
+- Adapt tone to the lead's seniority level${params.campaignContext?.type === 'alumni' || params.campaignContext?.type === 'alumni_re_engagement' ? `
+
+ALUMNI MESSAGING RULES:
+- If career_stage = early_alumni: Use recent graduate framing, emphasize skill building and career launch
+- If career_stage = mid_alumni: Use career advancement framing, emphasize leadership and upskilling
+- If career_stage = senior_alumni: Use leadership/AI transformation framing, emphasize strategic impact
+- You may reference: ClassName, years_since_registration, career_stage, engagement_status, Mentor
+- You MUST NOT invent: job title, salary, company, employment status
+- Always reference Ali, Colaberry, and the alumni community` : ''}`;
 }
 
 function buildUserPrompt(params: GenerateMessageParams): string {
@@ -145,6 +155,18 @@ function buildUserPrompt(params: GenerateMessageParams): string {
     parts.push(`\nICP INTELLIGENCE:`);
     if (lead.pain_indicators?.length) parts.push(`- Pain Indicators: ${lead.pain_indicators.join(', ')}`);
     if (lead.buying_signals?.length) parts.push(`- Buying Signals: ${lead.buying_signals.join(', ')}`);
+  }
+
+  if (lead.alumni_context) {
+    const ac = lead.alumni_context;
+    parts.push(`\nALUMNI CONTEXT:`);
+    if (ac.years_since_registration) parts.push(`- Years Since Registration: ${ac.years_since_registration}`);
+    if (ac.career_stage) parts.push(`- Career Stage: ${ac.career_stage}`);
+    if (ac.program_type) parts.push(`- Program: ${ac.program_type}`);
+    if (ac.engagement_status) parts.push(`- Engagement Status: ${ac.engagement_status}`);
+    if (ac.mentor) parts.push(`- Mentor: ${ac.mentor}`);
+    if (ac.alumni_cohort) parts.push(`- Alumni Cohort: ${ac.alumni_cohort}`);
+    if (ac.class_name) parts.push(`- Class: ${ac.class_name}`);
   }
 
   if (campaignContext) {

@@ -124,6 +124,7 @@ export async function generateVariants(
         campaign.ai_system_prompt,
         campaign.goals,
         evolutionConfig.similarity_threshold,
+        campaign.type,
       );
 
       const result = await generateMessage({
@@ -454,7 +455,18 @@ function buildEvolutionPrompt(
   systemPrompt: string | null,
   goals: string | null,
   similarityThreshold: number,
+  campaignType?: string,
 ): string {
+  const isAlumni = ['alumni', 'alumni_re_engagement'].includes(campaignType || '');
+
+  const alumniRules = isAlumni ? `
+7. You MUST retain references to the Colaberry alumni community and alumni connection.
+8. You MUST preserve the relationship framing (shared history, alumni bond).
+9. Do NOT remove alumni discount or referral commission mentions.
+10. You MAY reference: ClassName, years_since_registration, career_stage, engagement_status, Mentor.
+11. You MUST NOT fabricate: job title, salary, company name, employment status.
+12. You MUST NOT invent any context not present in the lead profile.` : '';
+
   return `You are evolving a campaign message to improve engagement.
 
 ORIGINAL MESSAGE INSTRUCTIONS:
@@ -470,7 +482,7 @@ RULES:
 3. You MUST maintain the campaign objective${goals ? `: ${goals}` : ''}.
 4. ${channel === 'sms' ? 'Keep SMS under 160 characters.' : 'Keep email under 200 words.'}
 5. Make ONE meaningful change in the specified dimension.
-6. The message should feel natural and personalized, not like a variant test.
+6. The message should feel natural and personalized, not like a variant test.${alumniRules}
 
 ${systemPrompt ? `CAMPAIGN CONTEXT:\n${systemPrompt}` : ''}
 

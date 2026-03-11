@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { Lead } from '../models';
 import { sequelize } from '../config/database';
 import { Op } from 'sequelize';
+import { buildAlumniContext } from './alumniContextEngine';
 
 // ── MSSQL Connection ────────────────────────────────────────────────────
 
@@ -42,16 +43,21 @@ export interface AlumniRecord {
   Email: string;
   PhoneNumber: string;
   HiredDate: Date | null;
+  RegisterDate_DAY: Date | null;
+  ClassName: string | null;
+  LastActivitySection: string | null;
+  Mentor: string | null;
 }
 
 export async function fetchAlumniFromCCPP(): Promise<AlumniRecord[]> {
   const db = await connectMssql();
   const result = await db.request().query<AlumniRecord>(`
-    SELECT DISTINCT Firstname, LastName, Email, PhoneNumber, HiredDate
+    SELECT DISTINCT
+      Firstname, LastName, Email, PhoneNumber, HiredDate,
+      RegisterDate_DAY, ClassName, LastActivitySection, Mentor
     FROM CCPP.dbo.vw_QS_MetricsDashboard_ActiveUsers
     WHERE grouporderid = 1
       AND PhoneNumber IS NOT NULL
-      AND Email IS NOT NULL
     ORDER BY HiredDate DESC
   `);
   console.log(`[AlumniData] Fetched ${result.recordset.length} alumni from CCPP`);
@@ -91,18 +97,15 @@ export async function importAlumniAsLeads(): Promise<AlumniImportResult> {
       });
 
       if (existing) {
-        // Update phone if changed, mark as alumni source
+        // Update phone if changed, mark as alumni source, refresh context
         const updates: Record<string, any> = {};
         if (phone && phone !== existing.phone) updates.phone = phone;
         if (existing.source !== 'ccpp_alumni') updates.source = 'ccpp_alumni';
         if (existing.lead_source_type !== 'alumni') updates.lead_source_type = 'alumni';
+        updates.alumni_context = buildAlumniContext(row);
 
-        if (Object.keys(updates).length > 0) {
-          await existing.update(updates as any);
-          result.updated.push({ id: existing.id, email });
-        } else {
-          result.skipped++;
-        }
+        await existing.update(updates as any);
+        result.updated.push({ id: existing.id, email });
         continue;
       }
 
@@ -118,6 +121,7 @@ export async function importAlumniAsLeads(): Promise<AlumniImportResult> {
         lead_temperature: 'warm',
         interest_area: 'AI Agents Training',
         consent_contact: true,
+        alumni_context: buildAlumniContext(row),
         notes: row.HiredDate
           ? `Colaberry alumni. Hired date: ${new Date(row.HiredDate).toLocaleDateString()}`
           : 'Colaberry alumni.',

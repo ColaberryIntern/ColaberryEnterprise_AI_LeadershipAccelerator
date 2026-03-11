@@ -93,7 +93,7 @@ export async function detectInactiveLeads(): Promise<{
 
   const lifecycleCampaigns = campaigns.filter((c: any) => {
     const tc = c.targeting_criteria || {};
-    return tc.lifecycle_enabled && c.type !== 're_engagement';
+    return tc.lifecycle_enabled && !['re_engagement', 'alumni_re_engagement'].includes(c.type);
   });
 
   for (const campaign of lifecycleCampaigns) {
@@ -210,7 +210,7 @@ export async function detectReengagementComplete(): Promise<{
 
   // Find re-engagement campaigns with lifecycle enabled
   const campaigns = await Campaign.findAll({
-    where: { status: 'active', type: 're_engagement' },
+    where: { status: 'active', type: { [Op.in]: ['re_engagement', 'alumni_re_engagement'] } },
     raw: true,
   }) as any[];
 

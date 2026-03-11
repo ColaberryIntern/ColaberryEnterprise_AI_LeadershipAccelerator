@@ -226,6 +226,39 @@ export async function scanCampaign(campaign: Campaign): Promise<ScanResult> {
     ai_failed_24h: Number(aiFailed),
   };
 
+  // Alumni-specific engagement scoring and SMS metrics
+  const campaignType = (campaign as any).type || '';
+  if (['alumni', 'alumni_re_engagement'].includes(campaignType) && totalSent7d >= 5) {
+    // SMS failure rate
+    const smsOutcomes = await InteractionOutcome.findAll({
+      where: { campaign_id: campaign.id, created_at: { [Op.gte]: last7d } },
+      attributes: ['outcome', [fn('COUNT', col('id')), 'count']],
+      group: ['outcome'],
+      raw: true,
+    }) as any[];
+    const smsSent = smsOutcomes.find((o: any) => o.outcome === 'sms_sent')?.count || 0;
+    const smsFailed = smsOutcomes.find((o: any) => o.outcome === 'sms_failed')?.count || 0;
+    const smsResponseCount = smsOutcomes.find((o: any) => o.outcome === 'sms_reply')?.count || 0;
+    const smsTotal = Number(smsSent) + Number(smsFailed);
+    const smsFailureRate = smsTotal > 0 ? (Number(smsFailed) / smsTotal) * 100 : 0;
+    const smsResponseRate = smsTotal > 0 ? Number(smsResponseCount) / smsTotal : 0;
+    metrics.sms_failure_rate = Math.round(smsFailureRate * 100) / 100;
+    metrics.sms_response_rate = Math.round(smsResponseRate * 10000) / 100;
+
+    // Alumni engagement score (weighted composite 0-100)
+    const clickRate = totalSent7d > 0
+      ? ((outcomeCounts['clicked'] || 0) / totalSent7d) : 0;
+    const rawScore =
+      replyRate * 0.35 +
+      openRate * 0.20 +
+      clickRate * 0.15 +
+      smsResponseRate * 0.15 -
+      bounceRate * 0.10 -
+      unsubscribeRate * 0.05;
+    // Normalize: typical good rates sum to ~0.15-0.30, scale to 0-100
+    metrics.alumni_engagement_score = Math.min(100, Math.max(0, Math.round(rawScore * 200)));
+  }
+
   // Add autonomous campaign signals
   if ((campaign as any).campaign_mode === 'autonomous') {
     const { CampaignVariant } = require('../models');

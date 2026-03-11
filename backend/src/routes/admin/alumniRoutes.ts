@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { seedAlumniCampaigns } from '../../services/alumniCampaignService';
+import { seedAlumniCampaigns, migrateExistingAlumniCampaigns } from '../../services/alumniCampaignService';
 import { importAlumniAsLeads } from '../../services/alumniDataService';
 import {
   detectInactiveLeads,
@@ -76,6 +76,17 @@ router.post('/api/admin/alumni/activity-signal', requireAdmin, async (req: Reque
     }
     await updateActivitySignal(lead_id, signal, metadata);
     res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Migrate Existing Alumni Campaigns to Autonomous ─────────────────────
+
+router.post('/api/admin/alumni/migrate-autonomous', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const result = await migrateExistingAlumniCampaigns();
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

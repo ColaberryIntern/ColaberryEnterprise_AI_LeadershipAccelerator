@@ -5,7 +5,7 @@ import { enrollLeadInSequence } from './sequenceService';
 import { getSetting } from './settingsService';
 import { syncLeadToGhl, bulkSyncCampaignLeads } from './ghlService';
 
-export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement';
+export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'alumni' | 'alumni_re_engagement';
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
 
 interface CreateCampaignParams {
@@ -133,9 +133,9 @@ export async function updateCampaign(id: string, updates: Record<string, any>) {
 
   // Validate autonomous mode is only allowed for appropriate campaign types
   if (filtered.campaign_mode === 'autonomous') {
-    const allowedTypes = ['cold_outbound', 're_engagement'];
+    const allowedTypes = ['cold_outbound', 're_engagement', 'alumni', 'alumni_re_engagement'];
     if (!allowedTypes.includes(campaign.type)) {
-      throw new Error('Autonomous mode is only available for Cold Outbound and Re-Engagement campaigns');
+      throw new Error('Autonomous mode is only available for Cold Outbound, Re-Engagement, and Alumni campaigns');
     }
   }
 
