@@ -47,6 +47,9 @@ import MiniSection from './MiniSection';
 import VariableDefinition from './VariableDefinition';
 import SessionChecklist from './SessionChecklist';
 import AuditLog from './AuditLog';
+import Department from './Department';
+import Initiative from './Initiative';
+import DepartmentEvent from './DepartmentEvent';
 import BlueprintSnapshot from './BlueprintSnapshot';
 import TestSimulationResult from './TestSimulationResult';
 import AiAgent from './AiAgent';
@@ -396,6 +399,16 @@ LeadRecommendation.belongsTo(ICPProfile, { foreignKey: 'icp_profile_id', as: 'ic
 Lead.hasMany(LeadRecommendation, { foreignKey: 'lead_id', as: 'leadRecommendations' });
 LeadRecommendation.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 
+// --- Department Intelligence Layer associations ---
+Department.hasMany(Initiative, { foreignKey: 'department_id', as: 'initiatives' });
+Initiative.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
+
+Department.hasMany(DepartmentEvent, { foreignKey: 'department_id', as: 'events' });
+DepartmentEvent.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
+
+Initiative.hasMany(DepartmentEvent, { foreignKey: 'initiative_id', as: 'events' });
+DepartmentEvent.belongsTo(Initiative, { foreignKey: 'initiative_id', as: 'initiative' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -444,4 +457,7 @@ export {
   CampaignInsight,
   CampaignVariant,
   LeadRecommendation,
+  Department,
+  Initiative,
+  DepartmentEvent,
 };

@@ -1,35 +1,21 @@
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
-import { forceX, forceY } from 'd3-force';
 import { useIntelligenceContext } from '../../../../contexts/IntelligenceContext';
-import { BusinessEntityNetwork } from '../../../../services/intelligenceApi';
-import { BUSINESS_CATEGORIES, formatRowCount } from './businessEntityConfig';
-import GraphTooltip from '../GraphTooltip';
-
-// Hierarchy level mapping for vertical positioning
-const LEVEL_MAP: Record<string, number> = {
-  agents: 0,
-  campaigns: 1,
-  system: 1,
-  leads: 2,
-  visitors: 3,
-  students: 3,
-  cohorts: 4,
-  curriculum: 4,
-  other: 5,
-};
+import { getDepartmentsApi, DepartmentSummary } from '../../../../services/intelligenceApi';
+import { DEPARTMENT_CATEGORIES } from './departmentConfig';
 
 interface GraphNode {
   id: string;
+  slug: string;
   label: string;
   color: string;
   bgLight: string;
   val: number;
-  table_count: number;
-  total_rows: number;
-  matched_tables: string[];
-  level: number;
-  isHub: boolean;
+  health_score: number;
+  innovation_score: number;
+  initiative_count: number;
+  active_initiatives: number;
+  team_size: number;
   x?: number;
   y?: number;
 }
@@ -40,20 +26,36 @@ interface GraphLink {
   relationship: string;
 }
 
-interface Props {
-  hierarchy: BusinessEntityNetwork | null;
-  loading?: boolean;
-}
+// Relationships between departments
+const DEPT_EDGES: { source: string; target: string; relationship: string }[] = [
+  { source: 'intelligence', target: 'operations', relationship: 'monitors' },
+  { source: 'intelligence', target: 'growth', relationship: 'informs' },
+  { source: 'intelligence', target: 'marketing', relationship: 'informs' },
+  { source: 'intelligence', target: 'finance', relationship: 'reports' },
+  { source: 'orchestration', target: 'intelligence', relationship: 'orchestrates' },
+  { source: 'orchestration', target: 'operations', relationship: 'orchestrates' },
+  { source: 'growth', target: 'marketing', relationship: 'aligns' },
+  { source: 'growth', target: 'education', relationship: 'feeds' },
+  { source: 'infrastructure', target: 'operations', relationship: 'supports' },
+  { source: 'education', target: 'finance', relationship: 'drives revenue' },
+];
 
-export default function BusinessMapTab({ hierarchy, loading }: Props) {
+export default function DeptMapTab() {
   const { drillDown, selectedEntity } = useIntelligenceContext();
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 380, height: 600 });
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [departments, setDepartments] = useState<DepartmentSummary[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Measure container
+  useEffect(() => {
+    getDepartmentsApi()
+      .then((res) => setDepartments(res.data.departments))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver((entries) => {
@@ -64,71 +66,54 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // Build graph data from hierarchy
   const graphData = useMemo(() => {
-    if (!hierarchy) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
-    const maxRows = Math.max(...hierarchy.categories.map((c) => c.total_rows), 1);
+    if (!departments.length) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
 
-    const nodes: GraphNode[] = hierarchy.categories
-      .filter((c) => c.table_count > 0)
-      .map((cat) => {
-        const config = BUSINESS_CATEGORIES[cat.id] || BUSINESS_CATEGORIES.other;
-        return {
-          id: cat.id,
-          label: config.label,
-          color: config.color,
-          bgLight: config.bgLight,
-          val: 8 + (cat.total_rows / maxRows) * 22,
-          table_count: cat.table_count,
-          total_rows: cat.total_rows,
-          matched_tables: cat.matched_tables,
-          level: LEVEL_MAP[cat.id] ?? 5,
-          isHub: cat.id === hierarchy.hub_entity,
-        };
-      });
+    const maxInits = Math.max(...departments.map((d) => d.initiative_count), 1);
+    const nodes: GraphNode[] = departments.map((d) => {
+      const config = DEPARTMENT_CATEGORIES[d.slug] || { label: d.name, color: '#718096', bgLight: '#f7fafc' };
+      return {
+        id: d.id,
+        slug: d.slug,
+        label: config.label,
+        color: config.color,
+        bgLight: config.bgLight,
+        val: 10 + (d.initiative_count / maxInits) * 20,
+        health_score: d.health_score,
+        innovation_score: d.innovation_score,
+        initiative_count: d.initiative_count,
+        active_initiatives: d.active_initiatives,
+        team_size: d.team_size,
+      };
+    });
 
-    const nodeIds = new Set(nodes.map((n) => n.id));
-    const links: GraphLink[] = hierarchy.hierarchy_edges
-      .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
-      .map((e) => ({ source: e.source, target: e.target, relationship: e.relationship }));
+    const slugToId: Record<string, string> = {};
+    departments.forEach((d) => { slugToId[d.slug] = d.id; });
+
+    const links: GraphLink[] = DEPT_EDGES
+      .filter((e) => slugToId[e.source] && slugToId[e.target])
+      .map((e) => ({ source: slugToId[e.source], target: slugToId[e.target], relationship: e.relationship }));
 
     return { nodes, links };
-  }, [hierarchy]);
+  }, [departments]);
 
-  // Configure forces for compact layout
   useEffect(() => {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
-
-    fg.d3Force('charge')?.strength(-500);
-    fg.d3Force('link')?.distance(100);
-
-    const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
-    fg.d3Force(
-      'y',
-      forceY((node: any) => {
-        const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
-        return -dimensions.height * 0.35 + normalizedLevel * dimensions.height * 0.75;
-      }).strength(0.35)
-    );
-    fg.d3Force('x', forceX(0).strength(0.05));
-
-    // Smoother physics (cast to access d3 simulation methods)
+    fg.d3Force('charge')?.strength(-400);
+    fg.d3Force('link')?.distance(90);
     (fg as any).d3AlphaDecay?.(0.015);
     (fg as any).d3VelocityDecay?.(0.25);
-
     fg.d3ReheatSimulation();
-  }, [graphData, dimensions.height]);
+  }, [graphData]);
 
-  // Zoom to fit after stabilization
   useEffect(() => {
     const timer = setTimeout(() => {
-      graphRef.current?.zoomToFit(400, 10);
+      graphRef.current?.zoomToFit(400, 20);
     }, 1200);
     return () => clearTimeout(timer);
   }, []);
 
-  // Re-fit when container dimensions change (e.g., after ResizeObserver fires)
   useEffect(() => {
     const timer = setTimeout(() => {
       graphRef.current?.zoomToFit(400, 20);
@@ -136,16 +121,14 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
     return () => clearTimeout(timer);
   }, [dimensions]);
 
-  // Custom node rendering (compact for sidebar)
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const n = node as GraphNode;
-      const radius = n.isHub ? 28 : 16 + n.val * 0.6;
+      const radius = 18 + n.val * 0.5;
       const isHovered = hoveredNode?.id === n.id;
-      const isSelected = selectedEntity?.type === n.id;
-      const fontSize = Math.max(11 / globalScale, 3);
+      const isSelected = selectedEntity?.id === n.id;
+      const fontSize = Math.max(10 / globalScale, 3);
 
-      // Selection ring
       if (isSelected) {
         ctx.beginPath();
         ctx.arc(n.x!, n.y!, radius + 6, 0, 2 * Math.PI);
@@ -165,24 +148,26 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
 
       ctx.beginPath();
       ctx.arc(n.x!, n.y!, radius, 0, 2 * Math.PI);
-      ctx.fillStyle = isSelected ? n.bgLight : n.bgLight;
+      ctx.fillStyle = n.bgLight;
       ctx.fill();
       ctx.strokeStyle = n.color;
-      ctx.lineWidth = isSelected ? 3 : n.isHub ? 2.5 : 1.5;
+      ctx.lineWidth = isSelected ? 3 : 2;
       ctx.stroke();
 
-      ctx.font = `${n.isHub ? 'bold' : '600'} ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      // Label
+      ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = n.color;
-      ctx.fillText(n.label, n.x!, n.y! - 2);
+      ctx.fillText(n.label, n.x!, n.y! - 3);
 
+      // Score
       const smallFont = Math.max(7 / globalScale, 2);
-      ctx.font = `${smallFont}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      ctx.font = `${smallFont}px -apple-system, sans-serif`;
       ctx.fillStyle = '#718096';
-      ctx.fillText(formatRowCount(n.total_rows), n.x!, n.y! + fontSize * 0.8);
+      ctx.fillText(`${Math.round(n.health_score)}hp / ${Math.round(n.innovation_score)}in`, n.x!, n.y! + fontSize * 0.7);
 
-      // Table count badge
+      // Initiative count badge
       const badgeRadius = Math.max(6 / globalScale, 2.5);
       const badgeX = n.x! + radius * 0.7;
       const badgeY = n.y! - radius * 0.7;
@@ -192,12 +177,11 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       ctx.fill();
       ctx.font = `bold ${Math.max(6 / globalScale, 2)}px sans-serif`;
       ctx.fillStyle = '#fff';
-      ctx.fillText(String(n.table_count), badgeX, badgeY + 0.5);
+      ctx.fillText(String(n.active_initiatives), badgeX, badgeY + 0.5);
     },
     [hoveredNode, selectedEntity]
   );
 
-  // Custom link rendering
   const paintLink = useCallback(
     (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const src = link.source as GraphNode;
@@ -213,41 +197,43 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      const midX = (src.x! + tgt.x!) / 2;
-      const midY = (src.y! + tgt.y!) / 2;
-      const labelSize = Math.max(7 / globalScale, 2);
-      ctx.font = `${labelSize}px -apple-system, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(113, 128, 150, 0.6)';
-      ctx.fillText((link as GraphLink).relationship, midX, midY - 2 / globalScale);
+      if (globalScale > 1.2) {
+        const midX = (src.x! + tgt.x!) / 2;
+        const midY = (src.y! + tgt.y!) / 2;
+        const labelSize = Math.max(6 / globalScale, 2);
+        ctx.font = `${labelSize}px -apple-system, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(113, 128, 150, 0.6)';
+        ctx.fillText((link as GraphLink).relationship, midX, midY - 2 / globalScale);
+      }
     },
     []
   );
 
-  const handleNodeHover = useCallback((node: any) => {
-    setHoveredNode(node as GraphNode | null);
-  }, []);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    setMousePos({ x: e.clientX, y: e.clientY });
-  }, []);
-
   const handleNodeClick = useCallback(
     (node: any) => {
       const n = node as GraphNode;
-      drillDown(n.id, 'all', n.label);
+      drillDown('department', n.id, n.label);
     },
     [drillDown]
   );
 
-  if (loading || !hierarchy) {
+  if (loading) {
     return (
       <div className="d-flex align-items-center justify-content-center h-100 text-muted">
         <div className="spinner-border spinner-border-sm me-2" role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
-        <small>Loading business map...</small>
+        <small>Loading departments...</small>
+      </div>
+    );
+  }
+
+  if (!departments.length) {
+    return (
+      <div className="d-flex align-items-center justify-content-center h-100 text-muted p-3">
+        <small className="text-center">No departments found. Seed data will populate on server restart.</small>
       </div>
     );
   }
@@ -257,10 +243,10 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       <div className="p-2 border-bottom">
         <div className="d-flex justify-content-between align-items-center">
           <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-            Business Model
+            Department Map
           </span>
           <span className="text-muted" style={{ fontSize: '0.65rem' }}>
-            {hierarchy.total_tables} tables / {formatRowCount(hierarchy.total_rows)} rows
+            {departments.length} depts
           </span>
         </div>
       </div>
@@ -269,8 +255,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
         ref={containerRef}
         className="flex-grow-1"
         style={{ position: 'relative', minHeight: 0 }}
-        onMouseMove={handleMouseMove}
-        aria-label="Business entity relationship graph — interactive. Use the Entities tab for an accessible list."
+        aria-label="Department relationship graph — interactive."
       >
         <ForceGraph2D
           ref={graphRef}
@@ -280,14 +265,14 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={(node: any, color, ctx) => {
             const n = node as GraphNode;
-            const radius = n.isHub ? 28 : 16 + n.val * 0.6;
+            const radius = 18 + n.val * 0.5;
             ctx.beginPath();
             ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
             ctx.fillStyle = color;
             ctx.fill();
           }}
           linkCanvasObject={paintLink}
-          onNodeHover={handleNodeHover}
+          onNodeHover={(node: any) => setHoveredNode(node as GraphNode | null)}
           onNodeClick={handleNodeClick}
           cooldownTicks={150}
           warmupTicks={30}
@@ -299,7 +284,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           maxZoom={8}
         />
 
-        {/* Compact zoom controls */}
+        {/* Zoom controls */}
         <div
           className="d-flex flex-column gap-1"
           style={{ position: 'absolute', bottom: 8, right: 8, zIndex: 10 }}
@@ -307,8 +292,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           <button
             className="btn btn-sm btn-outline-secondary"
             style={{ width: 26, height: 26, padding: 0, fontSize: '0.85rem', background: 'rgba(255,255,255,0.9)' }}
-            onClick={() => { const fg = graphRef.current; if (fg) fg.zoom(Math.min(fg.zoom() * 1.4, 6), 300); }}
-            title="Zoom in"
+            onClick={() => { const fg = graphRef.current; if (fg) fg.zoom(Math.min(fg.zoom() * 1.4, 8), 300); }}
             aria-label="Zoom in"
           >
             +
@@ -317,7 +301,6 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
             className="btn btn-sm btn-outline-secondary"
             style={{ width: 26, height: 26, padding: 0, fontSize: '0.85rem', background: 'rgba(255,255,255,0.9)' }}
             onClick={() => { const fg = graphRef.current; if (fg) fg.zoom(Math.max(fg.zoom() * 0.7, 0.3), 300); }}
-            title="Zoom out"
             aria-label="Zoom out"
           >
             −
@@ -325,17 +308,42 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
           <button
             className="btn btn-sm btn-outline-secondary"
             style={{ width: 26, height: 26, padding: 0, fontSize: '0.6rem', background: 'rgba(255,255,255,0.9)' }}
-            onClick={() => graphRef.current?.zoomToFit(400, 10)}
-            title="Reset view"
+            onClick={() => graphRef.current?.zoomToFit(400, 20)}
             aria-label="Reset view"
           >
             ⟳
           </button>
         </div>
 
-        {/* Hover tooltip */}
+        {/* Tooltip */}
         {hoveredNode && (
-          <GraphTooltip node={hoveredNode} position={mousePos} />
+          <div
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              zIndex: 20,
+              background: 'rgba(255,255,255,0.95)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 8,
+              padding: '8px 12px',
+              fontSize: '0.7rem',
+              pointerEvents: 'none',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              maxWidth: 220,
+            }}
+          >
+            <div className="fw-semibold" style={{ color: hoveredNode.color }}>
+              {hoveredNode.label}
+            </div>
+            <div className="text-muted mt-1">
+              Health: {Math.round(hoveredNode.health_score)} · Innovation: {Math.round(hoveredNode.innovation_score)}
+            </div>
+            <div className="text-muted">
+              {hoveredNode.active_initiatives} active / {hoveredNode.initiative_count} initiatives
+            </div>
+            <div className="text-muted">{hoveredNode.team_size} team members</div>
+          </div>
         )}
       </div>
     </div>

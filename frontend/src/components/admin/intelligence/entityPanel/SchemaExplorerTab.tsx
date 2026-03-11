@@ -30,7 +30,7 @@ function SchemaForceGraph({
 }) {
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 400, height: 500 });
+  const [dimensions, setDimensions] = useState({ width: 380, height: 500 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {

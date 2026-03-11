@@ -3,6 +3,7 @@ import { EntityNetwork, BusinessEntityNetwork } from '../../../../services/intel
 import BusinessMapTab from './BusinessMapTab';
 import EntityBrowserTab from './EntityBrowserTab';
 import SchemaExplorerTab from './SchemaExplorerTab';
+import DeptMapTab from './DeptMapTab';
 
 interface Props {
   network: EntityNetwork | null;
@@ -11,10 +12,11 @@ interface Props {
   onRefresh: () => void;
 }
 
-type TabKey = 'map' | 'entities' | 'schema';
+type TabKey = 'map' | 'depts' | 'entities' | 'schema';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'map', label: 'Map' },
+  { key: 'depts', label: 'Depts' },
   { key: 'entities', label: 'Entities' },
   { key: 'schema', label: 'Schema' },
 ];
@@ -43,6 +45,9 @@ export default function EntityNavigationPanel({ network, businessHierarchy, hier
       <div className="flex-grow-1" style={{ minHeight: 0 }}>
         {activeTab === 'map' && (
           <BusinessMapTab hierarchy={businessHierarchy} loading={hierarchyLoading} />
+        )}
+        {activeTab === 'depts' && (
+          <DeptMapTab />
         )}
         {activeTab === 'entities' && (
           <EntityBrowserTab hierarchy={businessHierarchy} network={network} />

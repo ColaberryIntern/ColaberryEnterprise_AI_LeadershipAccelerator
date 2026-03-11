@@ -13,10 +13,15 @@ import HealthTab from './tabs/HealthTab';
 import ErrorsTab from './tabs/ErrorsTab';
 import QAScanTab from './tabs/QAScanTab';
 import SafetyTab from './tabs/SafetyTab';
+import InitiativesTab from './tabs/InitiativesTab';
+import RoadmapTab from './tabs/RoadmapTab';
+import DeptTimelineTab from './tabs/DeptTimelineTab';
+import InnovationTab from './tabs/InnovationTab';
+import RevenueImpactTab from './tabs/RevenueImpactTab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety';
+type TabKey = 'dashboard' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
@@ -417,6 +422,11 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
     { key: 'safety', label: 'Safety' },
     { key: 'timeline', label: 'Timeline' },
     { key: 'impact', label: 'Impact' },
+    { key: 'initiatives', label: 'Initiatives' },
+    { key: 'roadmap', label: 'Roadmap' },
+    { key: 'dept-timeline', label: 'Dept Timeline' },
+    { key: 'innovation', label: 'Innovation' },
+    { key: 'revenue', label: 'Revenue' },
   ];
 
   return (
@@ -471,6 +481,11 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         {activeTab === 'safety' && <SafetyTab entityFilter={entityFilter} />}
         {activeTab === 'timeline' && <ReasoningTimeline />}
         {activeTab === 'impact' && <ImpactMetrics />}
+        {activeTab === 'initiatives' && <InitiativesTab entityFilter={entityFilter} />}
+        {activeTab === 'roadmap' && <RoadmapTab entityFilter={entityFilter} />}
+        {activeTab === 'dept-timeline' && <DeptTimelineTab entityFilter={entityFilter} />}
+        {activeTab === 'innovation' && <InnovationTab entityFilter={entityFilter} />}
+        {activeTab === 'revenue' && <RevenueImpactTab entityFilter={entityFilter} />}
       </div>
     </div>
   );

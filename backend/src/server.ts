@@ -17,6 +17,7 @@ import participantRoutes from './routes/participantRoutes';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
+import { seedDepartments } from './seeds/seedDepartments';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 
@@ -67,6 +68,7 @@ async function start(): Promise<void> {
   await connectDatabase();
   await sequelize.sync({ alter: true });
   await seedProgramCurriculum();
+  await seedDepartments();
 
   // Intelligence OS: ensure tables exist and start autonomous discovery
   await ensureIntelligenceTables();

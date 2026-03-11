@@ -31,6 +31,7 @@ import EntityNavigationPanel from '../../../components/admin/intelligence/entity
 import CoryPanel from '../../../components/admin/intelligence/CoryPanel';
 import CoryOrb from '../../../components/admin/intelligence/CoryOrb';
 import CoryOverlay from '../../../components/admin/intelligence/CoryOverlay';
+import DepartmentDrawer from '../../../components/admin/intelligence/DepartmentDrawer';
 import AgentDetailDrawer from '../../../components/admin/intelligence/AgentDetailDrawer';
 import CoryCenterTabs from '../../../components/admin/intelligence/CoryCenterTabs';
 
@@ -1073,6 +1074,8 @@ function IntelligenceOSContent() {
   const { isCompact, isMedium } = useBreakpoint();
   const [leftOpen, setLeftOpen] = useState(true);
   const [coryOverlayOpen, setCoryOverlayOpen] = useState(false);
+  const [deptDrawerOpen, setDeptDrawerOpen] = useState(false);
+  const [deptDrawerId, setDeptDrawerId] = useState<string | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'map' | 'canvas' | 'assistant'>('canvas');
   // Auto-collapse left panel on medium screens
@@ -1083,6 +1086,15 @@ function IntelligenceOSContent() {
       setLeftOpen(true);
     }
   }, [isMedium, isCompact]);
+
+  // Auto-open Department Drawer when a department is selected
+  useEffect(() => {
+    if (selectedEntity?.type === 'department' && selectedEntity.id) {
+      setDeptDrawerId(selectedEntity.id);
+      setDeptDrawerOpen(true);
+      setCoryOverlayOpen(false);
+    }
+  }, [selectedEntity]);
 
   // Auto-open Cory if arriving via ?cory=open (from GlobalCoryWidget click)
   const [searchParams] = useSearchParams();
@@ -1401,13 +1413,13 @@ function IntelligenceOSContent() {
         <div
           className="intel-panel-slide"
           style={{
-            width: leftOpen ? 420 : 0,
-            minWidth: leftOpen ? 420 : 0,
+            width: leftOpen ? 400 : 0,
+            minWidth: leftOpen ? 400 : 0,
             overflow: 'hidden',
             borderRight: leftOpen ? '1px solid rgba(226, 232, 240, 0.5)' : 'none',
           }}
         >
-          <div style={{ width: 420, height: '100%' }}>
+          <div style={{ width: 400, height: '100%' }}>
             <EntityNavigationPanel network={network} businessHierarchy={businessHierarchy} hierarchyLoading={hierarchyLoading} onRefresh={loadNetwork} />
           </div>
         </div>
@@ -1457,21 +1469,40 @@ function IntelligenceOSContent() {
           </div>
         </div>
 
-        {/* Right Panel: Cory AI COO (pushes content, no overlay) */}
-        <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
-          <CoryPanel
-            onVisualizationsUpdate={handleVisualizationsUpdate}
-            onSummaryUpdate={handleSummaryUpdate}
-            onInsightsUpdate={handleInsightsUpdate}
-            externalQuery={externalQuery}
+        {/* Right Panel: Cory AI COO or Department Drawer */}
+        {!deptDrawerOpen && (
+          <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
+            <CoryPanel
+              onVisualizationsUpdate={handleVisualizationsUpdate}
+              onSummaryUpdate={handleSummaryUpdate}
+              onInsightsUpdate={handleInsightsUpdate}
+              externalQuery={externalQuery}
+            />
+          </CoryOverlay>
+        )}
+
+        {deptDrawerId && (
+          <DepartmentDrawer
+            departmentId={deptDrawerId}
+            isOpen={deptDrawerOpen}
+            onClose={() => setDeptDrawerOpen(false)}
+            onSwitchToCory={() => {
+              setDeptDrawerOpen(false);
+              setCoryOverlayOpen(true);
+            }}
           />
-        </CoryOverlay>
+        )}
 
       </div>
 
       {/* Cory Floating Orb */}
       <CoryOrb
-        onClick={() => setCoryOverlayOpen(!coryOverlayOpen)}
+        onClick={() => {
+          if (deptDrawerOpen) {
+            setDeptDrawerOpen(false);
+          }
+          setCoryOverlayOpen(!coryOverlayOpen);
+        }}
         isOpen={coryOverlayOpen}
       />
 

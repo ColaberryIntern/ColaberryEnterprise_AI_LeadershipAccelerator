@@ -208,4 +208,97 @@ export const rejectDecision = (decisionId: string) =>
   api.post(`/autonomy/decisions/${decisionId}/reject`);
 export const runAutonomyCycle = () => api.post('/autonomy/run-cycle');
 
+// ─── Department Intelligence Layer ─────────────────────────────────────────
+
+export interface DepartmentSummary {
+  id: string;
+  name: string;
+  slug: string;
+  mission: string;
+  color: string;
+  bg_light: string;
+  team_size: number;
+  health_score: number;
+  innovation_score: number;
+  initiative_count: number;
+  active_initiatives: number;
+  completed_initiatives: number;
+  total_revenue_impact: number;
+  strategic_objectives: { title: string; progress: number }[];
+  kpis: { name: string; value: number; unit: string; trend: string }[];
+}
+
+export interface InitiativeSummary {
+  id: string;
+  department_id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  progress: number;
+  owner: string;
+  start_date: string;
+  target_date: string;
+  completed_date: string | null;
+  revenue_impact: number | null;
+  risk_level: string;
+  department?: { id: string; name: string; slug: string; color: string };
+}
+
+export interface DepartmentEventSummary {
+  id: string;
+  department_id: string;
+  initiative_id: string | null;
+  event_type: string;
+  title: string;
+  description: string;
+  severity: string | null;
+  created_at: string;
+  department?: { id: string; name: string; slug: string; color: string };
+  initiative?: { id: string; title: string };
+}
+
+export interface InnovationScoreEntry {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  bg_light: string;
+  innovation_score: number;
+  health_score: number;
+  breakdown: {
+    initiative_velocity: number;
+    completion_rate: number;
+    avg_progress: number;
+    team_size: number;
+    active_initiatives: number;
+    completed_initiatives: number;
+    total_initiatives: number;
+  };
+}
+
+export const getDepartmentsApi = () =>
+  api.get<{ departments: DepartmentSummary[] }>('/departments');
+
+export const getDepartmentDetail = (id: string) =>
+  api.get<any>(`/departments/${id}`);
+
+export const getInitiativesApi = (params?: { department_id?: string; status?: string; priority?: string }) =>
+  api.get<{ initiatives: InitiativeSummary[] }>('/initiatives', { params });
+
+export const getInitiativeDetail = (id: string) =>
+  api.get<InitiativeSummary>(`/initiatives/${id}`);
+
+export const getRoadmapData = () =>
+  api.get<{ roadmap: any[] }>('/roadmap');
+
+export const getDepartmentTimelineEvents = (params?: { department_id?: string; limit?: number }) =>
+  api.get<{ events: DepartmentEventSummary[] }>('/department-timeline', { params });
+
+export const getInnovationScoresData = () =>
+  api.get<{ scores: InnovationScoreEntry[] }>('/innovation-scores');
+
+export const getRevenueImpactData = (params?: { department_id?: string }) =>
+  api.get<{ grand_total: number; by_department: any[] }>('/revenue-impact', { params });
+
 export default api;
