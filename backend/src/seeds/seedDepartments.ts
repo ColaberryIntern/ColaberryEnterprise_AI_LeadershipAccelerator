@@ -17,9 +17,9 @@ const DEPARTMENTS = [
       { title: 'Real-time anomaly detection across all data streams', progress: 65 },
     ],
     kpis: [
-      { name: 'Query Accuracy', value: 94, unit: '%', trend: 'up' },
-      { name: 'Insights Generated', value: 1247, unit: '/mo', trend: 'up' },
-      { name: 'Data Coverage', value: 87, unit: '%', trend: 'stable' },
+      { name: 'Query Accuracy', value: 94, unit: '%', trend: 'up', delta: 3.2, prev_value: 91 },
+      { name: 'Insights Generated', value: 1247, unit: '/mo', trend: 'up', delta: 12.5, prev_value: 1108 },
+      { name: 'Data Coverage', value: 87, unit: '%', trend: 'stable', delta: 0.5, prev_value: 86.5 },
     ],
   },
   {
@@ -36,9 +36,9 @@ const DEPARTMENTS = [
       { title: 'Reduce operational costs by 20%', progress: 45 },
     ],
     kpis: [
-      { name: 'Uptime', value: 99.8, unit: '%', trend: 'stable' },
-      { name: 'Avg Response Time', value: 245, unit: 'ms', trend: 'down' },
-      { name: 'Error Rate', value: 0.3, unit: '%', trend: 'down' },
+      { name: 'Uptime', value: 99.8, unit: '%', trend: 'stable', delta: 0.1, prev_value: 99.7 },
+      { name: 'Avg Response Time', value: 245, unit: 'ms', trend: 'down', delta: -8.2, prev_value: 267 },
+      { name: 'Error Rate', value: 0.3, unit: '%', trend: 'down', delta: -25, prev_value: 0.4 },
     ],
   },
   {
@@ -55,9 +55,9 @@ const DEPARTMENTS = [
       { title: 'Improve lead-to-enrollment conversion by 25%', progress: 38 },
     ],
     kpis: [
-      { name: 'New Leads', value: 342, unit: '/mo', trend: 'up' },
-      { name: 'Conversion Rate', value: 12.4, unit: '%', trend: 'up' },
-      { name: 'CAC', value: 185, unit: '$', trend: 'down' },
+      { name: 'New Leads', value: 342, unit: '/mo', trend: 'up', delta: 18.6, prev_value: 288 },
+      { name: 'Conversion Rate', value: 12.4, unit: '%', trend: 'up', delta: 2.1, prev_value: 10.3 },
+      { name: 'CAC', value: 185, unit: '$', trend: 'down', delta: -12.3, prev_value: 211 },
     ],
   },
   {
@@ -74,9 +74,9 @@ const DEPARTMENTS = [
       { title: 'Achieve 30% email open rate across campaigns', progress: 72 },
     ],
     kpis: [
-      { name: 'Email Open Rate', value: 28.5, unit: '%', trend: 'up' },
-      { name: 'Content Engagement', value: 4.2, unit: 'min avg', trend: 'stable' },
-      { name: 'Campaign ROI', value: 3.8, unit: 'x', trend: 'up' },
+      { name: 'Email Open Rate', value: 28.5, unit: '%', trend: 'up', delta: 5.2, prev_value: 27.1 },
+      { name: 'Content Engagement', value: 4.2, unit: 'min avg', trend: 'stable', delta: 1.1, prev_value: 4.15 },
+      { name: 'Campaign ROI', value: 3.8, unit: 'x', trend: 'up', delta: 8.6, prev_value: 3.5 },
     ],
   },
   {
@@ -93,9 +93,9 @@ const DEPARTMENTS = [
       { title: 'Reduce revenue leakage to under 2%', progress: 85 },
     ],
     kpis: [
-      { name: 'MRR', value: 48500, unit: '$', trend: 'up' },
-      { name: 'Gross Margin', value: 72, unit: '%', trend: 'stable' },
-      { name: 'Collection Rate', value: 96, unit: '%', trend: 'up' },
+      { name: 'MRR', value: 48500, unit: '$', trend: 'up', delta: 6.8, prev_value: 45400 },
+      { name: 'Gross Margin', value: 72, unit: '%', trend: 'stable', delta: 0.3, prev_value: 71.8 },
+      { name: 'Collection Rate', value: 96, unit: '%', trend: 'up', delta: 1.5, prev_value: 94.6 },
     ],
   },
   {
@@ -112,9 +112,9 @@ const DEPARTMENTS = [
       { title: 'Implement zero-trust security architecture', progress: 30 },
     ],
     kpis: [
-      { name: 'Deploy Frequency', value: 12, unit: '/wk', trend: 'up' },
-      { name: 'MTTR', value: 18, unit: 'min', trend: 'down' },
-      { name: 'Security Score', value: 88, unit: '/100', trend: 'up' },
+      { name: 'Deploy Frequency', value: 12, unit: '/wk', trend: 'up', delta: 20, prev_value: 10 },
+      { name: 'MTTR', value: 18, unit: 'min', trend: 'down', delta: -18, prev_value: 22 },
+      { name: 'Security Score', value: 88, unit: '/100', trend: 'up', delta: 4.8, prev_value: 84 },
     ],
   },
   {
@@ -131,9 +131,9 @@ const DEPARTMENTS = [
       { title: '90% student satisfaction score', progress: 82 },
     ],
     kpis: [
-      { name: 'Completion Rate', value: 78, unit: '%', trend: 'up' },
-      { name: 'Student Satisfaction', value: 87, unit: '%', trend: 'up' },
-      { name: 'Job Placement', value: 72, unit: '%', trend: 'stable' },
+      { name: 'Completion Rate', value: 78, unit: '%', trend: 'up', delta: 4.0, prev_value: 75 },
+      { name: 'Student Satisfaction', value: 87, unit: '%', trend: 'up', delta: 3.6, prev_value: 84 },
+      { name: 'Job Placement', value: 72, unit: '%', trend: 'stable', delta: 0.8, prev_value: 71.4 },
     ],
   },
   {
@@ -150,9 +150,9 @@ const DEPARTMENTS = [
       { title: 'Cross-department workflow automation', progress: 42 },
     ],
     kpis: [
-      { name: 'Agent Success Rate', value: 96, unit: '%', trend: 'up' },
-      { name: 'Orchestration Cycles', value: 1840, unit: '/day', trend: 'up' },
-      { name: 'Auto-Resolution', value: 73, unit: '%', trend: 'up' },
+      { name: 'Agent Success Rate', value: 96, unit: '%', trend: 'up', delta: 2.1, prev_value: 94 },
+      { name: 'Orchestration Cycles', value: 1840, unit: '/day', trend: 'up', delta: 15.6, prev_value: 1592 },
+      { name: 'Auto-Resolution', value: 73, unit: '%', trend: 'up', delta: 8.9, prev_value: 67 },
     ],
   },
 ];
@@ -217,6 +217,15 @@ export async function seedDepartments() {
         console.log(`[seed] Departments already seeded (${existing} found) with story data, skipping.`);
         return;
       }
+      // Always update KPIs with latest delta/trend data
+      for (const dData of DEPARTMENTS) {
+        await Department.update(
+          { kpis: dData.kpis as any },
+          { where: { slug: dData.slug } }
+        );
+      }
+      console.log('[seed] Updated department KPIs with WoW delta data.');
+
       // Reseed initiatives with story metadata
       console.log('[seed] Reseeding initiatives with story metadata...');
       const depts = await Department.findAll();

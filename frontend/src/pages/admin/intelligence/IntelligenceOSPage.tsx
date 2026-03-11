@@ -182,6 +182,24 @@ function ContextBreadcrumb() {
 }
 
 // ─── Department KPI Header ────────────────────────────────────────────────────
+
+// Priority color map for initiative badges
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: 'danger',
+  high: 'warning',
+  medium: 'info',
+  low: 'secondary',
+};
+
+// Determine if a KPI trend is "good" (want higher) or "bad" (want lower like error rate, CAC, response time)
+const LOWER_IS_BETTER = ['error rate', 'cac', 'avg response time', 'mttr', 'response time'];
+function isGoodTrend(name: string, trend: string): boolean | null {
+  if (trend === 'stable') return null;
+  const lowerBetter = LOWER_IS_BETTER.some((k) => name.toLowerCase().includes(k));
+  if (lowerBetter) return trend === 'down';
+  return trend === 'up';
+}
+
 function DepartmentKPIHeader({
   detail,
   loading,
@@ -191,6 +209,8 @@ function DepartmentKPIHeader({
   loading: boolean;
   onCoryClick?: (context: string) => void;
 }) {
+  const [storyInitiativeId, setStoryInitiativeId] = useState<string | null>(null);
+
   if (loading) {
     return (
       <div className="d-flex gap-3 flex-wrap">
@@ -212,123 +232,144 @@ function DepartmentKPIHeader({
   if (!detail) return null;
 
   const overview = detail.overview || {};
-  const deptKpis: { name: string; value: number; unit: string; trend: string }[] = detail.kpis || [];
+  const deptKpis: { name: string; value: number; unit: string; trend: string; delta?: number; prev_value?: number }[] = detail.kpis || [];
   const objectives: { title: string; progress: number }[] = detail.strategic_objectives || [];
+  const building: any[] = detail.building || [];
+  const achievements: any[] = detail.achievements || [];
+  const risks: any[] = detail.risks || [];
+  const maintenance: any[] = detail.maintenance || [];
   const deptColor = overview.color || 'var(--color-primary)';
+  const deptName = overview.name || 'Department';
 
-  const trendIcon = (trend: string) => {
-    if (trend === 'up') return { symbol: '\u2191', color: 'var(--color-accent)', label: 'Improving' };
-    if (trend === 'down') return { symbol: '\u2193', color: 'var(--color-secondary)', label: 'Declining' };
-    return { symbol: '\u2192', color: '#718096', label: 'Stable' };
-  };
+  // Score health rating
+  const healthRating = overview.health_score >= 80 ? 'Excellent' : overview.health_score >= 60 ? 'Good' : overview.health_score >= 40 ? 'Fair' : 'Needs Attention';
+  const healthColor = overview.health_score >= 80 ? 'var(--color-accent)' : overview.health_score >= 60 ? '#2b6cb0' : overview.health_score >= 40 ? '#d69e2e' : 'var(--color-secondary)';
 
   return (
     <div>
-      {/* Top row: Department summary scores */}
-      <div className="d-flex gap-3 flex-wrap mb-3">
-        {/* Health Score */}
-        <div
-          className="intel-card-float flex-fill"
-          style={{ minWidth: 130, maxWidth: 200, borderLeft: `4px solid ${overview.health_score >= 70 ? 'var(--color-accent)' : overview.health_score >= 40 ? '#d69e2e' : 'var(--color-secondary)'}` }}
-        >
-          <div className="card-body p-3">
-            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
-              Health Score
-            </small>
-            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: overview.health_score >= 70 ? 'var(--color-accent)' : overview.health_score >= 40 ? '#d69e2e' : 'var(--color-secondary)' }}>
-              {Math.round(overview.health_score)}<small className="fw-normal text-muted">/100</small>
-            </div>
+      {/* ── Row 1: Department Scorecard (Health + Innovation + Team + Initiatives in a clean row) ── */}
+      <div
+        className="card border-0 shadow-sm mb-3"
+        style={{ borderTop: `3px solid ${deptColor}` }}
+      >
+        <div className="card-body p-3">
+          <div className="d-flex align-items-center gap-2 mb-3">
+            <span
+              className="d-inline-block rounded-circle"
+              style={{ width: 10, height: 10, background: deptColor, flexShrink: 0 }}
+            />
+            <span className="fw-semibold" style={{ fontSize: '0.85rem', color: 'var(--color-primary)' }}>{deptName} Department</span>
+            <span className="badge" style={{ fontSize: '0.6rem', background: healthColor, color: '#fff' }}>{healthRating}</span>
+            <small className="text-muted ms-auto" style={{ fontSize: '0.62rem' }}>Week-over-week</small>
           </div>
-        </div>
 
-        {/* Innovation Score */}
-        <div
-          className="intel-card-float flex-fill"
-          style={{ minWidth: 130, maxWidth: 200, borderLeft: `4px solid ${deptColor}` }}
-        >
-          <div className="card-body p-3">
-            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
-              Innovation Score
-            </small>
-            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: deptColor }}>
-              {Math.round(overview.innovation_score)}<small className="fw-normal text-muted">/100</small>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+            {/* Health */}
+            <div className="text-center">
+              <div className="position-relative d-inline-block mb-1">
+                <svg width="64" height="64" viewBox="0 0 64 64">
+                  <circle cx="32" cy="32" r="28" fill="none" stroke="var(--color-border)" strokeWidth="5" />
+                  <circle
+                    cx="32" cy="32" r="28" fill="none" stroke={healthColor} strokeWidth="5"
+                    strokeDasharray={`${(overview.health_score / 100) * 175.9} 175.9`}
+                    strokeLinecap="round" transform="rotate(-90 32 32)"
+                  />
+                  <text x="32" y="34" textAnchor="middle" fontSize="14" fontWeight="700" fill={healthColor}>
+                    {Math.round(overview.health_score)}
+                  </text>
+                </svg>
+              </div>
+              <div className="text-muted fw-medium" style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Health</div>
             </div>
-          </div>
-        </div>
 
-        {/* Team Size */}
-        <div
-          className="intel-card-float flex-fill"
-          style={{ minWidth: 130, maxWidth: 200, borderLeft: '4px solid var(--color-primary)' }}
-        >
-          <div className="card-body p-3">
-            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
-              Team Size
-            </small>
-            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
-              {overview.team_size}
+            {/* Innovation */}
+            <div className="text-center">
+              <div className="position-relative d-inline-block mb-1">
+                <svg width="64" height="64" viewBox="0 0 64 64">
+                  <circle cx="32" cy="32" r="28" fill="none" stroke="var(--color-border)" strokeWidth="5" />
+                  <circle
+                    cx="32" cy="32" r="28" fill="none" stroke={deptColor} strokeWidth="5"
+                    strokeDasharray={`${(overview.innovation_score / 100) * 175.9} 175.9`}
+                    strokeLinecap="round" transform="rotate(-90 32 32)"
+                  />
+                  <text x="32" y="34" textAnchor="middle" fontSize="14" fontWeight="700" fill={deptColor}>
+                    {Math.round(overview.innovation_score)}
+                  </text>
+                </svg>
+              </div>
+              <div className="text-muted fw-medium" style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Innovation</div>
             </div>
-          </div>
-        </div>
 
-        {/* Active Initiatives */}
-        <div
-          className="intel-card-float flex-fill"
-          style={{ minWidth: 130, maxWidth: 200, borderLeft: '4px solid #805ad5' }}
-        >
-          <div className="card-body p-3">
-            <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
-              Active Initiatives
-            </small>
-            <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: '#805ad5' }}>
-              {detail.building?.length || 0}
+            {/* Team */}
+            <div className="text-center d-flex flex-column align-items-center justify-content-center">
+              <div className="fw-bold" style={{ fontSize: '1.6rem', color: 'var(--color-primary)', lineHeight: 1.1 }}>{overview.team_size}</div>
+              <div className="text-muted fw-medium" style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Team</div>
             </div>
-            <small className="text-muted" style={{ fontSize: '0.65rem' }}>
-              of {(detail.building?.length || 0) + (detail.achievements?.length || 0) + (detail.maintenance?.length || 0)} total
-            </small>
+
+            {/* Initiatives Summary */}
+            <div className="text-center d-flex flex-column align-items-center justify-content-center">
+              <div className="d-flex align-items-baseline gap-1">
+                <span className="fw-bold" style={{ fontSize: '1.6rem', color: '#805ad5', lineHeight: 1.1 }}>{building.length}</span>
+                <small className="text-muted" style={{ fontSize: '0.65rem' }}>/ {building.length + achievements.length + maintenance.length}</small>
+              </div>
+              <div className="text-muted fw-medium" style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active</div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Department-specific KPIs */}
+      {/* ── Row 2: KPI Cards with WoW Trends ── */}
       {deptKpis.length > 0 && (
-        <div className="d-flex gap-3 flex-wrap mb-3">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }} className="mb-3">
           {deptKpis.map((kpi, i) => {
-            const t = trendIcon(kpi.trend);
+            const good = isGoodTrend(kpi.name, kpi.trend);
+            const trendColor = good === null ? '#718096' : good ? 'var(--color-accent)' : 'var(--color-secondary)';
+            const trendSymbol = kpi.trend === 'up' ? '\u2191' : kpi.trend === 'down' ? '\u2193' : '\u2192';
+            const deltaVal = kpi.delta != null ? Math.abs(kpi.delta) : null;
+
             return (
               <div
                 key={i}
-                className="intel-card-float flex-fill"
-                style={{ minWidth: 150, maxWidth: 240, borderLeft: `4px solid ${deptColor}`, position: 'relative' }}
+                className="card border-0 shadow-sm position-relative"
+                style={{ borderLeft: `3px solid ${trendColor}` }}
               >
                 <div className="card-body p-3">
                   {onCoryClick && (
-                    <div style={{ position: 'absolute', top: 8, right: 8 }}>
+                    <div style={{ position: 'absolute', top: 6, right: 6 }}>
                       <CoryBadge
-                        onClick={() => onCoryClick(`Analyze the ${overview.name} department KPI "${kpi.name}": current value is ${kpi.value}${kpi.unit}, trend is ${kpi.trend}. Give me a full analysis with context, risks, and recommendations.`)}
+                        onClick={() => onCoryClick(`Analyze the ${deptName} department KPI "${kpi.name}": current value is ${kpi.value}${kpi.unit}, trend is ${kpi.trend}${kpi.delta != null ? `, WoW change ${kpi.delta > 0 ? '+' : ''}${kpi.delta}%` : ''}. Give me a full analysis with context, risks, and recommendations.`)}
                         tooltip={`Ask Cory about ${kpi.name}`}
-                        size={18}
+                        size={16}
                       />
                     </div>
                   )}
-                  <small className="text-muted fw-medium text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+                  <small className="text-muted fw-medium text-uppercase d-block" style={{ fontSize: '0.6rem', letterSpacing: '0.5px' }}>
                     {kpi.name}
                   </small>
                   <div className="d-flex align-items-baseline gap-2 mt-1">
-                    <span className="fw-bold" style={{ fontSize: '1.25rem', color: deptColor }}>
-                      {kpi.value}{kpi.unit === '%' ? '%' : ''}
+                    <span className="fw-bold" style={{ fontSize: '1.3rem', color: 'var(--color-primary)' }}>
+                      {kpi.unit === '$' && '$'}{kpi.value}{kpi.unit === '%' ? '%' : ''}
                     </span>
-                    {kpi.unit !== '%' && kpi.unit && (
-                      <small className="text-muted" style={{ fontSize: '0.7rem' }}>{kpi.unit}</small>
+                    {kpi.unit !== '%' && kpi.unit !== '$' && kpi.unit && (
+                      <small className="text-muted" style={{ fontSize: '0.65rem' }}>{kpi.unit}</small>
                     )}
                   </div>
-                  <div className="d-flex align-items-center gap-1 mt-1">
+                  <div className="d-flex align-items-center gap-2 mt-1">
                     <span
-                      className="badge"
-                      style={{ fontSize: '0.6rem', fontWeight: 600, background: t.color, color: '#fff' }}
+                      className="d-flex align-items-center gap-1"
+                      style={{ fontSize: '0.62rem', fontWeight: 600, color: trendColor }}
                     >
-                      {t.symbol} {t.label}
+                      {trendSymbol}
+                      {deltaVal != null ? `${deltaVal}% WoW` : (kpi.trend === 'stable' ? 'Stable' : kpi.trend)}
                     </span>
+                    {good !== null && (
+                      <span style={{ fontSize: '0.55rem', color: trendColor }}>{good ? '●' : '●'}</span>
+                    )}
+                    {kpi.prev_value != null && (
+                      <small className="text-muted" style={{ fontSize: '0.55rem' }}>
+                        was {kpi.unit === '$' && '$'}{kpi.prev_value}{kpi.unit === '%' ? '%' : ''}
+                      </small>
+                    )}
                   </div>
                 </div>
               </div>
@@ -337,7 +378,7 @@ function DepartmentKPIHeader({
         </div>
       )}
 
-      {/* Strategic Objectives progress */}
+      {/* ── Row 3: Strategic Objectives ── */}
       {objectives.length > 0 && (
         <div className="card border-0 shadow-sm mb-3">
           <div className="card-header bg-white fw-semibold small d-flex align-items-center gap-2" style={{ color: deptColor }}>
@@ -345,190 +386,157 @@ function DepartmentKPIHeader({
             <span className="badge bg-light text-muted border" style={{ fontSize: '0.6rem' }}>{objectives.length}</span>
           </div>
           <div className="card-body py-2 px-3">
-            {objectives.map((obj, i) => (
-              <div key={i} className="mb-2">
-                <div className="d-flex justify-content-between align-items-center mb-1">
-                  <small className="fw-medium" style={{ fontSize: '0.72rem' }}>{obj.title}</small>
-                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>{obj.progress}%</small>
+            {objectives.map((obj, i) => {
+              const objColor = obj.progress >= 70 ? 'var(--color-accent)' : obj.progress >= 40 ? '#d69e2e' : 'var(--color-secondary)';
+              const objLabel = obj.progress >= 70 ? 'On Track' : obj.progress >= 40 ? 'In Progress' : 'Behind';
+              return (
+                <div key={i} className="mb-2">
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <small className="fw-medium" style={{ fontSize: '0.72rem' }}>{obj.title}</small>
+                    <div className="d-flex align-items-center gap-2">
+                      <span style={{ fontSize: '0.55rem', fontWeight: 600, color: objColor }}>{objLabel}</span>
+                      <small className="text-muted" style={{ fontSize: '0.65rem' }}>{obj.progress}%</small>
+                    </div>
+                  </div>
+                  <div className="progress" style={{ height: 6 }}>
+                    <div className="progress-bar" style={{ width: `${obj.progress}%`, background: objColor }} />
+                  </div>
                 </div>
-                <div className="progress" style={{ height: 5 }}>
-                  <div
-                    className="progress-bar"
-                    style={{
-                      width: `${obj.progress}%`,
-                      background: obj.progress >= 70 ? 'var(--color-accent)' : obj.progress >= 40 ? '#d69e2e' : deptColor,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Department Sections: Building, Achievements, Risks, Maintenance */}
-      <DepartmentSectionsGrid detail={detail} deptColor={deptColor} onCoryClick={onCoryClick} />
-    </div>
-  );
-}
-
-// Priority color map for initiative badges
-const PRIORITY_COLORS: Record<string, string> = {
-  critical: 'danger',
-  high: 'warning',
-  medium: 'info',
-  low: 'secondary',
-};
-
-// ─── Department Sections Grid ─────────────────────────────────────────────────
-function DepartmentSectionsGrid({
-  detail,
-  deptColor,
-  onCoryClick,
-}: {
-  detail: any;
-  deptColor: string;
-  onCoryClick?: (context: string) => void;
-}) {
-  const [storyInitiativeId, setStoryInitiativeId] = useState<string | null>(null);
-  const [expandedSection, setExpandedSection] = useState<string | null>('building');
-
-  const building: any[] = detail?.building || [];
-  const achievements: any[] = detail?.achievements || [];
-  const risks: any[] = detail?.risks || [];
-  const maintenance: any[] = detail?.maintenance || [];
-  const deptName = detail?.overview?.name || 'Department';
-
-  const sections = [
-    { key: 'building', label: 'Building', count: building.length, accent: deptColor, icon: '▸' },
-    { key: 'achievements', label: 'Achievements', count: achievements.length, accent: 'var(--color-accent)', icon: '★' },
-    { key: 'risks', label: 'Risks', count: risks.length, accent: 'var(--color-secondary)', icon: '⚠' },
-    { key: 'maintenance', label: 'Maintenance', count: maintenance.length, accent: '#805ad5', icon: '⟳' },
-  ];
-
-  return (
-    <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
-        {sections.map((section) => {
-          const isExpanded = expandedSection === section.key;
-          return (
-            <div
-              key={section.key}
-              className="card border-0 shadow-sm"
-              style={{ borderLeft: `4px solid ${section.accent}` }}
-            >
-              <div
-                className="card-header bg-white d-flex justify-content-between align-items-center"
-                style={{ cursor: 'pointer' }}
-                onClick={() => setExpandedSection(isExpanded ? null : section.key)}
-              >
-                <span className="fw-semibold small d-flex align-items-center gap-2" style={{ color: 'var(--color-primary)' }}>
-                  <span style={{ fontSize: '0.7rem' }}>{section.icon}</span>
-                  {section.label}
-                  {section.count > 0 && (
-                    <span className="badge bg-light text-muted border" style={{ fontSize: '0.6rem' }}>{section.count}</span>
-                  )}
-                </span>
-                <span style={{ fontSize: '0.65rem', color: 'var(--color-text-light)' }}>
-                  {isExpanded ? '▾' : '▸'}
-                </span>
-              </div>
-
-              {isExpanded && (
-                <div className="card-body py-2 px-3" style={{ maxHeight: 400, overflowY: 'auto' }}>
-                  {/* Building Section */}
-                  {section.key === 'building' && (
-                    building.length > 0 ? building.map((init: any) => (
-                      <div
-                        key={init.id}
-                        className="mb-3 p-2 rounded-2"
-                        style={{ cursor: 'pointer', transition: 'background 0.15s' }}
-                        onClick={() => setStoryInitiativeId(init.id)}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                      >
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                          <span className="fw-medium small" style={{ color: 'var(--color-primary-light)' }}>{init.title}</span>
-                          <span className={`badge bg-${PRIORITY_COLORS[init.priority] || 'secondary'}`} style={{ fontSize: '0.55rem' }}>
-                            {init.priority}
-                          </span>
-                        </div>
-                        <div className="d-flex align-items-center gap-2 mb-1">
-                          <div className="progress flex-grow-1" style={{ height: 6 }}>
-                            <div
-                              className={`progress-bar bg-${init.progress >= 80 ? 'success' : 'primary'}`}
-                              style={{ width: `${init.progress}%` }}
-                            />
-                          </div>
-                          <span className="text-muted" style={{ fontSize: '0.65rem' }}>{init.progress}%</span>
-                        </div>
-                        {init.owner && <div className="text-muted" style={{ fontSize: '0.65rem' }}>Owner: {init.owner}</div>}
-                      </div>
-                    )) : <div className="text-muted small py-2">No active initiatives.</div>
-                  )}
-
-                  {/* Achievements Section */}
-                  {section.key === 'achievements' && (
-                    achievements.length > 0 ? achievements.map((a: any) => (
-                      <div key={a.id} className="mb-2 small p-2 rounded-2" style={{ background: 'var(--color-bg-alt)' }}>
-                        <div className="fw-medium">{a.title}</div>
-                        {a.description && <div className="text-muted" style={{ fontSize: '0.7rem' }}>{a.description}</div>}
-                      </div>
-                    )) : <div className="text-muted small py-2">No achievements yet.</div>
-                  )}
-
-                  {/* Risks Section */}
-                  {section.key === 'risks' && (
-                    risks.length > 0 ? risks.map((r: any, i: number) => (
-                      <div
-                        key={r.id || i}
-                        className="mb-2 small p-2 rounded-2"
-                        style={{
-                          cursor: r.event_type === 'initiative_risk' ? 'pointer' : 'default',
-                          transition: 'background 0.15s',
-                        }}
-                        onClick={() => r.event_type === 'initiative_risk' && setStoryInitiativeId(r.id)}
-                        onMouseEnter={(e) => { if (r.event_type === 'initiative_risk') (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                      >
-                        <div className="d-flex align-items-center gap-1">
-                          {r.severity && (
-                            <span className={`badge bg-${PRIORITY_COLORS[r.severity] || 'secondary'}`} style={{ fontSize: '0.55rem' }}>
-                              {r.severity}
-                            </span>
-                          )}
-                          <span className="fw-medium" style={r.event_type === 'initiative_risk' ? { color: 'var(--color-primary-light)' } : {}}>{r.title}</span>
-                        </div>
-                        {r.description && <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>{r.description}</div>}
-                      </div>
-                    )) : <div className="text-muted small py-2">No active risks.</div>
-                  )}
-
-                  {/* Maintenance Section */}
-                  {section.key === 'maintenance' && (
-                    maintenance.length > 0 ? maintenance.map((init: any) => (
-                      <div
-                        key={init.id}
-                        className="mb-2 small p-2 rounded-2"
-                        style={{ cursor: 'pointer', transition: 'background 0.15s' }}
-                        onClick={() => setStoryInitiativeId(init.id)}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                      >
-                        <div className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>{init.title}</div>
-                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>Status: On Hold · {init.owner || 'Unassigned'}</div>
-                      </div>
-                    )) : <div className="text-muted small py-2">No maintenance items.</div>
-                  )}
+      {/* ── Row 4: Building + Risks side by side (always visible) ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '0.75rem' }} className="mb-3">
+        {/* Building - Active Initiatives */}
+        <div className="card border-0 shadow-sm" style={{ borderLeft: `3px solid ${deptColor}` }}>
+          <div className="card-header bg-white d-flex align-items-center gap-2">
+            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>Active Initiatives</span>
+            {building.length > 0 && <span className="badge" style={{ fontSize: '0.55rem', background: deptColor, color: '#fff' }}>{building.length}</span>}
+          </div>
+          <div className="card-body py-2 px-3" style={{ maxHeight: 320, overflowY: 'auto' }}>
+            {building.length > 0 ? building.map((init: any) => {
+              const progColor = init.progress >= 80 ? 'var(--color-accent)' : init.progress >= 50 ? '#2b6cb0' : init.progress >= 25 ? '#d69e2e' : 'var(--color-secondary)';
+              const progLabel = init.progress >= 80 ? 'Near Complete' : init.progress >= 50 ? 'On Track' : init.progress >= 25 ? 'Early' : 'Just Started';
+              return (
+                <div
+                  key={init.id}
+                  className="mb-3 p-2 rounded-2 border"
+                  style={{ cursor: 'pointer', borderColor: 'var(--color-border)', transition: 'border-color 0.15s, box-shadow 0.15s' }}
+                  onClick={() => setStoryInitiativeId(init.id)}
+                  onMouseEnter={(e) => { const el = e.currentTarget; el.style.borderColor = deptColor; el.style.boxShadow = `0 0 0 1px ${deptColor}20`; }}
+                  onMouseLeave={(e) => { const el = e.currentTarget; el.style.borderColor = 'var(--color-border)'; el.style.boxShadow = 'none'; }}
+                >
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <span className="fw-medium small" style={{ color: 'var(--color-primary)' }}>{init.title}</span>
+                    <div className="d-flex gap-1">
+                      <span className={`badge bg-${PRIORITY_COLORS[init.priority] || 'secondary'}`} style={{ fontSize: '0.5rem' }}>{init.priority}</span>
+                      <span className={`badge bg-${PRIORITY_COLORS[init.risk_level] || 'secondary'}`} style={{ fontSize: '0.5rem' }}>{init.risk_level} risk</span>
+                    </div>
+                  </div>
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <div className="progress flex-grow-1" style={{ height: 6 }}>
+                      <div className="progress-bar" style={{ width: `${init.progress}%`, background: progColor }} />
+                    </div>
+                    <span style={{ fontSize: '0.6rem', fontWeight: 600, color: progColor, whiteSpace: 'nowrap' }}>{init.progress}% · {progLabel}</span>
+                  </div>
+                  {init.owner && <div className="text-muted" style={{ fontSize: '0.6rem' }}>Owner: {init.owner}</div>}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            }) : <div className="text-muted small py-2">No active initiatives.</div>}
+          </div>
+        </div>
+
+        {/* Risks */}
+        <div className="card border-0 shadow-sm" style={{ borderLeft: '3px solid var(--color-secondary)' }}>
+          <div className="card-header bg-white d-flex align-items-center gap-2">
+            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>Risks & Alerts</span>
+            {risks.length > 0 && <span className="badge bg-danger" style={{ fontSize: '0.55rem' }}>{risks.length}</span>}
+            {risks.length === 0 && <span className="badge bg-success" style={{ fontSize: '0.55rem' }}>Clear</span>}
+          </div>
+          <div className="card-body py-2 px-3" style={{ maxHeight: 320, overflowY: 'auto' }}>
+            {risks.length > 0 ? risks.map((r: any, i: number) => (
+              <div
+                key={r.id || i}
+                className="mb-2 p-2 rounded-2"
+                style={{
+                  cursor: r.event_type === 'initiative_risk' ? 'pointer' : 'default',
+                  background: r.severity === 'critical' ? 'rgba(229, 62, 62, 0.05)' : r.severity === 'high' ? 'rgba(221, 107, 32, 0.05)' : 'transparent',
+                  border: `1px solid ${r.severity === 'critical' ? 'rgba(229, 62, 62, 0.2)' : r.severity === 'high' ? 'rgba(221, 107, 32, 0.15)' : 'var(--color-border)'}`,
+                }}
+                onClick={() => r.event_type === 'initiative_risk' && setStoryInitiativeId(r.id)}
+              >
+                <div className="d-flex align-items-center gap-1 small">
+                  {r.severity && (
+                    <span className={`badge bg-${PRIORITY_COLORS[r.severity] || 'secondary'}`} style={{ fontSize: '0.5rem' }}>{r.severity}</span>
+                  )}
+                  <span className="fw-medium" style={r.event_type === 'initiative_risk' ? { color: 'var(--color-primary-light)' } : {}}>{r.title}</span>
+                </div>
+                {r.description && <div className="text-muted mt-1" style={{ fontSize: '0.65rem' }}>{r.description}</div>}
+              </div>
+            )) : (
+              <div className="text-center py-3">
+                <div style={{ fontSize: '1.5rem', opacity: 0.3 }}>&#10003;</div>
+                <div className="text-muted small">No active risks</div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* ── Row 5: Achievements + Maintenance side by side (always visible) ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '0.75rem' }} className="mb-3">
+        {/* Achievements */}
+        <div className="card border-0 shadow-sm" style={{ borderLeft: '3px solid var(--color-accent)' }}>
+          <div className="card-header bg-white d-flex align-items-center gap-2">
+            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>Achievements</span>
+            {achievements.length > 0 && <span className="badge bg-success" style={{ fontSize: '0.55rem' }}>{achievements.length}</span>}
+          </div>
+          <div className="card-body py-2 px-3" style={{ maxHeight: 240, overflowY: 'auto' }}>
+            {achievements.length > 0 ? achievements.map((a: any) => (
+              <div key={a.id} className="mb-2 p-2 rounded-2 small d-flex gap-2" style={{ background: 'rgba(56, 161, 105, 0.04)', border: '1px solid rgba(56, 161, 105, 0.12)' }}>
+                <span style={{ color: 'var(--color-accent)', fontSize: '0.8rem', flexShrink: 0 }}>&#10003;</span>
+                <div>
+                  <div className="fw-medium">{a.title}</div>
+                  {a.description && <div className="text-muted" style={{ fontSize: '0.65rem' }}>{a.description}</div>}
+                </div>
+              </div>
+            )) : <div className="text-muted small py-2">No achievements yet.</div>}
+          </div>
+        </div>
+
+        {/* Maintenance */}
+        <div className="card border-0 shadow-sm" style={{ borderLeft: '3px solid #805ad5' }}>
+          <div className="card-header bg-white d-flex align-items-center gap-2">
+            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>Maintenance & On Hold</span>
+            {maintenance.length > 0 && <span className="badge" style={{ fontSize: '0.55rem', background: '#805ad5', color: '#fff' }}>{maintenance.length}</span>}
+          </div>
+          <div className="card-body py-2 px-3" style={{ maxHeight: 240, overflowY: 'auto' }}>
+            {maintenance.length > 0 ? maintenance.map((init: any) => (
+              <div
+                key={init.id}
+                className="mb-2 p-2 rounded-2 small border"
+                style={{ cursor: 'pointer', borderColor: 'var(--color-border)' }}
+                onClick={() => setStoryInitiativeId(init.id)}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#805ad5'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)'; }}
+              >
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge" style={{ fontSize: '0.5rem', background: '#805ad5', color: '#fff' }}>On Hold</span>
+                  <span className="fw-medium" style={{ color: 'var(--color-primary)' }}>{init.title}</span>
+                </div>
+                {init.owner && <div className="text-muted mt-1" style={{ fontSize: '0.6rem' }}>Owner: {init.owner}</div>}
+              </div>
+            )) : <div className="text-muted small py-2">No maintenance items.</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Ask Cory ── */}
       {onCoryClick && building.length > 0 && (
-        <div className="mt-2 mb-3">
+        <div className="mb-3">
           <button
             className="btn btn-sm btn-outline-secondary"
             style={{ fontSize: '0.7rem', borderRadius: 20 }}
@@ -543,7 +551,7 @@ function DepartmentSectionsGrid({
         initiativeId={storyInitiativeId}
         onClose={() => setStoryInitiativeId(null)}
       />
-    </>
+    </div>
   );
 }
 

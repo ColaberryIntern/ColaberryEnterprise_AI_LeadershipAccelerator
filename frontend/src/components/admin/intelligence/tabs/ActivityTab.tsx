@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../../../../utils/api';
 import ActivityDetailModal from '../../../../pages/admin/ai-settings/ActivityDetailModal';
 import ExecutionTraceModal from '../../../../pages/admin/ai-settings/ExecutionTraceModal';
@@ -23,6 +23,18 @@ interface ActivityRecord {
 interface ActivityTabProps {
   entityFilter?: { type: string; id: string; name: string } | null;
 }
+
+// Department color map for tagging activity rows
+const DEPT_TAG_COLORS: Record<string, string> = {
+  intelligence: '#1a365d',
+  operations: '#2b6cb0',
+  growth: '#38a169',
+  marketing: '#e53e3e',
+  finance: '#d69e2e',
+  infrastructure: '#718096',
+  education: '#805ad5',
+  orchestration: '#319795',
+};
 
 const RESULT_COLORS: Record<string, string> = {
   success: 'success',
@@ -100,7 +112,16 @@ export default function ActivityTab({ entityFilter }: ActivityTabProps) {
             AI Decision Log <span className="text-muted fw-normal">({total} total)</span>
           </span>
           {entityFilter && (
-            <span className="badge bg-primary" style={{ fontSize: '0.68rem' }}>
+            <span
+              className="badge"
+              style={{
+                fontSize: '0.68rem',
+                background: entityFilter.type === 'department'
+                  ? (DEPT_TAG_COLORS[entityFilter.name.toLowerCase()] || 'var(--color-primary)')
+                  : 'var(--color-primary)',
+                color: '#fff',
+              }}
+            >
               Filtered: {entityFilter.name}
             </span>
           )}
@@ -122,7 +143,21 @@ export default function ActivityTab({ entityFilter }: ActivityTabProps) {
               <tbody>
                 {activity.map((a) => (
                   <tr key={a.id}>
-                    <td className="fw-medium">{a.agent?.agent_name || 'Unknown'}</td>
+                    <td className="fw-medium">
+                      {entityFilter?.type === 'department' && (
+                        <span
+                          className="d-inline-block rounded-circle me-1"
+                          style={{
+                            width: 8,
+                            height: 8,
+                            background: DEPT_TAG_COLORS[entityFilter.name.toLowerCase()] || 'var(--color-primary)',
+                            verticalAlign: 'middle',
+                          }}
+                          title={entityFilter.name}
+                        />
+                      )}
+                      {a.agent?.agent_name || 'Unknown'}
+                    </td>
                     <td>
                       {a.action === 'scan_completed_no_issues' ? (
                         <span className="text-muted">No issues detected</span>
