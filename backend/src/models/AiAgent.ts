@@ -83,12 +83,24 @@ export type AiAgentType =
   | 'admissions_callback'
   | 'admissions_task_monitor'
   | 'admissions_assistant'
+  // Curriculum agents
+  | 'curriculum_architect'
+  | 'artifact_generator'
+  | 'curriculum_qa'
+  | 'curriculum_optimizer'
+  // Platform agents
+  | 'platform_fix'
+  | 'curriculum_type_creator'
+  | 'curriculum_type_fix'
+  // Ticket & student tracking
+  | 'ticket_management'
+  | 'student_behavior_intelligence' 
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations';
 
 interface AiAgentAttributes {
   id?: string;

@@ -21,6 +21,8 @@ import coryRoutes from './admin/coryRoutes';
 import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
 import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 import admissionsRoutes from './admin/admissionsRoutes';
+import ticketRoutes from './admin/ticketRoutes';
+import previewRoutes from './admin/previewRoutes';
 
 const router = Router();
 
@@ -46,5 +48,7 @@ router.use(coryRoutes);
 router.use(departmentIntelligenceRoutes);
 router.use(websiteIntelligenceRoutes);
 router.use(admissionsRoutes);
+router.use(ticketRoutes);
+router.use(previewRoutes);
 
 export default router;

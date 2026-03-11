@@ -10,12 +10,15 @@ import { getReasoningTimeline, type TimelineEntry } from './reasoningTimeline';
 import { createAgent, retireAgent, getDepartmentSummary, type AgentSpec, type DepartmentSummary } from '../agents/agentFactory';
 import { proposeGrowthExperiments } from '../agents/GrowthExperimentAgent';
 import { listAllAgents, agentCount } from '../agents/agentRegistry';
-import { AiAgent } from '../../models';
+
+import { AiAgent, Ticket } from '../../models';
 import Department from '../../models/Department';
 import IntelligenceDecision from '../../models/IntelligenceDecision';
 import { getDepartmentDetail } from '../../services/departmentIntelligenceService';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
+import { executeCoryStrategicAgent } from '../agents/CoryStrategicAgent';
+import { getTicketStats } from '../../services/ticketService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -28,7 +31,12 @@ export type CoryIntent =
   | 'department_status'
   | 'agent_status'
   | 'optimize'
-  | 'general_query';
+  | 'general_query'
+  | 'create_ticket'
+  | 'plan_curriculum'
+  | 'fix_platform'
+  | 'curriculum_status'
+  | 'strategic_plan';
 
 export interface CoryCommand {
   command: string;
@@ -76,6 +84,11 @@ const KEYWORD_INTENTS: Array<{ keywords: string[]; intent: CoryIntent }> = [
   { keywords: ['agent', 'fleet', 'roster'], intent: 'agent_status' },
   { keywords: ['optimize', 'improve', 'fix', 'boost', 'increase'], intent: 'optimize' },
   { keywords: ['analyze', 'analyse', 'look at', 'investigate', 'examine', 'growth', 'opportunity', 'conversion', 'revenue', 'funnel'], intent: 'analyze' },
+  { keywords: ['create ticket', 'make ticket', 'add task', 'new task', 'track this', 'open ticket'], intent: 'create_ticket' },
+  { keywords: ['plan curriculum', 'design course', 'build program', 'redesign curriculum', 'curriculum for', 'create bootcamp', 'create workshop'], intent: 'plan_curriculum' },
+  { keywords: ['fix', 'broken', 'bug', 'error', 'not working', 'issue with'], intent: 'fix_platform' },
+  { keywords: ['curriculum status', 'course progress', 'student progress', 'enrollment health'], intent: 'curriculum_status' },
+  { keywords: ['strategic plan', 'roadmap', 'plan for', 'strategy for', 'initiative'], intent: 'strategic_plan' },
 ];
 
 /**
@@ -106,7 +119,7 @@ export async function interpretCommand(
   // LLM fallback
   const systemPrompt = `You are a command classifier for an AI COO named Cory.
 Classify the user's command into one of these intents:
-briefing, analyze, hire_agent, retire_agent, launch_experiment, department_status, agent_status, optimize, general_query.
+briefing, analyze, hire_agent, retire_agent, launch_experiment, department_status, agent_status, optimize, general_query, create_ticket, plan_curriculum, fix_platform, curriculum_status, strategic_plan.
 
 Return JSON: { "intent": "...", "parameters": { ... } }
 Extract relevant parameters like agent_name, department, metric, entity_type.`;
@@ -502,6 +515,63 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
         actionsPerformed.push(`Scanned ${agents.length} agents`);
         break;
       }
+
+      case 'create_ticket':
+      case 'plan_curriculum':
+      case 'strategic_plan': {
+        const result = await executeCoryStrategicAgent(cmd.command, intent, cmd.context);
+        agentsDispatched.push('CoryStrategicAgent', ...result.agents_to_dispatch);
+        actionsPerformed.push(
+          `Created ${result.tickets_created.length} ticket(s)`,
+          result.plan_summary,
+        );
+        briefings = result.tickets_created.map((t) => ({
+          action_taken: `TK-${t.ticket_number}: ${t.title}`,
+          confidence: result.confidence,
+        }));
+        if (result.tickets_created.length > 0) {
+          briefings.unshift({
+            analysis: result.plan_summary,
+            confidence: result.confidence,
+          });
+        }
+        break;
+      }
+
+      case 'fix_platform': {
+        const fixResult = await executeCoryStrategicAgent(cmd.command, intent, cmd.context);
+        agentsDispatched.push('CoryStrategicAgent');
+        actionsPerformed.push(`Created bug ticket(s): ${fixResult.tickets_created.length}`);
+        briefings = fixResult.tickets_created.map((t) => ({
+          action_taken: `Bug ticket TK-${t.ticket_number}: ${t.title}`,
+          expected_impact: 'PlatformFixAgent will be dispatched to investigate',
+          confidence: fixResult.confidence,
+        }));
+        break;
+      }
+
+      case 'curriculum_status': {
+        const stats = await getTicketStats();
+        const currTickets = await Ticket.findAll({
+          where: { type: 'curriculum', status: { [Op.notIn]: ['done', 'cancelled'] } },
+          order: [['priority', 'ASC'], ['created_at', 'DESC']],
+          limit: 10,
+        });
+        briefings = [{
+          analysis: `Tickets: ${stats.open} open (${stats.byStatus.in_progress || 0} in progress, ${stats.byStatus.in_review || 0} in review). ${currTickets.length} open curriculum tickets.`,
+          confidence: 100,
+        }];
+        if (currTickets.length > 0) {
+          for (const t of currTickets.slice(0, 5)) {
+            briefings.push({
+              action_taken: `TK-${t.ticket_number}: ${t.title} [${t.status}/${t.priority}]`,
+              confidence: 100,
+            });
+          }
+        }
+        actionsPerformed.push(`Retrieved ticket stats and ${currTickets.length} curriculum tickets`);
+        break;
+      }
     }
   } catch (err: any) {
     actionsPerformed.push(`Error: ${err.message}`);
@@ -602,6 +672,11 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
   agent_status: ['Which agents have the highest error rates?', 'Give me a status briefing'],
   optimize: ['What are our biggest growth opportunities?', 'Show me the reasoning timeline'],
   general_query: ['Give me a status briefing', 'What are our biggest growth opportunities?'],
+  create_ticket: ['Show me the ticket board', 'Give me a status briefing'],
+  plan_curriculum: ['What is the curriculum status?', 'Show me open tickets'],
+  fix_platform: ['Show me the ticket board', 'What agents are working on fixes?'],
+  curriculum_status: ['Plan a new curriculum module', 'Show me student progress'],
+  strategic_plan: ['Show me open tickets', 'Give me a status briefing'],
 };
 
 /**

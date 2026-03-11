@@ -78,6 +78,9 @@ import AdmissionsActionLog from './AdmissionsActionLog';
 import CallContactLog from './CallContactLog';
 import CallbackRequest from './CallbackRequest';
 import DocumentDeliveryLog from './DocumentDeliveryLog';
+import Ticket from './Ticket';
+import TicketActivity from './TicketActivity';
+import StudentNavigationEvent from './StudentNavigationEvent';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -447,6 +450,16 @@ Visitor.hasMany(DocumentDeliveryLog, { foreignKey: 'visitor_id', as: 'documentDe
 
 DocumentDeliveryLog.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Lead.hasMany(DocumentDeliveryLog, { foreignKey: 'lead_id', as: 'documentDeliveries' });
+// Ticket associations
+Ticket.hasMany(TicketActivity, { foreignKey: 'ticket_id', as: 'activities' });
+TicketActivity.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(Ticket, { foreignKey: 'parent_ticket_id', as: 'subTasks' });
+Ticket.belongsTo(Ticket, { foreignKey: 'parent_ticket_id', as: 'parentTicket' });
+
+// Student Navigation Event associations
+Enrollment.hasMany(StudentNavigationEvent, { foreignKey: 'enrollment_id', as: 'navigationEvents' });
+StudentNavigationEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
@@ -506,4 +519,7 @@ export {
   CallContactLog,
   CallbackRequest,
   DocumentDeliveryLog,
+  Ticket,
+  TicketActivity,
+  StudentNavigationEvent,
 };

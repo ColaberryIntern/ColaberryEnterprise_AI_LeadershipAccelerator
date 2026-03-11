@@ -8,6 +8,10 @@ class BlueprintSnapshot extends Model {
   declare description: string | null;
   declare created_by: string | null;
   declare created_at: Date;
+  declare version_number: number | null;
+  declare snapshot_level: string | null;
+  declare entity_id: string | null;
+  declare change_summary: string | null;
 }
 
 BlueprintSnapshot.init(
@@ -18,6 +22,10 @@ BlueprintSnapshot.init(
     description: { type: DataTypes.TEXT, allowNull: true },
     created_by: { type: DataTypes.UUID, allowNull: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+    version_number: { type: DataTypes.INTEGER, allowNull: true },
+    snapshot_level: { type: DataTypes.STRING(20), allowNull: true },
+    entity_id: { type: DataTypes.UUID, allowNull: true },
+    change_summary: { type: DataTypes.TEXT, allowNull: true },
   },
   {
     sequelize,
