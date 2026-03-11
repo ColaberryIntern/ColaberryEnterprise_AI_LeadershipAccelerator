@@ -113,9 +113,35 @@ export const updateConfig = (config_key: string, config_value: Record<string, an
 export const triggerDiscovery = () => api.post('/discovery/run');
 export const getDictionary = () => api.get('/discovery/dictionary');
 
-// AI Query
+// AI Query (legacy orchestrator)
 export const queryOrchestrator = (question: string, scope?: Record<string, any>) =>
   api.post<QueryResponse>('/query', { question, scope });
+
+// Deterministic AI Assistant Pipeline
+export interface PipelineStep {
+  step: number;
+  name: string;
+  status: 'completed' | 'skipped' | 'error';
+  duration_ms: number;
+  detail?: string;
+}
+
+export interface AssistantResponse {
+  question: string;
+  entity_type: string | null;
+  intent: string;
+  confidence: number;
+  narrative: string;
+  insights: Array<{ type: string; severity: string; message: string; metric?: string; value?: number }>;
+  charts: Array<{ type: string; title: string; data: Record<string, any>[]; labelKey: string; valueKey: string }>;
+  recommendations: string[];
+  sources: string[];
+  pipelineSteps: PipelineStep[];
+  execution_path: string;
+}
+
+export const assistantQuery = (question: string, entityType?: string) =>
+  api.post<AssistantResponse>('/assistant', { question, entity_type: entityType });
 
 export const getExecutiveSummary = (params?: { entity_type?: string }) =>
   api.get<QueryResponse>('/executive-summary', { params });

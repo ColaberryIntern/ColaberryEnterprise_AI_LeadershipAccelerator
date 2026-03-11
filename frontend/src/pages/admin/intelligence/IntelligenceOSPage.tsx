@@ -423,6 +423,10 @@ interface ChatMessage {
   visualizations?: VisualizationSpec[];
   sources?: string[];
   executionPath?: string;
+  pipelineSteps?: Array<{ step: number; name: string; status: string; duration_ms: number; detail?: string }>;
+  insights?: Array<{ type: string; severity: string; message: string }>;
+  recommendations?: string[];
+  confidence?: number;
 }
 
 function AIAssistantPanel({
@@ -498,6 +502,10 @@ function AIAssistantPanel({
         visualizations: response.visualizations,
         sources: response.sources,
         executionPath: response.execution_path,
+        pipelineSteps: (response as any).pipelineSteps,
+        insights: (response as any).insights,
+        recommendations: (response as any).recommendations,
+        confidence: (response as any).confidence,
       };
       setMessages((prev) => [...prev, assistantMsg]);
 
@@ -640,6 +648,70 @@ function AIAssistantPanel({
             >
               {msg.content}
             </div>
+            {/* Pipeline steps summary */}
+            {msg.pipelineSteps && msg.pipelineSteps.length > 0 && (
+              <div className="mt-1 ms-1">
+                <details>
+                  <summary
+                    className="text-muted"
+                    style={{ fontSize: '0.6rem', cursor: 'pointer' }}
+                  >
+                    Pipeline: {msg.pipelineSteps.filter((s) => s.status === 'completed').length}/{msg.pipelineSteps.length} steps
+                    {msg.confidence != null && ` \u2022 ${(msg.confidence * 100).toFixed(0)}% confidence`}
+                    {' \u2022 '}
+                    {msg.pipelineSteps.reduce((sum, s) => sum + s.duration_ms, 0)}ms
+                  </summary>
+                  <div className="mt-1 ps-2 border-start" style={{ borderColor: 'var(--color-border)' }}>
+                    {msg.pipelineSteps.map((ps) => (
+                      <div
+                        key={ps.step}
+                        className="d-flex align-items-center gap-1"
+                        style={{ fontSize: '0.58rem', color: ps.status === 'completed' ? 'var(--color-text)' : 'var(--color-text-light)' }}
+                      >
+                        <span style={{ color: ps.status === 'completed' ? 'var(--color-accent)' : ps.status === 'skipped' ? 'var(--color-text-light)' : 'var(--color-secondary)' }}>
+                          {ps.status === 'completed' ? '\u2713' : ps.status === 'skipped' ? '\u2013' : '\u2717'}
+                        </span>
+                        <span>{ps.name}</span>
+                        {ps.detail && <span className="text-muted">({ps.detail})</span>}
+                        <span className="text-muted ms-auto">{ps.duration_ms}ms</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
+            {/* Insights */}
+            {msg.insights && msg.insights.length > 0 && (
+              <div className="mt-1">
+                {msg.insights.slice(0, 3).map((ins, ii) => (
+                  <div
+                    key={ii}
+                    className="d-flex align-items-start gap-1 ms-1"
+                    style={{ fontSize: '0.65rem', lineHeight: 1.4 }}
+                  >
+                    <span style={{ color: ins.severity === 'critical' ? 'var(--color-secondary)' : ins.severity === 'warning' ? '#d69e2e' : 'var(--color-primary-light)' }}>
+                      {ins.severity === 'critical' ? '\u26A0' : ins.severity === 'warning' ? '\u25B2' : '\u2022'}
+                    </span>
+                    <span>{ins.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Recommendations as clickable follow-ups */}
+            {msg.recommendations && msg.recommendations.length > 0 && (
+              <div className="mt-1 d-flex flex-wrap gap-1">
+                {msg.recommendations.slice(0, 3).map((rec, ri) => (
+                  <button
+                    key={ri}
+                    className="btn btn-sm btn-outline-secondary"
+                    style={{ fontSize: '0.58rem', padding: '1px 6px' }}
+                    onClick={() => handleSend(rec)}
+                  >
+                    {rec}
+                  </button>
+                ))}
+              </div>
+            )}
             {msg.sources && msg.sources.length > 0 && (
               <div className="mt-1">
                 {msg.sources.map((src, si) => (
