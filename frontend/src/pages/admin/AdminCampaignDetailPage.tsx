@@ -14,6 +14,7 @@ import CRMTab from '../../components/campaign/CRMTab';
 import SettingsTab from '../../components/campaign/SettingsTab';
 import ICPLeadsTab from '../../components/campaign/ICPLeadsTab';
 import EvolutionTab from '../../components/campaign/EvolutionTab';
+import LeadRecommendationsTab from '../../components/campaign/LeadRecommendationsTab';
 
 interface CampaignDetail {
   id: string;
@@ -88,7 +89,7 @@ interface AnalyticsData {
   lead_outcomes: any[];
 }
 
-type TabKey = 'overview' | 'analytics' | 'targeting' | 'icp_leads' | 'gtm' | 'leads' | 'crm' | 'evolution' | 'settings';
+type TabKey = 'overview' | 'analytics' | 'targeting' | 'icp_leads' | 'gtm' | 'leads' | 'crm' | 'evolution' | 'lead_recommendations' | 'settings';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -99,6 +100,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'leads', label: 'Leads & Outreach' },
   { key: 'crm', label: 'CRM' },
   { key: 'evolution', label: 'AI Control' },
+  { key: 'lead_recommendations', label: 'Lead Intelligence' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -341,6 +343,7 @@ function AdminCampaignDetailPage() {
         {TABS.filter((tab) => {
           if (tab.key === 'targeting' && campaign.type !== 'cold_outbound') return false;
           if (tab.key === 'evolution' && campaign.campaign_mode !== 'autonomous') return false;
+          if (tab.key === 'lead_recommendations' && campaign.campaign_mode !== 'autonomous') return false;
           return true;
         }).map((tab) => (
           <li key={tab.key} className="nav-item">
@@ -440,20 +443,40 @@ function AdminCampaignDetailPage() {
         />
       )}
 
+      {activeTab === 'lead_recommendations' && campaign.campaign_mode === 'autonomous' && (
+        <LeadRecommendationsTab
+          campaignId={id!}
+          headers={headers}
+        />
+      )}
+
       {activeTab === 'settings' && (
         <SettingsTab
           campaignId={id!}
           headers={headers}
           campaignMode={campaign.campaign_mode}
           campaignStatus={campaign.status}
+          campaignType={campaign.type}
           onModeChange={async (mode) => {
+            if (campaign.status === 'active') {
+              const msg = mode === 'autonomous'
+                ? 'This will initialize autonomous ramp-up and AI variant testing on this active campaign. Continue?'
+                : 'This will disable ramp-up and evolution. Enrolled leads will continue running. Continue?';
+              if (!window.confirm(msg)) return;
+            }
             try {
-              await fetch(`/api/admin/campaigns/${id}`, {
+              const res = await fetch(`/api/admin/campaigns/${id}`, {
                 method: 'PATCH',
                 headers,
                 body: JSON.stringify({ campaign_mode: mode }),
               });
-              setCampaign({ ...campaign, campaign_mode: mode });
+              if (!res.ok) {
+                const err = await res.json();
+                alert(err.error || 'Failed to update campaign mode');
+                return;
+              }
+              const updated = await res.json();
+              setCampaign({ ...campaign, ...updated, campaign_mode: mode });
             } catch (err) {
               console.error('Failed to update campaign mode:', err);
             }

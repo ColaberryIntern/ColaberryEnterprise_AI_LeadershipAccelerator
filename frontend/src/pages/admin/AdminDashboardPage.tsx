@@ -132,6 +132,7 @@ function AdminDashboardPage() {
   const [pipelineStats, setPipelineStats] = useState<Record<string, number>>({});
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [highIntent, setHighIntent] = useState<HighIntentVisitor[]>([]);
+  const [leadIntelStats, setLeadIntelStats] = useState<{ pending: number; estimated_revenue: number; total_discovered: number } | null>(null);
 
   useEffect(() => {
     Promise.allSettled([
@@ -145,7 +146,8 @@ function AdminDashboardPage() {
       api.get('/api/admin/pipeline/stats'),
       api.get('/api/admin/appointments/upcoming', { params: { days: 7 } }),
       api.get('/api/admin/visitors/high-intent', { params: { limit: 5 } }),
-    ]).then(([sR, cR, osR, fR, arR, vsR, lsR, psR, apR, hiR]) => {
+      api.get('/api/admin/lead-recommendations/stats'),
+    ]).then(([sR, cR, osR, fR, arR, vsR, lsR, psR, apR, hiR, lisR]) => {
       const s = settled(sR); if (s) setStats(s.data.stats);
       const c = settled(cR); if (c) setCohorts(c.data.cohorts);
       const os = settled(osR); if (os) setOppSummary(os.data);
@@ -156,6 +158,7 @@ function AdminDashboardPage() {
       const ps = settled(psR); if (ps) setPipelineStats(ps.data.stats || {});
       const ap = settled(apR); if (ap) setAppointments(ap.data.appointments || []);
       const hi = settled(hiR); if (hi) setHighIntent(Array.isArray(hi.data) ? hi.data : []);
+      const lis = settled(lisR); if (lis) setLeadIntelStats(lis.data);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -284,6 +287,24 @@ function AdminDashboardPage() {
           leadStats ? <div className="small text-muted">{leadStats.highIntent} high-intent</div> : undefined
         )}
       </div>
+
+      {/* Row 3: Lead Intelligence KPIs (autonomous campaigns) */}
+      {leadIntelStats && (leadIntelStats.total_discovered > 0 || leadIntelStats.pending > 0) && (
+        <div className="row g-3 mb-4">
+          {kpi('Discovered Leads', leadIntelStats.total_discovered, '#6f42c1',
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="#6f42c1"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" /></svg>,
+            <div className="small text-muted">AI agent sourced</div>
+          )}
+          {kpi('Pending Approval', leadIntelStats.pending, '#dd6b20',
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="#dd6b20"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z" /><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z" /></svg>,
+            leadIntelStats.pending > 0 ? <Link to="/admin/campaigns" className="small text-warning text-decoration-none">Review now</Link> : undefined
+          )}
+          {kpi('Est. Revenue', fmtCurrency(leadIntelStats.estimated_revenue), '#38a169',
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="#38a169"><path d="M4 10.781c.148 1.667 1.513 2.85 3.591 3.003V15h1.043v-1.216c2.27-.179 3.678-1.438 3.678-3.3 0-1.59-.947-2.51-2.956-3.028l-.722-.187V3.467c1.122.11 1.879.714 2.07 1.616h1.47c-.166-1.6-1.54-2.748-3.54-2.875V1H7.591v1.233c-1.939.23-3.27 1.472-3.27 3.156 0 1.454.966 2.483 2.661 2.917l.61.162v4.031c-1.149-.17-1.94-.8-2.131-1.718H4zm3.391-3.836c-1.043-.263-1.6-.825-1.6-1.616 0-.944.704-1.641 1.8-1.828v3.495l-.2-.05zm1.591 1.872c1.287.323 1.852.859 1.852 1.769 0 1.097-.826 1.828-2.2 1.939V8.73l.348.086z" /></svg>,
+            <div className="small text-muted">from discovered leads</div>
+          )}
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* SECTION 2: Pipeline & Opportunities                          */}

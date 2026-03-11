@@ -131,7 +131,48 @@ export async function updateCampaign(id: string, updates: Record<string, any>) {
   }
   filtered.updated_at = new Date();
 
+  // Validate autonomous mode is only allowed for appropriate campaign types
+  if (filtered.campaign_mode === 'autonomous') {
+    const allowedTypes = ['cold_outbound', 're_engagement'];
+    if (!allowedTypes.includes(campaign.type)) {
+      throw new Error('Autonomous mode is only available for Cold Outbound and Re-Engagement campaigns');
+    }
+  }
+
+  // Capture previous mode for transition logic
+  const prevMode = (campaign as any).campaign_mode || 'standard';
+
   await campaign.update(filtered);
+
+  // Handle mode transitions on active campaigns
+  if (filtered.campaign_mode && filtered.campaign_mode !== prevMode && campaign.status === 'active') {
+    if (filtered.campaign_mode === 'autonomous') {
+      // Standard → Autonomous: initialize ramp and evolution if not already set
+      try {
+        const { initializeRamp } = require('./autonomousRampService');
+        if (!(campaign as any).ramp_state) {
+          await initializeRamp(campaign.id);
+          console.log(`[Campaign] Autonomous ramp initialized on mode switch for ${campaign.name}`);
+        }
+      } catch (err: any) {
+        console.error(`[Campaign] Failed to initialize ramp on mode switch for ${campaign.id}:`, err.message);
+      }
+    } else if (prevMode === 'autonomous') {
+      // Autonomous → Standard: disable ramp and evolution gracefully
+      const modeDowngrade: Record<string, any> = {};
+      if ((campaign as any).ramp_state) {
+        modeDowngrade.ramp_state = { ...(campaign as any).ramp_state, status: 'complete' };
+      }
+      if ((campaign as any).evolution_config) {
+        modeDowngrade.evolution_config = { ...(campaign as any).evolution_config, enabled: false };
+      }
+      if (Object.keys(modeDowngrade).length) {
+        await campaign.update(modeDowngrade);
+        console.log(`[Campaign] Disabled ramp/evolution on mode downgrade for ${campaign.name}`);
+      }
+    }
+  }
+
   return campaign.reload({
     include: [
       { model: FollowUpSequence, as: 'sequence', attributes: ['id', 'name'] },

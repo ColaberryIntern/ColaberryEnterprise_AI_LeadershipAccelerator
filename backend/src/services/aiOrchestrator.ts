@@ -10,6 +10,7 @@ import { runPromptMonitorAgent } from './agents/promptMonitorAgent';
 import { runOrchestrationAutoRepairAgent } from './agents/orchestrationAutoRepairAgent';
 import { runCampaignQAAgent } from './agents/campaignQAAgent';
 import { runCampaignSelfHealingAgent } from './agents/campaignSelfHealingAgent';
+import { runApolloLeadIntelligenceAgent } from './agents/apolloLeadIntelligenceAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -261,4 +262,11 @@ export async function runCampaignQA(): Promise<AgentExecutionResult | null> {
  */
 export async function runSelfHealing(): Promise<AgentExecutionResult | null> {
   return runAgent('CampaignSelfHealingAgent', runCampaignSelfHealingAgent);
+}
+
+/**
+ * Run the Apollo Lead Intelligence Agent.
+ */
+export async function runLeadIntelligence(): Promise<AgentExecutionResult | null> {
+  return runAgent('ApolloLeadIntelligenceAgent', runApolloLeadIntelligenceAgent);
 }

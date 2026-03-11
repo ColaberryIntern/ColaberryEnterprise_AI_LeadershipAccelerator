@@ -296,6 +296,22 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Generates and evaluates AI message variants for autonomous campaigns every 4 hours. Creates A/B test variants, scores performance, promotes winners, and retires underperformers.',
   },
   {
+    agent_name: 'ApolloLeadIntelligenceAgent',
+    agent_type: 'lead_intelligence',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/apolloLeadIntelligenceAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 */6 * * *',
+    category: 'outbound',
+    description:
+      'Discovers leads from Apollo using ICP profiles on autonomous campaigns. Creates lead recommendations pending admin approval. Scores program fit (0-100) and estimates ROI.',
+    config: {
+      max_leads_per_profile: 50,
+      min_program_fit_score: 40,
+      avg_deal_value: 25000,
+    },
+  },
+  {
     agent_name: 'CampaignSelfHealingAgent',
     agent_type: 'self_healing',
     module: 'aiOpsScheduler',

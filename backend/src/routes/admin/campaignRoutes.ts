@@ -53,6 +53,13 @@ import {
   handleBuildColdCampaign,
   handleGetSequenceTemplates,
 } from '../../controllers/icpProfileController';
+import {
+  handleListRecommendations,
+  handleGetRecommendationStats,
+  handleApproveRecommendation as handleApproveLeadRec,
+  handleRejectRecommendation as handleRejectLeadRec,
+  handleBulkApproveRecommendations,
+} from '../../controllers/leadRecommendationController';
 
 const router = Router();
 
@@ -104,6 +111,13 @@ router.get('/api/admin/apollo/quota', requireAdmin, handleApolloQuota);
 
 // AI Preview
 router.post('/api/admin/ai/preview', requireAdmin, handleAIPreview);
+
+// Lead Recommendations (Apollo Lead Intelligence)
+router.get('/api/admin/lead-recommendations', requireAdmin, handleListRecommendations);
+router.get('/api/admin/lead-recommendations/stats', requireAdmin, handleGetRecommendationStats);
+router.post('/api/admin/lead-recommendations/:id/approve', requireAdmin, handleApproveLeadRec);
+router.post('/api/admin/lead-recommendations/:id/reject', requireAdmin, handleRejectLeadRec);
+router.post('/api/admin/lead-recommendations/bulk-approve', requireAdmin, handleBulkApproveRecommendations);
 
 // ── Autonomous Campaign Endpoints ────────────────────────────────────────
 

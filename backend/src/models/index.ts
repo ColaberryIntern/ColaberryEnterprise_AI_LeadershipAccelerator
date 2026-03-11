@@ -67,6 +67,7 @@ import CampaignSimulationStep from './CampaignSimulationStep';
 import CommunicationLog from './CommunicationLog';
 import CampaignInsight from './CampaignInsight';
 import CampaignVariant from './CampaignVariant';
+import LeadRecommendation from './LeadRecommendation';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -387,6 +388,14 @@ CampaignInsight.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' 
 Campaign.hasMany(CampaignVariant, { foreignKey: 'campaign_id', as: 'variants' });
 CampaignVariant.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
+// Lead Recommendation associations
+Campaign.hasMany(LeadRecommendation, { foreignKey: 'campaign_id', as: 'leadRecommendations' });
+LeadRecommendation.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+ICPProfile.hasMany(LeadRecommendation, { foreignKey: 'icp_profile_id', as: 'leadRecommendations' });
+LeadRecommendation.belongsTo(ICPProfile, { foreignKey: 'icp_profile_id', as: 'icpProfile' });
+Lead.hasMany(LeadRecommendation, { foreignKey: 'lead_id', as: 'leadRecommendations' });
+LeadRecommendation.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -434,4 +443,5 @@ export {
   CommunicationLog,
   CampaignInsight,
   CampaignVariant,
+  LeadRecommendation,
 };

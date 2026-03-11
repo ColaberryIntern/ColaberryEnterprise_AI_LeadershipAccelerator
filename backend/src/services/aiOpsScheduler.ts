@@ -11,6 +11,7 @@ import {
   runOrchestrationRepair,
   runCampaignQA,
   runSelfHealing,
+  runLeadIntelligence,
 } from './aiOrchestrator';
 import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
@@ -119,7 +120,14 @@ export function startAIOpsScheduler(): void {
     });
   });
 
-  console.log('[AI Ops] Scheduler started (43 agents registered):');
+  // Apollo Lead Intelligence Agent: every 6 hours
+  cron.schedule('0 */6 * * *', () => {
+    runLeadIntelligence().catch((err) => {
+      console.error('[AI Ops] Lead intelligence agent cron error:', err);
+    });
+  });
+
+  console.log('[AI Ops] Scheduler started (46 agents registered):');
   console.log('[AI Ops]   Campaign health scan: every 15 minutes');
   console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
   console.log('[AI Ops]   Content optimization: every 6 hours');
@@ -133,4 +141,5 @@ export function startAIOpsScheduler(): void {
   console.log('[AI Ops]   Autonomous engine: every 10 minutes');
   console.log('[AI Ops]   AI COO strategic cycle: every 30 minutes');
   console.log('[AI Ops]   Meta-agent loop: hourly at :02');
+  console.log('[AI Ops]   Apollo lead intelligence: every 6 hours');
 }

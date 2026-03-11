@@ -48,6 +48,8 @@ export type AiAgentType =
   | 'prompt_optimizer'
   | 'performance_tracker'
   | 'experiment_runner'
+  // Lead intelligence
+  | 'lead_intelligence'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
