@@ -88,6 +88,10 @@ export default function StrategyCallModal({
   const [phone, setPhone] = useState(initialPhone ? formatPhone(initialPhone) : '');
   const [formError, setFormError] = useState('');
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
+  const [editingDetails, setEditingDetails] = useState(false);
+
+  // If we already have name + email, the required fields are satisfied
+  const hasPrefilledIdentity = !!(initialName && initialEmail);
 
   const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
@@ -106,6 +110,7 @@ export default function StrategyCallModal({
     setPhone(initialPhone ? formatPhone(initialPhone) : '');
     setFormError('');
     setBookingResult(null);
+    setEditingDetails(false);
   };
 
   const handleClose = () => {
@@ -124,8 +129,8 @@ export default function StrategyCallModal({
     setStep('details');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setFormError('');
 
     if (!name.trim()) { setFormError('Name is required'); return; }
@@ -290,81 +295,122 @@ export default function StrategyCallModal({
             <div className="alert alert-danger py-2" role="alert">{formError}</div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="row g-3">
-              <div className="col-md-6">
-                <label htmlFor="sc-name" className="form-label">
-                  Full Name <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  id="sc-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  disabled={step === 'submitting'}
-                />
+          {/* If we have pre-filled identity, show compact confirmation */}
+          {hasPrefilledIdentity && !editingDetails ? (
+            <div>
+              <div className="bg-light rounded p-3 mb-3">
+                <div className="d-flex justify-content-between align-items-start">
+                  <div>
+                    <div className="fw-semibold">{name}</div>
+                    <div className="text-muted small">{email}</div>
+                    {company && <div className="text-muted small">{company}</div>}
+                    {phone && <div className="text-muted small">{phone}</div>}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm text-muted p-0"
+                    onClick={() => setEditingDetails(true)}
+                    disabled={step === 'submitting'}
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
-              <div className="col-md-6">
-                <label htmlFor="sc-email" className="form-label">
-                  Work Email <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="email"
-                  className="form-control"
-                  id="sc-email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={step === 'submitting'}
-                />
-              </div>
-              <div className="col-md-6">
-                <label htmlFor="sc-company" className="form-label">Company</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  id="sc-company"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  disabled={step === 'submitting'}
-                />
-              </div>
-              <div className="col-md-6">
-                <label htmlFor="sc-phone" className="form-label">Phone</label>
-                <input
-                  type="tel"
-                  className="form-control"
-                  id="sc-phone"
-                  value={phone}
-                  onChange={(e) => setPhone(formatPhone(e.target.value))}
-                  placeholder="(555) 123-4567"
-                  disabled={step === 'submitting'}
-                />
-              </div>
-              <div className="col-12">
-                <button
-                  type="submit"
-                  className="btn btn-hero-primary btn-lg w-100"
-                  disabled={step === 'submitting'}
-                >
-                  {step === 'submitting' ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Booking...
-                    </>
-                  ) : (
-                    'Confirm Strategy Call'
-                  )}
-                </button>
-              </div>
+              <button
+                type="button"
+                className="btn btn-hero-primary btn-lg w-100"
+                disabled={step === 'submitting'}
+                onClick={() => handleSubmit()}
+              >
+                {step === 'submitting' ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Booking...
+                  </>
+                ) : (
+                  'Confirm Strategy Call'
+                )}
+              </button>
+              <p className="text-muted small mt-3 mb-0 text-center">
+                A confirmation email with call details will be sent to you.
+              </p>
             </div>
-          </form>
-
-          <p className="text-muted small mt-3 mb-0 text-center">
-            A confirmation email with call details will be sent to you.
-          </p>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label htmlFor="sc-name" className="form-label">
+                    Full Name <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="sc-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    disabled={step === 'submitting'}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label htmlFor="sc-email" className="form-label">
+                    Work Email <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    id="sc-email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={step === 'submitting'}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label htmlFor="sc-company" className="form-label">Company</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="sc-company"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    disabled={step === 'submitting'}
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label htmlFor="sc-phone" className="form-label">Phone</label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    id="sc-phone"
+                    value={phone}
+                    onChange={(e) => setPhone(formatPhone(e.target.value))}
+                    placeholder="(555) 123-4567"
+                    disabled={step === 'submitting'}
+                  />
+                </div>
+                <div className="col-12">
+                  <button
+                    type="submit"
+                    className="btn btn-hero-primary btn-lg w-100"
+                    disabled={step === 'submitting'}
+                  >
+                    {step === 'submitting' ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Booking...
+                      </>
+                    ) : (
+                      'Confirm Strategy Call'
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-muted small mt-3 mb-0 text-center">
+                A confirmation email with call details will be sent to you.
+              </p>
+            </form>
+          )}
         </div>
       )}
 

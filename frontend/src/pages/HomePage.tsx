@@ -76,7 +76,7 @@ function HomePage() {
       payload.corporate_sponsorship_interest = briefingForm.willSeekCorporateSponsorship;
       payload.timeline = briefingForm.timeline;
       await api.post('/api/leads', payload);
-      navigate('/executive-overview/thank-you', { state: { name: briefingForm.fullName, email: briefingForm.email } });
+      navigate('/executive-overview/thank-you', { state: { name: briefingForm.fullName, email: briefingForm.email, company: briefingForm.company, phone: briefingForm.phone } });
     } catch (err: any) {
       if (err.response?.status === 400 && err.response?.data?.details) {
         const fieldErrors: Record<string, string> = {};
