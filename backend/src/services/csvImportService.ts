@@ -89,6 +89,8 @@ export async function importLeadsFromCsv(buffer: Buffer): Promise<ImportResult> 
         utm_source: row.utm_source?.trim() || '',
         utm_campaign: row.utm_campaign?.trim() || '',
         page_url: row.page_url?.trim() || '',
+        corporate_sponsorship_interest: false,
+        timeline: '',
       };
 
       const leadScore = calculateLeadScore(leadData);

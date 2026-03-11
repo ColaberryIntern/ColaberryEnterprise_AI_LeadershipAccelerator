@@ -10,6 +10,7 @@ import { detectSessionSignals } from '../services/behavioralSignalService';
 import { computeIntentScore } from '../services/intentScoringService';
 import { evaluateVisitorForTriggers } from '../services/behavioralTriggerService';
 import { env } from '../config/env';
+import { logAgentExecution } from '../services/governanceService';
 
 /** Fire-and-forget signal detection + intent scoring + behavioral triggers for high-value events */
 function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
@@ -64,6 +65,7 @@ function validateTrackEvent(body: Record<string, unknown>): string | null {
 }
 
 export async function handleTrackEvent(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const trackStart = Date.now();
   try {
     if (!env.enableVisitorTracking) {
       res.status(204).end();
@@ -140,8 +142,10 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       triggerSignalAnalysis(sessionId, visitorId);
     }
 
+    logAgentExecution('visitor_tracker', 'success', Date.now() - trackStart).catch(() => {});
     res.status(200).json({ visitor_id: visitorId, session_id: sessionId });
   } catch (err) {
+    logAgentExecution('visitor_tracker', 'failed', Date.now() - trackStart, (err as Error).message).catch(() => {});
     console.error('[Tracking]', err);
     res.status(204).end();
   }

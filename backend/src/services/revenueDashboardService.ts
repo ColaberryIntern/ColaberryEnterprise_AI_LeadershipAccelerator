@@ -2,6 +2,7 @@ import { Op, fn, col, literal, QueryTypes } from 'sequelize';
 import { Lead, Activity, Appointment, InteractionOutcome, CampaignLead } from '../models';
 import { sequelize } from '../config/database';
 import { getCampaignAttribution } from './campaignAnalyticsService';
+import { logAgentExecution } from './governanceService';
 
 const PIPELINE_STAGES = [
   'new_lead', 'contacted', 'meeting_scheduled', 'proposal_sent', 'negotiation', 'enrolled', 'lost',
@@ -10,6 +11,7 @@ const PIPELINE_STAGES = [
 const PRICE_PER_ENROLLMENT = 4500;
 
 export async function getRevenueDashboard() {
+  const forecastStart = Date.now();
   // Pipeline counts
   const pipelineCounts: Record<string, number> = {};
   for (const stage of PIPELINE_STAGES) {
@@ -122,7 +124,7 @@ export async function getRevenueDashboard() {
     campaignAttribution = { campaigns: [], by_type: [] };
   }
 
-  return {
+  const result = {
     pipelineCounts,
     funnelConversions,
     leadVelocity,
@@ -139,6 +141,9 @@ export async function getRevenueDashboard() {
     recentActivities,
     campaignAttribution,
   };
+
+  logAgentExecution('forecast_engine', 'success', Date.now() - forecastStart).catch(() => {});
+  return result;
 }
 
 // ── Multi-Touch Attribution ─────────────────────────────────────────────

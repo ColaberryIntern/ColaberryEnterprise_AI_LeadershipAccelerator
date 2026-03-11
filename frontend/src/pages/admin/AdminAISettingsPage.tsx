@@ -140,6 +140,45 @@ const RESULT_COLORS: Record<string, string> = {
   pending: 'warning',
 };
 
+const GOVERNANCE_STATUS_COLORS: Record<string, string> = {
+  healthy: 'success',
+  degraded: 'warning',
+  critical: 'danger',
+};
+
+const AUTONOMY_LABELS: Record<string, { color: string; label: string }> = {
+  full: { color: 'success', label: 'Full Autonomy' },
+  safe: { color: 'warning', label: 'Safe Mode' },
+  manual: { color: 'secondary', label: 'Manual Override' },
+};
+
+interface GovernanceOverview {
+  total_agents: number;
+  active_agents: number;
+  errored_agents: number;
+  errors_24h: number;
+  system_status: 'healthy' | 'degraded' | 'critical';
+  autonomy_mode: string;
+  settings_sync: {
+    high_intent_threshold: number;
+    price_per_enrollment: number;
+    test_mode_enabled: boolean;
+    follow_up_enabled: boolean;
+    enable_auto_email: boolean;
+    enable_voice_calls: boolean;
+  };
+}
+
+interface GovernanceAlert {
+  id: number;
+  source: string;
+  event_type: string;
+  entity_type: string;
+  entity_id: number | null;
+  details: { severity?: string; agent_name?: string; error_count?: number; message?: string };
+  created_at: string;
+}
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return 'Never';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -162,6 +201,11 @@ function AdminAISettingsPage() {
   const [activity, setActivity] = useState<ActivityRecord[]>([]);
   const [activityTotal, setActivityTotal] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Governance state
+  const [governanceOverview, setGovernanceOverview] = useState<GovernanceOverview | null>(null);
+  const [governanceAlerts, setGovernanceAlerts] = useState<GovernanceAlert[]>([]);
+  const [autonomyMode, setAutonomyMode] = useState('full');
 
   // Modal state
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
@@ -221,6 +265,35 @@ function AdminAISettingsPage() {
     }
   }, []);
 
+  const fetchGovernanceOverview = useCallback(async () => {
+    try {
+      const { data } = await api.get('/api/admin/governance/overview');
+      setGovernanceOverview(data);
+      setAutonomyMode(data.autonomy_mode || 'full');
+    } catch (err) {
+      console.error('Failed to fetch governance overview:', err);
+    }
+  }, []);
+
+  const fetchGovernanceAlerts = useCallback(async () => {
+    try {
+      const { data } = await api.get('/api/admin/governance/alerts');
+      setGovernanceAlerts(data.alerts || []);
+    } catch (err) {
+      console.error('Failed to fetch governance alerts:', err);
+    }
+  }, []);
+
+  const updateAutonomyMode = async (mode: string) => {
+    try {
+      await api.patch('/api/admin/governance/config', { ai_autonomy_mode: mode });
+      setAutonomyMode(mode);
+      fetchGovernanceOverview();
+    } catch (err) {
+      console.error('Failed to update autonomy mode:', err);
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
     Promise.allSettled([
@@ -229,8 +302,10 @@ function AdminAISettingsPage() {
       fetchHealth(),
       fetchErrors(),
       fetchActivity(),
+      fetchGovernanceOverview(),
+      fetchGovernanceAlerts(),
     ]).finally(() => setLoading(false));
-  }, [fetchOverview, fetchAgents, fetchHealth, fetchErrors, fetchActivity]);
+  }, [fetchOverview, fetchAgents, fetchHealth, fetchErrors, fetchActivity, fetchGovernanceOverview, fetchGovernanceAlerts]);
 
   // 10-second polling for overview stats
   useEffect(() => {
@@ -298,14 +373,31 @@ function AdminAISettingsPage() {
 
   return (
     <div>
+      {autonomyMode === 'manual' && (
+        <div className="alert alert-warning py-2 small mb-3 d-flex align-items-center gap-2">
+          <strong>MANUAL OVERRIDE ACTIVE</strong> — All AI agent actions require manual approval. Automated operations are paused.
+        </div>
+      )}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h4 className="mb-1 fw-bold" style={{ color: 'var(--color-primary)' }}>
-            AI Operations
+            AI Control Center
           </h4>
           <p className="text-muted small mb-0">
             Full observability and control across all {overview?.total_agents || 0} autonomous agents
           </p>
+        </div>
+        <div className="d-flex gap-2 align-items-center">
+          {governanceOverview && (
+            <>
+              <span className={`badge bg-${GOVERNANCE_STATUS_COLORS[governanceOverview.system_status] || 'secondary'}`}>
+                {governanceOverview.system_status.toUpperCase()}
+              </span>
+              <span className={`badge bg-${AUTONOMY_LABELS[autonomyMode]?.color || 'success'}`}>
+                {AUTONOMY_LABELS[autonomyMode]?.label || 'Full Autonomy'}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -338,6 +430,8 @@ function AdminAISettingsPage() {
           scanLoading={actionLoading === 'scan'}
           onSelectAgent={setSelectedAgentId}
           onSelectCampaign={setSelectedCampaignId}
+          governanceOverview={governanceOverview}
+          autonomyMode={autonomyMode}
         />
       )}
       {activeTab === 'registry' && <AgentRegistryTab />}
@@ -366,6 +460,7 @@ function AdminAISettingsPage() {
           errors={errors}
           onResolve={handleResolveError}
           onViewDetail={setSelectedErrorId}
+          governanceAlerts={governanceAlerts}
         />
       )}
       {activeTab === 'controls' && (
@@ -376,6 +471,8 @@ function AdminAISettingsPage() {
           onScan={handleScanAll}
           actionLoading={actionLoading}
           onSelectAgent={setSelectedAgentId}
+          autonomyMode={autonomyMode}
+          onUpdateAutonomyMode={updateAutonomyMode}
         />
       )}
       {activeTab === 'campaign-qa' && <CampaignQATab />}
@@ -437,6 +534,8 @@ function OverviewTab({
   scanLoading,
   onSelectAgent,
   onSelectCampaign,
+  governanceOverview,
+  autonomyMode,
 }: {
   overview: Overview | null;
   health: HealthRecord[];
@@ -444,6 +543,8 @@ function OverviewTab({
   scanLoading: boolean;
   onSelectAgent: (id: string) => void;
   onSelectCampaign: (id: string) => void;
+  governanceOverview: GovernanceOverview | null;
+  autonomyMode: string;
 }) {
   if (!overview) return <p className="text-muted">No data available</p>;
 
@@ -461,20 +562,89 @@ function OverviewTab({
     </div>
   );
 
+  const govStatusColor = governanceOverview
+    ? GOVERNANCE_STATUS_COLORS[governanceOverview.system_status] || 'secondary'
+    : 'secondary';
+  const autonomyInfo = AUTONOMY_LABELS[autonomyMode] || AUTONOMY_LABELS.full;
+  const ss = governanceOverview?.settings_sync;
+
   return (
     <>
-      {/* KPI Cards — 9 metrics */}
+      {/* Governance Health + KPI Cards */}
       <div className="row g-3 mb-4">
+        {governanceOverview && (
+          <>
+            <div className="col-6 col-md-4 col-xl">
+              <div className="card border-0 shadow-sm">
+                <div className="card-body text-center py-3">
+                  <div className="small text-muted mb-1">System Health</div>
+                  <span className={`badge bg-${govStatusColor} fs-6`}>
+                    {governanceOverview.system_status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {kpi('Errors (24h)', governanceOverview.errors_24h, governanceOverview.errors_24h > 0 ? 'var(--color-secondary)' : 'var(--color-accent)')}
+          </>
+        )}
         {kpi('Total Agents', overview.total_agents, 'var(--color-primary)')}
         {kpi('Running', overview.running, 'var(--color-primary-light)')}
         {kpi('Idle', overview.idle, 'var(--color-accent)')}
         {kpi('Paused', overview.paused, '#e0a800')}
-        {kpi('Disabled', overview.disabled, 'var(--color-text-light)')}
         {kpi('Errored', overview.errored, 'var(--color-secondary)')}
         {kpi('Health Score', overview.avg_health_score, overview.avg_health_score >= 80 ? 'var(--color-accent)' : overview.avg_health_score >= 60 ? '#e0a800' : 'var(--color-secondary)')}
         {kpi('Actions Today', overview.actions_today, 'var(--color-primary-light)')}
         {kpi('Repairs Today', overview.repairs_today, 'var(--color-accent)')}
       </div>
+
+      {/* Settings Sync — Read-Only Mirror */}
+      {ss && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white fw-semibold d-flex align-items-center gap-2">
+            Settings Sync
+            <span className="badge bg-secondary small" style={{ fontSize: '0.65rem' }}>READ-ONLY</span>
+          </div>
+          <div className="card-body">
+            <div className="row g-3">
+              <div className="col-md-2 col-sm-6">
+                <div className="text-muted small mb-1">Intent Threshold</div>
+                <div className="fw-bold">{ss.high_intent_threshold}</div>
+              </div>
+              <div className="col-md-2 col-sm-6">
+                <div className="text-muted small mb-1">Price/Enrollment</div>
+                <div className="fw-bold">${ss.price_per_enrollment.toLocaleString()}</div>
+              </div>
+              <div className="col-md-2 col-sm-4">
+                <div className="text-muted small mb-1">Test Mode</div>
+                <span className={`badge bg-${ss.test_mode_enabled ? 'warning' : 'success'}`}>
+                  {ss.test_mode_enabled ? 'ACTIVE' : 'OFF'}
+                </span>
+              </div>
+              <div className="col-md-2 col-sm-4">
+                <div className="text-muted small mb-1">Follow-Up</div>
+                <span className={`badge bg-${ss.follow_up_enabled ? 'success' : 'secondary'}`}>
+                  {ss.follow_up_enabled ? 'ON' : 'OFF'}
+                </span>
+              </div>
+              <div className="col-md-2 col-sm-4">
+                <div className="text-muted small mb-1">Auto Email</div>
+                <span className={`badge bg-${ss.enable_auto_email ? 'success' : 'secondary'}`}>
+                  {ss.enable_auto_email ? 'ON' : 'OFF'}
+                </span>
+              </div>
+              <div className="col-md-2 col-sm-4">
+                <div className="text-muted small mb-1">Voice Calls</div>
+                <span className={`badge bg-${ss.enable_voice_calls ? 'success' : 'secondary'}`}>
+                  {ss.enable_voice_calls ? 'ON' : 'OFF'}
+                </span>
+              </div>
+            </div>
+            <div className="form-text mt-2">
+              These values are read from Settings. To modify, use the Settings page.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="row g-3">
         {/* Agent Summary by Category */}
@@ -816,12 +986,52 @@ function ErrorsTab({
   errors,
   onResolve,
   onViewDetail,
+  governanceAlerts,
 }: {
   errors: CampaignErrorRecord[];
   onResolve: (id: string) => void;
   onViewDetail: (id: string) => void;
+  governanceAlerts: GovernanceAlert[];
 }) {
   return (
+    <>
+    {/* Governance System Alerts */}
+    {governanceAlerts.length > 0 && (
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold">
+          System Alerts <span className="text-muted fw-normal">({governanceAlerts.length})</span>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0 small">
+              <thead className="table-light">
+                <tr>
+                  <th>Time</th>
+                  <th>Type</th>
+                  <th>Severity</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {governanceAlerts.map((alert) => {
+                  const severity = alert.details?.severity || 'info';
+                  const severityColor = SEVERITY_COLORS[severity] || 'secondary';
+                  return (
+                    <tr key={alert.id}>
+                      <td className="text-muted text-nowrap">{timeAgo(alert.created_at)}</td>
+                      <td><span className="badge bg-secondary">{alert.event_type.replace(/_/g, ' ')}</span></td>
+                      <td><span className={`badge bg-${severityColor}`}>{severity}</span></td>
+                      <td>{alert.details?.message || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )}
+
     <div className="card border-0 shadow-sm">
       <div className="card-header bg-white fw-semibold">
         Unresolved Errors <span className="text-muted fw-normal">({errors.length})</span>
@@ -887,6 +1097,7 @@ function ErrorsTab({
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -899,6 +1110,8 @@ function ControlsTab({
   onScan,
   actionLoading,
   onSelectAgent,
+  autonomyMode,
+  onUpdateAutonomyMode,
 }: {
   agents: Agent[];
   onRunAgent: (id: string) => void;
@@ -906,9 +1119,58 @@ function ControlsTab({
   onScan: () => void;
   actionLoading: string | null;
   onSelectAgent: (id: string) => void;
+  autonomyMode: string;
+  onUpdateAutonomyMode: (mode: string) => void;
 }) {
+  const modes = [
+    { value: 'full', label: 'Full Autonomy', desc: 'AI agents operate independently with full decision-making authority.' },
+    { value: 'safe', label: 'Safe Mode', desc: 'AI agents log all actions but do not enforce restrictions. Observation-only flag.' },
+    { value: 'manual', label: 'Manual Override', desc: 'All AI agent actions require manual approval. Warning banner displayed system-wide.' },
+  ];
+
   return (
     <>
+      {/* Autonomy Mode */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold">AI Autonomy Mode</div>
+        <div className="card-body">
+          {autonomyMode === 'manual' && (
+            <div className="alert alert-warning py-2 small mb-3">
+              Manual Override is active. All automated operations display a warning banner.
+            </div>
+          )}
+          <div className="row g-3">
+            {modes.map((mode) => (
+              <div className="col-md-4" key={mode.value}>
+                <div
+                  className={`p-3 rounded d-flex align-items-start gap-3 h-100 ${
+                    autonomyMode === mode.value ? 'border border-primary bg-light' : 'border'
+                  }`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onUpdateAutonomyMode(mode.value)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && onUpdateAutonomyMode(mode.value)}
+                >
+                  <input
+                    type="radio"
+                    name="autonomy"
+                    checked={autonomyMode === mode.value}
+                    onChange={() => onUpdateAutonomyMode(mode.value)}
+                    className="form-check-input mt-1"
+                    aria-label={mode.label}
+                  />
+                  <div>
+                    <div className="fw-medium">{mode.label}</div>
+                    <div className="text-muted small">{mode.desc}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* System Actions */}
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold">System Actions</div>

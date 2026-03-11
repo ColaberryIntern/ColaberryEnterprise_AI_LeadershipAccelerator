@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { leadSchema, createLead } from '../services/leadService';
 import { runLeadAutomation } from '../services/automationService';
 import { syncNewLeadToGhl } from '../services/ghlService';
+import { scoreExecutiveBriefing } from '../services/executiveScoringService';
+import { logExecutiveBriefingEvent } from '../services/governanceService';
+import { sendHighIntentAlert } from '../services/emailService';
 import { ZodError } from 'zod';
 
 export async function submitLead(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -20,6 +23,30 @@ export async function submitLead(req: Request, res: Response, next: NextFunction
       message: 'Thank you for your interest',
       leadId: lead.id,
     });
+
+    // Executive briefing funnel post-processing (fire-and-forget)
+    if (data.form_type === 'executive_overview_download') {
+      (async () => {
+        try {
+          await lead.update({ executive_briefing_requested: true } as any);
+          const { score, tier, stage } = await scoreExecutiveBriefing(lead, data.timeline);
+          logExecutiveBriefingEvent(lead, score, tier, stage, lead.corporate_sponsorship_interest).catch(() => {});
+          if (score > 7) {
+            sendHighIntentAlert({
+              name: lead.name,
+              company: lead.company || '',
+              title: lead.title || '',
+              email: lead.email,
+              phone: lead.phone || '',
+              score: lead.lead_score || 0,
+              source: 'Executive Briefing Download',
+            }).catch((err) => console.error('[LeadController] High-intent alert error:', err));
+          }
+        } catch (err) {
+          console.error('[LeadController] Executive briefing post-processing error (non-blocking):', err);
+        }
+      })();
+    }
 
     // Resolve visitor identity if fingerprint provided
     if (req.body.visitor_fingerprint) {

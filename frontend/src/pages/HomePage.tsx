@@ -73,6 +73,8 @@ function HomePage() {
       };
       const payload = toLeadPayload(lead);
       payload.evaluating_90_days = briefingForm.evaluating90Days;
+      payload.corporate_sponsorship_interest = briefingForm.willSeekCorporateSponsorship;
+      payload.timeline = briefingForm.timeline;
       await api.post('/api/leads', payload);
       navigate('/executive-overview/thank-you', { state: { name: briefingForm.fullName, email: briefingForm.email } });
     } catch (err: any) {
@@ -393,8 +395,11 @@ function HomePage() {
                 </div>
               </div>
 
+              <p className="text-muted small text-center mb-3">
+                Organizations evaluating AI deployment within 90 days receive priority strategy sessions.
+              </p>
               <button type="submit" className="btn btn-hero-primary btn-lg w-100" disabled={briefingSubmitting}>
-                {briefingSubmitting ? 'Submitting...' : 'Get Executive Briefing →'}
+                {briefingSubmitting ? 'Submitting...' : 'Download Executive Briefing & Schedule Strategy Call →'}
               </button>
             </form>
 

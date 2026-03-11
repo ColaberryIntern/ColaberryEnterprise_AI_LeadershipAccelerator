@@ -1,5 +1,6 @@
-import { Op } from 'sequelize';
+import { Op, literal } from 'sequelize';
 import { AiAgent, AiAgentActivityLog, AiSystemEvent } from '../models';
+import { getSetting } from './settingsService';
 
 const GOVERNANCE_AGENTS = [
   { agent_name: 'visitor_tracker', agent_type: 'signal_detector', category: 'behavioral', description: 'Tracks visitor sessions and page events' },
@@ -22,7 +23,7 @@ export async function ensureGovernanceAgents(): Promise<void> {
         agent_type: agent.agent_type,
         category: agent.category,
         description: agent.description,
-        status: 'idle',
+        status: 'active',
         enabled: true,
         trigger_type: 'event_driven',
         run_count: 0,
@@ -135,7 +136,7 @@ export async function getGovernanceAlerts(limit = 50): Promise<any[]> {
 }
 
 /**
- * Get governance overview stats.
+ * Get governance overview stats with settings sync.
  */
 export async function getGovernanceOverview(): Promise<{
   total_agents: number;
@@ -143,6 +144,14 @@ export async function getGovernanceOverview(): Promise<{
   errored_agents: number;
   errors_24h: number;
   system_status: 'healthy' | 'degraded' | 'critical';
+  settings_sync: {
+    high_intent_threshold: number;
+    price_per_enrollment: number;
+    test_mode_enabled: boolean;
+    follow_up_enabled: boolean;
+    enable_auto_email: boolean;
+    enable_voice_calls: boolean;
+  };
 }> {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -161,9 +170,36 @@ export async function getGovernanceOverview(): Promise<{
     },
   });
 
+  // Check for critical/warning alerts in last 24h using JSONB path query
+  const criticalAlerts = await AiSystemEvent.count({
+    where: {
+      source: 'governance',
+      created_at: { [Op.gte]: oneDayAgo },
+      [Op.and]: [literal("details->>'severity' = 'critical'")],
+    },
+  });
+
+  const warningAlerts = await AiSystemEvent.count({
+    where: {
+      source: 'governance',
+      created_at: { [Op.gte]: oneDayAgo },
+      [Op.and]: [literal("details->>'severity' = 'warning'")],
+    },
+  });
+
   let systemStatus: 'healthy' | 'degraded' | 'critical' = 'healthy';
-  if (errors24h >= 3 || errored >= 2) systemStatus = 'critical';
-  else if (errors24h > 0 || errored > 0) systemStatus = 'degraded';
+  if (criticalAlerts > 0 || errors24h >= 3 || errored >= 2) systemStatus = 'critical';
+  else if (warningAlerts > 0 || errors24h > 0 || errored > 0) systemStatus = 'degraded';
+
+  // Settings sync — read-only mirror values from Settings layer
+  const [hitRaw, ppeRaw, tmRaw, fuRaw, aeRaw, vcRaw] = await Promise.all([
+    getSetting('high_intent_threshold'),
+    getSetting('price_per_enrollment'),
+    getSetting('test_mode_enabled'),
+    getSetting('follow_up_enabled'),
+    getSetting('enable_auto_email'),
+    getSetting('enable_voice_calls'),
+  ]);
 
   return {
     total_agents: total,
@@ -171,7 +207,48 @@ export async function getGovernanceOverview(): Promise<{
     errored_agents: errored,
     errors_24h: errors24h,
     system_status: systemStatus,
+    settings_sync: {
+      high_intent_threshold: parseInt(hitRaw as string, 10) || 60,
+      price_per_enrollment: parseInt(ppeRaw as string, 10) || 4500,
+      test_mode_enabled: tmRaw === true || tmRaw === 'true',
+      follow_up_enabled: fuRaw !== false && fuRaw !== 'false',
+      enable_auto_email: aeRaw !== false && aeRaw !== 'false',
+      enable_voice_calls: vcRaw === true || vcRaw === 'true',
+    },
   };
+}
+
+/**
+ * Log an executive briefing funnel event as a governance system event.
+ * Fire-and-forget — never throws.
+ */
+export async function logExecutiveBriefingEvent(
+  lead: { id: number; name: string; company?: string },
+  score: number,
+  tier: string,
+  stage: string,
+  sponsorshipInterest: boolean,
+): Promise<void> {
+  try {
+    await AiSystemEvent.create({
+      source: 'governance',
+      event_type: 'executive_briefing_request',
+      entity_type: 'lead',
+      entity_id: lead.id,
+      details: {
+        severity: 'info',
+        lead_name: lead.name,
+        company: lead.company || 'Unknown',
+        score,
+        tier,
+        stage,
+        sponsorship_interest: sponsorshipInterest,
+        message: `Executive briefing requested by "${lead.name}" — Score: ${score} (${tier})`,
+      },
+    } as any);
+  } catch (err) {
+    console.error('[Governance] logExecutiveBriefingEvent failed (non-blocking):', err);
+  }
 }
 
 /**

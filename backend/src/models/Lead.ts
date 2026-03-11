@@ -37,6 +37,10 @@ interface LeadAttributes {
   temperature_updated_at?: Date;
   ghl_contact_id?: string | null;
   visitor_id?: string | null;
+  executive_briefing_requested?: boolean;
+  executive_briefing_score?: number | null;
+  executive_interest_stage?: string | null;
+  corporate_sponsorship_interest?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -77,6 +81,10 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare temperature_updated_at: Date;
   declare ghl_contact_id: string | null;
   declare visitor_id: string | null;
+  declare executive_briefing_requested: boolean;
+  declare executive_briefing_score: number | null;
+  declare executive_interest_stage: string | null;
+  declare corporate_sponsorship_interest: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -232,6 +240,24 @@ Lead.init(
     visitor_id: {
       type: DataTypes.UUID,
       allowNull: true,
+    },
+    executive_briefing_requested: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    executive_briefing_score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    executive_interest_stage: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    corporate_sponsorship_interest: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     created_at: {
       type: DataTypes.DATE,

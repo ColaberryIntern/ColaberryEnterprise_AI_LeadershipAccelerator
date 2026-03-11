@@ -29,6 +29,8 @@ interface Lead {
   lead_temperature?: string;
   source: string;
   form_type: string;
+  executive_briefing_score?: number;
+  executive_briefing_requested?: boolean;
   created_at: string;
   assignedAdmin?: { id: string; email: string };
   ghl_contact_id?: string;
@@ -42,7 +44,7 @@ const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
 
 const SOURCE_OPTIONS = [
   { value: '', label: 'All Sources' },
-  { value: 'executive_overview_download', label: 'Executive Overview' },
+  { value: 'executive_overview_download', label: 'Executive Briefing' },
   { value: 'contact', label: 'Contact Form' },
   { value: 'interest', label: 'Interest Form' },
   { value: 'sponsorship_inquiry', label: 'Sponsorship' },
@@ -398,6 +400,9 @@ function AdminLeadsPage() {
                       </td>
                       <td className="fw-medium">
                         {lead.name}
+                        {lead.executive_briefing_score != null && lead.executive_briefing_score > 7 && (
+                          <span className="badge bg-danger ms-2" style={{ fontSize: '0.65rem', verticalAlign: 'middle' }}>High Intent Exec</span>
+                        )}
                         {lead.ghl_contact_id && (
                           <a
                             href={ghlContactUrl(lead.ghl_contact_id)}

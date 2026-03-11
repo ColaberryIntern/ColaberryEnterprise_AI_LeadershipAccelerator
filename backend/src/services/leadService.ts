@@ -44,6 +44,8 @@ export const leadSchema = z.object({
   utm_source: z.string().max(255).optional().default(''),
   utm_campaign: z.string().max(255).optional().default(''),
   page_url: z.string().max(500).optional().default(''),
+  corporate_sponsorship_interest: z.boolean().optional().default(false),
+  timeline: z.string().max(50).optional().default(''),
 });
 
 export type LeadInput = z.infer<typeof leadSchema>;
@@ -133,6 +135,7 @@ export async function createLead(data: LeadInput) {
     utm_source: data.utm_source,
     utm_campaign: data.utm_campaign,
     page_url: data.page_url,
+    corporate_sponsorship_interest: data.corporate_sponsorship_interest,
     status: 'new',
   });
   return { lead, isDuplicate: false };
@@ -353,6 +356,8 @@ export async function createLeadAdmin(data: {
     utm_source: '',
     utm_campaign: '',
     page_url: '',
+    corporate_sponsorship_interest: false,
+    timeline: '',
   };
 
   const leadScore = calculateLeadScore(leadInput);
