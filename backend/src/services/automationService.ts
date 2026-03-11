@@ -7,6 +7,7 @@ import { advancePipelineStage } from './pipelineService';
 import { recordOutcome, recordActionOutcome } from './interactionService';
 import { syncLeadToGhl } from './ghlService';
 import { getSetting } from './settingsService';
+import { buildConversationHistory, generateMessage } from './aiMessageService';
 
 interface LogParams {
   type: 'email' | 'voice_call' | 'alert';
@@ -75,13 +76,27 @@ export async function runEnrollmentAutomation(enrollment: EnrollmentData): Promi
     }
   }
 
-  // Voice call
+  // Voice call — dynamic prompt with enrollment context
   if (enrollment.phone) {
     try {
+      const voicePrompt = await generateMessage({
+        channel: 'voice',
+        ai_instructions: `You are calling a new student who just enrolled in "${enrollment.cohort.name}". Welcome them warmly, confirm their enrollment details, and ask if they have any questions about the program. Mention their start date is ${enrollment.cohort.start_date}, classes are on ${enrollment.cohort.core_day} at ${enrollment.cohort.core_time}.`,
+        lead: { name: enrollment.full_name, phone: enrollment.phone },
+      });
+
       const result = await triggerVoiceCall({
         name: enrollment.full_name,
         phone: enrollment.phone,
         callType: 'welcome',
+        prompt: voicePrompt.body,
+        context: {
+          lead_name: enrollment.full_name,
+          lead_email: enrollment.email,
+          cohort_name: enrollment.cohort.name,
+          cohort_start_date: enrollment.cohort.start_date,
+          step_goal: 'Welcome new enrollment, confirm details, answer questions',
+        },
       });
       await logAutomation({
         type: 'voice_call',
@@ -166,10 +181,40 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
 
   if (shouldCall && lead.phone) {
     try {
+      // Build dynamic prompt with lead context and conversation history
+      const conversationHistory = await buildConversationHistory(lead.id);
+      const voicePrompt = await generateMessage({
+        channel: 'voice',
+        ai_instructions: isOverviewForm
+          ? `You are following up with an executive who downloaded our AI Leadership Overview. Explore their interest in AI strategy for their organization, understand their current challenges, and gauge interest in the Executive AI Briefing program.`
+          : `You are calling a new lead who expressed interest in AI & Data Analytics training. Introduce Colaberry's program, understand their career goals, and explore whether the program is a fit. Ask about their current role and what drew them to AI/data analytics.`,
+        lead: {
+          name: lead.name,
+          company: lead.company,
+          title: lead.title,
+          email: lead.email,
+          phone: lead.phone,
+          interest_area: undefined,
+        },
+        conversationHistory,
+      });
+
       const result = await triggerVoiceCall({
         name: lead.name,
         phone: lead.phone,
         callType: 'interest',
+        prompt: voicePrompt.body,
+        context: {
+          lead_name: lead.name,
+          lead_company: lead.company,
+          lead_title: lead.title,
+          lead_email: lead.email,
+          lead_score: lead.lead_score,
+          conversation_history: conversationHistory,
+          step_goal: isOverviewForm
+            ? 'Explore executive AI interest, qualify for briefing program'
+            : 'Introduce program, understand career goals, qualify interest',
+        },
       });
       await logAutomation({
         type: 'voice_call',

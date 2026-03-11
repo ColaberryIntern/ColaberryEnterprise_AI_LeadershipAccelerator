@@ -9,7 +9,7 @@ import {
 } from '../../models';
 import { createTestLead } from './testLeadGenerator';
 import { getTestOverrides } from '../settingsService';
-import { generateMessage } from '../aiMessageService';
+import { generateMessage, buildConversationHistory } from '../aiMessageService';
 import { sendSmsViaGhl, syncLeadToGhl } from '../ghlService';
 import { triggerVoiceCall } from '../synthflowService';
 import { getSetting } from '../settingsService';
@@ -332,6 +332,7 @@ export async function executeSimulationStep(
         ? testOverrides.phone
         : lead.phone;
       if (targetPhone) {
+        const voiceHistory = await buildConversationHistory(lead.id);
         const voiceResult = await triggerVoiceCall({
           name: lead.name,
           phone: targetPhone,
@@ -342,7 +343,9 @@ export async function executeSimulationStep(
             lead_company: lead.company,
             lead_title: lead.title,
             lead_email: lead.email,
+            lead_interest: lead.interest_area,
             step_goal: stepDef.step_goal,
+            conversation_history: voiceHistory,
           },
         });
 
