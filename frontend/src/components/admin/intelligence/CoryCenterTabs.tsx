@@ -7,6 +7,7 @@ import {
   type TimelineEntry,
   type CoryStatusReport,
 } from '../../../services/coryApi';
+import { useIntelligenceContext } from '../../../contexts/IntelligenceContext';
 import ActivityTab from './tabs/ActivityTab';
 import HealthTab from './tabs/HealthTab';
 import ErrorsTab from './tabs/ErrorsTab';
@@ -399,8 +400,12 @@ function ImpactMetrics() {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTabsProps) {
+  const { selectedEntity, resetScope } = useIntelligenceContext();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [errorCount, setErrorCount] = useState(0);
+
+  // Convert context entity to filter prop shape
+  const entityFilter = selectedEntity ? { type: selectedEntity.type, id: selectedEntity.id, name: selectedEntity.name } : null;
 
   const tabs: { key: TabKey; label: string; badge?: number }[] = [
     { key: 'dashboard', label: 'Dashboard' },
@@ -436,15 +441,34 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         </ul>
       </div>
 
+      {/* Active Filter Indicator */}
+      {entityFilter && (
+        <div
+          className="d-flex align-items-center gap-2 px-3 py-2 border-bottom"
+          style={{ flexShrink: 0, background: 'rgba(26, 54, 93, 0.04)', fontSize: '0.75rem' }}
+        >
+          <span className="text-muted">Filtered by:</span>
+          <span className="badge bg-primary">{entityFilter.name}</span>
+          <span className="text-muted">({entityFilter.type})</span>
+          <button
+            className="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto"
+            style={{ fontSize: '0.68rem' }}
+            onClick={resetScope}
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
       {/* Tab Content */}
       <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
         {activeTab === 'dashboard' && children}
         {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} />}
-        {activeTab === 'activity' && <ActivityTab />}
-        {activeTab === 'health' && <HealthTab />}
-        {activeTab === 'errors' && <ErrorsTab onErrorCountChange={setErrorCount} />}
-        {activeTab === 'qa' && <QAScanTab />}
-        {activeTab === 'safety' && <SafetyTab />}
+        {activeTab === 'activity' && <ActivityTab entityFilter={entityFilter} />}
+        {activeTab === 'health' && <HealthTab entityFilter={entityFilter} />}
+        {activeTab === 'errors' && <ErrorsTab onErrorCountChange={setErrorCount} entityFilter={entityFilter} />}
+        {activeTab === 'qa' && <QAScanTab entityFilter={entityFilter} />}
+        {activeTab === 'safety' && <SafetyTab entityFilter={entityFilter} />}
         {activeTab === 'timeline' && <ReasoningTimeline />}
         {activeTab === 'impact' && <ImpactMetrics />}
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../../../../utils/api';
 import ErrorDetailModal from '../../../../pages/admin/ai-settings/ErrorDetailModal';
 import ExecutionTraceModal from '../../../../pages/admin/ai-settings/ExecutionTraceModal';
@@ -27,6 +27,11 @@ interface GovernanceAlert {
   created_at: string;
 }
 
+interface ErrorsTabProps {
+  onErrorCountChange?: (count: number) => void;
+  entityFilter?: { type: string; id: string; name: string } | null;
+}
+
 const SEVERITY_COLORS: Record<string, string> = {
   info: 'info',
   warning: 'warning',
@@ -45,17 +50,29 @@ function timeAgo(dateStr: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?: (count: number) => void }) {
+/** Map entity selection to API filter params */
+function entityToParams(entity: ErrorsTabProps['entityFilter']): Record<string, string> {
+  if (!entity) return {};
+  const t = entity.type.toLowerCase();
+  if (t === 'campaign' || t === 'campaigns') return { campaign_id: entity.id };
+  return {};
+}
+
+export default function ErrorsTab({ onErrorCountChange, entityFilter }: ErrorsTabProps) {
   const [errors, setErrors] = useState<CampaignErrorRecord[]>([]);
   const [governanceAlerts, setGovernanceAlerts] = useState<GovernanceAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedErrorId, setSelectedErrorId] = useState<string | null>(null);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+  const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null);
+
+  const filterKey = entityFilter ? `${entityFilter.type}:${entityFilter.id}` : 'global';
 
   const fetchData = useCallback(async () => {
     try {
+      const errParams: Record<string, any> = { resolved: 'false', limit: 50, ...entityToParams(entityFilter) };
       const [errRes, alertRes] = await Promise.allSettled([
-        api.get('/api/admin/ai-ops/errors', { params: { resolved: 'false', limit: 50 } }),
+        api.get('/api/admin/ai-ops/errors', { params: errParams }),
         api.get('/api/admin/governance/alerts'),
       ]);
       if (errRes.status === 'fulfilled') {
@@ -63,13 +80,30 @@ export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?:
         onErrorCountChange?.(errRes.value.data.total);
       }
       if (alertRes.status === 'fulfilled') {
-        setGovernanceAlerts(alertRes.value.data.alerts || []);
+        let alerts = alertRes.value.data.alerts || [];
+        // Client-side filter governance alerts by entity if applicable
+        if (entityFilter) {
+          const t = entityFilter.type.toLowerCase();
+          alerts = alerts.filter((a: GovernanceAlert) => {
+            if (t === 'agent' || t === 'ai agents' || t === 'ai_agents') {
+              return a.entity_type === 'agent' || a.details?.agent_name;
+            }
+            if (t === 'campaign' || t === 'campaigns') {
+              return a.entity_type === 'campaign';
+            }
+            return true;
+          });
+        }
+        setGovernanceAlerts(alerts);
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [onErrorCountChange]);
+  }, [filterKey, onErrorCountChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    setLoading(true);
+    fetchData();
+  }, [fetchData]);
 
   const handleResolve = async (id: string) => {
     try {
@@ -93,8 +127,13 @@ export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?:
       {/* Governance System Alerts */}
       {governanceAlerts.length > 0 && (
         <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-semibold">
-            System Alerts <span className="text-muted fw-normal">({governanceAlerts.length})</span>
+          <div className="card-header bg-white fw-semibold d-flex align-items-center justify-content-between">
+            <span>System Alerts <span className="text-muted fw-normal">({governanceAlerts.length})</span></span>
+            {entityFilter && (
+              <span className="badge bg-primary" style={{ fontSize: '0.68rem' }}>
+                Filtered: {entityFilter.name}
+              </span>
+            )}
           </div>
           <div className="card-body p-0">
             <div className="table-responsive">
@@ -105,17 +144,23 @@ export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?:
                     <th>Type</th>
                     <th>Severity</th>
                     <th>Message</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {governanceAlerts.map((alert) => {
                     const severity = alert.details?.severity || 'info';
                     return (
-                      <tr key={alert.id}>
+                      <tr key={alert.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedAlertId(alert.id)}>
                         <td className="text-muted text-nowrap">{timeAgo(alert.created_at)}</td>
                         <td><span className="badge bg-secondary">{alert.event_type.replace(/_/g, ' ')}</span></td>
                         <td><span className={`badge bg-${SEVERITY_COLORS[severity] || 'secondary'}`}>{severity}</span></td>
                         <td>{alert.details?.message || '—'}</td>
+                        <td>
+                          <button className="btn btn-sm btn-outline-primary py-0 px-2" onClick={(e) => { e.stopPropagation(); setSelectedAlertId(alert.id); }}>
+                            Detail
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -128,8 +173,13 @@ export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?:
 
       {/* Unresolved Errors */}
       <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold">
-          Unresolved Errors <span className="text-muted fw-normal">({errors.length})</span>
+        <div className="card-header bg-white fw-semibold d-flex align-items-center justify-content-between">
+          <span>Unresolved Errors <span className="text-muted fw-normal">({errors.length})</span></span>
+          {entityFilter && governanceAlerts.length === 0 && (
+            <span className="badge bg-primary" style={{ fontSize: '0.68rem' }}>
+              Filtered: {entityFilter.name}
+            </span>
+          )}
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
@@ -165,7 +215,7 @@ export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?:
                   </tr>
                 ))}
                 {errors.length === 0 && (
-                  <tr><td colSpan={6} className="text-muted text-center py-4">No unresolved errors</td></tr>
+                  <tr><td colSpan={6} className="text-muted text-center py-4">No unresolved errors{entityFilter ? ` for ${entityFilter.name}` : ''}</td></tr>
                 )}
               </tbody>
             </table>
@@ -173,6 +223,7 @@ export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?:
         </div>
       </div>
 
+      {/* Error Detail Modal */}
       {selectedErrorId && (
         <ErrorDetailModal
           errorId={selectedErrorId}
@@ -184,6 +235,71 @@ export default function ErrorsTab({ onErrorCountChange }: { onErrorCountChange?:
       {selectedTraceId && (
         <ExecutionTraceModal traceId={selectedTraceId} onClose={() => setSelectedTraceId(null)} />
       )}
+
+      {/* Alert Detail Modal */}
+      {selectedAlertId && (() => {
+        const alert = governanceAlerts.find((a) => a.id === selectedAlertId);
+        if (!alert) return null;
+        return (
+          <div className="modal show d-block" style={{ zIndex: 1060 }} role="dialog" aria-modal="true">
+            <div className="modal-backdrop show" style={{ zIndex: -1 }} onClick={() => setSelectedAlertId(null)} />
+            <div className="modal-dialog modal-lg modal-dialog-centered">
+              <div className="modal-content border-0 shadow">
+                <div className="modal-header" style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  <h6 className="modal-title mb-0">Alert Detail</h6>
+                  <button className="btn-close btn-close-white" onClick={() => setSelectedAlertId(null)} />
+                </div>
+                <div className="modal-body">
+                  <div className="row g-3">
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-medium text-muted">Event Type</label>
+                      <div><span className="badge bg-secondary">{alert.event_type.replace(/_/g, ' ')}</span></div>
+                    </div>
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-medium text-muted">Severity</label>
+                      <div><span className={`badge bg-${SEVERITY_COLORS[alert.details?.severity || 'info'] || 'secondary'}`}>{alert.details?.severity || 'info'}</span></div>
+                    </div>
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-medium text-muted">Source</label>
+                      <div>{alert.source}</div>
+                    </div>
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-medium text-muted">Entity</label>
+                      <div>{alert.entity_type}{alert.entity_id ? ` #${alert.entity_id}` : ''}</div>
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small fw-medium text-muted">Message</label>
+                      <div>{alert.details?.message || '—'}</div>
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small fw-medium text-muted">Time</label>
+                      <div>{new Date(alert.created_at).toLocaleString()}</div>
+                    </div>
+                    {alert.details?.agent_name && (
+                      <div className="col-sm-6">
+                        <label className="form-label small fw-medium text-muted">Agent</label>
+                        <div>{alert.details.agent_name}</div>
+                      </div>
+                    )}
+                    {alert.details?.error_count != null && (
+                      <div className="col-sm-6">
+                        <label className="form-label small fw-medium text-muted">Error Count</label>
+                        <div><span className="badge bg-danger">{alert.details.error_count}</span></div>
+                      </div>
+                    )}
+                    <div className="col-12">
+                      <label className="form-label small fw-medium text-muted">Full Details</label>
+                      <pre className="bg-light rounded p-2 small mb-0" style={{ maxHeight: 200, overflow: 'auto', fontSize: '0.72rem' }}>
+                        {JSON.stringify(alert.details, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

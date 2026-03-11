@@ -20,6 +20,10 @@ interface ActivityRecord {
   agent?: { agent_name: string; agent_type: string };
 }
 
+interface ActivityTabProps {
+  entityFilter?: { type: string; id: string; name: string } | null;
+}
+
 const RESULT_COLORS: Record<string, string> = {
   success: 'success',
   failed: 'danger',
@@ -38,23 +42,41 @@ function timeAgo(dateStr: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export default function ActivityTab() {
+/** Map entity selection to API filter params */
+function entityToParams(entity: ActivityTabProps['entityFilter']): Record<string, string> {
+  if (!entity) return {};
+  const t = entity.type.toLowerCase();
+  // Direct entity types that map to API params
+  if (t === 'campaign' || t === 'campaigns') return { campaign_id: entity.id };
+  if (t === 'agent' || t === 'ai agents' || t === 'ai_agents') return { agent_id: entity.id };
+  // For business map nodes, filter by action keywords
+  if (t === 'leads' || t === 'lead') return { action: 'lead' };
+  if (t === 'students' || t === 'student') return { action: 'student' };
+  if (t === 'visitors' || t === 'visitor') return { action: 'visitor' };
+  return {};
+}
+
+export default function ActivityTab({ entityFilter }: ActivityTabProps) {
   const [activity, setActivity] = useState<ActivityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
 
+  const filterKey = entityFilter ? `${entityFilter.type}:${entityFilter.id}` : 'global';
+
   const fetchActivity = useCallback(async () => {
     try {
-      const { data } = await api.get('/api/admin/ai-ops/activity', { params: { limit: 50 } });
+      const params: Record<string, any> = { limit: 50, ...entityToParams(entityFilter) };
+      const { data } = await api.get('/api/admin/ai-ops/activity', { params });
       setActivity(data.items);
       setTotal(data.total);
     } catch { /* ignore */ }
     setLoading(false);
-  }, []);
+  }, [filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    setLoading(true);
     fetchActivity();
     const interval = setInterval(fetchActivity, 10000);
     return () => clearInterval(interval);
@@ -73,8 +95,15 @@ export default function ActivityTab() {
   return (
     <div className="p-3">
       <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold">
-          AI Decision Log <span className="text-muted fw-normal">({total} total)</span>
+        <div className="card-header bg-white fw-semibold d-flex align-items-center justify-content-between">
+          <span>
+            AI Decision Log <span className="text-muted fw-normal">({total} total)</span>
+          </span>
+          {entityFilter && (
+            <span className="badge bg-primary" style={{ fontSize: '0.68rem' }}>
+              Filtered: {entityFilter.name}
+            </span>
+          )}
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
@@ -142,7 +171,7 @@ export default function ActivityTab() {
                   </tr>
                 ))}
                 {activity.length === 0 && (
-                  <tr><td colSpan={7} className="text-muted text-center py-4">No agent activity recorded yet</td></tr>
+                  <tr><td colSpan={7} className="text-muted text-center py-4">No agent activity recorded{entityFilter ? ` for ${entityFilter.name}` : ''}</td></tr>
                 )}
               </tbody>
             </table>
