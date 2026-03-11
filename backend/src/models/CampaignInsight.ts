@@ -5,7 +5,7 @@ export type InsightType = 'channel_perf' | 'timing' | 'audience' | 'message_patt
 
 interface CampaignInsightAttributes {
   id?: number;
-  campaign_id?: number | null;
+  campaign_id?: string | null;
   insight_type: InsightType;
   category: string;
   insight: string;
@@ -20,7 +20,7 @@ interface CampaignInsightAttributes {
 
 class CampaignInsight extends Model<CampaignInsightAttributes> implements CampaignInsightAttributes {
   declare id: number;
-  declare campaign_id: number | null;
+  declare campaign_id: string | null;
   declare insight_type: InsightType;
   declare category: string;
   declare insight: string;
@@ -41,7 +41,7 @@ CampaignInsight.init(
       primaryKey: true,
     },
     campaign_id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: true,
       references: { model: 'campaigns', key: 'id' },
     },
