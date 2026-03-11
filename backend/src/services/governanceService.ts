@@ -264,3 +264,137 @@ export async function getGovernanceAgents(): Promise<any[]> {
 
   return agents;
 }
+
+// ─── COO Config ──────────────────────────────────────────────────────────────
+
+export interface COOConfig {
+  cory_status: 'active' | 'paused' | 'manual';
+  cory_autonomy_level: 'full' | 'safe' | 'manual';
+  cory_experiment_budget: number;
+  cory_decision_authority: 'auto_safe' | 'propose_all' | 'manual_only';
+  enable_agent_hiring: boolean;
+  enable_experiments: boolean;
+  enable_auto_optimization: boolean;
+}
+
+const COO_DEFAULTS: COOConfig = {
+  cory_status: 'active',
+  cory_autonomy_level: 'full',
+  cory_experiment_budget: 3,
+  cory_decision_authority: 'auto_safe',
+  enable_agent_hiring: true,
+  enable_experiments: true,
+  enable_auto_optimization: true,
+};
+
+export async function getCOOConfig(): Promise<COOConfig> {
+  const keys = Object.keys(COO_DEFAULTS) as (keyof COOConfig)[];
+  const config: any = { ...COO_DEFAULTS };
+  for (const key of keys) {
+    const val = await getSetting(key);
+    if (val !== null && val !== undefined) {
+      if (typeof COO_DEFAULTS[key] === 'boolean') {
+        config[key] = val === true || val === 'true';
+      } else if (typeof COO_DEFAULTS[key] === 'number') {
+        config[key] = parseInt(val as string, 10) || COO_DEFAULTS[key];
+      } else {
+        config[key] = val;
+      }
+    }
+  }
+  return config;
+}
+
+export async function updateCOOConfig(updates: Partial<COOConfig>, updatedBy?: string): Promise<COOConfig> {
+  for (const [key, value] of Object.entries(updates)) {
+    if (key in COO_DEFAULTS) {
+      await setSetting(key, String(value), updatedBy);
+    }
+  }
+  return getCOOConfig();
+}
+
+// ─── Autonomy Rules ──────────────────────────────────────────────────────────
+
+export interface AutonomyRule {
+  name: string;
+  risk_min: number;
+  risk_max: number;
+  confidence_min: number;
+  confidence_max: number;
+  action: 'auto_execute' | 'require_approval' | 'allow_experiment' | 'block';
+}
+
+const DEFAULT_RULES: AutonomyRule[] = [
+  { name: 'LOW_IMPACT_HIGH_CONFIDENCE', risk_min: 0, risk_max: 25, confidence_min: 70, confidence_max: 100, action: 'auto_execute' },
+  { name: 'HIGH_IMPACT_LOW_CONFIDENCE', risk_min: 50, risk_max: 100, confidence_min: 0, confidence_max: 60, action: 'require_approval' },
+  { name: 'HIGH_IMPACT_HIGH_CONFIDENCE', risk_min: 50, risk_max: 100, confidence_min: 70, confidence_max: 100, action: 'allow_experiment' },
+  { name: 'CRITICAL_RISK', risk_min: 75, risk_max: 100, confidence_min: 0, confidence_max: 100, action: 'block' },
+];
+
+export async function getAutonomyRules(): Promise<AutonomyRule[]> {
+  const raw = await getSetting('autonomy_rules');
+  if (raw) {
+    try { return JSON.parse(raw as string); } catch { /* fall through */ }
+  }
+  return DEFAULT_RULES;
+}
+
+export async function updateAutonomyRules(rules: AutonomyRule[], updatedBy?: string): Promise<AutonomyRule[]> {
+  await setSetting('autonomy_rules', JSON.stringify(rules), updatedBy);
+  return rules;
+}
+
+// ─── Safety Limits ───────────────────────────────────────────────────────────
+
+export interface SafetyLimits {
+  max_agents: number;
+  max_experiments: number;
+  max_autonomous_decisions_per_hour: number;
+  approval_required_for_critical_actions: boolean;
+}
+
+const SAFETY_DEFAULTS: SafetyLimits = {
+  max_agents: 100,
+  max_experiments: 5,
+  max_autonomous_decisions_per_hour: 10,
+  approval_required_for_critical_actions: true,
+};
+
+export async function getSafetyLimits(): Promise<SafetyLimits> {
+  const raw = await getSetting('safety_limits');
+  if (raw) {
+    try { return { ...SAFETY_DEFAULTS, ...JSON.parse(raw as string) }; } catch { /* fall through */ }
+  }
+  return SAFETY_DEFAULTS;
+}
+
+export async function updateSafetyLimits(limits: Partial<SafetyLimits>, updatedBy?: string): Promise<SafetyLimits> {
+  const current = await getSafetyLimits();
+  const merged = { ...current, ...limits };
+  await setSetting('safety_limits', JSON.stringify(merged), updatedBy);
+  return merged;
+}
+
+// ─── Experiment Registry ─────────────────────────────────────────────────────
+
+import IntelligenceDecision from '../models/IntelligenceDecision';
+
+export async function getExperimentRegistry(): Promise<any[]> {
+  const experiments = await IntelligenceDecision.findAll({
+    where: { recommended_action: 'launch_ab_test' },
+    order: [['timestamp', 'DESC']],
+    limit: 50,
+  });
+
+  return experiments.map((e: any) => ({
+    id: e.decision_id,
+    experiment_name: e.action_details?.description || `Experiment ${e.decision_id?.slice(0, 8)}`,
+    agent: e.action_details?.parameters?.agent || 'system',
+    status: e.execution_status,
+    start_time: e.executed_at || e.timestamp,
+    impact: e.impact_after_24h || e.impact_estimate || null,
+    risk_score: e.risk_score,
+    confidence_score: e.confidence_score,
+  }));
+}

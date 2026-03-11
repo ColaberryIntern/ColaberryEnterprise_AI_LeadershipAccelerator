@@ -47,11 +47,13 @@ export type AiAgentType =
   | 'architecture_analyzer'
   | 'prompt_optimizer'
   | 'performance_tracker'
-  | 'experiment_runner';
+  | 'experiment_runner'
+  // Dynamic (created by AI COO)
+  | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security';
 
 interface AiAgentAttributes {
   id?: string;

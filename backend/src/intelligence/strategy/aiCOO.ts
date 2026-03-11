@@ -23,6 +23,17 @@ export interface StrategicReport {
   duration_ms: number;
 }
 
+// ─── Cached Report ──────────────────────────────────────────────────────────
+
+let _lastReport: StrategicReport | null = null;
+
+/**
+ * Return the most recent strategic report without triggering a new cycle.
+ */
+export function getLatestStrategicReport(): StrategicReport | null {
+  return _lastReport;
+}
+
 // ─── Orchestration ───────────────────────────────────────────────────────────
 
 /**
@@ -107,7 +118,7 @@ export async function runStrategicCycle(): Promise<StrategicReport> {
     console.log(`[AI COO] Strategic cycle: ${executiveSummary.join(' | ')} [${durationMs}ms]`);
   }
 
-  return {
+  const report: StrategicReport = {
     timestamp: new Date().toISOString(),
     overview,
     revenue,
@@ -117,4 +128,7 @@ export async function runStrategicCycle(): Promise<StrategicReport> {
     executive_summary: executiveSummary,
     duration_ms: durationMs,
   };
+
+  _lastReport = report;
+  return report;
 }

@@ -28,6 +28,8 @@ import ChartTypeSelector from '../../../components/admin/intelligence/ChartTypeS
 import ChartRenderer from '../../../components/admin/intelligence/ChartRenderer';
 import AutoInsightsGrid from '../../../components/admin/intelligence/AutoInsightsGrid';
 import EntityNavigationPanel from '../../../components/admin/intelligence/entityPanel/EntityNavigationPanel';
+import CoryPanel from '../../../components/admin/intelligence/CoryPanel';
+import CoryCenterTabs from '../../../components/admin/intelligence/CoryCenterTabs';
 
 // ─── Adaptive Execution Steps ─────────────────────────────────────────────────
 const EXECUTION_STEPS = [
@@ -1015,7 +1017,7 @@ function MobileTabBar({
   const tabs = [
     { key: 'map' as const, label: 'Navigation' },
     { key: 'canvas' as const, label: 'Dashboard' },
-    { key: 'assistant' as const, label: 'AI Assistant' },
+    { key: 'assistant' as const, label: 'Cory' },
   ];
 
   return (
@@ -1296,7 +1298,7 @@ function IntelligenceOSContent() {
             />
           )}
           {mobileTab === 'assistant' && (
-            <AIAssistantPanel
+            <CoryPanel
               onVisualizationsUpdate={handleVisualizationsUpdate}
               onSummaryUpdate={handleSummaryUpdate}
               onInsightsUpdate={handleInsightsUpdate}
@@ -1356,28 +1358,30 @@ function IntelligenceOSContent() {
           )}
 
           <div className="flex-grow-1" style={{ minHeight: 0, overflow: 'auto' }}>
-            <DynamicCanvas
-              visualizations={visualizations}
-              insights={insights}
-              summary={summary}
-              summaryLoading={summaryLoading}
-              autoInsights={autoInsights}
-              onFollowUpClick={handleFollowUpClick}
-              kpis={kpis}
-              anomalies={anomalies}
-              forecasts={forecasts}
-              riskEntities={riskEntities}
-              entityNetwork={network}
-              analyticsLoading={analyticsLoading}
-              investigationTarget={investigationTarget}
-              onInvestigate={handleInvestigate}
-              onCloseInvestigation={() => setInvestigationTarget(null)}
-              entityType={selectedEntity?.type}
-            />
+            <CoryCenterTabs>
+              <DynamicCanvas
+                visualizations={visualizations}
+                insights={insights}
+                summary={summary}
+                summaryLoading={summaryLoading}
+                autoInsights={autoInsights}
+                onFollowUpClick={handleFollowUpClick}
+                kpis={kpis}
+                anomalies={anomalies}
+                forecasts={forecasts}
+                riskEntities={riskEntities}
+                entityNetwork={network}
+                analyticsLoading={analyticsLoading}
+                investigationTarget={investigationTarget}
+                onInvestigate={handleInvestigate}
+                onCloseInvestigation={() => setInvestigationTarget(null)}
+                entityType={selectedEntity?.type}
+              />
+            </CoryCenterTabs>
           </div>
         </div>
 
-        {/* Right Panel: AI Assistant */}
+        {/* Right Panel: Cory — AI COO */}
         <div
           className="intel-panel-slide"
           style={{
@@ -1388,7 +1392,7 @@ function IntelligenceOSContent() {
           }}
         >
           <div style={{ width: 400, height: '100%' }}>
-            <AIAssistantPanel
+            <CoryPanel
               onVisualizationsUpdate={handleVisualizationsUpdate}
               onSummaryUpdate={handleSummaryUpdate}
               onInsightsUpdate={handleInsightsUpdate}
@@ -1398,7 +1402,7 @@ function IntelligenceOSContent() {
         </div>
 
         {/* Right Toggle */}
-        <PanelToggle label="AI" side="right" isOpen={rightOpen} onClick={() => setRightOpen(!rightOpen)} />
+        <PanelToggle label="COO" side="right" isOpen={rightOpen} onClick={() => setRightOpen(!rightOpen)} />
       </div>
 
       <StatusBar lastRefresh={lastRefresh} isProcessing={isProcessing} />

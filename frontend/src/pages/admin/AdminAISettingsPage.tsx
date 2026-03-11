@@ -8,6 +8,8 @@ import CampaignTimelineModal from './ai-settings/CampaignTimelineModal';
 import AgentDetailModal from './ai-settings/AgentDetailModal';
 import OrchestrationHealthSection from './ai-settings/OrchestrationHealthSection';
 import CampaignQATab from './ai-settings/CampaignQATab';
+import GovernanceCOOTab from './ai-settings/GovernanceCOOTab';
+import GovernanceAutonomyTab from './ai-settings/GovernanceAutonomyTab';
 
 interface Agent {
   id: string;
@@ -96,7 +98,9 @@ interface Overview {
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
+  { key: 'coo', label: 'AI COO' },
   { key: 'registry', label: 'Agent Registry' },
+  { key: 'autonomy', label: 'Autonomy & Safety' },
   { key: 'activity', label: 'Activity' },
   { key: 'health', label: 'Health Monitor' },
   { key: 'errors', label: 'Error Center' },
@@ -463,6 +467,8 @@ function AdminAISettingsPage() {
           governanceAlerts={governanceAlerts}
         />
       )}
+      {activeTab === 'coo' && <GovernanceCOOTab />}
+      {activeTab === 'autonomy' && <GovernanceAutonomyTab />}
       {activeTab === 'controls' && (
         <ControlsTab
           agents={agents}
