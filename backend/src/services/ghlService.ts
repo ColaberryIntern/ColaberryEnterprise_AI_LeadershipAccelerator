@@ -94,6 +94,33 @@ export async function findContactByEmail(email: string): Promise<GHLContact | nu
   return contact;
 }
 
+export async function findContactByPhone(phone: string): Promise<GHLContact | null> {
+  if (!phone) return null;
+  // Normalize to digits only for search
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 10) return null;
+
+  const result = await ghlFetch(
+    `/contacts/?query=${encodeURIComponent(phone)}&limit=1`,
+    'GET'
+  );
+
+  if (!result.success || !result.data?.contacts?.length) return null;
+
+  const contact = result.data.contacts[0] as GHLContact;
+
+  // Verify phone match (normalize both sides to digits)
+  const contactDigits = (contact.phone || '').replace(/\D/g, '');
+  if (!contactDigits || !contactDigits.endsWith(digits.slice(-10))) {
+    console.warn(
+      `[GHL] Phone fuzzy match rejected: searched "${phone}", got "${contact.phone}" (contact ${contact.id})`
+    );
+    return null;
+  }
+
+  return contact;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Contact create                                                     */
 /* ------------------------------------------------------------------ */
@@ -234,7 +261,7 @@ export async function syncLeadToGhl(
       return { contactId: lead.ghl_contact_id, isTestMode };
     }
 
-    // Search by email
+    // Search by email, then fallback to phone
     let contactId: string | null = null;
     let isNewContact = false;
     const existing = await findContactByEmail(effectiveEmail);
@@ -246,7 +273,20 @@ export async function syncLeadToGhl(
       }
     }
 
-    // Create new contact if not found
+    // Phone-based dedup fallback — prevent duplicates when email differs but phone matches
+    if (!contactId && lead.phone) {
+      const phoneMatch = await findContactByPhone(lead.phone);
+      if (phoneMatch) {
+        contactId = phoneMatch.id;
+        console.log(`[GHL] Found existing contact by phone ${lead.phone}: ${contactId} (email: ${phoneMatch.email})`);
+        if (interestGroup) {
+          await addContactTag(contactId, interestGroup);
+          await updateContact(contactId, { customField: { interestgroup: interestGroup } });
+        }
+      }
+    }
+
+    // Create new contact if not found by email or phone
     if (!contactId) {
       const createResult = await createContact(
         {

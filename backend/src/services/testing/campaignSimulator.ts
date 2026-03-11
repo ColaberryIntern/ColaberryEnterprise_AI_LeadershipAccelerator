@@ -260,7 +260,18 @@ export async function executeSimulationStep(
       const targetPhone = testOverrides.enabled && testOverrides.phone
         ? testOverrides.phone
         : lead.phone;
-      if (targetPhone) {
+
+      // Safety guard: in simulation, never send SMS to real lead numbers without test override
+      if (!testOverrides.phone) {
+        console.warn(`[Simulator] SMS blocked: no test phone configured. Set test overrides to route SMS safely.`);
+        deliveryDetails = {
+          blocked: true,
+          to: targetPhone,
+          delivery_mode: 'blocked',
+          provider: 'ghl',
+          reason: 'No test phone override configured — SMS blocked to prevent sending to real lead numbers during simulation',
+        };
+      } else if (targetPhone) {
         // In simulation/test mode, bypass the ghl_enabled gate to force real delivery
         const isSimTestMode = !!testOverrides.enabled;
         const ghlEnabled = await getSetting('ghl_enabled');
