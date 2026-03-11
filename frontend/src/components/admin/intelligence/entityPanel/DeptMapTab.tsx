@@ -40,185 +40,11 @@ const DEPT_EDGES: { source: string; target: string; relationship: string }[] = [
   { source: 'education', target: 'finance', relationship: 'drives revenue' },
 ];
 
-const TREND_ICONS: Record<string, { icon: string; color: string; label: string }> = {
-  up: { icon: '▲', color: 'var(--color-accent)', label: 'Trending up' },
-  down: { icon: '▼', color: 'var(--color-secondary)', label: 'Trending down' },
-  stable: { icon: '→', color: 'var(--color-text-light)', label: 'Stable' },
-};
-
-// Some KPIs are "lower is better" — a down trend is good
-const LOWER_IS_BETTER = ['error rate', 'cac', 'mttr', 'avg response time'];
-
-function isTrendGood(trend: string, kpiName: string): boolean {
-  const isLowerBetter = LOWER_IS_BETTER.some((k) => kpiName.toLowerCase().includes(k));
-  if (trend === 'stable') return true;
-  if (isLowerBetter) return trend === 'down';
-  return trend === 'up';
-}
-
-function getTrendColor(trend: string, kpiName: string): string {
-  if (trend === 'stable') return 'var(--color-text-light)';
-  return isTrendGood(trend, kpiName) ? 'var(--color-accent)' : 'var(--color-secondary)';
-}
-
-// ─── KPI Cards for Selected Department ─────────────────────────────────────
-
-function DeptKPICards({ dept }: { dept: DepartmentSummary }) {
-  const kpis = dept.kpis || [];
-  const objectives = dept.strategic_objectives || [];
-
-  return (
-    <div className="p-2" style={{ overflowY: 'auto' }}>
-      {/* Dept header */}
-      <div className="d-flex align-items-center gap-2 mb-2 px-1">
-        <div
-          className="rounded-circle"
-          style={{ width: 10, height: 10, background: dept.color, flexShrink: 0 }}
-        />
-        <span className="fw-semibold" style={{ fontSize: '0.8rem', color: dept.color }}>{dept.name}</span>
-        <span className="text-muted ms-auto" style={{ fontSize: '0.6rem' }}>{dept.team_size} members</span>
-      </div>
-
-      {/* Health / Innovation mini-bar */}
-      <div className="d-flex gap-2 mb-2 px-1">
-        <div className="flex-grow-1 rounded-2 p-1 text-center" style={{ background: dept.bg_light }}>
-          <div className="fw-bold" style={{ fontSize: '0.85rem', color: dept.color }}>{Math.round(dept.health_score)}</div>
-          <div className="text-muted" style={{ fontSize: '0.55rem' }}>Health</div>
-        </div>
-        <div className="flex-grow-1 rounded-2 p-1 text-center" style={{ background: dept.bg_light }}>
-          <div className="fw-bold" style={{ fontSize: '0.85rem', color: dept.color }}>{Math.round(dept.innovation_score)}</div>
-          <div className="text-muted" style={{ fontSize: '0.55rem' }}>Innovation</div>
-        </div>
-        <div className="flex-grow-1 rounded-2 p-1 text-center" style={{ background: dept.bg_light }}>
-          <div className="fw-bold" style={{ fontSize: '0.85rem', color: dept.color }}>{dept.active_initiatives}</div>
-          <div className="text-muted" style={{ fontSize: '0.55rem' }}>Active</div>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      {kpis.length > 0 && (
-        <>
-          <div className="px-1 mb-1">
-            <span className="fw-semibold" style={{ fontSize: '0.7rem', color: 'var(--color-primary)' }}>KPIs</span>
-          </div>
-          <div className="d-flex flex-column gap-1 mb-2">
-            {kpis.map((kpi) => {
-              const trend = TREND_ICONS[kpi.trend] || TREND_ICONS.stable;
-              const trendColor = getTrendColor(kpi.trend, kpi.name);
-              const good = isTrendGood(kpi.trend, kpi.name);
-              return (
-                <div
-                  key={kpi.name}
-                  className="d-flex align-items-center justify-content-between rounded-2 px-2 py-1"
-                  style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}
-                >
-                  <div className="d-flex align-items-center gap-1">
-                    <span className="text-muted" style={{ fontSize: '0.7rem' }}>{kpi.name}</span>
-                  </div>
-                  <div className="d-flex align-items-center gap-1">
-                    <span className="fw-bold" style={{ fontSize: '0.8rem', color: 'var(--color-text)' }}>
-                      {typeof kpi.value === 'number' && kpi.value >= 1000
-                        ? `${(kpi.value / 1000).toFixed(1)}K`
-                        : kpi.value}
-                      {kpi.unit && <span style={{ fontSize: '0.6rem', fontWeight: 400 }}> {kpi.unit}</span>}
-                    </span>
-                    <span
-                      style={{ fontSize: '0.6rem', color: trendColor, fontWeight: 600 }}
-                      title={`${trend.label} — ${good ? 'Positive' : kpi.trend === 'stable' ? 'Neutral' : 'Needs attention'}`}
-                    >
-                      {trend.icon}
-                    </span>
-                    <span
-                      className="rounded-circle d-inline-block"
-                      style={{
-                        width: 6,
-                        height: 6,
-                        background: good ? 'var(--color-accent)' : kpi.trend === 'stable' ? '#d69e2e' : 'var(--color-secondary)',
-                      }}
-                      title={good ? 'Good' : kpi.trend === 'stable' ? 'Stable' : 'Needs attention'}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* Strategic Objectives */}
-      {objectives.length > 0 && (
-        <>
-          <div className="px-1 mb-1">
-            <span className="fw-semibold" style={{ fontSize: '0.7rem', color: 'var(--color-primary)' }}>Objectives</span>
-          </div>
-          <div className="d-flex flex-column gap-1">
-            {objectives.map((obj, i) => (
-              <div key={i} className="px-2 py-1 rounded-2" style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)' }}>
-                <div className="d-flex justify-content-between align-items-center mb-1">
-                  <span className="text-muted" style={{ fontSize: '0.65rem' }}>{obj.title}</span>
-                  <span className="fw-bold" style={{ fontSize: '0.65rem', color: obj.progress >= 80 ? 'var(--color-accent)' : obj.progress >= 50 ? 'var(--color-primary-light)' : '#d69e2e' }}>
-                    {obj.progress}%
-                  </span>
-                </div>
-                <div className="progress" style={{ height: 4 }}>
-                  <div
-                    className={`progress-bar bg-${obj.progress >= 80 ? 'success' : obj.progress >= 50 ? 'primary' : 'warning'}`}
-                    style={{ width: `${obj.progress}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ─── All Departments Overview Cards ────────────────────────────────────────
-
-function AllDeptsOverview({ departments, onSelect }: { departments: DepartmentSummary[]; onSelect: (dept: DepartmentSummary) => void }) {
-  return (
-    <div className="p-2" style={{ overflowY: 'auto' }}>
-      <div className="px-1 mb-1">
-        <span className="fw-semibold" style={{ fontSize: '0.7rem', color: 'var(--color-primary)' }}>All Departments</span>
-      </div>
-      <div className="d-flex flex-column gap-1">
-        {departments.map((dept) => {
-          const topKpi = dept.kpis?.[0];
-          return (
-            <div
-              key={dept.id}
-              className="d-flex align-items-center gap-2 px-2 py-1 rounded-2"
-              style={{ background: 'var(--color-bg-alt)', border: '1px solid var(--color-border)', cursor: 'pointer' }}
-              onClick={() => onSelect(dept)}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = dept.bg_light; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
-            >
-              <div className="rounded-circle" style={{ width: 8, height: 8, background: dept.color, flexShrink: 0 }} />
-              <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                <div className="fw-medium" style={{ fontSize: '0.72rem', color: dept.color }}>{dept.name}</div>
-                <div className="text-muted" style={{ fontSize: '0.58rem' }}>
-                  {Math.round(dept.health_score)}hp · {dept.active_initiatives} active
-                  {topKpi && ` · ${topKpi.name}: ${topKpi.value}${topKpi.unit}`}
-                </div>
-              </div>
-              <span style={{ fontSize: '0.6rem', color: 'var(--color-text-light)' }}>▸</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Component ────────────────────────────────────────────────────────
-
 export default function DeptMapTab() {
   const { drillDown, selectedEntity } = useIntelligenceContext();
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 380, height: 300 });
+  const [dimensions, setDimensions] = useState({ width: 380, height: 600 });
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [departments, setDepartments] = useState<DepartmentSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -239,11 +65,6 @@ export default function DeptMapTab() {
     ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, []);
-
-  const selectedDept = useMemo(() => {
-    if (!selectedEntity || selectedEntity.type !== 'department') return null;
-    return departments.find((d) => d.id === selectedEntity.id) || null;
-  }, [selectedEntity, departments]);
 
   const graphData = useMemo(() => {
     if (!departments.length) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
@@ -398,14 +219,6 @@ export default function DeptMapTab() {
     [drillDown]
   );
 
-  const handleDeptCardClick = useCallback(
-    (dept: DepartmentSummary) => {
-      const config = DEPARTMENT_CATEGORIES[dept.slug];
-      drillDown('department', dept.id, config?.label || dept.name);
-    },
-    [drillDown]
-  );
-
   if (loading) {
     return (
       <div className="d-flex align-items-center justify-content-center h-100 text-muted">
@@ -438,10 +251,10 @@ export default function DeptMapTab() {
         </div>
       </div>
 
-      {/* Graph - takes about 45% of height */}
       <div
         ref={containerRef}
-        style={{ position: 'relative', minHeight: 0, flex: '0 0 45%' }}
+        className="flex-grow-1"
+        style={{ position: 'relative', minHeight: 0 }}
         aria-label="Department relationship graph — interactive."
       >
         <ForceGraph2D
@@ -531,15 +344,6 @@ export default function DeptMapTab() {
             </div>
             <div className="text-muted">{hoveredNode.team_size} team members</div>
           </div>
-        )}
-      </div>
-
-      {/* Bottom section - KPI detail or overview list */}
-      <div className="border-top flex-grow-1" style={{ minHeight: 0, overflowY: 'auto' }}>
-        {selectedDept ? (
-          <DeptKPICards dept={selectedDept} />
-        ) : (
-          <AllDeptsOverview departments={departments} onSelect={handleDeptCardClick} />
         )}
       </div>
     </div>
