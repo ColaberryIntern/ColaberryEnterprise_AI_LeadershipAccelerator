@@ -516,14 +516,17 @@ function AIAssistantPanel({
         onSummaryUpdate(response.data);
       }
 
-      // Parse execution path for status dots
+      // Parse execution path for status dots (matches pipeline step names from queryEngine.ts)
       const path = response.execution_path || '';
       const dots: string[] = [];
-      if (path.includes('sql') || path.includes('SQL')) dots.push('SQL');
-      if (path.includes('ml') || path.includes('ML')) dots.push('ML');
-      if (path.includes('vector') || path.includes('Vector')) dots.push('Vector');
-      if (path.includes('llm') || path.includes('LLM')) dots.push('LLM');
-      if (!dots.length) dots.push('SQL', 'LLM');
+      if (path.includes('classify_intent')) dots.push('Intent');
+      if (path.includes('execute_sql')) dots.push('SQL');
+      if (path.includes('execute_ml')) dots.push('ML');
+      if (path.includes('execute_vector')) dots.push('Vector');
+      if (path.includes('build_context')) dots.push('Insights');
+      if (path.includes('select_visualization')) dots.push('Charts');
+      if (path.includes('generate_narrative')) dots.push('Narrative');
+      if (!dots.length) dots.push('SQL');
       setStatusDots(dots);
     }
   }, [response, onVisualizationsUpdate, onSummaryUpdate, onInsightsUpdate]);
@@ -574,20 +577,31 @@ function AIAssistantPanel({
         </div>
         {statusDots.length > 0 && (
           <div className="d-flex gap-2">
-            {statusDots.map((dot) => (
-              <span key={dot} className="d-flex align-items-center gap-1" style={{ fontSize: '0.6rem' }}>
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: 'var(--color-accent)',
-                    display: 'inline-block',
-                  }}
-                />
-                {dot}
-              </span>
-            ))}
+            {statusDots.map((dot) => {
+              const dotColor: Record<string, string> = {
+                Intent: '#d69e2e',
+                SQL: 'var(--color-accent)',
+                ML: 'var(--color-accent)',
+                Vector: 'var(--color-accent)',
+                Insights: 'var(--color-primary-light)',
+                Charts: 'var(--color-primary-light)',
+                Narrative: 'var(--color-primary-light)',
+              };
+              return (
+                <span key={dot} className="d-flex align-items-center gap-1" style={{ fontSize: '0.6rem' }}>
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: dotColor[dot] || 'var(--color-accent)',
+                      display: 'inline-block',
+                    }}
+                  />
+                  {dot}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
