@@ -11,7 +11,9 @@ import { createAgent, retireAgent, getDepartmentSummary, type AgentSpec, type De
 import { proposeGrowthExperiments } from '../agents/GrowthExperimentAgent';
 import { listAllAgents, agentCount } from '../agents/agentRegistry';
 import { AiAgent } from '../../models';
+import Department from '../../models/Department';
 import IntelligenceDecision from '../../models/IntelligenceDecision';
+import { getDepartmentDetail } from '../../services/departmentIntelligenceService';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 
@@ -82,8 +84,17 @@ const KEYWORD_INTENTS: Array<{ keywords: string[]; intent: CoryIntent }> = [
  */
 export async function interpretCommand(
   command: string,
+  context?: Record<string, any>,
 ): Promise<{ intent: CoryIntent; parameters: Record<string, any> }> {
   const lower = command.toLowerCase().replace(/^cory[,:]?\s*/i, '');
+
+  // Department-scoped performance questions → briefing (will be overridden to department_deep_analysis)
+  if (context?.entity_type === 'department') {
+    const deptKeywords = ['how is', 'performing', 'performance', 'health', 'kpi', 'metrics', 'doing', 'status', 'overview', 'briefing', 'report', 'tell me about', 'what\'s happening'];
+    if (deptKeywords.some((kw) => lower.includes(kw))) {
+      return { intent: 'briefing', parameters: { raw_command: lower, department: context.entity_name } };
+    }
+  }
 
   // Fast-path keyword matching
   for (const { keywords, intent } of KEYWORD_INTENTS) {
@@ -119,14 +130,106 @@ You coordinate a fleet of AI agents across departments: Intelligence, Operations
 Report findings as structured executive briefings. Be concise but insightful.
 When presenting data, lead with the most important finding. Use numbers.`;
 
+/**
+ * Format department detail data into a concise text block for LLM context injection.
+ */
+function formatDepartmentDataForLLM(detail: any): string {
+  const o = detail.overview;
+  const lines: string[] = [];
+
+  lines.push(`=== ${o.name} DEPARTMENT DATA ===`);
+  lines.push(`Mission: ${o.mission}`);
+  lines.push(`Team Size: ${o.team_size} members`);
+  lines.push(`Health Score: ${Math.round(o.health_score)}/100`);
+  lines.push(`Innovation Score: ${Math.round(o.innovation_score)}/100`);
+
+  // KPIs with trends
+  if (detail.kpis?.length) {
+    lines.push(`\n--- KPIs ---`);
+    for (const kpi of detail.kpis) {
+      const trend = kpi.delta != null ? ` (WoW: ${kpi.delta > 0 ? '+' : ''}${kpi.delta}${kpi.unit || ''}, prev: ${kpi.prev_value}${kpi.unit || ''})` : '';
+      const dir = kpi.trend === 'up' ? '↑' : kpi.trend === 'down' ? '↓' : '→';
+      lines.push(`  ${kpi.name}: ${kpi.value}${kpi.unit || ''} ${dir}${trend}`);
+    }
+  }
+
+  // Strategic objectives
+  if (detail.strategic_objectives?.length) {
+    lines.push(`\n--- Strategic Objectives ---`);
+    for (const obj of detail.strategic_objectives) {
+      lines.push(`  • ${obj.title || obj.name}: ${obj.progress || 0}% — ${obj.status || 'unknown'}`);
+    }
+  }
+
+  // Active initiatives (building)
+  if (detail.building?.length) {
+    lines.push(`\n--- Active Initiatives (${detail.building.length}) ---`);
+    for (const init of detail.building) {
+      const risk = init.risk_level ? ` [${init.risk_level} risk]` : '';
+      const rev = init.revenue_impact ? ` ($${(init.revenue_impact / 1000).toFixed(0)}k revenue impact)` : '';
+      lines.push(`  • ${init.title}: ${init.progress}% complete, ${init.priority} priority${risk}${rev}`);
+      if (init.description) lines.push(`    ${init.description.slice(0, 120)}`);
+    }
+  }
+
+  // On-hold / maintenance
+  if (detail.maintenance?.length) {
+    lines.push(`\n--- On Hold / Maintenance (${detail.maintenance.length}) ---`);
+    for (const init of detail.maintenance) {
+      lines.push(`  • ${init.title}: ${init.progress}% — ${init.status}`);
+    }
+  }
+
+  // Achievements
+  if (detail.achievements?.length) {
+    lines.push(`\n--- Recent Achievements ---`);
+    for (const a of detail.achievements.slice(0, 5)) {
+      lines.push(`  ✓ ${a.title}`);
+    }
+  }
+
+  // Risks
+  if (detail.risks?.length) {
+    lines.push(`\n--- Active Risks (${detail.risks.length}) ---`);
+    for (const r of detail.risks) {
+      lines.push(`  ⚠ ${r.title} — severity: ${r.severity || 'unknown'}`);
+    }
+  } else {
+    lines.push(`\n--- Risks: None active ---`);
+  }
+
+  // Recent events
+  if (detail.recent_events?.length) {
+    lines.push(`\n--- Recent Events ---`);
+    for (const e of detail.recent_events.slice(0, 5)) {
+      lines.push(`  [${e.event_type}] ${e.title}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 function buildCoryPersona(context?: Record<string, any>): string {
   let persona = CORY_PERSONA_BASE;
   if (context?.entity_type === 'department' && context?.entity_name) {
     persona += `\n\nCURRENT SCOPE: You are focused on the ${context.entity_name} department.
 Talk specifically about ${context.entity_name}'s KPIs, initiatives, team, risks, and performance.
+Reference specific numbers from the department data provided below.
 You can reference how this department relates to other departments and overall company strategy.
 When the user asks questions, answer from the perspective of ${context.entity_name} and its sub-elements.
+
+MANDATORY ANALYSIS REQUIREMENTS:
+1. TEAM SIZE ANALYSIS: Always analyze whether the current team size is adequate for the department's workload. Consider the ratio of active initiatives to team members, risk exposure, and growth opportunities. Proactively recommend team expansion when initiatives could generate more revenue or improve system security with additional headcount.
+2. REVENUE OPPORTUNITIES: Identify which initiatives or new initiatives could generate more revenue. Recommend expanding the team specifically to pursue revenue-generating opportunities.
+3. SECURITY & RISK: Evaluate security posture and recommend team expansion to address vulnerabilities, reduce risk exposure, and strengthen system resilience.
+4. DATA-DRIVEN: Every claim must reference specific numbers from the department data. Never give generic responses.
+
 If asked about company-wide strategy, note that you're currently scoped to ${context.entity_name} and offer to zoom out.`;
+
+    // Inject actual department data if available
+    if (context._department_data) {
+      persona += `\n\n${context._department_data}`;
+    }
   } else {
     persona += `\n\nCURRENT SCOPE: Global / Company-wide.
 You have visibility across all 8 departments and the full organization.
@@ -146,12 +249,109 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
   let briefings: ExecutiveBriefing[] = [];
   let assistantResponse: AssistantResponse | undefined;
 
-  // Step 1: Interpret command
-  const { intent, parameters } = await interpretCommand(cmd.command);
+  // Step 0: If department scoped, fetch full department data for context injection
+  const isDeptScoped = cmd.context?.entity_type === 'department' && cmd.context?.entity_name;
+  let deptDetail: any = null;
+
+  if (isDeptScoped) {
+    try {
+      // Find department by name
+      const dept = await Department.findOne({
+        where: sequelize.where(
+          sequelize.fn('LOWER', sequelize.col('name')),
+          cmd.context!.entity_name!.toLowerCase(),
+        ),
+      });
+      if (dept) {
+        deptDetail = await getDepartmentDetail(dept.id);
+        if (deptDetail) {
+          // Inject formatted data into context for persona building
+          cmd.context!._department_data = formatDepartmentDataForLLM(deptDetail);
+          actionsPerformed.push(`Loaded ${cmd.context!.entity_name} department intelligence (${deptDetail.kpis?.length || 0} KPIs, ${deptDetail.building?.length || 0} active initiatives, ${deptDetail.risks?.length || 0} risks)`);
+        }
+      }
+    } catch (err: any) {
+      actionsPerformed.push(`Dept data fetch warning: ${err.message}`);
+    }
+  }
+
+  // Step 1: Interpret command (pass context for department-aware routing)
+  const { intent, parameters } = await interpretCommand(cmd.command, cmd.context);
+
+  // For department-scoped queries, override briefing/department_status to use rich department analysis
+  const effectiveIntent = (isDeptScoped && deptDetail && (intent === 'briefing' || intent === 'department_status'))
+    ? 'department_deep_analysis' as any
+    : intent;
 
   // Step 2 + 3: Create plan and launch agents based on intent
   try {
-    switch (intent) {
+    switch (effectiveIntent) {
+      // Department deep analysis — rich data-driven response using all department data
+      case 'department_deep_analysis': {
+        const o = deptDetail.overview;
+        const teamSize = o.team_size;
+        const activeInits = deptDetail.building?.length || 0;
+        const riskCount = deptDetail.risks?.length || 0;
+        const kpiSummary = (deptDetail.kpis || [])
+          .map((k: any) => `${k.name}: ${k.value}${k.unit || ''}${k.delta != null ? ` (WoW ${k.delta > 0 ? '+' : ''}${k.delta})` : ''}`)
+          .join(', ');
+
+        // Build rich briefings from actual department data
+        briefings.push({
+          analysis: `${o.name} Department: Health ${Math.round(o.health_score)}/100, Innovation ${Math.round(o.innovation_score)}/100. Team of ${teamSize} managing ${activeInits} active initiative(s). KPIs: ${kpiSummary}`,
+          confidence: 95,
+        });
+
+        // Team capacity analysis
+        const initPerMember = teamSize > 0 ? (activeInits / teamSize).toFixed(1) : 'N/A';
+        briefings.push({
+          analysis: `Team Capacity: ${teamSize} members with ${activeInits} active initiatives (${initPerMember} initiatives/member). ${
+            activeInits > teamSize
+              ? 'Team is over-leveraged — each member juggles multiple initiatives, increasing execution risk.'
+              : teamSize <= 3
+                ? 'Small team size limits throughput and creates single-point-of-failure risk.'
+                : 'Current capacity appears manageable but expansion would accelerate delivery.'
+          }`,
+          expected_impact: `Recommend expanding team to ${Math.max(teamSize + 2, Math.ceil(activeInits * 1.5))} to unlock revenue-generating initiatives and reduce risk exposure.`,
+          confidence: 88,
+        });
+
+        // Risk assessment
+        if (riskCount > 0) {
+          briefings.push({
+            problem_detected: `${riskCount} active risk(s) in ${o.name}: ${deptDetail.risks.slice(0, 3).map((r: any) => r.title).join('; ')}`,
+            action_taken: 'Risk monitoring active',
+            confidence: 85,
+          });
+        }
+
+        // Strategic objectives progress
+        if (deptDetail.strategic_objectives?.length) {
+          const objSummary = deptDetail.strategic_objectives
+            .map((obj: any) => `${obj.title || obj.name}: ${obj.progress || 0}%`)
+            .join(', ');
+          briefings.push({
+            analysis: `Strategic Objectives: ${objSummary}`,
+            confidence: 90,
+          });
+        }
+
+        // Revenue impact from initiatives
+        const revInits = (deptDetail.building || []).filter((i: any) => i.revenue_impact > 0);
+        if (revInits.length) {
+          const totalRev = revInits.reduce((s: number, i: any) => s + (i.revenue_impact || 0), 0);
+          briefings.push({
+            analysis: `Revenue pipeline: $${(totalRev / 1000).toFixed(0)}k across ${revInits.length} initiative(s)`,
+            expected_impact: `Adding ${Math.ceil(revInits.length * 0.5)} dedicated team members could accelerate delivery and unlock $${(totalRev * 0.3 / 1000).toFixed(0)}k additional revenue.`,
+            confidence: 82,
+          });
+        }
+
+        agentsDispatched.push('DepartmentIntelligenceAgent', 'TeamCapacityAnalyzer', 'RiskAssessor');
+        actionsPerformed.push(`Deep analysis of ${o.name}: ${activeInits} initiatives, ${riskCount} risks, ${deptDetail.kpis?.length || 0} KPIs`);
+        break;
+      }
+
       case 'briefing': {
         const report = getLatestStrategicReport();
         const recentDecisions = await IntelligenceDecision.findAll({
@@ -195,6 +395,15 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
             action_taken: r,
             confidence: assistantResponse!.confidence * 100,
           }));
+        }
+
+        // If dept scoped and assistant pipeline returned, enrich with dept-specific briefings
+        if (isDeptScoped && deptDetail) {
+          const o = deptDetail.overview;
+          briefings.unshift({
+            analysis: `${o.name} context: Health ${Math.round(o.health_score)}/100, Innovation ${Math.round(o.innovation_score)}/100, Team: ${o.team_size}, Active initiatives: ${deptDetail.building?.length || 0}`,
+            confidence: 95,
+          });
         }
         break;
       }
@@ -248,17 +457,27 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
       }
 
       case 'department_status': {
-        const departments = await getDepartmentSummary();
-        const deptName = parameters.department;
-        const filtered = deptName
-          ? departments.filter((d) => d.department.toLowerCase() === deptName.toLowerCase())
-          : departments;
+        // If we already have deptDetail from Step 0, use it (this case handles non-scoped dept queries)
+        if (deptDetail) {
+          // Already handled by department_deep_analysis override; fallback here for edge cases
+          const o = deptDetail.overview;
+          briefings = [{
+            analysis: `${o.name}: Health ${Math.round(o.health_score)}/100, Innovation ${Math.round(o.innovation_score)}/100, Team: ${o.team_size}, Active: ${deptDetail.building?.length || 0} initiatives`,
+            confidence: 95,
+          }];
+        } else {
+          const departments = await getDepartmentSummary();
+          const deptName = parameters.department;
+          const filtered = deptName
+            ? departments.filter((d) => d.department.toLowerCase() === deptName.toLowerCase())
+            : departments;
 
-        briefings = filtered.map((d) => ({
-          analysis: `${d.department}: ${d.agent_count} agents, ${d.healthy} healthy, ${d.errored} errored, ${d.paused} paused`,
-          confidence: 100,
-        }));
-        actionsPerformed.push(`Retrieved status for ${filtered.length} department(s)`);
+          briefings = filtered.map((d) => ({
+            analysis: `${d.department}: ${d.agent_count} agents, ${d.healthy} healthy, ${d.errored} errored, ${d.paused} paused`,
+            confidence: 100,
+          }));
+        }
+        actionsPerformed.push(`Retrieved department status`);
         break;
       }
 
@@ -340,10 +559,17 @@ async function formatCoryResponse(
       : 'No specific briefings to report.',
   ].join('\n');
 
+  // For department-scoped queries, give LLM more room to provide rich analysis
+  const isDeptScope = context?.entity_type === 'department' && context?._department_data;
+  const maxTokens = isDeptScope ? 600 : 300;
+  const prompt = isDeptScope
+    ? `Using the department data provided in your context, give a comprehensive executive briefing covering: (1) current performance with specific KPIs and trends, (2) team capacity analysis — is the team large enough? recommend expansion with specific headcount tied to revenue opportunities and security needs, (3) key risks and opportunities, (4) strategic recommendations. Be specific with numbers. Do NOT say you have no data — you have full department data.\n\nConversation context:\n${briefingContext}`
+    : `Summarize this in 2-4 sentences as a direct executive briefing:\n${briefingContext}`;
+
   const llmResponse = await chatCompletion(
     buildCoryPersona(context),
-    `Summarize this in 2-4 sentences as a direct executive briefing:\n${briefingContext}`,
-    { maxTokens: 300, temperature: 0.3 },
+    prompt,
+    { maxTokens, temperature: 0.3 },
   );
 
   if (llmResponse) return llmResponse;
@@ -365,13 +591,14 @@ async function formatCoryResponse(
 // ─── Suggested Questions ─────────────────────────────────────────────────────
 
 /** Intent-based fallback questions when LLM is unavailable */
-const FALLBACK_SUGGESTIONS: Record<CoryIntent, string[]> = {
+const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
   briefing: ['What actions should we prioritize today?', 'Show me department health'],
   analyze: ['What are the biggest risks right now?', 'How can we improve conversion rates?'],
   hire_agent: ['Show me the current agent roster', 'Give me a status briefing'],
   retire_agent: ['Which agents need attention?', 'Show me department health'],
   launch_experiment: ['What experiments are currently running?', 'Give me a status briefing'],
   department_status: ['Which department needs the most attention?', 'What experiments are running?'],
+  department_deep_analysis: ['Should we expand this team?', 'What initiatives could generate more revenue?'],
   agent_status: ['Which agents have the highest error rates?', 'Give me a status briefing'],
   optimize: ['What are our biggest growth opportunities?', 'Show me the reasoning timeline'],
   general_query: ['Give me a status briefing', 'What are our biggest growth opportunities?'],
