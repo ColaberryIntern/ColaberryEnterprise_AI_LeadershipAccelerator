@@ -113,11 +113,28 @@ Extract relevant parameters like agent_name, department, metric, entity_type.`;
 
 // ─── Executive Command Loop ──────────────────────────────────────────────────
 
-const CORY_PERSONA = `You are Cory, the AI Chief Operating Officer of Colaberry Enterprise.
+const CORY_PERSONA_BASE = `You are Cory, the AI Chief Operating Officer of Colaberry Enterprise.
 You speak in direct, executive language. You prioritize by business impact.
-You coordinate a fleet of AI agents across departments: Intelligence, Operations, Growth, Maintenance, Security.
+You coordinate a fleet of AI agents across departments: Intelligence, Operations, Growth, Marketing, Finance, Infrastructure, Education, Orchestration.
 Report findings as structured executive briefings. Be concise but insightful.
 When presenting data, lead with the most important finding. Use numbers.`;
+
+function buildCoryPersona(context?: Record<string, any>): string {
+  let persona = CORY_PERSONA_BASE;
+  if (context?.entity_type === 'department' && context?.entity_name) {
+    persona += `\n\nCURRENT SCOPE: You are focused on the ${context.entity_name} department.
+Talk specifically about ${context.entity_name}'s KPIs, initiatives, team, risks, and performance.
+You can reference how this department relates to other departments and overall company strategy.
+When the user asks questions, answer from the perspective of ${context.entity_name} and its sub-elements.
+If asked about company-wide strategy, note that you're currently scoped to ${context.entity_name} and offer to zoom out.`;
+  } else {
+    persona += `\n\nCURRENT SCOPE: Global / Company-wide.
+You have visibility across all 8 departments and the full organization.
+Talk about company strategy, cross-department performance, and organizational health.
+When referencing specific departments, compare and contrast their performance.`;
+  }
+  return persona;
+}
 
 /**
  * Execute a command through Cory's 5-step pipeline.
@@ -273,8 +290,8 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
 
   // Step 4: Monitor results (already awaited above)
 
-  // Step 5: Report to user in Cory's voice
-  const message = await formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse);
+  // Step 5: Report to user in Cory's voice (scope-aware)
+  const message = await formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse, cmd.context);
 
   // Generate 2 contextual follow-up questions
   const suggested_questions = await generateSuggestedQuestions(cmd.command, intent, actionsPerformed, briefings);
@@ -299,14 +316,15 @@ async function formatCoryResponse(
   actions: string[],
   briefings: ExecutiveBriefing[],
   assistantResponse?: AssistantResponse,
+  context?: Record<string, any>,
 ): Promise<string> {
   // If we have a full assistant response, use its narrative
   if (assistantResponse?.narrative) {
     return assistantResponse.narrative;
   }
 
-  // Build context for LLM
-  const context = [
+  // Build briefing context for LLM
+  const briefingContext = [
     `Intent: ${intent}`,
     `Actions performed: ${actions.join('; ')}`,
     briefings.length > 0
@@ -323,8 +341,8 @@ async function formatCoryResponse(
   ].join('\n');
 
   const llmResponse = await chatCompletion(
-    CORY_PERSONA,
-    `Summarize this in 2-4 sentences as a direct executive briefing:\n${context}`,
+    buildCoryPersona(context),
+    `Summarize this in 2-4 sentences as a direct executive briefing:\n${briefingContext}`,
     { maxTokens: 300, temperature: 0.3 },
   );
 

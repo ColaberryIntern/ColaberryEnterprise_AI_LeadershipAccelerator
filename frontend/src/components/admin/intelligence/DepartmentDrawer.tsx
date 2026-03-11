@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getDepartmentDetail } from '../../../services/intelligenceApi';
 import InitiativeStoryModal from './InitiativeStoryModal';
+import DeptHeadChat from './DeptHeadChat';
 
 interface Props {
   departmentId: string;
@@ -18,11 +19,31 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const ALL_SECTION_KEYS = ['overview', 'achievements', 'risks', 'building', 'maintenance', 'objectives', 'kpis'];
 
+const DEPT_HEADS: Record<string, { name: string; title: string }> = {
+  intelligence: { name: 'Dr. Sarah Chen', title: 'VP of Intelligence' },
+  operations: { name: 'James Liu', title: 'VP of Operations' },
+  growth: { name: 'Jordan Rivera', title: 'VP of Growth' },
+  marketing: { name: 'Natalie Brooks', title: 'VP of Marketing' },
+  finance: { name: 'Robert Chang', title: 'CFO' },
+  infrastructure: { name: 'Priya Sharma', title: 'VP of Infrastructure' },
+  education: { name: 'Dr. Marcus Reid', title: 'VP of Education' },
+  orchestration: { name: 'Alex Turner', title: 'VP of Orchestration' },
+};
+
+function getHeadName(slug: string | undefined): string {
+  return slug && DEPT_HEADS[slug] ? DEPT_HEADS[slug].name : 'Department Head';
+}
+
+function getHeadTitle(slug: string | undefined): string {
+  return slug && DEPT_HEADS[slug] ? DEPT_HEADS[slug].title : 'VP';
+}
+
 export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwitchToCory }: Props) {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
   const [storyInitiativeId, setStoryInitiativeId] = useState<string | null>(null);
+  const [chatMode, setChatMode] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     if (!departmentId) return;
@@ -105,14 +126,26 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
               </span>
             </div>
             <div className="d-flex gap-1">
-              <button
-                className="btn btn-sm px-2 py-0"
-                style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.3)' }}
-                onClick={toggleAll}
-                title={allExpanded ? 'Collapse All' : 'Expand All'}
-              >
-                {allExpanded ? 'Collapse' : 'Expand'}
-              </button>
+              {!chatMode && (
+                <>
+                  <button
+                    className="btn btn-sm px-2 py-0"
+                    style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.3)' }}
+                    onClick={toggleAll}
+                    title={allExpanded ? 'Collapse All' : 'Expand All'}
+                  >
+                    {allExpanded ? 'Collapse' : 'Expand'}
+                  </button>
+                  <button
+                    className="btn btn-sm px-2 py-0"
+                    style={{ color: '#fff', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.15)' }}
+                    onClick={() => setChatMode(true)}
+                    title="Talk to department head"
+                  >
+                    Talk to Head
+                  </button>
+                </>
+              )}
               <button
                 className="btn btn-sm px-2 py-0"
                 style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.3)' }}
@@ -132,7 +165,16 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
 
           {/* Content */}
           <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-            {loading ? (
+            {chatMode ? (
+              <DeptHeadChat
+                departmentSlug={detail?.overview?.slug || ''}
+                departmentName={overview?.name || 'Department'}
+                departmentColor={overview?.color || 'var(--color-primary)'}
+                headName={getHeadName(detail?.overview?.slug)}
+                headTitle={getHeadTitle(detail?.overview?.slug)}
+                onClose={() => setChatMode(false)}
+              />
+            ) : loading ? (
               <div className="d-flex align-items-center justify-content-center py-5">
                 <div className="spinner-border spinner-border-sm text-primary me-2" role="status">
                   <span className="visually-hidden">Loading...</span>

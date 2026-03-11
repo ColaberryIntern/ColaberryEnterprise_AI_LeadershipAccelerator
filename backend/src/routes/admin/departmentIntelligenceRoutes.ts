@@ -9,6 +9,7 @@ import {
   getInnovationScores,
   getRevenueImpact,
 } from '../../services/departmentIntelligenceService';
+import { chatWithDeptHead, evaluateIdea, getDeptHeadInfo } from '../../services/deptHeadService';
 
 const router = Router();
 
@@ -98,6 +99,47 @@ router.get('/api/admin/intelligence/revenue-impact', async (req: Request, res: R
       department_id: req.query.department_id as string,
     });
     res.json(impact);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Department Head AI Chat ────────────────────────────────────────────────
+
+// GET /api/admin/intelligence/departments/:slug/head — Get dept head info
+router.get('/api/admin/intelligence/departments/:slug/head', async (req: Request, res: Response) => {
+  try {
+    const info = getDeptHeadInfo(req.params.slug as string);
+    if (!info) return res.status(404).json({ error: 'Department head not found' });
+    res.json(info);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/departments/:slug/chat — Chat with dept head
+router.post('/api/admin/intelligence/departments/:slug/chat', async (req: Request, res: Response) => {
+  try {
+    const { message, history } = req.body;
+    if (!message) return res.status(400).json({ error: 'message is required' });
+    const result = await chatWithDeptHead(
+      req.params.slug as string,
+      message,
+      history || [],
+    );
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/departments/:slug/evaluate-idea — Evaluate an idea
+router.post('/api/admin/intelligence/departments/:slug/evaluate-idea', async (req: Request, res: Response) => {
+  try {
+    const { idea } = req.body;
+    if (!idea) return res.status(400).json({ error: 'idea is required' });
+    const evaluation = await evaluateIdea(req.params.slug as string, idea);
+    res.json(evaluation);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

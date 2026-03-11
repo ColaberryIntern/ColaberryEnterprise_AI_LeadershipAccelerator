@@ -103,13 +103,24 @@ export default function CoryPanel({
   const processedExternalRef = useRef<string | null>(null);
   const [coryStatus, setCoryStatus] = useState<'active' | 'thinking' | 'idle'>('active');
 
-  const starterQuestions = useMemo(() => [
-    'Give me a status briefing',
-    'What are our biggest growth opportunities?',
-    'Show me department health',
-    'What experiments are running?',
-    'Which agents need attention?',
-  ], []);
+  const starterQuestions = useMemo(() => {
+    if (scope.level === 'entity' && scope.entity_type === 'department' && scope.entity_name) {
+      return [
+        `How is ${scope.entity_name} performing?`,
+        `What are ${scope.entity_name}'s biggest risks?`,
+        `Show me ${scope.entity_name}'s KPIs and trends`,
+        `What initiatives need attention in ${scope.entity_name}?`,
+        `Compare ${scope.entity_name} to other departments`,
+      ];
+    }
+    return [
+      'Give me a status briefing',
+      'What are our biggest growth opportunities?',
+      'Show me department health',
+      'What experiments are running?',
+      'Which agents need attention?',
+    ];
+  }, [scope]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -231,6 +242,11 @@ export default function CoryPanel({
           <div>
             <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)', fontSize: '0.85rem' }}>
               Cory &mdash; AI COO
+              {scope.level === 'entity' && scope.entity_name && (
+                <span className="badge ms-1" style={{ fontSize: '0.55rem', background: 'var(--color-primary-light)', verticalAlign: 'middle' }}>
+                  {scope.entity_name}
+                </span>
+              )}
             </h6>
           </div>
           <span
@@ -265,8 +281,11 @@ export default function CoryPanel({
               Cory &mdash; AI Chief Operating Officer
             </h6>
             <small className="text-muted d-block mb-3" style={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
-              I coordinate {'>'}40 AI agents across 5 departments.<br />
-              Ask me for briefings, analysis, or to hire new agents.
+              {scope.level === 'entity' && scope.entity_name ? (
+                <>Focused on <strong>{scope.entity_name}</strong>. I can talk about this department's KPIs, initiatives, risks, and performance.<br />Ask me anything at this level or below.</>
+              ) : (
+                <>I coordinate {'>'}40 AI agents across 8 departments.<br />Ask me for briefings, analysis, or to hire new agents.</>
+              )}
             </small>
             <div className="d-flex flex-column gap-2">
               {starterQuestions.map((q, i) => (

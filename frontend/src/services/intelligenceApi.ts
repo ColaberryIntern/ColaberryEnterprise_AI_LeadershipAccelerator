@@ -301,4 +301,37 @@ export const getInnovationScoresData = () =>
 export const getRevenueImpactData = (params?: { department_id?: string }) =>
   api.get<{ grand_total: number; by_department: any[] }>('/revenue-impact', { params });
 
+// ─── Department Head AI Chat ────────────────────────────────────────────────
+
+export interface DeptHeadInfo {
+  name: string;
+  title: string;
+  personality: string;
+}
+
+export interface IdeaEvaluation {
+  idea: string;
+  department_id: string;
+  department_name: string;
+  head_name: string;
+  research_summary: string;
+  feasibility_score: number;
+  confidence: number;
+  risk_assessment: string;
+  estimated_impact: string;
+  estimated_timeline: string;
+  recommendation: 'auto_implement' | 'needs_approval' | 'not_recommended';
+  implementation_plan: string[];
+  coo_report: string;
+}
+
+export const getDeptHeadInfo = (slug: string) =>
+  api.get<DeptHeadInfo>(`/departments/${slug}/head`);
+
+export const chatWithDeptHead = (slug: string, message: string, history: Array<{ role: string; content: string }>) =>
+  api.post<{ response: string; head_name: string; head_title: string }>(`/departments/${slug}/chat`, { message, history });
+
+export const evaluateIdea = (slug: string, idea: string) =>
+  api.post<IdeaEvaluation>(`/departments/${slug}/evaluate-idea`, { idea });
+
 export default api;
