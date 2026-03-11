@@ -23,12 +23,21 @@ export interface PipelineStep {
   detail?: string;
 }
 
+export interface NarrativeSections {
+  executive_summary: string;
+  key_findings: string[];
+  risk_assessment: string;
+  recommended_actions: string[];
+  follow_up_areas: string[];
+}
+
 export interface AssistantResponse {
   question: string;
   entity_type: string | null;
   intent: Intent;
   confidence: number;
   narrative: string;
+  narrative_sections: NarrativeSections | null;
   insights: Array<{ type: string; severity: string; message: string; metric?: string; value?: number }>;
   charts: Array<{ type: string; title: string; data: Record<string, any>[]; labelKey: string; valueKey: string }>;
   recommendations: string[];
@@ -166,55 +175,59 @@ export async function runAssistantPipeline(
     steps.push({ step: 6, name: 'Build context', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
   }
 
-  // ── Step 7: Generate Narrative ─────────────────────────────────────────────
-  t0 = Date.now();
-  let narrative = context.ruleNarrative;
-  let recommendations = context.recommendations;
-  try {
-    const llmNarrative = await generateNarrative(context, intent, question, entityType);
-    if (llmNarrative) {
-      narrative = llmNarrative.narrative;
-      if (llmNarrative.recommendations.length > 0) {
-        recommendations = llmNarrative.recommendations;
-      }
-      steps.push({ step: 7, name: 'Generate narrative', status: 'completed', duration_ms: Date.now() - t0, detail: 'LLM-generated' });
-    } else {
-      steps.push({ step: 7, name: 'Generate narrative', status: 'completed', duration_ms: Date.now() - t0, detail: 'rule-based fallback' });
-    }
-  } catch (err: any) {
-    steps.push({ step: 7, name: 'Generate narrative', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
-  }
-
-  // ── Step 8: Select Visualizations ──────────────────────────────────────────
+  // ── Step 7: Select Visualizations ──────────────────────────────────────────
   t0 = Date.now();
   let charts: ChartConfig[] = [];
   try {
     charts = selectVisualizations(intent, sqlResults, mlResults, vectorResults);
     steps.push({
-      step: 8,
+      step: 7,
       name: 'Select visualizations',
       status: 'completed',
       duration_ms: Date.now() - t0,
       detail: `${charts.length} charts`,
     });
   } catch (err: any) {
-    steps.push({ step: 8, name: 'Select visualizations', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
+    steps.push({ step: 7, name: 'Select visualizations', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
   }
 
-  // ── Step 9: Generate Follow-ups ────────────────────────────────────────────
+  // ── Step 8: Generate Follow-ups ────────────────────────────────────────────
   t0 = Date.now();
   let followUps: string[] = [];
   try {
     followUps = await generateFollowups(intent, question, entityType, context.ruleNarrative);
     steps.push({
-      step: 9,
+      step: 8,
       name: 'Generate follow-ups',
       status: 'completed',
       duration_ms: Date.now() - t0,
       detail: `${followUps.length} questions`,
     });
   } catch (err: any) {
-    steps.push({ step: 9, name: 'Generate follow-ups', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
+    steps.push({ step: 8, name: 'Generate follow-ups', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
+  }
+
+  // ── Step 9: Generate Narrative ─────────────────────────────────────────────
+  t0 = Date.now();
+  let narrative = context.ruleNarrative;
+  let recommendations = context.recommendations;
+  let narrativeSections: NarrativeSections | null = null;
+  try {
+    const llmNarrative = await generateNarrative(context, intent, question, entityType);
+    if (llmNarrative) {
+      narrative = llmNarrative.narrative;
+      narrativeSections = llmNarrative.sections;
+      if (llmNarrative.recommendations.length > 0) {
+        recommendations = llmNarrative.recommendations;
+      }
+      steps.push({ step: 9, name: 'Generate narrative', status: 'completed', duration_ms: Date.now() - t0, detail: 'LLM-generated' });
+    } else {
+      narrativeSections = buildRuleBasedSections(context, followUps);
+      steps.push({ step: 9, name: 'Generate narrative', status: 'completed', duration_ms: Date.now() - t0, detail: 'rule-based fallback' });
+    }
+  } catch (err: any) {
+    narrativeSections = buildRuleBasedSections(context, followUps);
+    steps.push({ step: 9, name: 'Generate narrative', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
   }
 
   // ── Build Final Response ───────────────────────────────────────────────────
@@ -229,6 +242,7 @@ export async function runAssistantPipeline(
     intent,
     confidence,
     narrative,
+    narrative_sections: narrativeSections,
     insights: context.insights.map((i: Insight) => ({
       type: i.type,
       severity: i.severity,
@@ -251,17 +265,23 @@ async function generateNarrative(
   intent: Intent,
   question: string,
   entityType?: string
-): Promise<{ narrative: string; recommendations: string[] } | null> {
+): Promise<{ narrative: string; sections: NarrativeSections; recommendations: string[] } | null> {
   if (context.formattedContext.length < 20) return null;
 
   const system = `You are a senior data analyst for Colaberry, an enterprise education technology company.
-Generate a concise executive summary (120-200 words) from the data provided.
+Generate a structured analysis from the data provided.
 Rules:
 - Be specific with numbers — reference actual metrics from the data
 - Explain causes and trends when visible
-- Include 2-4 actionable recommendations
 - Never fabricate data points
-- Respond as JSON: { "narrative": "...", "recommendations": ["...", "..."] }`;
+- Respond as JSON with this exact structure:
+{
+  "executive_summary": "2-3 sentence overview of the key finding",
+  "key_findings": ["specific finding with numbers", "another finding"],
+  "risk_assessment": "1-2 sentence evaluation of risks based on the data",
+  "recommended_actions": ["actionable recommendation 1", "actionable recommendation 2"],
+  "follow_up_areas": ["area to investigate further", "another area"]
+}`;
 
   const user = `Question: ${question}
 Intent: ${intent}
@@ -270,16 +290,35 @@ ${entityType ? `Entity scope: ${entityType}` : 'Scope: global'}
 Data context:
 ${context.formattedContext.slice(0, 6000)}`;
 
-  const raw = await chatCompletion(system, user, { json: true, maxTokens: 600, temperature: 0.3 });
+  const raw = await chatCompletion(system, user, { json: true, maxTokens: 800, temperature: 0.3 });
   if (!raw) return null;
 
   try {
     const parsed = JSON.parse(raw);
-    if (typeof parsed.narrative === 'string' && Array.isArray(parsed.recommendations)) {
-      return { narrative: parsed.narrative, recommendations: parsed.recommendations };
-    }
-    return null;
+    const sections: NarrativeSections = {
+      executive_summary: parsed.executive_summary || '',
+      key_findings: Array.isArray(parsed.key_findings) ? parsed.key_findings : [],
+      risk_assessment: parsed.risk_assessment || '',
+      recommended_actions: Array.isArray(parsed.recommended_actions) ? parsed.recommended_actions : [],
+      follow_up_areas: Array.isArray(parsed.follow_up_areas) ? parsed.follow_up_areas : [],
+    };
+    const narrative = sections.executive_summary;
+    const recommendations = sections.recommended_actions;
+    return { narrative, sections, recommendations };
   } catch {
     return null;
   }
+}
+
+function buildRuleBasedSections(context: PipelineContext, followUps: string[]): NarrativeSections {
+  const criticalInsights = context.insights.filter((i) => i.severity === 'critical' || i.severity === 'warning');
+  return {
+    executive_summary: context.ruleNarrative || 'Analysis complete based on available data.',
+    key_findings: context.insights.slice(0, 5).map((i) => i.message),
+    risk_assessment: criticalInsights.length > 0
+      ? `${criticalInsights.length} issue${criticalInsights.length > 1 ? 's' : ''} detected requiring attention: ${criticalInsights.map((i) => i.message).join('; ')}`
+      : 'No critical risks detected in the current data.',
+    recommended_actions: context.recommendations.slice(0, 4),
+    follow_up_areas: followUps.slice(0, 3),
+  };
 }

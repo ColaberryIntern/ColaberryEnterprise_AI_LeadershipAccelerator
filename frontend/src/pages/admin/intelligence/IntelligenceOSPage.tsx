@@ -416,6 +416,14 @@ function DynamicCanvas({
 }
 
 // ─── AI Assistant Panel ───────────────────────────────────────────────────────
+interface NarrativeSections {
+  executive_summary: string;
+  key_findings: string[];
+  risk_assessment: string;
+  recommended_actions: string[];
+  follow_up_areas: string[];
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -427,6 +435,7 @@ interface ChatMessage {
   insights?: Array<{ type: string; severity: string; message: string }>;
   recommendations?: string[];
   confidence?: number;
+  narrativeSections?: NarrativeSections | null;
 }
 
 function AIAssistantPanel({
@@ -506,6 +515,7 @@ function AIAssistantPanel({
         insights: (response as any).insights,
         recommendations: (response as any).recommendations,
         confidence: (response as any).confidence,
+        narrativeSections: (response as any).narrativeSections,
       };
       setMessages((prev) => [...prev, assistantMsg]);
 
@@ -646,99 +656,176 @@ function AIAssistantPanel({
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`mb-2 ${msg.role === 'user' ? 'text-end' : ''}`}>
-            <div
-              className={`d-inline-block px-2 py-1 rounded-3 small ${
-                msg.role === 'user' ? 'text-white' : 'border'
-              }`}
-              style={{
-                maxWidth: '90%',
-                background: msg.role === 'user' ? 'var(--color-primary)' : 'var(--color-bg-alt)',
-                textAlign: 'left',
-                whiteSpace: 'pre-line',
-                fontSize: '0.78rem',
-                lineHeight: 1.5,
-              }}
-            >
-              {msg.content}
-            </div>
-            {/* Pipeline steps summary */}
-            {msg.pipelineSteps && msg.pipelineSteps.length > 0 && (
-              <div className="mt-1 ms-1">
-                <details>
-                  <summary
-                    className="text-muted"
-                    style={{ fontSize: '0.6rem', cursor: 'pointer' }}
-                  >
-                    Pipeline: {msg.pipelineSteps.filter((s) => s.status === 'completed').length}/{msg.pipelineSteps.length} steps
-                    {msg.confidence != null && ` \u2022 ${(msg.confidence * 100).toFixed(0)}% confidence`}
-                    {' \u2022 '}
-                    {msg.pipelineSteps.reduce((sum, s) => sum + s.duration_ms, 0)}ms
-                  </summary>
-                  <div className="mt-1 ps-2 border-start" style={{ borderColor: 'var(--color-border)' }}>
-                    {msg.pipelineSteps.map((ps) => (
-                      <div
-                        key={ps.step}
-                        className="d-flex align-items-center gap-1"
-                        style={{ fontSize: '0.58rem', color: ps.status === 'completed' ? 'var(--color-text)' : 'var(--color-text-light)' }}
-                      >
-                        <span style={{ color: ps.status === 'completed' ? 'var(--color-accent)' : ps.status === 'skipped' ? 'var(--color-text-light)' : 'var(--color-secondary)' }}>
-                          {ps.status === 'completed' ? '\u2713' : ps.status === 'skipped' ? '\u2013' : '\u2717'}
-                        </span>
-                        <span>{ps.name}</span>
-                        {ps.detail && <span className="text-muted">({ps.detail})</span>}
-                        <span className="text-muted ms-auto">{ps.duration_ms}ms</span>
+          <div key={i} className={`mb-3 ${msg.role === 'user' ? 'text-end' : ''}`}>
+            {msg.role === 'user' ? (
+              <div
+                className="d-inline-block px-2 py-1 rounded-3 small text-white"
+                style={{
+                  maxWidth: '90%',
+                  background: 'var(--color-primary)',
+                  textAlign: 'left',
+                  fontSize: '0.78rem',
+                  lineHeight: 1.5,
+                }}
+              >
+                {msg.content}
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.78rem', lineHeight: 1.6, color: 'var(--color-text)' }}>
+                {/* Structured narrative sections */}
+                {msg.narrativeSections ? (
+                  <div>
+                    {/* Executive Summary */}
+                    {msg.narrativeSections.executive_summary && (
+                      <div className="mb-2">
+                        <div className="fw-semibold mb-1" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
+                          Executive Summary
+                        </div>
+                        <div>{msg.narrativeSections.executive_summary}</div>
                       </div>
+                    )}
+
+                    {/* Key Findings */}
+                    {msg.narrativeSections.key_findings?.length > 0 && (
+                      <div className="mb-2">
+                        <div className="fw-semibold mb-1" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
+                          Key Findings
+                        </div>
+                        <ul className="mb-0 ps-3" style={{ fontSize: '0.76rem' }}>
+                          {msg.narrativeSections.key_findings.map((f, fi) => (
+                            <li key={fi} className="mb-1">{f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Risk Assessment */}
+                    {msg.narrativeSections.risk_assessment && (
+                      <div className="mb-2">
+                        <div className="fw-semibold mb-1" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
+                          Risk Assessment
+                        </div>
+                        <div>{msg.narrativeSections.risk_assessment}</div>
+                      </div>
+                    )}
+
+                    {/* Recommended Actions */}
+                    {msg.narrativeSections.recommended_actions?.length > 0 && (
+                      <div className="mb-2">
+                        <div className="fw-semibold mb-1" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
+                          Recommended Actions
+                        </div>
+                        <div
+                          className="ps-2 ms-1"
+                          style={{ borderLeft: '3px solid var(--color-primary-light)', fontSize: '0.76rem' }}
+                        >
+                          {msg.narrativeSections.recommended_actions.map((a, ai) => (
+                            <div key={ai} className="mb-1">Recommendation: {a}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Follow-Up Areas */}
+                    {msg.narrativeSections.follow_up_areas?.length > 0 && (
+                      <div className="mb-2">
+                        <div className="fw-semibold mb-1" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
+                          Follow-Up Areas
+                        </div>
+                        <ul className="mb-0 ps-3" style={{ fontSize: '0.76rem' }}>
+                          {msg.narrativeSections.follow_up_areas.map((f, fi) => (
+                            <li key={fi} className="mb-1">{f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ whiteSpace: 'pre-line' }}>{msg.content}</div>
+                )}
+
+                {/* Sources as badges */}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-2 mb-1">
+                    {msg.sources.map((src, si) => (
+                      <span
+                        key={si}
+                        className="badge bg-light text-muted border me-1"
+                        style={{ fontSize: '0.55rem' }}
+                      >
+                        {src}
+                      </span>
                     ))}
                   </div>
-                </details>
-              </div>
-            )}
-            {/* Insights */}
-            {msg.insights && msg.insights.length > 0 && (
-              <div className="mt-1">
-                {msg.insights.slice(0, 3).map((ins, ii) => (
-                  <div
-                    key={ii}
-                    className="d-flex align-items-start gap-1 ms-1"
-                    style={{ fontSize: '0.65rem', lineHeight: 1.4 }}
-                  >
-                    <span style={{ color: ins.severity === 'critical' ? 'var(--color-secondary)' : ins.severity === 'warning' ? '#d69e2e' : 'var(--color-primary-light)' }}>
-                      {ins.severity === 'critical' ? '\u26A0' : ins.severity === 'warning' ? '\u25B2' : '\u2022'}
-                    </span>
-                    <span>{ins.message}</span>
+                )}
+
+                {/* Path indicator */}
+                {msg.executionPath && (
+                  <div className="mt-1" style={{ fontSize: '0.58rem', color: 'var(--color-text-light)' }}>
+                    Path: {msg.executionPath}
                   </div>
-                ))}
+                )}
+
+                {/* Pipeline steps (collapsible) */}
+                {msg.pipelineSteps && msg.pipelineSteps.length > 0 && (
+                  <div className="mt-1">
+                    <details>
+                      <summary
+                        className="text-muted"
+                        style={{ fontSize: '0.6rem', cursor: 'pointer' }}
+                      >
+                        Pipeline: {msg.pipelineSteps.filter((s) => s.status === 'completed').length}/{msg.pipelineSteps.length} steps
+                        {msg.confidence != null && ` \u2022 ${(msg.confidence * 100).toFixed(0)}% confidence`}
+                        {' \u2022 '}
+                        {msg.pipelineSteps.reduce((sum, s) => sum + s.duration_ms, 0)}ms
+                      </summary>
+                      <div className="mt-1 ps-2 border-start" style={{ borderColor: 'var(--color-border)' }}>
+                        {msg.pipelineSteps.map((ps) => (
+                          <div
+                            key={ps.step}
+                            className="d-flex align-items-center gap-1"
+                            style={{ fontSize: '0.58rem', color: ps.status === 'completed' ? 'var(--color-text)' : 'var(--color-text-light)' }}
+                          >
+                            <span style={{ color: ps.status === 'completed' ? 'var(--color-accent)' : ps.status === 'skipped' ? 'var(--color-text-light)' : 'var(--color-secondary)' }}>
+                              {ps.status === 'completed' ? '\u2713' : ps.status === 'skipped' ? '\u2013' : '\u2717'}
+                            </span>
+                            <span>{ps.name}</span>
+                            {ps.detail && <span className="text-muted">({ps.detail})</span>}
+                            <span className="text-muted ms-auto">{ps.duration_ms}ms</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
             )}
-            {/* Recommendations as clickable follow-ups */}
-            {msg.recommendations && msg.recommendations.length > 0 && (
-              <div className="mt-1 d-flex flex-wrap gap-1">
+
+            {/* Follow-up questions as cards */}
+            {msg.role === 'assistant' && msg.recommendations && msg.recommendations.length > 0 && (
+              <div className="mt-2 d-flex flex-column gap-1">
                 {msg.recommendations.slice(0, 3).map((rec, ri) => (
                   <button
                     key={ri}
-                    className="btn btn-sm btn-outline-secondary"
-                    style={{ fontSize: '0.58rem', padding: '1px 6px' }}
+                    className="btn btn-sm text-start border rounded-2 w-100"
+                    style={{
+                      fontSize: '0.72rem',
+                      padding: '6px 10px',
+                      background: 'rgba(26, 54, 93, 0.03)',
+                      color: 'var(--color-text)',
+                      borderColor: 'var(--color-border)',
+                      lineHeight: 1.4,
+                    }}
                     onClick={() => handleSend(rec)}
+                    onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'rgba(26, 54, 93, 0.08)'; }}
+                    onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'rgba(26, 54, 93, 0.03)'; }}
                   >
                     {rec}
                   </button>
                 ))}
               </div>
             )}
-            {msg.sources && msg.sources.length > 0 && (
-              <div className="mt-1">
-                {msg.sources.map((src, si) => (
-                  <span
-                    key={si}
-                    className="badge bg-light text-muted border me-1"
-                    style={{ fontSize: '0.55rem' }}
-                  >
-                    {src}
-                  </span>
-                ))}
-              </div>
-            )}
+
             <div className="mt-1">
               <small className="text-muted" style={{ fontSize: '0.55rem' }}>
                 {msg.timestamp.toLocaleTimeString()}

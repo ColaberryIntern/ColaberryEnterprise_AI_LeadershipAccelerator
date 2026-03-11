@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { assistantQuery, queryOrchestrator, QueryResponse, AssistantResponse, PipelineStep } from '../services/intelligenceApi';
+import { assistantQuery, queryOrchestrator, QueryResponse, AssistantResponse, PipelineStep, NarrativeSections } from '../services/intelligenceApi';
 
 export interface EnrichedQueryResponse extends QueryResponse {
   /** Pipeline steps from the deterministic assistant engine */
@@ -10,6 +10,8 @@ export interface EnrichedQueryResponse extends QueryResponse {
   recommendations?: string[];
   /** Confidence score from intent classification */
   confidence?: number;
+  /** Structured narrative sections */
+  narrativeSections?: NarrativeSections | null;
 }
 
 interface UseIntelligenceQueryReturn {
@@ -49,6 +51,7 @@ function mapAssistantToQueryResponse(r: AssistantResponse): EnrichedQueryRespons
     insights: r.insights,
     recommendations: r.recommendations,
     confidence: r.confidence,
+    narrativeSections: r.narrative_sections,
   };
 }
 

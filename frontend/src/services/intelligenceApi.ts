@@ -127,12 +127,21 @@ export interface PipelineStep {
   detail?: string;
 }
 
+export interface NarrativeSections {
+  executive_summary: string;
+  key_findings: string[];
+  risk_assessment: string;
+  recommended_actions: string[];
+  follow_up_areas: string[];
+}
+
 export interface AssistantResponse {
   question: string;
   entity_type: string | null;
   intent: string;
   confidence: number;
   narrative: string;
+  narrative_sections: NarrativeSections | null;
   insights: Array<{ type: string; severity: string; message: string; metric?: string; value?: number }>;
   charts: Array<{ type: string; title: string; data: Record<string, any>[]; labelKey: string; valueKey: string }>;
   recommendations: string[];
