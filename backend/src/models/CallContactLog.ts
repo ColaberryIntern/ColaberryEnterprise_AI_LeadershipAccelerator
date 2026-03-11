@@ -35,7 +35,7 @@ CallContactLog.init(
       primaryKey: true,
     },
     visitor_id: {
-      type: DataTypes.STRING(100),
+      type: DataTypes.UUID,
       allowNull: false,
     },
     call_timestamp: {

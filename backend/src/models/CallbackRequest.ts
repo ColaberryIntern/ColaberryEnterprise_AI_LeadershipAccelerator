@@ -37,7 +37,7 @@ CallbackRequest.init(
       primaryKey: true,
     },
     visitor_id: {
-      type: DataTypes.STRING(100),
+      type: DataTypes.UUID,
       allowNull: false,
     },
     lead_id: {
