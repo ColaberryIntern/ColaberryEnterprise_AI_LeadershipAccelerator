@@ -41,6 +41,9 @@ interface LeadAttributes {
   executive_briefing_score?: number | null;
   executive_interest_stage?: string | null;
   corporate_sponsorship_interest?: boolean;
+  sponsorship_kit_requested?: boolean;
+  sponsorship_readiness_score?: number | null;
+  sponsorship_stage?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -85,6 +88,9 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare executive_briefing_score: number | null;
   declare executive_interest_stage: string | null;
   declare corporate_sponsorship_interest: boolean;
+  declare sponsorship_kit_requested: boolean;
+  declare sponsorship_readiness_score: number | null;
+  declare sponsorship_stage: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -258,6 +264,19 @@ Lead.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    sponsorship_kit_requested: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    sponsorship_readiness_score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    sponsorship_stage: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,

@@ -31,6 +31,9 @@ interface Lead {
   form_type: string;
   executive_briefing_score?: number;
   executive_briefing_requested?: boolean;
+  sponsorship_kit_requested?: boolean;
+  sponsorship_readiness_score?: number;
+  sponsorship_stage?: string;
   created_at: string;
   assignedAdmin?: { id: string; email: string };
   ghl_contact_id?: string;
@@ -48,6 +51,7 @@ const SOURCE_OPTIONS = [
   { value: 'contact', label: 'Contact Form' },
   { value: 'interest', label: 'Interest Form' },
   { value: 'sponsorship_inquiry', label: 'Sponsorship' },
+  { value: 'sponsorship_pipeline', label: 'Sponsorship Pipeline' },
 ];
 
 function AdminLeadsPage() {
@@ -402,6 +406,9 @@ function AdminLeadsPage() {
                         {lead.name}
                         {lead.executive_briefing_score != null && lead.executive_briefing_score > 7 && (
                           <span className="badge bg-danger ms-2" style={{ fontSize: '0.65rem', verticalAlign: 'middle' }}>High Intent Exec</span>
+                        )}
+                        {lead.sponsorship_readiness_score != null && lead.sponsorship_readiness_score > 12 && (
+                          <span className="badge bg-warning text-dark ms-2" style={{ fontSize: '0.65rem', verticalAlign: 'middle' }}>Sponsor Likely</span>
                         )}
                         {lead.ghl_contact_id && (
                           <a

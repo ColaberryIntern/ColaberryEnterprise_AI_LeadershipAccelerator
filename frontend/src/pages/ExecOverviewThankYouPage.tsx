@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
+import api from '../utils/api';
 
 interface LocationState {
   name?: string;
@@ -12,8 +13,29 @@ interface LocationState {
 
 function ExecOverviewThankYouPage() {
   const [showBooking, setShowBooking] = useState(false);
+  const [kitRequested, setKitRequested] = useState(false);
+  const [kitLoading, setKitLoading] = useState(false);
+  const [kitError, setKitError] = useState('');
   const location = useLocation();
   const leadData = (location.state as LocationState) || {};
+
+  const handleSponsorshipKit = async () => {
+    if (!leadData.email) {
+      setKitError('Email not available. Please complete the Executive Briefing form first.');
+      return;
+    }
+    setKitLoading(true);
+    setKitError('');
+    try {
+      await api.post('/api/sponsorship-kit-request', { email: leadData.email });
+      setKitRequested(true);
+      window.open('/assets/The_AI_Execution_Engine.pdf', '_blank');
+    } catch (err: any) {
+      setKitError(err.response?.data?.error || 'Failed to process request. Please try again.');
+    } finally {
+      setKitLoading(false);
+    }
+  };
 
   return (
     <>
@@ -56,6 +78,35 @@ function ExecOverviewThankYouPage() {
             <button onClick={() => setShowBooking(true)} className="btn btn-lg btn-accent">
               Schedule a 30-Minute Strategy Call
             </button>
+          </div>
+
+          {/* Corporate Sponsorship Kit */}
+          <div className="card border-0 shadow-sm p-4 mb-4 text-start" style={{ background: '#f7fafc', borderLeft: '4px solid var(--color-primary)' }}>
+            <h2 className="h5 fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>
+              Ready to Move Forward? Download the Corporate Sponsorship Kit.
+            </h2>
+            <p className="text-muted mb-3">
+              Get the internal justification framework — ROI analysis, budget templates,
+              and executive positioning — to secure corporate sponsorship for your team's participation.
+            </p>
+            {kitRequested ? (
+              <div className="alert alert-success mb-0">
+                Your sponsorship kit has been sent to your email. The PDF should open in a new tab.
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={handleSponsorshipKit}
+                  disabled={kitLoading}
+                  className="btn btn-outline-primary"
+                >
+                  {kitLoading ? 'Processing...' : 'Download Sponsorship Kit & Begin Internal Approval'}
+                </button>
+                {kitError && (
+                  <div className="alert alert-danger mt-2 mb-0 small">{kitError}</div>
+                )}
+              </>
+            )}
           </div>
 
           <div className="card border-0 shadow-sm p-4 text-start" style={{ background: 'var(--color-warning-bg, #fff3cd)' }}>

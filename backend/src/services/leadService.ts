@@ -168,7 +168,9 @@ export async function listLeads(params: ListLeadsParams) {
     where.status = params.status;
   }
 
-  if (params.source) {
+  if (params.source === 'sponsorship_pipeline') {
+    where.sponsorship_kit_requested = true;
+  } else if (params.source) {
     where.form_type = params.source;
   }
 

@@ -187,6 +187,98 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
   console.log(`[Email] High-intent alert sent for: ${data.name} (score: ${data.score}) | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
+interface SponsorshipKitEmailData {
+  to: string;
+  fullName: string;
+  company: string;
+  scoreTier: string;
+}
+
+export async function sendSponsorshipKitEmail(data: SponsorshipKitEmailData): Promise<void> {
+  const html = buildSponsorshipKitHtml(data);
+
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping sponsorship kit email to:', data.to);
+    return;
+  }
+
+  const r = await resolveEmailRecipient(data.to, 'Your Corporate Sponsorship Kit — Building the Internal AI Execution Engine');
+  const info = await transporter.sendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('sponsorship-kit'),
+  });
+
+  console.log(`[Email] Sponsorship kit email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+}
+
+function buildSponsorshipKitHtml(data: SponsorshipKitEmailData): string {
+  const tierCopy = data.scoreTier === 'Executive Sponsor Likely'
+    ? 'Based on your profile, your organization is well-positioned for corporate sponsorship. This kit provides the internal justification framework your leadership team needs.'
+    : data.scoreTier === 'Needs Sponsor Education'
+    ? 'This kit will help you build the internal case for AI leadership investment and guide conversations with your executive sponsor.'
+    : 'This kit introduces the framework for positioning AI leadership development as a strategic investment within your organization.';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .cta-green { display: inline-block; background: #38a169; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    ul li { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Your Corporate Sponsorship Kit</h1>
+
+  <p>Dear ${data.fullName},</p>
+
+  <p>Thank you for requesting the Corporate Sponsorship Kit for the Enterprise AI Leadership Accelerator. Attached below is your copy of <strong>"Building the Internal AI Execution Engine"</strong> — the executive framework for securing corporate sponsorship.</p>
+
+  <div class="highlight">
+    <strong>Your Sponsorship Readiness:</strong> ${data.scoreTier}<br>
+    ${data.company ? `<strong>Organization:</strong> ${data.company}` : ''}
+  </div>
+
+  <p>${tierCopy}</p>
+
+  <h2>What's Inside the Kit</h2>
+  <ul>
+    <li><strong>ROI Framework</strong> — Quantify the return on AI leadership development vs. consulting engagements</li>
+    <li><strong>Budget Justification Template</strong> — Ready-to-use language for procurement and finance approval</li>
+    <li><strong>Executive Summary Deck</strong> — One-page board-ready positioning of the investment</li>
+    <li><strong>Sponsor Alignment Guide</strong> — How to identify and engage the right internal champion</li>
+    <li><strong>Implementation Timeline</strong> — Phase-by-phase deployment roadmap</li>
+  </ul>
+
+  <p><a href="${env.frontendUrl}/assets/The_AI_Execution_Engine.pdf" class="cta">Download the Sponsorship Kit (PDF)</a></p>
+
+  <h2>Ready to Nominate a Leader?</h2>
+  <p>If you've identified who should participate, schedule a quick alignment call and we'll tailor the program to your organization's AI priorities.</p>
+
+  <p><a href="${env.frontendUrl}/executive-overview/thank-you" class="cta-green">Schedule an Alignment Call</a></p>
+
+  <div class="footer">
+    <p><strong>Ali Merchant</strong><br>
+    Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
 interface StrategyCallConfirmationData {
   to: string;
   name: string;

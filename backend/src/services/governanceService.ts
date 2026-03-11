@@ -252,6 +252,37 @@ export async function logExecutiveBriefingEvent(
 }
 
 /**
+ * Log a sponsorship kit request as a governance system event.
+ * Fire-and-forget — never throws.
+ */
+export async function logSponsorshipKitEvent(
+  lead: { id: number; name: string; company?: string },
+  score: number,
+  tier: string,
+  stage: string,
+): Promise<void> {
+  try {
+    await AiSystemEvent.create({
+      source: 'governance',
+      event_type: 'sponsorship_kit_requested',
+      entity_type: 'lead',
+      entity_id: lead.id,
+      details: {
+        severity: score > 12 ? 'warning' : 'info',
+        lead_name: lead.name,
+        company: lead.company || 'Unknown',
+        score,
+        tier,
+        stage,
+        message: `Sponsorship kit requested by "${lead.name}" — Score: ${score} (${tier})`,
+      },
+    } as any);
+  } catch (err) {
+    console.error('[Governance] logSponsorshipKitEvent failed (non-blocking):', err);
+  }
+}
+
+/**
  * Get all governance-tracked agents with their stats.
  */
 export async function getGovernanceAgents(): Promise<any[]> {
