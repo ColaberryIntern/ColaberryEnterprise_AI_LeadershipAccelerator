@@ -64,7 +64,7 @@ export default function GlobalCoryWidget() {
         }}
       >
         <img
-          src="/cory-avatar.png"
+          src="/cory-avatar.jpg"
           alt="Cory — AI COO"
           className="global-cory-avatar"
           style={isHovered ? { transform: 'scale(1.1)', boxShadow: '0 6px 24px rgba(26, 54, 93, 0.45)' } : undefined}

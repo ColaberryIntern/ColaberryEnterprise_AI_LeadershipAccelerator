@@ -57,7 +57,7 @@ export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayPr
         >
           <div className="d-flex align-items-center gap-2">
             <img
-              src="/cory-avatar.png"
+              src="/cory-avatar.jpg"
               alt="Cory"
               style={{
                 width: 28,
