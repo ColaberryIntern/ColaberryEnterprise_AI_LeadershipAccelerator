@@ -12,6 +12,7 @@ import EnrollSuccessPage from '../pages/EnrollSuccessPage';
 import EnrollCancelPage from '../pages/EnrollCancelPage';
 import ExecOverviewThankYouPage from '../pages/ExecOverviewThankYouPage';
 import StrategyCallPrepPage from '../pages/StrategyCallPrepPage';
+import ExecutiveROICalculatorPage from '../pages/ExecutiveROICalculatorPage';
 import NotFoundPage from '../pages/NotFoundPage';
 
 const publicRoutes = (
@@ -28,6 +29,7 @@ const publicRoutes = (
     <Route path="/contact" element={<ContactPage />} />
     <Route path="/executive-overview/thank-you" element={<ExecOverviewThankYouPage />} />
     <Route path="/strategy-call-prep" element={<StrategyCallPrepPage />} />
+    <Route path="/executive-roi-calculator" element={<ExecutiveROICalculatorPage />} />
     <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="*" element={<NotFoundPage />} />
   </>
