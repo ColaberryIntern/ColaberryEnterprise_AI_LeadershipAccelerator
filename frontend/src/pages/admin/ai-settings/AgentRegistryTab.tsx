@@ -42,6 +42,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   intelligence: 'dark',
   orchestration: 'primary',
   website_intelligence: 'purple',
+  admissions: 'danger',
+  admissions_ops: 'danger',
 };
 
 const STATUS_COLORS: Record<string, string> = {

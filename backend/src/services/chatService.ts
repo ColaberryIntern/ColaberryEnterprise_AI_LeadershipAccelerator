@@ -12,6 +12,9 @@ import {
   PageEvent,
 } from '../models';
 import { getVisitorSignalSummary } from './behavioralSignalService';
+import { buildMayaSystemPrompt, generateMayaGreeting } from './admissionsMayaService';
+import { loadMemory, saveConversationToMemory, classifyVisitorType } from './admissionsMemoryService';
+import { buildKnowledgeContext } from './admissionsKnowledgeService';
 
 let openaiClient: OpenAI | null = null;
 
@@ -142,14 +145,36 @@ export async function startConversation(params: {
   const visitor = await Visitor.findByPk(params.visitorId);
   const leadId = visitor?.lead_id || null;
 
-  const systemPrompt = await buildChatSystemPrompt({
-    pageUrl: params.pageUrl,
-    pageCategory: params.pageCategory,
-    visitorId: params.visitorId,
-    leadId,
-    triggerContext: params.triggerContext,
-    campaignSystemPrompt: params.campaignSystemPrompt,
-  });
+  // Load admissions memory for returning visitor detection
+  const memory = await loadMemory(params.visitorId);
+  const visitorType = await classifyVisitorType(params.visitorId);
+  const isReturning = memory.conversation_count > 0;
+
+  // Update visitor type in memory
+  if (memory.visitor_type !== visitorType) {
+    await memory.update({ visitor_type: visitorType });
+  }
+
+  // Build Maya system prompt (or campaign override)
+  let systemPrompt: string;
+  if (params.campaignSystemPrompt) {
+    systemPrompt = await buildChatSystemPrompt({
+      pageUrl: params.pageUrl,
+      pageCategory: params.pageCategory,
+      visitorId: params.visitorId,
+      leadId,
+      triggerContext: params.triggerContext,
+      campaignSystemPrompt: params.campaignSystemPrompt,
+    });
+  } else {
+    systemPrompt = await buildMayaSystemPrompt({
+      pageUrl: params.pageUrl,
+      pageCategory: params.pageCategory,
+      visitorId: params.visitorId,
+      leadId,
+      triggerContext: params.triggerContext,
+    });
+  }
 
   // Create conversation record
   const conversation = await ChatConversation.create({
@@ -167,32 +192,49 @@ export async function startConversation(params: {
     ai_system_prompt: systemPrompt,
   } as any);
 
-  // Generate greeting
-  const client = getClient();
-  const model = env.chatModel;
-  const maxTokens = env.chatMaxTokens;
-
-  let greetingPrompt: string;
-  if (params.triggerType === 'proactive_behavioral') {
-    greetingPrompt = `Generate a proactive greeting for a website visitor. You are reaching out because their behavior indicates interest. Be warm and relevant. One to two sentences. Start with something like "Hi there!" or "Welcome back!".`;
-  } else {
-    greetingPrompt = `Generate a welcoming greeting for a visitor who just opened the chat widget. Be warm, brief, and contextually relevant to the page they are on. One to two sentences. Start with "Hi there!" or "Hello!".`;
-  }
-
-  const startTime = Date.now();
-  const response = await client.chat.completions.create({
-    model,
-    max_tokens: maxTokens,
-    temperature: 0.7,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: greetingPrompt },
-    ],
+  // Generate Maya greeting (deterministic for known types, LLM fallback)
+  const mayaGreeting = await generateMayaGreeting({
+    visitorType,
+    pageCategory: params.pageCategory,
+    isReturning,
+    memory,
   });
 
-  const greeting = response.choices[0]?.message?.content?.trim() || 'Hi there! How can I help you today?';
-  const tokensUsed = response.usage?.total_tokens || 0;
-  const latencyMs = Date.now() - startTime;
+  // For returning visitors, use the deterministic Maya greeting directly
+  // For new visitors, optionally enhance with LLM
+  let greeting = mayaGreeting;
+  let tokensUsed = 0;
+  let latencyMs = 0;
+  const chatModel = env.chatModel;
+
+  if (!isReturning && visitorType !== 'ceo') {
+    // Use LLM to generate contextual greeting for new visitors
+    const client = getClient();
+    const model = chatModel;
+    const maxTokens = env.chatMaxTokens;
+
+    let greetingPrompt: string;
+    if (params.triggerType === 'proactive_behavioral') {
+      greetingPrompt = `Generate a proactive greeting as Maya, Director of Admissions. You are reaching out because their behavior indicates interest. Be warm and relevant. One to two sentences. Always introduce yourself as Maya.`;
+    } else {
+      greetingPrompt = `Generate a welcoming greeting as Maya, Director of Admissions. Be warm, brief, and contextually relevant to the page they are on. One to two sentences. Always introduce yourself as Maya.`;
+    }
+
+    const startTime = Date.now();
+    const response = await client.chat.completions.create({
+      model,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: greetingPrompt },
+      ],
+    });
+
+    greeting = response.choices[0]?.message?.content?.trim() || mayaGreeting;
+    tokensUsed = response.usage?.total_tokens || 0;
+    latencyMs = Date.now() - startTime;
+  }
 
   // Save greeting as assistant message
   await ChatMessage.create({
@@ -201,14 +243,19 @@ export async function startConversation(params: {
     content: greeting,
     tokens_used: tokensUsed,
     timestamp: new Date(),
-    metadata: { model, latency_ms: latencyMs },
+    metadata: { model: chatModel, latency_ms: latencyMs },
   } as any);
 
   await conversation.update({
     message_count: 1,
   } as any);
 
-  return { conversation_id: conversation.id, greeting };
+  return {
+    conversation_id: conversation.id,
+    greeting,
+    returning_visitor: isReturning,
+    visitor_type: visitorType,
+  } as any;
 }
 
 // ---------------------------------------------------------------------------
@@ -238,8 +285,20 @@ export async function sendMessage(
     limit: 20,
   });
 
+  // Inject RAG knowledge context for the current message
+  let systemPrompt = conversation.ai_system_prompt || '';
+  try {
+    const pageCategory = (conversation as any).page_category || '';
+    const knowledgeCtx = await buildKnowledgeContext(visitorMessage, pageCategory);
+    if (knowledgeCtx) {
+      systemPrompt += '\n\n' + knowledgeCtx;
+    }
+  } catch {
+    // Non-critical — continue without knowledge context
+  }
+
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: conversation.ai_system_prompt || '' },
+    { role: 'system', content: systemPrompt },
   ];
 
   for (const msg of history) {
@@ -355,6 +414,36 @@ export async function closeConversation(conversationId: string): Promise<void> {
       // Non-critical
     }
   }
+
+  // Save conversation to admissions memory
+  saveConversationToMemory(conversationId).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
+// Update page context mid-conversation (page navigation without closing)
+// ---------------------------------------------------------------------------
+
+export async function updateConversationContext(
+  conversationId: string,
+  newPageUrl: string,
+  newPageCategory: string
+): Promise<void> {
+  const conversation = await ChatConversation.findByPk(conversationId);
+  if (!conversation || conversation.status !== 'active') return;
+
+  await conversation.update({
+    page_url: newPageUrl,
+    page_category: newPageCategory,
+    updated_at: new Date(),
+  } as any);
+
+  // Save a system context note
+  await ChatMessage.create({
+    conversation_id: conversationId,
+    role: 'system',
+    content: `[Context update: visitor navigated to ${newPageUrl} (${newPageCategory})]`,
+    timestamp: new Date(),
+  } as any);
 }
 
 // ---------------------------------------------------------------------------

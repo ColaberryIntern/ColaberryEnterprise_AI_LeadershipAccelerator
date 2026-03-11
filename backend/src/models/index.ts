@@ -72,6 +72,12 @@ import CampaignInsight from './CampaignInsight';
 import CampaignVariant from './CampaignVariant';
 import LeadRecommendation from './LeadRecommendation';
 import WebsiteIssue from './WebsiteIssue';
+import AdmissionsMemory from './AdmissionsMemory';
+import AdmissionsKnowledgeEntry from './AdmissionsKnowledgeEntry';
+import AdmissionsActionLog from './AdmissionsActionLog';
+import CallContactLog from './CallContactLog';
+import CallbackRequest from './CallbackRequest';
+import DocumentDeliveryLog from './DocumentDeliveryLog';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -410,6 +416,38 @@ DepartmentEvent.belongsTo(Department, { foreignKey: 'department_id', as: 'depart
 Initiative.hasMany(DepartmentEvent, { foreignKey: 'initiative_id', as: 'events' });
 DepartmentEvent.belongsTo(Initiative, { foreignKey: 'initiative_id', as: 'initiative' });
 
+// --- Admissions Intelligence associations ---
+AdmissionsMemory.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+Visitor.hasOne(AdmissionsMemory, { foreignKey: 'visitor_id', as: 'admissionsMemory' });
+
+AdmissionsMemory.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasOne(AdmissionsMemory, { foreignKey: 'lead_id', as: 'admissionsMemory' });
+
+AdmissionsMemory.belongsTo(ChatConversation, { foreignKey: 'last_conversation_id', as: 'lastConversation' });
+
+// --- Admissions Operations associations ---
+AdmissionsActionLog.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+Visitor.hasMany(AdmissionsActionLog, { foreignKey: 'visitor_id', as: 'admissionsActions' });
+
+AdmissionsActionLog.belongsTo(ChatConversation, { foreignKey: 'conversation_id', as: 'conversation' });
+
+CallContactLog.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+Visitor.hasMany(CallContactLog, { foreignKey: 'visitor_id', as: 'callContactLogs' });
+
+CallbackRequest.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+Visitor.hasMany(CallbackRequest, { foreignKey: 'visitor_id', as: 'callbackRequests' });
+
+CallbackRequest.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(CallbackRequest, { foreignKey: 'lead_id', as: 'callbackRequests' });
+
+CallbackRequest.belongsTo(ChatConversation, { foreignKey: 'conversation_id', as: 'conversation' });
+
+DocumentDeliveryLog.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
+Visitor.hasMany(DocumentDeliveryLog, { foreignKey: 'visitor_id', as: 'documentDeliveries' });
+
+DocumentDeliveryLog.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(DocumentDeliveryLog, { foreignKey: 'lead_id', as: 'documentDeliveries' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -462,4 +500,10 @@ export {
   Initiative,
   DepartmentEvent,
   WebsiteIssue,
+  AdmissionsMemory,
+  AdmissionsKnowledgeEntry,
+  AdmissionsActionLog,
+  CallContactLog,
+  CallbackRequest,
+  DocumentDeliveryLog,
 };

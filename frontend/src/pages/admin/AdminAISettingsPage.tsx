@@ -11,6 +11,7 @@ import CampaignQATab from './ai-settings/CampaignQATab';
 import GovernanceCOOTab from './ai-settings/GovernanceCOOTab';
 import GovernanceAutonomyTab from './ai-settings/GovernanceAutonomyTab';
 import WebsiteIntelligenceTab from './ai-settings/WebsiteIntelligenceTab';
+import AdminAdmissionsTab from './ai-settings/AdminAdmissionsTab';
 
 interface Agent {
   id: string;
@@ -108,6 +109,7 @@ const TABS = [
   { key: 'controls', label: 'Controls' },
   { key: 'campaign-qa', label: 'Campaign QA' },
   { key: 'website', label: 'Website Intelligence' },
+  { key: 'admissions', label: 'Admissions Intelligence' },
 ];
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -138,6 +140,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   ai_ops: 'warning',
   accelerator: 'success',
   website_intelligence: 'purple',
+  admissions: 'danger',
+  admissions_ops: 'danger',
 };
 
 const RESULT_COLORS: Record<string, string> = {
@@ -486,6 +490,7 @@ function AdminAISettingsPage() {
       )}
       {activeTab === 'campaign-qa' && <CampaignQATab />}
       {activeTab === 'website' && <WebsiteIntelligenceTab />}
+      {activeTab === 'admissions' && <AdminAdmissionsTab />}
 
       {/* Drill-Down Modals */}
       {selectedActivityId && (

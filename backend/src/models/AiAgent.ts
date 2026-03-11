@@ -58,12 +58,37 @@ export type AiAgentType =
   | 'website_behavior'
   | 'website_repair'
   | 'website_strategist'
+  // Admissions intelligence
+  | 'admissions_identity'
+  | 'admissions_activity'
+  | 'admissions_memory'
+  | 'admissions_intent'
+  | 'admissions_planning'
+  | 'admissions_knowledge'
+  | 'admissions_proactive'
+  | 'admissions_page_context'
+  | 'admissions_continuity'
+  | 'admissions_high_intent'
+  | 'admissions_ceo_recognition'
+  | 'admissions_insights'
+  | 'admissions_executive_update'
+  // Admissions operations
+  | 'admissions_document_delivery'
+  | 'admissions_email'
+  | 'admissions_sms'
+  | 'admissions_appointment'
+  | 'admissions_synthflow_call'
+  | 'admissions_call_governance'
+  | 'admissions_call_compliance'
+  | 'admissions_callback'
+  | 'admissions_task_monitor'
+  | 'admissions_assistant'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops';
 
 interface AiAgentAttributes {
   id?: string;

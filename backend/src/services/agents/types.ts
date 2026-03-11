@@ -5,10 +5,10 @@ export interface AgentAction {
   confidence: number;
   before_state: Record<string, any> | null;
   after_state: Record<string, any> | null;
-  result: 'success' | 'failed' | 'skipped';
+  result: 'success' | 'failed' | 'skipped' | 'flagged';
   details?: Record<string, any>;
   /** Target entity type for non-campaign actions */
-  entity_type?: 'campaign' | 'lead' | 'agent' | 'system' | 'config';
+  entity_type?: 'campaign' | 'lead' | 'agent' | 'system' | 'config' | 'visitor';
   /** Target entity identifier */
   entity_id?: string;
 }

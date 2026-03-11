@@ -7,6 +7,7 @@ import {
   handleChatClose,
   handleChatHistory,
   handleProactiveCheck,
+  handleContextUpdate,
 } from '../controllers/chatController';
 
 const eventLimiter = rateLimit({
@@ -67,5 +68,6 @@ router.post('/api/chat/message', chatMessageLimiter, handleChatMessage);
 router.post('/api/chat/close', chatMessageLimiter, handleChatClose);
 router.get('/api/chat/history/:id', handleChatHistory);
 router.get('/api/chat/proactive-check', handleProactiveCheck);
+router.post('/api/chat/context-update', chatMessageLimiter, handleContextUpdate);
 
 export default router;

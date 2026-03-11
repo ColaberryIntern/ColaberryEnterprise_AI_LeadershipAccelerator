@@ -6,6 +6,7 @@ import {
   closeConversation,
   getConversationHistory,
   checkProactiveChat,
+  updateConversationContext,
 } from '../services/chatService';
 import { categorizePagePath } from '../services/visitorTrackingService';
 
@@ -147,5 +148,33 @@ export async function handleProactiveCheck(req: Request, res: Response, next: Ne
   } catch (err) {
     // Non-critical — don't break the page
     res.json({ show_proactive: false });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/chat/context-update — Update page context mid-conversation
+// ---------------------------------------------------------------------------
+
+export async function handleContextUpdate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!env.enableChat) {
+      res.status(204).end();
+      return;
+    }
+
+    const { conversation_id, page_url, page_path } = req.body;
+
+    if (!conversation_id || typeof conversation_id !== 'string') {
+      res.status(400).json({ error: 'conversation_id is required' });
+      return;
+    }
+
+    const pageCategory = page_path ? categorizePagePath(page_path) : 'homepage';
+
+    await updateConversationContext(conversation_id, page_url || '', pageCategory);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Chat] Context update error:', (err as Error).message);
+    next(err);
   }
 }

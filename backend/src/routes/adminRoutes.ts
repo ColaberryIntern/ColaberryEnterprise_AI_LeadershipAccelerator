@@ -20,6 +20,7 @@ import autonomyRoutes from './admin/autonomyRoutes';
 import coryRoutes from './admin/coryRoutes';
 import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
 import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
+import admissionsRoutes from './admin/admissionsRoutes';
 
 const router = Router();
 
@@ -44,5 +45,6 @@ router.use(autonomyRoutes);
 router.use(coryRoutes);
 router.use(departmentIntelligenceRoutes);
 router.use(websiteIntelligenceRoutes);
+router.use(admissionsRoutes);
 
 export default router;

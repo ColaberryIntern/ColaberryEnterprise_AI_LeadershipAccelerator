@@ -18,6 +18,29 @@ import { runWebsiteUXHeuristicAgent } from './agents/websiteUXHeuristicAgent';
 import { runWebsiteBehaviorAgent } from './agents/websiteBehaviorAgent';
 import { runWebsiteAutoRepairAgent } from './agents/websiteAutoRepairAgent';
 import { runWebsiteImprovementStrategist } from './agents/websiteImprovementStrategist';
+import { runAdmissionsVisitorIdentityAgent } from './agents/admissions/admissionsVisitorIdentityAgent';
+import { runAdmissionsVisitorActivityAgent } from './agents/admissions/admissionsVisitorActivityAgent';
+import { runAdmissionsConversationMemoryAgent } from './agents/admissions/admissionsConversationMemoryAgent';
+import { runAdmissionsIntentDetectionAgent } from './agents/admissions/admissionsIntentDetectionAgent';
+import { runAdmissionsConversationPlanningAgent } from './agents/admissions/admissionsConversationPlanningAgent';
+import { runAdmissionsKnowledgeAgent } from './agents/admissions/admissionsKnowledgeAgent';
+import { runAdmissionsProactiveOutreachAgent } from './agents/admissions/admissionsProactiveOutreachAgent';
+import { runAdmissionsPageContextAgent } from './agents/admissions/admissionsPageContextAgent';
+import { runAdmissionsConversationContinuityAgent } from './agents/admissions/admissionsConversationContinuityAgent';
+import { runAdmissionsHighIntentLeadAgent } from './agents/admissions/admissionsHighIntentLeadAgent';
+import { runAdmissionsCEORecognitionAgent } from './agents/admissions/admissionsCEORecognitionAgent';
+import { runAdmissionsInsightsAgent } from './agents/admissions/admissionsInsightsAgent';
+import { runAdmissionsExecutiveUpdateAgent } from './agents/admissions/admissionsExecutiveUpdateAgent';
+import { runAdmissionsDocumentDeliveryAgent } from './agents/admissions/admissionsDocumentDeliveryAgent';
+import { runAdmissionsEmailAgent } from './agents/admissions/admissionsEmailAgent';
+import { runAdmissionsSMSAgent } from './agents/admissions/admissionsSMSAgent';
+import { runAdmissionsAppointmentAgent } from './agents/admissions/admissionsAppointmentAgent';
+import { runAdmissionsSynthflowCallAgent } from './agents/admissions/admissionsSynthflowCallAgent';
+import { runAdmissionsCallGovernanceAgent } from './agents/admissions/admissionsCallGovernanceAgent';
+import { runAdmissionsCallComplianceAgent } from './agents/admissions/admissionsCallComplianceAgent';
+import { runAdmissionsCallbackAgent } from './agents/admissions/admissionsCallbackAgent';
+import { runAdmissionsConversationTaskMonitor } from './agents/admissions/admissionsConversationTaskMonitor';
+import { runAdmissionsAssistantAgent } from './agents/admissions/admissionsAssistantAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -321,5 +344,119 @@ export async function runAllWebsiteIntelligence(): Promise<(AgentExecutionResult
   results.push(await runWebsiteStrategist());
   // Auto-repair runs last — processes issues found by other agents
   results.push(await runWebsiteAutoRepair());
+  return results;
+}
+
+/* ── Admissions Intelligence Agents ────────────────────────────────── */
+
+export async function runAdmissionsVisitorIdentity(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsVisitorIdentityAgent', runAdmissionsVisitorIdentityAgent);
+}
+
+export async function runAdmissionsVisitorActivity(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsVisitorActivityAgent', runAdmissionsVisitorActivityAgent);
+}
+
+export async function runAdmissionsConversationMemory(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsConversationMemoryAgent', runAdmissionsConversationMemoryAgent);
+}
+
+export async function runAdmissionsIntentDetection(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsIntentDetectionAgent', runAdmissionsIntentDetectionAgent);
+}
+
+export async function runAdmissionsConversationPlanning(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsConversationPlanningAgent', runAdmissionsConversationPlanningAgent);
+}
+
+export async function runAdmissionsKnowledge(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsKnowledgeAgent', runAdmissionsKnowledgeAgent);
+}
+
+export async function runAdmissionsProactiveOutreach(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsProactiveOutreachAgent', runAdmissionsProactiveOutreachAgent);
+}
+
+export async function runAdmissionsPageContext(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsPageContextAgent', runAdmissionsPageContextAgent);
+}
+
+export async function runAdmissionsConversationContinuity(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsConversationContinuityAgent', runAdmissionsConversationContinuityAgent);
+}
+
+export async function runAdmissionsHighIntentLead(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsHighIntentLeadAgent', runAdmissionsHighIntentLeadAgent);
+}
+
+export async function runAdmissionsCEORecognition(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsCEORecognitionAgent', runAdmissionsCEORecognitionAgent);
+}
+
+export async function runAdmissionsInsights(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsInsightsAgent', runAdmissionsInsightsAgent);
+}
+
+export async function runAdmissionsExecutiveUpdate(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsExecutiveUpdateAgent', runAdmissionsExecutiveUpdateAgent);
+}
+
+// --- Admissions Operations agent runners ---
+
+export async function runAdmissionsDocumentDelivery(config?: Record<string, any>): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsDocumentDeliveryAgent', (id, cfg) => runAdmissionsDocumentDeliveryAgent(id, { ...cfg, ...config }));
+}
+
+export async function runAdmissionsEmail(config?: Record<string, any>): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsEmailAgent', (id, cfg) => runAdmissionsEmailAgent(id, { ...cfg, ...config }));
+}
+
+export async function runAdmissionsSMS(config?: Record<string, any>): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsSMSAgent', (id, cfg) => runAdmissionsSMSAgent(id, { ...cfg, ...config }));
+}
+
+export async function runAdmissionsAppointment(config?: Record<string, any>): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsAppointmentSchedulingAgent', (id, cfg) => runAdmissionsAppointmentAgent(id, { ...cfg, ...config }));
+}
+
+export async function runAdmissionsSynthflowCall(config?: Record<string, any>): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsSynthflowCallAgent', (id, cfg) => runAdmissionsSynthflowCallAgent(id, { ...cfg, ...config }));
+}
+
+export async function runAdmissionsCallGovernance(config?: Record<string, any>): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsCallGovernanceAgent', (id, cfg) => runAdmissionsCallGovernanceAgent(id, { ...cfg, ...config }));
+}
+
+export async function runAdmissionsCallCompliance(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsCallComplianceMonitor', runAdmissionsCallComplianceAgent);
+}
+
+export async function runAdmissionsCallback(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsCallbackManagementAgent', runAdmissionsCallbackAgent);
+}
+
+export async function runAdmissionsConversationTaskScan(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsConversationTaskMonitor', runAdmissionsConversationTaskMonitor);
+}
+
+export async function runAdmissionsAssistant(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsAssistantAgent', runAdmissionsAssistantAgent);
+}
+
+/**
+ * Run all admissions intelligence agents in sequence.
+ */
+export async function runAllAdmissionsIntelligence(): Promise<(AgentExecutionResult | null)[]> {
+  const results: (AgentExecutionResult | null)[] = [];
+  results.push(await runAdmissionsVisitorIdentity());
+  results.push(await runAdmissionsVisitorActivity());
+  results.push(await runAdmissionsConversationMemory());
+  results.push(await runAdmissionsIntentDetection());
+  results.push(await runAdmissionsProactiveOutreach());
+  results.push(await runAdmissionsConversationContinuity());
+  results.push(await runAdmissionsHighIntentLead());
+  results.push(await runAdmissionsCEORecognition());
+  results.push(await runAdmissionsInsights());
+  results.push(await runAdmissionsExecutiveUpdate());
   return results;
 }

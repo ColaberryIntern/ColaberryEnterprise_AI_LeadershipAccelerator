@@ -6,7 +6,7 @@ import { initTracker } from '../../utils/tracker';
 import { captureUTMFromURL } from '../../services/utmService';
 import { captureCampaignFromURL } from '../../services/campaignAttributionService';
 
-const ChatWidget = lazy(() => import('../ChatWidget'));
+const MayaChatWidget = lazy(() => import('../MayaChatWidget'));
 const MarketingMonitorPanel = lazy(() => import('../MarketingMonitorPanel'));
 
 function PublicLayout() {
@@ -23,7 +23,7 @@ function PublicLayout() {
       </main>
       <PublicFooter />
       <Suspense fallback={null}>
-        <ChatWidget />
+        <MayaChatWidget />
       </Suspense>
       <Suspense fallback={null}>
         <MarketingMonitorPanel />
