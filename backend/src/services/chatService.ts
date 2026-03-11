@@ -141,26 +141,39 @@ export async function startConversation(params: {
   triggerContext?: Record<string, any> | null;
   campaignSystemPrompt?: string | null;
 }): Promise<{ conversation_id: string; greeting: string }> {
-  // Get visitor's lead_id if identified
-  const visitor = await Visitor.findByPk(params.visitorId);
-  const leadId = visitor?.lead_id || null;
+  // Resolve visitor: the widget sends a fingerprint string, not a UUID.
+  // Look up by fingerprint first, then by PK as fallback.
+  let visitor = await Visitor.findOne({ where: { fingerprint: params.visitorId } });
+  if (!visitor) {
+    visitor = await Visitor.findByPk(params.visitorId);
+  }
+  // If visitor still doesn't exist, create a minimal record so FKs work
+  if (!visitor) {
+    visitor = await Visitor.create({
+      fingerprint: params.visitorId,
+      first_seen_at: new Date(),
+      last_seen_at: new Date(),
+      total_sessions: 0,
+      total_pageviews: 0,
+    } as any);
+  }
+  const visitorUUID = visitor.id;
+  const leadId = visitor.lead_id || null;
 
   // Load admissions memory for returning visitor detection
-  // Wrapped in try-catch: visitor may not yet exist in visitors table (tracking is async)
   let memory: Awaited<ReturnType<typeof loadMemory>> | null = null;
   let visitorType = 'new';
   let isReturning = false;
   try {
-    memory = await loadMemory(params.visitorId);
-    visitorType = await classifyVisitorType(params.visitorId);
+    memory = await loadMemory(visitorUUID);
+    visitorType = await classifyVisitorType(visitorUUID);
     isReturning = memory.conversation_count > 0;
 
-    // Update visitor type in memory
     if (memory.visitor_type !== visitorType) {
       await memory.update({ visitor_type: visitorType as any });
     }
   } catch (memErr) {
-    console.warn('[Chat] Admissions memory unavailable (visitor may not exist yet):', (memErr as Error).message);
+    console.warn('[Chat] Admissions memory unavailable:', (memErr as Error).message);
   }
 
   // Build Maya system prompt (or campaign override)
@@ -169,7 +182,7 @@ export async function startConversation(params: {
     systemPrompt = await buildChatSystemPrompt({
       pageUrl: params.pageUrl,
       pageCategory: params.pageCategory,
-      visitorId: params.visitorId,
+      visitorId: visitorUUID,
       leadId,
       triggerContext: params.triggerContext,
       campaignSystemPrompt: params.campaignSystemPrompt,
@@ -178,7 +191,7 @@ export async function startConversation(params: {
     systemPrompt = await buildMayaSystemPrompt({
       pageUrl: params.pageUrl,
       pageCategory: params.pageCategory,
-      visitorId: params.visitorId,
+      visitorId: visitorUUID,
       leadId,
       triggerContext: params.triggerContext,
     });
@@ -186,7 +199,7 @@ export async function startConversation(params: {
 
   // Create conversation record
   const conversation = await ChatConversation.create({
-    visitor_id: params.visitorId,
+    visitor_id: visitorUUID,
     lead_id: leadId,
     session_id: params.sessionId || null,
     status: 'active',
@@ -476,15 +489,16 @@ export async function checkProactiveChat(visitorId: string): Promise<{
 } | null> {
   if (!env.enableChat) return null;
 
+  // visitorId may be a fingerprint string rather than a UUID
+  let visitor = await Visitor.findOne({ where: { fingerprint: visitorId } });
+  if (!visitor) visitor = await Visitor.findByPk(visitorId);
+  if (!visitor) return null;
+
   // Check if visitor already has an active conversation
   const activeConversation = await ChatConversation.findOne({
-    where: { visitor_id: visitorId, status: 'active' },
+    where: { visitor_id: visitor.id, status: 'active' },
   });
   if (activeConversation) return null;
-
-  // Check if visitor was recently flagged for proactive chat
-  const visitor = await Visitor.findByPk(visitorId);
-  if (!visitor) return null;
 
   const metadata = (visitor as any).metadata || {};
   if (!metadata.proactive_chat_pending) return null;
