@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { IntelligenceProvider, useIntelligenceContext } from '../../../contexts/IntelligenceContext';
 import { useIntelligenceQuery } from '../../../hooks/useIntelligenceQuery';
 import {
@@ -29,6 +29,9 @@ import ChartRenderer from '../../../components/admin/intelligence/ChartRenderer'
 import AutoInsightsGrid from '../../../components/admin/intelligence/AutoInsightsGrid';
 import EntityNavigationPanel from '../../../components/admin/intelligence/entityPanel/EntityNavigationPanel';
 import CoryPanel from '../../../components/admin/intelligence/CoryPanel';
+import CoryOrb from '../../../components/admin/intelligence/CoryOrb';
+import CoryOverlay from '../../../components/admin/intelligence/CoryOverlay';
+import AgentDetailDrawer from '../../../components/admin/intelligence/AgentDetailDrawer';
 import CoryCenterTabs from '../../../components/admin/intelligence/CoryCenterTabs';
 
 // ─── Adaptive Execution Steps ─────────────────────────────────────────────────
@@ -1069,18 +1072,50 @@ function IntelligenceOSContent() {
   // Panel state
   const { isCompact, isMedium } = useBreakpoint();
   const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
+  const [coryOverlayOpen, setCoryOverlayOpen] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'map' | 'canvas' | 'assistant'>('canvas');
   // Auto-collapse left panel on medium screens
   useEffect(() => {
     if (isMedium && !isCompact) {
       setLeftOpen(false);
-      setRightOpen(true);
     } else if (!isMedium) {
       setLeftOpen(true);
-      setRightOpen(true);
     }
   }, [isMedium, isCompact]);
+
+  // Auto-open Cory if arriving via ?cory=open (from GlobalCoryWidget click)
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('cory') === 'open') {
+      setCoryOverlayOpen(true);
+      const contextPath = searchParams.get('context');
+      if (contextPath) {
+        const PAGE_GREETINGS: Record<string, string> = {
+          '/': 'I see you were on the homepage. Want me to analyze enrollment trends, marketing performance, or lead pipeline health?',
+          '/program': 'You were viewing the Program page. Need insights on curriculum engagement or session completion rates?',
+          '/pricing': 'You were on Pricing. Shall I analyze conversion rates or pricing strategy effectiveness?',
+          '/admin/dashboard': 'Coming from the Admin Dashboard. Ready for a full executive briefing?',
+          '/admin/campaigns': 'You were in Campaign Management. Want me to analyze outbound performance or suggest optimizations?',
+          '/admin/leads': 'Coming from Lead Management. Shall I run a pipeline health assessment?',
+          '/admin/revenue': 'You were on Revenue. Need a revenue trend analysis or forecast?',
+          '/admin/marketing': 'Coming from Marketing. Ready for a marketing intelligence briefing?',
+          '/admin/accelerator': 'You were in the Accelerator. Need student engagement or completion insights?',
+        };
+        let greeting = PAGE_GREETINGS[contextPath];
+        if (!greeting) {
+          for (const [prefix, msg] of Object.entries(PAGE_GREETINGS)) {
+            if (contextPath.startsWith(prefix) && prefix !== '/') { greeting = msg; break; }
+          }
+        }
+        if (greeting) {
+          setExternalQuery(greeting + '|' + Date.now());
+        }
+      }
+    }
+  // Run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadNetwork = useCallback(() => {
     getEntityNetwork()
@@ -1263,8 +1298,12 @@ function IntelligenceOSContent() {
 
   const handleCoryClick = useCallback((context: string) => {
     setExternalQuery(context + '|' + Date.now());
-    setRightOpen(true); // Ensure Cory panel is visible
+    setCoryOverlayOpen(true);
     setIsProcessing(true);
+  }, []);
+
+  const handleAgentClick = useCallback((agentId: string) => {
+    setSelectedAgentId(agentId);
   }, []);
 
   const handleInvestigate = useCallback((anomaly: any) => {
@@ -1315,6 +1354,24 @@ function IntelligenceOSContent() {
             />
           )}
         </div>
+
+        {/* Cory Orb (mobile — hidden when assistant tab is active) */}
+        {mobileTab !== 'assistant' && (
+          <>
+            <CoryOrb
+              onClick={() => setCoryOverlayOpen(!coryOverlayOpen)}
+              isOpen={coryOverlayOpen}
+            />
+            <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
+              <CoryPanel
+                onVisualizationsUpdate={handleVisualizationsUpdate}
+                onSummaryUpdate={handleSummaryUpdate}
+                onInsightsUpdate={handleInsightsUpdate}
+                externalQuery={externalQuery}
+              />
+            </CoryOverlay>
+          </>
+        )}
 
         <StatusBar lastRefresh={lastRefresh} isProcessing={isProcessing} />
       </div>
@@ -1367,7 +1424,7 @@ function IntelligenceOSContent() {
           )}
 
           <div className="flex-grow-1" style={{ minHeight: 0, overflow: 'auto' }}>
-            <CoryCenterTabs>
+            <CoryCenterTabs onAgentClick={handleAgentClick}>
               <DynamicCanvas
                 visualizations={visualizations}
                 insights={insights}
@@ -1391,29 +1448,24 @@ function IntelligenceOSContent() {
           </div>
         </div>
 
-        {/* Right Panel: Cory — AI COO */}
-        <div
-          className="intel-panel-slide"
-          style={{
-            width: rightOpen ? 400 : 0,
-            minWidth: rightOpen ? 400 : 0,
-            overflow: 'hidden',
-            borderLeft: rightOpen ? '1px solid rgba(226, 232, 240, 0.5)' : 'none',
-          }}
-        >
-          <div style={{ width: 400, height: '100%' }}>
-            <CoryPanel
-              onVisualizationsUpdate={handleVisualizationsUpdate}
-              onSummaryUpdate={handleSummaryUpdate}
-              onInsightsUpdate={handleInsightsUpdate}
-              externalQuery={externalQuery}
-            />
-          </div>
-        </div>
-
-        {/* Right Toggle */}
-        <PanelToggle label="COO" side="right" isOpen={rightOpen} onClick={() => setRightOpen(!rightOpen)} />
       </div>
+
+      {/* Cory Floating Orb + Overlay */}
+      <CoryOrb
+        onClick={() => setCoryOverlayOpen(!coryOverlayOpen)}
+        isOpen={coryOverlayOpen}
+      />
+      <CoryOverlay isOpen={coryOverlayOpen} onClose={() => setCoryOverlayOpen(false)}>
+        <CoryPanel
+          onVisualizationsUpdate={handleVisualizationsUpdate}
+          onSummaryUpdate={handleSummaryUpdate}
+          onInsightsUpdate={handleInsightsUpdate}
+          externalQuery={externalQuery}
+        />
+      </CoryOverlay>
+
+      {/* Agent Detail Drawer */}
+      <AgentDetailDrawer agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} />
 
       <StatusBar lastRefresh={lastRefresh} isProcessing={isProcessing} />
     </div>

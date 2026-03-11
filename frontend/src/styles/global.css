@@ -723,3 +723,55 @@ a:hover {
     transform: scale(1) translateY(0);
   }
 }
+
+/* Cory Orb floating button */
+.cory-orb-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 28px rgba(26, 54, 93, 0.45);
+}
+
+/* Cory Overlay slide-in animation */
+.cory-overlay-slide {
+  animation: corySlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes corySlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Global Cory Widget — site-wide floating assistant */
+.global-cory-widget {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  z-index: 9999;
+}
+
+.global-cory-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid var(--color-primary);
+  object-fit: cover;
+  box-shadow: 0 4px 16px rgba(26, 54, 93, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cory-orb-button:hover {
+    transform: none;
+  }
+  .cory-overlay-slide {
+    animation: none;
+  }
+  .global-cory-avatar {
+    transition: none;
+  }
+}

@@ -7,13 +7,19 @@ import {
   type TimelineEntry,
   type CoryStatusReport,
 } from '../../../services/coryApi';
+import ActivityTab from './tabs/ActivityTab';
+import HealthTab from './tabs/HealthTab';
+import ErrorsTab from './tabs/ErrorsTab';
+import QAScanTab from './tabs/QAScanTab';
+import SafetyTab from './tabs/SafetyTab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'orchestration' | 'timeline' | 'impact';
+type TabKey = 'dashboard' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
+  onAgentClick?: (agentId: string) => void;
 }
 
 // ─── Color Maps ──────────────────────────────────────────────────────────────
@@ -43,7 +49,7 @@ const DEPT_COLORS: Record<string, string> = {
 
 // ─── Orchestration Tab ───────────────────────────────────────────────────────
 
-function OrchestrationGraph() {
+function OrchestrationGraph({ onAgentClick }: { onAgentClick?: (agentId: string) => void }) {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -73,8 +79,33 @@ function OrchestrationGraph() {
     grouped[dept].push(agent);
   }
 
+  // Compute fleet stats from agents
+  const total = agents.length;
+  const running = agents.filter((a) => a.status === 'running').length;
+  const errored = agents.filter((a) => a.status === 'error').length;
+  const paused = agents.filter((a) => a.status === 'paused').length;
+  const idle = total - running - errored - paused;
+
   return (
     <div className="p-3" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 220px)' }}>
+      {/* Fleet Overview KPIs */}
+      <div className="d-flex gap-2 mb-3 flex-wrap">
+        {[
+          { label: 'Total Agents', value: total, color: 'var(--color-primary)' },
+          { label: 'Running', value: running, color: 'var(--color-primary-light)' },
+          { label: 'Idle', value: idle, color: '#718096' },
+          { label: 'Errored', value: errored, color: 'var(--color-secondary)' },
+          { label: 'Paused', value: paused, color: '#d69e2e' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="card border-0 shadow-sm flex-fill" style={{ minWidth: 90 }}>
+            <div className="card-body py-2 px-3 text-center">
+              <div className="fw-bold" style={{ fontSize: '1.1rem', color: kpi.color }}>{kpi.value}</div>
+              <div className="text-muted" style={{ fontSize: '0.65rem' }}>{kpi.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="row g-3">
         {departments.map((dept) => (
           <div key={dept} className="col-12 col-lg-6 col-xl-4">
@@ -98,10 +129,15 @@ function OrchestrationGraph() {
                       <div
                         key={agent.id}
                         className="d-flex align-items-center gap-2 px-2 py-1 rounded-2"
+                        role={onAgentClick ? 'button' : undefined}
+                        tabIndex={onAgentClick ? 0 : undefined}
+                        onClick={onAgentClick ? () => onAgentClick(agent.id) : undefined}
+                        onKeyDown={onAgentClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAgentClick(agent.id); } } : undefined}
                         style={{
                           fontSize: '0.72rem',
                           background: agent.status === 'running' ? 'rgba(43, 108, 176, 0.06)' : 'transparent',
                           border: agent.status === 'running' ? '1px solid rgba(43, 108, 176, 0.2)' : '1px solid transparent',
+                          cursor: onAgentClick ? 'pointer' : 'default',
                         }}
                       >
                         <div
@@ -362,12 +398,18 @@ function ImpactMetrics() {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export default function CoryCenterTabs({ children }: CoryCenterTabsProps) {
+export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTabsProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
+  const [errorCount, setErrorCount] = useState(0);
 
-  const tabs: { key: TabKey; label: string }[] = [
+  const tabs: { key: TabKey; label: string; badge?: number }[] = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'orchestration', label: 'Orchestration' },
+    { key: 'activity', label: 'Activity' },
+    { key: 'health', label: 'Health' },
+    { key: 'errors', label: 'Errors', badge: errorCount },
+    { key: 'qa', label: 'QA & Scans' },
+    { key: 'safety', label: 'Safety' },
     { key: 'timeline', label: 'Timeline' },
     { key: 'impact', label: 'Impact' },
   ];
@@ -375,16 +417,19 @@ export default function CoryCenterTabs({ children }: CoryCenterTabsProps) {
   return (
     <div className="d-flex flex-column h-100">
       {/* Tab Bar */}
-      <div className="px-3 pt-2" style={{ flexShrink: 0 }}>
-        <ul className="nav nav-tabs" style={{ fontSize: '0.78rem' }}>
+      <div className="px-3 pt-2" style={{ flexShrink: 0, overflowX: 'auto' }}>
+        <ul className="nav nav-tabs flex-nowrap" style={{ fontSize: '0.78rem' }}>
           {tabs.map((tab) => (
             <li key={tab.key} className="nav-item">
               <button
                 className={`nav-link ${activeTab === tab.key ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.key)}
-                style={{ padding: '6px 14px', fontSize: '0.76rem' }}
+                style={{ padding: '6px 14px', fontSize: '0.76rem', whiteSpace: 'nowrap' }}
               >
                 {tab.label}
+                {tab.badge != null && tab.badge > 0 && (
+                  <span className="badge bg-danger ms-1" style={{ fontSize: '0.6rem' }}>{tab.badge}</span>
+                )}
               </button>
             </li>
           ))}
@@ -394,7 +439,12 @@ export default function CoryCenterTabs({ children }: CoryCenterTabsProps) {
       {/* Tab Content */}
       <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
         {activeTab === 'dashboard' && children}
-        {activeTab === 'orchestration' && <OrchestrationGraph />}
+        {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} />}
+        {activeTab === 'activity' && <ActivityTab />}
+        {activeTab === 'health' && <HealthTab />}
+        {activeTab === 'errors' && <ErrorsTab onErrorCountChange={setErrorCount} />}
+        {activeTab === 'qa' && <QAScanTab />}
+        {activeTab === 'safety' && <SafetyTab />}
         {activeTab === 'timeline' && <ReasoningTimeline />}
         {activeTab === 'impact' && <ImpactMetrics />}
       </div>

@@ -19,8 +19,7 @@ const adminNavLinks = [
   { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
   { path: '/admin/events', label: 'Event Ledger', icon: 'journal' },
   { path: '/admin/import', label: 'Import', icon: 'cloud-upload' },
-  { path: '/admin/ai-settings', label: 'AI Control Center', icon: 'cpu' },
-  { path: '/admin/intelligence', label: 'Intelligence', icon: 'brain' },
+  { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
   { path: '/admin/settings', label: 'Settings', icon: 'gear' },
 ];
 

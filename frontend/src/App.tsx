@@ -8,6 +8,7 @@ import publicRoutes from './routes/publicRoutes';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import AlumniChampionPage from './pages/AlumniChampionPage';
+import GlobalCoryWidget from './components/GlobalCoryWidget';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           {publicRoutes}
         </Route>
       </Routes>
+      <GlobalCoryWidget />
       </ToastProvider>
     </AuthProvider>
   );
