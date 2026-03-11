@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { seedAgentRegistry } from './agentRegistrySeed';
+import { seedAdmissionsKnowledge } from './admissionsKnowledgeSeed';
 import {
   runHealthScans,
   runRepairAgent,
@@ -34,9 +35,14 @@ import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
 export function startAIOpsScheduler(): void {
-  // Seed full agent registry on startup (idempotent — 22 agents)
+  // Seed full agent registry on startup (idempotent — 75 agents)
   seedAgentRegistry().catch((err) => {
     console.error('[AI Ops] Failed to seed agent registry:', err.message);
+  });
+
+  // Seed admissions knowledge base on startup (idempotent)
+  seedAdmissionsKnowledge().catch((err) => {
+    console.error('[AI Ops] Failed to seed admissions knowledge:', err.message);
   });
 
   // Campaign health scan: every 15 minutes

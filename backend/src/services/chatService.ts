@@ -146,13 +146,21 @@ export async function startConversation(params: {
   const leadId = visitor?.lead_id || null;
 
   // Load admissions memory for returning visitor detection
-  const memory = await loadMemory(params.visitorId);
-  const visitorType = await classifyVisitorType(params.visitorId);
-  const isReturning = memory.conversation_count > 0;
+  // Wrapped in try-catch: visitor may not yet exist in visitors table (tracking is async)
+  let memory: Awaited<ReturnType<typeof loadMemory>> | null = null;
+  let visitorType = 'new';
+  let isReturning = false;
+  try {
+    memory = await loadMemory(params.visitorId);
+    visitorType = await classifyVisitorType(params.visitorId);
+    isReturning = memory.conversation_count > 0;
 
-  // Update visitor type in memory
-  if (memory.visitor_type !== visitorType) {
-    await memory.update({ visitor_type: visitorType });
+    // Update visitor type in memory
+    if (memory.visitor_type !== visitorType) {
+      await memory.update({ visitor_type: visitorType });
+    }
+  } catch (memErr) {
+    console.warn('[Chat] Admissions memory unavailable (visitor may not exist yet):', (memErr as Error).message);
   }
 
   // Build Maya system prompt (or campaign override)
