@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getDepartmentDetail } from '../../../services/intelligenceApi';
+import InitiativeStoryModal from './InitiativeStoryModal';
 
 interface Props {
   departmentId: string;
@@ -21,6 +22,7 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
+  const [storyInitiativeId, setStoryInitiativeId] = useState<string | null>(null);
 
   const fetchDetail = useCallback(async () => {
     if (!departmentId) return;
@@ -204,14 +206,21 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
                         {section.key === 'risks' && (
                           <div>
                             {(detail.risks || []).map((r: any, i: number) => (
-                              <div key={r.id || i} className="mb-2 small">
+                              <div
+                                key={r.id || i}
+                                className="mb-2 small"
+                                style={{ cursor: r.event_type === 'initiative_risk' ? 'pointer' : 'default', padding: '4px 6px', borderRadius: 4 }}
+                                onClick={() => r.event_type === 'initiative_risk' && setStoryInitiativeId(r.id)}
+                                onMouseEnter={(e) => { if (r.event_type === 'initiative_risk') (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
                                 <div className="d-flex align-items-center gap-1">
                                   {r.severity && (
                                     <span className={`badge bg-${PRIORITY_COLORS[r.severity] || 'secondary'}`} style={{ fontSize: '0.55rem' }}>
                                       {r.severity}
                                     </span>
                                   )}
-                                  <span className="fw-medium">{r.title}</span>
+                                  <span className="fw-medium" style={r.event_type === 'initiative_risk' ? { color: 'var(--color-primary-light)' } : {}}>{r.title}</span>
                                 </div>
                                 {r.description && <div className="text-muted" style={{ fontSize: '0.7rem' }}>{r.description}</div>}
                               </div>
@@ -225,9 +234,16 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
                         {section.key === 'building' && (
                           <div>
                             {(detail.building || []).map((init: any) => (
-                              <div key={init.id} className="mb-2 small">
+                              <div
+                                key={init.id}
+                                className="mb-2 small"
+                                style={{ cursor: 'pointer', padding: '4px 6px', borderRadius: 4 }}
+                                onClick={() => setStoryInitiativeId(init.id)}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
                                 <div className="d-flex justify-content-between align-items-center mb-1">
-                                  <span className="fw-medium">{init.title}</span>
+                                  <span className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>{init.title}</span>
                                   <span className={`badge bg-${PRIORITY_COLORS[init.priority] || 'secondary'}`} style={{ fontSize: '0.55rem' }}>
                                     {init.priority}
                                   </span>
@@ -253,8 +269,15 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
                         {section.key === 'maintenance' && (
                           <div>
                             {(detail.maintenance || []).map((init: any) => (
-                              <div key={init.id} className="mb-2 small">
-                                <div className="fw-medium">{init.title}</div>
+                              <div
+                                key={init.id}
+                                className="mb-2 small"
+                                style={{ cursor: 'pointer', padding: '4px 6px', borderRadius: 4 }}
+                                onClick={() => setStoryInitiativeId(init.id)}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--color-bg-alt)'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                              >
+                                <div className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>{init.title}</div>
                                 <div className="text-muted" style={{ fontSize: '0.7rem' }}>Status: On Hold · {init.owner || 'Unassigned'}</div>
                               </div>
                             ))}
@@ -313,6 +336,11 @@ export default function DepartmentDrawer({ departmentId, isOpen, onClose, onSwit
           </div>
         </div>
       )}
+
+      <InitiativeStoryModal
+        initiativeId={storyInitiativeId}
+        onClose={() => setStoryInitiativeId(null)}
+      />
     </div>
   );
 }

@@ -104,11 +104,32 @@ export async function getInitiatives(filters: { department_id?: string; status?:
 export async function getInitiativeDetail(id: string) {
   const initiative = await Initiative.findByPk(id, {
     include: [
-      { model: Department, as: 'department', attributes: ['id', 'name', 'slug', 'color'] },
+      { model: Department, as: 'department', attributes: ['id', 'name', 'slug', 'color', 'bg_light'] },
       { model: DepartmentEvent, as: 'events', order: [['created_at', 'DESC']], limit: 10 },
     ],
   });
-  return initiative;
+
+  if (!initiative) return null;
+
+  const now = new Date();
+  const startDate = initiative.start_date ? new Date(initiative.start_date) : null;
+  const targetDate = initiative.target_date ? new Date(initiative.target_date) : null;
+  const completedDate = initiative.completed_date ? new Date(initiative.completed_date) : null;
+
+  const daysElapsed = startDate ? Math.max(0, Math.floor((now.getTime() - startDate.getTime()) / 86400000)) : 0;
+  const totalPlannedDays = startDate && targetDate ? Math.max(1, Math.floor((targetDate.getTime() - startDate.getTime()) / 86400000)) : 0;
+  const actualDuration = startDate && completedDate ? Math.floor((completedDate.getTime() - startDate.getTime()) / 86400000) : null;
+
+  return {
+    ...initiative.toJSON(),
+    computed: {
+      days_elapsed: daysElapsed,
+      total_planned_days: totalPlannedDays,
+      actual_duration_days: actualDuration,
+      days_remaining: targetDate ? Math.max(0, Math.floor((targetDate.getTime() - now.getTime()) / 86400000)) : null,
+      on_schedule: totalPlannedDays > 0 ? initiative.progress >= (daysElapsed / totalPlannedDays) * 100 : null,
+    },
+  };
 }
 
 export async function getRoadmap() {
