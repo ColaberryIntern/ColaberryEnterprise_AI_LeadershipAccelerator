@@ -64,6 +64,18 @@ class IntelligenceProxyService {
   async getRiskScores(): Promise<AxiosResponse> {
     return this.client.get('/ml/risk-score');
   }
+
+  async getRootCause(params?: Record<string, any>): Promise<AxiosResponse> {
+    return this.client.post('/ml/root-cause', params || {});
+  }
+
+  async getTextClusters(params?: Record<string, any>): Promise<AxiosResponse> {
+    return this.client.get('/ml/text-cluster', { params });
+  }
+
+  async getSimilarEntities(params?: Record<string, any>): Promise<AxiosResponse> {
+    return this.client.post('/vectors/similar', params || {});
+  }
 }
 
 export const intelligenceProxy = new IntelligenceProxyService();

@@ -274,7 +274,7 @@ export async function handleAssistantQuery(req: Request, res: Response, next: Ne
       res.status(400).json({ error: 'question is required' });
       return;
     }
-    const { runAssistantPipeline } = await import('../intelligence/assistant/assistantEngine');
+    const { runAssistantPipeline } = await import('../intelligence/assistant/queryEngine');
     const data = await runAssistantPipeline(question, entity_type);
 
     // Store in Q&A history
