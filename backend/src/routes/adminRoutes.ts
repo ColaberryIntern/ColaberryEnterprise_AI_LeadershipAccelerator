@@ -19,6 +19,7 @@ import alumniRoutes from './admin/alumniRoutes';
 import autonomyRoutes from './admin/autonomyRoutes';
 import coryRoutes from './admin/coryRoutes';
 import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
+import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use(alumniRoutes);
 router.use(autonomyRoutes);
 router.use(coryRoutes);
 router.use(departmentIntelligenceRoutes);
+router.use(websiteIntelligenceRoutes);
 
 export default router;

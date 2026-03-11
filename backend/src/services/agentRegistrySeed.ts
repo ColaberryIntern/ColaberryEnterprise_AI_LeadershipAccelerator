@@ -530,10 +530,88 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'meta',
     description: 'Controlled experiments with safety guardrails for agent improvement. Hourly.',
   },
+  // --- Website Intelligence Agents ---
+  {
+    agent_name: 'WebsiteUIVisibilityAgent',
+    agent_type: 'website_ui',
+    module: 'websiteIntelligence',
+    source_file: 'backend/src/services/agents/websiteUIVisibilityAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 */6 * * *',
+    category: 'website_intelligence',
+    description:
+      'Scans all public pages for accessibility issues: missing alt text, aria-hidden interactive content, unlabeled form fields, and low-contrast text.',
+  },
+  {
+    agent_name: 'WebsiteBrokenLinkAgent',
+    agent_type: 'website_links',
+    module: 'websiteIntelligence',
+    source_file: 'backend/src/services/agents/websiteBrokenLinkAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 */6 * * *',
+    category: 'website_intelligence',
+    description:
+      'Crawls all public pages checking internal links against known routes and external links via HEAD requests. Detects empty hrefs, unknown routes, and HTTP errors.',
+  },
+  {
+    agent_name: 'WebsiteConversionFlowAgent',
+    agent_type: 'website_conversion',
+    module: 'websiteIntelligence',
+    source_file: 'backend/src/services/agents/websiteConversionFlowAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 */12 * * *',
+    category: 'website_intelligence',
+    description:
+      'Maps CTA destinations per page and validates expected conversion flows. Detects dead-end pages, missing expected paths, and circular navigation loops.',
+  },
+  {
+    agent_name: 'WebsiteUXHeuristicAgent',
+    agent_type: 'website_ux',
+    module: 'websiteIntelligence',
+    source_file: 'backend/src/services/agents/websiteUXHeuristicAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 0 * * *',
+    category: 'website_intelligence',
+    description:
+      'Evaluates pages against UX heuristics: form field count, CTA density, heading hierarchy, word count, and content depth.',
+  },
+  {
+    agent_name: 'WebsiteBehaviorAgent',
+    agent_type: 'website_behavior',
+    module: 'websiteIntelligence',
+    source_file: 'backend/src/services/agents/websiteBehaviorAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 */12 * * *',
+    category: 'website_intelligence',
+    description:
+      'Analyzes PageEvent data to detect low-traffic pages, form abandonment patterns, and engagement anomalies across the public website.',
+  },
+  {
+    agent_name: 'WebsiteAutoRepairAgent',
+    agent_type: 'website_repair',
+    module: 'websiteIntelligence',
+    source_file: 'backend/src/services/agents/websiteAutoRepairAgent.ts',
+    trigger_type: 'event_driven',
+    schedule: '',
+    category: 'website_intelligence',
+    description:
+      'Processes open WebsiteIssue records. Routes through COO decision layer: auto-resolves high-confidence (>=0.95), COO approval (0.80-0.94), CEO review (<0.80).',
+  },
+  {
+    agent_name: 'WebsiteImprovementStrategist',
+    agent_type: 'website_strategist',
+    module: 'websiteIntelligence',
+    source_file: 'backend/src/services/agents/websiteImprovementStrategist.ts',
+    trigger_type: 'cron',
+    schedule: '0 0 * * *',
+    category: 'website_intelligence',
+    description:
+      'Generates strategic improvement recommendations: missing social proof, weak CTA copy, absent trust signals, missing urgency, and SEO gaps.',
+  },
 ];
 
 /**
- * Seed the full agent registry (45 agents). Idempotent — uses findOrCreate
+ * Seed the full agent registry (52 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
 export async function seedAgentRegistry(): Promise<void> {

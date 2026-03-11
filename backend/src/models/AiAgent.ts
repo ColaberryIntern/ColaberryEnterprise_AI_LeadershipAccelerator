@@ -50,12 +50,20 @@ export type AiAgentType =
   | 'experiment_runner'
   // Lead intelligence
   | 'lead_intelligence'
+  // Website intelligence
+  | 'website_ui'
+  | 'website_links'
+  | 'website_conversion'
+  | 'website_ux'
+  | 'website_behavior'
+  | 'website_repair'
+  | 'website_strategist'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence';
 
 interface AiAgentAttributes {
   id?: string;

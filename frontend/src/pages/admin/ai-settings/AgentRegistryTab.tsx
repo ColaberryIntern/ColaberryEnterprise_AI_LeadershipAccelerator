@@ -41,6 +41,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   accelerator: 'success',
   intelligence: 'dark',
   orchestration: 'primary',
+  website_intelligence: 'purple',
 };
 
 const STATUS_COLORS: Record<string, string> = {

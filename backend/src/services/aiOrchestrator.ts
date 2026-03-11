@@ -11,6 +11,13 @@ import { runOrchestrationAutoRepairAgent } from './agents/orchestrationAutoRepai
 import { runCampaignQAAgent } from './agents/campaignQAAgent';
 import { runCampaignSelfHealingAgent } from './agents/campaignSelfHealingAgent';
 import { runApolloLeadIntelligenceAgent } from './agents/apolloLeadIntelligenceAgent';
+import { runWebsiteUIVisibilityAgent } from './agents/websiteUIVisibilityAgent';
+import { runWebsiteBrokenLinkAgent } from './agents/websiteBrokenLinkAgent';
+import { runWebsiteConversionFlowAgent } from './agents/websiteConversionFlowAgent';
+import { runWebsiteUXHeuristicAgent } from './agents/websiteUXHeuristicAgent';
+import { runWebsiteBehaviorAgent } from './agents/websiteBehaviorAgent';
+import { runWebsiteAutoRepairAgent } from './agents/websiteAutoRepairAgent';
+import { runWebsiteImprovementStrategist } from './agents/websiteImprovementStrategist';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -269,4 +276,50 @@ export async function runSelfHealing(): Promise<AgentExecutionResult | null> {
  */
 export async function runLeadIntelligence(): Promise<AgentExecutionResult | null> {
   return runAgent('ApolloLeadIntelligenceAgent', runApolloLeadIntelligenceAgent);
+}
+
+/* ── Website Intelligence Agents ─────────────────────────────────── */
+
+export async function runWebsiteUIVisibility(): Promise<AgentExecutionResult | null> {
+  return runAgent('WebsiteUIVisibilityAgent', runWebsiteUIVisibilityAgent);
+}
+
+export async function runWebsiteBrokenLinks(): Promise<AgentExecutionResult | null> {
+  return runAgent('WebsiteBrokenLinkAgent', runWebsiteBrokenLinkAgent);
+}
+
+export async function runWebsiteConversionFlow(): Promise<AgentExecutionResult | null> {
+  return runAgent('WebsiteConversionFlowAgent', runWebsiteConversionFlowAgent);
+}
+
+export async function runWebsiteUXHeuristics(): Promise<AgentExecutionResult | null> {
+  return runAgent('WebsiteUXHeuristicAgent', runWebsiteUXHeuristicAgent);
+}
+
+export async function runWebsiteBehavior(): Promise<AgentExecutionResult | null> {
+  return runAgent('WebsiteBehaviorAgent', runWebsiteBehaviorAgent);
+}
+
+export async function runWebsiteAutoRepair(): Promise<AgentExecutionResult | null> {
+  return runAgent('WebsiteAutoRepairAgent', runWebsiteAutoRepairAgent);
+}
+
+export async function runWebsiteStrategist(): Promise<AgentExecutionResult | null> {
+  return runAgent('WebsiteImprovementStrategist', runWebsiteImprovementStrategist);
+}
+
+/**
+ * Run all website intelligence agents in sequence.
+ */
+export async function runAllWebsiteIntelligence(): Promise<(AgentExecutionResult | null)[]> {
+  const results: (AgentExecutionResult | null)[] = [];
+  results.push(await runWebsiteUIVisibility());
+  results.push(await runWebsiteBrokenLinks());
+  results.push(await runWebsiteConversionFlow());
+  results.push(await runWebsiteUXHeuristics());
+  results.push(await runWebsiteBehavior());
+  results.push(await runWebsiteStrategist());
+  // Auto-repair runs last — processes issues found by other agents
+  results.push(await runWebsiteAutoRepair());
+  return results;
 }

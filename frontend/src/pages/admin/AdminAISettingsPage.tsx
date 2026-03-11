@@ -10,6 +10,7 @@ import OrchestrationHealthSection from './ai-settings/OrchestrationHealthSection
 import CampaignQATab from './ai-settings/CampaignQATab';
 import GovernanceCOOTab from './ai-settings/GovernanceCOOTab';
 import GovernanceAutonomyTab from './ai-settings/GovernanceAutonomyTab';
+import WebsiteIntelligenceTab from './ai-settings/WebsiteIntelligenceTab';
 
 interface Agent {
   id: string;
@@ -106,6 +107,7 @@ const TABS = [
   { key: 'errors', label: 'Error Center' },
   { key: 'controls', label: 'Controls' },
   { key: 'campaign-qa', label: 'Campaign QA' },
+  { key: 'website', label: 'Website Intelligence' },
 ];
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -135,6 +137,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   maintenance: 'secondary',
   ai_ops: 'warning',
   accelerator: 'success',
+  website_intelligence: 'purple',
 };
 
 const RESULT_COLORS: Record<string, string> = {
@@ -482,6 +485,7 @@ function AdminAISettingsPage() {
         />
       )}
       {activeTab === 'campaign-qa' && <CampaignQATab />}
+      {activeTab === 'website' && <WebsiteIntelligenceTab />}
 
       {/* Drill-Down Modals */}
       {selectedActivityId && (

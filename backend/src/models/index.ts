@@ -71,6 +71,7 @@ import CommunicationLog from './CommunicationLog';
 import CampaignInsight from './CampaignInsight';
 import CampaignVariant from './CampaignVariant';
 import LeadRecommendation from './LeadRecommendation';
+import WebsiteIssue from './WebsiteIssue';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -460,4 +461,5 @@ export {
   Department,
   Initiative,
   DepartmentEvent,
+  WebsiteIssue,
 };
