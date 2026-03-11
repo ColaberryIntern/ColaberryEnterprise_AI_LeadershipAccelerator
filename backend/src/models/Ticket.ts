@@ -65,7 +65,6 @@ Ticket.init(
     },
     ticket_number: {
       type: DataTypes.INTEGER,
-      autoIncrement: true,
       unique: true,
     },
     title: {
