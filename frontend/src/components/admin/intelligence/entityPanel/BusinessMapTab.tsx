@@ -128,6 +128,14 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
     return () => clearTimeout(timer);
   }, []);
 
+  // Re-fit when container dimensions change (e.g., after ResizeObserver fires)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      graphRef.current?.zoomToFit(400, 20);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [dimensions]);
+
   // Custom node rendering (compact for sidebar)
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
