@@ -223,7 +223,7 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
         briefings = experiments.map((e) => ({
           problem_detected: e.hypothesis,
           action_taken: `A/B test: ${e.control} vs ${e.variant}`,
-          expected_impact: `Tracking ${e.metric} over ${e.duration}`,
+          expected_impact: `Tracking ${e.metric} over ${e.duration_hours}h`,
           confidence: 60,
         }));
         break;

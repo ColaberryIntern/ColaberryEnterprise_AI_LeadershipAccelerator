@@ -1,6 +1,6 @@
 import { Op, literal } from 'sequelize';
 import { AiAgent, AiAgentActivityLog, AiSystemEvent } from '../models';
-import { getSetting } from './settingsService';
+import { getSetting, setSetting } from './settingsService';
 
 const GOVERNANCE_AGENTS = [
   { agent_name: 'visitor_tracker', agent_type: 'signal_detector', category: 'behavioral', description: 'Tracks visitor sessions and page events' },
