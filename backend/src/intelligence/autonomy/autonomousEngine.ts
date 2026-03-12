@@ -12,8 +12,21 @@ import { evaluateRisk, type RiskEvaluation } from '../agents/RiskEvaluatorAgent'
 import { executeAction } from '../agents/ExecutionAgent';
 import { updateFromDecision } from '../memory/learningEngine';
 import { getVectorMemory } from '../memory/vectorMemory';
+import { createTicket } from '../../services/ticketService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+export interface TicketSummary {
+  id: string;
+  ticket_number: number;
+  title: string;
+  status: string;
+  priority: string;
+  type: string;
+  estimated_effort: string | null;
+  due_date: string | null;
+  auto_executed: boolean;
+}
 
 export interface CycleResult {
   trace_id: string;
@@ -21,6 +34,7 @@ export interface CycleResult {
   decisions_created: number;
   auto_executed: number;
   proposed: number;
+  tickets: TicketSummary[];
   errors: string[];
   duration_ms: number;
 }
@@ -34,6 +48,7 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
   const traceId = crypto.randomUUID();
   const start = Date.now();
   const errors: string[] = [];
+  const tickets: TicketSummary[] = [];
   let decisionsCreated = 0;
   let autoExecuted = 0;
   let proposed = 0;
@@ -44,11 +59,11 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
     problems = await discoverProblems();
   } catch (err: any) {
     errors.push(`Discovery failed: ${err.message}`);
-    return { trace_id: traceId, problems_detected: 0, decisions_created: 0, auto_executed: 0, proposed: 0, errors, duration_ms: Date.now() - start };
+    return { trace_id: traceId, problems_detected: 0, decisions_created: 0, auto_executed: 0, proposed: 0, tickets: [], errors, duration_ms: Date.now() - start };
   }
 
   if (problems.length === 0) {
-    return { trace_id: traceId, problems_detected: 0, decisions_created: 0, auto_executed: 0, proposed: 0, errors, duration_ms: Date.now() - start };
+    return { trace_id: traceId, problems_detected: 0, decisions_created: 0, auto_executed: 0, proposed: 0, tickets: [], errors, duration_ms: Date.now() - start };
   }
 
   console.log(`[AutonomousEngine] Detected ${problems.length} problem(s) [trace: ${traceId}]`);
@@ -110,6 +125,57 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
 
       decisionsCreated++;
 
+      // Step 6b: Create ticket for tracking
+      const isAutoExec = risk.auto_executable;
+      const effortEstimate = estimateEffort(risk.risk_score, impact);
+      const dueDate = estimateDueDate(effortEstimate);
+      try {
+        const ticket = await createTicket({
+          title: `[${isAutoExec ? 'Auto' : 'Review'}] ${recommendation.action}`,
+          description: [
+            `**Problem:** ${problem.description}`,
+            `**Root Cause:** ${rootCause.reasoning}`,
+            `**Recommended Action:** ${recommendation.description || recommendation.action}`,
+            `**Expected Impact:** ${recommendation.expected_impact || 'N/A'}`,
+            `**Risk Score:** ${risk.risk_score}/100 (${risk.risk_tier})`,
+            `**Confidence:** ${risk.confidence_score}%`,
+            impact.metric ? `**Metric:** ${impact.metric} — ${impact.current_value} → ${impact.predicted_value} (${impact.change_pct > 0 ? '+' : ''}${impact.change_pct}%)` : '',
+          ].filter(Boolean).join('\n'),
+          status: isAutoExec ? 'in_progress' : 'todo',
+          priority: risk.risk_score >= 70 ? 'critical' : risk.risk_score >= 50 ? 'high' : risk.risk_score >= 30 ? 'medium' : 'low',
+          type: 'agent_action',
+          source: 'cory_autonomous_cycle',
+          created_by_type: 'cory',
+          created_by_id: 'cory-engine',
+          entity_type: 'decision',
+          entity_id: decision.get('decision_id') as string,
+          confidence: risk.confidence_score / 100,
+          estimated_effort: effortEstimate,
+          due_date: dueDate,
+          metadata: {
+            trace_id: traceId,
+            risk_tier: risk.risk_tier,
+            auto_executed: isAutoExec,
+            impact_metric: impact.metric,
+            impact_change_pct: impact.change_pct,
+          },
+        });
+
+        tickets.push({
+          id: ticket.id,
+          ticket_number: (ticket as any).ticket_number,
+          title: ticket.title,
+          status: ticket.status,
+          priority: ticket.priority,
+          type: ticket.type,
+          estimated_effort: effortEstimate,
+          due_date: dueDate ? dueDate.toISOString().split('T')[0] : null,
+          auto_executed: isAutoExec,
+        });
+      } catch (ticketErr: any) {
+        errors.push(`Ticket creation failed: ${ticketErr.message}`);
+      }
+
       // Step 7: Auto-execute if safe
       if (risk.auto_executable) {
         const execResult = await executeAction(
@@ -156,9 +222,29 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
     decisions_created: decisionsCreated,
     auto_executed: autoExecuted,
     proposed,
+    tickets,
     errors,
     duration_ms: duration,
   };
+}
+
+// ─── Effort & Due Date Estimation ───────────────────────────────────────────
+
+function estimateEffort(riskScore: number, impact: ImpactEstimate): string {
+  // Higher risk/impact = more effort
+  const changeMagnitude = Math.abs(impact.change_pct || 0);
+  if (riskScore < 20 && changeMagnitude < 10) return '30min';
+  if (riskScore < 40 && changeMagnitude < 25) return '2h';
+  if (riskScore < 60) return '4h';
+  if (riskScore < 80) return '1d';
+  return '3d';
+}
+
+function estimateDueDate(effort: string): Date {
+  const now = new Date();
+  const hoursMap: Record<string, number> = { '30min': 1, '2h': 4, '4h': 8, '1d': 24, '3d': 72 };
+  const hours = hoursMap[effort] || 24;
+  return new Date(now.getTime() + hours * 60 * 60 * 1000);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

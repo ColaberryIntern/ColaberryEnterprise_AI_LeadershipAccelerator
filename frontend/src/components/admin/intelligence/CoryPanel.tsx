@@ -78,11 +78,28 @@ function renderFormattedText(text: string): React.ReactNode {
 }
 
 function renderInlineFormatting(text: string): React.ReactNode {
-  // Bold: **text**
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  // Split on bold (**text**) and internal links (→ /path)
+  const parts = text.split(/(\*\*[^*]+\*\*|→\s*\/\S+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    // Internal link: → /admin/tickets
+    const linkMatch = part.match(/^→\s*(\/\S+)/);
+    if (linkMatch) {
+      return (
+        <a
+          key={i}
+          href={linkMatch[1]}
+          style={{ color: 'var(--color-primary-light)', fontWeight: 600, textDecoration: 'none', marginLeft: 4 }}
+          onClick={(e) => {
+            e.preventDefault();
+            window.location.href = linkMatch[1];
+          }}
+        >
+          View Tickets →
+        </a>
+      );
     }
     return part;
   });
@@ -234,7 +251,11 @@ function ActionButtons({ onAction }: { onAction: (q: string) => void }) {
           try {
             const res = await runAutonomyCycle();
             const d = res.data;
-            onAction(`Cycle complete: ${d.problems_detected} problems detected, ${d.decisions_created} decisions (${d.auto_executed} auto-executed, ${d.proposed} proposed for review).`);
+            const ticketLines = (d.tickets || []).map((t: any) =>
+              `• TK-${t.ticket_number}: ${t.title} [${t.priority}] — Est: ${t.estimated_effort || 'N/A'}, Due: ${t.due_date || 'TBD'} → /admin/tickets`
+            ).join('\n');
+            const summary = `Cycle complete: ${d.problems_detected} problems detected, ${d.decisions_created} decisions (${d.auto_executed} auto-executed, ${d.proposed} proposed for review).`;
+            onAction(ticketLines ? `${summary}\n\nTickets created:\n${ticketLines}` : summary);
           } catch { onAction('Cycle execution failed.'); }
         }}
       >
