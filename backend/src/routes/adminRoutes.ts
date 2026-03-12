@@ -25,6 +25,8 @@ import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
 import openclawRoutes from './admin/openclawRoutes';
+import reportingRoutes from './admin/reportingRoutes';
+import governanceCenterRoutes from './admin/governanceCenterRoutes';
 
 const router = Router();
 
@@ -54,5 +56,7 @@ router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);
 router.use(openclawRoutes);
+router.use(reportingRoutes);
+router.use(governanceCenterRoutes);
 
 export default router;

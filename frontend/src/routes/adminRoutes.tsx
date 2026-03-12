@@ -27,6 +27,7 @@ import IntelligenceDiscoveryPage from '../pages/admin/intelligence/IntelligenceD
 import IntelligenceSettingsPage from '../pages/admin/intelligence/IntelligenceSettingsPage';
 import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketingDashboardPage';
 import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
+import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
 const adminRoutes = (
   <>
     <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -57,6 +58,7 @@ const adminRoutes = (
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
+        <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
       </Route>
     </Route>
   </>

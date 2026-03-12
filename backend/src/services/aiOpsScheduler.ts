@@ -38,12 +38,106 @@ import {
 import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
 import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
+import { resolveAllCronSchedules, ResolvedCronSchedule } from './governanceResolutionService';
+
+// ─── Schedule Registry ──────────────────────────────────────────────────────
+// Maps agent_name (matching cron_schedule_configs rows) to runner + hardcoded default.
+
+interface ScheduleEntry {
+  agentName: string;
+  hardcodedSchedule: string;
+  runner: () => Promise<any>;
+  label: string;
+}
+
+const SCHEDULE_REGISTRY: ScheduleEntry[] = [
+  // Campaign agents
+  { agentName: 'CampaignHealthScanner', hardcodedSchedule: '*/15 * * * *', runner: runHealthScans, label: 'Campaign health scan' },
+  { agentName: 'CampaignRepairAgent', hardcodedSchedule: '8,28,48 * * * *', runner: runRepairAgent, label: 'Campaign repair agent' },
+  { agentName: 'ContentOptimizationAgent', hardcodedSchedule: '0 */6 * * *', runner: runContentOptimization, label: 'Content optimization' },
+  { agentName: 'ConversationOptimizationAgent', hardcodedSchedule: '0 4 * * *', runner: runConversationOptimization, label: 'Conversation optimization' },
+  { agentName: 'CampaignQAAgent', hardcodedSchedule: '0 */6 * * *', runner: runCampaignQA, label: 'Campaign QA agent' },
+  { agentName: 'CampaignSelfHealingAgent', hardcodedSchedule: '15,45 * * * *', runner: runSelfHealing, label: 'Campaign self-healing' },
+
+  // Platform agents
+  { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth, label: 'Orchestration health' },
+  { agentName: 'StudentProgressMonitor', hardcodedSchedule: '*/2 * * * *', runner: runStudentProgress, label: 'Student progress monitor' },
+  { agentName: 'PromptMonitorAgent', hardcodedSchedule: '*/1 * * * *', runner: runPromptMonitor, label: 'Prompt monitor' },
+  { agentName: 'OrchestrationAutoRepairAgent', hardcodedSchedule: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *', runner: runOrchestrationRepair, label: 'Orchestration auto-repair' },
+
+  // Intelligence layer
+  { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAutonomousCycle, label: 'Autonomous engine' },
+  { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runStrategicCycle, label: 'AI COO strategic cycle' },
+  { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },
+  { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
+
+  // Admissions intelligence
+  { agentName: 'AdmissionsVisitorActivity', hardcodedSchedule: '*/10 * * * *', runner: runAdmissionsVisitorActivity, label: 'Admissions visitor activity' },
+  { agentName: 'AdmissionsConversationMemory', hardcodedSchedule: '*/30 * * * *', runner: runAdmissionsConversationMemory, label: 'Admissions conversation memory' },
+  { agentName: 'AdmissionsIntentDetection', hardcodedSchedule: '3,13,23,33,43,53 * * * *', runner: runAdmissionsIntentDetection, label: 'Admissions intent detection' },
+  { agentName: 'AdmissionsProactiveOutreach', hardcodedSchedule: '*/5 * * * *', runner: runAdmissionsProactiveOutreach, label: 'Admissions proactive outreach' },
+  { agentName: 'AdmissionsConversationContinuity', hardcodedSchedule: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *', runner: runAdmissionsConversationContinuity, label: 'Admissions conversation continuity' },
+  { agentName: 'AdmissionsHighIntentDetection', hardcodedSchedule: '6,16,26,36,46,56 * * * *', runner: runAdmissionsHighIntentLead, label: 'Admissions high-intent lead' },
+  { agentName: 'AdmissionsInsightsAggregation', hardcodedSchedule: '10,40 * * * *', runner: runAdmissionsInsights, label: 'Admissions insights' },
+  { agentName: 'AdmissionsExecutiveUpdate', hardcodedSchedule: '0 */4 * * *', runner: runAdmissionsExecutiveUpdate, label: 'Admissions executive update' },
+  { agentName: 'AdmissionsCallCompliance', hardcodedSchedule: '7,22,37,52 * * * *', runner: runAdmissionsCallCompliance, label: 'Admissions call compliance' },
+  { agentName: 'AdmissionsCallbackManagement', hardcodedSchedule: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *', runner: runAdmissionsCallback, label: 'Admissions callback management' },
+  { agentName: 'AdmissionsConversationTaskMonitor', hardcodedSchedule: '*/2 * * * *', runner: runAdmissionsConversationTaskScan, label: 'Admissions conversation task monitor' },
+  { agentName: 'AdmissionsAssistant', hardcodedSchedule: '4,14,24,34,44,54 * * * *', runner: runAdmissionsAssistant, label: 'Admissions assistant' },
+
+  // OpenClaw network
+  { agentName: 'OpenclawSupervisor', hardcodedSchedule: '*/2 * * * *', runner: runOpenclawSupervisor, label: 'OpenClaw supervisor' },
+  { agentName: 'OpenclawMarketSignal', hardcodedSchedule: '*/30 * * * *', runner: runOpenclawMarketSignal, label: 'OpenClaw market signal' },
+  { agentName: 'OpenclawConversationDetection', hardcodedSchedule: '5,35 * * * *', runner: runOpenclawConversationDetection, label: 'OpenClaw conversation detection' },
+  { agentName: 'OpenclawContentResponse', hardcodedSchedule: '10,40 * * * *', runner: runOpenclawContentResponse, label: 'OpenClaw content response' },
+  { agentName: 'OpenclawBrowserWorker', hardcodedSchedule: '15,45 * * * *', runner: runOpenclawBrowserWorker, label: 'OpenClaw browser worker' },
+  { agentName: 'OpenclawLearningOptimization', hardcodedSchedule: '0 */4 * * *', runner: runOpenclawLearningOptimization, label: 'OpenClaw learning optimization' },
+  { agentName: 'OpenclawInfrastructureMonitor', hardcodedSchedule: '*/5 * * * *', runner: runOpenclawInfraMonitor, label: 'OpenClaw infra monitor' },
+  { agentName: 'OpenclawTechResearch', hardcodedSchedule: '0 6 * * *', runner: runOpenclawTechResearch, label: 'OpenClaw tech research' },
+];
+
+// Executive briefings use dynamic imports, registered separately
+interface DynamicScheduleEntry {
+  agentName: string;
+  hardcodedSchedule: string;
+  dynamicImport: () => void;
+  label: string;
+}
+
+const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
+  {
+    agentName: 'DailyExecutiveBriefing',
+    hardcodedSchedule: '0 7 * * *',
+    dynamicImport: () => {
+      import('./executiveBriefingService').then(({ generateDailyBriefing }) => {
+        generateDailyBriefing().catch((err) => {
+          console.error('[AI Ops] Daily briefing cron error:', err);
+        });
+      });
+    },
+    label: 'Executive daily briefing',
+  },
+  {
+    agentName: 'WeeklyStrategicBriefing',
+    hardcodedSchedule: '0 7 * * 1',
+    dynamicImport: () => {
+      import('./executiveBriefingService').then(({ generateWeeklyStrategicBriefing }) => {
+        generateWeeklyStrategicBriefing().catch((err) => {
+          console.error('[AI Ops] Weekly briefing cron error:', err);
+        });
+      });
+    },
+    label: 'Executive weekly briefing',
+  },
+];
 
 /**
  * Start all AI Operations cron jobs.
+ * Reads schedules from governance DB (cron_schedule_configs table).
+ * Falls back to hardcoded schedules if DB is unavailable.
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
-export function startAIOpsScheduler(): void {
+export async function startAIOpsScheduler(): Promise<void> {
   // Seed 11 departments on startup (idempotent)
   seedDepartments().catch((err) => {
     console.error('[AI Ops] Failed to seed departments:', err.message);
@@ -59,305 +153,61 @@ export function startAIOpsScheduler(): void {
     console.error('[AI Ops] Failed to seed admissions knowledge:', err.message);
   });
 
-  // Campaign health scan: every 15 minutes
-  cron.schedule('*/15 * * * *', () => {
-    runHealthScans().catch((err) => {
-      console.error('[AI Ops] Health scan cron error:', err);
-    });
-  });
+  // Load all cron schedules from governance DB
+  let dbSchedules = new Map<string, ResolvedCronSchedule>();
+  try {
+    dbSchedules = await resolveAllCronSchedules();
+    if (dbSchedules.size > 0) {
+      console.log(`[AI Ops] Loaded ${dbSchedules.size} cron schedules from governance DB`);
+    }
+  } catch (err: any) {
+    console.warn('[AI Ops] Failed to load cron schedules from DB, using hardcoded defaults:', err.message);
+  }
 
-  // Campaign Repair Agent: every 20 minutes (offset from scanner)
-  cron.schedule('8,28,48 * * * *', () => {
-    runRepairAgent().catch((err) => {
-      console.error('[AI Ops] Repair agent cron error:', err);
-    });
-  });
+  let scheduledCount = 0;
+  let skippedCount = 0;
 
-  // Content Optimization Agent: every 6 hours
-  cron.schedule('0 */6 * * *', () => {
-    runContentOptimization().catch((err) => {
-      console.error('[AI Ops] Content optimization cron error:', err);
-    });
-  });
+  // Schedule standard agents
+  for (const entry of SCHEDULE_REGISTRY) {
+    const dbEntry = dbSchedules.get(entry.agentName);
+    const schedule = dbEntry?.schedule || entry.hardcodedSchedule;
+    const enabled = dbEntry?.enabled ?? true;
+    const source = dbEntry ? 'DB' : 'hardcoded';
 
-  // Conversation Optimization Agent: daily at 4 AM
-  cron.schedule('0 4 * * *', () => {
-    runConversationOptimization().catch((err) => {
-      console.error('[AI Ops] Conversation optimization cron error:', err);
-    });
-  });
+    if (!enabled) {
+      console.log(`[AI Ops]   SKIP ${entry.label} (disabled in governance DB)`);
+      skippedCount++;
+      continue;
+    }
 
-  // Orchestration Health Agent: every 5 minutes
-  cron.schedule('*/5 * * * *', () => {
-    runOrchestrationHealth().catch((err) => {
-      console.error('[AI Ops] Orchestration health cron error:', err);
-    });
-  });
-
-  // Student Progress Monitor: every 2 minutes
-  cron.schedule('*/2 * * * *', () => {
-    runStudentProgress().catch((err) => {
-      console.error('[AI Ops] Student progress monitor cron error:', err);
-    });
-  });
-
-  // Prompt Monitor Agent: every minute
-  cron.schedule('*/1 * * * *', () => {
-    runPromptMonitor().catch((err) => {
-      console.error('[AI Ops] Prompt monitor cron error:', err);
-    });
-  });
-
-  // Orchestration Auto-Repair Agent: every 5 minutes (offset from health scan)
-  cron.schedule('3,8,13,18,23,28,33,38,43,48,53,58 * * * *', () => {
-    runOrchestrationRepair().catch((err) => {
-      console.error('[AI Ops] Orchestration repair cron error:', err);
-    });
-  });
-
-  // Campaign QA Agent: every 6 hours
-  cron.schedule('0 */6 * * *', () => {
-    runCampaignQA().catch((err) => {
-      console.error('[AI Ops] Campaign QA agent cron error:', err);
-    });
-  });
-
-  // Campaign Self-Healing Agent: every 30 minutes (offset from repair agent)
-  cron.schedule('15,45 * * * *', () => {
-    runSelfHealing().catch((err) => {
-      console.error('[AI Ops] Self-healing agent cron error:', err);
-    });
-  });
-
-  // --- Intelligence Layer Crons ---
-
-  // Autonomous Engine: every 10 minutes (offset from existing agents)
-  cron.schedule('5,15,25,35,45,55 * * * *', () => {
-    runAutonomousCycle().catch((err) => {
-      console.error('[AI Ops] Autonomous cycle cron error:', err);
-    });
-  });
-
-  // AI COO Strategic Cycle: every 30 minutes
-  cron.schedule('0,30 * * * *', () => {
-    runStrategicCycle().catch((err) => {
-      console.error('[AI Ops] Strategic cycle cron error:', err);
-    });
-  });
-
-  // Meta-Agent Loop: hourly at :02
-  cron.schedule('2 * * * *', () => {
-    runMetaAgentLoop().catch((err) => {
-      console.error('[AI Ops] Meta-agent loop cron error:', err);
-    });
-  });
-
-  // Apollo Lead Intelligence Agent: every 6 hours
-  cron.schedule('0 */6 * * *', () => {
-    runLeadIntelligence().catch((err) => {
-      console.error('[AI Ops] Lead intelligence agent cron error:', err);
-    });
-  });
-
-  // --- Admissions Intelligence Crons ---
-
-  // Admissions Visitor Activity: every 10 minutes
-  cron.schedule('*/10 * * * *', () => {
-    runAdmissionsVisitorActivity().catch((err) => {
-      console.error('[AI Ops] Admissions visitor activity cron error:', err);
-    });
-  });
-
-  // Admissions Conversation Memory: every 30 minutes
-  cron.schedule('*/30 * * * *', () => {
-    runAdmissionsConversationMemory().catch((err) => {
-      console.error('[AI Ops] Admissions conversation memory cron error:', err);
-    });
-  });
-
-  // Admissions Intent Detection: every 10 minutes (offset)
-  cron.schedule('3,13,23,33,43,53 * * * *', () => {
-    runAdmissionsIntentDetection().catch((err) => {
-      console.error('[AI Ops] Admissions intent detection cron error:', err);
-    });
-  });
-
-  // Admissions Proactive Outreach: every 5 minutes
-  cron.schedule('*/5 * * * *', () => {
-    runAdmissionsProactiveOutreach().catch((err) => {
-      console.error('[AI Ops] Admissions proactive outreach cron error:', err);
-    });
-  });
-
-  // Admissions Conversation Continuity: every 5 minutes (offset)
-  cron.schedule('2,7,12,17,22,27,32,37,42,47,52,57 * * * *', () => {
-    runAdmissionsConversationContinuity().catch((err) => {
-      console.error('[AI Ops] Admissions conversation continuity cron error:', err);
-    });
-  });
-
-  // Admissions High-Intent Lead Detection: every 10 minutes (offset)
-  cron.schedule('6,16,26,36,46,56 * * * *', () => {
-    runAdmissionsHighIntentLead().catch((err) => {
-      console.error('[AI Ops] Admissions high-intent lead cron error:', err);
-    });
-  });
-
-  // Admissions Insights Aggregation: every 30 minutes (offset)
-  cron.schedule('10,40 * * * *', () => {
-    runAdmissionsInsights().catch((err) => {
-      console.error('[AI Ops] Admissions insights cron error:', err);
-    });
-  });
-
-  // Admissions Executive Update: every 4 hours
-  cron.schedule('0 */4 * * *', () => {
-    runAdmissionsExecutiveUpdate().catch((err) => {
-      console.error('[AI Ops] Admissions executive update cron error:', err);
-    });
-  });
-
-  // Admissions Ops: Call compliance monitor every 15 minutes (offset :07)
-  cron.schedule('7,22,37,52 * * * *', () => {
-    runAdmissionsCallCompliance().catch((err) => {
-      console.error('[AI Ops] Admissions call compliance cron error:', err);
-    });
-  });
-
-  // Admissions Ops: Callback management every 5 minutes (offset :02)
-  cron.schedule('2,7,12,17,22,27,32,37,42,47,52,57 * * * *', () => {
-    runAdmissionsCallback().catch((err) => {
-      console.error('[AI Ops] Admissions callback management cron error:', err);
-    });
-  });
-
-  // Admissions Ops: Conversation task monitor every 2 minutes
-  cron.schedule('*/2 * * * *', () => {
-    runAdmissionsConversationTaskScan().catch((err) => {
-      console.error('[AI Ops] Admissions conversation task monitor cron error:', err);
-    });
-  });
-
-  // Admissions Ops: Assistant agent every 10 minutes (offset :04)
-  cron.schedule('4,14,24,34,44,54 * * * *', () => {
-    runAdmissionsAssistant().catch((err) => {
-      console.error('[AI Ops] Admissions assistant cron error:', err);
-    });
-  });
-
-  // --- Executive Briefing Crons ---
-
-  // Daily Executive Briefing: 7 AM every day
-  cron.schedule('0 7 * * *', () => {
-    import('./executiveBriefingService').then(({ generateDailyBriefing }) => {
-      generateDailyBriefing().catch((err) => {
-        console.error('[AI Ops] Daily briefing cron error:', err);
+    cron.schedule(schedule, () => {
+      entry.runner().catch((err) => {
+        console.error(`[AI Ops] ${entry.label} cron error:`, err);
       });
     });
-  });
 
-  // Weekly Strategic Briefing: 7 AM every Monday
-  cron.schedule('0 7 * * 1', () => {
-    import('./executiveBriefingService').then(({ generateWeeklyStrategicBriefing }) => {
-      generateWeeklyStrategicBriefing().catch((err) => {
-        console.error('[AI Ops] Weekly briefing cron error:', err);
-      });
-    });
-  });
+    console.log(`[AI Ops]   ${entry.label}: ${schedule} [${source}]`);
+    scheduledCount++;
+  }
 
-  // --- OpenClaw Autonomous Outreach Network Crons ---
+  // Schedule dynamic-import agents (executive briefings)
+  for (const entry of DYNAMIC_SCHEDULE_REGISTRY) {
+    const dbEntry = dbSchedules.get(entry.agentName);
+    const schedule = dbEntry?.schedule || entry.hardcodedSchedule;
+    const enabled = dbEntry?.enabled ?? true;
+    const source = dbEntry ? 'DB' : 'hardcoded';
 
-  // OpenClaw Supervisor: every 2 minutes
-  cron.schedule('*/2 * * * *', () => {
-    runOpenclawSupervisor().catch((err) => {
-      console.error('[AI Ops] OpenClaw supervisor cron error:', err);
-    });
-  });
+    if (!enabled) {
+      console.log(`[AI Ops]   SKIP ${entry.label} (disabled in governance DB)`);
+      skippedCount++;
+      continue;
+    }
 
-  // OpenClaw Market Signal: every 30 minutes
-  cron.schedule('*/30 * * * *', () => {
-    runOpenclawMarketSignal().catch((err) => {
-      console.error('[AI Ops] OpenClaw market signal cron error:', err);
-    });
-  });
+    cron.schedule(schedule, entry.dynamicImport);
 
-  // OpenClaw Conversation Detection: at :05 and :35
-  cron.schedule('5,35 * * * *', () => {
-    runOpenclawConversationDetection().catch((err) => {
-      console.error('[AI Ops] OpenClaw conversation detection cron error:', err);
-    });
-  });
+    console.log(`[AI Ops]   ${entry.label}: ${schedule} [${source}]`);
+    scheduledCount++;
+  }
 
-  // OpenClaw Content Response: at :10 and :40
-  cron.schedule('10,40 * * * *', () => {
-    runOpenclawContentResponse().catch((err) => {
-      console.error('[AI Ops] OpenClaw content response cron error:', err);
-    });
-  });
-
-  // OpenClaw Browser Worker: at :15 and :45
-  cron.schedule('15,45 * * * *', () => {
-    runOpenclawBrowserWorker().catch((err) => {
-      console.error('[AI Ops] OpenClaw browser worker cron error:', err);
-    });
-  });
-
-  // OpenClaw Learning Optimization: every 4 hours
-  cron.schedule('0 */4 * * *', () => {
-    runOpenclawLearningOptimization().catch((err) => {
-      console.error('[AI Ops] OpenClaw learning optimization cron error:', err);
-    });
-  });
-
-  // OpenClaw Infrastructure Monitor: every 5 minutes
-  cron.schedule('*/5 * * * *', () => {
-    runOpenclawInfraMonitor().catch((err) => {
-      console.error('[AI Ops] OpenClaw infra monitor cron error:', err);
-    });
-  });
-
-  // OpenClaw Tech Research: daily at 6 AM
-  cron.schedule('0 6 * * *', () => {
-    runOpenclawTechResearch().catch((err) => {
-      console.error('[AI Ops] OpenClaw tech research cron error:', err);
-    });
-  });
-
-  console.log('[AI Ops] Scheduler started (113 agents registered):');
-  console.log('[AI Ops]   Campaign health scan: every 15 minutes');
-  console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
-  console.log('[AI Ops]   Content optimization: every 6 hours');
-  console.log('[AI Ops]   Conversation optimization: daily at 4 AM');
-  console.log('[AI Ops]   Orchestration health: every 5 minutes');
-  console.log('[AI Ops]   Student progress monitor: every 2 minutes');
-  console.log('[AI Ops]   Prompt monitor: every minute');
-  console.log('[AI Ops]   Orchestration auto-repair: every 5 minutes (offset)');
-  console.log('[AI Ops]   Campaign QA agent: every 6 hours');
-  console.log('[AI Ops]   Campaign self-healing: every 30 minutes');
-  console.log('[AI Ops]   Autonomous engine: every 10 minutes');
-  console.log('[AI Ops]   AI COO strategic cycle: every 30 minutes');
-  console.log('[AI Ops]   Meta-agent loop: hourly at :02');
-  console.log('[AI Ops]   Apollo lead intelligence: every 6 hours');
-  console.log('[AI Ops]   Admissions visitor activity: every 10 minutes');
-  console.log('[AI Ops]   Admissions conversation memory: every 30 minutes');
-  console.log('[AI Ops]   Admissions intent detection: every 10 minutes');
-  console.log('[AI Ops]   Admissions proactive outreach: every 5 minutes');
-  console.log('[AI Ops]   Admissions conversation continuity: every 5 minutes');
-  console.log('[AI Ops]   Admissions high-intent lead: every 10 minutes');
-  console.log('[AI Ops]   Admissions insights: every 30 minutes');
-  console.log('[AI Ops]   Admissions executive update: every 4 hours');
-  console.log('[AI Ops]   Admissions call compliance: every 15 minutes');
-  console.log('[AI Ops]   Admissions callback management: every 5 minutes');
-  console.log('[AI Ops]   Admissions conversation task monitor: every 2 minutes');
-  console.log('[AI Ops]   Admissions assistant: every 10 minutes');
-  console.log('[AI Ops]   Executive daily briefing: 7 AM daily');
-  console.log('[AI Ops]   Executive weekly briefing: 7 AM Mondays');
-  console.log('[AI Ops]   OpenClaw supervisor: every 2 minutes');
-  console.log('[AI Ops]   OpenClaw market signal: every 30 minutes');
-  console.log('[AI Ops]   OpenClaw conversation detection: at :05,:35');
-  console.log('[AI Ops]   OpenClaw content response: at :10,:40');
-  console.log('[AI Ops]   OpenClaw browser worker: at :15,:45');
-  console.log('[AI Ops]   OpenClaw learning optimization: every 4 hours');
-  console.log('[AI Ops]   OpenClaw infra monitor: every 5 minutes');
-  console.log('[AI Ops]   OpenClaw tech research: daily at 6 AM');
+  console.log(`[AI Ops] Scheduler started: ${scheduledCount} agents scheduled, ${skippedCount} disabled`);
 }

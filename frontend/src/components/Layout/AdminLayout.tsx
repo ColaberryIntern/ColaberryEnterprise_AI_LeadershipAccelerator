@@ -21,6 +21,7 @@ const adminNavLinks = [
   { path: '/admin/events', label: 'Event Ledger', icon: 'journal' },
   { path: '/admin/import', label: 'Import', icon: 'cloud-upload' },
   { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
+  { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
   { path: '/admin/settings', label: 'Settings', icon: 'gear' },
 ];
 

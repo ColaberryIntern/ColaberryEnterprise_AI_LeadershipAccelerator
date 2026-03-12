@@ -1220,7 +1220,9 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Campaign evolution engine: every 4 hours');
 
-  // AI Operations Layer scheduler
+  // AI Operations Layer scheduler (async — reads schedules from governance DB)
   const { startAIOpsScheduler } = require('./aiOpsScheduler');
-  startAIOpsScheduler();
+  startAIOpsScheduler().catch((err: any) => {
+    console.error('[Scheduler] AI Ops scheduler startup error:', err.message);
+  });
 }
