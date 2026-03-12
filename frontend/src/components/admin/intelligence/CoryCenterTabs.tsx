@@ -439,6 +439,12 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [errorCount, setErrorCount] = useState(0);
 
+  // Reset error count when entity filter changes so badge doesn't show stale data
+  const entityKey = selectedEntity ? `${selectedEntity.type}:${selectedEntity.id}` : 'global';
+  useEffect(() => {
+    setErrorCount(0);
+  }, [entityKey]);
+
   // Convert context entity to filter prop shape
   const entityFilter = selectedEntity ? { type: selectedEntity.type, id: selectedEntity.id, name: selectedEntity.name } : null;
 

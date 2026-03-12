@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getInitiativesApi, InitiativeSummary } from '../../../../services/intelligenceApi';
+import InitiativeStoryModal from '../InitiativeStoryModal';
 
 interface Props {
   entityFilter?: { type: string; id: string; name: string } | null;
@@ -30,6 +31,7 @@ export default function InitiativesTab({ entityFilter }: Props) {
   const [initiatives, setInitiatives] = useState<InitiativeSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [selectedInitiativeId, setSelectedInitiativeId] = useState<string | null>(null);
 
   const filterKey = entityFilter ? `${entityFilter.type}:${entityFilter.id}` : 'global';
 
@@ -103,7 +105,7 @@ export default function InitiativesTab({ entityFilter }: Props) {
               </thead>
               <tbody>
                 {initiatives.map((init) => (
-                  <tr key={init.id}>
+                  <tr key={init.id} style={{ cursor: 'pointer' }} onClick={() => setSelectedInitiativeId(init.id)}>
                     <td>
                       <div className="fw-medium">{init.title}</div>
                       {init.description && (
@@ -164,6 +166,11 @@ export default function InitiativesTab({ entityFilter }: Props) {
           </div>
         </div>
       </div>
+
+      <InitiativeStoryModal
+        initiativeId={selectedInitiativeId}
+        onClose={() => setSelectedInitiativeId(null)}
+      />
     </div>
   );
 }

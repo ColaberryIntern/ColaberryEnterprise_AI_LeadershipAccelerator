@@ -68,17 +68,30 @@ export default function ErrorsTab({ onErrorCountChange, entityFilter }: ErrorsTa
 
   const filterKey = entityFilter ? `${entityFilter.type}:${entityFilter.id}` : 'global';
 
+  const isCampaignFilter = entityFilter && (entityFilter.type.toLowerCase() === 'campaign' || entityFilter.type.toLowerCase() === 'campaigns');
+
   const fetchData = useCallback(async () => {
     try {
+      // Campaign errors only apply when unfiltered or filtered by campaigns
+      const shouldFetchCampaignErrors = !entityFilter || isCampaignFilter;
       const errParams: Record<string, any> = { resolved: 'false', limit: 50, ...entityToParams(entityFilter) };
-      const [errRes, alertRes] = await Promise.allSettled([
-        api.get('/api/admin/ai-ops/errors', { params: errParams }),
+
+      const promises: Promise<any>[] = [
+        shouldFetchCampaignErrors
+          ? api.get('/api/admin/ai-ops/errors', { params: errParams })
+          : Promise.resolve(null),
         api.get('/api/admin/governance/alerts'),
-      ]);
-      if (errRes.status === 'fulfilled') {
-        setErrors(errRes.value.data.items);
-        onErrorCountChange?.(errRes.value.data.total);
+      ];
+
+      const [errRes, alertRes] = await Promise.allSettled(promises);
+
+      if (errRes.status === 'fulfilled' && errRes.value) {
+        setErrors(errRes.value.data.items || []);
+      } else {
+        setErrors([]);
       }
+
+      let totalErrors = 0;
       if (alertRes.status === 'fulfilled') {
         let alerts = alertRes.value.data.alerts || [];
         // Client-side filter governance alerts by entity if applicable
@@ -91,11 +104,20 @@ export default function ErrorsTab({ onErrorCountChange, entityFilter }: ErrorsTa
             if (t === 'campaign' || t === 'campaigns') {
               return a.entity_type === 'campaign';
             }
-            return true;
+            if (t === 'department') {
+              return true; // show all alerts for departments
+            }
+            return a.entity_type === t;
           });
         }
         setGovernanceAlerts(alerts);
+        totalErrors += alerts.length;
       }
+
+      if (errRes.status === 'fulfilled' && errRes.value) {
+        totalErrors += errRes.value.data.total || 0;
+      }
+      onErrorCountChange?.(totalErrors);
     } catch { /* ignore */ }
     setLoading(false);
   }, [filterKey, onErrorCountChange]);
@@ -171,7 +193,8 @@ export default function ErrorsTab({ onErrorCountChange, entityFilter }: ErrorsTa
         </div>
       )}
 
-      {/* Unresolved Errors */}
+      {/* Unresolved Errors — only show campaign errors table when relevant */}
+      {(!entityFilter || isCampaignFilter) && (
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-white fw-semibold d-flex align-items-center justify-content-between">
           <span>Unresolved Errors <span className="text-muted fw-normal">({errors.length})</span></span>
@@ -222,6 +245,16 @@ export default function ErrorsTab({ onErrorCountChange, entityFilter }: ErrorsTa
           </div>
         </div>
       </div>
+      )}
+
+      {/* No campaign errors context for non-campaign entities */}
+      {entityFilter && !isCampaignFilter && governanceAlerts.length === 0 && (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body text-center text-muted py-5">
+            No errors or alerts found for {entityFilter.name}
+          </div>
+        </div>
+      )}
 
       {/* Error Detail Modal */}
       {selectedErrorId && (
