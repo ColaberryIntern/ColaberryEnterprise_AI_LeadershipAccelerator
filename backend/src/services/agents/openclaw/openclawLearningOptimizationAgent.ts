@@ -23,8 +23,8 @@ export async function runOpenclawLearningOptimizationAgent(
     const responses = await OpenclawResponse.findAll({
       where: {
         post_status: 'posted',
-        engagement_metrics: { [Op.ne]: null },
-      },
+        engagement_metrics: { [Op.ne]: null as any },
+      } as any,
     });
 
     if (responses.length < minSampleSize) {

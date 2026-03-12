@@ -11,7 +11,7 @@ interface OpenclawSignalAttributes {
   author?: string;
   title?: string;
   content_excerpt?: string;
-  topic_tags?: string[];
+  topic_tags?: any;
   relevance_score?: number;
   engagement_score?: number;
   risk_score?: number;
@@ -32,7 +32,7 @@ class OpenclawSignal extends Model<OpenclawSignalAttributes> implements Openclaw
   declare author: string;
   declare title: string;
   declare content_excerpt: string;
-  declare topic_tags: string[];
+  declare topic_tags: any;
   declare relevance_score: number;
   declare engagement_score: number;
   declare risk_score: number;

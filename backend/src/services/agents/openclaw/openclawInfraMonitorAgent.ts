@@ -33,7 +33,7 @@ export async function runOpenclawInfraMonitorAgent(
       if (status === 'captcha_blocked') {
         // Pause all tasks for this platform
         await OpenclawTask.update(
-          { status: 'pending', assigned_agent: null, updated_at: new Date() },
+          { status: 'pending', assigned_agent: undefined, updated_at: new Date() } as any,
           {
             where: {
               session_id: session.id,

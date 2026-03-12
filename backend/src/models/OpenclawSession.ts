@@ -12,7 +12,7 @@ interface OpenclawSessionAttributes {
   last_activity_at?: Date;
   pages_visited?: number;
   actions_performed?: number;
-  errors?: Record<string, any>[];
+  errors?: any;
   health_score?: number;
   screenshot_path?: string;
   created_at?: Date;
@@ -28,7 +28,7 @@ class OpenclawSession extends Model<OpenclawSessionAttributes> implements Opencl
   declare last_activity_at: Date;
   declare pages_visited: number;
   declare actions_performed: number;
-  declare errors: Record<string, any>[];
+  declare errors: any;
   declare health_score: number;
   declare screenshot_path: string;
   declare created_at: Date;

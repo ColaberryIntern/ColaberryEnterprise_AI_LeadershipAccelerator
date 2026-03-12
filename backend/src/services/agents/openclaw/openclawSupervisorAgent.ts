@@ -50,10 +50,10 @@ export async function runOpenclawSupervisorAgent(
         await task.update({
           status: 'pending',
           retry_count: retries,
-          started_at: null,
-          assigned_agent: null,
+          started_at: undefined,
+          assigned_agent: undefined,
           updated_at: new Date(),
-        });
+        } as any);
         actions.push({
           campaign_id: '',
           action: 'retry_stuck_task',
@@ -78,10 +78,10 @@ export async function runOpenclawSupervisorAgent(
         where: {
           status: 'pending',
           [Op.or]: [
-            { scheduled_for: null },
+            { scheduled_for: { [Op.is]: null as any } },
             { scheduled_for: { [Op.lte]: new Date() } },
           ],
-        },
+        } as any,
         order: [['priority', 'DESC'], ['created_at', 'ASC']],
         limit: slotsAvailable,
       });

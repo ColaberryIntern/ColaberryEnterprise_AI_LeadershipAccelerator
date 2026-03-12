@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { OpenclawTask, OpenclawResponse, OpenclawSession } from '../../../models';
+import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from '../../../models';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
@@ -100,7 +100,7 @@ export async function runOpenclawBrowserWorkerAgent(
 
         // Link response back to signal
         const signal = response.signal_id
-          ? await (await import('../../../models')).OpenclawSignal.findByPk(response.signal_id)
+          ? await OpenclawSignal.findByPk(response.signal_id)
           : null;
         if (signal) {
           await signal.update({
