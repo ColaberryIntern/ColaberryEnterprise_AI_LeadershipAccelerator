@@ -113,6 +113,15 @@ function approvalLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function generateDestinationKey(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let key = '';
+  for (let i = 0; i < 8; i++) key += chars[Math.floor(Math.random() * chars.length)];
+  return `/c/${key}`;
+}
+
 // ─── Create Campaign Modal ──────────────────────────────────────────────────
 
 function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
@@ -184,7 +193,12 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                 </div>
                 <div className="col-md-8">
                   <label className="form-label small fw-medium">Destination Path *</label>
-                  <input className="form-control form-control-sm" placeholder="/strategy-call-prep" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
+                  <div className="input-group input-group-sm">
+                    <input className="form-control form-control-sm" placeholder="/strategy-call-prep or generate a key" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
+                    <button className="btn btn-outline-secondary" type="button" onClick={() => set('destination_path', generateDestinationKey())} title="Generate unique key">
+                      Generate Key
+                    </button>
+                  </div>
                 </div>
                 <div className="col-12">
                   <label className="form-label small fw-medium">Objective</label>
@@ -296,7 +310,12 @@ function EditCampaignModal({ campaign, onClose, onSaved }: { campaign: Registere
                 </div>
                 <div className="col-md-8">
                   <label className="form-label small fw-medium">Destination Path</label>
-                  <input className="form-control form-control-sm" placeholder="/strategy-call-prep" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
+                  <div className="input-group input-group-sm">
+                    <input className="form-control form-control-sm" placeholder="/strategy-call-prep or generate a key" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
+                    <button className="btn btn-outline-secondary" type="button" onClick={() => set('destination_path', generateDestinationKey())} title="Generate unique key">
+                      Generate Key
+                    </button>
+                  </div>
                 </div>
                 <div className="col-12">
                   <label className="form-label small fw-medium">Objective</label>
@@ -466,6 +485,19 @@ function CampaignLinkRegistryTab() {
   }, []);
 
   useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Delete campaign "${name}"? This cannot be undone.`)) return;
+    setActionLoading(`${id}:delete`);
+    try {
+      await api.delete(`/api/admin/campaigns/${id}`);
+      await fetchCampaigns();
+    } catch (e: any) {
+      alert(e.response?.data?.error || 'Failed to delete campaign');
+    } finally {
+      setActionLoading('');
+    }
+  };
 
   const handleAction = async (id: string, action: string) => {
     setActionLoading(`${id}:${action}`);
@@ -672,6 +704,14 @@ function CampaignLinkRegistryTab() {
                               {actionLoading === `${c.id}:${act.action}` ? '...' : act.label}
                             </button>
                           ))}
+                          <button
+                            className="btn btn-sm btn-outline-danger py-0"
+                            style={{ fontSize: '0.72rem' }}
+                            disabled={actionLoading === `${c.id}:delete`}
+                            onClick={() => handleDelete(c.id, c.name)}
+                          >
+                            {actionLoading === `${c.id}:delete` ? '...' : 'Delete'}
+                          </button>
                         </div>
                       </td>
                     </tr>
