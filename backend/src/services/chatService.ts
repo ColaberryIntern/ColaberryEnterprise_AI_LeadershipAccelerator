@@ -356,9 +356,10 @@ export async function sendMessage(
     messages.push(assistantMessage as any);
 
     for (const toolCall of assistantMessage.tool_calls) {
+      const fn = (toolCall as any).function;
       const result = await executeMayaAction(
-        toolCall.function.name,
-        JSON.parse(toolCall.function.arguments),
+        fn.name,
+        JSON.parse(fn.arguments),
         conversation.visitor_id,
         conversationId,
       );
