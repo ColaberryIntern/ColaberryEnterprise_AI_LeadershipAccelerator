@@ -1656,10 +1656,92 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description: 'Strategic planning agent for Alumni Relations. Strengthens post-graduation engagement, referral programs, and community building.',
     config: { department_slug: 'alumni', agent_name: 'AlumniNetworkArchitect' },
   },
+
+  // --- Security Operations Department (8 agents) ---
+  {
+    agent_name: 'SecurityDirectorAgent',
+    agent_type: 'security_director',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/securityDirectorAgent.ts',
+    trigger_type: 'cron',
+    schedule: '*/10 * * * *',
+    category: 'security_ops',
+    description: 'Coordinator agent for Security Operations. Aggregates recent security events, checks open tickets, monitors subordinate agent health, and creates tickets for unaddressed critical threats.',
+  },
+  {
+    agent_name: 'SecretDetectionAgent',
+    agent_type: 'secret_detection',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/secretDetectionAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 */4 * * *',
+    category: 'security_ops',
+    description: 'Scans source files for leaked secrets: AWS keys, private keys, connection strings, JWT tokens, API keys, and platform-specific credentials. Every 4 hours.',
+  },
+  {
+    agent_name: 'CodeSecurityAuditAgent',
+    agent_type: 'code_security',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/codeSecurityAuditAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 3 * * *',
+    category: 'security_ops',
+    description: 'Static analysis for SQL injection, XSS, command injection, eval usage, and path traversal vulnerabilities in backend TypeScript files. Daily at 3 AM.',
+  },
+  {
+    agent_name: 'DependencySecurityAgent',
+    agent_type: 'dependency_security',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/dependencySecurityAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 4 * * *',
+    category: 'security_ops',
+    description: 'Runs npm audit on backend and frontend projects to detect vulnerable dependencies. Creates tickets for critical and high CVEs. Daily at 4 AM.',
+  },
+  {
+    agent_name: 'RuntimeThreatMonitorAgent',
+    agent_type: 'runtime_threat',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/runtimeThreatMonitorAgent.ts',
+    trigger_type: 'cron',
+    schedule: '*/5 * * * *',
+    category: 'security_ops',
+    description: 'Monitors runtime activity for scraping detection (high-volume visitors) and agent failure spikes. Every 5 minutes.',
+  },
+  {
+    agent_name: 'AccessControlGuardianAgent',
+    agent_type: 'access_control',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/accessControlGuardianAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 5 * * *',
+    category: 'security_ops',
+    description: 'Audits route definitions for missing authentication middleware. Checks admin routes for requireAdmin, mutation endpoints for auth guards. Daily at 5 AM.',
+  },
+  {
+    agent_name: 'AISafetyMonitorAgent',
+    agent_type: 'ai_safety',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/aiSafetyMonitorAgent.ts',
+    trigger_type: 'cron',
+    schedule: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *',
+    category: 'security_ops',
+    description: 'Scans recent visitor chat messages for prompt injection attempts: system prompt overrides, role impersonation, jailbreaks, command probes. Every 5 minutes (offset).',
+  },
+  {
+    agent_name: 'AgentBehaviorMonitorAgent',
+    agent_type: 'agent_behavior',
+    module: 'security',
+    source_file: 'backend/src/services/agents/security/agentBehaviorMonitorAgent.ts',
+    trigger_type: 'cron',
+    schedule: '5,15,25,35,45,55 * * * *',
+    category: 'security_ops',
+    description: 'Monitors agent fleet for anomalies: stuck agents (running >15min), error spikes (>5/hr), and execution duration outliers (>3x average). Every 10 minutes.',
+  },
 ];
 
 /**
- * Seed the full agent registry (121 agents). Idempotent — uses findOrCreate
+ * Seed the full agent registry (129 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
 export async function seedAgentRegistry(): Promise<void> {

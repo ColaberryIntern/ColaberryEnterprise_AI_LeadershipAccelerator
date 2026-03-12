@@ -26,10 +26,11 @@ import MapsTab from './tabs/MapsTab';
 import TrendsTab from './tabs/TrendsTab';
 import AgentPerformanceTab from './tabs/AgentPerformanceTab';
 import DepartmentStrategyTab from './tabs/DepartmentStrategyTab';
+import SecurityTab from './tabs/SecurityTab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach' | 'insights' | 'reports' | 'maps' | 'trends' | 'agent-performance' | 'dept-strategy';
+type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach' | 'insights' | 'reports' | 'maps' | 'trends' | 'agent-performance' | 'dept-strategy' | 'security';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
@@ -495,6 +496,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
     { key: 'trends', label: 'Trends' },
     { key: 'agent-performance', label: 'Agent Perf' },
     { key: 'dept-strategy', label: 'Dept Strategy' },
+    { key: 'security', label: 'Security' },
   ];
 
   return (
@@ -562,6 +564,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         {activeTab === 'trends' && <TrendsTab />}
         {activeTab === 'agent-performance' && <AgentPerformanceTab />}
         {activeTab === 'dept-strategy' && <DepartmentStrategyTab />}
+        {activeTab === 'security' && <SecurityTab />}
       </div>
     </div>
   );

@@ -152,12 +152,21 @@ export type AiAgentType =
   | 'knowledge_graph_builder'
   // Department Strategy Architects
   | 'dept_strategy_architect'
+  // Security Operations
+  | 'security_director'
+  | 'secret_detection'
+  | 'code_security'
+  | 'dependency_security'
+  | 'runtime_threat'
+  | 'access_control'
+  | 'ai_safety'
+  | 'agent_behavior'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting' | 'dept_strategy';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting' | 'dept_strategy' | 'security_ops';
 
 interface AiAgentAttributes {
   id?: string;

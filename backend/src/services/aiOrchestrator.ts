@@ -50,6 +50,14 @@ import { runOpenclawLearningOptimizationAgent } from './agents/openclaw/openclaw
 import { runOpenclawInfraMonitorAgent } from './agents/openclaw/openclawInfraMonitorAgent';
 import { runOpenclawTechResearchAgent } from './agents/openclaw/openclawTechResearchAgent';
 import { runStrategyArchitectAgent } from './agents/strategy/strategyArchitectAgent';
+import { runSecurityDirectorAgent } from './agents/security/securityDirectorAgent';
+import { runSecretDetectionAgent } from './agents/security/secretDetectionAgent';
+import { runCodeSecurityAuditAgent } from './agents/security/codeSecurityAuditAgent';
+import { runDependencySecurityAgent } from './agents/security/dependencySecurityAgent';
+import { runRuntimeThreatMonitorAgent } from './agents/security/runtimeThreatMonitorAgent';
+import { runAccessControlGuardianAgent } from './agents/security/accessControlGuardianAgent';
+import { runAiSafetyMonitorAgent } from './agents/security/aiSafetyMonitorAgent';
+import { runAgentBehaviorMonitorAgent } from './agents/security/agentBehaviorMonitorAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -568,4 +576,38 @@ export async function runStudentSuccessArchitect(): Promise<AgentExecutionResult
 
 export async function runAlumniNetworkArchitect(): Promise<AgentExecutionResult | null> {
   return runAgent('AlumniNetworkArchitect', runStrategyArchitectAgent);
+}
+
+// ─── Security Operations Agents (8) ──────────────────────────────────────────
+
+export async function runSecurityDirector(): Promise<AgentExecutionResult | null> {
+  return runAgent('SecurityDirectorAgent', runSecurityDirectorAgent);
+}
+
+export async function runSecretDetection(): Promise<AgentExecutionResult | null> {
+  return runAgent('SecretDetectionAgent', runSecretDetectionAgent);
+}
+
+export async function runCodeSecurityAudit(): Promise<AgentExecutionResult | null> {
+  return runAgent('CodeSecurityAuditAgent', runCodeSecurityAuditAgent);
+}
+
+export async function runDependencySecurity(): Promise<AgentExecutionResult | null> {
+  return runAgent('DependencySecurityAgent', runDependencySecurityAgent);
+}
+
+export async function runRuntimeThreatMonitor(): Promise<AgentExecutionResult | null> {
+  return runAgent('RuntimeThreatMonitorAgent', runRuntimeThreatMonitorAgent);
+}
+
+export async function runAccessControlGuardian(): Promise<AgentExecutionResult | null> {
+  return runAgent('AccessControlGuardianAgent', runAccessControlGuardianAgent);
+}
+
+export async function runAiSafetyMonitor(): Promise<AgentExecutionResult | null> {
+  return runAgent('AISafetyMonitorAgent', runAiSafetyMonitorAgent);
+}
+
+export async function runAgentBehaviorMonitor(): Promise<AgentExecutionResult | null> {
+  return runAgent('AgentBehaviorMonitorAgent', runAgentBehaviorMonitorAgent);
 }

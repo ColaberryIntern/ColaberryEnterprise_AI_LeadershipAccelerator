@@ -27,6 +27,7 @@ const DEPARTMENT_MAP: Record<string, { label: string; color: string }> = {
   dept_infrastructure: { label: 'Infrastructure', color: 'danger' },
   dept_orchestration: { label: 'Orchestration', color: 'primary' },
   dept_strategy: { label: 'Strategy Architects', color: 'info' },
+  security_ops: { label: 'Security Operations', color: 'danger' },
 };
 
 const STATUS_COLORS: Record<string, string> = {

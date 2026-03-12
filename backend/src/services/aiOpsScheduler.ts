@@ -50,6 +50,14 @@ import {
   runLearningInnovationArchitect,
   runStudentSuccessArchitect,
   runAlumniNetworkArchitect,
+  runSecurityDirector,
+  runSecretDetection,
+  runCodeSecurityAudit,
+  runDependencySecurity,
+  runRuntimeThreatMonitor,
+  runAccessControlGuardian,
+  runAiSafetyMonitor,
+  runAgentBehaviorMonitor,
 } from './aiOrchestrator';
 import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
@@ -128,6 +136,16 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'LearningInnovationArchitect', hardcodedSchedule: '26 */6 * * *', runner: runLearningInnovationArchitect, label: 'Learning innovation architect' },
   { agentName: 'StudentSuccessArchitect', hardcodedSchedule: '28 */6 * * *', runner: runStudentSuccessArchitect, label: 'Student success architect' },
   { agentName: 'AlumniNetworkArchitect', hardcodedSchedule: '30 */6 * * *', runner: runAlumniNetworkArchitect, label: 'Alumni network architect' },
+
+  // Security Operations
+  { agentName: 'SecurityDirectorAgent', hardcodedSchedule: '*/10 * * * *', runner: runSecurityDirector, label: 'Security director' },
+  { agentName: 'SecretDetectionAgent', hardcodedSchedule: '0 */4 * * *', runner: runSecretDetection, label: 'Secret detection' },
+  { agentName: 'CodeSecurityAuditAgent', hardcodedSchedule: '0 3 * * *', runner: runCodeSecurityAudit, label: 'Code security audit' },
+  { agentName: 'DependencySecurityAgent', hardcodedSchedule: '0 4 * * *', runner: runDependencySecurity, label: 'Dependency security' },
+  { agentName: 'RuntimeThreatMonitorAgent', hardcodedSchedule: '*/5 * * * *', runner: runRuntimeThreatMonitor, label: 'Runtime threat monitor' },
+  { agentName: 'AccessControlGuardianAgent', hardcodedSchedule: '0 5 * * *', runner: runAccessControlGuardian, label: 'Access control guardian' },
+  { agentName: 'AISafetyMonitorAgent', hardcodedSchedule: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *', runner: runAiSafetyMonitor, label: 'AI safety monitor' },
+  { agentName: 'AgentBehaviorMonitorAgent', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAgentBehaviorMonitor, label: 'Agent behavior monitor' },
 ];
 
 // Executive briefings use dynamic imports, registered separately
@@ -163,6 +181,30 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     },
     label: 'Executive weekly briefing',
   },
+  {
+    agentName: 'ExecutiveAwarenessMorningDigest',
+    hardcodedSchedule: '0 7 * * *',
+    dynamicImport: () => {
+      import('./executiveBriefingService').then(({ generateExecutiveDigest }) => {
+        generateExecutiveDigest('morning').catch((err) => {
+          console.error('[AI Ops] Executive morning digest cron error:', err);
+        });
+      });
+    },
+    label: 'Executive awareness morning digest',
+  },
+  {
+    agentName: 'ExecutiveAwarenessEveningDigest',
+    hardcodedSchedule: '0 18 * * *',
+    dynamicImport: () => {
+      import('./executiveBriefingService').then(({ generateExecutiveDigest }) => {
+        generateExecutiveDigest('evening').catch((err) => {
+          console.error('[AI Ops] Executive evening digest cron error:', err);
+        });
+      });
+    },
+    label: 'Executive awareness evening digest',
+  },
 ];
 
 /**
@@ -172,12 +214,12 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
 export async function startAIOpsScheduler(): Promise<void> {
-  // Seed 16 departments on startup (idempotent)
+  // Seed 17 departments on startup (idempotent)
   seedDepartments().catch((err) => {
     console.error('[AI Ops] Failed to seed departments:', err.message);
   });
 
-  // Seed full agent registry on startup (idempotent — 121 agents)
+  // Seed full agent registry on startup (idempotent — 129 agents)
   seedAgentRegistry().catch((err) => {
     console.error('[AI Ops] Failed to seed agent registry:', err.message);
   });
@@ -185,6 +227,13 @@ export async function startAIOpsScheduler(): Promise<void> {
   // Seed admissions knowledge base on startup (idempotent)
   seedAdmissionsKnowledge().catch((err) => {
     console.error('[AI Ops] Failed to seed admissions knowledge:', err.message);
+  });
+
+  // Seed executive notification policy on startup (idempotent)
+  import('./executiveAwarenessSeed').then(({ seedExecutiveNotificationPolicy }) => {
+    seedExecutiveNotificationPolicy().catch((err) => {
+      console.error('[AI Ops] Failed to seed executive notification policy:', err.message);
+    });
   });
 
   // Load all cron schedules from governance DB

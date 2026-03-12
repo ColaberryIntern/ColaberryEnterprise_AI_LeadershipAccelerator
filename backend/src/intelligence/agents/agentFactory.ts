@@ -27,7 +27,8 @@ export type Department =
   | 'Operations'
   | 'Orchestration'
   | 'Growth'
-  | 'Infrastructure';
+  | 'Infrastructure'
+  | 'Security';
 
 const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
   // Intelligence
@@ -64,6 +65,8 @@ const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
   reporting: 'Reporting',
   // Department Strategy
   dept_strategy: 'Strategy',
+  // Security Operations
+  security_ops: 'Security',
 };
 
 const DEPARTMENT_TO_CATEGORIES: Record<Department, string[]> = {
@@ -84,6 +87,7 @@ const DEPARTMENT_TO_CATEGORIES: Record<Department, string[]> = {
   Orchestration: [],
   Growth: [],
   Infrastructure: [],
+  Security: ['security_ops'],
 };
 
 export function getDepartmentForCategory(category: string): Department {

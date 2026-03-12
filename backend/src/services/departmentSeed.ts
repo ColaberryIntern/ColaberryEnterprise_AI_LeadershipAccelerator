@@ -20,6 +20,7 @@ const DEPARTMENTS = [
   { slug: 'orchestration', name: 'Orchestration', color: '#3182ce', bg_light: '#bee3f8', mission: 'Agent fleet coordination, system performance, decision simulation, and hiring.' },
   { slug: 'growth', name: 'Growth', color: '#805ad5', bg_light: '#e9d8fd', mission: 'Growth experiments, opportunity scanning, partnership development, and expansion.' },
   { slug: 'infrastructure', name: 'Infrastructure', color: '#718096', bg_light: '#e2e8f0', mission: 'AI model performance, security monitoring, system health, and reliability.' },
+  { slug: 'security', name: 'Security Operations', color: '#c53030', bg_light: '#fff5f5', mission: 'Threat detection, vulnerability management, secret scanning, runtime protection, and AI safety monitoring.' },
 ];
 
 export async function seedDepartments(): Promise<void> {
