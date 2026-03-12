@@ -18,6 +18,8 @@ import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
 import { seedDepartments } from './seeds/seedDepartments';
+import { seedCurriculumTypeDefinitions } from './seeds/seedCurriculumTypeDefinitions';
+import { seedAllCampaigns } from './seeds/seedAllCampaigns';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 
@@ -92,6 +94,24 @@ async function start(): Promise<void> {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
   await connectDatabase();
+
+  // Migrate mini_section_type from ENUM to VARCHAR for dynamic curriculum types
+  try {
+    await sequelize.query(`
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_type WHERE typname = 'enum_mini_sections_mini_section_type'
+        ) THEN
+          ALTER TABLE mini_sections ALTER COLUMN mini_section_type TYPE VARCHAR(100) USING mini_section_type::VARCHAR;
+          DROP TYPE IF EXISTS "enum_mini_sections_mini_section_type";
+          RAISE NOTICE 'Migrated mini_section_type ENUM -> VARCHAR';
+        END IF;
+      END $$;
+    `);
+  } catch (err: any) {
+    console.warn('[DB] mini_section_type ENUM migration skipped:', err?.message);
+  }
+
   try {
     await sequelize.sync({ alter: true });
   } catch (err: any) {
@@ -101,6 +121,8 @@ async function start(): Promise<void> {
   await ensureCampaignLinkColumns();
   await seedProgramCurriculum();
   await seedDepartments();
+  await seedCurriculumTypeDefinitions();
+  await seedAllCampaigns();
 
   // Intelligence OS: ensure tables exist and start autonomous discovery
   await ensureIntelligenceTables();
