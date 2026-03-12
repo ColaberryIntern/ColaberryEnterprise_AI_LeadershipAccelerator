@@ -495,48 +495,100 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
   // Convert context entity to filter prop shape
   const entityFilter = selectedEntity ? { type: selectedEntity.type, id: selectedEntity.id, name: selectedEntity.name } : null;
 
-  const tabs: { key: TabKey; label: string; badge?: number }[] = [
-    { key: 'dashboard', label: 'Dashboard' },
-    { key: 'alerts', label: 'Alerts' },
-    { key: 'orchestration', label: 'Agents' },
-    { key: 'activity', label: 'Activity' },
-    { key: 'health', label: 'Health' },
-    { key: 'errors', label: 'Errors', badge: errorCount },
-    { key: 'qa', label: 'QA & Scans' },
-    { key: 'safety', label: 'Safety' },
-    { key: 'timeline', label: 'Timeline' },
-    { key: 'impact', label: 'Impact' },
-    { key: 'initiatives', label: 'Initiatives' },
-    { key: 'roadmap', label: 'Roadmap' },
-    { key: 'dept-timeline', label: 'Dept Timeline' },
-    { key: 'innovation', label: 'Innovation' },
-    { key: 'revenue', label: 'Revenue' },
-    { key: 'outreach', label: 'Outreach' },
-    { key: 'insights', label: 'Insights' },
-    { key: 'reports', label: 'Reports' },
-    { key: 'maps', label: 'Maps' },
-    { key: 'trends', label: 'Trends' },
-    { key: 'agent-performance', label: 'Agent Perf' },
-    { key: 'dept-strategy', label: 'Dept Strategy' },
-    { key: 'security', label: 'Security' },
-    { key: 'executions', label: 'Executions' },
+  type TabGroup = 'overview' | 'agents' | 'operations' | 'strategy' | 'analytics';
+
+  const TAB_GROUPS: { key: TabGroup; label: string; tabs: { key: TabKey; label: string; badge?: number }[] }[] = [
+    {
+      key: 'overview', label: 'Overview',
+      tabs: [
+        { key: 'dashboard', label: 'Dashboard' },
+        { key: 'alerts', label: 'Alerts' },
+        { key: 'impact', label: 'Impact' },
+        { key: 'maps', label: 'Maps' },
+      ],
+    },
+    {
+      key: 'agents', label: 'Agent Fleet',
+      tabs: [
+        { key: 'orchestration', label: 'Agents' },
+        { key: 'activity', label: 'Activity' },
+        { key: 'health', label: 'Health' },
+        { key: 'errors', label: 'Errors', badge: errorCount },
+        { key: 'agent-performance', label: 'Performance' },
+      ],
+    },
+    {
+      key: 'operations', label: 'Operations',
+      tabs: [
+        { key: 'qa', label: 'QA & Scans' },
+        { key: 'safety', label: 'Safety' },
+        { key: 'security', label: 'Security' },
+        { key: 'timeline', label: 'Decisions' },
+        { key: 'dept-timeline', label: 'Dept Timeline' },
+      ],
+    },
+    {
+      key: 'strategy', label: 'Strategy',
+      tabs: [
+        { key: 'initiatives', label: 'Initiatives' },
+        { key: 'roadmap', label: 'Roadmap' },
+        { key: 'innovation', label: 'Innovation' },
+        { key: 'dept-strategy', label: 'Dept Strategy' },
+        { key: 'executions', label: 'Executions' },
+      ],
+    },
+    {
+      key: 'analytics', label: 'Analytics',
+      tabs: [
+        { key: 'revenue', label: 'Revenue' },
+        { key: 'trends', label: 'Trends' },
+        { key: 'insights', label: 'Insights' },
+        { key: 'reports', label: 'Reports' },
+        { key: 'outreach', label: 'Outreach' },
+      ],
+    },
   ];
+
+  // Find which group the active tab belongs to
+  const activeGroupKey = TAB_GROUPS.find(g => g.tabs.some(t => t.key === activeTab))?.key || 'overview';
+  const activeGroup = TAB_GROUPS.find(g => g.key === activeGroupKey)!;
 
   return (
     <div className="d-flex flex-column h-100">
-      {/* Tab Bar */}
-      <div className="px-3 pt-2" style={{ flexShrink: 0 }}>
-        <ul className="nav nav-tabs flex-wrap" style={{ fontSize: '0.78rem' }}>
-          {tabs.map((tab) => (
+      {/* Group Selector */}
+      <div className="px-3 pt-2 d-flex gap-1 flex-wrap" style={{ flexShrink: 0 }}>
+        {TAB_GROUPS.map((group) => {
+          const isActive = group.key === activeGroupKey;
+          const groupBadge = group.tabs.reduce((s, t) => s + (t.badge || 0), 0);
+          return (
+            <button
+              key={group.key}
+              className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline-secondary'}`}
+              onClick={() => setActiveTab(group.tabs[0].key)}
+              style={{ fontSize: '0.72rem', padding: '4px 12px', fontWeight: isActive ? 600 : 400 }}
+            >
+              {group.label}
+              {groupBadge > 0 && (
+                <span className="badge bg-danger ms-1" style={{ fontSize: '0.55rem' }}>{groupBadge}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sub-Tabs */}
+      <div className="px-3 pt-1" style={{ flexShrink: 0 }}>
+        <ul className="nav nav-tabs" style={{ fontSize: '0.76rem' }}>
+          {activeGroup.tabs.map((tab) => (
             <li key={tab.key} className="nav-item">
               <button
                 className={`nav-link ${activeTab === tab.key ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.key)}
-                style={{ padding: '6px 14px', fontSize: '0.76rem', whiteSpace: 'nowrap' }}
+                style={{ padding: '5px 14px', fontSize: '0.74rem', whiteSpace: 'nowrap' }}
               >
                 {tab.label}
                 {tab.badge != null && tab.badge > 0 && (
-                  <span className="badge bg-danger ms-1" style={{ fontSize: '0.6rem' }}>{tab.badge}</span>
+                  <span className="badge bg-danger ms-1" style={{ fontSize: '0.55rem' }}>{tab.badge}</span>
                 )}
               </button>
             </li>
