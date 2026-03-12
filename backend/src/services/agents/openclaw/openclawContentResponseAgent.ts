@@ -1,10 +1,12 @@
 import { Op } from 'sequelize';
 import { OpenclawSignal, OpenclawTask, OpenclawResponse } from '../../../models';
+import { getOpenAIClient } from '../../../intelligence/assistant/openaiHelper';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
  * OpenClaw Content Response Agent
  * Generates educational, platform-appropriate responses for queued signals.
+ * Uses LLM (GPT-4o-mini) for intelligent response generation with template fallback.
  * Creates draft responses pending admin approval.
  */
 export async function runOpenclawContentResponseAgent(
@@ -49,7 +51,7 @@ export async function runOpenclawContentResponseAgent(
 
         // Generate response content
         const tone = selectTone(signal, defaultTone);
-        const content = generateResponse(signal, tone, maxLength);
+        const content = await generateLLMResponse(signal, tone, maxLength);
 
         // Create UTM params
         const utmParams = {
@@ -149,10 +151,97 @@ function selectTone(signal: any, defaultTone: string): string {
   return defaultTone;
 }
 
-function generateResponse(signal: any, tone: string, maxLength: number): string {
-  // Template-based response generation
-  // In production, this would call an LLM API
+const SYSTEM_PROMPT = `You are a knowledgeable AI education thought leader writing responses to online discussions about AI, enterprise AI adoption, AI training, and workforce transformation.
+
+Your employer is Colaberry — a company that provides enterprise AI leadership training and bootcamps. You NEVER mention Colaberry by name in your responses. Instead, you provide genuinely helpful, educational insights that establish thought leadership.
+
+Rules:
+1. Lead with VALUE — share real insights, data points, frameworks, or practical advice
+2. NEVER pitch, sell, or mention any company or product by name
+3. NEVER include links or URLs in the response
+4. Match the platform's communication style and norms
+5. Be authentic — write like a real person who happens to be deeply knowledgeable about AI adoption
+6. Keep responses concise and substantive — no filler, no generic platitudes
+7. If the original post asks a question, answer it directly first
+8. Draw on real industry trends: AI literacy gaps, change management, ROI of upskilling, adoption curves
+9. Avoid corporate jargon — write naturally
+10. End with a thought-provoking observation or question that invites further discussion, not a call to action`;
+
+function buildUserPrompt(signal: any, tone: string, maxLength: number): string {
   const platform = signal.platform;
+  const title = signal.title || '';
+  const excerpt = signal.content_excerpt || '';
+  const details = signal.details || {};
+
+  let platformContext = '';
+  if (platform === 'reddit') {
+    platformContext = `This is a Reddit post in r/${details.subreddit || 'unknown'}. Write like a genuine Reddit commenter — casual but knowledgeable. Don't use bullet points or headers. Keep it to 2-3 paragraphs max.`;
+  } else if (platform === 'hackernews') {
+    platformContext = `This is a Hacker News discussion. HN values technical depth, contrarian thinking, and data-backed claims. Be concise and intellectually rigorous. Avoid anything that sounds like marketing.`;
+  } else if (platform === 'devto') {
+    platformContext = `This is a Dev.to article discussion. The audience is developers. You can use technical language and reference tools/frameworks. Be practical and actionable.`;
+  } else if (platform === 'linkedin') {
+    platformContext = `This is a LinkedIn post. Professional tone but not stiff. Share insights from experience. Short paragraphs work well.`;
+  } else if (platform === 'quora') {
+    platformContext = `This is a Quora question. Give a thorough, authoritative answer. Structure is okay here — numbered points or short sections work well.`;
+  }
+
+  return `Platform: ${platform}
+Tone: ${tone}
+Max length: ${maxLength} characters
+
+${platformContext}
+
+--- ORIGINAL POST ---
+Title: ${title}
+Content: ${excerpt.slice(0, 800)}
+${details.subreddit ? `Subreddit: r/${details.subreddit}` : ''}
+${details.num_comments ? `Comments: ${details.num_comments}` : ''}
+--- END ---
+
+Write a response to this post. Remember: provide genuine value, no self-promotion, no links.`;
+}
+
+// Use gpt-4o for outreach content — higher quality than gpt-4o-mini
+const OPENCLAW_MODEL = 'gpt-4o';
+
+async function generateLLMResponse(signal: any, tone: string, maxLength: number): Promise<string> {
+  const userPrompt = buildUserPrompt(signal, tone, maxLength);
+  const client = getOpenAIClient();
+
+  let llmResult: string | null = null;
+  if (client) {
+    try {
+      const response = await client.chat.completions.create({
+        model: OPENCLAW_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: Math.min(Math.ceil(maxLength / 3), 1024),
+        temperature: 0.7,
+      });
+      llmResult = response.choices[0]?.message?.content || null;
+    } catch (err: any) {
+      console.warn('[OpenClaw Content] LLM call failed, using template fallback:', err?.message?.slice(0, 200));
+    }
+  }
+
+  if (llmResult) {
+    // Clean up any LLM artifacts
+    let cleaned = llmResult.trim();
+    // Remove any accidental self-references the LLM might add
+    cleaned = cleaned.replace(/\b[Cc]olaberry\b/g, '');
+    // Remove any URLs the LLM might sneak in
+    cleaned = cleaned.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+    return cleaned.slice(0, maxLength);
+  }
+
+  // Fallback to template if LLM unavailable
+  return generateTemplateResponse(signal, tone, maxLength);
+}
+
+function generateTemplateResponse(signal: any, tone: string, maxLength: number): string {
   const title = signal.title || 'this topic';
 
   const templates: Record<string, string[]> = {
@@ -165,7 +254,7 @@ function generateResponse(signal: any, tone: string, maxLength: number): string 
       `Really resonates with this. The biggest challenge I see isn't technical — it's organizational. Teams need practical, hands-on AI skills, not just awareness. Has anyone found programs that actually bridge that gap between theory and practice?`,
     ],
     technical: [
-      `Good technical breakdown. One dimension worth adding: the pipeline from model selection → fine-tuning → deployment → monitoring benefits enormously from teams with hands-on AI engineering skills. We've found that a structured training approach covering prompt engineering, RAG architectures, and evaluation frameworks dramatically reduces iteration cycles.`,
+      `Good technical breakdown. One dimension worth adding: the pipeline from model selection to fine-tuning to deployment to monitoring benefits enormously from teams with hands-on AI engineering skills. A structured training approach covering prompt engineering, RAG architectures, and evaluation frameworks dramatically reduces iteration cycles.`,
       `Solid analysis. In practice, the bottleneck often isn't the model architecture but the team's ability to evaluate, iterate, and deploy effectively. Organizations that invest in AI engineering training see significantly faster time-to-production.`,
     ],
   };
