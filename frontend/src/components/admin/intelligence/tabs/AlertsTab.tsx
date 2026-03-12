@@ -47,6 +47,16 @@ export default function AlertsTab() {
   const [stats, setStats] = useState<AlertStats | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+
+  useEffect(() => {
+    if (!selectedAlert) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedAlert(null);
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [selectedAlert]);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -165,8 +175,18 @@ export default function AlertsTab() {
                       {SEVERITY_LABELS[alert.severity] || `S${alert.severity}`}
                     </span>
                   </td>
-                  <td style={{ fontSize: '13px', fontWeight: 500, maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {alert.title}
+                  <td style={{ fontSize: '0.82rem', fontWeight: 500, maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedAlert(alert)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedAlert(alert); } }}
+                      style={{ color: 'var(--color-primary-light, #2b6cb0)', cursor: 'pointer', textDecoration: 'none' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLSpanElement).style.textDecoration = 'underline'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLSpanElement).style.textDecoration = 'none'; }}
+                    >
+                      {alert.title}
+                    </span>
                     {alert.description && (
                       <div style={{ fontSize: '11px', color: '#718096', fontWeight: 400 }}>{alert.description.slice(0, 80)}{alert.description.length > 80 ? '...' : ''}</div>
                     )}
@@ -202,6 +222,114 @@ export default function AlertsTab() {
           </table>
         </div>
       </div>
+
+      {/* Alert Detail Modal */}
+      {selectedAlert && (
+        <>
+          <div
+            className="modal-backdrop show"
+            style={{ zIndex: 1050 }}
+            onClick={() => setSelectedAlert(null)}
+          />
+          <div
+            className="modal show d-block"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="alert-detail-title"
+            style={{ zIndex: 1055 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setSelectedAlert(null); }}
+          >
+            <div className="modal-dialog modal-dialog-centered modal-lg">
+              <div className="modal-content border-0 shadow-sm">
+                <div className="modal-header py-2 bg-white">
+                  <h6 id="alert-detail-title" className="modal-title mb-0" style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-primary, #1a365d)' }}>
+                    {selectedAlert.title}
+                    <span
+                      className={`badge bg-${SEVERITY_COLORS[selectedAlert.severity] || 'secondary'} ms-2`}
+                      style={{ fontSize: '0.65rem', verticalAlign: 'middle' }}
+                    >
+                      {SEVERITY_LABELS[selectedAlert.severity] || `S${selectedAlert.severity}`}
+                    </span>
+                  </h6>
+                  <button type="button" className="btn-close" aria-label="Close" onClick={() => setSelectedAlert(null)} />
+                </div>
+                <div className="modal-body py-3">
+                  {selectedAlert.description && (
+                    <div className="mb-3">
+                      <div className="fw-medium mb-1" style={{ fontSize: '0.75rem', color: 'var(--color-text-light, #718096)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Description</div>
+                      <p className="mb-0" style={{ fontSize: '0.75rem', color: 'var(--color-text, #2d3748)', lineHeight: 1.6 }}>{selectedAlert.description}</p>
+                    </div>
+                  )}
+                  <div className="row g-3">
+                    <div className="col-6 col-md-3">
+                      <div className="fw-medium mb-1" style={{ fontSize: '0.75rem', color: 'var(--color-text-light, #718096)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Impact Area</div>
+                      <div style={{ fontSize: '0.75rem' }}>{selectedAlert.impact_area || '—'}</div>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <div className="fw-medium mb-1" style={{ fontSize: '0.75rem', color: 'var(--color-text-light, #718096)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Type</div>
+                      <div style={{ fontSize: '0.75rem' }}>{selectedAlert.source_type || '—'}</div>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <div className="fw-medium mb-1" style={{ fontSize: '0.75rem', color: 'var(--color-text-light, #718096)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</div>
+                      <span className={`badge bg-${STATUS_COLORS[selectedAlert.status] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>
+                        {selectedAlert.status}
+                      </span>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <div className="fw-medium mb-1" style={{ fontSize: '0.75rem', color: 'var(--color-text-light, #718096)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Created</div>
+                      <div style={{ fontSize: '0.75rem' }}>{new Date(selectedAlert.created_at).toLocaleString()}</div>
+                    </div>
+                  </div>
+                  {selectedAlert.type && (
+                    <div className="mt-3">
+                      <div className="fw-medium mb-1" style={{ fontSize: '0.75rem', color: 'var(--color-text-light, #718096)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Type</div>
+                      <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>{selectedAlert.type}</span>
+                    </div>
+                  )}
+                  {selectedAlert.urgency && (
+                    <div className="mt-3">
+                      <div className="fw-medium mb-1" style={{ fontSize: '0.75rem', color: 'var(--color-text-light, #718096)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Urgency</div>
+                      <div style={{ fontSize: '0.75rem' }}>{selectedAlert.urgency}</div>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer py-2">
+                  {selectedAlert.status === 'new' && (
+                    <button
+                      className="btn btn-sm btn-outline-warning"
+                      style={{ fontSize: '0.75rem' }}
+                      onClick={() => { handleAction(selectedAlert.id, 'acknowledge'); setSelectedAlert(null); }}
+                    >
+                      Acknowledge
+                    </button>
+                  )}
+                  {(selectedAlert.status === 'new' || selectedAlert.status === 'acknowledged' || selectedAlert.status === 'investigating') && (
+                    <>
+                      <button
+                        className="btn btn-sm btn-outline-success"
+                        style={{ fontSize: '0.75rem' }}
+                        onClick={() => { handleAction(selectedAlert.id, 'resolve'); setSelectedAlert(null); }}
+                      >
+                        Resolve
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-secondary"
+                        style={{ fontSize: '0.75rem' }}
+                        onClick={() => { handleAction(selectedAlert.id, 'dismiss'); setSelectedAlert(null); }}
+                      >
+                        Dismiss
+                      </button>
+                    </>
+                  )}
+                  <button className="btn btn-sm btn-primary" style={{ fontSize: '0.75rem' }} onClick={() => setSelectedAlert(null)}>
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -17,6 +17,7 @@ export default function ExecutionsTab() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedExecution, setSelectedExecution] = useState<ExecutionEntry | null>(null);
 
   const fetchExecutions = useCallback(async () => {
     setLoading(true);
@@ -70,7 +71,12 @@ export default function ExecutionsTab() {
               <div className="card border-0 shadow-sm h-100">
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
-                    <span className="badge bg-info">{exec.simulation_type}</span>
+                    <span
+                      className="badge bg-info"
+                      role="button"
+                      style={{ cursor: 'pointer', color: 'var(--color-primary-light)' }}
+                      onClick={() => setSelectedExecution(exec)}
+                    >{exec.simulation_type}</span>
                     <span className={`badge bg-${STATUS_COLORS[exec.status] || 'secondary'}`}>
                       {exec.status}
                     </span>
@@ -124,8 +130,10 @@ export default function ExecutionsTab() {
                     {exec.ticket_id ? (
                       <span
                         className="fw-medium"
+                        role="button"
                         style={{ color: 'var(--color-primary-light)', cursor: 'pointer' }}
                         title={exec.ticket_id}
+                        onClick={() => setSelectedExecution(exec)}
                       >
                         TK-{exec.ticket_id.substring(0, 8)}
                       </span>
@@ -155,6 +163,228 @@ export default function ExecutionsTab() {
           </button>
         </div>
       )}
+
+      {/* Detail Modal */}
+      {selectedExecution && (
+        <ExecutionDetailModal
+          exec={selectedExecution}
+          onClose={() => setSelectedExecution(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/* ─── Detail Modal ──────────────────────────────────────────────────────── */
+
+const OUTCOME_FIELDS: readonly { label: string; key: string; isCurrency?: boolean }[] = [
+  { label: 'Leads', key: 'leads' },
+  { label: 'Conversions', key: 'conversions' },
+  { label: 'Enrollments', key: 'enrollments' },
+  { label: 'Revenue', key: 'revenue', isCurrency: true },
+];
+
+function ExecutionDetailModal({ exec, onClose }: { exec: ExecutionEntry; onClose: () => void }) {
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const ctx = exec.context || {};
+  const accuracyPct = exec.accuracy_score != null ? Math.round(exec.accuracy_score * 100) : null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="modal-backdrop show"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div
+        className="modal show d-block"
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        onClick={onClose}
+      >
+        <div
+          className="modal-dialog modal-dialog-centered"
+          style={{ maxWidth: 520 }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="modal-content border-0 shadow">
+            {/* Header */}
+            <div className="modal-header py-2 px-3" style={{ borderBottom: '1px solid var(--color-border, #e2e8f0)' }}>
+              <div className="d-flex align-items-center gap-2">
+                <span className="fw-semibold" style={{ fontSize: '0.82rem' }}>
+                  {exec.simulation_type}
+                </span>
+                <span
+                  className={`badge bg-${STATUS_COLORS[exec.status] || 'secondary'}`}
+                  style={{ fontSize: '0.65rem' }}
+                >
+                  {exec.status}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                style={{ fontSize: '0.65rem' }}
+                aria-label="Close"
+                onClick={onClose}
+              />
+            </div>
+
+            {/* Body */}
+            <div className="modal-body px-3 py-2" style={{ fontSize: '0.75rem' }}>
+
+              {/* Context Info */}
+              {(ctx.entity_type || ctx.entity_id || ctx.strategy_type) && (
+                <div className="mb-3">
+                  <div className="fw-semibold mb-1" style={{ fontSize: '0.82rem', color: 'var(--color-primary)' }}>
+                    Context
+                  </div>
+                  <div className="row g-2">
+                    {ctx.entity_type && (
+                      <div className="col-6">
+                        <span className="text-muted">Entity Type</span>
+                        <div className="fw-medium">{ctx.entity_type}</div>
+                      </div>
+                    )}
+                    {ctx.entity_id && (
+                      <div className="col-6">
+                        <span className="text-muted">Entity ID</span>
+                        <div className="fw-medium" style={{ wordBreak: 'break-all' }}>{ctx.entity_id}</div>
+                      </div>
+                    )}
+                    {ctx.strategy_type && (
+                      <div className="col-6">
+                        <span className="text-muted">Strategy</span>
+                        <div className="fw-medium">{ctx.strategy_type}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Predicted Outcomes */}
+              {exec.predicted_outcome && (
+                <div className="mb-3">
+                  <div className="fw-semibold mb-1" style={{ fontSize: '0.82rem', color: 'var(--color-primary)' }}>
+                    Predicted Outcomes
+                  </div>
+                  <div className="row g-2">
+                    {OUTCOME_FIELDS.map(m => {
+                      const val = exec.predicted_outcome?.[m.key];
+                      if (val == null) return null;
+                      return (
+                        <div key={m.key} className="col-6 col-sm-3">
+                          <div className="text-muted">{m.label}</div>
+                          <div className="fw-semibold" style={{ color: 'var(--color-primary)' }}>
+                            {m.isCurrency ? `$${Number(val).toLocaleString()}` : val}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Actual Outcomes */}
+              {exec.status === 'completed' && exec.actual_outcome && (
+                <div className="mb-3">
+                  <div className="fw-semibold mb-1" style={{ fontSize: '0.82rem', color: 'var(--color-accent, #38a169)' }}>
+                    Actual Outcomes
+                  </div>
+                  <div className="row g-2">
+                    {OUTCOME_FIELDS.map(m => {
+                      const val = exec.actual_outcome?.[m.key];
+                      if (val == null) return null;
+                      return (
+                        <div key={m.key} className="col-6 col-sm-3">
+                          <div className="text-muted">{m.label}</div>
+                          <div className="fw-semibold" style={{ color: 'var(--color-accent, #38a169)' }}>
+                            {m.isCurrency ? `$${Number(val).toLocaleString()}` : val}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Accuracy Score with bar */}
+              {accuracyPct != null && (
+                <div className="mb-3">
+                  <div className="fw-semibold mb-1" style={{ fontSize: '0.82rem', color: 'var(--color-primary)' }}>
+                    Accuracy Score
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="progress flex-grow-1" style={{ height: 8 }}>
+                      <div
+                        className={`progress-bar bg-${accuracyPct >= 70 ? 'success' : accuracyPct >= 40 ? 'warning' : 'danger'}`}
+                        role="progressbar"
+                        style={{ width: `${accuracyPct}%` }}
+                        aria-valuenow={accuracyPct}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      />
+                    </div>
+                    <span className="fw-semibold" style={{ minWidth: 36, textAlign: 'right' }}>{accuracyPct}%</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Confidence & Risk */}
+              <div className="d-flex gap-2 mb-3">
+                <span
+                  className={`badge bg-${exec.confidence >= 0.7 ? 'success' : exec.confidence >= 0.4 ? 'warning' : 'danger'}`}
+                  style={{ fontSize: '0.65rem' }}
+                >
+                  Confidence: {(exec.confidence * 100).toFixed(0)}%
+                </span>
+                <span
+                  className={`badge bg-${exec.risk_score >= 0.7 ? 'danger' : exec.risk_score >= 0.4 ? 'warning' : 'success'}`}
+                  style={{ fontSize: '0.65rem' }}
+                >
+                  Risk: {(exec.risk_score * 100).toFixed(0)}%
+                </span>
+              </div>
+
+              {/* Ticket ID */}
+              <div className="d-flex justify-content-between align-items-center text-muted" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)', paddingTop: 8 }}>
+                <div>
+                  <span className="fw-medium">Ticket: </span>
+                  {exec.ticket_id ? (
+                    <span style={{ color: 'var(--color-primary-light)' }}>{exec.ticket_id}</span>
+                  ) : (
+                    <span>&mdash;</span>
+                  )}
+                </div>
+                <div>
+                  <span className="fw-medium">Created: </span>
+                  {new Date(exec.created_at).toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="modal-footer py-2 px-3" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={onClose}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
