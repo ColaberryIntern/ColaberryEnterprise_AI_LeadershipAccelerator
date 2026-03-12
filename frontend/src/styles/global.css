@@ -764,6 +764,12 @@ a:hover {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* Cory badge pulse animation for critical events */
+@keyframes cory-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.15); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cory-orb-button:hover {
     transform: none;
@@ -773,5 +779,8 @@ a:hover {
   }
   .global-cory-avatar {
     transition: none;
+  }
+  .cory-critical-pulse {
+    animation: none !important;
   }
 }

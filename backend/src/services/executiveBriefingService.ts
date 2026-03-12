@@ -129,3 +129,64 @@ export async function generateWeeklyStrategicBriefing(): Promise<void> {
     console.error('[Briefing] Failed to generate weekly briefing:', err.message);
   }
 }
+
+// ─── Executive Awareness Digest ─────────────────────────────────────────────
+
+export async function generateExecutiveDigest(period: 'morning' | 'evening'): Promise<void> {
+  try {
+    const { getExecutiveEvents, getUnreadBadge } = await import('./executiveAwarenessService');
+    const { sendBriefingEmail } = await import('./emailService');
+    const { SystemSetting } = await import('../models');
+
+    const badge = await getUnreadBadge();
+    if (badge.count === 0) {
+      console.log(`[Briefing] No unread executive events for ${period} digest. Skipping.`);
+      return;
+    }
+
+    const { events } = await getExecutiveEvents({ status: 'new', limit: 50 });
+
+    // Build digest as a briefing data structure the email service can consume
+    const digestData: ExecutiveBriefingData = {
+      generatedAt: new Date(),
+      type: 'daily',
+      digest: {
+        period,
+        executiveEvents: events.map((e: any) => ({
+          id: e.id,
+          title: e.title,
+          severity: e.severity,
+          category: e.metadata?.executive_category || 'system',
+          description: e.description,
+          createdAt: e.created_at,
+          clusterCount: e.metadata?.cluster_count || 1,
+        })),
+        unreadCount: badge.count,
+        maxSeverity: badge.maxSeverity,
+      },
+      alertSummary: { openCount: badge.count, criticalOpen: 0, last24h: badge.count, byType: {} },
+      agentFleet: { total: 0, healthy: 0, errored: 0, paused: 0 },
+      ticketSummary: { openCount: 0, resolvedLast24h: 0, criticalOpen: 0 },
+    };
+
+    const setting = await SystemSetting.findOne({ where: { key: 'admin_notification_emails' } });
+    const recipients = setting?.getDataValue('value')
+      ? String(setting.getDataValue('value')).split(',').map((e: string) => e.trim()).filter(Boolean)
+      : [];
+
+    if (recipients.length === 0) {
+      console.log('[Briefing] No admin email recipients for executive digest. Skipping.');
+      return;
+    }
+
+    for (const to of recipients) {
+      await sendBriefingEmail(to, digestData).catch((err: any) => {
+        console.error(`[Briefing] Executive digest email to ${to} failed:`, err.message);
+      });
+    }
+
+    console.log(`[Briefing] Executive ${period} digest sent to ${recipients.length} recipients (${badge.count} events)`);
+  } catch (err: any) {
+    console.error(`[Briefing] Failed to generate executive ${period} digest:`, err.message);
+  }
+}

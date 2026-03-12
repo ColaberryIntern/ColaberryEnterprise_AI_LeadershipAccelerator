@@ -45,6 +45,7 @@ const TABS = [
   { key: 'schedules', label: 'Agent Schedules' },
   { key: 'risk', label: 'Risk Scoring' },
   { key: 'autonomy', label: 'Autonomy Rules' },
+  { key: 'executive', label: 'Executive Awareness' },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -609,6 +610,315 @@ function GovernanceCommandCenter() {
       {activeTab === 'schedules' && <AgentSchedulesTab />}
       {activeTab === 'risk' && <RiskScoringTab />}
       {activeTab === 'autonomy' && <AutonomyRulesTab />}
+      {activeTab === 'executive' && <ExecutiveAwarenessTab />}
+    </div>
+  );
+}
+
+// ─── Executive Awareness Tab ────────────────────────────────────────────────
+
+interface NotificationPolicy {
+  enabled: boolean;
+  quiet_hours_start: string;
+  quiet_hours_end: string;
+  quiet_hours_timezone: string;
+  weekend_policy: string;
+  severity_channel_map: Record<string, string[]>;
+  rate_limits: Record<string, { max_per_hour: number }>;
+  cluster_window_minutes: number;
+  digest_enabled: boolean;
+  digest_morning_cron: string;
+  digest_evening_cron: string;
+  acknowledgment_suppresses: boolean;
+}
+
+interface ExecEvent {
+  id: string;
+  title: string;
+  description?: string;
+  severity: number;
+  status: string;
+  created_at: string;
+  metadata?: Record<string, any>;
+}
+
+function ExecutiveAwarenessTab() {
+  const [policy, setPolicy] = useState<NotificationPolicy | null>(null);
+  const [events, setEvents] = useState<ExecEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [edits, setEdits] = useState<Record<string, any>>({});
+  const [testSeverity, setTestSeverity] = useState('important');
+  const [testing, setTesting] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [policyRes, eventsRes] = await Promise.all([
+        apiFetch('/api/admin/executive-awareness/policy'),
+        apiFetch('/api/admin/executive-awareness/events?limit=20'),
+      ]);
+      setPolicy(policyRes.policy);
+      setEvents(eventsRes.events || []);
+      setEdits({});
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSave = async () => {
+    if (Object.keys(edits).length === 0) return;
+    try {
+      setSaving(true);
+      setError('');
+      const res = await apiFetch('/api/admin/executive-awareness/policy', {
+        method: 'PATCH',
+        body: JSON.stringify(edits),
+      });
+      setPolicy(res.policy);
+      setEdits({});
+      setSuccess('Policy saved');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestEscalation = async () => {
+    try {
+      setTesting(true);
+      setError('');
+      const res = await apiFetch('/api/admin/executive-awareness/test-escalation', {
+        method: 'POST',
+        body: JSON.stringify({ severity: testSeverity }),
+      });
+      setSuccess(res.message || 'Test event emitted');
+      setTimeout(() => setSuccess(''), 3000);
+      load();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const setEdit = (key: string, val: any) => setEdits({ ...edits, [key]: val });
+  const getValue = (key: string): any => edits[key] !== undefined ? edits[key] : (policy as any)?.[key];
+
+  if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
+
+  const severityBadge = (sev: number) => {
+    if (sev >= 5) return { label: 'Critical', cls: 'bg-danger' };
+    if (sev >= 4) return { label: 'High', cls: 'bg-warning text-dark' };
+    if (sev >= 2) return { label: 'Important', cls: 'bg-info' };
+    return { label: 'Info', cls: 'bg-secondary' };
+  };
+
+  return (
+    <div>
+      {error && <div className="alert alert-danger alert-dismissible py-2 small"><button type="button" className="btn-close btn-close-sm" onClick={() => setError('')} />{error}</div>}
+      {success && <div className="alert alert-success py-2 small">{success}</div>}
+
+      {policy && (
+        <>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="d-flex align-items-center gap-2">
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={getValue('enabled')}
+                  onChange={(e) => setEdit('enabled', e.target.checked)}
+                />
+                <label className="form-check-label small fw-medium">
+                  {getValue('enabled') ? 'Enabled' : 'Disabled'}
+                </label>
+              </div>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving || Object.keys(edits).length === 0}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+
+          {/* Quiet Hours & Weekend */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white fw-semibold">Quiet Hours & Weekend</div>
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-4 mb-3">
+                  <label className="form-label small fw-medium">Quiet Start</label>
+                  <input type="text" className="form-control form-control-sm" value={getValue('quiet_hours_start')} onChange={(e) => setEdit('quiet_hours_start', e.target.value)} placeholder="22:00" />
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label small fw-medium">Quiet End</label>
+                  <input type="text" className="form-control form-control-sm" value={getValue('quiet_hours_end')} onChange={(e) => setEdit('quiet_hours_end', e.target.value)} placeholder="07:00" />
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label small fw-medium">Timezone</label>
+                  <input type="text" className="form-control form-control-sm" value={getValue('quiet_hours_timezone')} onChange={(e) => setEdit('quiet_hours_timezone', e.target.value)} />
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label small fw-medium">Weekend Policy</label>
+                  <select className="form-select form-select-sm" value={getValue('weekend_policy')} onChange={(e) => setEdit('weekend_policy', e.target.value)}>
+                    <option value="normal">Normal</option>
+                    <option value="quiet_hours_only">Quiet Hours Only</option>
+                    <option value="silent">Silent</option>
+                  </select>
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label small fw-medium">Cluster Window (min)</label>
+                  <input type="number" className="form-control form-control-sm" value={getValue('cluster_window_minutes')} onChange={(e) => setEdit('cluster_window_minutes', parseInt(e.target.value, 10) || 10)} />
+                </div>
+                <div className="col-md-4 mb-3">
+                  <div className="form-check form-switch mt-4">
+                    <input className="form-check-input" type="checkbox" checked={getValue('acknowledgment_suppresses')} onChange={(e) => setEdit('acknowledgment_suppresses', e.target.checked)} />
+                    <label className="form-check-label small fw-medium">Ack suppresses</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Severity → Channel Mapping */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white fw-semibold">Severity → Channel Mapping</div>
+            <div className="card-body p-0">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th className="small fw-medium">Severity</th>
+                    <th className="small fw-medium">Channels</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(['info', 'important', 'high', 'critical'] as const).map((sev) => {
+                    const channels = (getValue('severity_channel_map') || {})[sev] || [];
+                    return (
+                      <tr key={sev}>
+                        <td className="small fw-medium text-capitalize">{sev}</td>
+                        <td className="small">
+                          {channels.map((ch: string) => (
+                            <span key={ch} className="badge bg-light text-dark me-1">{ch}</span>
+                          ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Rate Limits */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white fw-semibold">Rate Limits</div>
+            <div className="card-body">
+              <div className="row">
+                {Object.entries(getValue('rate_limits') || {}).map(([ch, limit]: [string, any]) => (
+                  <div className="col-md-4 mb-3" key={ch}>
+                    <label className="form-label small fw-medium">{ch} (max/hr)</label>
+                    <input type="number" className="form-control form-control-sm" value={limit.max_per_hour} readOnly />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Digest Settings */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white fw-semibold">Digest Settings</div>
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-4 mb-3">
+                  <div className="form-check form-switch">
+                    <input className="form-check-input" type="checkbox" checked={getValue('digest_enabled')} onChange={(e) => setEdit('digest_enabled', e.target.checked)} />
+                    <label className="form-check-label small fw-medium">Digest Enabled</label>
+                  </div>
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label small fw-medium">Morning Cron</label>
+                  <input type="text" className="form-control form-control-sm" value={getValue('digest_morning_cron')} onChange={(e) => setEdit('digest_morning_cron', e.target.value)} />
+                </div>
+                <div className="col-md-4 mb-3">
+                  <label className="form-label small fw-medium">Evening Cron</label>
+                  <input type="text" className="form-control form-control-sm" value={getValue('digest_evening_cron')} onChange={(e) => setEdit('digest_evening_cron', e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Test Escalation */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white fw-semibold">Test Escalation</div>
+            <div className="card-body">
+              <div className="d-flex gap-2 align-items-end">
+                <div>
+                  <label className="form-label small fw-medium">Severity</label>
+                  <select className="form-select form-select-sm" value={testSeverity} onChange={(e) => setTestSeverity(e.target.value)}>
+                    <option value="info">Info</option>
+                    <option value="important">Important</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <button className="btn btn-outline-danger btn-sm" onClick={handleTestEscalation} disabled={testing}>
+                  {testing ? 'Sending...' : 'Send Test Event'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Events */}
+          <div className="card border-0 shadow-sm">
+            <div className="card-header bg-white fw-semibold">Recent Executive Events</div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table table-hover mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th className="small fw-medium">Time</th>
+                      <th className="small fw-medium">Severity</th>
+                      <th className="small fw-medium">Title</th>
+                      <th className="small fw-medium">Category</th>
+                      <th className="small fw-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.length === 0 ? (
+                      <tr><td colSpan={5} className="text-center text-muted py-3 small">No executive events yet</td></tr>
+                    ) : events.map((evt) => {
+                      const badge = severityBadge(evt.severity);
+                      return (
+                        <tr key={evt.id}>
+                          <td className="small text-muted text-nowrap">
+                            {new Date(evt.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td><span className={`badge ${badge.cls}`} style={{ fontSize: '0.65rem' }}>{badge.label}</span></td>
+                          <td className="small">{evt.title}</td>
+                          <td className="small"><span className="badge bg-light text-dark">{evt.metadata?.executive_category || '-'}</span></td>
+                          <td className="small">
+                            <span className={`badge ${evt.status === 'new' ? 'bg-info' : evt.status === 'acknowledged' ? 'bg-success' : 'bg-secondary'}`} style={{ fontSize: '0.65rem' }}>
+                              {evt.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
