@@ -311,6 +311,8 @@ export default function ObjectConfigEngine(props: Props) {
                   {corePromptPairs.map(pair => {
                     const systemValue = (editing[pair.systemField] as string) || '';
                     const userValue = (editing[pair.userField] as string) || '';
+                    // Only show user template for types that have student-facing prompts
+                    const showUserTemplate = editType === 'prompt_template' || editType === 'implementation_task';
                     return (
                       <div key={pair.key} className="mb-2">
                         <span className="text-muted fw-medium" style={{ fontSize: 10 }}>{pair.label}</span>
@@ -323,15 +325,17 @@ export default function ObjectConfigEngine(props: Props) {
                           rows={3}
                           placeholder="System instructions for the AI model..."
                         />
-                        <HighlightedPromptEditor
-                          value={userValue}
-                          onChange={val => props.onUpdate({ [pair.userField]: val } as any)}
-                          availableVars={coreAvailableVars}
-                          allDefinedVars={coreAllDefinedVars}
-                          label="USER TEMPLATE"
-                          rows={4}
-                          placeholder="User prompt template with {{variable}} placeholders..."
-                        />
+                        {showUserTemplate && (
+                          <HighlightedPromptEditor
+                            value={userValue}
+                            onChange={val => props.onUpdate({ [pair.userField]: val } as any)}
+                            availableVars={coreAvailableVars}
+                            allDefinedVars={coreAllDefinedVars}
+                            label="USER TEMPLATE"
+                            rows={4}
+                            placeholder="User prompt template with {{variable}} placeholders..."
+                          />
+                        )}
                       </div>
                     );
                   })}
