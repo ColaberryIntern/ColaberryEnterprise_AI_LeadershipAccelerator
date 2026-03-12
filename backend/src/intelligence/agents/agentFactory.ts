@@ -6,6 +6,7 @@ import { AiAgent } from '../../models';
 import { registerAgent, hasAgent, listAllAgents } from './agentRegistry';
 import type { AgentExecutionResult } from '../../services/agents/types';
 import { Op } from 'sequelize';
+import { resolveGlobalConfig, HARDCODED_DEFAULTS } from '../../services/governanceResolutionService';
 
 // ─── Department Mapping ──────────────────────────────────────────────────────
 
@@ -20,7 +21,8 @@ export type Department =
   | 'Student_Success'
   | 'Platform'
   | 'Intelligence'
-  | 'Governance';
+  | 'Governance'
+  | 'Reporting';
 
 const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
   // Intelligence
@@ -53,6 +55,8 @@ const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
   alumni: 'Alumni',
   partnerships: 'Partnerships',
   student_success: 'Student_Success',
+  // Reporting department
+  reporting: 'Reporting',
 };
 
 const DEPARTMENT_TO_CATEGORIES: Record<Department, string[]> = {
@@ -67,6 +71,7 @@ const DEPARTMENT_TO_CATEGORIES: Record<Department, string[]> = {
   Platform: ['maintenance', 'operations', 'website_intelligence', 'orchestration'],
   Intelligence: ['behavioral', 'ai_ops', 'memory', 'meta', 'autonomous'],
   Governance: ['security', 'governance_ops'],
+  Reporting: ['reporting'],
 };
 
 export function getDepartmentForCategory(category: string): Department {
@@ -107,8 +112,6 @@ export interface DepartmentSummary {
 
 // ─── Factory Functions ───────────────────────────────────────────────────────
 
-const MAX_DYNAMIC_AGENTS = 50;
-
 /**
  * Create a new agent dynamically. Validates uniqueness, enforces limits,
  * creates DB record, and registers in the in-memory agent registry.
@@ -120,10 +123,16 @@ export async function createAgent(spec: AgentSpec): Promise<any> {
     throw new Error(`Agent "${spec.name}" already exists`);
   }
 
-  // Enforce dynamic agent limit
+  // Enforce dynamic agent limit (from governance DB, fallback to hardcoded)
+  let maxDynamic = HARDCODED_DEFAULTS.max_dynamic_agents;
+  try {
+    const config = await resolveGlobalConfig();
+    maxDynamic = config.max_dynamic_agents;
+  } catch { /* fallback */ }
+
   const dynamicCount = await AiAgent.count({ where: { agent_type: 'dynamic' } });
-  if (dynamicCount >= MAX_DYNAMIC_AGENTS) {
-    throw new Error(`Maximum dynamic agents (${MAX_DYNAMIC_AGENTS}) reached`);
+  if (dynamicCount >= maxDynamic) {
+    throw new Error(`Maximum dynamic agents (${maxDynamic}) reached`);
   }
 
   // Determine category from department

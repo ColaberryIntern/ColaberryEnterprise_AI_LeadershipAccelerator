@@ -7,6 +7,7 @@ import type { ActionRecommendation } from './ActionPlannerAgent';
 import type { ImpactEstimate } from './ImpactEstimatorAgent';
 import type { RootCauseResult } from './RootCauseAgent';
 import type { RiskTier } from '../../models/IntelligenceDecision';
+import { resolveGlobalConfig, HARDCODED_DEFAULTS } from '../../services/governanceResolutionService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,11 +54,11 @@ const ACTION_REVERSIBILITY: Record<string, number> = {
 /**
  * Evaluate risk and confidence for a proposed action.
  */
-export function evaluateRisk(
+export async function evaluateRisk(
   recommendation: ActionRecommendation,
   impact: ImpactEstimate,
   rootCause: RootCauseResult,
-): RiskEvaluation {
+): Promise<RiskEvaluation> {
   const reasoning: string[] = [];
 
   // ── Risk Score (0-100) ──
@@ -102,9 +103,17 @@ export function evaluateRisk(
   else if (riskScore < 75) riskTier = 'risky';
   else riskTier = 'dangerous';
 
-  // ── Auto-execution gate ──
-  const autoExecutable = riskScore < 40 && confidenceScore > 70;
-  reasoning.push(`Gate: risk=${riskScore} < 40 AND confidence=${confidenceScore} > 70 → ${autoExecutable ? 'AUTO-EXECUTE' : 'PROPOSE ONLY'}`);
+  // ── Auto-execution gate (thresholds from governance DB) ──
+  let riskThreshold = HARDCODED_DEFAULTS.auto_execute_risk_threshold;
+  let confidenceThreshold = HARDCODED_DEFAULTS.auto_execute_confidence_threshold;
+  try {
+    const config = await resolveGlobalConfig();
+    riskThreshold = config.auto_execute_risk_threshold;
+    confidenceThreshold = config.auto_execute_confidence_threshold;
+  } catch { /* fallback to hardcoded */ }
+
+  const autoExecutable = riskScore < riskThreshold && confidenceScore > confidenceThreshold;
+  reasoning.push(`Gate: risk=${riskScore} < ${riskThreshold} AND confidence=${confidenceScore} > ${confidenceThreshold} → ${autoExecutable ? 'AUTO-EXECUTE' : 'PROPOSE ONLY'}`);
 
   return {
     risk_score: riskScore,

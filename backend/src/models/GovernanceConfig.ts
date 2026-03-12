@@ -13,6 +13,7 @@ interface GovernanceConfigAttributes {
   max_auto_executions_per_hour: number;
   max_risk_budget_per_hour: number;
   max_proposed_pending: number;
+  max_concurrent_monitoring: number;
   auto_execute_risk_threshold: number;
   auto_execute_confidence_threshold: number;
   max_experiments_per_agent: number;
@@ -34,6 +35,7 @@ class GovernanceConfig extends Model<GovernanceConfigAttributes> implements Gove
   declare max_auto_executions_per_hour: number;
   declare max_risk_budget_per_hour: number;
   declare max_proposed_pending: number;
+  declare max_concurrent_monitoring: number;
   declare auto_execute_risk_threshold: number;
   declare auto_execute_confidence_threshold: number;
   declare max_experiments_per_agent: number;
@@ -92,6 +94,11 @@ GovernanceConfig.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 50,
+    },
+    max_concurrent_monitoring: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 20,
     },
     auto_execute_risk_threshold: {
       type: DataTypes.INTEGER,

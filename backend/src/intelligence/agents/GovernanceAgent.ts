@@ -5,14 +5,15 @@
 import IntelligenceDecision from '../../models/IntelligenceDecision';
 import { registerAgent } from './agentRegistry';
 import { Op } from 'sequelize';
+import { resolveGlobalConfig, HARDCODED_DEFAULTS } from '../../services/governanceResolutionService';
 
-// ─── Guardrails ──────────────────────────────────────────────────────────────
+// ─── Guardrails (hardcoded fallback — DB values preferred via resolveGlobalConfig) ─
 
-const GUARDRAILS = {
-  max_auto_executions_per_hour: 10,
-  max_risk_budget_per_hour: 200, // sum of risk_scores
-  max_proposed_pending: 50,
-  max_concurrent_monitoring: 20,
+const GUARDRAILS_FALLBACK = {
+  max_auto_executions_per_hour: HARDCODED_DEFAULTS.max_auto_executions_per_hour,
+  max_risk_budget_per_hour: HARDCODED_DEFAULTS.max_risk_budget_per_hour,
+  max_proposed_pending: HARDCODED_DEFAULTS.max_proposed_pending,
+  max_concurrent_monitoring: HARDCODED_DEFAULTS.max_concurrent_monitoring,
 };
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -37,6 +38,20 @@ export interface GovernanceReport {
 export async function enforceGovernance(): Promise<GovernanceReport> {
   const violations: string[] = [];
   const actionsTaken: string[] = [];
+
+  // Resolve guardrails from governance DB (falls back to hardcoded on error)
+  let GUARDRAILS = GUARDRAILS_FALLBACK;
+  try {
+    const config = await resolveGlobalConfig();
+    GUARDRAILS = {
+      max_auto_executions_per_hour: config.max_auto_executions_per_hour,
+      max_risk_budget_per_hour: config.max_risk_budget_per_hour,
+      max_proposed_pending: config.max_proposed_pending,
+      max_concurrent_monitoring: config.max_concurrent_monitoring,
+    };
+  } catch {
+    // Fall back to hardcoded defaults
+  }
 
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 

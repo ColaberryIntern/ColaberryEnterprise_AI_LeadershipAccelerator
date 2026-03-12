@@ -20,6 +20,7 @@ export const HARDCODED_DEFAULTS = {
   max_auto_executions_per_hour: 10,
   max_risk_budget_per_hour: 200,
   max_proposed_pending: 50,
+  max_concurrent_monitoring: 20,
   auto_execute_risk_threshold: 40,
   auto_execute_confidence_threshold: 70,
   max_experiments_per_agent: 1,
@@ -53,6 +54,7 @@ export interface ResolvedGovernanceConfig {
   max_auto_executions_per_hour: number;
   max_risk_budget_per_hour: number;
   max_proposed_pending: number;
+  max_concurrent_monitoring: number;
   auto_execute_risk_threshold: number;
   auto_execute_confidence_threshold: number;
   max_experiments_per_agent: number;
@@ -129,6 +131,7 @@ export async function resolveGlobalConfig(): Promise<ResolvedGovernanceConfig> {
         max_auto_executions_per_hour: row.max_auto_executions_per_hour,
         max_risk_budget_per_hour: row.max_risk_budget_per_hour,
         max_proposed_pending: row.max_proposed_pending,
+        max_concurrent_monitoring: row.max_concurrent_monitoring,
         auto_execute_risk_threshold: row.auto_execute_risk_threshold,
         auto_execute_confidence_threshold: row.auto_execute_confidence_threshold,
         max_experiments_per_agent: row.max_experiments_per_agent,

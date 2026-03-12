@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { Campaign, CampaignLead, CampaignHealth, Lead } from '../models';
 import { enrollLeadsInCampaign } from './campaignService';
+import { resolveCampaignGovernance, HARDCODED_CAMPAIGN_DEFAULTS } from './governanceResolutionService';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -161,14 +162,18 @@ export async function evaluateRampPhase(campaignId: string): Promise<{
     return { decision: 'no_data', health_score: null };
   }
 
-  // Alumni safety thresholds — pause if exceeded
+  // Safety thresholds — pause if exceeded (from governance DB, fallback to hardcoded)
   const isAlumni = ['alumni', 'alumni_re_engagement'].includes(campaign.type);
   if (isAlumni && health?.metrics) {
     const m = health.metrics;
+    let safetyLimits = HARDCODED_CAMPAIGN_DEFAULTS;
+    try {
+      safetyLimits = await resolveCampaignGovernance(campaignId);
+    } catch { /* fallback */ }
     const safetyViolations: string[] = [];
-    if ((m.unsubscribe_rate || 0) >= 1.5) safetyViolations.push(`unsubscribe_rate=${m.unsubscribe_rate}%`);
-    if ((m.bounce_rate || 0) >= 5.0) safetyViolations.push(`bounce_rate=${m.bounce_rate}%`);
-    if ((m.sms_failure_rate || 0) >= 10.0) safetyViolations.push(`sms_failure_rate=${m.sms_failure_rate}%`);
+    if ((m.unsubscribe_rate || 0) >= safetyLimits.max_unsubscribe_rate) safetyViolations.push(`unsubscribe_rate=${m.unsubscribe_rate}%`);
+    if ((m.bounce_rate || 0) >= safetyLimits.max_bounce_rate) safetyViolations.push(`bounce_rate=${m.bounce_rate}%`);
+    if ((m.sms_failure_rate || 0) >= safetyLimits.max_sms_failure_rate) safetyViolations.push(`sms_failure_rate=${m.sms_failure_rate}%`);
 
     if (safetyViolations.length > 0) {
       const campaignFull = await Campaign.findByPk(campaignId) as any;

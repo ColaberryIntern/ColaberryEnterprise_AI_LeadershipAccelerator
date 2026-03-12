@@ -89,7 +89,7 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
       const impact = await estimateImpact(recommendation, problem);
 
       // Step 5: Evaluate risk
-      const risk = evaluateRisk(recommendation, impact, rootCause);
+      const risk = await evaluateRisk(recommendation, impact, rootCause);
 
       // Step 6: Create decision record
       const decision = await IntelligenceDecision.create({
@@ -298,7 +298,7 @@ export async function simulateAutonomousCycle(): Promise<{
       if (actions.length === 0) continue;
 
       const impact = await estimateImpact(actions[0], problem);
-      const risk = evaluateRisk(actions[0], impact, rootCause);
+      const risk = await evaluateRisk(actions[0], impact, rootCause);
 
       recommendations.push({
         problem: problem.description,

@@ -14,6 +14,7 @@ import AiAgent from '../../models/AiAgent';
 import { getVectorMemory } from '../memory/vectorMemory';
 import { registerAgent } from '../agents/agentRegistry';
 import { Op } from 'sequelize';
+import { resolveGlobalConfig, HARDCODED_DEFAULTS } from '../../services/governanceResolutionService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,8 +40,9 @@ interface ExperimentMetrics {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MAX_EXPERIMENTS_PER_AGENT = 1;
-const MAX_SYSTEM_EXPERIMENTS = 3;
+// Defaults — overridden at runtime from governance DB
+let MAX_EXPERIMENTS_PER_AGENT = HARDCODED_DEFAULTS.max_experiments_per_agent;
+let MAX_SYSTEM_EXPERIMENTS = HARDCODED_DEFAULTS.max_system_experiments;
 const MIN_DURATION_HOURS = 6;
 const MAX_DURATION_HOURS = 72;
 const ERROR_ROLLBACK_MULTIPLIER = 3;
@@ -72,6 +74,13 @@ export async function runExperimentCycle(): Promise<{
   let concluded = 0;
   let adopted = 0;
   let rolledBack = 0;
+
+  // Resolve experiment limits from governance DB
+  try {
+    const config = await resolveGlobalConfig();
+    MAX_EXPERIMENTS_PER_AGENT = config.max_experiments_per_agent;
+    MAX_SYSTEM_EXPERIMENTS = config.max_system_experiments;
+  } catch { /* fallback to hardcoded */ }
 
   // 1. Check active experiments
   for (const [id, experiment] of activeExperiments) {
