@@ -308,7 +308,10 @@ export default function ObjectConfigEngine(props: Props) {
                     <span className="fw-semibold small">Prompts</span>
                     <span className="text-muted" style={{ fontSize: 10 }}>Use <code style={{ fontSize: 10 }}>{'{{variable_key}}'}</code> for dynamic values</span>
                   </div>
-                  {corePromptPairs.map(pair => {
+                  {corePromptPairs
+                    // In Core, only show the primary prompt for each type — skip mentor prompt for concept types
+                    .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
+                    .map(pair => {
                     const systemValue = (editing[pair.systemField] as string) || '';
                     const userValue = (editing[pair.userField] as string) || '';
                     // Only show user template for types that have student-facing prompts
