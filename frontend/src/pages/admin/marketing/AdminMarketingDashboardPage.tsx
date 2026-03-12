@@ -113,14 +113,20 @@ function approvalLabel(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Landing Pages ──────────────────────────────────────────────────────────
 
-function generateDestinationKey(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let key = '';
-  for (let i = 0; i < 8; i++) key += chars[Math.floor(Math.random() * chars.length)];
-  return `/c/${key}`;
-}
+const LANDING_PAGES = [
+  { value: '/', label: 'Home Page' },
+  { value: '/program', label: 'Program Overview' },
+  { value: '/pricing', label: 'Pricing' },
+  { value: '/enroll', label: 'Enrollment' },
+  { value: '/strategy-call-prep', label: 'Strategy Call Prep' },
+  { value: '/executive-roi-calculator', label: 'ROI Calculator' },
+  { value: '/sponsorship', label: 'Sponsorship' },
+  { value: '/advisory', label: 'Advisory' },
+  { value: '/case-studies', label: 'Case Studies' },
+  { value: '/contact', label: 'Contact' },
+];
 
 // ─── Create Campaign Modal ──────────────────────────────────────────────────
 
@@ -192,13 +198,11 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                   </select>
                 </div>
                 <div className="col-md-8">
-                  <label className="form-label small fw-medium">Destination Path *</label>
-                  <div className="input-group input-group-sm">
-                    <input className="form-control form-control-sm" placeholder="/strategy-call-prep or generate a key" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
-                    <button className="btn btn-outline-secondary" type="button" onClick={() => set('destination_path', generateDestinationKey())} title="Generate unique key">
-                      Generate Key
-                    </button>
-                  </div>
+                  <label className="form-label small fw-medium">Landing Page *</label>
+                  <select className="form-select form-select-sm" value={form.destination_path} onChange={e => set('destination_path', e.target.value)}>
+                    <option value="">Select a landing page...</option>
+                    {LANDING_PAGES.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
+                  </select>
                 </div>
                 <div className="col-12">
                   <label className="form-label small fw-medium">Objective</label>
@@ -309,13 +313,11 @@ function EditCampaignModal({ campaign, onClose, onSaved }: { campaign: Registere
                   </select>
                 </div>
                 <div className="col-md-8">
-                  <label className="form-label small fw-medium">Destination Path</label>
-                  <div className="input-group input-group-sm">
-                    <input className="form-control form-control-sm" placeholder="/strategy-call-prep or generate a key" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
-                    <button className="btn btn-outline-secondary" type="button" onClick={() => set('destination_path', generateDestinationKey())} title="Generate unique key">
-                      Generate Key
-                    </button>
-                  </div>
+                  <label className="form-label small fw-medium">Landing Page</label>
+                  <select className="form-select form-select-sm" value={form.destination_path} onChange={e => set('destination_path', e.target.value)}>
+                    <option value="">Select a landing page...</option>
+                    {LANDING_PAGES.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
+                  </select>
                 </div>
                 <div className="col-12">
                   <label className="form-label small fw-medium">Objective</label>
