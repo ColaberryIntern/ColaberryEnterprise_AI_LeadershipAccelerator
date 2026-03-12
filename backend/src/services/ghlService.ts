@@ -134,12 +134,13 @@ export async function createContact(
   const lastName = nameParts.slice(1).join(' ') || '';
 
   const payload: any = {
-    firstName,
-    lastName,
     email: lead.email,
     phone: lead.phone || undefined,
-    companyName: lead.company || undefined,
   };
+  // Only include name/company if provided — avoids overwriting existing GHL contact data in test mode
+  if (firstName) payload.firstName = firstName;
+  if (lastName) payload.lastName = lastName;
+  if (lead.company) payload.companyName = lead.company;
   if (interestGroup) {
     payload.tags = [interestGroup];
     payload.customField = { interestgroup: interestGroup };
@@ -290,11 +291,11 @@ export async function syncLeadToGhl(
     if (!contactId) {
       const createResult = await createContact(
         {
-          name: lead.name,
+          name: isTestMode ? '' : lead.name,
           email: effectiveEmail,
           phone: isTestMode && testOverrides.phone ? testOverrides.phone : lead.phone,
-          company: lead.company,
-          title: lead.title,
+          company: isTestMode ? '' : (lead.company || ''),
+          title: isTestMode ? '' : (lead.title || ''),
         },
         interestGroup
       );
