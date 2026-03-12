@@ -503,7 +503,21 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     return;
   }
 
-  const html = wrapEmailHtml(action.body);
+  // Auto-inject campaign tracking into all site links
+  let emailBody = action.body;
+  if (action.campaign_id) {
+    const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['channel', 'type'] });
+    if (campaign) {
+      emailBody = injectCampaignTracking(
+        emailBody,
+        action.campaign_id,
+        campaign.channel || 'email',
+        campaign.type || 'campaign',
+      );
+    }
+  }
+
+  const html = wrapEmailHtml(emailBody);
   const info = await mailer.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
@@ -819,6 +833,36 @@ async function handleFallback(action: InstanceType<typeof ScheduledEmail>): Prom
     type: 'system',
     subject: `Channel fallback: ${action.channel} → ${fallback}`,
     metadata: { scheduled_email_id: action.id, from_channel: action.channel, to_channel: fallback },
+  });
+}
+
+/**
+ * Auto-inject campaign tracking params into all site links in email HTML.
+ * Any href pointing to enterprise.colaberry.ai gets utm_source, utm_medium,
+ * utm_campaign, and cid appended — so every click is attributed automatically.
+ */
+function injectCampaignTracking(
+  html: string,
+  campaignId: string,
+  channel: string,
+  campaignType: string,
+): string {
+  const SITE_PATTERN = /href="(https?:\/\/enterprise\.colaberry\.ai[^"]*)"/gi;
+
+  return html.replace(SITE_PATTERN, (_match, rawUrl: string) => {
+    try {
+      const url = new URL(rawUrl);
+      // Don't overwrite if already has cid (manually set tracking link)
+      if (url.searchParams.has('cid')) return `href="${rawUrl}"`;
+
+      url.searchParams.set('utm_source', channel || 'email');
+      url.searchParams.set('utm_medium', campaignType || 'campaign');
+      url.searchParams.set('utm_campaign', campaignId);
+      url.searchParams.set('cid', campaignId);
+      return `href="${url.toString()}"`;
+    } catch {
+      return `href="${rawUrl}"`;
+    }
   });
 }
 
