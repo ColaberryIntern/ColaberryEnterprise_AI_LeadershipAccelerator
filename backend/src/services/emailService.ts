@@ -3,8 +3,18 @@ import { env } from '../config/env';
 import { getTestOverrides, getSetting } from './settingsService';
 import type { DigestData } from './digestService';
 
-const transporter =
-  env.smtpUser && env.smtpPass
+// Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
+const transporter = env.mandrillApiKey
+  ? nodemailer.createTransport({
+      host: 'smtp.mandrillapp.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: 'apikey',
+        pass: env.mandrillApiKey,
+      },
+    })
+  : env.smtpUser && env.smtpPass
     ? nodemailer.createTransport({
         host: env.smtpHost,
         port: env.smtpPort,

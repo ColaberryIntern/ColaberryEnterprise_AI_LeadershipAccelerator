@@ -292,20 +292,61 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
       {reverseResult && (
         <div className="card border-0 shadow-sm mb-4 border-start border-4 border-info">
           <div className="card-header bg-white d-flex justify-content-between align-items-center">
-            <span className="fw-semibold">Reverse Engineered Summary</span>
+            <div>
+              <span className="fw-semibold">Reverse Engineered Campaign Prompt</span>
+              <span className="badge bg-info ms-2" style={{ fontSize: 10 }}>
+                {reverseResult.split('\n').length} lines
+              </span>
+            </div>
             <button className="btn-close" onClick={() => setReverseResult(null)} />
           </div>
           <div className="card-body">
-            <pre className="mb-3 small" style={{ whiteSpace: 'pre-wrap' }}>{reverseResult}</pre>
-            <button
-              className="btn btn-outline-primary btn-sm"
-              onClick={() => {
-                setPrompt(reverseResult);
-                setReverseResult(null);
+            <div className="small text-muted mb-2">
+              Review the generated prompt below. You can use it as-is, copy it, or edit the prompt above before rebuilding.
+            </div>
+            <pre
+              className="mb-3 p-3 rounded"
+              style={{
+                whiteSpace: 'pre-wrap',
+                fontSize: '0.82rem',
+                backgroundColor: 'var(--color-bg-alt, #f7fafc)',
+                border: '1px solid var(--color-border, #e2e8f0)',
+                maxHeight: 400,
+                overflowY: 'auto',
+                lineHeight: 1.6,
               }}
             >
-              Use as Prompt
-            </button>
+              {reverseResult}
+            </pre>
+            <div className="d-flex gap-2 flex-wrap">
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setPrompt(reverseResult);
+                  setReverseResult(null);
+                }}
+              >
+                Use as Prompt
+              </button>
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(reverseResult);
+                }}
+              >
+                Copy to Clipboard
+              </button>
+              <button
+                className="btn btn-outline-info btn-sm"
+                onClick={() => {
+                  // Append to existing prompt instead of replacing
+                  setPrompt(prev => prev ? `${prev}\n\n---\n\n${reverseResult}` : reverseResult);
+                  setReverseResult(null);
+                }}
+              >
+                Append to Prompt
+              </button>
+            </div>
           </div>
         </div>
       )}

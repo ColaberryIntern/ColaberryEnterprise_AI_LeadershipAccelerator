@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import ErrorBoundary from '../../components/ui/ErrorBoundary';
 import ProgramOverviewTab from './orchestration/ProgramOverviewTab';
 import SessionControlTab from './orchestration/SessionControlTab';
 import SectionControlTab from './orchestration/SectionControlTab';
@@ -65,18 +66,20 @@ export default function AdminOrchestrationPage() {
         ))}
       </ul>
 
-      {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
-      {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
-      {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
-      {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
-      {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
-      {activeTab === 'types' && <CurriculumTypesTab />}
-      {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
-      {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
-      {activeTab === 'gating' && <GatingControlTab {...tabProps} />}
-      {activeTab === 'analytics' && <AnalyticsTab {...tabProps} />}
-      {activeTab === 'bulk' && <BulkConfigPanel {...tabProps} onNavigateToLesson={handleNavigateToMiniSections} />}
-      {activeTab === 'health' && <HealthDashboardTab {...tabProps} />}
+      <ErrorBoundary key={activeTab}>
+        {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
+        {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
+        {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
+        {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
+        {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}
+        {activeTab === 'types' && <CurriculumTypesTab />}
+        {activeTab === 'artifacts' && <ArtifactControlTab {...tabProps} />}
+        {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
+        {activeTab === 'gating' && <GatingControlTab {...tabProps} />}
+        {activeTab === 'analytics' && <AnalyticsTab {...tabProps} />}
+        {activeTab === 'bulk' && <BulkConfigPanel {...tabProps} onNavigateToLesson={handleNavigateToMiniSections} />}
+        {activeTab === 'health' && <HealthDashboardTab {...tabProps} />}
+      </ErrorBoundary>
     </div>
   );
 }

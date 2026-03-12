@@ -67,7 +67,7 @@ const ProgramOverviewTab: React.FC<Props> = ({ token, apiUrl }) => {
                 <span className="badge bg-info" style={{ fontSize: 11 }}>{mod.lessons?.length || 0} lessons</span>
               </div>
               <div className="card-body py-2">
-                <p className="text-muted small mb-2">{mod.description}</p>
+                <p className="text-muted small mb-2">{typeof mod.description === 'object' ? JSON.stringify(mod.description) : mod.description}</p>
                 <div className="table-responsive">
                   <table className="table table-sm mb-0" style={{ fontSize: 12 }}>
                     <thead className="table-light">

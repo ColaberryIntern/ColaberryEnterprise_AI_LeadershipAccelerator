@@ -144,6 +144,8 @@ Campaign.init(
         max_leads_per_cycle: 10,
         agent_name: 'Colaberry AI',
         agent_greeting: 'Hi {first_name}, this is {agent_name} calling from Colaberry.',
+        sender_email: '',
+        sender_name: '',
         call_time_start: '09:00',
         call_time_end: '17:00',
         call_timezone: 'America/Chicago',
@@ -153,7 +155,7 @@ Campaign.init(
         auto_dnc_on_request: true,
         voicemail_enabled: true,
         pass_prior_conversations: true,
-        auto_reply_enabled: false,
+        auto_reply_enabled: true,
       },
     },
     goals: {

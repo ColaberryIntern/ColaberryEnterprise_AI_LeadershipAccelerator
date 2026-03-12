@@ -36,8 +36,9 @@ export const env = {
   // Apollo
   apolloApiKey: process.env.APOLLO_API_KEY || '',
 
-  // Mandrill Webhook
+  // Mandrill
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
+  mandrillApiKey: process.env.MANDRILL_API_KEY || '',
 
   // Google Calendar
   googleCalendarId: process.env.GOOGLE_CALENDAR_ID || '',

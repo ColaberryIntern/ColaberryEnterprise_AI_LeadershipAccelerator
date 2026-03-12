@@ -33,13 +33,37 @@ export async function reverseEngineerCampaign(campaignId: string): Promise<{ sum
   }
 
   const steps = Array.isArray(sequence?.steps) ? sequence.steps : [];
+  const settings = campaign.settings || {};
 
-  const stepsOverview = steps.map((s: any, i: number) => {
+  // Build detailed step-by-step breakdown for AI analysis
+  const stepsDetail = steps.map((s: any, i: number) => {
     const timing = s.minutes_before_call
       ? `T-${s.minutes_before_call >= 1440 ? s.minutes_before_call / 1440 + 'd' : s.minutes_before_call >= 60 ? s.minutes_before_call / 60 + 'h' : s.minutes_before_call + 'min'}`
       : `Day ${s.delay_days || 0}`;
-    return `Step ${i + 1}: ${s.channel} at ${timing} — goal: ${s.step_goal || 'N/A'}`;
-  }).join('\n');
+    const parts = [
+      `Step ${i + 1}: ${s.channel} at ${timing}`,
+      s.step_goal ? `  Goal: ${s.step_goal}` : null,
+      s.ai_instructions ? `  AI Instructions: ${s.ai_instructions}` : null,
+      s.ai_tone ? `  Tone: ${s.ai_tone}` : null,
+      s.subject ? `  Subject: ${s.subject}` : null,
+      s.fallback_channel ? `  Fallback: ${s.fallback_channel}` : null,
+      s.max_attempts && s.max_attempts > 1 ? `  Max attempts: ${s.max_attempts}` : null,
+      s.voice_prompt ? `  Voice prompt: ${s.voice_prompt.substring(0, 300)}` : null,
+      s.sms_template ? `  SMS template: ${s.sms_template}` : null,
+      s.body_template ? `  Email body: ${s.body_template.substring(0, 300)}` : null,
+    ].filter(Boolean);
+    return parts.join('\n');
+  }).join('\n\n');
+
+  // Channel breakdown
+  const channelCounts = steps.reduce((acc: Record<string, number>, s: any) => {
+    acc[s.channel || 'email'] = (acc[s.channel || 'email'] || 0) + 1;
+    return acc;
+  }, {});
+  const channelSummary = Object.entries(channelCounts).map(([ch, count]) => `${count} ${ch}`).join(', ');
+
+  // Timeline
+  const totalDays = steps.length > 0 ? Math.max(...steps.map((s: any) => s.delay_days || 0)) : 0;
 
   const client = getClient();
   const model = (await getSetting('ai_model')) || env.aiModel;
@@ -47,31 +71,75 @@ export async function reverseEngineerCampaign(campaignId: string): Promise<{ sum
   const response = await client.chat.completions.create({
     model,
     temperature: 0.5,
-    max_tokens: 500,
+    max_tokens: 2000,
     messages: [
       {
         role: 'system',
-        content: `You are a campaign strategist. Analyze the campaign configuration below and write a concise strategic summary (2-4 sentences).
+        content: `You are a senior B2B campaign strategist. Analyze the complete campaign configuration below and produce a DETAILED system prompt that could be used to rebuild this exact campaign from scratch.
 
-Describe WHAT the campaign does at a high level — its purpose, audience, channel strategy, messaging approach, and key outcomes.
+Your output must be a structured campaign system prompt using this EXACT format. Include ALL sections, filled in with specific details from the campaign analysis:
 
-Do NOT list individual steps like "Email 1: ...", "SMS 2: ...". Instead, describe the overall arc, tone, and strategy.
+You are [role], an AI assistant working on behalf of [company/division], role of [specific company].
 
-The summary should be usable as a campaign system prompt — someone should be able to read it and understand the full campaign strategy.`,
+You are reaching out to [audience definition — be specific about who they are, their relationship to the company, and why they matter] about the [product/program name].
+
+Key messaging pillars:
+- [pillar 1 — specific to this campaign's content and value props]
+- [pillar 2]
+- [pillar 3]
+- [additional pillars as needed]
+- Landing page: [URL if found in the data, otherwise describe the destination]
+
+Tone: [specific tone — e.g., "Warm, professional, personal. Like a colleague reaching out, not a marketer."]
+Voice: [describe the writing style and what NOT to do — e.g., "Write as if personally reaching out. Not salesy. Use their first name. Reference shared history."]
+Goal: [primary conversion goal — be specific about what success looks like]
+
+Sequence arc: [describe the narrative flow across all steps — what comes first, how it builds, and how it closes. Reference specific themes like value, proof, urgency, etc.]
+
+Channel strategy:
+- Email: [when and why emails are used in this campaign]
+- SMS: [when and why SMS is used, if applicable]
+- Voice: [when and why voice calls are used, if applicable]
+
+Key constraints:
+- [content rules — e.g., "Keep emails under 300 words", "SMS under 160 chars"]
+- [audience rules — e.g., "These are alumni — reference shared Colaberry history"]
+- [timing rules — e.g., "Space touches 2-3 days apart", "Campaign runs over X days"]
+- [any specific offers, discounts, referral bonuses, or CTAs found in the data]
+
+RULES FOR YOUR OUTPUT:
+1. Be SPECIFIC — use actual details from the campaign data, not generic placeholders
+2. Reference actual content/themes from the steps (subjects, goals, instructions, body text)
+3. Include the campaign's specific value propositions, offers, and audience context
+4. The output should be detailed enough that the Rebuild function can recreate the entire campaign from it
+5. Do NOT list individual steps like "Email 1: ...", "SMS 2: ..." — describe the STRATEGY and ARC
+6. If the campaign has specific offers (discounts, referral bonuses, deadlines), include them
+7. Output ONLY the prompt text — no explanatory preamble, commentary, or markdown formatting`,
       },
       {
         role: 'user',
         content: `Campaign: ${campaign.name}
 Type: ${campaign.type}
+Status: ${campaign.status || 'N/A'}
 Description: ${campaign.description || 'N/A'}
 Goals: ${campaign.goals || 'N/A'}
 GTM Notes: ${campaign.gtm_notes || 'N/A'}
 Current AI System Prompt: ${campaign.ai_system_prompt || 'N/A'}
 
-Sequence (${steps.length} steps):
-${stepsOverview || 'No steps defined'}
+Agent Identity:
+- Agent Name: ${settings.agent_name || 'N/A'}
+- Agent Greeting: ${settings.agent_greeting || 'N/A'}
 
-Write a strategic summary of this campaign.`,
+Campaign Stats:
+- ${steps.length} steps across ${channelSummary || 'no channels'}
+- Timeline: ${totalDays} days
+- Has voice steps: ${steps.some((s: any) => s.channel === 'voice') ? 'Yes' : 'No'}
+- Has SMS steps: ${steps.some((s: any) => s.channel === 'sms') ? 'Yes' : 'No'}
+
+Detailed Step Breakdown:
+${stepsDetail || 'No steps defined'}
+
+Produce the detailed campaign system prompt.`,
       },
     ],
   });

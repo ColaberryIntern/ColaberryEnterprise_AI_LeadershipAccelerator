@@ -8,6 +8,8 @@ interface CampaignSettings {
   max_leads_per_cycle: number;
   agent_name: string;
   agent_greeting: string;
+  sender_email: string;
+  sender_name: string;
   call_time_start: string;
   call_time_end: string;
   call_timezone: string;
@@ -28,6 +30,8 @@ const DEFAULT_SETTINGS: CampaignSettings = {
   max_leads_per_cycle: 10,
   agent_name: 'Colaberry AI',
   agent_greeting: 'Hi {first_name}, this is {agent_name} calling from Colaberry.',
+  sender_email: '',
+  sender_name: '',
   call_time_start: '09:00',
   call_time_end: '17:00',
   call_timezone: 'America/Chicago',
@@ -37,7 +41,7 @@ const DEFAULT_SETTINGS: CampaignSettings = {
   auto_dnc_on_request: true,
   voicemail_enabled: true,
   pass_prior_conversations: true,
-  auto_reply_enabled: false,
+  auto_reply_enabled: true,
 };
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -296,13 +300,38 @@ export default function SettingsTab({ campaignId, headers, campaignMode, campaig
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold">Agent Identity</div>
         <div className="card-body">
+          <div className="row g-3 mb-3">
+            <div className="col-md-6">
+              <label className="form-label small fw-medium">Agent Name</label>
+              <input
+                className="form-control form-control-sm"
+                value={settings.agent_name}
+                onChange={(e) => updateSetting('agent_name', e.target.value)}
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label small fw-medium">Sender Display Name</label>
+              <input
+                className="form-control form-control-sm"
+                value={settings.sender_name || ''}
+                onChange={(e) => updateSetting('sender_name', e.target.value)}
+                placeholder="Colaberry Enterprise AI"
+              />
+              <div className="form-text">Name shown in the "From" field of emails.</div>
+            </div>
+          </div>
           <div className="mb-3">
-            <label className="form-label small fw-medium">Agent Name</label>
+            <label className="form-label small fw-medium">Sender Email Address</label>
             <input
+              type="email"
               className="form-control form-control-sm"
-              value={settings.agent_name}
-              onChange={(e) => updateSetting('agent_name', e.target.value)}
+              value={settings.sender_email || ''}
+              onChange={(e) => updateSetting('sender_email', e.target.value)}
+              placeholder="enrollment@colaberry.com"
             />
+            <div className="form-text">
+              The "From" email for this campaign. Must be a @colaberry.com address. Leave blank to use the system default.
+            </div>
           </div>
           <div className="mb-3">
             <label className="form-label small fw-medium">Agent Greeting</label>

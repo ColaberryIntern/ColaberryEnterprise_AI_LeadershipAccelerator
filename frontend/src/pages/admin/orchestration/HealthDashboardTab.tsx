@@ -160,7 +160,7 @@ const HealthDashboardTab: React.FC<Props> = ({ token, apiUrl }) => {
               {latestSnapshot && latestSnapshot.health_score != null && (
                 <div className="ms-auto d-flex align-items-center gap-2" style={{ fontSize: 12 }}>
                   <span className="text-muted">Automated scan:</span>
-                  <span className={`badge bg-${statusColor[latestSnapshot.status] === statusColor.healthy ? 'success' : latestSnapshot.status === 'degraded' ? 'warning' : 'danger'}`}>
+                  <span className={`badge bg-${latestSnapshot.status === 'healthy' ? 'success' : latestSnapshot.status === 'degraded' ? 'warning' : 'danger'}`}>
                     {latestSnapshot.health_score}/100
                   </span>
                   <span className="text-muted">{timeAgo(latestSnapshot.scan_timestamp)}</span>

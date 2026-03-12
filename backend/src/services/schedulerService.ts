@@ -105,16 +105,30 @@ async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Pr
 let transporter: nodemailer.Transporter | null = null;
 
 function getTransporter() {
-  if (!transporter && env.smtpUser && env.smtpPass) {
-    transporter = nodemailer.createTransport({
-      host: env.smtpHost,
-      port: env.smtpPort,
-      secure: env.smtpPort === 465,
-      auth: {
-        user: env.smtpUser,
-        pass: env.smtpPass,
-      },
-    });
+  if (!transporter) {
+    // Prefer Mandrill SMTP relay when API key is set
+    if (env.mandrillApiKey) {
+      transporter = nodemailer.createTransport({
+        host: 'smtp.mandrillapp.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: 'apikey',
+          pass: env.mandrillApiKey,
+        },
+      });
+      console.log('[Scheduler] Using Mandrill SMTP relay for email delivery');
+    } else if (env.smtpUser && env.smtpPass) {
+      transporter = nodemailer.createTransport({
+        host: env.smtpHost,
+        port: env.smtpPort,
+        secure: env.smtpPort === 465,
+        auth: {
+          user: env.smtpUser,
+          pass: env.smtpPass,
+        },
+      });
+    }
   }
   return transporter;
 }
@@ -503,36 +517,44 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     return;
   }
 
-  // Auto-inject campaign tracking into all site links
+  // Resolve per-campaign sender email and inject tracking
+  let senderEmail = env.emailFrom;
+  let senderName = 'Colaberry Enterprise AI';
   let emailBody = action.body;
+
   if (action.campaign_id) {
-    const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['channel', 'type'] });
+    const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['channel', 'type', 'settings'] });
     if (campaign) {
+      // Auto-inject campaign tracking into all site links
       emailBody = injectCampaignTracking(
         emailBody,
         action.campaign_id,
         campaign.channel || 'email',
         campaign.type || 'campaign',
       );
+      // Use per-campaign sender if configured
+      const settings = (campaign as any).settings || {};
+      if (settings.sender_email) senderEmail = settings.sender_email;
+      if (settings.sender_name) senderName = settings.sender_name;
     }
   }
 
   const html = wrapEmailHtml(emailBody);
   const info = await mailer.sendMail({
-    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    from: `"${senderName}" <${senderEmail}>`,
+    replyTo: `"${senderName}" <${senderEmail}>`,
     to: action.to_email,
     subject: action.subject,
     html,
     text: stripHtml(html),
     headers: {
       'X-MC-Metadata': JSON.stringify({ scheduled_email_id: action.id }),
-      'List-Unsubscribe': `<mailto:${env.emailFrom}?subject=unsubscribe>`,
+      'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
       'X-MC-Tags': 'campaign-sequence',
     },
   });
 
-  console.log(`[Scheduler] Email sent to: ${action.to_email} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Scheduler] Email sent to: ${action.to_email} from: ${senderEmail} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 
   await action.update({
     status: 'sent',
@@ -564,10 +586,10 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     delivery_mode: 'live',
     status: 'sent',
     to_address: action.to_email,
-    from_address: env.emailFrom,
+    from_address: senderEmail,
     subject: action.subject,
     body: action.body,
-    provider: 'smtp',
+    provider: 'mandrill',
     provider_message_id: info.messageId,
     provider_response: { accepted: info.accepted, rejected: info.rejected },
     metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false },
