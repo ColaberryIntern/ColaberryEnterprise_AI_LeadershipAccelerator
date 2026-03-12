@@ -268,7 +268,7 @@ export async function startAIOpsScheduler(): Promise<void> {
     console.error('[AI Ops] Failed to seed departments:', err.message);
   });
 
-  // Seed full agent registry on startup (idempotent — 129 agents)
+  // Seed full agent registry on startup (idempotent — 176 agents)
   seedAgentRegistry().catch((err) => {
     console.error('[AI Ops] Failed to seed agent registry:', err.message);
   });

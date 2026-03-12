@@ -842,7 +842,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'admissions_ops',
     description: 'Prepare daily call queues, verify eligibility, monitor operational backlog.',
   },
-  // --- Cory Product Operations agents ---
+  // --- Cory Product Operations agents (COO → Executive Office) ---
   {
     agent_name: 'CoryStrategicAgent',
     agent_type: 'action_planner',
@@ -850,7 +850,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     source_file: 'backend/src/intelligence/agents/CoryStrategicAgent.ts',
     trigger_type: 'on_demand',
     schedule: '',
-    category: 'strategic',
+    category: 'executive',
     description: 'On-demand strategic agent invoked by CoryEngine. Translates natural language commands into structured tickets and action plans.',
   },
   {
@@ -944,6 +944,36 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     schedule: '0 7 * * *',
     category: 'executive',
     description: 'Generates and delivers daily executive briefing with leads, pipeline, revenue, campaign performance, and system health. Daily at 7am.',
+  },
+  {
+    agent_name: 'AutonomousEngine',
+    agent_type: 'autonomous_engine',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/autonomousEngine.ts',
+    trigger_type: 'cron',
+    schedule: '5,15,25,35,45,55 * * * *',
+    category: 'executive',
+    description: 'COO autonomous operations loop. Discovers problems, plans actions, estimates impact, evaluates risk, and executes approved changes. Every 10 min.',
+  },
+  {
+    agent_name: 'AICOOStrategicCycle',
+    agent_type: 'strategic_cycle',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/strategy/aiCOO.ts',
+    trigger_type: 'cron',
+    schedule: '0,30 * * * *',
+    category: 'executive',
+    description: 'AI COO strategic planning cycle. Revenue optimization, cost reduction, growth experiments, resource allocation, and governance review. Every 30 min.',
+  },
+  {
+    agent_name: 'MetaAgentLoop',
+    agent_type: 'meta_agent_loop',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/meta/metaAgentLoop.ts',
+    trigger_type: 'cron',
+    schedule: '2 * * * *',
+    category: 'executive',
+    description: 'Meta-agent oversight loop. Analyzes agent architecture, optimizes prompts, tracks performance, and runs experiments to improve the fleet. Hourly.',
   },
 
   // ─── Strategy Department ───────────────────────────────────────────────────

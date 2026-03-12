@@ -161,6 +161,10 @@ export type AiAgentType =
   | 'access_control'
   | 'ai_safety'
   | 'agent_behavior'
+  // Executive intelligence modules
+  | 'autonomous_engine'
+  | 'strategic_cycle'
+  | 'meta_agent_loop'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
