@@ -132,6 +132,7 @@ const MayaChatWidget: React.FC = () => {
   const isAdminPage = location.pathname.startsWith('/admin');
   const doNotTrack = navigator.doNotTrack === '1';
   const visitorId = typeof window !== 'undefined' ? localStorage.getItem('cb_visitor_fp') : null;
+  const isAdmin = typeof window !== 'undefined' ? !!localStorage.getItem('admin_token') : false;
 
   // Determine Maya's expression based on conversation state
   const mayaExpression: MayaExpression = useMemo(() => {
@@ -266,6 +267,7 @@ const MayaChatWidget: React.FC = () => {
         page_path: location.pathname,
         trigger_type: triggerType,
         trigger_context: triggerContext,
+        is_admin: isAdmin || undefined,
       });
 
       if (res.data?.conversation_id) {
@@ -295,7 +297,7 @@ const MayaChatWidget: React.FC = () => {
     }
 
     setInitialized(true);
-  }, [conversationId, initialized, visitorId, location.pathname]);
+  }, [conversationId, initialized, visitorId, location.pathname, isAdmin]);
 
   const handleClose = useCallback(() => {
     if (isFullScreen) {

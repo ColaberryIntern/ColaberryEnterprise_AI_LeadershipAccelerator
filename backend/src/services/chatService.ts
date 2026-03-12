@@ -141,6 +141,7 @@ export async function startConversation(params: {
   triggerType?: string;
   triggerContext?: Record<string, any> | null;
   campaignSystemPrompt?: string | null;
+  isAdmin?: boolean;
 }): Promise<{ conversation_id: string; greeting: string }> {
   // Resolve visitor: the widget sends a fingerprint string, not a UUID.
   // Look up by fingerprint first, then by PK as fallback.
@@ -228,6 +229,50 @@ export async function startConversation(params: {
   let tokensUsed = 0;
   let latencyMs = 0;
   const chatModel = env.chatModel;
+
+  // Admin/owner detection — skip LLM, return stats dashboard greeting
+  if (params.isAdmin) {
+    let adminGreeting = `Welcome back, Boss. Here's your quick pulse:`;
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const [totalVisitors, todayConversations, totalLeads, activeConversations] = await Promise.all([
+        Visitor.count(),
+        ChatConversation.count({ where: { started_at: { [require('sequelize').Op.gte]: today } } }),
+        Lead.count(),
+        ChatConversation.count({ where: { status: 'active' } }),
+      ]);
+
+      adminGreeting = `Welcome back, Boss. Here's your pulse:\n\n`
+        + `Total visitors: ${totalVisitors}\n`
+        + `Conversations today: ${todayConversations}\n`
+        + `Total leads: ${totalLeads}\n`
+        + `Active conversations: ${activeConversations}\n\n`
+        + `What would you like to dig into?`;
+    } catch (statsErr) {
+      console.warn('[Chat] Admin stats error:', (statsErr as Error).message);
+    }
+
+    // Save greeting
+    await ChatMessage.create({
+      conversation_id: conversation.id,
+      role: 'assistant',
+      content: adminGreeting,
+      tokens_used: 0,
+      timestamp: new Date(),
+      metadata: { model: 'admin_stats', latency_ms: 0 },
+    } as any);
+    await conversation.update({ message_count: 1 } as any);
+
+    return {
+      conversation_id: conversation.id,
+      greeting: adminGreeting,
+      returning_visitor: true,
+      visitor_type: 'admin',
+      is_admin: true,
+    } as any;
+  }
 
   if (!isReturning && visitorType !== 'ceo') {
     // Use LLM to generate contextual greeting for new visitors

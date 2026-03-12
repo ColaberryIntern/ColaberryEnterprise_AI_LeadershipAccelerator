@@ -13,246 +13,269 @@ interface MayaAvatarProps {
 }
 
 /**
- * Professional female avatar for Maya — brown hair in updo/bun, glasses,
- * navy blazer with bow tie. Matches the 3D portrait style the user selected.
- * Each expression changes eyes/mouth/brows to match conversation mood.
+ * Professional female avatar for Maya — realistic style with brown hair
+ * in updo, semi-rimless glasses, navy blazer. Refined shading and
+ * proportions for a polished, non-cartoonish look.
  */
 const MayaAvatar: React.FC<MayaAvatarProps> = ({ expression = 'greeting', size = 32 }) => {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 100 100"
+      viewBox="0 0 120 120"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       style={{ borderRadius: '50%', flexShrink: 0 }}
     >
-      {/* Soft gradient background */}
       <defs>
-        <radialGradient id="maya-bg" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="#EDF2F7" />
-          <stop offset="100%" stopColor="#E2E8F0" />
+        {/* Skin gradient — warm, natural */}
+        <radialGradient id="m-skin" cx="48%" cy="38%" r="50%">
+          <stop offset="0%" stopColor="#F5D0B0" />
+          <stop offset="60%" stopColor="#EFBF9A" />
+          <stop offset="100%" stopColor="#E0A87E" />
         </radialGradient>
-        <radialGradient id="maya-skin-shading" cx="45%" cy="40%" r="55%">
-          <stop offset="0%" stopColor="#FDDCB5" />
-          <stop offset="100%" stopColor="#F0C9A0" />
+        {/* Hair gradient — rich brown */}
+        <linearGradient id="m-hair" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#5C3317" />
+          <stop offset="50%" stopColor="#6B3A1F" />
+          <stop offset="100%" stopColor="#4A2710" />
+        </linearGradient>
+        {/* Hair highlight */}
+        <linearGradient id="m-hair-hi" x1="30%" y1="0%" x2="70%" y2="100%">
+          <stop offset="0%" stopColor="#8B5E3C" opacity="0.6" />
+          <stop offset="100%" stopColor="#6B3A1F" opacity="0" />
+        </linearGradient>
+        {/* Blazer gradient — navy */}
+        <linearGradient id="m-blazer" x1="50%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" stopColor="#1E3A5F" />
+          <stop offset="100%" stopColor="#152C4D" />
+        </linearGradient>
+        {/* Background */}
+        <radialGradient id="m-bg" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stopColor="#F0F4F8" />
+          <stop offset="100%" stopColor="#D6DDE6" />
         </radialGradient>
+        {/* Soft shadow */}
+        <filter id="m-shadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.08" />
+        </filter>
+        {/* Lens reflection */}
+        <linearGradient id="m-lens" x1="30%" y1="20%" x2="70%" y2="80%">
+          <stop offset="0%" stopColor="#fff" stopOpacity="0.12" />
+          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
       </defs>
-      <circle cx="50" cy="50" r="50" fill="url(#maya-bg)" />
 
-      {/* Hair — brown updo/bun style */}
+      {/* Background */}
+      <circle cx="60" cy="60" r="60" fill="url(#m-bg)" />
+
       {/* Back hair volume */}
-      <ellipse cx="50" cy="28" rx="27" ry="20" fill="#5C3317" />
-      {/* Top hair with volume */}
-      <ellipse cx="50" cy="26" rx="25" ry="16" fill="#6B3A1F" />
-      {/* Hair highlight/shine */}
-      <path d="M34 22C38 16 46 14 52 14C58 14 64 17 66 22" fill="#7B4A2F" opacity="0.5" />
-      {/* Side-swept bangs */}
-      <path d="M30 36C32 28 38 22 48 20C42 24 36 30 34 38Z" fill="#6B3A1F" />
-      <path d="M70 36C68 28 62 22 52 20C58 24 64 30 66 38Z" fill="#5C3317" opacity="0.7" />
-      {/* Bun on top */}
-      <ellipse cx="54" cy="16" rx="10" ry="8" fill="#5C3317" />
-      <ellipse cx="54" cy="15" rx="8" ry="6" fill="#6B3A1F" />
-      {/* Bun highlight */}
-      <ellipse cx="52" cy="13" rx="4" ry="3" fill="#7B4A2F" opacity="0.4" />
+      <ellipse cx="60" cy="34" rx="32" ry="24" fill="url(#m-hair)" />
 
-      {/* Side hair framing face */}
-      <path d="M28 38C27 42 27 48 28 52C30 48 30 42 29 38Z" fill="#5C3317" />
-      <path d="M72 38C73 42 73 48 72 52C70 48 70 42 71 38Z" fill="#5C3317" />
+      {/* Side hair — frames the face naturally */}
+      <path d="M32 42C30 48 29 56 30 62C33 58 34 50 33 44Z" fill="#5C3317" />
+      <path d="M88 42C90 48 91 56 90 62C87 58 86 50 87 44Z" fill="#4A2710" />
+
+      {/* Bun */}
+      <ellipse cx="64" cy="18" rx="12" ry="10" fill="url(#m-hair)" />
+      <ellipse cx="64" cy="17" rx="10" ry="8" fill="#6B3A1F" />
+      <ellipse cx="62" cy="15" rx="5" ry="3.5" fill="url(#m-hair-hi)" />
 
       {/* Neck */}
-      <rect x="44" y="64" width="12" height="7" rx="3" fill="url(#maya-skin-shading)" />
+      <rect x="52" y="76" width="16" height="10" rx="5" fill="url(#m-skin)" />
+      {/* Neck shadow */}
+      <ellipse cx="60" cy="77" rx="8" ry="2" fill="#D49A70" opacity="0.3" />
 
-      {/* Navy blazer / shoulders */}
+      {/* Navy blazer */}
       <path
-        d="M28 78C28 72 36 67 50 67C64 67 72 72 72 78L74 100L26 100Z"
-        fill="#1A365D"
+        d="M32 94C32 86 42 80 60 80C78 80 88 86 88 94L90 120L30 120Z"
+        fill="url(#m-blazer)"
       />
       {/* Blazer lapels */}
-      <path d="M42 68L48 76L50 68" fill="#2D4A7A" />
-      <path d="M58 68L52 76L50 68" fill="#2D4A7A" />
-      {/* Lapel shadow */}
-      <path d="M43 69L48 75L49 69" fill="#152C4D" opacity="0.3" />
-      <path d="M57 69L52 75L51 69" fill="#152C4D" opacity="0.3" />
+      <path d="M50 81L56 91L58 82" fill="#243F64" />
+      <path d="M70 81L64 91L62 82" fill="#243F64" />
+      {/* Lapel edges */}
+      <path d="M50.5 81.5L56 90L57.5 82.5" stroke="#1A3050" strokeWidth="0.5" fill="none" opacity="0.4" />
+      <path d="M69.5 81.5L64 90L62.5 82.5" stroke="#1A3050" strokeWidth="0.5" fill="none" opacity="0.4" />
 
-      {/* White shirt collar V */}
-      <path d="M44 68L50 75L56 68" fill="#FFFFFF" />
-      <path d="M45 68.5L50 74L55 68.5" fill="#F7FAFC" />
+      {/* White collar */}
+      <path d="M52 81L60 90L68 81" fill="#FFFFFF" />
+      <path d="M53 81.5L60 89L67 81.5" fill="#F5F5F5" />
 
-      {/* Bow tie */}
-      <path d="M47 70L50 72L53 70L50 68Z" fill="#1A365D" />
-      <circle cx="50" cy="70" r="1.2" fill="#2D4A7A" />
+      {/* Bow tie — small, elegant */}
+      <path d="M56 84L60 86.5L64 84L60 82Z" fill="#1A365D" />
+      <circle cx="60" cy="84.2" r="1.3" fill="#243F64" />
 
-      {/* Face — softer, feminine shape */}
-      <ellipse cx="50" cy="48" rx="21" ry="23" fill="url(#maya-skin-shading)" />
-      {/* Jaw softening */}
-      <ellipse cx="50" cy="56" rx="17" ry="14" fill="#FDDCB5" opacity="0.5" />
+      {/* Face — natural proportions */}
+      <ellipse cx="60" cy="56" rx="25" ry="28" fill="url(#m-skin)" />
+      {/* Subtle jaw definition */}
+      <ellipse cx="60" cy="66" rx="20" ry="16" fill="#EFBF9A" opacity="0.4" />
+      {/* Cheek contour (subtle) */}
+      <ellipse cx="42" cy="58" rx="5" ry="7" fill="#E8AE85" opacity="0.15" />
+      <ellipse cx="78" cy="58" rx="5" ry="7" fill="#E8AE85" opacity="0.15" />
 
-      {/* Ears (partially hidden by hair) */}
-      <ellipse cx="29" cy="48" rx="3" ry="4.5" fill="#F0C9A0" />
-      <ellipse cx="71" cy="48" rx="3" ry="4.5" fill="#F0C9A0" />
+      {/* Ears */}
+      <ellipse cx="35" cy="56" rx="3.5" ry="5" fill="#EFBF9A" />
+      <ellipse cx="85" cy="56" rx="3.5" ry="5" fill="#EFBF9A" />
 
-      {/* Nose — small, subtle */}
-      <path d="M49 52C49.5 54 50.5 54 51 52" stroke="#DEB896" strokeWidth="1" strokeLinecap="round" fill="none" />
+      {/* Front hair — side-swept bangs */}
+      <path d="M36 40C38 30 46 24 58 23C50 27 42 34 40 44Z" fill="url(#m-hair)" />
+      <path d="M84 40C82 30 74 24 62 23C70 27 78 34 80 44Z" fill="#4A2710" opacity="0.8" />
+      {/* Hair shine */}
+      <path d="M42 32C46 26 52 24 58 24C52 26 46 30 44 36Z" fill="url(#m-hair-hi)" />
 
-      {/* Glasses — semi-rimless, professional style */}
-      <ellipse cx="40" cy="46" rx="8" ry="6.5" stroke="#4A3728" strokeWidth="1.8" fill="none" opacity="0.9" />
-      <ellipse cx="60" cy="46" rx="8" ry="6.5" stroke="#4A3728" strokeWidth="1.8" fill="none" opacity="0.9" />
-      {/* Glasses bridge */}
-      <path d="M48 46C49 44.5 51 44.5 52 46" stroke="#4A3728" strokeWidth="1.3" fill="none" />
-      {/* Glasses arms */}
-      <line x1="32" y1="45" x2="29" y2="46" stroke="#4A3728" strokeWidth="1.2" />
-      <line x1="68" y1="45" x2="71" y2="46" stroke="#4A3728" strokeWidth="1.2" />
-      {/* Lens shine */}
-      <ellipse cx="37" cy="44" rx="2" ry="1.5" fill="#fff" opacity="0.15" />
-      <ellipse cx="57" cy="44" rx="2" ry="1.5" fill="#fff" opacity="0.15" />
+      {/* Nose — refined */}
+      <path d="M58 62C59 64 61 64 62 62" stroke="#D4A07A" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+      <path d="M57.5 63C58.5 64 61.5 64 62.5 63" stroke="#C89670" strokeWidth="0.5" strokeLinecap="round" fill="none" opacity="0.5" />
 
-      {/* Expression-dependent features */}
+      {/* Glasses — thin, sophisticated frames */}
+      <ellipse cx="48" cy="54" rx="10" ry="8" stroke="#3D2B1F" strokeWidth="1.2" fill="url(#m-lens)" filter="url(#m-shadow)" />
+      <ellipse cx="72" cy="54" rx="10" ry="8" stroke="#3D2B1F" strokeWidth="1.2" fill="url(#m-lens)" filter="url(#m-shadow)" />
+      {/* Bridge */}
+      <path d="M58 53.5C59 52 61 52 62 53.5" stroke="#3D2B1F" strokeWidth="1" fill="none" />
+      {/* Arms */}
+      <line x1="38" y1="53" x2="35" y2="54" stroke="#3D2B1F" strokeWidth="0.8" />
+      <line x1="82" y1="53" x2="85" y2="54" stroke="#3D2B1F" strokeWidth="0.8" />
+
+      {/* ── Expression-dependent features ── */}
+
       {expression === 'greeting' && (
         <>
-          {/* Warm, friendly eyes */}
-          <ellipse cx="40" cy="46" rx="3" ry="3.2" fill="#3D2B1F" />
-          <ellipse cx="60" cy="46" rx="3" ry="3.2" fill="#3D2B1F" />
-          {/* Iris color */}
-          <ellipse cx="40" cy="46" rx="3" ry="3.2" fill="#4A2F1A" />
-          <ellipse cx="60" cy="46" rx="3" ry="3.2" fill="#4A2F1A" />
-          {/* Pupils */}
-          <circle cx="40" cy="46" r="1.8" fill="#1A1A1A" />
-          <circle cx="60" cy="46" r="1.8" fill="#1A1A1A" />
-          {/* Eye shine */}
-          <circle cx="41.5" cy="44.8" r="1" fill="#fff" />
-          <circle cx="61.5" cy="44.8" r="1" fill="#fff" />
-          <circle cx="39" cy="47" r="0.5" fill="#fff" opacity="0.6" />
-          <circle cx="59" cy="47" r="0.5" fill="#fff" opacity="0.6" />
-          {/* Upper eyelids / lash line */}
-          <path d="M35 44C37 42 43 42 45 44" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          <path d="M55 44C57 42 63 42 65 44" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          {/* Eyelashes */}
-          <path d="M34.5 44.5L33 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M45.5 44.5L47 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M54.5 44.5L53 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M65.5 44.5L67 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
+          {/* Warm open eyes */}
+          <ellipse cx="48" cy="53.5" rx="3.5" ry="4" fill="#3D2B1F" />
+          <ellipse cx="72" cy="53.5" rx="3.5" ry="4" fill="#3D2B1F" />
+          <circle cx="48" cy="53.5" r="2.2" fill="#1A1A1A" />
+          <circle cx="72" cy="53.5" r="2.2" fill="#1A1A1A" />
+          <circle cx="49.5" cy="52" r="1.1" fill="#fff" />
+          <circle cx="73.5" cy="52" r="1.1" fill="#fff" />
+          <circle cx="47" cy="54.5" r="0.5" fill="#fff" opacity="0.4" />
+          <circle cx="71" cy="54.5" r="0.5" fill="#fff" opacity="0.4" />
+          {/* Upper lash line */}
+          <path d="M42 50.5C44 48.5 52 48.5 54 50.5" stroke="#3D2B1F" strokeWidth="1" strokeLinecap="round" fill="none" />
+          <path d="M66 50.5C68 48.5 76 48.5 78 50.5" stroke="#3D2B1F" strokeWidth="1" strokeLinecap="round" fill="none" />
+          {/* Lashes */}
+          <path d="M42 51L40.5 49.5" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M54 51L55.5 49.5" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M66 51L64.5 49.5" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M78 51L79.5 49.5" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
           {/* Friendly smile */}
-          <path d="M42 58C44 62 56 62 58 58" stroke="#C4705A" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-          {/* Lower lip hint */}
-          <path d="M44 60C47 62 53 62 56 60" fill="#D4856E" opacity="0.4" />
-          {/* Warm blush */}
-          <circle cx="33" cy="54" r="4.5" fill="#FFB5B5" opacity="0.2" />
-          <circle cx="67" cy="54" r="4.5" fill="#FFB5B5" opacity="0.2" />
-          {/* Eyebrows — arched, feminine */}
-          <path d="M34 40C37 37.5 43 37.5 46 39.5" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d="M54 39.5C57 37.5 63 37.5 66 40" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          <path d="M50 70C53 74 67 74 70 70" stroke="#B85C4A" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          <path d="M52 71C55 73.5 65 73.5 68 71" fill="#C46854" opacity="0.3" />
+          {/* Light blush */}
+          <circle cx="40" cy="64" r="5" fill="#FFB5B5" opacity="0.12" />
+          <circle cx="80" cy="64" r="5" fill="#FFB5B5" opacity="0.12" />
+          {/* Brows — natural arch */}
+          <path d="M41 46C44 43.5 52 43.5 55 46" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M65 46C68 43.5 76 43.5 79 46" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </>
       )}
 
       {expression === 'thinking' && (
         <>
-          {/* Eyes looking slightly up and to the side */}
-          <ellipse cx="41" cy="45.5" rx="3" ry="3.2" fill="#4A2F1A" />
-          <ellipse cx="61" cy="45.5" rx="3" ry="3.2" fill="#4A2F1A" />
-          <circle cx="41" cy="45.5" r="1.8" fill="#1A1A1A" />
-          <circle cx="61" cy="45.5" r="1.8" fill="#1A1A1A" />
-          {/* Eye shine — positioned higher (looking up) */}
-          <circle cx="42.5" cy="44" r="1" fill="#fff" />
-          <circle cx="62.5" cy="44" r="1" fill="#fff" />
-          {/* Upper eyelids */}
-          <path d="M35 43.5C37 41.5 43 41.5 45 43.5" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          <path d="M55 43.5C57 41.5 63 41.5 65 43.5" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          {/* Eyelashes */}
-          <path d="M34.5 44L33 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M45.5 44L47 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M54.5 44L53 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M65.5 44L67 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          {/* Small pursed/thoughtful mouth */}
-          <ellipse cx="50" cy="59" rx="3.5" ry="2" fill="#D4856E" opacity="0.7" />
-          <path d="M47 58.5C48 57.5 52 57.5 53 58.5" stroke="#C4705A" strokeWidth="1" strokeLinecap="round" fill="none" />
-          {/* One brow raised — curious/thinking */}
-          <path d="M34 39C37 36 43 36.5 46 39" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d="M54 39.5C57 37 63 37 66 39.5" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          {/* Eyes glancing up-right */}
+          <ellipse cx="49" cy="52.5" rx="3.5" ry="4" fill="#3D2B1F" />
+          <ellipse cx="73" cy="52.5" rx="3.5" ry="4" fill="#3D2B1F" />
+          <circle cx="49" cy="52.5" r="2.2" fill="#1A1A1A" />
+          <circle cx="73" cy="52.5" r="2.2" fill="#1A1A1A" />
+          <circle cx="50.5" cy="51" r="1.1" fill="#fff" />
+          <circle cx="74.5" cy="51" r="1.1" fill="#fff" />
+          {/* Upper lash line */}
+          <path d="M42 50C44 48 52 48 54 50" stroke="#3D2B1F" strokeWidth="1" strokeLinecap="round" fill="none" />
+          <path d="M66 50C68 48 76 48 78 50" stroke="#3D2B1F" strokeWidth="1" strokeLinecap="round" fill="none" />
+          {/* Lashes */}
+          <path d="M42 50.5L40.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M54 50.5L55.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M66 50.5L64.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M78 50.5L79.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          {/* Thoughtful small mouth */}
+          <ellipse cx="60" cy="70.5" rx="4" ry="2.5" fill="#C46854" opacity="0.5" />
+          <path d="M57 70C58.5 69 61.5 69 63 70" stroke="#B85C4A" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+          {/* One brow slightly raised */}
+          <path d="M41 44.5C44 42 52 42 55 45" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M65 45.5C68 42.5 76 42.5 79 45" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </>
       )}
 
       {expression === 'explaining' && (
         <>
-          {/* Attentive, engaged eyes — slightly wider */}
-          <ellipse cx="40" cy="46" rx="3.2" ry="3.5" fill="#4A2F1A" />
-          <ellipse cx="60" cy="46" rx="3.2" ry="3.5" fill="#4A2F1A" />
-          <circle cx="40" cy="46" r="1.8" fill="#1A1A1A" />
-          <circle cx="60" cy="46" r="1.8" fill="#1A1A1A" />
-          <circle cx="41.5" cy="44.8" r="1" fill="#fff" />
-          <circle cx="61.5" cy="44.8" r="1" fill="#fff" />
-          <circle cx="39" cy="47" r="0.5" fill="#fff" opacity="0.5" />
-          <circle cx="59" cy="47" r="0.5" fill="#fff" opacity="0.5" />
-          {/* Upper eyelids */}
-          <path d="M35 43.5C37 41.5 43 41.5 45 43.5" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          <path d="M55 43.5C57 41.5 63 41.5 65 43.5" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          {/* Eyelashes */}
-          <path d="M34.5 44L33 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M45.5 44L47 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M54.5 44L53 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M65.5 44L67 42.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          {/* Friendly open smile — showing teeth */}
-          <path d="M42 57C45 62 55 62 58 57" stroke="#C4705A" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-          <path d="M44 58C46 61 54 61 56 58" fill="#FFFFFF" />
-          <path d="M44 58.5C47 60 53 60 56 58.5" fill="#F7FAFC" opacity="0.8" />
-          {/* Slight blush */}
-          <circle cx="33" cy="54" r="4" fill="#FFB5B5" opacity="0.15" />
-          <circle cx="67" cy="54" r="4" fill="#FFB5B5" opacity="0.15" />
-          {/* Confident brows — slightly raised */}
-          <path d="M34 39.5C37 37 43 37 46 39" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d="M54 39C57 37 63 37 66 39.5" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          {/* Engaged, slightly wider eyes */}
+          <ellipse cx="48" cy="53.5" rx="3.8" ry="4.3" fill="#3D2B1F" />
+          <ellipse cx="72" cy="53.5" rx="3.8" ry="4.3" fill="#3D2B1F" />
+          <circle cx="48" cy="53.5" r="2.3" fill="#1A1A1A" />
+          <circle cx="72" cy="53.5" r="2.3" fill="#1A1A1A" />
+          <circle cx="49.5" cy="52" r="1.2" fill="#fff" />
+          <circle cx="73.5" cy="52" r="1.2" fill="#fff" />
+          <circle cx="47" cy="54.5" r="0.5" fill="#fff" opacity="0.4" />
+          <circle cx="71" cy="54.5" r="0.5" fill="#fff" opacity="0.4" />
+          {/* Upper lash line */}
+          <path d="M42 50C44 47.5 52 47.5 54 50" stroke="#3D2B1F" strokeWidth="1" strokeLinecap="round" fill="none" />
+          <path d="M66 50C68 47.5 76 47.5 78 50" stroke="#3D2B1F" strokeWidth="1" strokeLinecap="round" fill="none" />
+          {/* Lashes */}
+          <path d="M42 50.5L40.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M54 50.5L55.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M66 50.5L64.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M78 50.5L79.5 49" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          {/* Open, confident smile — teeth showing */}
+          <path d="M50 69C53 74 67 74 70 69" stroke="#B85C4A" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          <path d="M52 70C55 73 65 73 68 70" fill="#FFFFFF" />
+          <path d="M52 70.5C55 72.5 65 72.5 68 70.5" fill="#F5F5F5" opacity="0.6" />
+          {/* Subtle blush */}
+          <circle cx="40" cy="64" r="4.5" fill="#FFB5B5" opacity="0.1" />
+          <circle cx="80" cy="64" r="4.5" fill="#FFB5B5" opacity="0.1" />
+          {/* Brows slightly raised — engaged */}
+          <path d="M41 45C44 42.5 52 42.5 55 45" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M65 45C68 42.5 76 42.5 79 45" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </>
       )}
 
       {expression === 'excited' && (
         <>
-          {/* Happy squished eyes — smiling so hard eyes crinkle */}
-          <path d="M36 47C38 43 42 43 44 47" stroke="#3D2B1F" strokeWidth="2" strokeLinecap="round" fill="none" />
-          <path d="M56 47C58 43 62 43 64 47" stroke="#3D2B1F" strokeWidth="2" strokeLinecap="round" fill="none" />
-          {/* Eyelash accents */}
-          <path d="M35 47L33.5 45.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M44.5 47L46 45.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M55.5 47L54 45.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M64.5 47L66 45.5" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          {/* Big delighted grin */}
-          <path d="M40 57C44 64 56 64 60 57" stroke="#C4705A" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-          <path d="M42 58C45 63 55 63 58 58" fill="#FFFFFF" />
+          {/* Happy crescent eyes */}
+          <path d="M43 54.5C45 50 51 50 53 54.5" stroke="#3D2B1F" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+          <path d="M67 54.5C69 50 75 50 77 54.5" stroke="#3D2B1F" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+          {/* Lash accents */}
+          <path d="M42.5 55L41 53" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M53.5 55L55 53" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M66.5 55L65 53" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M77.5 55L79 53" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          {/* Big genuine smile */}
+          <path d="M48 69C52 76 68 76 72 69" stroke="#B85C4A" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          <path d="M50 70C53 75 67 75 70 70" fill="#FFFFFF" />
           {/* Rosy cheeks */}
-          <circle cx="32" cy="54" r="5.5" fill="#FFAAAA" opacity="0.3" />
-          <circle cx="68" cy="54" r="5.5" fill="#FFAAAA" opacity="0.3" />
-          {/* Raised happy brows */}
-          <path d="M34 38C37 35.5 43 35.5 46 37.5" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d="M54 37.5C57 35.5 63 35.5 66 38" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          <circle cx="39" cy="64" r="6" fill="#FFAAAA" opacity="0.18" />
+          <circle cx="81" cy="64" r="6" fill="#FFAAAA" opacity="0.18" />
+          {/* Raised joyful brows */}
+          <path d="M41 43.5C44 41 52 41 55 43.5" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M65 43.5C68 41 76 41 79 43.5" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </>
       )}
 
       {expression === 'empathetic' && (
         <>
-          {/* Soft, gentle eyes */}
-          <ellipse cx="40" cy="46.5" rx="3" ry="3" fill="#4A2F1A" />
-          <ellipse cx="60" cy="46.5" rx="3" ry="3" fill="#4A2F1A" />
-          <circle cx="40" cy="46.5" r="1.8" fill="#1A1A1A" />
-          <circle cx="60" cy="46.5" r="1.8" fill="#1A1A1A" />
-          <circle cx="41.2" cy="45.3" r="1" fill="#fff" />
-          <circle cx="61.2" cy="45.3" r="1" fill="#fff" />
-          {/* Softer eyelids — slightly more closed, caring look */}
-          <path d="M35 44C37 42.5 43 42.5 45 44" stroke="#3D2B1F" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-          <path d="M55 44C57 42.5 63 42.5 65 44" stroke="#3D2B1F" strokeWidth="1.4" strokeLinecap="round" fill="none" />
-          {/* Eyelashes */}
-          <path d="M34.5 44.5L33 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M45.5 44.5L47 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M54.5 44.5L53 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          <path d="M65.5 44.5L67 43" stroke="#3D2B1F" strokeWidth="0.8" strokeLinecap="round" />
-          {/* Gentle warm smile */}
-          <path d="M43 58C46 61 54 61 57 58" stroke="#C4705A" strokeWidth="1.6" strokeLinecap="round" fill="none" />
-          {/* Slight lower lip */}
-          <path d="M45 59C47 61 53 61 55 59" fill="#D4856E" opacity="0.3" />
-          {/* Warm soft blush */}
-          <circle cx="33" cy="54" r="4.5" fill="#FFB5B5" opacity="0.2" />
-          <circle cx="67" cy="54" r="4.5" fill="#FFB5B5" opacity="0.2" />
-          {/* Caring brows — inner edges slightly raised (empathy shape) */}
-          <path d="M34 40.5C37 38 42 37 46 39" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d="M54 39C58 37 63 38 66 40.5" stroke="#4A2F1A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          {/* Gentle, soft eyes */}
+          <ellipse cx="48" cy="54" rx="3.5" ry="3.8" fill="#3D2B1F" />
+          <ellipse cx="72" cy="54" rx="3.5" ry="3.8" fill="#3D2B1F" />
+          <circle cx="48" cy="54" r="2.2" fill="#1A1A1A" />
+          <circle cx="72" cy="54" r="2.2" fill="#1A1A1A" />
+          <circle cx="49.3" cy="52.8" r="1" fill="#fff" />
+          <circle cx="73.3" cy="52.8" r="1" fill="#fff" />
+          {/* Slightly lowered lids — caring look */}
+          <path d="M42 51C44 49.5 52 49.5 54 51" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+          <path d="M66 51C68 49.5 76 49.5 78 51" stroke="#3D2B1F" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+          {/* Lashes */}
+          <path d="M42 51.5L40.5 50" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M54 51.5L55.5 50" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M66 51.5L64.5 50" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          <path d="M78 51.5L79.5 50" stroke="#3D2B1F" strokeWidth="0.6" strokeLinecap="round" />
+          {/* Gentle understanding smile */}
+          <path d="M52 70C55 73 65 73 68 70" stroke="#B85C4A" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          <path d="M54 71C56.5 72.5 63.5 72.5 66 71" fill="#C46854" opacity="0.2" />
+          {/* Warm blush */}
+          <circle cx="40" cy="64" r="5" fill="#FFB5B5" opacity="0.14" />
+          <circle cx="80" cy="64" r="5" fill="#FFB5B5" opacity="0.14" />
+          {/* Empathetic brows — inner edges slightly raised */}
+          <path d="M41 46.5C44 44 51 43 55 45.5" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M65 45.5C69 43 76 44 79 46.5" stroke="#4A2F1A" strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </>
       )}
     </svg>

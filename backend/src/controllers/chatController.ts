@@ -21,7 +21,7 @@ export async function handleChatStart(req: Request, res: Response, next: NextFun
       return;
     }
 
-    const { visitor_id, session_id, page_url, page_path, trigger_type, trigger_context } = req.body;
+    const { visitor_id, session_id, page_url, page_path, trigger_type, trigger_context, is_admin } = req.body;
 
     if (!visitor_id || typeof visitor_id !== 'string') {
       res.status(400).json({ error: 'visitor_id is required' });
@@ -37,6 +37,7 @@ export async function handleChatStart(req: Request, res: Response, next: NextFun
       pageCategory,
       triggerType: trigger_type || 'visitor_initiated',
       triggerContext: trigger_context || null,
+      isAdmin: !!is_admin,
     });
 
     res.json(result);
