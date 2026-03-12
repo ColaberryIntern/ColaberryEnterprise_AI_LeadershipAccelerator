@@ -107,13 +107,22 @@ const BUSINESS_ENTITY_MAP: Record<string, { label: string; color: string; tables
  * Business entity hierarchy edges (parent → child relationships).
  */
 const HIERARCHY_EDGES: HierarchyEdge[] = [
+  // Core pipeline flow
   { source: 'campaigns', target: 'leads', relationship: 'enrolls' },
   { source: 'leads', target: 'visitors', relationship: 'tracks' },
   { source: 'leads', target: 'students', relationship: 'converts to' },
   { source: 'cohorts', target: 'students', relationship: 'contains' },
   { source: 'cohorts', target: 'curriculum', relationship: 'follows' },
+  // Agent oversight
   { source: 'agents', target: 'campaigns', relationship: 'monitors' },
   { source: 'agents', target: 'system', relationship: 'observes' },
+  { source: 'agents', target: 'leads', relationship: 'scores' },
+  // Cross-domain connections
+  { source: 'campaigns', target: 'visitors', relationship: 'targets' },
+  { source: 'system', target: 'leads', relationship: 'logs' },
+  { source: 'system', target: 'campaigns', relationship: 'schedules' },
+  { source: 'students', target: 'curriculum', relationship: 'progresses' },
+  { source: 'visitors', target: 'campaigns', relationship: 'attributed to' },
 ];
 
 /**

@@ -1,4 +1,4 @@
-import { Campaign, CampaignLead, Lead } from '../models';
+import { Campaign, CampaignLead, Lead, FollowUpSequence } from '../models';
 import { createCampaign } from './campaignService';
 import { createSequence } from './sequenceService';
 import { enrollLeadsInCampaign } from './campaignService';
@@ -198,19 +198,25 @@ export interface SeedResult {
  * import alumni from MSSQL, and enroll them in the primary campaign.
  */
 export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult> {
-  // 1. Create AI Champion sequence
-  const championSeq = await createSequence({
-    name: 'Alumni AI Champion Sequence',
-    description: '6-step multi-channel sequence: Day 0 (email+SMS), Day 2 (email), Day 4 (SMS), Day 7 (email), Day 10 (SMS)',
-    steps: AI_CHAMPION_STEPS,
-  });
+  // 1. Create AI Champion sequence (find existing first to avoid duplicates)
+  let championSeq = await FollowUpSequence.findOne({ where: { name: 'Alumni AI Champion Sequence' } });
+  if (!championSeq) {
+    championSeq = await createSequence({
+      name: 'Alumni AI Champion Sequence',
+      description: '6-step multi-channel sequence: Day 0 (email+SMS), Day 2 (email), Day 4 (SMS), Day 7 (email), Day 10 (SMS)',
+      steps: AI_CHAMPION_STEPS,
+    });
+  }
 
-  // 2. Create Re-Engagement sequence
-  const reengageSeq = await createSequence({
-    name: 'Alumni Re-Engagement Sequence',
-    description: '4-step re-engagement: Day 0 (email), Day 1 (SMS), Day 3 (email), Day 6 (SMS)',
-    steps: RE_ENGAGEMENT_STEPS,
-  });
+  // 2. Create Re-Engagement sequence (find existing first to avoid duplicates)
+  let reengageSeq = await FollowUpSequence.findOne({ where: { name: 'Alumni Re-Engagement Sequence' } });
+  if (!reengageSeq) {
+    reengageSeq = await createSequence({
+      name: 'Alumni Re-Engagement Sequence',
+      description: '4-step re-engagement: Day 0 (email), Day 1 (SMS), Day 3 (email), Day 6 (SMS)',
+      steps: RE_ENGAGEMENT_STEPS,
+    });
+  }
 
   // 3. Create AI Champion campaign
   const championCampaign = await createCampaign({

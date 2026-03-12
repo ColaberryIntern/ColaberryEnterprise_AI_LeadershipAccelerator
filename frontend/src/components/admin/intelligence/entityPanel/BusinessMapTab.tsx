@@ -100,22 +100,22 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
 
-    fg.d3Force('charge')?.strength(-500);
-    fg.d3Force('link')?.distance(100);
+    fg.d3Force('charge')?.strength(-250);
+    fg.d3Force('link')?.distance(60);
 
     const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
     fg.d3Force(
       'y',
       forceY((node: any) => {
         const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
-        return -dimensions.height * 0.35 + normalizedLevel * dimensions.height * 0.75;
-      }).strength(0.35)
+        return -dimensions.height * 0.25 + normalizedLevel * dimensions.height * 0.55;
+      }).strength(0.5)
     );
-    fg.d3Force('x', forceX(0).strength(0.05));
+    fg.d3Force('x', forceX(0).strength(0.12));
 
     // Smoother physics (cast to access d3 simulation methods)
-    (fg as any).d3AlphaDecay?.(0.015);
-    (fg as any).d3VelocityDecay?.(0.25);
+    (fg as any).d3AlphaDecay?.(0.02);
+    (fg as any).d3VelocityDecay?.(0.3);
 
     fg.d3ReheatSimulation();
   }, [graphData, dimensions.height]);
@@ -205,13 +205,11 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       if (!src.x || !tgt.x) return;
 
       ctx.beginPath();
-      ctx.setLineDash([3, 2]);
       ctx.moveTo(src.x!, src.y!);
       ctx.lineTo(tgt.x!, tgt.y!);
-      ctx.strokeStyle = 'rgba(160, 174, 192, 0.5)';
-      ctx.lineWidth = 1 / globalScale;
+      ctx.strokeStyle = 'rgba(160, 174, 192, 0.7)';
+      ctx.lineWidth = 1.2 / globalScale;
       ctx.stroke();
-      ctx.setLineDash([]);
 
       const midX = (src.x! + tgt.x!) / 2;
       const midY = (src.y! + tgt.y!) / 2;
@@ -219,7 +217,7 @@ export default function BusinessMapTab({ hierarchy, loading }: Props) {
       ctx.font = `${labelSize}px -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(113, 128, 150, 0.6)';
+      ctx.fillStyle = 'rgba(113, 128, 150, 0.75)';
       ctx.fillText((link as GraphLink).relationship, midX, midY - 2 / globalScale);
     },
     []
