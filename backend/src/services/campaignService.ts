@@ -125,7 +125,7 @@ export async function updateCampaign(id: string, updates: Record<string, any>) {
     'channel_config', 'budget_total', 'ai_system_prompt', 'campaign_mode',
     'settings', 'goals', 'gtm_notes', 'evolution_config',
     'channel', 'destination_path', 'objective', 'budget_cap',
-    'cost_per_lead_target', 'expected_roi',
+    'cost_per_lead_target', 'expected_roi', 'status',
   ];
   const filtered: Record<string, any> = {};
   for (const key of allowedFields) {

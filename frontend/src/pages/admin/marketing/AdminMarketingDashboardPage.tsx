@@ -82,15 +82,6 @@ const CHANNELS = [
   { value: 'organic', label: 'Organic' },
 ];
 
-const APPROVAL_BADGE: Record<string, string> = {
-  draft: 'bg-secondary',
-  pending_approval: 'bg-warning text-dark',
-  approved: 'bg-info',
-  live: 'bg-success',
-  paused: 'bg-secondary',
-  completed: 'bg-dark',
-};
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function intentBadge(pct: number) {
@@ -107,10 +98,6 @@ function conversionBadge(rate: number) {
 
 function fmt$(n: number) {
   return `$${n.toLocaleString()}`;
-}
-
-function approvalLabel(status: string) {
-  return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // ─── Landing Pages ──────────────────────────────────────────────────────────
@@ -352,9 +339,16 @@ function EditCampaignModal({ campaign, onClose, onSaved }: { campaign: Registere
 
 // ─── Campaign Detail Modal ──────────────────────────────────────────────────
 
-function CampaignDetailModal({ campaign: c, onClose }: { campaign: RegisteredCampaign; onClose: () => void }) {
+function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
+  campaign: RegisteredCampaign;
+  onClose: () => void;
+  onEdit: () => void;
+  onRefresh: () => void;
+}) {
   const [roi, setRoi] = useState<any>(null);
   const [roiLoading, setRoiLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     api.get(`/api/admin/campaigns/${c.id}/roi`)
@@ -363,12 +357,49 @@ function CampaignDetailModal({ campaign: c, onClose }: { campaign: RegisteredCam
       .finally(() => setRoiLoading(false));
   }, [c.id]);
 
+  const handleAction = async (action: string) => {
+    setActionLoading(action);
+    try {
+      if (action === 'delete') {
+        if (!window.confirm(`Delete campaign "${c.name}"? This cannot be undone.`)) { setActionLoading(''); return; }
+        await api.delete(`/api/admin/campaigns/${c.id}`);
+        onRefresh();
+        onClose();
+        return;
+      }
+      if (action === 'toggle-active') {
+        const newStatus = c.status === 'active' ? 'paused' : 'active';
+        await api.patch(`/api/admin/campaigns/${c.id}`, { status: newStatus });
+        onRefresh();
+        onClose();
+        return;
+      }
+      await api.post(`/api/admin/campaigns/${c.id}/${action}`);
+      onRefresh();
+      onClose();
+    } catch (e: any) {
+      alert(e.response?.data?.error || `Failed: ${action}`);
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const copyLink = () => {
+    if (!c.tracking_link) return;
+    navigator.clipboard.writeText(c.tracking_link).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    }).catch(() => {});
+  };
+
   const DetailRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="d-flex justify-content-between py-1 border-bottom" style={{ fontSize: '0.85rem' }}>
       <span className="text-muted">{label}</span>
       <span className="fw-medium text-end" style={{ maxWidth: '60%', wordBreak: 'break-all' }}>{value}</span>
     </div>
   );
+
+  const isActive = c.status === 'active';
 
   return (
     <>
@@ -377,46 +408,23 @@ function CampaignDetailModal({ campaign: c, onClose }: { campaign: RegisteredCam
         <div className="modal-dialog modal-lg modal-dialog-scrollable">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title fw-semibold">Campaign Details</h5>
+              <div>
+                <h5 className="modal-title fw-semibold mb-1">{c.name}</h5>
+                <div className="d-flex gap-2 align-items-center">
+                  <span className={`badge ${isActive ? 'bg-success' : 'bg-secondary'}`}>
+                    {isActive ? 'Active' : c.status || 'Draft'}
+                  </span>
+                  {c.channel && (
+                    <span className="badge bg-info text-dark">{c.channel.replace(/_/g, ' ')}</span>
+                  )}
+                  <span className="text-muted small">{c.type.replace(/_/g, ' ')}</span>
+                </div>
+              </div>
               <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
             </div>
             <div className="modal-body">
-              <div className="row g-4">
-                {/* Left column: Campaign Info */}
-                <div className="col-md-6">
-                  <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Campaign Info</h6>
-                  <DetailRow label="Name" value={c.name} />
-                  <DetailRow label="Type" value={c.type.replace(/_/g, ' ')} />
-                  <DetailRow label="Channel" value={c.channel ? c.channel.replace(/_/g, ' ') : '\u2014'} />
-                  <DetailRow label="Status" value={
-                    <span className={`badge ${APPROVAL_BADGE[c.approval_status] || 'bg-secondary'}`}>
-                      {approvalLabel(c.approval_status)}
-                    </span>
-                  } />
-                  <DetailRow label="Created" value={new Date(c.created_at).toLocaleDateString()} />
-                  {c.approved_at && <DetailRow label="Approved" value={new Date(c.approved_at).toLocaleDateString()} />}
-                  <DetailRow label="Objective" value={c.objective || '\u2014'} />
-                </div>
-
-                {/* Right column: Tracking & Budget */}
-                <div className="col-md-6">
-                  <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Tracking & Budget</h6>
-                  <DetailRow label="Destination" value={c.destination_path || '\u2014'} />
-                  <DetailRow label="Tracking Link" value={
-                    c.tracking_link
-                      ? <code className="small" style={{ wordBreak: 'break-all' }}>{c.tracking_link}</code>
-                      : '\u2014'
-                  } />
-                  <DetailRow label="Budget Cap" value={c.budget_cap != null ? fmt$(Number(c.budget_cap)) : '\u2014'} />
-                  <DetailRow label="Budget Spent" value={fmt$(Number(c.budget_spent || 0))} />
-                  <DetailRow label="Target CPL" value={c.cost_per_lead_target != null ? fmt$(Number(c.cost_per_lead_target)) : '\u2014'} />
-                  <DetailRow label="Expected ROI" value={c.expected_roi != null ? `${c.expected_roi}x` : '\u2014'} />
-                </div>
-              </div>
-
-              {/* ROI & Performance Section */}
-              <hr className="my-3" />
-              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Performance & ROI</h6>
+              {/* Performance KPIs */}
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Performance</h6>
               {roiLoading ? (
                 <div className="text-center py-3">
                   <div className="spinner-border spinner-border-sm me-2" role="status">
@@ -425,7 +433,7 @@ function CampaignDetailModal({ campaign: c, onClose }: { campaign: RegisteredCam
                   Loading performance data...
                 </div>
               ) : roi ? (
-                <div className="row g-3">
+                <div className="row g-3 mb-4">
                   {[
                     { label: 'Visitors', value: (roi.visitors || 0).toLocaleString() },
                     { label: 'Leads', value: (roi.leads || 0).toLocaleString() },
@@ -445,10 +453,58 @@ function CampaignDetailModal({ campaign: c, onClose }: { campaign: RegisteredCam
                   ))}
                 </div>
               ) : (
-                <div className="text-muted small">No performance data available yet.</div>
+                <div className="text-muted small mb-4">No performance data available yet.</div>
               )}
+
+              <div className="row g-4">
+                {/* Left column: Campaign Info */}
+                <div className="col-md-6">
+                  <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Campaign Info</h6>
+                  <DetailRow label="Created" value={new Date(c.created_at).toLocaleDateString()} />
+                  <DetailRow label="Objective" value={c.objective || '\u2014'} />
+                  <DetailRow label="Destination" value={c.destination_path || '\u2014'} />
+                </div>
+
+                {/* Right column: Tracking & Budget */}
+                <div className="col-md-6">
+                  <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Tracking & Budget</h6>
+                  <DetailRow label="Tracking Link" value={
+                    c.tracking_link
+                      ? <span className="d-flex align-items-center gap-1">
+                          <code className="small" style={{ wordBreak: 'break-all' }}>{c.tracking_link}</code>
+                          <button className="btn btn-sm btn-outline-secondary py-0 px-1" style={{ fontSize: '0.7rem' }} onClick={copyLink}>
+                            {linkCopied ? 'Copied!' : 'Copy'}
+                          </button>
+                        </span>
+                      : '\u2014'
+                  } />
+                  <DetailRow label="Budget Cap" value={c.budget_cap != null ? fmt$(Number(c.budget_cap)) : '\u2014'} />
+                  <DetailRow label="Budget Spent" value={fmt$(Number(c.budget_spent || 0))} />
+                  <DetailRow label="Target CPL" value={c.cost_per_lead_target != null ? fmt$(Number(c.cost_per_lead_target)) : '\u2014'} />
+                  <DetailRow label="Expected ROI" value={c.expected_roi != null ? `${c.expected_roi}x` : '\u2014'} />
+                </div>
+              </div>
             </div>
-            <div className="modal-footer">
+            <div className="modal-footer d-flex justify-content-between">
+              <div className="d-flex gap-2">
+                <button
+                  className={`btn btn-sm ${isActive ? 'btn-outline-secondary' : 'btn-success'}`}
+                  onClick={() => handleAction('toggle-active')}
+                  disabled={actionLoading === 'toggle-active'}
+                >
+                  {actionLoading === 'toggle-active' ? '...' : isActive ? 'Pause Campaign' : 'Activate Campaign'}
+                </button>
+                <button className="btn btn-sm btn-outline-primary" onClick={onEdit}>
+                  Edit
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-danger"
+                  onClick={() => handleAction('delete')}
+                  disabled={actionLoading === 'delete'}
+                >
+                  {actionLoading === 'delete' ? '...' : 'Delete'}
+                </button>
+              </div>
               <button className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
             </div>
           </div>
@@ -467,7 +523,6 @@ function CampaignLinkRegistryTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<RegisteredCampaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<RegisteredCampaign | null>(null);
-  const [actionLoading, setActionLoading] = useState('');
   const [copied, setCopied] = useState('');
 
   const fetchCampaigns = useCallback(async () => {
@@ -488,31 +543,6 @@ function CampaignLinkRegistryTab() {
 
   useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Delete campaign "${name}"? This cannot be undone.`)) return;
-    setActionLoading(`${id}:delete`);
-    try {
-      await api.delete(`/api/admin/campaigns/${id}`);
-      await fetchCampaigns();
-    } catch (e: any) {
-      alert(e.response?.data?.error || 'Failed to delete campaign');
-    } finally {
-      setActionLoading('');
-    }
-  };
-
-  const handleAction = async (id: string, action: string) => {
-    setActionLoading(`${id}:${action}`);
-    try {
-      await api.post(`/api/admin/campaigns/${id}/${action}`);
-      await fetchCampaigns();
-    } catch (e: any) {
-      alert(e.response?.data?.error || `Failed to ${action}`);
-    } finally {
-      setActionLoading('');
-    }
-  };
-
   const copyLink = (link: string, id: string) => {
     navigator.clipboard.writeText(link).then(() => {
       setCopied(id);
@@ -520,37 +550,18 @@ function CampaignLinkRegistryTab() {
     }).catch(() => {});
   };
 
-  const getActions = (c: RegisteredCampaign) => {
-    const acts: { label: string; action: string; variant: string }[] = [];
-    switch (c.approval_status) {
-      case 'draft':
-        acts.push({ label: 'Submit for Approval', action: 'submit-approval', variant: 'btn-outline-warning' });
-        break;
-      case 'pending_approval':
-        acts.push({ label: 'Approve', action: 'approve', variant: 'btn-outline-success' });
-        acts.push({ label: 'Reject', action: 'reject', variant: 'btn-outline-danger' });
-        break;
-      case 'approved':
-        acts.push({ label: 'Go Live', action: 'go-live', variant: 'btn-outline-success' });
-        acts.push({ label: 'Pause', action: 'pause-approval', variant: 'btn-outline-secondary' });
-        break;
-      case 'live':
-        acts.push({ label: 'Pause', action: 'pause-approval', variant: 'btn-outline-secondary' });
-        acts.push({ label: 'Complete', action: 'complete-approval', variant: 'btn-outline-dark' });
-        break;
-      case 'paused':
-        acts.push({ label: 'Go Live', action: 'go-live', variant: 'btn-outline-success' });
-        acts.push({ label: 'Complete', action: 'complete-approval', variant: 'btn-outline-dark' });
-        break;
-    }
-    return acts;
-  };
-
   return (
     <div>
       {showCreate && <CreateCampaignModal onClose={() => setShowCreate(false)} onCreated={fetchCampaigns} />}
       {editingCampaign && <EditCampaignModal campaign={editingCampaign} onClose={() => setEditingCampaign(null)} onSaved={fetchCampaigns} />}
-      {detailCampaign && <CampaignDetailModal campaign={detailCampaign} onClose={() => setDetailCampaign(null)} />}
+      {detailCampaign && (
+        <CampaignDetailModal
+          campaign={detailCampaign}
+          onClose={() => setDetailCampaign(null)}
+          onEdit={() => { setEditingCampaign(detailCampaign); setDetailCampaign(null); }}
+          onRefresh={fetchCampaigns}
+        />
+      )}
 
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
@@ -561,7 +572,7 @@ function CampaignLinkRegistryTab() {
             {loading ? 'Loading...' : 'Refresh'}
           </button>
           <button className="btn btn-sm btn-primary" onClick={() => setShowCreate(true)}>
-            + Create Tracked Campaign
+            + Create Campaign
           </button>
         </div>
       </div>
@@ -614,110 +625,62 @@ function CampaignLinkRegistryTab() {
             </div>
           ) : campaigns.length === 0 ? (
             <div className="p-4 text-center text-muted">
-              No campaigns found. Create a tracked campaign to get started.
+              No campaigns found. Create a campaign to get started.
             </div>
           ) : (
             <div className="table-responsive">
               <table className="table table-hover mb-0" style={{ fontSize: '0.82rem' }}>
                 <thead className="table-light">
                   <tr>
-                    <th style={{ minWidth: 160 }}>Name</th>
+                    <th style={{ minWidth: 180 }}>Name</th>
                     <th>Channel</th>
-                    <th>Type</th>
-                    <th>Approval</th>
-                    <th style={{ minWidth: 200 }}>Tracking Link</th>
-                    <th>Destination</th>
-                    <th>Budget</th>
-                    <th>Actions</th>
+                    <th>Status</th>
+                    <th>Landing Page</th>
+                    <th style={{ minWidth: 140 }}>Tracking Link</th>
+                    <th className="text-end">Budget</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {campaigns.map(c => (
-                    <tr key={c.id}>
-                      <td className="fw-medium">
-                        <button
-                          className="btn btn-link p-0 text-start fw-medium text-decoration-none"
-                          style={{ fontSize: 'inherit', color: 'var(--color-primary-light)' }}
-                          onClick={() => setDetailCampaign(c)}
-                        >
+                  {campaigns.map(c => {
+                    const isActive = c.status === 'active';
+                    return (
+                      <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setDetailCampaign(c)}>
+                        <td className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>
                           {c.name}
-                        </button>
-                      </td>
-                      <td>
-                        {c.channel
-                          ? <span className="badge bg-info text-dark">{c.channel.replace(/_/g, ' ')}</span>
-                          : <span className="text-muted">{'\u2014'}</span>}
-                      </td>
-                      <td className="text-muted small">{c.type.replace(/_/g, ' ')}</td>
-                      <td>
-                        <span className={`badge ${APPROVAL_BADGE[c.approval_status] || 'bg-secondary'}`}>
-                          {approvalLabel(c.approval_status)}
-                        </span>
-                      </td>
-                      <td>
-                        {c.tracking_link ? (
-                          <div className="d-flex align-items-center gap-1">
-                            <code className="small text-truncate" style={{ maxWidth: 200 }} title={c.tracking_link}>
-                              {c.tracking_link}
-                            </code>
+                        </td>
+                        <td>
+                          {c.channel
+                            ? <span className="badge bg-info text-dark">{c.channel.replace(/_/g, ' ')}</span>
+                            : <span className="text-muted">{'\u2014'}</span>}
+                        </td>
+                        <td>
+                          <span className={`badge ${isActive ? 'bg-success' : 'bg-secondary'}`}>
+                            {isActive ? 'Active' : c.status || 'Draft'}
+                          </span>
+                        </td>
+                        <td className="small">{c.destination_path || '\u2014'}</td>
+                        <td onClick={e => e.stopPropagation()}>
+                          {c.tracking_link ? (
                             <button
-                              className="btn btn-sm btn-outline-secondary py-0 px-1"
-                              style={{ fontSize: '0.7rem' }}
-                              onClick={() => copyLink(c.tracking_link!, c.id)}
-                              title="Copy link"
-                            >
-                              {copied === c.id ? 'Copied!' : 'Copy'}
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-muted small">Not generated</span>
-                        )}
-                      </td>
-                      <td className="small">{c.destination_path || '\u2014'}</td>
-                      <td className="small">
-                        {c.budget_cap != null
-                          ? <>{fmt$(Number(c.budget_spent || 0))} / {fmt$(Number(c.budget_cap))}</>
-                          : <span className="text-muted">{'\u2014'}</span>}
-                      </td>
-                      <td>
-                        <div className="d-flex gap-1 flex-wrap">
-                          <button
-                            className="btn btn-sm btn-outline-primary py-0"
-                            style={{ fontSize: '0.72rem' }}
-                            onClick={() => setDetailCampaign(c)}
-                          >
-                            View
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-primary py-0"
-                            style={{ fontSize: '0.72rem' }}
-                            onClick={() => setEditingCampaign(c)}
-                          >
-                            Edit
-                          </button>
-                          {getActions(c).map(act => (
-                            <button
-                              key={act.action}
-                              className={`btn btn-sm ${act.variant} py-0`}
+                              className="btn btn-sm btn-outline-secondary py-0 px-2"
                               style={{ fontSize: '0.72rem' }}
-                              disabled={actionLoading === `${c.id}:${act.action}`}
-                              onClick={() => handleAction(c.id, act.action)}
+                              onClick={() => copyLink(c.tracking_link!, c.id)}
+                              title={c.tracking_link}
                             >
-                              {actionLoading === `${c.id}:${act.action}` ? '...' : act.label}
+                              {copied === c.id ? 'Copied!' : 'Copy Link'}
                             </button>
-                          ))}
-                          <button
-                            className="btn btn-sm btn-outline-danger py-0"
-                            style={{ fontSize: '0.72rem' }}
-                            disabled={actionLoading === `${c.id}:delete`}
-                            onClick={() => handleDelete(c.id, c.name)}
-                          >
-                            {actionLoading === `${c.id}:delete` ? '...' : 'Delete'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          ) : (
+                            <span className="text-muted small">Not generated</span>
+                          )}
+                        </td>
+                        <td className="text-end small">
+                          {c.budget_cap != null
+                            ? <>{fmt$(Number(c.budget_spent || 0))} / {fmt$(Number(c.budget_cap))}</>
+                            : <span className="text-muted">{'\u2014'}</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
