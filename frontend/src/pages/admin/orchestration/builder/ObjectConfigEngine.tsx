@@ -85,6 +85,12 @@ export default function ObjectConfigEngine(props: Props) {
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
 
+  // Generate mock student content for preview (must be before early return to maintain hook order)
+  const mockContent = useMemo(
+    () => generateMockV2Content(miniSections, props.lessonTitle || 'Untitled Section'),
+    [miniSections, props.lessonTitle]
+  );
+
   const handleReverseEngineer = useCallback(async () => {
     if (!editing?.id) return;
     setReverseLoading(true);
@@ -116,12 +122,6 @@ export default function ObjectConfigEngine(props: Props) {
   const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
   const selectedTypeInfo = effectiveTypeOptions.find(t => t.value === editType);
   const canSave = !!editing.title && !!editType;
-
-  // Generate mock student content for preview
-  const mockContent = useMemo(
-    () => generateMockV2Content(miniSections, props.lessonTitle || 'Untitled Section'),
-    [miniSections, props.lessonTitle]
-  );
 
   const toggle = (key: keyof AccordionState) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
