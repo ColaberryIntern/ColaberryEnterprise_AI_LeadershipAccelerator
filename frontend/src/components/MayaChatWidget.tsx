@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../utils/api';
+import MayaAvatar, { MayaExpression } from './MayaAvatar';
 
 interface ChatMessageData {
   id?: string;
@@ -130,6 +131,36 @@ const MayaChatWidget: React.FC = () => {
   const isAdminPage = location.pathname.startsWith('/admin');
   const doNotTrack = navigator.doNotTrack === '1';
   const visitorId = typeof window !== 'undefined' ? localStorage.getItem('cb_visitor_fp') : null;
+
+  // Determine Maya's expression based on conversation state
+  const mayaExpression: MayaExpression = useMemo(() => {
+    if (sending) return 'thinking';
+    if (messages.length === 0) return 'greeting';
+
+    // Check the last assistant message for contextual expression
+    const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+    if (!lastAssistant) return 'greeting';
+
+    const text = lastAssistant.content.toLowerCase();
+
+    // Excited: enrollment, booking, strategy call, congratulations
+    if (/enroll|book|secur|congratulat|excellent|fantastic|wonderful|let['']s get you started|welcome aboard/i.test(text)) {
+      return 'excited';
+    }
+
+    // Empathetic: concerns, questions about fit, hesitation, understanding
+    if (/understand|concern|worry|absolutely|of course|great question|that['']s a (?:great|good)|happy to help|no problem/i.test(text)) {
+      return 'empathetic';
+    }
+
+    // Explaining: delivering information, program details, lists
+    if (/session|week|program|deliverable|curriculum|architec|roadmap|proof of capability|roi|investment/i.test(text)) {
+      return 'explaining';
+    }
+
+    // Default after first exchange
+    return messages.length <= 2 ? 'greeting' : 'explaining';
+  }, [messages, sending]);
 
   // Delayed appearance
   useEffect(() => {
@@ -367,19 +398,7 @@ const MayaChatWidget: React.FC = () => {
             }}
           >
             <div className="d-flex align-items-center gap-3">
-              <div
-                className="d-flex align-items-center justify-content-center fw-bold"
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--color-accent, #38a169)',
-                  fontSize: '16px',
-                  flexShrink: 0,
-                }}
-              >
-                M
-              </div>
+              <MayaAvatar expression={mayaExpression} size={36} />
               <div>
                 <div className="fw-semibold" style={{ fontSize: '16px' }}>Maya — AI Admissions Advisor</div>
                 <div style={{ fontSize: '12px', opacity: 0.8 }}>
@@ -419,19 +438,8 @@ const MayaChatWidget: React.FC = () => {
                 <div key={i} style={{ marginBottom: '24px' }}>
                   {msg.role === 'assistant' ? (
                     <div className="d-flex gap-3" style={{ alignItems: 'flex-start' }}>
-                      <div
-                        className="d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          backgroundColor: 'var(--color-accent, #38a169)',
-                          color: '#fff',
-                          fontSize: '13px',
-                          marginTop: '2px',
-                        }}
-                      >
-                        M
+                      <div style={{ marginTop: '2px' }}>
+                        <MayaAvatar expression={i === messages.length - 1 ? mayaExpression : 'explaining'} size={32} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {msg.visitor_type === 'ceo' && (
@@ -500,15 +508,7 @@ const MayaChatWidget: React.FC = () => {
               {/* Typing indicator */}
               {sending && (
                 <div className="d-flex gap-3" style={{ marginBottom: '24px' }}>
-                  <div
-                    className="d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
-                    style={{
-                      width: '32px', height: '32px', borderRadius: '50%',
-                      backgroundColor: 'var(--color-accent, #38a169)', color: '#fff', fontSize: '13px',
-                    }}
-                  >
-                    M
-                  </div>
+                  <MayaAvatar expression="thinking" size={32} />
                   <div style={{ padding: '8px 0' }}>
                     <span className="maya-typing-dots" />
                   </div>
@@ -594,20 +594,21 @@ const MayaChatWidget: React.FC = () => {
           style={{
             bottom: '24px',
             right: '24px',
-            width: '56px',
-            height: '56px',
+            width: '60px',
+            height: '60px',
             borderRadius: '50%',
-            backgroundColor: 'var(--color-accent, #38a169)',
-            color: '#ffffff',
+            backgroundColor: '#E8F4FD',
             zIndex: 9998,
             cursor: 'pointer',
             transition: 'transform 0.2s ease',
+            padding: 0,
+            overflow: 'hidden',
           }}
           aria-label="Chat with Maya — AI Admissions Advisor"
           onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.1)')}
           onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
         >
-          <span className="fw-bold" style={{ fontSize: '20px' }}>M</span>
+          <MayaAvatar expression="greeting" size={60} />
         </button>
       )}
 
@@ -642,16 +643,7 @@ const MayaChatWidget: React.FC = () => {
             }}
           >
             <div className="d-flex align-items-center gap-2">
-              <div
-                className="d-flex align-items-center justify-content-center fw-bold"
-                style={{
-                  width: '32px', height: '32px', borderRadius: '50%',
-                  backgroundColor: 'var(--color-accent, #38a169)', color: '#ffffff',
-                  fontSize: '14px', flexShrink: 0,
-                }}
-              >
-                M
-              </div>
+              <MayaAvatar expression={mayaExpression} size={32} />
               <div>
                 <span className="fw-semibold" style={{ fontSize: '14px' }}>Maya — AI Admissions Advisor</span>
                 {isReturningVisitor && (
@@ -695,15 +687,8 @@ const MayaChatWidget: React.FC = () => {
                 className={`d-flex mb-3 ${msg.role === 'visitor' ? 'justify-content-end' : 'justify-content-start'}`}
               >
                 {msg.role === 'assistant' && (
-                  <div
-                    className="d-flex align-items-start justify-content-center fw-bold flex-shrink-0 me-2"
-                    style={{
-                      width: '28px', height: '28px', borderRadius: '50%',
-                      backgroundColor: 'var(--color-accent, #38a169)', color: '#fff',
-                      fontSize: '12px', marginTop: '2px',
-                    }}
-                  >
-                    M
+                  <div className="me-2" style={{ marginTop: '2px' }}>
+                    <MayaAvatar expression={i === messages.length - 1 ? mayaExpression : 'explaining'} size={28} />
                   </div>
                 )}
                 <div
@@ -759,14 +744,8 @@ const MayaChatWidget: React.FC = () => {
             {/* Typing indicator */}
             {sending && (
               <div className="d-flex justify-content-start mb-2">
-                <div
-                  className="d-flex align-items-center justify-content-center fw-bold flex-shrink-0 me-2"
-                  style={{
-                    width: '28px', height: '28px', borderRadius: '50%',
-                    backgroundColor: 'var(--color-accent, #38a169)', color: '#fff', fontSize: '12px',
-                  }}
-                >
-                  M
+                <div className="me-2">
+                  <MayaAvatar expression="thinking" size={28} />
                 </div>
                 <div
                   style={{
