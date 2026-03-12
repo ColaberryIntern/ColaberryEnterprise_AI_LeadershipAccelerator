@@ -8,6 +8,7 @@ import {
   type CoryStatusReport,
 } from '../../../services/coryApi';
 import { useIntelligenceContext } from '../../../contexts/IntelligenceContext';
+import { deptMatchesLayer, LAYER_LABELS } from './entityPanel/departmentConfig';
 import ActivityTab from './tabs/ActivityTab';
 import HealthTab from './tabs/HealthTab';
 import ErrorsTab from './tabs/ErrorsTab';
@@ -81,7 +82,7 @@ const DEPT_COLORS: Record<string, string> = {
 
 // ─── Orchestration Tab ───────────────────────────────────────────────────────
 
-function OrchestrationGraph({ onAgentClick, entityFilter }: { onAgentClick?: (agentId: string) => void; entityFilter?: { type: string; id: string; name: string } | null }) {
+function OrchestrationGraph({ onAgentClick, entityFilter, layerFilter }: { onAgentClick?: (agentId: string) => void; entityFilter?: { type: string; id: string; name: string } | null; layerFilter?: number | null }) {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -101,10 +102,13 @@ function OrchestrationGraph({ onAgentClick, entityFilter }: { onAgentClick?: (ag
 
   if (loading) return <div className="text-center p-4 text-muted">Loading agent graph...</div>;
 
-  // Filter agents by department if entity filter is active
-  const filteredAgents = entityFilter?.type === 'department'
+  // Filter agents by department entity filter or layer filter
+  let filteredAgents = entityFilter?.type === 'department'
     ? agents.filter((a) => (a.department || '').toLowerCase() === entityFilter.name.toLowerCase())
     : agents;
+  if (layerFilter != null && entityFilter?.type !== 'department') {
+    filteredAgents = filteredAgents.filter((a) => deptMatchesLayer(a.department || 'operations', layerFilter));
+  }
 
   // Group by department — collect all unique departments from agents
   const allDepts = Array.from(new Set(filteredAgents.map((a) => a.department || 'Operations'))).sort();
@@ -316,7 +320,7 @@ function ReasoningTimeline({ entityFilter }: { entityFilter?: { type: string; id
 
 // ─── Impact Tab ──────────────────────────────────────────────────────────────
 
-function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: string; name: string } | null }) {
+function ImpactMetrics({ entityFilter, layerFilter }: { entityFilter?: { type: string; id: string; name: string } | null; layerFilter?: number | null }) {
   const [status, setStatus] = useState<CoryStatusReport | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -336,12 +340,16 @@ function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: st
   if (error) return <div className="text-center p-4 text-muted">{error}</div>;
   if (!status) return <div className="text-center p-4 text-muted">Unable to load metrics.</div>;
 
-  // Filter departments if entity filter active
-  const filteredDepts = entityFilter?.type === 'department'
+  // Filter departments by entity filter or layer filter
+  let filteredDepts = entityFilter?.type === 'department'
     ? status.departments.filter((d) => d.department.toLowerCase() === entityFilter.name.toLowerCase())
     : status.departments;
+  if (layerFilter != null && entityFilter?.type !== 'department') {
+    filteredDepts = filteredDepts.filter((d) => deptMatchesLayer(d.department, layerFilter));
+  }
 
-  const filteredFleet = entityFilter?.type === 'department'
+  const isFiltered = entityFilter?.type === 'department' || layerFilter != null;
+  const filteredFleet = isFiltered
     ? {
         total: filteredDepts.reduce((s, d) => s + d.agent_count, 0),
         healthy: filteredDepts.reduce((s, d) => s + d.healthy, 0),
@@ -474,7 +482,7 @@ function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: st
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTabsProps) {
-  const { selectedEntity, resetScope } = useIntelligenceContext();
+  const { selectedEntity, resetScope, activeLayer, setActiveLayer } = useIntelligenceContext();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [errorCount, setErrorCount] = useState(0);
 
@@ -536,21 +544,31 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         </ul>
       </div>
 
-      {/* Active Filter Indicator */}
-      {entityFilter && (
+      {/* Active Filter Indicators */}
+      {(entityFilter || activeLayer !== null) && (
         <div
-          className="d-flex align-items-center gap-2 px-3 py-2 border-bottom"
+          className="d-flex align-items-center gap-2 px-3 py-2 border-bottom flex-wrap"
           style={{ flexShrink: 0, background: 'rgba(26, 54, 93, 0.04)', fontSize: '0.75rem' }}
         >
-          <span className="text-muted">Filtered by:</span>
-          <span className="badge bg-primary">{entityFilter.name}</span>
-          <span className="text-muted">({entityFilter.type})</span>
+          {entityFilter && (
+            <>
+              <span className="text-muted">Entity:</span>
+              <span className="badge bg-primary">{entityFilter.name}</span>
+              <span className="text-muted">({entityFilter.type})</span>
+            </>
+          )}
+          {activeLayer !== null && (
+            <>
+              <span className="text-muted">{entityFilter ? '·' : ''} Layer:</span>
+              <span className="badge bg-primary">{LAYER_LABELS[activeLayer]}</span>
+            </>
+          )}
           <button
             className="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto"
             style={{ fontSize: '0.68rem' }}
-            onClick={resetScope}
+            onClick={() => { resetScope(); setActiveLayer(null); }}
           >
-            Clear filter
+            Clear filters
           </button>
         </div>
       )}
@@ -559,19 +577,19 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
       <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
         {activeTab === 'dashboard' && children}
         {activeTab === 'alerts' && <AlertsTab />}
-        {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} entityFilter={entityFilter} />}
-        {activeTab === 'activity' && <ActivityTab entityFilter={entityFilter} />}
-        {activeTab === 'health' && <HealthTab entityFilter={entityFilter} />}
-        {activeTab === 'errors' && <ErrorsTab onErrorCountChange={setErrorCount} entityFilter={entityFilter} />}
-        {activeTab === 'qa' && <QAScanTab entityFilter={entityFilter} />}
-        {activeTab === 'safety' && <SafetyTab entityFilter={entityFilter} />}
+        {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'activity' && <ActivityTab entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'health' && <HealthTab entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'errors' && <ErrorsTab onErrorCountChange={setErrorCount} entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'qa' && <QAScanTab entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'safety' && <SafetyTab entityFilter={entityFilter} layerFilter={activeLayer} />}
         {activeTab === 'timeline' && <ReasoningTimeline entityFilter={entityFilter} />}
-        {activeTab === 'impact' && <ImpactMetrics entityFilter={entityFilter} />}
-        {activeTab === 'initiatives' && <InitiativesTab entityFilter={entityFilter} />}
-        {activeTab === 'roadmap' && <RoadmapTab entityFilter={entityFilter} />}
-        {activeTab === 'dept-timeline' && <DeptTimelineTab entityFilter={entityFilter} />}
-        {activeTab === 'innovation' && <InnovationTab entityFilter={entityFilter} />}
-        {activeTab === 'revenue' && <RevenueImpactTab entityFilter={entityFilter} />}
+        {activeTab === 'impact' && <ImpactMetrics entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'initiatives' && <InitiativesTab entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'roadmap' && <RoadmapTab entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'dept-timeline' && <DeptTimelineTab entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'innovation' && <InnovationTab entityFilter={entityFilter} layerFilter={activeLayer} />}
+        {activeTab === 'revenue' && <RevenueImpactTab entityFilter={entityFilter} layerFilter={activeLayer} />}
         {activeTab === 'outreach' && <OpenclawTab />}
         {activeTab === 'insights' && <InsightsTab />}
         {activeTab === 'reports' && <ReportsTab />}

@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getInnovationScoresData, InnovationScoreEntry } from '../../../../services/intelligenceApi';
 import FeedbackButtons from '../FeedbackButtons';
+import { deptMatchesLayer } from '../entityPanel/departmentConfig';
 
 interface Props {
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
-export default function InnovationTab({ entityFilter }: Props) {
+export default function InnovationTab({ entityFilter, layerFilter }: Props) {
   const [scores, setScores] = useState<InnovationScoreEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,11 +18,13 @@ export default function InnovationTab({ entityFilter }: Props) {
       let result = data.scores || [];
       if (entityFilter?.type === 'department') {
         result = result.filter((s) => s.id === entityFilter.id);
+      } else if (layerFilter != null) {
+        result = result.filter((s: any) => deptMatchesLayer(s.slug || s.name || '', layerFilter));
       }
       setScores(result);
     } catch { /* ignore */ }
     setLoading(false);
-  }, [entityFilter?.type, entityFilter?.id]);
+  }, [entityFilter?.type, entityFilter?.id, layerFilter]);
 
   useEffect(() => {
     setLoading(true);

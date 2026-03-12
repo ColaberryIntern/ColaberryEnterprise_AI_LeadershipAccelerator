@@ -4,6 +4,7 @@ import FeedbackButtons from '../FeedbackButtons';
 
 interface Props {
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {

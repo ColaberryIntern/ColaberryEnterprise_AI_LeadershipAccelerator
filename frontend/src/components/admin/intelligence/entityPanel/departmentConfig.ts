@@ -28,3 +28,28 @@ export const DEPARTMENT_CATEGORIES: Record<string, DepartmentConfig> = {
 export function formatScore(score: number): string {
   return `${Math.round(score)}`;
 }
+
+// 5-Layer organizational structure
+export const LAYER_LABELS = ['Command', 'Strategy', 'Intelligence', 'Business', 'Delivery'];
+
+export const DEPT_TIER: Record<string, number> = {
+  executive: 0, governance: 0, security: 0,
+  strategy: 1, finance: 1, reporting: 1,
+  intelligence: 2, orchestration: 2, operations: 2,
+  growth: 3, marketing: 3, admissions: 3, partnerships: 3,
+  education: 4, student_success: 4, alumni: 4, platform: 4, infrastructure: 4,
+};
+
+// Reverse lookup: tier → set of department slugs
+export const TIER_SLUGS: Record<number, Set<string>> = {};
+Object.entries(DEPT_TIER).forEach(([slug, tier]) => {
+  if (!TIER_SLUGS[tier]) TIER_SLUGS[tier] = new Set();
+  TIER_SLUGS[tier].add(slug);
+});
+
+export function deptMatchesLayer(deptNameOrSlug: string, layer: number): boolean {
+  const slugs = TIER_SLUGS[layer];
+  if (!slugs) return false;
+  const normalized = deptNameOrSlug.toLowerCase().replace(/\s+/g, '_');
+  return slugs.has(normalized);
+}

@@ -2,6 +2,7 @@ import CampaignQATab from '../../../../pages/admin/ai-settings/CampaignQATab';
 
 interface QAScanTabProps {
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
 export default function QAScanTab({ entityFilter }: QAScanTabProps) {

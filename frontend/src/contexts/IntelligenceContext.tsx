@@ -24,6 +24,8 @@ interface IntelligenceContextType {
   drillUp: () => void;
   resetScope: () => void;
   scopeHistory: IntelligenceScope[];
+  activeLayer: number | null;
+  setActiveLayer: (layer: number | null) => void;
 }
 
 const defaultScope: IntelligenceScope = { level: 'global' };
@@ -36,11 +38,14 @@ const IntelligenceContext = createContext<IntelligenceContextType>({
   drillUp: () => {},
   resetScope: () => {},
   scopeHistory: [],
+  activeLayer: null,
+  setActiveLayer: () => {},
 });
 
 export function IntelligenceProvider({ children }: { children: ReactNode }) {
   const [scope, setScopeState] = useState<IntelligenceScope>(defaultScope);
   const [scopeHistory, setScopeHistory] = useState<IntelligenceScope[]>([defaultScope]);
+  const [activeLayer, setActiveLayer] = useState<number | null>(null);
 
   const setScope = useCallback((newScope: IntelligenceScope) => {
     setScopeState(newScope);
@@ -81,7 +86,7 @@ export function IntelligenceProvider({ children }: { children: ReactNode }) {
   }, [scope]);
 
   return (
-    <IntelligenceContext.Provider value={{ scope, selectedEntity, setScope, drillDown, drillUp, resetScope, scopeHistory }}>
+    <IntelligenceContext.Provider value={{ scope, selectedEntity, setScope, drillDown, drillUp, resetScope, scopeHistory, activeLayer, setActiveLayer }}>
       {children}
     </IntelligenceContext.Provider>
   );

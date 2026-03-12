@@ -30,6 +30,7 @@ interface GovernanceAlert {
 interface ErrorsTabProps {
   onErrorCountChange?: (count: number) => void;
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {

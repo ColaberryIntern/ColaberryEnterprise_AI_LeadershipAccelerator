@@ -21,6 +21,7 @@ interface HealthRecord {
 
 interface HealthTabProps {
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
 const HEALTH_COLORS: Record<string, string> = {

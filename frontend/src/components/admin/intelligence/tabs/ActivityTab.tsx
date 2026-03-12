@@ -22,6 +22,7 @@ interface ActivityRecord {
 
 interface ActivityTabProps {
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
 // Department color map for tagging activity rows

@@ -3,23 +3,7 @@ import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
 import { forceX, forceY } from 'd3-force';
 import { useIntelligenceContext } from '../../../../contexts/IntelligenceContext';
 import { getDepartmentsApi, DepartmentSummary } from '../../../../services/intelligenceApi';
-import { DEPARTMENT_CATEGORIES } from './departmentConfig';
-
-// 5-Layer organizational structure
-const LAYER_LABELS = ['Command', 'Strategy', 'Intelligence', 'Business', 'Delivery'];
-
-const DEPT_TIER: Record<string, number> = {
-  // Layer 0 — Command: oversight, governance, security
-  executive: 0, governance: 0, security: 0,
-  // Layer 1 — Strategy: planning, finance, reporting
-  strategy: 1, finance: 1, reporting: 1,
-  // Layer 2 — Intelligence: AI ops, orchestration, operations
-  intelligence: 2, orchestration: 2, operations: 2,
-  // Layer 3 — Business: growth, marketing, admissions, partnerships
-  growth: 3, marketing: 3, admissions: 3, partnerships: 3,
-  // Layer 4 — Delivery: education, student success, alumni, platform, infrastructure
-  education: 4, student_success: 4, alumni: 4, platform: 4, infrastructure: 4,
-};
+import { DEPARTMENT_CATEGORIES, LAYER_LABELS, DEPT_TIER, TIER_SLUGS } from './departmentConfig';
 
 interface GraphNode {
   id: string;
@@ -95,22 +79,14 @@ const DEPT_EDGES: { source: string; target: string; relationship: string }[] = [
   { source: 'reporting', target: 'finance', relationship: 'reports' },
 ];
 
-// Build reverse lookup: tier → set of department slugs
-const TIER_SLUGS: Record<number, Set<string>> = {};
-Object.entries(DEPT_TIER).forEach(([slug, tier]) => {
-  if (!TIER_SLUGS[tier]) TIER_SLUGS[tier] = new Set();
-  TIER_SLUGS[tier].add(slug);
-});
-
 export default function DeptMapTab() {
-  const { drillDown, selectedEntity } = useIntelligenceContext();
+  const { drillDown, selectedEntity, activeLayer, setActiveLayer } = useIntelligenceContext();
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 380, height: 600 });
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [departments, setDepartments] = useState<DepartmentSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeLayer, setActiveLayer] = useState<number | null>(null); // null = all
 
   useEffect(() => {
     getDepartmentsApi()

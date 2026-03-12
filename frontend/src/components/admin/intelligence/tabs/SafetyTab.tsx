@@ -32,6 +32,7 @@ interface Experiment {
 
 interface SafetyTabProps {
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
 const ACTION_COLORS: Record<string, string> = {

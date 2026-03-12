@@ -3,6 +3,7 @@ import { getDepartmentTimelineEvents, DepartmentEventSummary } from '../../../..
 
 interface Props {
   entityFilter?: { type: string; id: string; name: string } | null;
+  layerFilter?: number | null;
 }
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
