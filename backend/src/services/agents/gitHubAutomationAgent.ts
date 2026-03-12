@@ -9,7 +9,12 @@ import {
   createPullRequest,
   getDefaultBranch,
 } from '../agentGitHubService';
-import type { AgentExecutionResult } from './types';
+export interface GitHubResult {
+  status: 'success' | 'error' | 'skipped';
+  summary: string;
+  actions: Array<{ action: string; details: string; result: string }>;
+  metrics: Record<string, number>;
+}
 
 export interface GitHubAutomationRequest {
   action: 'create_pr' | 'commit_file' | 'create_branch';
@@ -24,7 +29,7 @@ export interface GitHubAutomationRequest {
 
 export async function runGitHubAutomation(
   request: GitHubAutomationRequest,
-): Promise<AgentExecutionResult> {
+): Promise<GitHubResult> {
   const actions: Array<{ action: string; details: string; result: string }> = [];
 
   if (!isGitHubConfigured()) {
