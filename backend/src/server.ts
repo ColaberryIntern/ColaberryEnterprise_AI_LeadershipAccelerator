@@ -122,7 +122,11 @@ async function start(): Promise<void> {
   await seedProgramCurriculum();
   await seedDepartments();
   await seedCurriculumTypeDefinitions();
-  await seedAllCampaigns();
+  // Run campaign seeding in background — it may make slow external API calls (GHL)
+  // that should not block server startup
+  seedAllCampaigns().catch((err) =>
+    console.error('[Seed] Campaign seeding failed:', err?.message)
+  );
 
   // Intelligence OS: ensure tables exist and start autonomous discovery
   await ensureIntelligenceTables();
