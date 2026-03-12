@@ -106,16 +106,18 @@ export default function DeptMapTab() {
   const graphData = useMemo(() => {
     if (!departments.length) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
 
-    const maxInits = Math.max(...departments.map((d) => d.initiative_count), 1);
+    // Size circles by team_size (agent count) — clamped so nothing dominates
+    const maxTeam = Math.max(...departments.map((d) => d.team_size), 1);
     const nodes: GraphNode[] = departments.map((d) => {
       const config = DEPARTMENT_CATEGORIES[d.slug] || { label: d.name, color: '#718096', bgLight: '#f7fafc' };
+      const sizeRatio = Math.min(d.team_size / maxTeam, 1);
       return {
         id: d.id,
         slug: d.slug,
         label: config.label,
         color: config.color,
         bgLight: config.bgLight,
-        val: 10 + (d.initiative_count / maxInits) * 20,
+        val: 8 + sizeRatio * 18,  // range: 8–26 (prevents any from getting too huge)
         health_score: d.health_score,
         innovation_score: d.innovation_score,
         initiative_count: d.initiative_count,
@@ -174,11 +176,14 @@ export default function DeptMapTab() {
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const n = node as GraphNode;
-      const radius = 18 + n.val * 0.5;
+      const radius = 20 + n.val * 0.55;
       const isHovered = hoveredNode?.id === n.id;
       const isSelected = selectedEntity?.id === n.id;
-      const fontSize = Math.max(10 / globalScale, 3);
+      const labelFont = Math.max(10 / globalScale, 3);
+      const smallFont = Math.max(7.5 / globalScale, 2.2);
+      const tinyFont = Math.max(6.5 / globalScale, 1.8);
 
+      // Selection ring
       if (isSelected) {
         ctx.beginPath();
         ctx.arc(n.x!, n.y!, radius + 6, 0, 2 * Math.PI);
@@ -189,6 +194,7 @@ export default function DeptMapTab() {
         ctx.setLineDash([]);
       }
 
+      // Hover glow
       if (isHovered) {
         ctx.beginPath();
         ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
@@ -196,6 +202,7 @@ export default function DeptMapTab() {
         ctx.fill();
       }
 
+      // Main circle
       ctx.beginPath();
       ctx.arc(n.x!, n.y!, radius, 0, 2 * Math.PI);
       ctx.fillStyle = n.bgLight;
@@ -204,21 +211,63 @@ export default function DeptMapTab() {
       ctx.lineWidth = isSelected ? 3 : 2;
       ctx.stroke();
 
-      // Label
-      ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+      // Health arc — colored ring segment around bottom showing health %
+      const healthPct = Math.min(n.health_score / 100, 1);
+      const healthColor = n.health_score >= 80 ? '#38a169' : n.health_score >= 60 ? '#d69e2e' : '#e53e3e';
+      const arcStart = Math.PI * 0.65;
+      const arcEnd = arcStart + healthPct * Math.PI * 0.7;
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, radius + 1.5, arcStart, arcEnd);
+      ctx.strokeStyle = healthColor;
+      ctx.lineWidth = Math.max(3 / globalScale, 1.2);
+      ctx.stroke();
+
+      // Innovation arc — on the right side
+      const innoPct = Math.min(n.innovation_score / 100, 1);
+      const innoColor = '#3182ce';
+      const innoStart = -Math.PI * 0.35;
+      const innoEnd = innoStart + innoPct * Math.PI * 0.7;
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, radius + 1.5, innoStart, innoEnd);
+      ctx.strokeStyle = innoColor;
+      ctx.lineWidth = Math.max(3 / globalScale, 1.2);
+      ctx.stroke();
+
+      // Department name
+      ctx.font = `bold ${labelFont}px -apple-system, BlinkMacSystemFont, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = n.color;
-      ctx.fillText(n.label, n.x!, n.y! - 3);
+      ctx.fillText(n.label, n.x!, n.y! - smallFont * 1.1);
 
-      // Score
-      const smallFont = Math.max(7 / globalScale, 2);
+      // Health / Innovation scores inline
       ctx.font = `${smallFont}px -apple-system, sans-serif`;
-      ctx.fillStyle = '#718096';
-      ctx.fillText(`${Math.round(n.health_score)}hp / ${Math.round(n.innovation_score)}in`, n.x!, n.y! + fontSize * 0.7);
+      ctx.fillStyle = healthColor;
+      const hpText = `${Math.round(n.health_score)}hp`;
+      const inText = `${Math.round(n.innovation_score)}in`;
+      const separator = ' / ';
+      const hpWidth = ctx.measureText(hpText).width;
+      const sepWidth = ctx.measureText(separator).width;
+      const totalWidth = hpWidth + sepWidth + ctx.measureText(inText).width;
+      const startX = n.x! - totalWidth / 2;
+      const scoreY = n.y! + smallFont * 0.3;
 
-      // Initiative count badge
-      const badgeRadius = Math.max(6 / globalScale, 2.5);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = healthColor;
+      ctx.fillText(hpText, startX, scoreY);
+      ctx.fillStyle = '#718096';
+      ctx.fillText(separator, startX + hpWidth, scoreY);
+      ctx.fillStyle = innoColor;
+      ctx.fillText(inText, startX + hpWidth + sepWidth, scoreY);
+
+      // Agent count (team size) — shown below scores
+      ctx.textAlign = 'center';
+      ctx.font = `${tinyFont}px -apple-system, sans-serif`;
+      ctx.fillStyle = '#a0aec0';
+      ctx.fillText(`${n.team_size} agents`, n.x!, scoreY + smallFont * 1.1);
+
+      // Active initiative count badge — top-right
+      const badgeRadius = Math.max(6.5 / globalScale, 2.5);
       const badgeX = n.x! + radius * 0.7;
       const badgeY = n.y! - radius * 0.7;
       ctx.beginPath();
@@ -226,6 +275,7 @@ export default function DeptMapTab() {
       ctx.fillStyle = n.color;
       ctx.fill();
       ctx.font = `bold ${Math.max(6 / globalScale, 2)}px sans-serif`;
+      ctx.textAlign = 'center';
       ctx.fillStyle = '#fff';
       ctx.fillText(String(n.active_initiatives), badgeX, badgeY + 0.5);
     },
@@ -311,7 +361,7 @@ export default function DeptMapTab() {
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={(node: any, color, ctx) => {
             const n = node as GraphNode;
-            const radius = 18 + n.val * 0.5;
+            const radius = 20 + n.val * 0.55;
             ctx.beginPath();
             ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
             ctx.fillStyle = color;
