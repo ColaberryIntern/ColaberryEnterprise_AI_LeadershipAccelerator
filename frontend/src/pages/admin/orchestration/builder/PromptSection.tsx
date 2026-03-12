@@ -95,11 +95,14 @@ export default function PromptSection({ editing, miniSections, prompts, promptBo
         const fkValue = (editing[pair.fkField] as string) || '';
         const hasInlineContent = !!combinedValue;
         const isTemplateExpanded = expandedTemplate === pair.key;
+        // Contextual labels for implementation_task
+        const implLabels: Record<string, string> = { build: 'Task Requirements Prompt', mentor: 'Mentor Preparation Prompt', reflection: 'AI Workstation Prompt' };
+        const displayLabel = editType === 'implementation_task' && implLabels[pair.key] ? implLabels[pair.key] : pair.label;
 
         return (
           <div key={pair.key} className="border rounded mb-2 p-2">
             <div className="d-flex align-items-center justify-content-between mb-1">
-              <span className="fw-semibold small">{pair.label}</span>
+              <span className="fw-semibold small">{displayLabel}</span>
               <div className="d-flex align-items-center gap-1">
                 {hasInlineContent && <span className="badge bg-success-subtle text-success border" style={{ fontSize: 8 }}>inline</span>}
                 {fkValue && <span className="badge bg-info-subtle text-info border" style={{ fontSize: 8 }}>template linked</span>}

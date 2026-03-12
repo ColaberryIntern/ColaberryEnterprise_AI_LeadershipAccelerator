@@ -480,7 +480,20 @@ function PortalMentorChat() {
                   onClick={() => {
                     const taskData = lessonContext.implementationTaskData!;
                     const lastMentorMsg = [...messages].reverse().find(m => m.role === 'assistant');
-                    const prompt = `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
+                    // Use admin-configured workstation prompt if available, otherwise fallback
+                    let prompt: string;
+                    if (lessonContext.workstationPrompt) {
+                      // Admin-configured prompt with variable substitution
+                      prompt = lessonContext.workstationPrompt
+                        .replace(/\{task_title\}/g, taskData.title)
+                        .replace(/\{task_description\}/g, taskData.description)
+                        .replace(/\{task_deliverable\}/g, taskData.deliverable)
+                        .replace(/\{task_requirements\}/g, taskData.requirements.map((r, i) => `${i + 1}. ${r}`).join('\n'))
+                        .replace(/\{task_artifacts\}/g, taskData.artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description}`).join('\n'))
+                        .replace(/\{lesson_title\}/g, lessonContext.lessonTitle)
+                        .replace(/\{mentor_briefing\}/g, lastMentorMsg?.content || 'No briefing available yet.');
+                    } else {
+                      prompt = `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
 
 ASSIGNMENT: ${taskData.title}
 DESCRIPTION: ${taskData.description}
@@ -505,6 +518,7 @@ Guide the learner through completing this assignment step by step. For each arti
 
 Track progress through the requirements checklist. Be encouraging but thorough.
 Start by summarizing what they need to do and ask which artifact they want to work on first.`;
+                    }
                     openLLMWithPrompt(prompt);
                   }}
                   disabled={sending}

@@ -34,6 +34,7 @@ export interface LessonContext {
   conceptText: string;
   promptTemplate: string;
   implementationTaskData?: ImplementationTaskData;
+  workstationPrompt?: string;
 }
 
 export interface LearnerProfile {

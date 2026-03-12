@@ -53,6 +53,7 @@ interface OrchestrationContext {
     system_prompt: string;
     user_prompt_template: string;
   } | null;
+  workstationPrompt: string | null;
   resolvedVariables: Record<string, string>;
 }
 
@@ -173,9 +174,10 @@ export default function ImplementationTask({ data, lessonId, onSubmit, initialTa
         title, description, deliverable, requirements,
         artifacts: artifacts.map(a => ({ name: a.name, description: a.description, file_types: a.file_types, validation_criteria: a.validation_criteria })),
       },
+      workstationPrompt: orchContext?.workstationPrompt || undefined,
     });
-    return () => updateLessonContext({ currentSection: '', implementationTaskData: undefined });
-  }, [title, description, deliverable, requirements, artifacts, updateLessonContext]);
+    return () => updateLessonContext({ currentSection: '', implementationTaskData: undefined, workstationPrompt: undefined });
+  }, [title, description, deliverable, requirements, artifacts, orchContext?.workstationPrompt, updateLessonContext]);
 
   const handleMentorResponse = useCallback(() => {
     setBriefingReceived(true);

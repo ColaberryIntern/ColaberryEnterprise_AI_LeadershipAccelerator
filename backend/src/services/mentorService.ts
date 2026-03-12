@@ -97,6 +97,18 @@ BOUNDARIES:
     }
   }
 
+  // Add admin-configured mentor preparation prompt for implementation tasks
+  if (lessonId) {
+    const MiniSection = (await import('../models/MiniSection')).default;
+    const implTask = await MiniSection.findOne({
+      where: { lesson_id: lessonId, mini_section_type: 'implementation_task', is_active: true },
+    });
+    if (implTask?.mentor_prompt_system) {
+      parts.push('\nMENTOR PREPARATION CONTEXT:');
+      parts.push(implTask.mentor_prompt_system);
+    }
+  }
+
   // Add curriculum progress summary
   const instances = await LessonInstance.findAll({
     where: { enrollment_id: enrollmentId },

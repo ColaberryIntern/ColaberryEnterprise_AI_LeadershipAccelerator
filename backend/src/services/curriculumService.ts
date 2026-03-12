@@ -4,6 +4,7 @@ import LessonInstance from '../models/LessonInstance';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import SessionGate from '../models/SessionGate';
 import { Enrollment, Cohort, SectionConfig, ArtifactDefinition, PromptTemplate, AssignmentSubmission } from '../models';
+import MiniSection from '../models/MiniSection';
 import { generateLessonContent } from './contentGenerationService';
 import * as variableService from './variableService';
 import * as artifactService from './artifactService';
@@ -820,6 +821,18 @@ export async function getOrchestrationContext(enrollmentId: string, lessonId: st
 
   const resolvedVariables = await variableService.getAllVariables(enrollmentId);
 
+  // Load admin-configured AI Workstation prompt from implementation_task mini-section
+  let workstationPrompt: string | null = null;
+  const implTask = await MiniSection.findOne({
+    where: { lesson_id: lessonId, mini_section_type: 'implementation_task', is_active: true },
+  });
+  if (implTask) {
+    const raw = (implTask as any).reflection_prompt_system as string;
+    if (raw) {
+      workstationPrompt = await variableService.resolveTemplate(enrollmentId, raw);
+    }
+  }
+
   return {
     sectionConfig: {
       id: sectionConfig.id,
@@ -842,6 +855,7 @@ export async function getOrchestrationContext(enrollmentId: string, lessonId: st
       required_for_presentation_unlock: a.required_for_presentation_unlock,
     })),
     mentorPromptTemplate,
+    workstationPrompt,
     resolvedVariables,
   };
 }

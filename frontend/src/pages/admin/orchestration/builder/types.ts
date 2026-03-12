@@ -218,7 +218,7 @@ export const PROMPT_PAIRS: { key: string; systemField: keyof MiniSection; userFi
   { key: 'build', systemField: 'build_prompt_system', userField: 'build_prompt_user', fkField: 'build_prompt_template_id', label: 'Build Prompt', applicableTypes: ['prompt_template', 'implementation_task'] },
   { key: 'mentor', systemField: 'mentor_prompt_system', userField: 'mentor_prompt_user', fkField: 'mentor_prompt_template_id', label: 'Mentor Prompt', applicableTypes: ['executive_reality_check', 'ai_strategy', 'prompt_template', 'implementation_task', 'knowledge_check'] },
   { key: 'kc', systemField: 'kc_prompt_system', userField: 'kc_prompt_user', fkField: 'concept_prompt_template_id', label: 'Knowledge Check Prompt', applicableTypes: ['knowledge_check'] },
-  { key: 'reflection', systemField: 'reflection_prompt_system', userField: 'reflection_prompt_user', fkField: 'concept_prompt_template_id', label: 'Reflection Prompt', applicableTypes: ['knowledge_check'] },
+  { key: 'reflection', systemField: 'reflection_prompt_system', userField: 'reflection_prompt_user', fkField: 'concept_prompt_template_id', label: 'Reflection Prompt', applicableTypes: ['knowledge_check', 'implementation_task'] },
 ];
 
 export const TYPE_OPTIONS: { value: MiniSectionType; label: string; badge: string; studentLabel: string; description: string }[] = [

@@ -315,9 +315,19 @@ export default function ObjectConfigEngine(props: Props) {
                     const sysVal = (editing[pair.systemField] as string) || '';
                     const usrVal = (editing[pair.userField] as string) || '';
                     const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
+                    // Contextual labels for implementation_task
+                    const implLabels: Record<string, { label: string; tooltip: string }> = {
+                      build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
+                      mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
+                      reflection: { label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
+                    };
+                    const displayLabel = editType === 'implementation_task' && implLabels[pair.key]
+                      ? implLabels[pair.key].label : pair.label;
+                    const tooltip = editType === 'implementation_task' && implLabels[pair.key]
+                      ? implLabels[pair.key].tooltip : '';
                     return (
                       <div key={pair.key} className="mb-2">
-                        <span className="text-muted fw-medium" style={{ fontSize: 10 }}>{pair.label}</span>
+                        <span className="text-muted fw-medium" style={{ fontSize: 10 }} title={tooltip}>{displayLabel} {tooltip && <i className="bi bi-info-circle" style={{ fontSize: 9 }}></i>}</span>
                         <HighlightedPromptEditor
                           value={combinedValue}
                           onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
@@ -369,9 +379,13 @@ export default function ObjectConfigEngine(props: Props) {
         {renderAccordion('skills', 'Skills', 'bi-stars', (
           <SkillSection
             editing={editing}
+            editType={editType}
+            miniSectionId={editing.id}
             skillOptions={props.skillOptions}
             onUpdate={props.onUpdate}
             onCreateSkill={props.onCreateSkill}
+            token={props.token}
+            apiUrl={props.apiUrl}
           />
         ))}
 

@@ -103,6 +103,15 @@ router.delete('/api/admin/orchestration/skills/:id', requireAdmin, async (req, r
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Recalculate skills from build prompt (LLM-powered)
+router.post('/api/admin/orchestration/mini-sections/:id/recalculate-skills', requireAdmin, async (req, res) => {
+  try {
+    const { recalculateSkillsForMiniSection } = await import('../../services/skillRecalculationService');
+    const result = await recalculateSkillsForMiniSection(req.params.id as string);
+    res.json(result);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
 // Bulk Curriculum Operations
 router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, async (_req, res) => {
   try {
