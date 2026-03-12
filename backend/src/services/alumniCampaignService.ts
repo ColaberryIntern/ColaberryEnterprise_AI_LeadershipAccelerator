@@ -218,53 +218,63 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
     });
   }
 
-  // 3. Create AI Champion campaign
-  const championCampaign = await createCampaign({
-    name: 'Colaberry Alumni AI Champion Campaign',
-    description: 'Primary alumni outreach: AI Agents training (alumni discount) + $250 referral commission. Multi-channel email+SMS over 10 days.',
-    type: 'alumni',
-    sequence_id: championSeq.id,
-    ai_system_prompt: AI_CHAMPION_SYSTEM_PROMPT,
-    channel_config: {
-      email: { enabled: true, daily_limit: 100 },
-      sms: { enabled: true },
-      voice: { enabled: false },
-    },
-    targeting_criteria: {
-      lifecycle_enabled: true,
-      inactivity_days: 30,
-      lead_source_type: 'alumni',
-      lead_source_types: ['alumni'],
-      utm_source: 'alumni_champion',
-      utm_medium: 'email',
-      utm_campaign: 'alumni_ai_champion_2026',
-    },
-    created_by: createdBy,
-  });
+  // 3. Create AI Champion campaign (idempotent — skip if exists)
+  let championCampaign = await Campaign.findOne({ where: { name: 'Colaberry Alumni AI Champion Campaign' } });
+  if (!championCampaign) {
+    championCampaign = await createCampaign({
+      name: 'Colaberry Alumni AI Champion Campaign',
+      description: 'Primary alumni outreach: AI Agents training (alumni discount) + $250 referral commission. Multi-channel email+SMS over 10 days.',
+      type: 'alumni',
+      sequence_id: championSeq.id,
+      ai_system_prompt: AI_CHAMPION_SYSTEM_PROMPT,
+      channel_config: {
+        email: { enabled: true, daily_limit: 100 },
+        sms: { enabled: true },
+        voice: { enabled: false },
+      },
+      targeting_criteria: {
+        lifecycle_enabled: true,
+        inactivity_days: 30,
+        lead_source_type: 'alumni',
+        lead_source_types: ['alumni'],
+        utm_source: 'alumni_champion',
+        utm_medium: 'email',
+        utm_campaign: 'alumni_ai_champion_2026',
+      },
+      created_by: createdBy,
+    });
+  } else {
+    await (championCampaign as any).update({ sequence_id: championSeq.id, status: 'active' });
+  }
 
-  // 4. Create Re-Engagement campaign
-  const reengageCampaign = await createCampaign({
-    name: 'Colaberry Alumni Re-Engagement Campaign',
-    description: 'Auto-triggered when alumni go inactive for 30 days after completing champion campaign. 4-step re-engagement over 6 days.',
-    type: 'alumni_re_engagement',
-    sequence_id: reengageSeq.id,
-    ai_system_prompt: RE_ENGAGEMENT_SYSTEM_PROMPT,
-    channel_config: {
-      email: { enabled: true, daily_limit: 100 },
-      sms: { enabled: true },
-      voice: { enabled: false },
-    },
-    targeting_criteria: {
-      lifecycle_enabled: true,
-      paired_campaign_id: championCampaign.id,
-      inactivity_days: 30,
-      lead_source_type: 'alumni',
-      utm_source: 'alumni_reengagement',
-      utm_medium: 'email',
-      utm_campaign: 'alumni_reengagement_2026',
-    },
-    created_by: createdBy,
-  });
+  // 4. Create Re-Engagement campaign (idempotent — skip if exists)
+  let reengageCampaign = await Campaign.findOne({ where: { name: 'Colaberry Alumni Re-Engagement Campaign' } });
+  if (!reengageCampaign) {
+    reengageCampaign = await createCampaign({
+      name: 'Colaberry Alumni Re-Engagement Campaign',
+      description: 'Auto-triggered when alumni go inactive for 30 days after completing champion campaign. 4-step re-engagement over 6 days.',
+      type: 'alumni_re_engagement',
+      sequence_id: reengageSeq.id,
+      ai_system_prompt: RE_ENGAGEMENT_SYSTEM_PROMPT,
+      channel_config: {
+        email: { enabled: true, daily_limit: 100 },
+        sms: { enabled: true },
+        voice: { enabled: false },
+      },
+      targeting_criteria: {
+        lifecycle_enabled: true,
+        paired_campaign_id: championCampaign.id,
+        inactivity_days: 30,
+        lead_source_type: 'alumni',
+        utm_source: 'alumni_reengagement',
+        utm_medium: 'email',
+        utm_campaign: 'alumni_reengagement_2026',
+      },
+      created_by: createdBy,
+    });
+  } else {
+    await (reengageCampaign as any).update({ sequence_id: reengageSeq.id, status: 'active' });
+  }
 
   // 5. Cross-link: champion → re-engagement
   const existingCriteria = (championCampaign as any).targeting_criteria || {};
