@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import api from '../../../../utils/api';
 import { MiniSection, MiniSectionType, TYPE_OPTIONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions } from './types';
 import PromptSection from './PromptSection';
@@ -9,7 +9,8 @@ import KnowledgeCheckSection from './KnowledgeCheckSection';
 import ValidationSection from './ValidationSection';
 import QualityScoreSection from './QualityScoreSection';
 import SuggestionSection from './SuggestionSection';
-import PreviewPanel from './PreviewPanel';
+import ConceptV2 from '../../../../components/portal/lesson/ConceptV2';
+import { generateMockV2Content } from './mockDataGenerator';
 import { PromptOption } from './types';
 
 interface Props {
@@ -72,15 +73,14 @@ interface AccordionState {
   validation: boolean;
   quality: boolean;
   suggestions: boolean;
-  preview: boolean;
 }
 
 export default function ObjectConfigEngine(props: Props) {
   const { editing, isNew, isDirty, miniSections, saving, error } = props;
   const [expanded, setExpanded] = useState<AccordionState>({
-    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false, preview: false,
+    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
   });
-  const [previewMode, setPreviewMode] = useState<'preview' | 'json'>('preview');
+  const [showPreview, setShowPreview] = useState(false);
   const [reversePrompt, setReversePrompt] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
@@ -117,6 +117,12 @@ export default function ObjectConfigEngine(props: Props) {
   const selectedTypeInfo = effectiveTypeOptions.find(t => t.value === editType);
   const canSave = !!editing.title && !!editType;
 
+  // Generate mock student content for preview
+  const mockContent = useMemo(
+    () => generateMockV2Content(miniSections, props.lessonTitle || 'Untitled Section'),
+    [miniSections, props.lessonTitle]
+  );
+
   const toggle = (key: keyof AccordionState) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   const renderAccordion = (key: keyof AccordionState, label: string, icon: string, content: React.ReactNode, show = true) => {
@@ -145,9 +151,24 @@ export default function ObjectConfigEngine(props: Props) {
     <div className="card border-0 shadow-sm">
       <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
         <div className="d-flex align-items-center gap-2">
-          <span className="fw-semibold small">{isNew ? 'New Mini-Section' : 'Configure'}</span>
+          <div className="btn-group btn-group-sm">
+            <button
+              className={`btn ${!showPreview ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setShowPreview(false)}
+              style={{ fontSize: 11 }}
+            >
+              <i className="bi bi-gear me-1"></i>{isNew ? 'New' : 'Configure'}
+            </button>
+            <button
+              className={`btn ${showPreview ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setShowPreview(true)}
+              style={{ fontSize: 11 }}
+            >
+              <i className="bi bi-eye me-1"></i>Preview
+            </button>
+          </div>
           {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 8 }}>unsaved changes</span>}
-          {editing.quality_score != null && (
+          {!showPreview && editing.quality_score != null && (
             <span className={`badge ${editing.quality_score >= 90 ? 'bg-info' : editing.quality_score >= 70 ? 'bg-success' : editing.quality_score >= 40 ? 'bg-warning text-dark' : 'bg-danger'}`} style={{ fontSize: 9 }}>
               Score: {Math.round(editing.quality_score)}
             </span>
@@ -157,6 +178,19 @@ export default function ObjectConfigEngine(props: Props) {
           <span className={`badge ${selectedTypeInfo.badge}`} style={{ fontSize: 9 }}>{selectedTypeInfo.studentLabel}</span>
         )}
       </div>
+      {showPreview ? (
+        <div className="card-body py-3" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
+          <div className="mb-2 d-flex align-items-center gap-2">
+            <span className="badge bg-secondary" style={{ fontSize: 10 }}>Mock Data</span>
+            <span className="text-muted" style={{ fontSize: 11 }}>This preview uses generated sample data — not AI output.</span>
+          </div>
+          <ConceptV2
+            content={mockContent}
+            lessonId={props.lessonId || ''}
+            isCompleted={false}
+          />
+        </div>
+      ) : (
       <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
         {error && <div className="alert alert-danger small py-1 mb-2">{error}</div>}
 
@@ -294,47 +328,6 @@ export default function ObjectConfigEngine(props: Props) {
           />
         ), !!editing.id)}
 
-        {/* Student Preview Section */}
-        {props.lessonId && (
-          <div className="border rounded mb-2">
-            <div
-              className="d-flex align-items-center gap-2 px-3 py-2"
-              style={{ cursor: 'pointer', backgroundColor: expanded.preview ? 'var(--color-bg-alt, #f7fafc)' : 'transparent' }}
-              onClick={() => toggle('preview')}
-            >
-              <i className="bi bi-eye" style={{ fontSize: 13 }}></i>
-              <span className="fw-semibold small">Student Preview</span>
-              {expanded.preview && (
-                <div className="btn-group btn-group-sm ms-auto me-2" onClick={e => e.stopPropagation()}>
-                  <button className={`btn ${previewMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={() => setPreviewMode('preview')} style={{ fontSize: 10, padding: '1px 6px' }}>
-                    <i className="bi bi-eye me-1"></i>Preview
-                  </button>
-                  <button className={`btn ${previewMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={() => setPreviewMode('json')} style={{ fontSize: 10, padding: '1px 6px' }}>
-                    <i className="bi bi-code me-1"></i>JSON
-                  </button>
-                </div>
-              )}
-              <span className={expanded.preview ? '' : 'ms-auto'} style={{ fontSize: 11 }}>{expanded.preview ? '\u25B2' : '\u25BC'}</span>
-            </div>
-            {expanded.preview && (
-              <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
-                <PreviewPanel
-                  miniSections={miniSections}
-                  lessonTitle={props.lessonTitle || 'Untitled Section'}
-                  lessonId={props.lessonId}
-                  compact
-                  defaultViewMode={previewMode}
-                  selectedMiniSectionId={editing.id}
-                  token={props.token}
-                  apiUrl={props.apiUrl}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Diagnostic & Repair buttons */}
         {editing.id && (
           <div className="d-flex gap-2 mt-2 mb-1">
@@ -347,6 +340,7 @@ export default function ObjectConfigEngine(props: Props) {
           </div>
         )}
       </div>
+      )}
 
       {/* Footer */}
       <div className="card-footer bg-white py-2 d-flex justify-content-between">
