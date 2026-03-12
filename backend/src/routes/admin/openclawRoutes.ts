@@ -84,20 +84,23 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
 
 router.get(`${BASE}/signals`, async (req: Request, res: Response) => {
   try {
-    const { platform, status, page = '1', limit = '25' } = req.query;
+    const platform = req.query.platform as string | undefined;
+    const status = req.query.status as string | undefined;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 25;
     const where: Record<string, any> = {};
     if (platform) where.platform = platform;
     if (status) where.status = status;
 
-    const offset = (Number(page) - 1) * Number(limit);
+    const offset = (page - 1) * limit;
     const { rows, count } = await OpenclawSignal.findAndCountAll({
       where,
       order: [['created_at', 'DESC']],
-      limit: Number(limit),
+      limit,
       offset,
     });
 
-    res.json({ signals: rows, total: count, page: Number(page), limit: Number(limit) });
+    res.json({ signals: rows, total: count, page, limit });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -105,7 +108,7 @@ router.get(`${BASE}/signals`, async (req: Request, res: Response) => {
 
 router.get(`${BASE}/signals/:id`, async (req: Request, res: Response) => {
   try {
-    const signal = await OpenclawSignal.findByPk(req.params.id, {
+    const signal = await OpenclawSignal.findByPk(req.params.id as string, {
       include: [{ model: OpenclawResponse, as: 'response' }],
     });
     if (!signal) return res.status(404).json({ error: 'Signal not found' });
@@ -119,21 +122,24 @@ router.get(`${BASE}/signals/:id`, async (req: Request, res: Response) => {
 
 router.get(`${BASE}/responses`, async (req: Request, res: Response) => {
   try {
-    const { post_status, platform, page = '1', limit = '25' } = req.query;
+    const post_status = req.query.post_status as string | undefined;
+    const platform = req.query.platform as string | undefined;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 25;
     const where: Record<string, any> = {};
     if (post_status) where.post_status = post_status;
     if (platform) where.platform = platform;
 
-    const offset = (Number(page) - 1) * Number(limit);
+    const offset = (page - 1) * limit;
     const { rows, count } = await OpenclawResponse.findAndCountAll({
       where,
       order: [['created_at', 'DESC']],
-      limit: Number(limit),
+      limit,
       offset,
-      include: [{ model: OpenclawSignal, as: 'signal', attributes: ['title', 'source_url', 'platform'] }],
+      include: [{ model: OpenclawSignal, as: 'signal', attributes: ['title', 'source_url', 'platform'] as any }],
     });
 
-    res.json({ responses: rows, total: count, page: Number(page), limit: Number(limit) });
+    res.json({ responses: rows, total: count, page, limit });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -141,7 +147,7 @@ router.get(`${BASE}/responses`, async (req: Request, res: Response) => {
 
 router.post(`${BASE}/responses/:id/approve`, async (req: Request, res: Response) => {
   try {
-    const response = await OpenclawResponse.findByPk(req.params.id);
+    const response = await OpenclawResponse.findByPk(req.params.id as string);
     if (!response) return res.status(404).json({ error: 'Response not found' });
     if (response.post_status !== 'draft') {
       return res.status(400).json({ error: `Cannot approve response with status: ${response.post_status}` });
@@ -167,7 +173,7 @@ router.post(`${BASE}/responses/:id/approve`, async (req: Request, res: Response)
 
 router.post(`${BASE}/responses/:id/reject`, async (req: Request, res: Response) => {
   try {
-    const response = await OpenclawResponse.findByPk(req.params.id);
+    const response = await OpenclawResponse.findByPk(req.params.id as string);
     if (!response) return res.status(404).json({ error: 'Response not found' });
 
     await response.update({ post_status: 'removed', updated_at: new Date() });
@@ -203,20 +209,23 @@ router.get(`${BASE}/sessions`, async (_req: Request, res: Response) => {
 
 router.get(`${BASE}/tasks`, async (req: Request, res: Response) => {
   try {
-    const { status, task_type, page = '1', limit = '25' } = req.query;
+    const status = req.query.status as string | undefined;
+    const task_type = req.query.task_type as string | undefined;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 25;
     const where: Record<string, any> = {};
     if (status) where.status = status;
     if (task_type) where.task_type = task_type;
 
-    const offset = (Number(page) - 1) * Number(limit);
+    const offset = (page - 1) * limit;
     const { rows, count } = await OpenclawTask.findAndCountAll({
       where,
       order: [['priority', 'DESC'], ['created_at', 'DESC']],
-      limit: Number(limit),
+      limit,
       offset,
     });
 
-    res.json({ tasks: rows, total: count, page: Number(page), limit: Number(limit) });
+    res.json({ tasks: rows, total: count, page, limit });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -226,7 +235,8 @@ router.get(`${BASE}/tasks`, async (req: Request, res: Response) => {
 
 router.get(`${BASE}/learnings`, async (req: Request, res: Response) => {
   try {
-    const { learning_type, platform } = req.query;
+    const learning_type = req.query.learning_type as string | undefined;
+    const platform = req.query.platform as string | undefined;
     const where: Record<string, any> = {};
     if (learning_type) where.learning_type = learning_type;
     if (platform) where.platform = platform;
