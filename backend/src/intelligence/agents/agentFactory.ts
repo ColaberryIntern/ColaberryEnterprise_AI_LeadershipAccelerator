@@ -9,31 +9,51 @@ import { Op } from 'sequelize';
 
 // ─── Department Mapping ──────────────────────────────────────────────────────
 
-export type Department = 'Intelligence' | 'Operations' | 'Growth' | 'Maintenance' | 'Security';
+export type Department = 'Intelligence' | 'Operations' | 'Growth' | 'Marketing' | 'Finance' | 'Infrastructure' | 'Education' | 'Orchestration';
 
 const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
+  // Intelligence — data analysis, AI ops, memory, autonomous decision-making
   behavioral: 'Intelligence',
   ai_ops: 'Intelligence',
   memory: 'Intelligence',
-  outbound: 'Operations',
+  autonomous: 'Intelligence',
+  strategic: 'Intelligence',
+  // Operations — maintenance, ticket management
   maintenance: 'Operations',
-  autonomous: 'Operations',
-  accelerator: 'Growth',
-  strategic: 'Growth',
-  meta: 'Maintenance',
-  security: 'Security',
+  operations: 'Operations',
+  // Growth — admissions pipeline, lead intelligence
+  admissions: 'Growth',
+  admissions_ops: 'Growth',
+  // Marketing — outbound campaigns, website intelligence
+  outbound: 'Marketing',
+  website_intelligence: 'Marketing',
+  // Education — accelerator, curriculum, student progress
+  accelerator: 'Education',
+  curriculum: 'Education',
+  // Infrastructure — meta-agents, security, platform
+  meta: 'Infrastructure',
+  security: 'Infrastructure',
+  // Orchestration — orchestration-specific agents
+  orchestration: 'Orchestration',
 };
 
 const DEPARTMENT_TO_CATEGORIES: Record<Department, string[]> = {
-  Intelligence: ['behavioral', 'ai_ops', 'memory'],
-  Operations: ['outbound', 'maintenance', 'autonomous'],
-  Growth: ['accelerator', 'strategic'],
-  Maintenance: ['meta'],
-  Security: ['security'],
+  Intelligence: ['behavioral', 'ai_ops', 'memory', 'autonomous', 'strategic'],
+  Operations: ['maintenance', 'operations'],
+  Growth: ['admissions', 'admissions_ops'],
+  Marketing: ['outbound', 'website_intelligence'],
+  Finance: [],
+  Infrastructure: ['meta', 'security'],
+  Education: ['accelerator', 'curriculum'],
+  Orchestration: ['orchestration'],
 };
 
 export function getDepartmentForCategory(category: string): Department {
   return CATEGORY_TO_DEPARTMENT[category] || 'Operations';
+}
+
+export function getAllDepartments(): Department[] {
+  return Object.keys(DEPARTMENT_TO_CATEGORIES) as Department[];
 }
 
 // ─── Agent Spec ──────────────────────────────────────────────────────────────
@@ -187,7 +207,7 @@ export async function listDepartmentAgents(department: Department): Promise<any[
  */
 export async function getDepartmentSummary(): Promise<DepartmentSummary[]> {
   const allAgents = await AiAgent.findAll({ order: [['agent_name', 'ASC']] });
-  const departments: Department[] = ['Intelligence', 'Operations', 'Growth', 'Maintenance', 'Security'];
+  const departments = getAllDepartments();
 
   return departments.map((dept) => {
     const categories = DEPARTMENT_TO_CATEGORIES[dept] || [];

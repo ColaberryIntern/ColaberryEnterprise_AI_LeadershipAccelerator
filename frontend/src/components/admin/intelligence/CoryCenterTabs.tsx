@@ -49,8 +49,11 @@ const DEPT_COLORS: Record<string, string> = {
   Intelligence: '#2b6cb0',
   Operations: '#38a169',
   Growth: '#805ad5',
-  Maintenance: '#718096',
-  Security: '#e53e3e',
+  Marketing: '#dd6b20',
+  Finance: '#d69e2e',
+  Infrastructure: '#718096',
+  Education: '#319795',
+  Orchestration: '#3182ce',
 };
 
 // ─── Orchestration Tab ───────────────────────────────────────────────────────
@@ -80,10 +83,11 @@ function OrchestrationGraph({ onAgentClick, entityFilter }: { onAgentClick?: (ag
     ? agents.filter((a) => (a.department || '').toLowerCase() === entityFilter.name.toLowerCase())
     : agents;
 
-  // Group by department
+  // Group by department — collect all unique departments from agents
+  const allDepts = Array.from(new Set(filteredAgents.map((a) => a.department || 'Operations'))).sort();
   const departments = entityFilter?.type === 'department'
     ? [entityFilter.name]
-    : ['Intelligence', 'Operations', 'Growth', 'Maintenance', 'Security'];
+    : allDepts.length > 0 ? allDepts : ['Intelligence', 'Operations', 'Growth', 'Marketing', 'Education', 'Infrastructure', 'Orchestration'];
   const grouped: Record<string, AgentInfo[]> = {};
   for (const dept of departments) grouped[dept] = [];
   for (const agent of filteredAgents) {
