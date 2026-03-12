@@ -164,12 +164,16 @@ const MayaChatWidget: React.FC = () => {
     return messages.length <= 2 ? 'greeting' : 'explaining';
   }, [messages, sending]);
 
-  // Delayed appearance
+  // Delayed appearance — admin shows immediately
   useEffect(() => {
     if (isAdminPage || doNotTrack) return;
+    if (isAdmin) {
+      setShowButton(true);
+      return;
+    }
     const timer = setTimeout(() => setShowButton(true), 3000);
     return () => clearTimeout(timer);
-  }, [isAdminPage, doNotTrack]);
+  }, [isAdminPage, doNotTrack, isAdmin]);
 
   // Restore conversation from sessionStorage
   useEffect(() => {
@@ -298,6 +302,15 @@ const MayaChatWidget: React.FC = () => {
 
     setInitialized(true);
   }, [conversationId, initialized, visitorId, location.pathname, isAdmin]);
+
+  // Auto-open for admin — Maya greets the boss immediately on page load
+  const adminAutoOpened = useRef(false);
+  useEffect(() => {
+    if (isAdmin && showButton && !isOpen && !initialized && !adminAutoOpened.current && visitorId) {
+      adminAutoOpened.current = true;
+      handleOpen('admin_greeting');
+    }
+  }, [isAdmin, showButton, isOpen, initialized, visitorId, handleOpen]);
 
   const handleClose = useCallback(() => {
     if (isFullScreen) {
