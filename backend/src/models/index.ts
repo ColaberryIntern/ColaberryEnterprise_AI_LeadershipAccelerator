@@ -81,6 +81,10 @@ import DocumentDeliveryLog from './DocumentDeliveryLog';
 import Ticket from './Ticket';
 import TicketActivity from './TicketActivity';
 import StudentNavigationEvent from './StudentNavigationEvent';
+import Alert from './Alert';
+import AlertEvent from './AlertEvent';
+import AlertSubscription from './AlertSubscription';
+import AlertResolution from './AlertResolution';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -457,6 +461,19 @@ TicketActivity.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 Ticket.hasMany(Ticket, { foreignKey: 'parent_ticket_id', as: 'subTasks' });
 Ticket.belongsTo(Ticket, { foreignKey: 'parent_ticket_id', as: 'parentTicket' });
 
+// --- Alert Intelligence Layer associations ---
+Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
+AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
+
+Alert.hasOne(AlertResolution, { foreignKey: 'alert_id', as: 'resolution' });
+AlertResolution.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
+
+Alert.belongsTo(AiAgent, { foreignKey: 'source_agent_id', as: 'sourceAgent' });
+AiAgent.hasMany(Alert, { foreignKey: 'source_agent_id', as: 'alerts' });
+
+Alert.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
+Department.hasMany(Alert, { foreignKey: 'department_id', as: 'alerts' });
+
 // Student Navigation Event associations
 Enrollment.hasMany(StudentNavigationEvent, { foreignKey: 'enrollment_id', as: 'navigationEvents' });
 StudentNavigationEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
@@ -522,4 +539,8 @@ export {
   Ticket,
   TicketActivity,
   StudentNavigationEvent,
+  Alert,
+  AlertEvent,
+  AlertSubscription,
+  AlertResolution,
 };

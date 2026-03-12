@@ -36,6 +36,7 @@ import CoryOverlay from '../../../components/admin/intelligence/CoryOverlay';
 import InitiativeStoryModal from '../../../components/admin/intelligence/InitiativeStoryModal';
 import AgentDetailDrawer from '../../../components/admin/intelligence/AgentDetailDrawer';
 import CoryCenterTabs from '../../../components/admin/intelligence/CoryCenterTabs';
+import SituationalAwarenessPanel from '../../../components/admin/intelligence/SituationalAwarenessPanel';
 
 // ─── Adaptive Execution Steps ─────────────────────────────────────────────────
 const EXECUTION_STEPS = [
@@ -1845,6 +1846,7 @@ function IntelligenceOSContent() {
           )}
 
           <div ref={centerPanelRef} className="flex-grow-1" style={{ minHeight: 0, overflow: 'auto' }}>
+            <SituationalAwarenessPanel />
             <CoryCenterTabs onAgentClick={handleAgentClick}>
               <DynamicCanvas
                 visualizations={visualizations}

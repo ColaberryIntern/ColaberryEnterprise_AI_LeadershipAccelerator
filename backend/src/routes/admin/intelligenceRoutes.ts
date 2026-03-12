@@ -67,4 +67,15 @@ router.get('/api/admin/intelligence/data-access-report', requireAdmin, handleDat
 // Deterministic AI Assistant Pipeline
 router.post('/api/admin/intelligence/assistant', requireAdmin, handleAssistantQuery);
 
+// Situational Awareness
+router.get('/api/admin/intelligence/situational-awareness', requireAdmin, async (_req, res) => {
+  try {
+    const { getSituationalSnapshot } = await import('../../services/situationalAwarenessService');
+    const snapshot = await getSituationalSnapshot();
+    res.json(snapshot);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

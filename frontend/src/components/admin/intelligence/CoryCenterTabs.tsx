@@ -18,10 +18,11 @@ import RoadmapTab from './tabs/RoadmapTab';
 import DeptTimelineTab from './tabs/DeptTimelineTab';
 import InnovationTab from './tabs/InnovationTab';
 import RevenueImpactTab from './tabs/RevenueImpactTab';
+import AlertsTab from './tabs/AlertsTab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue';
+type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
@@ -46,13 +47,24 @@ const RISK_COLORS: Record<string, string> = {
 };
 
 const DEPT_COLORS: Record<string, string> = {
-  Intelligence: '#2b6cb0',
-  Operations: '#38a169',
+  Executive: '#1a365d',
+  Strategy: '#2b6cb0',
+  Marketing: '#805ad5',
+  Admissions: '#38a169',
+  Alumni: '#d69e2e',
+  Partnerships: '#dd6b20',
+  Education: '#3182ce',
+  Student_Success: '#319795',
+  Platform: '#718096',
+  Intelligence: '#e53e3e',
+  Governance: '#1a365d',
+  // Legacy mappings (backwards compat)
+  Operations: '#718096',
   Growth: '#805ad5',
-  Marketing: '#dd6b20',
+  Maintenance: '#718096',
+  Security: '#1a365d',
   Finance: '#d69e2e',
   Infrastructure: '#718096',
-  Education: '#319795',
   Orchestration: '#3182ce',
 };
 
@@ -454,6 +466,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
 
   const tabs: { key: TabKey; label: string; badge?: number }[] = [
     { key: 'dashboard', label: 'Dashboard' },
+    { key: 'alerts', label: 'Alerts' },
     { key: 'orchestration', label: 'Orchestration' },
     { key: 'activity', label: 'Activity' },
     { key: 'health', label: 'Health' },
@@ -513,6 +526,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
       {/* Tab Content */}
       <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
         {activeTab === 'dashboard' && children}
+        {activeTab === 'alerts' && <AlertsTab />}
         {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} entityFilter={entityFilter} />}
         {activeTab === 'activity' && <ActivityTab entityFilter={entityFilter} />}
         {activeTab === 'health' && <HealthTab entityFilter={entityFilter} />}

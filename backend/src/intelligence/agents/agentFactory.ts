@@ -9,47 +9,67 @@ import { Op } from 'sequelize';
 
 // ─── Department Mapping ──────────────────────────────────────────────────────
 
-export type Department = 'Intelligence' | 'Operations' | 'Growth' | 'Marketing' | 'Finance' | 'Infrastructure' | 'Education' | 'Orchestration';
+export type Department =
+  | 'Executive'
+  | 'Strategy'
+  | 'Marketing'
+  | 'Admissions'
+  | 'Alumni'
+  | 'Partnerships'
+  | 'Education'
+  | 'Student_Success'
+  | 'Platform'
+  | 'Intelligence'
+  | 'Governance';
 
 const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
-  // Intelligence — data analysis, AI ops, memory, autonomous decision-making
+  // Intelligence
   behavioral: 'Intelligence',
   ai_ops: 'Intelligence',
   memory: 'Intelligence',
+  meta: 'Intelligence',
   autonomous: 'Intelligence',
-  strategic: 'Intelligence',
-  // Operations — maintenance, ticket management
-  maintenance: 'Operations',
-  operations: 'Operations',
-  // Growth — admissions pipeline, lead intelligence
-  admissions: 'Growth',
-  admissions_ops: 'Growth',
-  // Marketing — outbound campaigns, website intelligence
+  // Marketing
   outbound: 'Marketing',
-  website_intelligence: 'Marketing',
-  // Education — accelerator, curriculum, student progress
+  // Strategy
+  strategic: 'Strategy',
+  // Education
   accelerator: 'Education',
   curriculum: 'Education',
-  // Infrastructure — meta-agents, security, platform
-  meta: 'Infrastructure',
-  security: 'Infrastructure',
-  // Orchestration — orchestration-specific agents
-  orchestration: 'Orchestration',
+  // Platform
+  maintenance: 'Platform',
+  operations: 'Platform',
+  website_intelligence: 'Platform',
+  orchestration: 'Platform',
+  // Admissions
+  admissions: 'Admissions',
+  admissions_ops: 'Admissions',
+  // Governance
+  security: 'Governance',
+  governance_ops: 'Governance',
+  // New department categories
+  executive: 'Executive',
+  alumni: 'Alumni',
+  partnerships: 'Partnerships',
+  student_success: 'Student_Success',
 };
 
 const DEPARTMENT_TO_CATEGORIES: Record<Department, string[]> = {
-  Intelligence: ['behavioral', 'ai_ops', 'memory', 'autonomous', 'strategic'],
-  Operations: ['maintenance', 'operations'],
-  Growth: ['admissions', 'admissions_ops'],
-  Marketing: ['outbound', 'website_intelligence'],
-  Finance: [],
-  Infrastructure: ['meta', 'security'],
+  Executive: ['executive'],
+  Strategy: ['strategic'],
+  Marketing: ['outbound'],
+  Admissions: ['admissions', 'admissions_ops'],
+  Alumni: ['alumni'],
+  Partnerships: ['partnerships'],
   Education: ['accelerator', 'curriculum'],
-  Orchestration: ['orchestration'],
+  Student_Success: ['student_success'],
+  Platform: ['maintenance', 'operations', 'website_intelligence', 'orchestration'],
+  Intelligence: ['behavioral', 'ai_ops', 'memory', 'meta', 'autonomous'],
+  Governance: ['security', 'governance_ops'],
 };
 
 export function getDepartmentForCategory(category: string): Department {
-  return CATEGORY_TO_DEPARTMENT[category] || 'Operations';
+  return CATEGORY_TO_DEPARTMENT[category] || 'Platform';
 }
 
 export function getAllDepartments(): Department[] {

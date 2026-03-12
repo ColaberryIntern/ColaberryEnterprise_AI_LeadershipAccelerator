@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { seedAgentRegistry } from './agentRegistrySeed';
+import { seedDepartments } from './departmentSeed';
 import { seedAdmissionsKnowledge } from './admissionsKnowledgeSeed';
 import {
   runHealthScans,
@@ -35,7 +36,12 @@ import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
 export function startAIOpsScheduler(): void {
-  // Seed full agent registry on startup (idempotent — 75 agents)
+  // Seed 11 departments on startup (idempotent)
+  seedDepartments().catch((err) => {
+    console.error('[AI Ops] Failed to seed departments:', err.message);
+  });
+
+  // Seed full agent registry on startup (idempotent — 105 agents)
   seedAgentRegistry().catch((err) => {
     console.error('[AI Ops] Failed to seed agent registry:', err.message);
   });
@@ -231,7 +237,27 @@ export function startAIOpsScheduler(): void {
     });
   });
 
-  console.log('[AI Ops] Scheduler started (75 agents registered):');
+  // --- Executive Briefing Crons ---
+
+  // Daily Executive Briefing: 7 AM every day
+  cron.schedule('0 7 * * *', () => {
+    import('./executiveBriefingService').then(({ generateDailyBriefing }) => {
+      generateDailyBriefing().catch((err) => {
+        console.error('[AI Ops] Daily briefing cron error:', err);
+      });
+    });
+  });
+
+  // Weekly Strategic Briefing: 7 AM every Monday
+  cron.schedule('0 7 * * 1', () => {
+    import('./executiveBriefingService').then(({ generateWeeklyStrategicBriefing }) => {
+      generateWeeklyStrategicBriefing().catch((err) => {
+        console.error('[AI Ops] Weekly briefing cron error:', err);
+      });
+    });
+  });
+
+  console.log('[AI Ops] Scheduler started (105 agents registered):');
   console.log('[AI Ops]   Campaign health scan: every 15 minutes');
   console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
   console.log('[AI Ops]   Content optimization: every 6 hours');
@@ -258,4 +284,6 @@ export function startAIOpsScheduler(): void {
   console.log('[AI Ops]   Admissions callback management: every 5 minutes');
   console.log('[AI Ops]   Admissions conversation task monitor: every 2 minutes');
   console.log('[AI Ops]   Admissions assistant: every 10 minutes');
+  console.log('[AI Ops]   Executive daily briefing: 7 AM daily');
+  console.log('[AI Ops]   Executive weekly briefing: 7 AM Mondays');
 }

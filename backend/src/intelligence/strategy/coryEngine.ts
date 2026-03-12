@@ -36,7 +36,9 @@ export type CoryIntent =
   | 'plan_curriculum'
   | 'fix_platform'
   | 'curriculum_status'
-  | 'strategic_plan';
+  | 'strategic_plan'
+  | 'executive_briefing'
+  | 'github_automation';
 
 export interface CoryCommand {
   command: string;
@@ -89,6 +91,8 @@ const KEYWORD_INTENTS: Array<{ keywords: string[]; intent: CoryIntent }> = [
   { keywords: ['fix', 'broken', 'bug', 'error', 'not working', 'issue with'], intent: 'fix_platform' },
   { keywords: ['curriculum status', 'course progress', 'student progress', 'enrollment health'], intent: 'curriculum_status' },
   { keywords: ['strategic plan', 'roadmap', 'plan for', 'strategy for', 'initiative'], intent: 'strategic_plan' },
+  { keywords: ['executive briefing', 'daily briefing', 'morning brief', 'send briefing', 'weekly briefing', 'executive summary email', 'send me a briefing'], intent: 'executive_briefing' },
+  { keywords: ['create pr', 'open pull request', 'push code', 'create branch', 'github', 'git automation'], intent: 'github_automation' },
 ];
 
 /**
@@ -722,6 +726,61 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
           }
         }
         actionsPerformed.push(`Retrieved ticket stats and ${currTickets.length} curriculum tickets`);
+        break;
+      }
+
+      case 'executive_briefing': {
+        const { generateDailyBriefing, compileExecutiveBriefing } = await import('../../services/executiveBriefingService');
+        const briefingData = await compileExecutiveBriefing('daily');
+        const fleet = briefingData.agentFleet;
+        const alerts = briefingData.alertSummary;
+        const tickets = briefingData.ticketSummary;
+
+        briefings = [{
+          analysis: `Fleet: ${fleet.healthy}/${fleet.total} healthy, ${fleet.errored} errored. Alerts: ${alerts.openCount} open (${alerts.criticalOpen} critical). Tickets: ${tickets.openCount} open, ${tickets.resolvedLast24h} resolved in 24h.`,
+          confidence: 100,
+        }];
+
+        // Attempt to send email briefing
+        try {
+          await generateDailyBriefing();
+          actionsPerformed.push('Executive briefing compiled and emailed to admin recipients');
+        } catch {
+          actionsPerformed.push('Executive briefing compiled (email delivery skipped — check SMTP config)');
+        }
+
+        agentsDispatched.push('ExecutiveBriefingAgent');
+        break;
+      }
+
+      case 'github_automation': {
+        const { isGitHubConfigured } = await import('../../services/agentGitHubService');
+        if (!isGitHubConfigured()) {
+          briefings = [{
+            problem_detected: 'GitHub integration not configured',
+            action_taken: 'Set GITHUB_TOKEN and GITHUB_REPO environment variables to enable GitHub automation.',
+            confidence: 100,
+          }];
+        } else {
+          const { runGitHubAutomation } = await import('../../services/agents/gitHubAutomationAgent');
+          const action = parameters.action || 'create_branch';
+          const result = await runGitHubAutomation({
+            action,
+            branch: parameters.branch,
+            baseBranch: parameters.base_branch,
+            filePath: parameters.file_path,
+            fileContent: parameters.file_content,
+            commitMessage: parameters.commit_message,
+            prTitle: parameters.pr_title,
+            prBody: parameters.pr_body,
+          });
+          briefings = [{
+            action_taken: result.summary,
+            confidence: result.status === 'success' ? 100 : 30,
+          }];
+          actionsPerformed.push(result.summary);
+        }
+        agentsDispatched.push('GitHubAutomationAgent');
         break;
       }
     }

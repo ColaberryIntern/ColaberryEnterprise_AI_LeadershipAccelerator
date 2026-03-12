@@ -1349,6 +1349,189 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
   console.log(`[Email] Admissions document (${params.documentType}) sent to: ${r.to} | msgId: ${info.messageId}`);
 }
 
+// ─── Alert Email ──────────────────────────────────────────────────────────
+
+export async function sendAlertEmail(to: string, alert: { type: string; severity: number; title: string; description?: string; impact_area?: string; source_type?: string; urgency?: string; created_at?: Date }): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping alert email to:', to);
+    return;
+  }
+
+  const severityColors: Record<number, string> = { 1: '#38a169', 2: '#2b6cb0', 3: '#d69e2e', 4: '#dd6b20', 5: '#e53e3e' };
+  const typeLabels: Record<string, string> = { info: 'Information', insight: 'Insight', opportunity: 'Opportunity', warning: 'Warning', critical: 'Critical Alert' };
+
+  const color = severityColors[alert.severity] || '#718096';
+  const label = typeLabels[alert.type] || alert.type;
+  const subject = `[${label}] ${alert.title}`;
+
+  const r = await resolveEmailRecipient(to, subject);
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 22px; }
+    .alert-bar { background: ${color}; color: #fff; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 16px; margin-bottom: 16px; }
+    .detail { background: #f7fafc; border-left: 4px solid ${color}; padding: 14px 18px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+    .meta { font-size: 13px; color: #718096; margin-top: 8px; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+  </style>
+</head>
+<body>
+  <div class="alert-bar">${label} — Severity ${alert.severity}/5</div>
+  <h1>${alert.title}</h1>
+  ${alert.description ? `<div class="detail">${alert.description}</div>` : ''}
+  <div class="meta">
+    ${alert.impact_area ? `<strong>Impact Area:</strong> ${alert.impact_area}<br>` : ''}
+    ${alert.urgency ? `<strong>Urgency:</strong> ${alert.urgency}<br>` : ''}
+    <strong>Source:</strong> ${alert.source_type || 'system'}
+  </div>
+  <p style="margin-top: 20px;">Review this alert in the <a href="http://95.216.199.47:8888/admin/intelligence" style="color: #2b6cb0; font-weight: 600;">Intelligence OS</a>.</p>
+  <div class="footer">
+    <p>Colaberry AI Organization — Alert Intelligence Engine</p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const info = await transporter.sendMail({
+    from: `"Cory — AI Operations" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('alert-notification'),
+  });
+
+  console.log(`[Email] Alert email sent to: ${r.to} | type: ${alert.type} | msgId: ${info.messageId}`);
+}
+
+// ─── Executive Briefing Email ─────────────────────────────────────────────
+
+import type { ExecutiveBriefingData } from './executiveBriefingService';
+
+export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping briefing email to:', to);
+    return;
+  }
+
+  const periodLabel = data.type === 'weekly' ? 'Weekly Strategic' : 'Daily Executive';
+  const dateStr = data.generatedAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const subject = `${periodLabel} Briefing — ${dateStr}`;
+
+  const r = await resolveEmailRecipient(to, subject);
+
+  const fleet = data.agentFleet;
+  const alerts = data.alertSummary;
+  const tickets = data.ticketSummary;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 650px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 22px; margin-bottom: 4px; }
+    h2 { color: #1a365d; font-size: 16px; margin-top: 24px; margin-bottom: 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+    .subtitle { color: #718096; font-size: 13px; margin-bottom: 20px; }
+    .kpi-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+    .kpi-box { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 130px; }
+    .kpi-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 20px; font-weight: 700; color: #1a365d; }
+    .kpi-sub { font-size: 11px; color: #718096; }
+    .alert-box { background: #fff5f5; border: 1px solid #fc8181; border-radius: 8px; padding: 12px 16px; margin-top: 8px; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #718096; }
+  </style>
+</head>
+<body>
+  <h1>${periodLabel} Briefing</h1>
+  <div class="subtitle">${dateStr}</div>
+
+  <h2>Agent Fleet</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Total Agents</div>
+      <div class="kpi-value">${fleet.total}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Healthy</div>
+      <div class="kpi-value" style="color:#38a169;">${fleet.healthy}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Errored</div>
+      <div class="kpi-value" style="color:#e53e3e;">${fleet.errored}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Paused</div>
+      <div class="kpi-value" style="color:#d69e2e;">${fleet.paused}</div>
+    </div>
+  </div>
+
+  <h2>Alert Summary</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Open Alerts</div>
+      <div class="kpi-value">${alerts.openCount}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Critical</div>
+      <div class="kpi-value" style="color:#e53e3e;">${alerts.criticalOpen}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Last 24h</div>
+      <div class="kpi-value">${alerts.last24h}</div>
+    </div>
+  </div>
+
+  <h2>Tickets</h2>
+  <div class="kpi-grid">
+    <div class="kpi-box">
+      <div class="kpi-label">Open</div>
+      <div class="kpi-value">${tickets.openCount}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Resolved (24h)</div>
+      <div class="kpi-value" style="color:#38a169;">${tickets.resolvedLast24h}</div>
+    </div>
+    <div class="kpi-box">
+      <div class="kpi-label">Critical Open</div>
+      <div class="kpi-value" style="color:#e53e3e;">${tickets.criticalOpen}</div>
+    </div>
+  </div>
+
+  ${alerts.criticalOpen > 0 ? `
+  <div class="alert-box">
+    <strong>Attention:</strong> ${alerts.criticalOpen} critical alert${alerts.criticalOpen > 1 ? 's' : ''} require${alerts.criticalOpen === 1 ? 's' : ''} immediate review.
+  </div>
+  ` : ''}
+
+  <p style="margin-top: 20px;">View the full Intelligence OS dashboard at <a href="http://95.216.199.47:8888/admin/intelligence" style="color: #2b6cb0; font-weight: 600;">Intelligence OS</a>.</p>
+
+  <div class="footer">
+    <p><strong>Colaberry AI Organization</strong> — ${periodLabel} Briefing<br>
+    <span style="font-size:11px;color:#a0aec0;">Generated by Cory, AI COO</span></p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const info = await transporter.sendMail({
+    from: `"Cory — AI COO" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('executive-briefing'),
+  });
+
+  console.log(`[Email] ${periodLabel} briefing sent to: ${r.to} | msgId: ${info.messageId}`);
+}
+
 function buildPortalMagicLinkHtml(data: PortalMagicLinkData, magicLink: string): string {
   return `
 <!DOCTYPE html>

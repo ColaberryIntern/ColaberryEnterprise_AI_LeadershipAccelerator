@@ -94,13 +94,47 @@ export type AiAgentType =
   | 'curriculum_type_fix'
   // Ticket & student tracking
   | 'ticket_management'
-  | 'student_behavior_intelligence' 
+  | 'student_behavior_intelligence'
+  // Executive & organizational
+  | 'organization_health'
+  | 'executive_briefing'
+  // Strategy
+  | 'product_strategy'
+  | 'human_learning_strategy'
+  | 'program_evolution'
+  // Marketing
+  | 'content_marketing'
+  // Admissions extensions
+  | 'enterprise_opportunity'
+  // Alumni
+  | 'alumni_outreach'
+  | 'alumni_reengagement'
+  | 'alumni_referral'
+  // Partnerships
+  | 'enterprise_partnership'
+  | 'corporate_training'
+  | 'employer_relationship'
+  // Platform extensions
+  | 'ux_optimization'
+  | 'deployment'
+  | 'performance_monitoring'
+  // Intelligence extensions
+  | 'data_intelligence'
+  | 'trend_detection'
+  | 'analytics'
+  | 'opportunity_detection'
+  // Governance
+  | 'policy'
+  | 'risk'
+  | 'approval'
+  // GitHub
+  | 'github_automation'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops';
 
 interface AiAgentAttributes {
   id?: string;

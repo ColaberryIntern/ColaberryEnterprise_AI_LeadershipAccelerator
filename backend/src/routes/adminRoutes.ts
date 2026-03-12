@@ -23,6 +23,7 @@ import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 import admissionsRoutes from './admin/admissionsRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
+import alertRoutes from './admin/alertRoutes';
 
 const router = Router();
 
@@ -50,5 +51,6 @@ router.use(websiteIntelligenceRoutes);
 router.use(admissionsRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
+router.use(alertRoutes);
 
 export default router;

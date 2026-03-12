@@ -1,6 +1,7 @@
 import AiSystemEvent from '../models/AiSystemEvent';
 import AiAgentActivityLog from '../models/AiAgentActivityLog';
 import type { AgentActivityResult } from '../models/AiAgentActivityLog';
+import { emitAlert } from './alertService';
 
 /**
  * Log an AI system event (campaign scans, agent triggers, repairs, failures, etc.)
@@ -57,4 +58,50 @@ export async function logAgentActivity(params: {
     stack_trace: params.stack_trace || undefined,
     retry_of: params.retry_of || undefined,
   });
+}
+
+/**
+ * Emit an alert from an agent into the Alert Intelligence Engine.
+ * This is the standard way any agent creates an alert.
+ */
+export async function emitAgentAlert(params: {
+  agentId: string;
+  type: 'info' | 'insight' | 'opportunity' | 'warning' | 'critical';
+  title: string;
+  description: string;
+  impactArea: string;
+  confidence?: number;
+  urgency?: 'low' | 'medium' | 'high' | 'immediate';
+  departmentId?: string;
+  entityType?: string;
+  entityId?: string;
+  metadata?: Record<string, any>;
+}): Promise<void> {
+  try {
+    const severityMap: Record<string, number> = {
+      info: 1,
+      insight: 2,
+      opportunity: 3,
+      warning: 4,
+      critical: 5,
+    };
+
+    await emitAlert({
+      type: params.type,
+      severity: severityMap[params.type] || 3,
+      title: params.title,
+      description: params.description,
+      sourceAgentId: params.agentId,
+      sourceType: 'agent',
+      impactArea: params.impactArea,
+      departmentId: params.departmentId || null,
+      confidence: params.confidence ?? null,
+      urgency: params.urgency || 'medium',
+      entityType: params.entityType || null,
+      entityId: params.entityId || null,
+      metadata: params.metadata || {},
+    });
+  } catch (err: any) {
+    console.error(`[emitAgentAlert] Failed for agent ${params.agentId}:`, err.message);
+  }
 }
