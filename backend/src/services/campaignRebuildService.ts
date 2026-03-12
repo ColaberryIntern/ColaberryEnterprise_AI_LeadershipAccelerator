@@ -175,21 +175,41 @@ export async function rebuildCampaignFromPrompt(
   const response = await client.chat.completions.create({
     model,
     temperature: 0.7,
-    max_tokens: 3000,
+    max_tokens: 4500,
     messages: [
       {
         role: 'system',
         content: `You are a B2B campaign strategist for Colaberry Enterprise AI Division.
 
-Given a campaign system prompt (persona/strategy), generate a complete campaign structure.
+Given a campaign system prompt (persona/strategy), generate a complete campaign structure with highly detailed step-level instructions.
 
-RULES:
-- The ai_instructions for each step should describe WHAT the AI should write, not the actual content
-- Keep step subjects short and natural (not marketing-y)
-- Use appropriate channels: email for detailed content, SMS for quick nudges (under 160 chars), voice for personal touch
+CONTEXT ON HOW STEPS ARE USED:
+The campaign system prompt becomes the AI's persona/system message. Each step's "ai_instructions" becomes the user-level prompt that tells the AI exactly what to write for that touchpoint. The AI then generates the actual email/SMS/voice content by combining the persona with the step instructions and the specific lead's profile data.
+
+This means ai_instructions must be EXTREMELY detailed and specific — they are the primary driver of what gets generated. Vague instructions like "Write an introductory email" produce generic, forgettable content.
+
+RULES FOR ai_instructions (CRITICAL):
+- Write 4-8 sentences minimum per step
+- Specify EXACTLY what content to include (specific offers, numbers, links, product names)
+- Specify what lead context to reference (e.g., "Reference their company name and industry", "Mention their class year and mentor if alumni")
+- Specify the CTA explicitly (e.g., "End with a link to the landing page at /alumni-ai-champion", "Ask them to reply YES to schedule a call")
+- Specify how this step builds on previous steps in the sequence (e.g., "This is the follow-up to the intro email — acknowledge they may not have seen it, add new value")
+- For email: specify the structure (opening hook, value points, proof, CTA)
+- For SMS: specify the exact intent (e.g., "Quick nudge to check email, mention the subject line of Email 1")
+- For voice: specify talking points, objection handling, and success criteria
+- Include specific messaging themes from the campaign prompt (discounts, referral commissions, program names, etc.)
+
+RULES FOR step_goal:
+- Must be specific and measurable (e.g., "Get alumni to click through to the landing page" not just "Introduce program")
+- Should describe the desired outcome, not the action
+
+OTHER RULES:
+- Keep step subjects short and natural (not marketing-y) — 5-8 words max
+- Use appropriate channels: email for detailed content, SMS for quick nudges, voice for personal touch
 - Sequence should flow naturally: introduce → add value → social proof → urgency → close
+- Each step must feel distinct — no two steps should cover the same ground
 - Goals should be measurable and specific
-- GTM notes should cover messaging themes, positioning, and audience context
+- GTM notes should cover messaging themes, positioning, audience context, and competitive angle
 - Description should be 2-3 sentences explaining the campaign
 
 Respond with ONLY valid JSON, no markdown fences:
@@ -203,7 +223,7 @@ Respond with ONLY valid JSON, no markdown fences:
       "delay_days": 0,
       "subject": "...",
       "step_goal": "...",
-      "ai_instructions": "...",
+      "ai_instructions": "... (4-8 detailed sentences) ...",
       "ai_tone": "professional|casual|consultative|urgent|friendly",
       "max_attempts": 1,
       "fallback_channel": null,
@@ -219,10 +239,10 @@ Respond with ONLY valid JSON, no markdown fences:
         content: `Campaign Name: ${campaign.name}
 Campaign Type: ${campaign.type}
 
-AI System Prompt:
+AI System Prompt (this is the persona/strategy the AI will use as its system message when generating content for each step):
 ${newPrompt}
 
-Generate the full campaign structure.`,
+Generate the full campaign structure. Remember: the ai_instructions for each step must be highly detailed and specific because they directly drive the AI content generation. Include specific offers, CTAs, messaging themes, and lead context references from the system prompt above.`,
       },
     ],
   });
