@@ -54,14 +54,14 @@ export default function DepartmentStrategyTab() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [summaryRes, crossRes, agentsRes] = await Promise.all([
+      const [summaryRes, crossRes, agentsRes] = await Promise.allSettled([
         getStrategySummary(),
         getCrossDeptInitiatives(),
         getStrategyAgents(),
       ]);
-      setSummary(summaryRes.data);
-      setCrossDeptInitiatives(crossRes.data.initiatives || []);
-      setAgents(agentsRes.data.agents || []);
+      if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.data);
+      if (crossRes.status === 'fulfilled') setCrossDeptInitiatives(crossRes.value.data.initiatives || []);
+      if (agentsRes.status === 'fulfilled') setAgents(agentsRes.value.data.agents || []);
     } catch (err) {
       console.error('[DeptStrategy] Load error:', err);
     } finally {
@@ -274,7 +274,7 @@ function StrategyAgentsTable({ agents }: { agents: StrategyAgentInfo[] }) {
                 <td className="text-end">{a.run_count}</td>
                 <td className="text-end">{a.error_count > 0 ? <span className="text-danger fw-bold">{a.error_count}</span> : '0'}</td>
                 <td>{a.last_run_at ? new Date(a.last_run_at).toLocaleString() : '—'}</td>
-                <td className="text-end">{a.last_duration_ms ? `${(a.last_duration_ms / 1000).toFixed(1)}s` : '—'}</td>
+                <td className="text-end">{a.avg_duration_ms ? `${(a.avg_duration_ms / 1000).toFixed(1)}s` : '—'}</td>
               </tr>
             ))}
             {agents.length === 0 && (

@@ -182,7 +182,7 @@ router.get('/api/admin/intelligence/strategy-agents', async (_req: Request, res:
       order: [['agent_name', 'ASC']],
       attributes: [
         'id', 'agent_name', 'status', 'enabled', 'run_count', 'error_count',
-        'last_run_at', 'last_duration_ms', 'last_result', 'config',
+        'last_run_at', 'avg_duration_ms', 'last_result', 'config',
       ],
     });
     res.json({ agents });

@@ -344,7 +344,7 @@ export interface StrategyAgentInfo {
   run_count: number;
   error_count: number;
   last_run_at: string | null;
-  last_duration_ms: number | null;
+  avg_duration_ms: number | null;
   last_result: any;
   config: Record<string, any>;
 }
