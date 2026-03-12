@@ -201,7 +201,6 @@ export default function RoadmapTab({ entityFilter }: Props) {
       {selectedInit && (
         <>
           <div className="modal-backdrop show" style={{ zIndex: 1050 }} />
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div
             className="modal show d-block"
             style={{ zIndex: 1055 }}
