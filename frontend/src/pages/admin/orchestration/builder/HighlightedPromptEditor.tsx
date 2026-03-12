@@ -21,6 +21,23 @@ export default function HighlightedPromptEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [validationIssues, setValidationIssues] = useState<{ key: string; status: 'available' | 'not_yet' | 'undefined' }[]>([]);
+  const [showVarPicker, setShowVarPicker] = useState(false);
+
+  const insertVariable = useCallback((varKey: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const insert = `{{${varKey}}}`;
+    const newVal = value.substring(0, start) + insert + value.substring(end);
+    onChange(newVal);
+    // Restore cursor after the inserted variable
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + insert.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  }, [value, onChange]);
 
   const handleScroll = useCallback(() => {
     if (textareaRef.current && overlayRef.current) {
@@ -57,6 +74,15 @@ export default function HighlightedPromptEditor({
     <div className="mb-2">
       <div className="d-flex align-items-center gap-1 mb-1">
         <span className="text-muted fw-medium" style={{ fontSize: 10 }}>{label}</span>
+        <button
+          type="button"
+          className={`btn btn-sm py-0 px-1 ${showVarPicker ? 'btn-primary' : 'btn-outline-secondary'}`}
+          style={{ fontSize: 9, lineHeight: '16px' }}
+          onClick={() => setShowVarPicker(!showVarPicker)}
+          title="Insert variable"
+        >
+          <i className="bi bi-braces me-1"></i>Variables
+        </button>
         {validationIssues.length > 0 && (
           <span className="ms-auto d-flex gap-1">
             {undefinedCount > 0 && <span className="badge bg-danger" style={{ fontSize: 8 }}>{undefinedCount} undefined</span>}
@@ -64,6 +90,37 @@ export default function HighlightedPromptEditor({
           </span>
         )}
       </div>
+      {showVarPicker && (
+        <div className="d-flex flex-wrap gap-1 mb-1 p-1 rounded" style={{ background: 'var(--color-bg-alt, #f7fafc)', border: '1px solid var(--color-border, #e2e8f0)' }}>
+          {[...availableVars].sort().map(v => (
+            <button
+              key={v}
+              type="button"
+              className="btn btn-sm py-0 px-1"
+              style={{ fontSize: 9, background: 'rgba(56,161,105,0.15)', color: '#276749', border: '1px solid rgba(56,161,105,0.3)', borderRadius: 4 }}
+              onClick={() => insertVariable(v)}
+              title={`Insert {{${v}}}`}
+            >
+              {`{{${v}}}`}
+            </button>
+          ))}
+          {[...allDefinedVars].filter(v => !availableVars.has(v)).sort().map(v => (
+            <button
+              key={v}
+              type="button"
+              className="btn btn-sm py-0 px-1"
+              style={{ fontSize: 9, background: 'rgba(236,201,75,0.15)', color: '#975a16', border: '1px solid rgba(236,201,75,0.3)', borderRadius: 4 }}
+              onClick={() => insertVariable(v)}
+              title={`Insert {{${v}}} (defined but not yet available at this order)`}
+            >
+              {`{{${v}}}`}
+            </button>
+          ))}
+          {availableVars.size === 0 && allDefinedVars.size === 0 && (
+            <span className="text-muted" style={{ fontSize: 9 }}>No variables defined yet</span>
+          )}
+        </div>
+      )}
       <div className="position-relative" style={{ fontFamily: 'monospace', fontSize: 11 }}>
         {/* Highlight overlay */}
         <div
