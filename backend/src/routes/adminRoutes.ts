@@ -28,6 +28,7 @@ import openclawRoutes from './admin/openclawRoutes';
 import reportingRoutes from './admin/reportingRoutes';
 import governanceCenterRoutes from './admin/governanceCenterRoutes';
 import executiveAwarenessRoutes from './admin/executiveAwarenessRoutes';
+import strategicIntelligenceRoutes from './admin/strategicIntelligenceRoutes';
 import securityRoutes from './admin/securityRoutes';
 
 const router = Router();
@@ -61,6 +62,7 @@ router.use(openclawRoutes);
 router.use(reportingRoutes);
 router.use(governanceCenterRoutes);
 router.use(executiveAwarenessRoutes);
+router.use(strategicIntelligenceRoutes);
 router.use(securityRoutes);
 
 export default router;

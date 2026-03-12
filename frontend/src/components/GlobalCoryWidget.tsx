@@ -10,14 +10,21 @@ export default function GlobalCoryWidget() {
   const [isHovered, setIsHovered] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [badge, setBadge] = useState<{ count: number; maxSeverity: string }>({ count: 0, maxSeverity: 'none' });
+  const [stabilityScore, setStabilityScore] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isAdmin = location.pathname.startsWith('/admin');
 
   const fetchBadge = useCallback(async () => {
     try {
-      const res = await api.get('/api/admin/executive-awareness/badge');
-      setBadge(res.data);
+      const [badgeRes, riskRes] = await Promise.all([
+        api.get('/api/admin/executive-awareness/badge'),
+        api.get('/api/admin/strategic-intelligence/risk').catch(() => ({ data: null })),
+      ]);
+      setBadge(badgeRes.data);
+      if (riskRes.data?.stabilityScore != null) {
+        setStabilityScore(riskRes.data.stabilityScore);
+      }
     } catch {
       // Silent fail — badge is non-critical
     }
@@ -62,6 +69,11 @@ export default function GlobalCoryWidget() {
 
   const isCritical = badge.maxSeverity === 'critical';
 
+  // Stability ring color
+  const stabilityRingColor = stabilityScore != null
+    ? (stabilityScore >= 80 ? '#38a169' : stabilityScore >= 60 ? '#d69e2e' : stabilityScore >= 40 ? '#dd6b20' : '#e53e3e')
+    : 'var(--color-primary)';
+
   return (
     <div className="global-cory-widget">
       <button
@@ -69,7 +81,7 @@ export default function GlobalCoryWidget() {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         aria-label={badge.count > 0 ? `Cory — ${badge.count} executive events` : 'Open Cory — AI COO'}
-        title={badge.count > 0 ? `${badge.count} executive event${badge.count !== 1 ? 's' : ''}` : 'Cory — AI COO'}
+        title={badge.count > 0 ? `${badge.count} executive event${badge.count !== 1 ? 's' : ''}` : stabilityScore != null ? `Cory — Stability: ${stabilityScore}/100` : 'Cory — AI COO'}
         style={{
           position: 'relative',
           background: 'none',
@@ -93,11 +105,28 @@ export default function GlobalCoryWidget() {
           />
         )}
 
+        {/* Stability score ring */}
+        {stabilityScore != null && !isCritical && (
+          <span
+            style={{
+              position: 'absolute',
+              inset: -3,
+              borderRadius: '50%',
+              border: `3px solid ${stabilityRingColor}`,
+              pointerEvents: 'none',
+              opacity: 0.8,
+            }}
+          />
+        )}
+
         <img
           src="/cory-avatar.jpg"
           alt="Cory — AI COO"
           className="global-cory-avatar"
-          style={isHovered ? { transform: 'scale(1.1)', boxShadow: '0 6px 24px rgba(26, 54, 93, 0.45)' } : undefined}
+          style={{
+            ...(stabilityScore != null ? { border: 'none' } : {}),
+            ...(isHovered ? { transform: 'scale(1.1)', boxShadow: '0 6px 24px rgba(26, 54, 93, 0.45)' } : {}),
+          }}
         />
 
         {/* Badge counter */}

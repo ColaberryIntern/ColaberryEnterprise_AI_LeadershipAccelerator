@@ -46,6 +46,7 @@ const TABS = [
   { key: 'risk', label: 'Risk Scoring' },
   { key: 'autonomy', label: 'Autonomy Rules' },
   { key: 'executive', label: 'Executive Awareness' },
+  { key: 'aicoo', label: 'AI COO' },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -611,6 +612,7 @@ function GovernanceCommandCenter() {
       {activeTab === 'risk' && <RiskScoringTab />}
       {activeTab === 'autonomy' && <AutonomyRulesTab />}
       {activeTab === 'executive' && <ExecutiveAwarenessTab />}
+      {activeTab === 'aicoo' && <AICOOTab />}
     </div>
   );
 }
@@ -919,6 +921,338 @@ function ExecutiveAwarenessTab() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── AI COO Tab ─────────────────────────────────────────────────────────────
+
+interface RiskData {
+  stabilityScore: number;
+  components: Record<string, number>;
+  riskLevel: string;
+  topRisks: string[];
+}
+
+interface MetricsData {
+  revenue: { totalRevenue: number; totalEnrollments: number; paidEnrollments: number; pendingInvoice: number; seatsRemaining: number };
+  funnel: { totalLeads: number; conversionRate: number; highIntent: number; thisMonth: number };
+  campaign: { activeCampaigns: number; avgOpenRate: number; avgReplyRate: number; totalMeetings: number };
+  operations: { totalAgents: number; healthyAgents: number; erroredAgents: number; avgErrorRate: number; errors24h: number };
+  visitors: { total: number; sessions: number; bounceRate: number; today: number };
+  opportunities: { pipelineValue: number; projectedRevenue: number; stalledCount: number; totalScored: number; avgScore: number };
+}
+
+interface RecommendationData {
+  priority: string;
+  domain: string;
+  summary: string;
+  recommendation: string;
+  projectedImpact: string;
+  confidence: number;
+}
+
+interface SimResult {
+  baseline: { revenue: number; enrollments: number; operationalLoad: number };
+  projected: { revenue: number; enrollments: number; operationalLoad: number };
+  delta: { revenue: number; enrollments: number; operationalLoad: number };
+  riskShift: number;
+  assumptions: string[];
+  confidence: number;
+}
+
+function AICOOTab() {
+  const [risk, setRisk] = useState<RiskData | null>(null);
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendationData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Scenario Lab state
+  const [scenarioType, setScenarioType] = useState('ad_spend_change');
+  const [scenarioMagnitude, setScenarioMagnitude] = useState(10);
+  const [simulating, setSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<SimResult | null>(null);
+
+  // Narrative
+  const [narrative, setNarrative] = useState<any>(null);
+  const [narrativePeriod, setNarrativePeriod] = useState<'morning' | 'evening'>('morning');
+  const [loadingNarrative, setLoadingNarrative] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [riskRes, metricsRes, recsRes] = await Promise.all([
+        apiFetch('/api/admin/strategic-intelligence/risk'),
+        apiFetch('/api/admin/strategic-intelligence/metrics'),
+        apiFetch('/api/admin/strategic-intelligence/recommendations'),
+      ]);
+      setRisk(riskRes);
+      setMetrics(metricsRes);
+      setRecommendations(recsRes.recommendations || []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSimulate = async () => {
+    try {
+      setSimulating(true);
+      setError('');
+      const result = await apiFetch('/api/admin/strategic-intelligence/simulate', {
+        method: 'POST',
+        body: JSON.stringify({ type: scenarioType, magnitude: scenarioMagnitude }),
+      });
+      setSimResult(result);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const loadNarrative = async () => {
+    try {
+      setLoadingNarrative(true);
+      const res = await apiFetch(`/api/admin/strategic-intelligence/narrative/${narrativePeriod}`);
+      setNarrative(res);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoadingNarrative(false);
+    }
+  };
+
+  if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
+
+  const stabilityColor = (score: number) => {
+    if (score >= 80) return '#38a169';
+    if (score >= 60) return '#d69e2e';
+    if (score >= 40) return '#dd6b20';
+    return '#e53e3e';
+  };
+
+  const priorityBadge = (p: string) => {
+    if (p === 'critical') return 'bg-danger';
+    if (p === 'high') return 'bg-warning text-dark';
+    if (p === 'medium') return 'bg-info';
+    return 'bg-secondary';
+  };
+
+  const fmtCurrency = (v: number) => {
+    if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
+    if (v >= 1000) return `$${(v / 1000).toFixed(1)}K`;
+    return `$${v.toFixed(0)}`;
+  };
+
+  return (
+    <div>
+      {error && <div className="alert alert-danger alert-dismissible py-2 small"><button type="button" className="btn-close btn-close-sm" onClick={() => setError('')} />{error}</div>}
+
+      {/* 1. Strategic Stability Score */}
+      {risk && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white fw-semibold">Strategic Stability Score</div>
+          <div className="card-body">
+            <div className="row align-items-center">
+              <div className="col-md-3 text-center">
+                <div style={{ fontSize: '3rem', fontWeight: 700, color: stabilityColor(risk.stabilityScore) }}>
+                  {risk.stabilityScore}
+                </div>
+                <span className={`badge ${risk.riskLevel === 'stable' ? 'bg-success' : risk.riskLevel === 'watch' ? 'bg-warning text-dark' : risk.riskLevel === 'elevated' ? 'bg-warning text-dark' : 'bg-danger'}`}>
+                  {risk.riskLevel}
+                </span>
+              </div>
+              <div className="col-md-9">
+                <div className="row">
+                  {Object.entries(risk.components).map(([key, val]) => (
+                    <div className="col-md-4 mb-2" key={key}>
+                      <div className="d-flex justify-content-between small">
+                        <span className="text-muted">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                        <span className="fw-medium">{val}</span>
+                      </div>
+                      <div className="progress" style={{ height: 6 }}>
+                        <div className="progress-bar" role="progressbar" style={{ width: `${val}%`, backgroundColor: stabilityColor(100 - val) }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {risk.topRisks.length > 0 && (
+                  <div className="mt-2">
+                    {risk.topRisks.map((r, i) => (
+                      <span key={i} className="badge bg-light text-dark me-1 mb-1" style={{ fontSize: '0.65rem' }}>{r}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Key Metrics Overview */}
+      {metrics && (
+        <div className="row mb-4">
+          {[
+            { label: 'Revenue', val: fmtCurrency(metrics.revenue.totalRevenue), sub: `${metrics.revenue.totalEnrollments} enrolled` },
+            { label: 'Pipeline', val: fmtCurrency(metrics.opportunities.pipelineValue), sub: `${metrics.opportunities.stalledCount} stalled` },
+            { label: 'Leads', val: String(metrics.funnel.totalLeads), sub: `${metrics.funnel.conversionRate}% conv.` },
+            { label: 'Visitors Today', val: String(metrics.visitors.today), sub: `${metrics.visitors.bounceRate.toFixed(0)}% bounce` },
+            { label: 'Agent Fleet', val: `${metrics.operations.healthyAgents}/${metrics.operations.totalAgents}`, sub: `${metrics.operations.errors24h} errors 24h` },
+            { label: 'Campaigns', val: String(metrics.campaign.activeCampaigns), sub: `${metrics.campaign.avgOpenRate.toFixed(1)}% open` },
+          ].map((card, i) => (
+            <div className="col-md-2 mb-3" key={i}>
+              <div className="card border-0 shadow-sm h-100">
+                <div className="card-body py-2 px-3 text-center">
+                  <div className="text-muted" style={{ fontSize: '0.65rem' }}>{card.label}</div>
+                  <div className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>{card.val}</div>
+                  <div className="text-muted" style={{ fontSize: '0.65rem' }}>{card.sub}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 3. Recommendations */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold">Strategic Recommendations ({recommendations.length})</div>
+        <div className="card-body p-0">
+          {recommendations.length === 0 ? (
+            <div className="p-3 text-muted small">No actionable recommendations at this time.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th className="small fw-medium">Priority</th>
+                    <th className="small fw-medium">Domain</th>
+                    <th className="small fw-medium">Insight</th>
+                    <th className="small fw-medium">Action</th>
+                    <th className="small fw-medium text-end">Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recommendations.slice(0, 10).map((rec, i) => (
+                    <tr key={i}>
+                      <td><span className={`badge ${priorityBadge(rec.priority)}`} style={{ fontSize: '0.65rem' }}>{rec.priority}</span></td>
+                      <td className="small"><span className="badge bg-light text-dark">{rec.domain}</span></td>
+                      <td className="small">{rec.summary}</td>
+                      <td className="small text-muted">{rec.recommendation}</td>
+                      <td className="small text-end">{(rec.confidence * 100).toFixed(0)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 4. Scenario Lab */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold">Scenario Lab</div>
+        <div className="card-body">
+          <div className="row align-items-end mb-3">
+            <div className="col-md-4">
+              <label className="form-label small fw-medium">Scenario Type</label>
+              <select className="form-select form-select-sm" value={scenarioType} onChange={(e) => setScenarioType(e.target.value)}>
+                <option value="ad_spend_change">Ad Spend Change</option>
+                <option value="conversion_lift">Conversion Lift</option>
+                <option value="pricing_change">Pricing Change</option>
+                <option value="alignment_day_add">Alignment Day Capacity</option>
+                <option value="roi_engagement_boost">ROI Engagement Boost</option>
+              </select>
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small fw-medium">Magnitude: {scenarioMagnitude}%</label>
+              <input type="range" className="form-range" min={-50} max={100} value={scenarioMagnitude} onChange={(e) => setScenarioMagnitude(parseInt(e.target.value, 10))} />
+            </div>
+            <div className="col-md-4">
+              <button className="btn btn-primary btn-sm" onClick={handleSimulate} disabled={simulating}>
+                {simulating ? 'Simulating...' : 'Simulate'}
+              </button>
+            </div>
+          </div>
+
+          {simResult && (
+            <div className="row">
+              {[
+                { label: 'Revenue', base: fmtCurrency(simResult.baseline.revenue), proj: fmtCurrency(simResult.projected.revenue), delta: fmtCurrency(simResult.delta.revenue) },
+                { label: 'Enrollments', base: simResult.baseline.enrollments.toFixed(1), proj: simResult.projected.enrollments.toFixed(1), delta: simResult.delta.enrollments.toFixed(1) },
+                { label: 'Ops Load', base: String(simResult.baseline.operationalLoad), proj: String(simResult.projected.operationalLoad), delta: String(simResult.delta.operationalLoad) },
+              ].map((col, i) => (
+                <div className="col-md-4" key={i}>
+                  <div className="card border-0 bg-light mb-2">
+                    <div className="card-body py-2 px-3 text-center">
+                      <div className="text-muted" style={{ fontSize: '0.65rem' }}>{col.label}</div>
+                      <div className="small">Baseline: <strong>{col.base}</strong></div>
+                      <div className="small">Projected: <strong style={{ color: 'var(--color-primary)' }}>{col.proj}</strong></div>
+                      <div className="small">Delta: <strong className={simResult.delta.revenue >= 0 ? 'text-success' : 'text-danger'}>{col.delta}</strong></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="col-12 mt-2">
+                <div className="small text-muted">
+                  Confidence: {(simResult.confidence * 100).toFixed(0)}% | Risk shift: {simResult.riskShift > 0 ? '+' : ''}{simResult.riskShift}
+                </div>
+                <div className="small text-muted mt-1">
+                  Assumptions: {simResult.assumptions.join(' | ')}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 5. Executive Narrative */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+          <span>Executive Report</span>
+          <div className="d-flex gap-2 align-items-center">
+            <select className="form-select form-select-sm" value={narrativePeriod} onChange={(e) => setNarrativePeriod(e.target.value as 'morning' | 'evening')} style={{ width: 120 }}>
+              <option value="morning">Morning</option>
+              <option value="evening">Evening</option>
+            </select>
+            <button className="btn btn-outline-secondary btn-sm" onClick={loadNarrative} disabled={loadingNarrative}>
+              {loadingNarrative ? 'Loading...' : 'Generate'}
+            </button>
+          </div>
+        </div>
+        {narrative && (
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <span className="badge bg-light text-dark">{narrative.period} report</span>
+              <span style={{ fontSize: '0.75rem', color: stabilityColor(narrative.stabilityScore) }}>
+                Stability: {narrative.stabilityScore}/100
+              </span>
+            </div>
+            {narrative.topActions?.length > 0 && (
+              <div className="alert alert-info py-2 small mb-3">
+                <strong>Top Actions:</strong>
+                <ul className="mb-0 mt-1">
+                  {narrative.topActions.map((a: string, i: number) => <li key={i}>{a}</li>)}
+                </ul>
+              </div>
+            )}
+            {Object.entries(narrative.sections || {}).map(([key, val]) => (
+              <div key={key} className="mb-3">
+                <h6 className="small fw-bold text-capitalize mb-1" style={{ color: 'var(--color-primary)' }}>
+                  {key.replace(/([A-Z])/g, ' $1').trim()}
+                </h6>
+                <pre className="small text-muted mb-0" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                  {val as string}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

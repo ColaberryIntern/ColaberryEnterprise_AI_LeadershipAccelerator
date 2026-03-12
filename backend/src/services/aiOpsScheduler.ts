@@ -205,6 +205,55 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     },
     label: 'Executive awareness evening digest',
   },
+  {
+    agentName: 'StrategicMetricCapture',
+    hardcodedSchedule: '*/15 * * * *',
+    dynamicImport: () => {
+      import('./strategic-intelligence/strategicStateStore').then(({ captureStrategicSnapshot }) => {
+        captureStrategicSnapshot().catch((err) => {
+          console.error('[AI Ops] Strategic snapshot cron error:', err);
+        });
+      });
+    },
+    label: 'Strategic metric capture (15min)',
+  },
+  {
+    agentName: 'StrategicTrendAnalysis',
+    hardcodedSchedule: '5,35 * * * *',
+    dynamicImport: () => {
+      import('./strategic-intelligence/anomalyDetectionEngine').then(({ detectAndEmitAnomalies }) => {
+        detectAndEmitAnomalies().catch((err) => {
+          console.error('[AI Ops] Strategic trend/anomaly cron error:', err);
+        });
+      });
+    },
+    label: 'Strategic trend + anomaly analysis',
+  },
+  {
+    agentName: 'StrategicRecommendationCycle',
+    hardcodedSchedule: '10,40 * * * *',
+    dynamicImport: () => {
+      Promise.all([
+        import('./strategic-intelligence/metricCollector'),
+        import('./strategic-intelligence/trendAnalyzer'),
+        import('./strategic-intelligence/anomalyDetectionEngine'),
+        import('./strategic-intelligence/strategicInferenceEngine'),
+        import('./strategic-intelligence/recommendationEngine'),
+      ]).then(async ([{ getStrategicMetrics }, { analyzeStrategicTrends }, { detectAnomalies }, { generateInferences }, { generateRecommendations, persistRecommendations }]) => {
+        const [metrics, trends, anomalies] = await Promise.all([
+          getStrategicMetrics(),
+          analyzeStrategicTrends(),
+          detectAnomalies(),
+        ]);
+        const inferences = await generateInferences(trends, anomalies, metrics);
+        const recommendations = await generateRecommendations(inferences, metrics);
+        await persistRecommendations(recommendations);
+      }).catch((err) => {
+        console.error('[AI Ops] Strategic recommendation cron error:', err);
+      });
+    },
+    label: 'Strategic inference + recommendation cycle',
+  },
 ];
 
 /**
