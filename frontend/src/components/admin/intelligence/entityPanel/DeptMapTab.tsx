@@ -28,16 +28,42 @@ interface GraphLink {
 
 // Relationships between departments
 const DEPT_EDGES: { source: string; target: string; relationship: string }[] = [
+  // Core intelligence & orchestration
   { source: 'intelligence', target: 'operations', relationship: 'monitors' },
   { source: 'intelligence', target: 'growth', relationship: 'informs' },
   { source: 'intelligence', target: 'marketing', relationship: 'informs' },
   { source: 'intelligence', target: 'finance', relationship: 'reports' },
+  { source: 'intelligence', target: 'strategy', relationship: 'feeds' },
   { source: 'orchestration', target: 'intelligence', relationship: 'orchestrates' },
   { source: 'orchestration', target: 'operations', relationship: 'orchestrates' },
+  { source: 'orchestration', target: 'admissions', relationship: 'automates' },
+  // Growth & revenue pipeline
   { source: 'growth', target: 'marketing', relationship: 'aligns' },
   { source: 'growth', target: 'education', relationship: 'feeds' },
-  { source: 'infrastructure', target: 'operations', relationship: 'supports' },
+  { source: 'growth', target: 'partnerships', relationship: 'develops' },
+  { source: 'growth', target: 'admissions', relationship: 'drives' },
+  { source: 'marketing', target: 'admissions', relationship: 'generates leads' },
+  { source: 'marketing', target: 'alumni', relationship: 'engages' },
+  // Education & student lifecycle
   { source: 'education', target: 'finance', relationship: 'drives revenue' },
+  { source: 'education', target: 'student_success', relationship: 'supports' },
+  { source: 'admissions', target: 'education', relationship: 'enrolls into' },
+  { source: 'student_success', target: 'alumni', relationship: 'graduates' },
+  { source: 'alumni', target: 'partnerships', relationship: 'refers' },
+  // Infrastructure & platform
+  { source: 'infrastructure', target: 'operations', relationship: 'supports' },
+  { source: 'infrastructure', target: 'platform', relationship: 'powers' },
+  { source: 'platform', target: 'education', relationship: 'delivers' },
+  { source: 'platform', target: 'intelligence', relationship: 'provides data' },
+  // Executive & governance
+  { source: 'executive', target: 'strategy', relationship: 'directs' },
+  { source: 'executive', target: 'finance', relationship: 'oversees' },
+  { source: 'executive', target: 'governance', relationship: 'mandates' },
+  { source: 'governance', target: 'operations', relationship: 'audits' },
+  { source: 'governance', target: 'finance', relationship: 'compliance' },
+  // Strategy cross-links
+  { source: 'strategy', target: 'growth', relationship: 'plans' },
+  { source: 'strategy', target: 'partnerships', relationship: 'evaluates' },
 ];
 
 export default function DeptMapTab() {
@@ -100,10 +126,10 @@ export default function DeptMapTab() {
   useEffect(() => {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
-    fg.d3Force('charge')?.strength(-400);
-    fg.d3Force('link')?.distance(90);
-    (fg as any).d3AlphaDecay?.(0.015);
-    (fg as any).d3VelocityDecay?.(0.25);
+    fg.d3Force('charge')?.strength(-180);
+    fg.d3Force('link')?.distance(50);
+    (fg as any).d3AlphaDecay?.(0.02);
+    (fg as any).d3VelocityDecay?.(0.3);
     fg.d3ReheatSimulation();
   }, [graphData]);
 
@@ -189,24 +215,20 @@ export default function DeptMapTab() {
       if (!src.x || !tgt.x) return;
 
       ctx.beginPath();
-      ctx.setLineDash([3, 2]);
       ctx.moveTo(src.x!, src.y!);
       ctx.lineTo(tgt.x!, tgt.y!);
-      ctx.strokeStyle = 'rgba(160, 174, 192, 0.5)';
-      ctx.lineWidth = 1 / globalScale;
+      ctx.strokeStyle = 'rgba(160, 174, 192, 0.7)';
+      ctx.lineWidth = 1.2 / globalScale;
       ctx.stroke();
-      ctx.setLineDash([]);
 
-      if (globalScale > 1.2) {
-        const midX = (src.x! + tgt.x!) / 2;
-        const midY = (src.y! + tgt.y!) / 2;
-        const labelSize = Math.max(6 / globalScale, 2);
-        ctx.font = `${labelSize}px -apple-system, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(113, 128, 150, 0.6)';
-        ctx.fillText((link as GraphLink).relationship, midX, midY - 2 / globalScale);
-      }
+      const midX = (src.x! + tgt.x!) / 2;
+      const midY = (src.y! + tgt.y!) / 2;
+      const labelSize = Math.max(6 / globalScale, 2);
+      ctx.font = `${labelSize}px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(113, 128, 150, 0.75)';
+      ctx.fillText((link as GraphLink).relationship, midX, midY - 2 / globalScale);
     },
     []
   );
