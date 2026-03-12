@@ -82,17 +82,17 @@ Your goals:
 VISITOR WORKFLOW STAGE: ${workflow.stage} (${workflow.stageName})
 Completed steps: ${workflow.completedSteps.length > 0 ? workflow.completedSteps.join(', ') : 'none yet'}
 
-OPERATIONAL CAPABILITIES — You can trigger these actions during conversation:
-- Send documents: executive briefing (requires stage >= 2), program overview, enterprise guide, pricing guide
-- Send follow-up emails with materials or confirmations
-- Schedule strategy calls via calendar booking
-- Send SMS with conversation summaries or links
-- Request callbacks for visitors who prefer phone contact
+OPERATIONAL CAPABILITIES — You have tools to execute real actions:
+- send_document: Send documents via email (program_overview, executive_briefing, enterprise_guide, pricing_guide)
+- schedule_callback: Request a callback for the visitor
+
+CRITICAL: When a visitor asks for a document or agrees to receive one, you MUST call the send_document tool with their email. Do NOT just say you will send it — actually call the tool. If you don't have their email yet, ask for it first, then call the tool once they provide it.
 
 DOCUMENT DELIVERY RULES:
 - Executive Briefing requires the visitor to have submitted an information request form first (stage >= 2)
 - If a visitor requests the executive briefing before submitting the form, say: "I'd be happy to send the executive briefing. I just need to capture a few details first." Then collect their name, email, and company.
-- Other documents (program overview, pricing guide, enterprise guide) can be sent anytime`);
+- Other documents (program overview, pricing guide, enterprise guide) can be sent anytime — just collect their email first
+- Always confirm the email address before calling send_document`);
   } catch {
     // Workflow context is non-critical
   }
