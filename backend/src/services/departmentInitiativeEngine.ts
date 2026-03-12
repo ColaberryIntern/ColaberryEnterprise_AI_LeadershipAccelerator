@@ -345,6 +345,7 @@ export async function getStrategySummary(): Promise<any> {
       planned_initiatives: deptInits.filter((i: any) => i.status === 'planned').length,
       completed_initiatives: deptInits.filter((i: any) => i.status === 'completed').length,
       total_initiatives: deptInits.length,
+      last_strategy_run: agent?.last_run_at || null,
       strategy_agent: agent ? {
         id: agent.id,
         name: agent.agent_name,
@@ -361,11 +362,20 @@ export async function getStrategySummary(): Promise<any> {
     (i: any) => i.supporting_departments && i.supporting_departments.length > 0,
   ).length;
 
+  const totalHealth = departments.reduce((s: number, d: any) => s + (d.health_score || 0), 0);
+  const totalInnovation = departments.reduce((s: number, d: any) => s + (d.innovation_score || 0), 0);
+  const deptCount = departments.length || 1;
+
   return {
     departments: deptSummaries,
+    total_departments: departments.length,
     total_initiatives: initiatives.length,
     active_initiatives: initiatives.filter((i: any) => i.status === 'active').length,
+    completed_initiatives: initiatives.filter((i: any) => i.status === 'completed').length,
+    cross_dept_initiatives: crossDeptCount,
     cross_dept_count: crossDeptCount,
+    avg_health_score: Math.round(totalHealth / deptCount),
+    avg_innovation_score: Math.round(totalInnovation / deptCount),
     strategy_agents: strategyAgents.map((a: any) => ({
       id: a.id,
       name: a.agent_name,
