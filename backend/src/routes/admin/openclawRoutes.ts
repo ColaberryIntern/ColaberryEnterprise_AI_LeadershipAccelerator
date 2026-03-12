@@ -7,6 +7,7 @@ import {
   OpenclawResponse,
   OpenclawLearning,
   AiAgent,
+  AiAgentActivityLog,
 } from '../../models';
 
 const router = Router();
@@ -51,7 +52,7 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
     // Agent statuses
     const agents = await AiAgent.findAll({
       where: { category: 'openclaw' },
-      attributes: ['agent_name', 'status', 'enabled', 'last_run_at', 'run_count', 'error_count'],
+      attributes: ['id', 'agent_name', 'agent_type', 'status', 'enabled', 'description', 'config', 'last_run_at', 'last_result', 'run_count', 'error_count', 'avg_duration_ms'],
       order: [['agent_name', 'ASC']],
     });
 
@@ -67,12 +68,18 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
       },
       platforms: platformStats,
       agents: agents.map((a: any) => ({
+        id: a.id,
         name: a.agent_name,
+        type: a.agent_type,
         status: a.status,
         enabled: a.enabled,
+        description: a.description,
+        config: a.config,
         last_run_at: a.last_run_at,
+        last_result: a.last_result,
         run_count: a.run_count,
         error_count: a.error_count,
+        avg_duration_ms: a.avg_duration_ms,
       })),
     });
   } catch (err: any) {
@@ -248,6 +255,32 @@ router.get(`${BASE}/learnings`, async (req: Request, res: Response) => {
     });
 
     res.json({ learnings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Agent Activity Logs ─────────────────────────────────────────
+
+router.get(`${BASE}/agents/:agentId/activity`, async (req: Request, res: Response) => {
+  try {
+    const agentId = req.params.agentId as string;
+    const page = Number(req.query.page) || 1;
+    const limit = Math.min(Number(req.query.limit) || 25, 100);
+    const result = req.query.result as string | undefined;
+    const offset = (page - 1) * limit;
+
+    const where: Record<string, any> = { agent_id: agentId };
+    if (result) where.result = result;
+
+    const { rows, count } = await AiAgentActivityLog.findAndCountAll({
+      where,
+      order: [['created_at', 'DESC']],
+      limit,
+      offset,
+    });
+
+    res.json({ activities: rows, total: count, page, limit });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

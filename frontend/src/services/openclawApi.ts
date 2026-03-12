@@ -14,12 +14,18 @@ export interface OpenclawDashboard {
   };
   platforms: Array<{ platform: string; count: number }>;
   agents: Array<{
+    id: string;
     name: string;
+    type: string;
     status: string;
     enabled: boolean;
+    description: string;
+    config: Record<string, any>;
     last_run_at: string | null;
+    last_result: Record<string, any> | null;
     run_count: number;
     error_count: number;
+    avg_duration_ms: number | null;
   }>;
 }
 
@@ -75,6 +81,20 @@ export interface OpenclawLearningItem {
   applied: boolean;
 }
 
+export interface OpenclawAgentActivity {
+  id: string;
+  agent_id: string;
+  action: string;
+  reason: string | null;
+  confidence: number | null;
+  before_state: Record<string, any> | null;
+  after_state: Record<string, any> | null;
+  result: string;
+  details: Record<string, any> | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
 export const getOpenclawDashboard = () =>
   api.get<OpenclawDashboard>(`${BASE}/dashboard`);
 
@@ -107,3 +127,6 @@ export const getOpenclawConfig = () =>
 
 export const updateOpenclawConfig = (data: { agent_name: string; config?: Record<string, any>; enabled?: boolean }) =>
   api.post(`${BASE}/config`, data);
+
+export const getOpenclawAgentActivity = (agentId: string, params?: Record<string, string>) =>
+  api.get<{ activities: OpenclawAgentActivity[]; total: number }>(`${BASE}/agents/${agentId}/activity`, { params });
