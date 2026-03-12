@@ -94,6 +94,13 @@ const DEPT_EDGES: { source: string; target: string; relationship: string }[] = [
   { source: 'reporting', target: 'finance', relationship: 'reports' },
 ];
 
+// Build reverse lookup: tier → set of department slugs
+const TIER_SLUGS: Record<number, Set<string>> = {};
+Object.entries(DEPT_TIER).forEach(([slug, tier]) => {
+  if (!TIER_SLUGS[tier]) TIER_SLUGS[tier] = new Set();
+  TIER_SLUGS[tier].add(slug);
+});
+
 export default function DeptMapTab() {
   const { drillDown, selectedEntity } = useIntelligenceContext();
   const graphRef = useRef<ForceGraphMethods>();
@@ -102,6 +109,7 @@ export default function DeptMapTab() {
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [departments, setDepartments] = useState<DepartmentSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeLayer, setActiveLayer] = useState<number | null>(null); // null = all
 
   useEffect(() => {
     getDepartmentsApi()
@@ -120,12 +128,20 @@ export default function DeptMapTab() {
     return () => ro.disconnect();
   }, []);
 
+  // Filter departments by active layer
+  const filteredDepts = useMemo(() => {
+    if (activeLayer === null) return departments;
+    const slugs = TIER_SLUGS[activeLayer];
+    if (!slugs) return departments;
+    return departments.filter((d) => slugs.has(d.slug));
+  }, [departments, activeLayer]);
+
   const graphData = useMemo(() => {
-    if (!departments.length) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
+    if (!filteredDepts.length) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
 
     // Size circles by team_size (agent count) — clamped so nothing dominates
-    const maxTeam = Math.max(...departments.map((d) => d.team_size), 1);
-    const nodes: GraphNode[] = departments.map((d) => {
+    const maxTeam = Math.max(...filteredDepts.map((d) => d.team_size), 1);
+    const nodes: GraphNode[] = filteredDepts.map((d) => {
       const config = DEPARTMENT_CATEGORIES[d.slug] || { label: d.name, color: '#718096', bgLight: '#f7fafc' };
       const sizeRatio = Math.min(d.team_size / maxTeam, 1);
       return {
@@ -140,19 +156,19 @@ export default function DeptMapTab() {
         initiative_count: d.initiative_count,
         active_initiatives: d.active_initiatives,
         team_size: d.team_size,
-        tier: DEPT_TIER[d.slug] ?? 2,
+        tier: activeLayer !== null ? 0 : (DEPT_TIER[d.slug] ?? 2), // flatten tier when filtering a single layer
       };
     });
 
     const slugToId: Record<string, string> = {};
-    departments.forEach((d) => { slugToId[d.slug] = d.id; });
+    filteredDepts.forEach((d) => { slugToId[d.slug] = d.id; });
 
     const links: GraphLink[] = DEPT_EDGES
       .filter((e) => slugToId[e.source] && slugToId[e.target])
       .map((e) => ({ source: slugToId[e.source], target: slugToId[e.target], relationship: e.relationship }));
 
     return { nodes, links };
-  }, [departments]);
+  }, [filteredDepts, activeLayer]);
 
   useEffect(() => {
     const fg = graphRef.current;
@@ -189,6 +205,14 @@ export default function DeptMapTab() {
     }, 300);
     return () => clearTimeout(timer);
   }, [dimensions]);
+
+  // Re-fit after layer filter changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      graphRef.current?.zoomToFit(400, 30);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [activeLayer]);
 
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -354,13 +378,36 @@ export default function DeptMapTab() {
   return (
     <div className="d-flex flex-column h-100">
       <div className="p-2 border-bottom">
-        <div className="d-flex justify-content-between align-items-center">
+        <div className="d-flex justify-content-between align-items-center mb-1">
           <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
             Department Map
           </span>
           <span className="text-muted" style={{ fontSize: '0.65rem' }}>
-            {departments.length} depts
+            {filteredDepts.length}/{departments.length} depts
           </span>
+        </div>
+        <div className="d-flex gap-1 flex-wrap">
+          <button
+            className={`btn btn-sm ${activeLayer === null ? 'btn-primary' : 'btn-outline-secondary'}`}
+            style={{ fontSize: '0.6rem', padding: '1px 6px', lineHeight: 1.4 }}
+            onClick={() => setActiveLayer(null)}
+          >
+            All
+          </button>
+          {LAYER_LABELS.map((label, i) => {
+            const count = TIER_SLUGS[i] ? departments.filter((d) => TIER_SLUGS[i].has(d.slug)).length : 0;
+            return (
+              <button
+                key={label}
+                className={`btn btn-sm ${activeLayer === i ? 'btn-primary' : 'btn-outline-secondary'}`}
+                style={{ fontSize: '0.6rem', padding: '1px 6px', lineHeight: 1.4 }}
+                onClick={() => setActiveLayer(activeLayer === i ? null : i)}
+                title={`${count} department${count !== 1 ? 's' : ''}`}
+              >
+                {label} <span className="opacity-75">{count}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -397,48 +444,50 @@ export default function DeptMapTab() {
           maxZoom={8}
         />
 
-        {/* Layer labels — positioned along the left edge at each tier level */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 18,
-            height: '100%',
-            zIndex: 5,
-            pointerEvents: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          {LAYER_LABELS.map((label, i) => (
-            <div
-              key={label}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRight: '1px solid rgba(200,200,210,0.25)',
-                borderBottom: i < LAYER_LABELS.length - 1 ? '1px dashed rgba(200,200,210,0.3)' : 'none',
-              }}
-            >
-              <span
+        {/* Layer labels — positioned along the left edge at each tier level (hidden when filtered to single layer) */}
+        {activeLayer === null && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 18,
+              height: '100%',
+              zIndex: 5,
+              pointerEvents: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {LAYER_LABELS.map((label, i) => (
+              <div
+                key={label}
                 style={{
-                  writingMode: 'vertical-rl',
-                  transform: 'rotate(180deg)',
-                  fontSize: '0.55rem',
-                  fontWeight: 600,
-                  color: 'rgba(100,116,139,0.6)',
-                  letterSpacing: '0.05em',
-                  textTransform: 'uppercase',
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRight: '1px solid rgba(200,200,210,0.25)',
+                  borderBottom: i < LAYER_LABELS.length - 1 ? '1px dashed rgba(200,200,210,0.3)' : 'none',
                 }}
               >
-                {label}
-              </span>
-            </div>
-          ))}
-        </div>
+                <span
+                  style={{
+                    writingMode: 'vertical-rl',
+                    transform: 'rotate(180deg)',
+                    fontSize: '0.55rem',
+                    fontWeight: 600,
+                    color: 'rgba(100,116,139,0.6)',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Zoom controls */}
         <div
