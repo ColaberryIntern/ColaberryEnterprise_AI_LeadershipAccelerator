@@ -103,10 +103,26 @@ export default function ObjectConfigEngine(props: Props) {
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
 
-  // Generate mock student content for preview (must be before early return to maintain hook order)
+  // All useMemo/useCallback hooks MUST be before any early return to maintain hook order
   const mockContent = useMemo(
     () => generateMockV2Content(miniSections, props.lessonTitle || 'Untitled Section'),
     [miniSections, props.lessonTitle]
+  );
+
+  const editType = editing?.mini_section_type;
+  const corePromptPairs = useMemo(() =>
+    PROMPT_PAIRS.filter(p => !editType || p.applicableTypes.includes(editType)),
+    [editType]
+  );
+  const currentOrder = editing?.mini_section_order ?? 999;
+  const systemVarKeys = useMemo(() => props.systemVariables.map(v => v.variable_key), [props.systemVariables]);
+  const coreAvailableVars = useMemo(() =>
+    computeAvailableVars(miniSections, currentOrder, systemVarKeys),
+    [miniSections, currentOrder, systemVarKeys]
+  );
+  const coreAllDefinedVars = useMemo(() =>
+    new Set(props.variables.map(v => v.variable_key)),
+    [props.variables]
   );
 
   const handleReverseEngineer = useCallback(async () => {
@@ -136,26 +152,9 @@ export default function ObjectConfigEngine(props: Props) {
     );
   }
 
-  const editType = editing.mini_section_type;
   const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
   const selectedTypeInfo = effectiveTypeOptions.find(t => t.value === editType);
   const canSave = !!editing.title && !!editType;
-
-  // Prompt-related computations for Core section inline editors
-  const corePromptPairs = useMemo(() =>
-    PROMPT_PAIRS.filter(p => !editType || p.applicableTypes.includes(editType)),
-    [editType]
-  );
-  const currentOrder = editing.mini_section_order ?? 999;
-  const systemVarKeys = useMemo(() => props.systemVariables.map(v => v.variable_key), [props.systemVariables]);
-  const coreAvailableVars = useMemo(() =>
-    computeAvailableVars(miniSections, currentOrder, systemVarKeys),
-    [miniSections, currentOrder, systemVarKeys]
-  );
-  const coreAllDefinedVars = useMemo(() =>
-    new Set(props.variables.map(v => v.variable_key)),
-    [props.variables]
-  );
 
   const toggle = (key: keyof AccordionState) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
