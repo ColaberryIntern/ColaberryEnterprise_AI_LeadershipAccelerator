@@ -101,11 +101,11 @@ export async function interpretCommand(
 ): Promise<{ intent: CoryIntent; parameters: Record<string, any> }> {
   const lower = command.toLowerCase().replace(/^cory[,:]?\s*/i, '');
 
-  // Department-scoped performance questions → briefing (will be overridden to department_deep_analysis)
-  if (context?.entity_type === 'department') {
-    const deptKeywords = ['how is', 'performing', 'performance', 'health', 'kpi', 'metrics', 'doing', 'status', 'overview', 'briefing', 'report', 'tell me about', 'what\'s happening'];
-    if (deptKeywords.some((kw) => lower.includes(kw))) {
-      return { intent: 'briefing', parameters: { raw_command: lower, department: context.entity_name } };
+  // Scoped performance questions → briefing (department will be overridden to department_deep_analysis)
+  if (context?.entity_type) {
+    const scopedKeywords = ['how is', 'performing', 'performance', 'health', 'kpi', 'metrics', 'doing', 'status', 'overview', 'briefing', 'report', 'tell me about', 'what\'s happening', 'what are', 'show me', 'summarize', 'summary'];
+    if (scopedKeywords.some((kw) => lower.includes(kw))) {
+      return { intent: 'briefing', parameters: { raw_command: lower, entity_type: context.entity_type, entity_name: context.entity_name } };
     }
   }
 
@@ -222,26 +222,136 @@ function formatDepartmentDataForLLM(detail: any): string {
   return lines.join('\n');
 }
 
+/**
+ * Load context data for non-department entities by querying relevant tables.
+ * Returns a formatted text block for LLM context injection.
+ */
+async function loadEntityContextData(entityType: string, entityName: string): Promise<string | null> {
+  const lines: string[] = [`=== ${entityName.toUpperCase()} (${entityType}) DATA ===`];
+
+  try {
+    // Use a raw query to find tables and data related to this entity type
+    const tableMap: Record<string, { table: string; countQuery?: string; statsQuery?: string }> = {
+      campaigns: {
+        table: 'campaigns',
+        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active, COUNT(*) FILTER (WHERE status = 'paused') as paused, COUNT(*) FILTER (WHERE status = 'completed') as completed FROM campaigns`,
+        statsQuery: `SELECT c.name, c.status, c.type, COUNT(l.id) as lead_count FROM campaigns c LEFT JOIN leads l ON l.source LIKE '%' || c.id::text || '%' GROUP BY c.id, c.name, c.status, c.type ORDER BY lead_count DESC LIMIT 10`,
+      },
+      leads: {
+        table: 'leads',
+        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE pipeline_stage = 'new_lead') as new_leads, COUNT(*) FILTER (WHERE pipeline_stage = 'qualified') as qualified, COUNT(*) FILTER (WHERE opportunity_score > 50) as high_opportunity FROM leads`,
+      },
+      students: {
+        table: 'students',
+        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active, COUNT(*) FILTER (WHERE status = 'graduated') as graduated FROM students`,
+      },
+      visitors: {
+        table: 'visitors',
+        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') as last_7_days, COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as last_24h FROM visitors`,
+      },
+      cohorts: {
+        table: 'cohorts',
+        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active FROM cohorts`,
+      },
+    };
+
+    // Normalize entity type (handle pluralization, casing)
+    const normalized = entityType.toLowerCase().replace(/s$/, '');
+    const config = tableMap[entityType.toLowerCase()] || tableMap[normalized + 's'] || tableMap[normalized];
+
+    if (config?.countQuery) {
+      const [results] = await sequelize.query(config.countQuery);
+      if (results && results.length > 0) {
+        const stats = results[0] as Record<string, any>;
+        lines.push('\n--- Summary Statistics ---');
+        for (const [key, value] of Object.entries(stats)) {
+          lines.push(`  ${key.replace(/_/g, ' ')}: ${value}`);
+        }
+      }
+    }
+
+    if (config?.statsQuery) {
+      const [results] = await sequelize.query(config.statsQuery);
+      if (results && results.length > 0) {
+        lines.push('\n--- Breakdown ---');
+        for (const row of results as Record<string, any>[]) {
+          const parts = Object.entries(row).map(([k, v]) => `${k}: ${v}`);
+          lines.push(`  ${parts.join(', ')}`);
+        }
+      }
+    }
+
+    // Also check for recent errors/events related to this entity
+    try {
+      const [errorResults] = await sequelize.query(
+        `SELECT COUNT(*) as error_count FROM ai_system_events WHERE entity_type = :entityType AND event_type = 'error' AND created_at > NOW() - INTERVAL '24 hours'`,
+        { replacements: { entityType: entityType.toLowerCase() } },
+      );
+      if (errorResults?.[0]) {
+        const errCount = (errorResults[0] as any).error_count;
+        lines.push(`\n--- Health (24h) ---`);
+        lines.push(`  Errors: ${errCount}`);
+      }
+    } catch { /* table may not exist */ }
+
+    // Check agent health for this entity type
+    try {
+      const [agentResults] = await sequelize.query(
+        `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as healthy, COUNT(*) FILTER (WHERE status = 'error') as errored FROM ai_agents WHERE department ILIKE :entityType OR agent_type ILIKE :entityType`,
+        { replacements: { entityType: `%${entityType}%` } },
+      );
+      if (agentResults?.[0]) {
+        const agents = agentResults[0] as any;
+        if (agents.total > 0) {
+          lines.push(`\n--- Agents ---`);
+          lines.push(`  Total: ${agents.total}, Healthy: ${agents.healthy}, Errored: ${agents.errored}`);
+        }
+      }
+    } catch { /* table may not exist */ }
+
+  } catch (err: any) {
+    lines.push(`\nData loading note: ${err.message}`);
+  }
+
+  return lines.length > 1 ? lines.join('\n') : null;
+}
+
 function buildCoryPersona(context?: Record<string, any>): string {
   let persona = CORY_PERSONA_BASE;
-  if (context?.entity_type === 'department' && context?.entity_name) {
-    persona += `\n\nCURRENT SCOPE: You are focused on the ${context.entity_name} department.
-Talk specifically about ${context.entity_name}'s KPIs, initiatives, team, risks, and performance.
-Reference specific numbers from the department data provided below.
-You can reference how this department relates to other departments and overall company strategy.
-When the user asks questions, answer from the perspective of ${context.entity_name} and its sub-elements.
 
+  if (context?.entity_type && context?.entity_name) {
+    const entityType = context.entity_type;
+    const entityName = context.entity_name;
+
+    persona += `\n\nCURRENT SCOPE: You are focused on "${entityName}" (entity type: ${entityType}).
+CRITICAL: ALL your responses MUST be about ${entityName} (${entityType}). Never give a generic company overview when scoped to a specific entity.
+When the user asks questions, answer from the perspective of ${entityName} and its sub-elements.
+Reference specific numbers and data from the context provided below.`;
+
+    if (entityType === 'department') {
+      persona += `\n
 MANDATORY ANALYSIS REQUIREMENTS:
 1. TEAM SIZE ANALYSIS: Always analyze whether the current team size is adequate for the department's workload. Consider the ratio of active initiatives to team members, risk exposure, and growth opportunities. Proactively recommend team expansion when initiatives could generate more revenue or improve system security with additional headcount.
 2. REVENUE OPPORTUNITIES: Identify which initiatives or new initiatives could generate more revenue. Recommend expanding the team specifically to pursue revenue-generating opportunities.
 3. SECURITY & RISK: Evaluate security posture and recommend team expansion to address vulnerabilities, reduce risk exposure, and strengthen system resilience.
-4. DATA-DRIVEN: Every claim must reference specific numbers from the department data. Never give generic responses.
+4. DATA-DRIVEN: Every claim must reference specific numbers from the department data. Never give generic responses.`;
+    } else {
+      persona += `\n
+MANDATORY REQUIREMENTS:
+1. STAY IN SCOPE: Only discuss ${entityName} (${entityType}). Do NOT drift to department overviews or unrelated topics.
+2. DATA-DRIVEN: Reference specific numbers, statuses, and metrics from the data provided. Never give generic responses.
+3. ACTIONABLE: Provide specific recommendations relevant to ${entityType} performance, optimization, and risk.
+4. COMPARATIVE: When relevant, compare against benchmarks or trends visible in the data.`;
+    }
 
-If asked about company-wide strategy, note that you're currently scoped to ${context.entity_name} and offer to zoom out.`;
+    persona += `\nIf asked about company-wide strategy, note that you're currently scoped to ${entityName} (${entityType}) and offer to zoom out.`;
 
-    // Inject actual department data if available
+    // Inject actual entity data if available
     if (context._department_data) {
       persona += `\n\n${context._department_data}`;
+    }
+    if (context._entity_data) {
+      persona += `\n\n${context._entity_data}`;
     }
   } else {
     persona += `\n\nCURRENT SCOPE: Global / Company-wide.
@@ -249,6 +359,15 @@ You have visibility across all 8 departments and the full organization.
 Talk about company strategy, cross-department performance, and organizational health.
 When referencing specific departments, compare and contrast their performance.`;
   }
+
+  // Inject conversation history for continuity
+  if (context?.conversation_history?.length) {
+    persona += '\n\nRECENT CONVERSATION (maintain this context — do NOT repeat yourself or lose thread):';
+    for (const msg of context.conversation_history) {
+      persona += `\n${msg.role === 'user' ? 'User' : 'Cory'}: ${msg.content}`;
+    }
+  }
+
   return persona;
 }
 
@@ -262,29 +381,41 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
   let briefings: ExecutiveBriefing[] = [];
   let assistantResponse: AssistantResponse | undefined;
 
-  // Step 0: If department scoped, fetch full department data for context injection
-  const isDeptScoped = cmd.context?.entity_type === 'department' && cmd.context?.entity_name;
+  // Step 0: Load scoped entity data for context injection
+  const entityType = cmd.context?.entity_type;
+  const entityName = cmd.context?.entity_name;
+  const isDeptScoped = entityType === 'department' && entityName;
+  const isEntityScoped = !!entityType && !!entityName;
   let deptDetail: any = null;
 
   if (isDeptScoped) {
     try {
-      // Find department by name
       const dept = await Department.findOne({
         where: sequelize.where(
           sequelize.fn('LOWER', sequelize.col('name')),
-          cmd.context!.entity_name!.toLowerCase(),
+          entityName!.toLowerCase(),
         ),
       });
       if (dept) {
         deptDetail = await getDepartmentDetail(dept.id);
         if (deptDetail) {
-          // Inject formatted data into context for persona building
           cmd.context!._department_data = formatDepartmentDataForLLM(deptDetail);
-          actionsPerformed.push(`Loaded ${cmd.context!.entity_name} department intelligence (${deptDetail.kpis?.length || 0} KPIs, ${deptDetail.building?.length || 0} active initiatives, ${deptDetail.risks?.length || 0} risks)`);
+          actionsPerformed.push(`Loaded ${entityName} department intelligence (${deptDetail.kpis?.length || 0} KPIs, ${deptDetail.building?.length || 0} active initiatives, ${deptDetail.risks?.length || 0} risks)`);
         }
       }
     } catch (err: any) {
       actionsPerformed.push(`Dept data fetch warning: ${err.message}`);
+    }
+  } else if (isEntityScoped) {
+    // For non-department entities, query the database for relevant data
+    try {
+      const entityData = await loadEntityContextData(entityType!, entityName!);
+      if (entityData) {
+        cmd.context!._entity_data = entityData;
+        actionsPerformed.push(`Loaded ${entityName} (${entityType}) context data`);
+      }
+    } catch (err: any) {
+      actionsPerformed.push(`Entity data fetch warning: ${err.message}`);
     }
   }
 
@@ -366,6 +497,23 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
       }
 
       case 'briefing': {
+        // For non-department scoped entities, delegate to assistant pipeline for data-driven analysis
+        if (isEntityScoped && !isDeptScoped) {
+          const pipelineType = cmd.context?.entity_type;
+          assistantResponse = await runAssistantPipeline(cmd.command, pipelineType);
+          agentsDispatched.push('IntentAgent', 'SQLAgent', 'MLAgent', 'NarrativeAgent');
+          actionsPerformed.push(`Ran scoped ${entityName} (${entityType}) analysis pipeline`);
+
+          if (assistantResponse.recommendations.length > 0) {
+            briefings = assistantResponse.recommendations.map((r) => ({
+              action_taken: r,
+              confidence: assistantResponse!.confidence * 100,
+            }));
+          }
+          break;
+        }
+
+        // Global/unscoped briefing — generic strategic overview
         const report = getLatestStrategicReport();
         const recentDecisions = await IntelligenceDecision.findAll({
           where: { timestamp: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
@@ -373,7 +521,6 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
           limit: 5,
         });
 
-        // Build briefings from recent decisions
         briefings = recentDecisions.map((d: any) => ({
           problem_detected: d.problem_detected,
           analysis: d.analysis_summary,
@@ -397,8 +544,8 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
       case 'general_query':
       case 'optimize': {
         // Delegate to the existing assistant pipeline
-        const entityType = parameters.entity_type || cmd.context?.entity_type;
-        assistantResponse = await runAssistantPipeline(cmd.command, entityType);
+        const pipelineEntityType = parameters.entity_type || cmd.context?.entity_type;
+        assistantResponse = await runAssistantPipeline(cmd.command, pipelineEntityType);
         agentsDispatched.push('IntentAgent', 'SQLAgent', 'MLAgent', 'NarrativeAgent');
         actionsPerformed.push(`Ran ${assistantResponse.pipelineSteps.length}-step analysis pipeline`);
 
@@ -410,12 +557,17 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
           }));
         }
 
-        // If dept scoped and assistant pipeline returned, enrich with dept-specific briefings
+        // If scoped, enrich with entity-specific context briefing
         if (isDeptScoped && deptDetail) {
           const o = deptDetail.overview;
           briefings.unshift({
             analysis: `${o.name} context: Health ${Math.round(o.health_score)}/100, Innovation ${Math.round(o.innovation_score)}/100, Team: ${o.team_size}, Active initiatives: ${deptDetail.building?.length || 0}`,
             confidence: 95,
+          });
+        } else if (isEntityScoped) {
+          briefings.unshift({
+            analysis: `Scoped to ${entityName} (${entityType}) — analysis filtered to this entity context.`,
+            confidence: 90,
           });
         }
         break;
@@ -629,12 +781,19 @@ async function formatCoryResponse(
       : 'No specific briefings to report.',
   ].join('\n');
 
-  // For department-scoped queries, give LLM more room to provide rich analysis
+  // For scoped queries, give LLM more room and context-specific instructions
   const isDeptScope = context?.entity_type === 'department' && context?._department_data;
-  const maxTokens = isDeptScope ? 600 : 300;
-  const prompt = isDeptScope
-    ? `Using the department data provided in your context, give a comprehensive executive briefing covering: (1) current performance with specific KPIs and trends, (2) team capacity analysis — is the team large enough? recommend expansion with specific headcount tied to revenue opportunities and security needs, (3) key risks and opportunities, (4) strategic recommendations. Be specific with numbers. Do NOT say you have no data — you have full department data.\n\nConversation context:\n${briefingContext}`
-    : `Summarize this in 2-4 sentences as a direct executive briefing:\n${briefingContext}`;
+  const isEntityScope = context?.entity_type && context?.entity_name && !isDeptScope;
+  const maxTokens = (isDeptScope || isEntityScope) ? 600 : 300;
+
+  let prompt: string;
+  if (isDeptScope) {
+    prompt = `Using the department data provided in your context, give a comprehensive executive briefing covering: (1) current performance with specific KPIs and trends, (2) team capacity analysis — is the team large enough? recommend expansion with specific headcount tied to revenue opportunities and security needs, (3) key risks and opportunities, (4) strategic recommendations. Be specific with numbers. Do NOT say you have no data — you have full department data.\n\nConversation context:\n${briefingContext}`;
+  } else if (isEntityScope) {
+    prompt = `You are scoped to "${context!.entity_name}" (${context!.entity_type}). Using the data provided in your context, give a focused executive briefing about this specific entity. Cover: (1) current status and key metrics, (2) performance trends and anomalies, (3) risks or issues, (4) actionable recommendations. Be specific with numbers. NEVER give a generic department overview — stay focused on ${context!.entity_name} (${context!.entity_type}).\n\nConversation context:\n${briefingContext}`;
+  } else {
+    prompt = `Summarize this in 2-4 sentences as a direct executive briefing:\n${briefingContext}`;
+  }
 
   const llmResponse = await chatCompletion(
     buildCoryPersona(context),

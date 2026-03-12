@@ -469,9 +469,16 @@ export default function CoryPanel({
       setCoryStatus('thinking');
 
       try {
+        // Pass recent conversation history so Cory maintains context
+        const recentHistory = messages.slice(-6).map((m) => ({
+          role: m.role,
+          content: m.content.substring(0, 300),
+        }));
+
         const coryResult: CoryResponse = await sendCoryCommand(question, {
           entity_type: scope.level !== 'global' ? scope.entity_type : undefined,
           entity_name: scope.entity_name,
+          conversation_history: recentHistory.length > 0 ? recentHistory : undefined,
         });
 
         if (coryResult.assistant_response) {
@@ -520,7 +527,7 @@ export default function CoryPanel({
         setCoryStatus('active');
       }
     },
-    [input, loading, queryLoading, scope, onVisualizationsUpdate, onSummaryUpdate],
+    [input, loading, queryLoading, scope, messages, onVisualizationsUpdate, onSummaryUpdate],
   );
 
   // Handle external queries
