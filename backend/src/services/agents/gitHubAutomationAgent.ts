@@ -9,7 +9,7 @@ import {
   createPullRequest,
   getDefaultBranch,
 } from '../agentGitHubService';
-import type { AgentExecutionResult } from '../../intelligence/agents/types';
+import type { AgentExecutionResult } from './types';
 
 export interface GitHubAutomationRequest {
   action: 'create_pr' | 'commit_file' | 'create_branch';

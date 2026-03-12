@@ -293,8 +293,8 @@ export async function getAlertTrends(period: '24h' | '7d' | '30d'): Promise<
       [fn('COUNT', col('id')), 'count'],
     ],
     where: { created_at: { [Op.gte]: cutoff } },
-    group: [dateExpr, 'type'],
-    order: [[dateExpr, 'ASC']],
+    group: [dateExpr as any, 'type'],
+    order: [[dateExpr as any, 'ASC']],
     raw: true,
   });
 
@@ -305,7 +305,7 @@ export async function getAlertTrends(period: '24h' | '7d' | '30d'): Promise<
     dateMap[r.date][r.type] = parseInt(r.count, 10);
   }
 
-  return Object.entries(dateMap).map(([date, counts]) => ({ date, ...counts }));
+  return Object.entries(dateMap).map(([date, counts]) => ({ date, info: 0, insight: 0, opportunity: 0, warning: 0, critical: 0, ...counts }));
 }
 
 export async function getTopAlerts(limit = 5): Promise<Alert[]> {

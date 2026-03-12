@@ -75,7 +75,7 @@ router.post('/api/admin/alerts/subscriptions', async (req: Request, res: Respons
 
 router.delete('/api/admin/alerts/subscriptions/:id', async (req: Request, res: Response) => {
   try {
-    const deleted = await alertService.deleteSubscription(req.params.id);
+    const deleted = await alertService.deleteSubscription(req.params.id as string);
     res.json({ deleted });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -86,7 +86,7 @@ router.delete('/api/admin/alerts/subscriptions/:id', async (req: Request, res: R
 
 router.get('/api/admin/alerts/:id', async (req: Request, res: Response) => {
   try {
-    const result = await alertService.getAlertById(req.params.id);
+    const result = await alertService.getAlertById(req.params.id as string);
     if (!result) return res.status(404).json({ error: 'Alert not found' });
     res.json(result);
   } catch (err: any) {
@@ -99,7 +99,7 @@ router.get('/api/admin/alerts/:id', async (req: Request, res: Response) => {
 router.post('/api/admin/alerts/:id/acknowledge', async (req: Request, res: Response) => {
   try {
     const alert = await alertService.acknowledgeAlert(
-      req.params.id,
+      req.params.id as string,
       req.body.actor_type || 'human',
       req.body.actor_id || 'admin',
     );
@@ -112,7 +112,7 @@ router.post('/api/admin/alerts/:id/acknowledge', async (req: Request, res: Respo
 
 router.post('/api/admin/alerts/:id/resolve', async (req: Request, res: Response) => {
   try {
-    const alert = await alertService.resolveAlert(req.params.id, {
+    const alert = await alertService.resolveAlert(req.params.id as string, {
       resolutionType: req.body.resolution_type || 'manual',
       resolutionNotes: req.body.resolution_notes,
       actionsTaken: req.body.actions_taken,
@@ -129,7 +129,7 @@ router.post('/api/admin/alerts/:id/resolve', async (req: Request, res: Response)
 router.post('/api/admin/alerts/:id/dismiss', async (req: Request, res: Response) => {
   try {
     const alert = await alertService.dismissAlert(
-      req.params.id,
+      req.params.id as string,
       req.body.reason || 'No reason provided',
       req.body.actor_type || 'human',
       req.body.actor_id || 'admin',
