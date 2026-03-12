@@ -3,7 +3,7 @@ import React from 'react';
 interface Props {
   show: boolean;
   minimized: boolean;
-  currentStep: number; // 0-5 (0=not started, 1-5=progress, 5=complete)
+  currentStep: number; // 0=not started, 1-4=progress steps, 5=complete
   onClose: () => void;
   onMinimize: () => void;
   onRestore: () => void;
@@ -15,7 +15,6 @@ const REBUILD_STEPS = [
   'Analyzing campaign strategy...',
   'Generating description & goals...',
   'Building sequence steps...',
-  'Complete!',
 ];
 
 export default function RebuildProgressModal({
@@ -29,7 +28,8 @@ export default function RebuildProgressModal({
 }: Props) {
   if (!show) return null;
 
-  const isComplete = currentStep >= REBUILD_STEPS.length;
+  // Complete when step exceeds the number of progress steps
+  const isComplete = currentStep > REBUILD_STEPS.length;
   const canClose = isComplete || !!error;
   const activeStepLabel =
     error ? 'Rebuild failed' : isComplete ? 'Rebuild complete' : REBUILD_STEPS[currentStep - 1] || 'Starting...';
@@ -50,12 +50,15 @@ export default function RebuildProgressModal({
           gap: 8,
           padding: '10px 16px',
           borderRadius: 24,
-          backgroundColor: error ? 'var(--color-secondary, #e53e3e)' : isComplete ? 'var(--color-accent, #38a169)' : 'var(--color-primary, #1a365d)',
+          backgroundColor: error
+            ? 'var(--color-secondary, #e53e3e)'
+            : isComplete
+              ? 'var(--color-accent, #38a169)'
+              : 'var(--color-primary, #1a365d)',
           color: '#fff',
           boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
           fontSize: '0.85rem',
           fontWeight: 500,
-          transition: 'transform 0.15s ease',
         }}
         title="Click to expand"
       >
@@ -104,12 +107,15 @@ export default function RebuildProgressModal({
                   <ul className="list-unstyled mb-0">
                     {REBUILD_STEPS.map((label, i) => {
                       const stepNum = i + 1;
-                      const isActive = stepNum === currentStep;
+                      const isActive = stepNum === currentStep && !isComplete;
                       const isDone = stepNum < currentStep || isComplete;
                       const isPending = stepNum > currentStep && !isComplete;
 
                       return (
-                        <li key={i} className={`d-flex align-items-center gap-2 py-2 ${isPending ? 'text-muted' : ''}`}>
+                        <li
+                          key={i}
+                          className={`d-flex align-items-center gap-2 py-2 ${isPending ? 'text-muted' : ''}`}
+                        >
                           {isDone && <span className="text-success fw-bold">&#10003;</span>}
                           {isActive && (
                             <div className="spinner-border spinner-border-sm text-primary" role="status">
@@ -125,6 +131,11 @@ export default function RebuildProgressModal({
                         </li>
                       );
                     })}
+                    {isComplete && (
+                      <li className="d-flex align-items-center gap-2 py-2 text-success fw-semibold">
+                        <span>&#10003;</span> Complete!
+                      </li>
+                    )}
                   </ul>
                   {!isComplete && (
                     <div className="text-muted small mt-3" style={{ fontSize: '0.78rem' }}>
