@@ -18,7 +18,7 @@ const router = Router();
 
 // ─── Insights ─────────────────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/insights', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/insights', async (req: Request, res: Response) => {
   try {
     const result = await insightDiscoveryService.listInsights({
       insight_type: req.query.insight_type as string,
@@ -42,7 +42,7 @@ router.get('/intelligence/reporting/insights', async (req: Request, res: Respons
   }
 });
 
-router.get('/intelligence/reporting/insights/:id', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/insights/:id', async (req: Request, res: Response) => {
   try {
     const insight = await ReportingInsight.findByPk(req.params.id as string);
     if (!insight) return res.status(404).json({ error: 'Insight not found' });
@@ -52,7 +52,7 @@ router.get('/intelligence/reporting/insights/:id', async (req: Request, res: Res
   }
 });
 
-router.post('/intelligence/reporting/insights/:id/action', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/insights/:id/action', async (req: Request, res: Response) => {
   try {
     const { status } = req.body;
     await insightDiscoveryService.updateInsightStatus(req.params.id as string, status);
@@ -62,7 +62,7 @@ router.post('/intelligence/reporting/insights/:id/action', async (req: Request, 
   }
 });
 
-router.post('/intelligence/reporting/insights/:id/feedback', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/insights/:id/feedback', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).adminUser?.id || 'anonymous';
     const { feedback_type } = req.body;
@@ -75,7 +75,7 @@ router.post('/intelligence/reporting/insights/:id/feedback', async (req: Request
 
 // ─── KPIs ─────────────────────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/kpis', async (_req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/kpis', async (_req: Request, res: Response) => {
   try {
     const kpis = await kpiService.getSystemWideKPIs();
     res.json(kpis);
@@ -84,7 +84,7 @@ router.get('/intelligence/reporting/kpis', async (_req: Request, res: Response) 
   }
 });
 
-router.get('/intelligence/reporting/kpis/:scopeType/:scopeId', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/kpis/:scopeType/:scopeId', async (req: Request, res: Response) => {
   try {
     const period = (req.query.period as string) || 'daily';
     const limit = Number(req.query.limit) || 30;
@@ -102,7 +102,7 @@ router.get('/intelligence/reporting/kpis/:scopeType/:scopeId', async (req: Reque
 
 // ─── Trends ───────────────────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/trends', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/trends', async (req: Request, res: Response) => {
   try {
     const { forecastEnrollments } = await import('../../services/reporting/predictiveAnalyticsService');
     const enrollmentForecast = await forecastEnrollments(
@@ -116,7 +116,7 @@ router.get('/intelligence/reporting/trends', async (req: Request, res: Response)
 
 // ─── Maps ─────────────────────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/maps/:mapType', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/maps/:mapType', async (req: Request, res: Response) => {
   try {
     const mapData = await intelligenceMapsService.getMapData(req.params.mapType as string);
     res.json(mapData);
@@ -127,7 +127,7 @@ router.get('/intelligence/reporting/maps/:mapType', async (req: Request, res: Re
 
 // ─── Experiments ──────────────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/experiments', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/experiments', async (req: Request, res: Response) => {
   try {
     const result = await experimentService.listExperiments({
       status: req.query.status as string,
@@ -141,7 +141,7 @@ router.get('/intelligence/reporting/experiments', async (req: Request, res: Resp
   }
 });
 
-router.post('/intelligence/reporting/experiments/:id/approve', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/experiments/:id/approve', async (req: Request, res: Response) => {
   try {
     const ticket = await experimentService.approveExperiment(req.params.id as string);
     res.json({ success: true, ticket });
@@ -152,7 +152,7 @@ router.post('/intelligence/reporting/experiments/:id/approve', async (req: Reque
 
 // ─── Revenue Opportunities ────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/opportunities', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/opportunities', async (req: Request, res: Response) => {
   try {
     const result = await revenueOpportunityService.listOpportunities({
       status: req.query.status as string,
@@ -168,7 +168,7 @@ router.get('/intelligence/reporting/opportunities', async (req: Request, res: Re
 
 // ─── Agent Performance ────────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/agent-performance', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/agent-performance', async (req: Request, res: Response) => {
   try {
     const metric = (req.query.metric as string) || 'impact_score';
     const limit = Number(req.query.limit) || 20;
@@ -181,7 +181,7 @@ router.get('/intelligence/reporting/agent-performance', async (req: Request, res
 
 // ─── Executive Briefing ───────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/executive-brief', async (_req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/executive-brief', async (_req: Request, res: Response) => {
   try {
     const kpis = await kpiService.getSystemWideKPIs();
     const { rows: insights } = await insightDiscoveryService.listInsights({ status: 'new', limit: 10 });
@@ -194,7 +194,7 @@ router.get('/intelligence/reporting/executive-brief', async (_req: Request, res:
 
 // ─── Manual Scan ──────────────────────────────────────────────────────────
 
-router.post('/intelligence/reporting/scan', async (_req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/scan', async (_req: Request, res: Response) => {
   try {
     const result = await reportingOrchestrationService.runSystemScan();
     res.json(result);
@@ -205,7 +205,7 @@ router.post('/intelligence/reporting/scan', async (_req: Request, res: Response)
 
 // ─── Knowledge Graph ──────────────────────────────────────────────────────
 
-router.get('/intelligence/reporting/graph/node/:nodeId', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/graph/node/:nodeId', async (req: Request, res: Response) => {
   try {
     const related = await coryKnowledgeGraphService.traverseRelationships(req.params.nodeId as string, 2);
     res.json({ node_id: req.params.nodeId, related });
@@ -214,7 +214,7 @@ router.get('/intelligence/reporting/graph/node/:nodeId', async (req: Request, re
   }
 });
 
-router.get('/intelligence/reporting/graph/path', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/graph/path', async (req: Request, res: Response) => {
   try {
     const path = await coryKnowledgeGraphService.findPath(
       req.query.from as string,
@@ -226,7 +226,7 @@ router.get('/intelligence/reporting/graph/path', async (req: Request, res: Respo
   }
 });
 
-router.get('/intelligence/reporting/graph/impact/:nodeId', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/graph/impact/:nodeId', async (req: Request, res: Response) => {
   try {
     const impact = await coryKnowledgeGraphService.traceImpact(req.params.nodeId as string);
     res.json({ impact });
@@ -237,7 +237,7 @@ router.get('/intelligence/reporting/graph/impact/:nodeId', async (req: Request, 
 
 // ─── Cory Modes ───────────────────────────────────────────────────────────
 
-router.post('/intelligence/reporting/cory/explain', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/cory/explain', async (req: Request, res: Response) => {
   try {
     const { chartData, chartType, title } = req.body;
     const explanation = await narrativeService.explainChart(chartData, chartType, title);
@@ -247,7 +247,7 @@ router.post('/intelligence/reporting/cory/explain', async (req: Request, res: Re
   }
 });
 
-router.post('/intelligence/reporting/cory/research', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/cory/research', async (req: Request, res: Response) => {
   try {
     const { entityType, entityId, question } = req.body;
     const research = await narrativeService.researchEntity(entityType, entityId, question);
@@ -257,7 +257,7 @@ router.post('/intelligence/reporting/cory/research', async (req: Request, res: R
   }
 });
 
-router.post('/intelligence/reporting/cory/recommend', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/cory/recommend', async (req: Request, res: Response) => {
   try {
     const { insightId } = req.body;
     const recommendations = await narrativeService.recommendActions(insightId);
@@ -272,7 +272,7 @@ router.post('/intelligence/reporting/cory/recommend', async (req: Request, res: 
 import * as coryDecisionEngine from '../../services/reporting/coryDecisionEngine';
 import { SimulationAccuracy } from '../../models';
 
-router.post('/intelligence/reporting/cory/simulate', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/cory/simulate', async (req: Request, res: Response) => {
   try {
     const { entity_type, entity_id, strategy_type, parameters, insight_id } = req.body;
     const result = await coryDecisionEngine.handleSimulate({
@@ -284,7 +284,7 @@ router.post('/intelligence/reporting/cory/simulate', async (req: Request, res: R
   }
 });
 
-router.post('/intelligence/reporting/cory/execute', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/cory/execute', async (req: Request, res: Response) => {
   try {
     const { simulation_id } = req.body;
     const result = await coryDecisionEngine.handleExecute(simulation_id);
@@ -294,7 +294,7 @@ router.post('/intelligence/reporting/cory/execute', async (req: Request, res: Re
   }
 });
 
-router.get('/intelligence/reporting/executions', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/executions', async (req: Request, res: Response) => {
   try {
     const where: any = {};
     if (req.query.status) where.status = req.query.status as string;
@@ -309,7 +309,7 @@ router.get('/intelligence/reporting/executions', async (req: Request, res: Respo
   }
 });
 
-router.get('/intelligence/reporting/executions/:id', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/executions/:id', async (req: Request, res: Response) => {
   try {
     const record = await SimulationAccuracy.findByPk(req.params.id as string);
     if (!record) return res.status(404).json({ error: 'Not found' });
@@ -319,7 +319,7 @@ router.get('/intelligence/reporting/executions/:id', async (req: Request, res: R
   }
 });
 
-router.post('/intelligence/reporting/executions/:id/track', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/executions/:id/track', async (req: Request, res: Response) => {
   try {
     const record = await SimulationAccuracy.findByPk(req.params.id as string);
     if (!record) return res.status(404).json({ error: 'Not found' });
@@ -344,7 +344,7 @@ router.post('/intelligence/reporting/executions/:id/track', async (req: Request,
 
 // ─── Content Feedback ─────────────────────────────────────────────────────
 
-router.post('/intelligence/reporting/feedback', async (req: Request, res: Response) => {
+router.post('/api/admin/intelligence/reporting/feedback', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).adminUser?.id || 'anonymous';
     const { content_type, content_key, feedback_type, metadata } = req.body;
@@ -368,7 +368,7 @@ router.post('/intelligence/reporting/feedback', async (req: Request, res: Respon
   }
 });
 
-router.get('/intelligence/reporting/feedback/summary', async (req: Request, res: Response) => {
+router.get('/api/admin/intelligence/reporting/feedback/summary', async (req: Request, res: Response) => {
   try {
     const { content_type, content_key } = req.query;
     const where: any = {};
