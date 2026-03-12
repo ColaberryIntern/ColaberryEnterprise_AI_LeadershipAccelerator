@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getMapData, type MapData, type MapNode, type MapEdge } from '../../../../services/reportingApi';
+import FeedbackButtons from '../FeedbackButtons';
 
 const MAP_TYPES = [
   { id: 'department', label: 'Department Map' },
@@ -79,6 +80,9 @@ function JourneyFlow({ nodes, edges }: { nodes: MapNode[]; edges: MapEdge[] }) {
                   ))}
                 </div>
               )}
+              <div className="mt-1">
+                <FeedbackButtons contentType="map" contentKey={`map_journey_${node.id}`} />
+              </div>
             </div>
           </div>
           {i < nodes.length - 1 && (
@@ -111,6 +115,9 @@ function GraphView({ nodes, edges }: { nodes: MapNode[]; edges: MapEdge[] }) {
                   ))}
                 </div>
               )}
+              <div className="mt-1">
+                <FeedbackButtons contentType="map" contentKey={`map_graph_${node.id}`} />
+              </div>
             </div>
           </div>
         </div>

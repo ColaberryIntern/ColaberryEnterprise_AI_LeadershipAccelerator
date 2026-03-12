@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getRevenueImpactData } from '../../../../services/intelligenceApi';
+import FeedbackButtons from '../FeedbackButtons';
 
 interface Props {
   entityFilter?: { type: string; id: string; name: string } | null;
@@ -65,6 +66,9 @@ export default function RevenueImpactTab({ entityFilter }: Props) {
           <div className="fw-bold" style={{ fontSize: '2rem', color: '#fff' }}>
             ${(grandTotal / 1000).toFixed(0)}K
           </div>
+          <div className="mt-1">
+            <FeedbackButtons contentType="revenue" contentKey="revenue_grand_total" />
+          </div>
         </div>
       </div>
 
@@ -116,6 +120,9 @@ export default function RevenueImpactTab({ entityFilter }: Props) {
                   </span>
                 </div>
               ))}
+            </div>
+            <div className="mt-2 pt-2 border-top">
+              <FeedbackButtons contentType="revenue" contentKey={`revenue_${dept.department.id}`} />
             </div>
           </div>
         </div>

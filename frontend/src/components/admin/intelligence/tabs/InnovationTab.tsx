@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getInnovationScoresData, InnovationScoreEntry } from '../../../../services/intelligenceApi';
+import FeedbackButtons from '../FeedbackButtons';
 
 interface Props {
   entityFilter?: { type: string; id: string; name: string } | null;
@@ -127,6 +128,9 @@ export default function InnovationTab({ entityFilter }: Props) {
                       {dept.breakdown.active_initiatives} active / {dept.breakdown.total_initiatives} total
                     </span>
                   </div>
+                </div>
+                <div className="mt-2 pt-2 border-top">
+                  <FeedbackButtons contentType="innovation" contentKey={`innovation_${dept.id}`} />
                 </div>
               </div>
             </div>

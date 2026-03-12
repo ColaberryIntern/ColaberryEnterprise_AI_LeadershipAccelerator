@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../../../../utils/api';
 import CampaignTimelineModal from '../../../../pages/admin/ai-settings/CampaignTimelineModal';
 import OrchestrationHealthSection from '../../../../pages/admin/ai-settings/OrchestrationHealthSection';
+import FeedbackButtons from '../FeedbackButtons';
 
 interface HealthRecord {
   id: string;
@@ -169,7 +170,10 @@ export default function HealthTab({ entityFilter }: HealthTabProps) {
                   )}
                   <div className="d-flex justify-content-between align-items-center mt-2">
                     <span className="text-muted" style={{ fontSize: '0.75rem' }}>Last scan: {timeAgo(h.last_scan_at)}</span>
-                    <span className="text-primary small">View Timeline</span>
+                    <div className="d-flex align-items-center gap-2">
+                      <FeedbackButtons contentType="campaign_health" contentKey={`health_${h.campaign_id.substring(0, 16)}`} />
+                      <span className="text-primary small">View Timeline</span>
+                    </div>
                   </div>
                 </div>
               </div>

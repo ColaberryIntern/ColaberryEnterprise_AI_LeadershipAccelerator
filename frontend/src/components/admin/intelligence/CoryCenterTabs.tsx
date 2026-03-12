@@ -28,6 +28,7 @@ import AgentPerformanceTab from './tabs/AgentPerformanceTab';
 import DepartmentStrategyTab from './tabs/DepartmentStrategyTab';
 import SecurityTab from './tabs/SecurityTab';
 import ExecutionsTab from './tabs/ExecutionsTab';
+import FeedbackButtons from './FeedbackButtons';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,9 @@ function OrchestrationGraph({ onAgentClick, entityFilter }: { onAgentClick?: (ag
             </div>
           </div>
         ))}
+      </div>
+      <div className="mb-3">
+        <FeedbackButtons contentType="fleet_kpi" contentKey="fleet_overview_kpis" />
       </div>
 
       <div className="row g-3">
@@ -367,6 +371,9 @@ function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: st
           </div>
         ))}
       </div>
+      <div className="mb-3">
+        <FeedbackButtons contentType="impact_kpi" contentKey="impact_metrics_overview" />
+      </div>
 
       {/* Fleet Health */}
       <div className="card border-0 shadow-sm mb-3">
@@ -395,6 +402,9 @@ function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: st
             <div className="progress-bar bg-danger" style={{ width: `${(status.agent_fleet.errored / Math.max(status.agent_fleet.total, 1)) * 100}%` }} />
             <div className="progress-bar bg-warning" style={{ width: `${(status.agent_fleet.paused / Math.max(status.agent_fleet.total, 1)) * 100}%` }} />
           </div>
+          <div className="mt-2">
+            <FeedbackButtons contentType="fleet_health" contentKey="agent_fleet_health" />
+          </div>
         </div>
       </div>
 
@@ -419,6 +429,9 @@ function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: st
               <div className="fw-bold" style={{ color: 'var(--color-secondary)' }}>{status.decisions_24h.rejected}</div>
               <small className="text-muted" style={{ fontSize: '0.65rem' }}>Rejected</small>
             </div>
+          </div>
+          <div className="mt-2">
+            <FeedbackButtons contentType="decisions" contentKey="decisions_24h" />
           </div>
         </div>
       </div>

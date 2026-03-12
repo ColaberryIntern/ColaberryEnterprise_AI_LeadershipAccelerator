@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import FeedbackButtons from '../FeedbackButtons';
 
 interface Alert {
   id: string;
@@ -86,36 +87,41 @@ export default function AlertsTab() {
     <div>
       {/* Stats Row */}
       {stats && (
-        <div className="row g-3 mb-4">
-          <div className="col-6 col-md-3">
-            <div className="card border-0 shadow-sm text-center p-3">
-              <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Open Alerts</div>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#1a365d' }}>{stats.openCount}</div>
+        <>
+          <div className="row g-3 mb-4">
+            <div className="col-6 col-md-3">
+              <div className="card border-0 shadow-sm text-center p-3">
+                <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Open Alerts</div>
+                <div style={{ fontSize: '28px', fontWeight: 700, color: '#1a365d' }}>{stats.openCount}</div>
+              </div>
             </div>
-          </div>
-          <div className="col-6 col-md-3">
-            <div className="card border-0 shadow-sm text-center p-3">
-              <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Critical</div>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#e53e3e' }}>{stats.criticalOpen}</div>
+            <div className="col-6 col-md-3">
+              <div className="card border-0 shadow-sm text-center p-3">
+                <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Critical</div>
+                <div style={{ fontSize: '28px', fontWeight: 700, color: '#e53e3e' }}>{stats.criticalOpen}</div>
+              </div>
             </div>
-          </div>
-          <div className="col-6 col-md-3">
-            <div className="card border-0 shadow-sm text-center p-3">
-              <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Last 24h</div>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#2b6cb0' }}>{stats.last24h}</div>
+            <div className="col-6 col-md-3">
+              <div className="card border-0 shadow-sm text-center p-3">
+                <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Last 24h</div>
+                <div style={{ fontSize: '28px', fontWeight: 700, color: '#2b6cb0' }}>{stats.last24h}</div>
+              </div>
             </div>
-          </div>
-          <div className="col-6 col-md-3">
-            <div className="card border-0 shadow-sm text-center p-3">
-              <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Type</div>
-              <div className="d-flex justify-content-center gap-2 mt-1 flex-wrap">
-                {Object.entries(stats.byType).map(([type, count]) => (
-                  <span key={type} className="badge bg-secondary" style={{ fontSize: '10px' }}>{type}: {count}</span>
-                ))}
+            <div className="col-6 col-md-3">
+              <div className="card border-0 shadow-sm text-center p-3">
+                <div style={{ fontSize: '11px', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.5px' }}>By Type</div>
+                <div className="d-flex justify-content-center gap-2 mt-1 flex-wrap">
+                  {Object.entries(stats.byType).map(([type, count]) => (
+                    <span key={type} className="badge bg-secondary" style={{ fontSize: '10px' }}>{type}: {count}</span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+          <div className="mb-3">
+            <FeedbackButtons contentType="alert_stats" contentKey="alert_stats_overview" />
+          </div>
+        </>
       )}
 
       {/* Filter Bar */}

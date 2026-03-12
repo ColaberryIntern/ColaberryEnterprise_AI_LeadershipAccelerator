@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getAgentPerformance, type AgentKPI } from '../../../../services/reportingApi';
+import FeedbackButtons from '../FeedbackButtons';
 
 type SortKey = keyof AgentKPI;
 
@@ -59,7 +60,10 @@ export default function AgentPerformanceTab() {
 
       {Object.entries(grouped).map(([group, groupAgents]) => (
         <div key={group} className="mb-4">
-          {groupByDept && <h6 className="fw-semibold text-muted mb-2">{group.replace(/_/g, ' ')}</h6>}
+          <div className="d-flex justify-content-between align-items-center">
+            {groupByDept && <h6 className="fw-semibold text-muted mb-2">{group.replace(/_/g, ' ')}</h6>}
+            <FeedbackButtons contentType="agent_performance" contentKey={`agent_perf_${group.replace(/\s+/g, '_').toLowerCase()}`} />
+          </div>
           <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">

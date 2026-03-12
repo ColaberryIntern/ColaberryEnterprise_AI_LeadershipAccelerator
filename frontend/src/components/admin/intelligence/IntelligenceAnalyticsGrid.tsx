@@ -20,6 +20,7 @@ import {
   Pie,
 } from 'recharts';
 import IntelNetworkGraph from './charts/IntelNetworkGraph';
+import FeedbackButtons from './FeedbackButtons';
 
 interface Props {
   anomalies: any[];
@@ -108,8 +109,9 @@ const DEFAULT_PANELS: PanelConfig[] = [
 function PanelCard({ title, children, minHeight = 300 }: { title: string; children: React.ReactNode; minHeight?: number }) {
   return (
     <div className="intel-card-float intel-fade-in" style={{ minHeight }}>
-      <div className="card-header bg-white fw-semibold small border-bottom" style={{ color: 'var(--color-primary)', borderRadius: '10px 10px 0 0' }}>
-        {title}
+      <div className="card-header bg-white fw-semibold small border-bottom d-flex justify-content-between align-items-center" style={{ color: 'var(--color-primary)', borderRadius: '10px 10px 0 0' }}>
+        <span>{title}</span>
+        <FeedbackButtons contentType="analytics_panel" contentKey={`panel_${title.replace(/\s+/g, '_').toLowerCase()}`} />
       </div>
       <div className="card-body p-3 d-flex flex-column justify-content-center">
         {children}

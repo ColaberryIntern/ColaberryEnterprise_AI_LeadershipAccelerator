@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getExecutions, type ExecutionEntry } from '../../../../services/reportingApi';
+import FeedbackButtons from '../FeedbackButtons';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'info',
@@ -131,7 +132,10 @@ export default function ExecutionsTab() {
                     ) : (
                       <span>&mdash;</span>
                     )}
-                    <span>{new Date(exec.created_at).toLocaleDateString()}</span>
+                    <div className="d-flex align-items-center gap-2">
+                      <FeedbackButtons contentType="execution" contentKey={`exec_${exec.id.substring(0, 16)}`} />
+                      <span>{new Date(exec.created_at).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
               </div>
