@@ -94,6 +94,14 @@ import GovernanceConfig from './GovernanceConfig';
 import CronScheduleConfig from './CronScheduleConfig';
 import CampaignGovernanceConfig from './CampaignGovernanceConfig';
 import RiskScoringConfig from './RiskScoringConfig';
+import KnowledgeNode from './KnowledgeNode';
+import KnowledgeEdge from './KnowledgeEdge';
+import ReportingInsight from './ReportingInsight';
+import KPISnapshot from './KPISnapshot';
+import ExperimentProposal from './ExperimentProposal';
+import RevenueOpportunity from './RevenueOpportunity';
+import UserInsightFeedback from './UserInsightFeedback';
+import InsightReplacement from './InsightReplacement';
 
 // --- Governance Center associations ---
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
@@ -507,6 +515,20 @@ OpenclawTask.belongsTo(OpenclawSession, { foreignKey: 'session_id', as: 'session
 Campaign.hasMany(OpenclawResponse, { foreignKey: 'campaign_id', as: 'openclawResponses' });
 OpenclawResponse.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
+// --- Cory Knowledge Graph associations ---
+KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'source_node_id', as: 'sourceNode' });
+KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'target_node_id', as: 'targetNode' });
+KnowledgeNode.hasMany(KnowledgeEdge, { foreignKey: 'source_node_id', as: 'outgoingEdges' });
+KnowledgeNode.hasMany(KnowledgeEdge, { foreignKey: 'target_node_id', as: 'incomingEdges' });
+
+// --- Reporting Intelligence associations ---
+UserInsightFeedback.belongsTo(ReportingInsight, { foreignKey: 'insight_id', as: 'insight' });
+ReportingInsight.hasMany(UserInsightFeedback, { foreignKey: 'insight_id', as: 'feedback' });
+
+InsightReplacement.belongsTo(ReportingInsight, { foreignKey: 'original_insight_id', as: 'originalInsight' });
+InsightReplacement.belongsTo(ReportingInsight, { foreignKey: 'replacement_insight_id', as: 'replacementInsight' });
+InsightReplacement.belongsTo(UserInsightFeedback, { foreignKey: 'triggered_by_feedback_id', as: 'triggeringFeedback' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -581,4 +603,12 @@ export {
   CronScheduleConfig,
   CampaignGovernanceConfig,
   RiskScoringConfig,
+  KnowledgeNode,
+  KnowledgeEdge,
+  ReportingInsight,
+  KPISnapshot,
+  ExperimentProposal,
+  RevenueOpportunity,
+  UserInsightFeedback,
+  InsightReplacement,
 };

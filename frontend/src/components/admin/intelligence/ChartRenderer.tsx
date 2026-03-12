@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import CoryBadge from './CoryBadge';
+import CoryExplainMenu from './CoryExplainMenu';
 
 const IntelLineChart = lazy(() => import('./charts/IntelLineChart'));
 const IntelBarChart = lazy(() => import('./charts/IntelBarChart'));
@@ -98,7 +99,13 @@ export default function ChartRenderer({ visualization, onCoryClick }: ChartRende
       <div className="card-header bg-white d-flex justify-content-between align-items-center py-2" style={{ borderRadius: '10px 10px 0 0' }}>
         <div className="d-flex align-items-center gap-2">
           <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>{title}</span>
-          {handleCoryClick && <CoryBadge onClick={handleCoryClick} tooltip={`Ask Cory about ${title}`} size={18} />}
+          <CoryExplainMenu
+            chartData={Array.isArray(data) ? data.slice(0, 10) : data}
+            chartType={chart_type}
+            chartTitle={title}
+            onResult={onCoryClick ? (result: string) => onCoryClick(result) : undefined}
+            size={18}
+          />
         </div>
         {kpis.length > 0 && (
           <div className="d-flex gap-1 flex-wrap">
