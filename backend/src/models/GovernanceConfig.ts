@@ -58,7 +58,6 @@ GovernanceConfig.init(
       type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'global',
-      unique: true,
     },
     version: {
       type: DataTypes.INTEGER,
@@ -146,6 +145,9 @@ GovernanceConfig.init(
     sequelize,
     tableName: 'governance_configs',
     timestamps: false,
+    indexes: [
+      { fields: ['scope'], unique: true },
+    ],
   }
 );
 
