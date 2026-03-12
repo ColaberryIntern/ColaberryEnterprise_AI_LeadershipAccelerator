@@ -498,7 +498,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
   const tabs: { key: TabKey; label: string; badge?: number }[] = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'alerts', label: 'Alerts' },
-    { key: 'orchestration', label: 'Orchestration' },
+    { key: 'orchestration', label: 'Agents' },
     { key: 'activity', label: 'Activity' },
     { key: 'health', label: 'Health' },
     { key: 'errors', label: 'Errors', badge: errorCount },

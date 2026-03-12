@@ -2,14 +2,31 @@ import { Op } from 'sequelize';
 import Department from '../models/Department';
 import Initiative from '../models/Initiative';
 import DepartmentEvent from '../models/DepartmentEvent';
+import { AiAgent } from '../models';
+import { getDepartmentForCategory } from '../intelligence/agents/agentFactory';
+
+// Build a map of department slug → actual agent count
+async function getAgentCountsByDept(): Promise<Record<string, number>> {
+  const agents = await AiAgent.findAll({ attributes: ['category', 'config'] });
+  const counts: Record<string, number> = {};
+  for (const a of agents) {
+    const cfg = (a as any).config;
+    const slug = cfg?.department_slug || getDepartmentForCategory((a as any).category || '').toLowerCase().replace(/ /g, '_');
+    counts[slug] = (counts[slug] || 0) + 1;
+  }
+  return counts;
+}
 
 export async function getDepartments() {
-  const departments = await Department.findAll({
-    include: [
-      { model: Initiative, as: 'initiatives', attributes: ['id', 'status', 'progress', 'revenue_impact'] },
-    ],
-    order: [['name', 'ASC']],
-  });
+  const [departments, agentCounts] = await Promise.all([
+    Department.findAll({
+      include: [
+        { model: Initiative, as: 'initiatives', attributes: ['id', 'status', 'progress', 'revenue_impact'] },
+      ],
+      order: [['name', 'ASC']],
+    }),
+    getAgentCountsByDept(),
+  ]);
 
   return departments.map((d) => {
     const inits = (d as any).initiatives || [];
@@ -24,7 +41,7 @@ export async function getDepartments() {
       mission: d.mission,
       color: d.color,
       bg_light: d.bg_light,
-      team_size: d.team_size,
+      team_size: agentCounts[d.slug] || 0,
       health_score: d.health_score,
       innovation_score: d.innovation_score,
       initiative_count: inits.length,

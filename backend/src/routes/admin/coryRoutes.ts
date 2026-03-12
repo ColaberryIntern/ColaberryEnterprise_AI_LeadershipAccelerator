@@ -7,7 +7,20 @@ import { executeCoryCommand, getCoryStatus, getCoryNarrative } from '../../intel
 import { getReasoningTimeline } from '../../intelligence/strategy/reasoningTimeline';
 import { createAgent, retireAgent, getDepartmentSummary, editAgent } from '../../intelligence/agents/agentFactory';
 import { AiAgent } from '../../models';
-import { getDepartmentForCategory } from '../../intelligence/agents/agentFactory';
+import { getDepartmentForCategory, type Department } from '../../intelligence/agents/agentFactory';
+
+// Convert department_slug (e.g. 'finance') to Department name (e.g. 'Finance')
+const SLUG_TO_DEPT: Record<string, Department> = {
+  executive: 'Executive', strategy: 'Strategy', marketing: 'Marketing',
+  admissions: 'Admissions', alumni: 'Alumni', partnerships: 'Partnerships',
+  education: 'Education', student_success: 'Student_Success', platform: 'Platform',
+  intelligence: 'Intelligence', governance: 'Governance', reporting: 'Reporting',
+  finance: 'Finance', operations: 'Operations', orchestration: 'Orchestration',
+  growth: 'Growth', infrastructure: 'Infrastructure', security: 'Security',
+};
+function slugToDept(slug?: string): Department | undefined {
+  return slug ? SLUG_TO_DEPT[slug.toLowerCase()] : undefined;
+}
 
 const router = Router();
 
@@ -122,7 +135,7 @@ router.get('/api/admin/intelligence/cory/agents', async (_req: Request, res: Res
       status: a.status,
       enabled: a.enabled,
       category: a.category,
-      department: a.config?.department || getDepartmentForCategory(a.category || ''),
+      department: a.config?.department || slugToDept(a.config?.department_slug) || getDepartmentForCategory(a.category || ''),
       run_count: a.run_count || 0,
       error_count: a.error_count || 0,
       avg_duration_ms: a.avg_duration_ms || 0,
