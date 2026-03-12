@@ -267,4 +267,79 @@ router.post('/intelligence/reporting/cory/recommend', async (req: Request, res: 
   }
 });
 
+// ─── Simulation & Execution ───────────────────────────────────────────────
+
+import * as coryDecisionEngine from '../../services/reporting/coryDecisionEngine';
+import { SimulationAccuracy } from '../../models';
+
+router.post('/intelligence/reporting/cory/simulate', async (req: Request, res: Response) => {
+  try {
+    const { entity_type, entity_id, strategy_type, parameters, insight_id } = req.body;
+    const result = await coryDecisionEngine.handleSimulate({
+      entity_type, entity_id, strategy_type, parameters, insight_id,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/intelligence/reporting/cory/execute', async (req: Request, res: Response) => {
+  try {
+    const { simulation_id } = req.body;
+    const result = await coryDecisionEngine.handleExecute(simulation_id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/intelligence/reporting/executions', async (req: Request, res: Response) => {
+  try {
+    const where: any = {};
+    if (req.query.status) where.status = req.query.status as string;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const { rows, count } = await SimulationAccuracy.findAndCountAll({
+      where, order: [['created_at', 'DESC']], limit, offset: (page - 1) * limit,
+    });
+    res.json({ rows, count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/intelligence/reporting/executions/:id', async (req: Request, res: Response) => {
+  try {
+    const record = await SimulationAccuracy.findByPk(req.params.id as string);
+    if (!record) return res.status(404).json({ error: 'Not found' });
+    res.json(record);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/intelligence/reporting/executions/:id/track', async (req: Request, res: Response) => {
+  try {
+    const record = await SimulationAccuracy.findByPk(req.params.id as string);
+    if (!record) return res.status(404).json({ error: 'Not found' });
+    const { actual_outcome } = req.body;
+    const predicted = (record as any).predicted_outcome || {};
+    const fields = ['leads', 'conversions', 'enrollments', 'revenue'];
+    let totalAccuracy = 0;
+    let fieldCount = 0;
+    for (const f of fields) {
+      if (predicted[f] && actual_outcome[f]) {
+        totalAccuracy += 1 - Math.abs(predicted[f] - actual_outcome[f]) / Math.max(predicted[f], 1);
+        fieldCount++;
+      }
+    }
+    const accuracy_score = fieldCount > 0 ? Math.max(0, totalAccuracy / fieldCount) : 0;
+    await record.update({ actual_outcome, accuracy_score, status: 'completed' });
+    res.json({ accuracy_score, status: 'completed' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

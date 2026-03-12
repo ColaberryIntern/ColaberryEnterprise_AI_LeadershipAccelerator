@@ -186,3 +186,72 @@ export const coryResearch = (entityType: string, entityId: string, question?: st
 
 export const coryRecommend = (insightId: string) =>
   api.post<{ recommendations: string }>('/cory/recommend', { insightId }).then(r => r.data);
+
+// ─── Simulation & Execution Types ─────────────────────────────────────────
+
+export interface SimulationResult {
+  simulation_id: string;
+  predicted_leads: number;
+  predicted_conversions: number;
+  predicted_enrollments: number;
+  predicted_revenue: number;
+  confidence: number;
+  risk_score: number;
+  assumptions: string[];
+  timeline_days: number;
+  breakdown: { task: string; agent: string; duration: string; dependencies: string[] }[];
+}
+
+export interface ExecutionResult {
+  ticket_id: string;
+  ticket_number: number;
+  tasks: { title: string; agent_name: string; status: string; estimated_duration: string; ticket_id?: string }[];
+  predicted_results: { leads: number; conversions: number; enrollments: number; revenue: number };
+  eta: string;
+  monitoring_url: string;
+}
+
+export interface ExecutionEntry {
+  id: string;
+  simulation_type: string;
+  context: any;
+  predicted_outcome: any;
+  actual_outcome: any;
+  accuracy_score: number | null;
+  confidence: number;
+  risk_score: number;
+  status: string;
+  ticket_id: string | null;
+  created_at: string;
+}
+
+// ─── Simulation & Execution API ───────────────────────────────────────────
+
+export const corySimulate = async (
+  entity_type: string, entity_id: string, strategy_type: string,
+  parameters?: Record<string, any>, insight_id?: string
+): Promise<SimulationResult> => {
+  const { data } = await api.post('/cory/simulate', {
+    entity_type, entity_id, strategy_type, parameters, insight_id,
+  });
+  return data;
+};
+
+export const coryExecute = async (simulation_id: string): Promise<ExecutionResult> => {
+  const { data } = await api.post('/cory/execute', { simulation_id });
+  return data;
+};
+
+export const getExecutions = async (params?: Record<string, any>): Promise<{ rows: ExecutionEntry[]; count: number }> => {
+  const { data } = await api.get('/executions', { params });
+  return data;
+};
+
+export const getExecution = async (id: string): Promise<ExecutionEntry> => {
+  const { data } = await api.get(`/executions/${id}`);
+  return data;
+};
+
+export const trackExecution = async (id: string, actual_outcome: any): Promise<void> => {
+  await api.post(`/executions/${id}/track`, { actual_outcome });
+};

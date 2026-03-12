@@ -119,6 +119,13 @@ export async function updateTicketStatus(
     to_value: newStatus,
   });
 
+  // Learning loop: when a strategic ticket reaches 'done', trigger outcome tracking
+  if (newStatus === 'done' && (ticket as any).type === 'strategic' && (ticket as any).source === 'cory') {
+    import('./reporting/coryDecisionEngine')
+      .then((engine) => engine.trackExecutionOutcome(ticketId))
+      .catch(() => { /* non-critical */ });
+  }
+
   return ticket;
 }
 

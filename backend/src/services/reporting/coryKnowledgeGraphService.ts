@@ -150,6 +150,61 @@ export async function traceImpact(nodeId: string): Promise<{ affected: KGNode[];
   return graph.traceImpact(nodeId);
 }
 
+// ─── Strategy Execution Recording ────────────────────────────────────────────
+// Records a strategy execution as edges in the knowledge graph, linking
+// the strategy type to the affected entity and its outcomes.
+
+export async function recordStrategyExecution(
+  strategyType: string,
+  entityType: string,
+  entityId: string,
+  outcomes: { leads?: number; conversions?: number; enrollments?: number; revenue?: number },
+): Promise<{ edges_created: number }> {
+  let edgesCreated = 0;
+
+  // Ensure a node exists for the strategy
+  const [stratNode] = await KnowledgeNode.findOrCreate({
+    where: { node_type: 'department' as KnowledgeNodeType, entity_id: `strategy_${strategyType}` },
+    defaults: {
+      node_type: 'department' as KnowledgeNodeType,
+      entity_id: `strategy_${strategyType}`,
+      entity_name: `Strategy: ${strategyType.replace(/_/g, ' ')}`,
+      metadata: { type: 'strategy' },
+    },
+  });
+
+  // Link strategy to the target entity
+  const targetNode = await KnowledgeNode.findOne({
+    where: { node_type: entityType as KnowledgeNodeType, entity_id: entityId },
+  });
+
+  if (targetNode) {
+    const [, created] = await KnowledgeEdge.findOrCreate({
+      where: {
+        source_node_id: stratNode.id,
+        target_node_id: targetNode.id,
+        relationship_type: 'executed_on',
+      },
+      defaults: {
+        source_node_id: stratNode.id,
+        target_node_id: targetNode.id,
+        relationship_type: 'executed_on',
+        weight: 1.0,
+        confidence: 1.0,
+        metadata: { outcomes, executed_at: new Date().toISOString() },
+      },
+    });
+    if (created) edgesCreated++;
+  }
+
+  // Invalidate cache so next read picks up new edges
+  invalidateGraphCache();
+
+  return { edges_created: edgesCreated };
+}
+
+// ─── Graph Stats ──────────────────────────────────────────────────────────────
+
 export async function getGraphStats(): Promise<{ total_nodes: number; total_edges: number; node_types: Record<string, number> }> {
   const nodes = await KnowledgeNode.findAll({ attributes: ['node_type'], raw: true });
   const edgeCount = await KnowledgeEdge.count();

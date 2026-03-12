@@ -9,6 +9,7 @@ import {
   addAgentOutput,
   addTicketComment,
 } from './ticketService';
+import * as coryDecisionEngine from './reporting/coryDecisionEngine';
 import type { AgentExecutionResult } from './agents/types';
 import { runCurriculumArchitectAgent } from './agents/curriculumArchitectAgent';
 import { runArtifactGenerationAgent } from './agents/artifactGenerationAgent';
@@ -50,6 +51,29 @@ const AGENT_MAPPINGS: AgentMapping[] = [
     execute: async (ticket) => runCurriculumArchitectAgent(ticket.id, ticket.metadata || {}),
   },
 ];
+
+// ─── Dispatcher ──────────────────────────────────────────────────────────────
+
+// ─── Strategic Completion Hook ───────────────────────────────────────────────
+// When a strategic ticket reaches 'done', trigger outcome tracking so the
+// Decision Engine can compare predicted vs actual results and update the
+// simulation accuracy learning loop.
+
+export async function onTicketStatusChange(ticketId: string, newStatus: string): Promise<void> {
+  if (newStatus !== 'done') return;
+
+  const ticket = await Ticket.findByPk(ticketId);
+  if (!ticket) return;
+
+  // Only track strategic tickets created by Cory Decision Engine
+  if ((ticket as any).type === 'strategic' && (ticket as any).source === 'cory') {
+    try {
+      await coryDecisionEngine.trackExecutionOutcome(ticketId);
+    } catch (_err) {
+      // Non-critical: tracking failure should not block ticket state transition
+    }
+  }
+}
 
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
 

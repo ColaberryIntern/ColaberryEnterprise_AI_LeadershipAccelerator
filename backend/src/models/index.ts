@@ -103,6 +103,7 @@ import RevenueOpportunity from './RevenueOpportunity';
 import UserInsightFeedback from './UserInsightFeedback';
 import InsightReplacement from './InsightReplacement';
 import ExecutiveNotificationPolicy from './ExecutiveNotificationPolicy';
+import SimulationAccuracy from './SimulationAccuracy';
 
 // --- Governance Center associations ---
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
@@ -613,4 +614,5 @@ export {
   UserInsightFeedback,
   InsightReplacement,
   ExecutiveNotificationPolicy,
+  SimulationAccuracy,
 };
