@@ -1,8 +1,18 @@
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
+import { forceX, forceY } from 'd3-force';
 import { useIntelligenceContext } from '../../../../contexts/IntelligenceContext';
 import { getDepartmentsApi, DepartmentSummary } from '../../../../services/intelligenceApi';
 import { DEPARTMENT_CATEGORIES } from './departmentConfig';
+
+// Vertical tier mapping — spread departments across 5 layers
+const DEPT_TIER: Record<string, number> = {
+  executive: 0, governance: 0,
+  strategy: 1, finance: 1,
+  intelligence: 2, orchestration: 2, operations: 2,
+  growth: 3, marketing: 3, admissions: 3, partnerships: 3,
+  education: 4, student_success: 4, alumni: 4, platform: 4, infrastructure: 4,
+};
 
 interface GraphNode {
   id: string;
@@ -16,6 +26,7 @@ interface GraphNode {
   initiative_count: number;
   active_initiatives: number;
   team_size: number;
+  tier: number;
   x?: number;
   y?: number;
 }
@@ -110,6 +121,7 @@ export default function DeptMapTab() {
         initiative_count: d.initiative_count,
         active_initiatives: d.active_initiatives,
         team_size: d.team_size,
+        tier: DEPT_TIER[d.slug] ?? 2,
       };
     });
 
@@ -126,12 +138,24 @@ export default function DeptMapTab() {
   useEffect(() => {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
-    fg.d3Force('charge')?.strength(-180);
-    fg.d3Force('link')?.distance(50);
+    fg.d3Force('charge')?.strength(-200);
+    fg.d3Force('link')?.distance(55);
+
+    // Spread vertically across the full canvas using tier levels
+    const maxTier = Math.max(...graphData.nodes.map((n) => n.tier), 1);
+    fg.d3Force(
+      'y',
+      forceY((node: any) => {
+        const t = (node as GraphNode).tier / maxTier;
+        return -dimensions.height * 0.38 + t * dimensions.height * 0.76;
+      }).strength(0.45)
+    );
+    fg.d3Force('x', forceX(0).strength(0.06));
+
     (fg as any).d3AlphaDecay?.(0.02);
     (fg as any).d3VelocityDecay?.(0.3);
     fg.d3ReheatSimulation();
-  }, [graphData]);
+  }, [graphData, dimensions.height]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
