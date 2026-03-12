@@ -4,6 +4,8 @@ import {
 } from 'recharts';
 import api from '../../../utils/api';
 
+// ─── Types ──────────────────────────────────────────────────────────────────
+
 interface CampaignMetric {
   campaign_id: string;
   visitors_count: number;
@@ -24,9 +26,72 @@ interface CampaignMetric {
   creative: string | null;
 }
 
+interface RegisteredCampaign {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  channel: string | null;
+  destination_path: string | null;
+  tracking_link: string | null;
+  objective: string | null;
+  approval_status: string;
+  budget_cap: number | null;
+  budget_spent: number;
+  budget_total: number | null;
+  expected_roi: number | null;
+  cost_per_lead_target: number | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+}
+
+interface ChannelROI {
+  channel: string;
+  campaign_count: number;
+  total_budget_allocated: number;
+  total_budget_spent: number;
+  total_visitors: number;
+  total_leads: number;
+  total_enrollments: number;
+  total_revenue: number;
+  roi: number;
+}
+
 type SortKey = keyof CampaignMetric;
 
 const FUNNEL_COLORS = ['#2b6cb0', '#38a169', '#dd6b20', '#1a365d'];
+
+const CAMPAIGN_TYPES = [
+  { value: 'warm_nurture', label: 'Warm Nurture' },
+  { value: 'cold_outbound', label: 'Cold Outbound' },
+  { value: 're_engagement', label: 'Re-engagement' },
+  { value: 'behavioral_trigger', label: 'Behavioral Trigger' },
+  { value: 'alumni', label: 'Alumni' },
+  { value: 'alumni_re_engagement', label: 'Alumni Re-engagement' },
+];
+
+const CHANNELS = [
+  { value: 'email', label: 'Email' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'social', label: 'Social' },
+  { value: 'paid_search', label: 'Paid Search' },
+  { value: 'paid_social', label: 'Paid Social' },
+  { value: 'direct_mail', label: 'Direct Mail' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'organic', label: 'Organic' },
+];
+
+const APPROVAL_BADGE: Record<string, string> = {
+  draft: 'bg-secondary',
+  pending_approval: 'bg-warning text-dark',
+  approved: 'bg-info',
+  live: 'bg-success',
+  paused: 'bg-secondary',
+  completed: 'bg-dark',
+};
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function intentBadge(pct: number) {
   if (pct >= 40) return 'bg-success';
@@ -44,7 +109,340 @@ function fmt$(n: number) {
   return `$${n.toLocaleString()}`;
 }
 
-function AdminMarketingDashboardPage() {
+function approvalLabel(status: string) {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ─── Create Campaign Modal ──────────────────────────────────────────────────
+
+function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({
+    name: '', type: 'warm_nurture', channel: 'email', destination_path: '',
+    objective: '', budget_cap: '', cost_per_lead_target: '', expected_roi: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) { setErr('Name is required'); return; }
+    if (!form.destination_path.trim()) { setErr('Destination path is required'); return; }
+    setSaving(true);
+    setErr('');
+    try {
+      const payload: Record<string, any> = {
+        name: form.name, type: form.type, channel: form.channel,
+        destination_path: form.destination_path, objective: form.objective,
+      };
+      if (form.budget_cap) payload.budget_cap = Number(form.budget_cap);
+      if (form.cost_per_lead_target) payload.cost_per_lead_target = Number(form.cost_per_lead_target);
+      if (form.expected_roi) payload.expected_roi = Number(form.expected_roi);
+
+      const res = await api.post('/api/admin/campaigns', payload);
+      const id = res.data?.campaign?.id || res.data?.id;
+      if (id) {
+        await api.post(`/api/admin/campaigns/${id}/generate-link`).catch(() => {});
+      }
+      onCreated();
+      onClose();
+    } catch (e: any) {
+      setErr(e.response?.data?.error || 'Failed to create campaign');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal-backdrop show" style={{ zIndex: 1050 }} />
+      <div className="modal show d-block" style={{ zIndex: 1055 }} role="dialog" aria-modal="true">
+        <div className="modal-dialog modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title fw-semibold">Create Tracked Campaign</h5>
+              <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
+            </div>
+            <div className="modal-body">
+              {err && <div className="alert alert-danger py-2 small">{err}</div>}
+              <div className="row g-3">
+                <div className="col-md-8">
+                  <label className="form-label small fw-medium">Campaign Name *</label>
+                  <input className="form-control form-control-sm" value={form.name} onChange={e => set('name', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Type</label>
+                  <select className="form-select form-select-sm" value={form.type} onChange={e => set('type', e.target.value)}>
+                    {CAMPAIGN_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Channel *</label>
+                  <select className="form-select form-select-sm" value={form.channel} onChange={e => set('channel', e.target.value)}>
+                    {CHANNELS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div className="col-md-8">
+                  <label className="form-label small fw-medium">Destination Path *</label>
+                  <input className="form-control form-control-sm" placeholder="/strategy-call-prep" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
+                </div>
+                <div className="col-12">
+                  <label className="form-label small fw-medium">Objective</label>
+                  <textarea className="form-control form-control-sm" rows={2} value={form.objective} onChange={e => set('objective', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Budget Cap ($)</label>
+                  <input type="number" className="form-control form-control-sm" value={form.budget_cap} onChange={e => set('budget_cap', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Target CPL ($)</label>
+                  <input type="number" className="form-control form-control-sm" value={form.cost_per_lead_target} onChange={e => set('cost_per_lead_target', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Expected ROI (x)</label>
+                  <input type="number" step="0.1" className="form-control form-control-sm" value={form.expected_roi} onChange={e => set('expected_roi', e.target.value)} />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-sm btn-outline-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-sm btn-primary" onClick={handleSubmit} disabled={saving}>
+                {saving ? 'Creating...' : 'Create Campaign'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Campaign Link Registry Tab ─────────────────────────────────────────────
+
+function CampaignLinkRegistryTab() {
+  const [campaigns, setCampaigns] = useState<RegisteredCampaign[]>([]);
+  const [channelROI, setChannelROI] = useState<ChannelROI[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [actionLoading, setActionLoading] = useState('');
+  const [copied, setCopied] = useState('');
+
+  const fetchCampaigns = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [campRes, roiRes] = await Promise.all([
+        api.get('/api/admin/campaigns'),
+        api.get('/api/admin/marketing/channel-roi').catch(() => ({ data: { channels: [] } })),
+      ]);
+      setCampaigns(campRes.data?.campaigns || campRes.data || []);
+      setChannelROI(roiRes.data?.channels || []);
+    } catch {
+      setCampaigns([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
+
+  const handleAction = async (id: string, action: string) => {
+    setActionLoading(`${id}:${action}`);
+    try {
+      await api.post(`/api/admin/campaigns/${id}/${action}`);
+      await fetchCampaigns();
+    } catch (e: any) {
+      alert(e.response?.data?.error || `Failed to ${action}`);
+    } finally {
+      setActionLoading('');
+    }
+  };
+
+  const copyLink = (link: string, id: string) => {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(id);
+      setTimeout(() => setCopied(''), 2000);
+    }).catch(() => {});
+  };
+
+  const getActions = (c: RegisteredCampaign) => {
+    const acts: { label: string; action: string; variant: string }[] = [];
+    switch (c.approval_status) {
+      case 'draft':
+        acts.push({ label: 'Submit for Approval', action: 'submit-approval', variant: 'btn-outline-warning' });
+        break;
+      case 'pending_approval':
+        acts.push({ label: 'Approve', action: 'approve', variant: 'btn-outline-success' });
+        acts.push({ label: 'Reject', action: 'reject', variant: 'btn-outline-danger' });
+        break;
+      case 'approved':
+        acts.push({ label: 'Go Live', action: 'go-live', variant: 'btn-outline-success' });
+        acts.push({ label: 'Pause', action: 'pause-approval', variant: 'btn-outline-secondary' });
+        break;
+      case 'live':
+        acts.push({ label: 'Pause', action: 'pause-approval', variant: 'btn-outline-secondary' });
+        acts.push({ label: 'Complete', action: 'complete-approval', variant: 'btn-outline-dark' });
+        break;
+      case 'paused':
+        acts.push({ label: 'Go Live', action: 'go-live', variant: 'btn-outline-success' });
+        acts.push({ label: 'Complete', action: 'complete-approval', variant: 'btn-outline-dark' });
+        break;
+    }
+    return acts;
+  };
+
+  return (
+    <div>
+      {showCreate && <CreateCampaignModal onClose={() => setShowCreate(false)} onCreated={fetchCampaigns} />}
+
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
+          Campaign Link Registry
+        </h1>
+        <div className="d-flex gap-2">
+          <button className="btn btn-sm btn-outline-primary" onClick={fetchCampaigns} disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+          <button className="btn btn-sm btn-primary" onClick={() => setShowCreate(true)}>
+            + Create Tracked Campaign
+          </button>
+        </div>
+      </div>
+
+      {/* Channel ROI Summary */}
+      {channelROI.length > 0 && (
+        <div className="row g-3 mb-4">
+          {channelROI.map(ch => (
+            <div className="col-6 col-lg-3" key={ch.channel}>
+              <div className="card border-0 shadow-sm">
+                <div className="card-body p-3">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="small fw-semibold text-uppercase">{ch.channel.replace(/_/g, ' ')}</span>
+                    <span className="badge bg-secondary">{ch.campaign_count}</span>
+                  </div>
+                  <div className="d-flex justify-content-between small">
+                    <span className="text-muted">Spend</span>
+                    <span className="fw-medium">{fmt$(ch.total_budget_spent)}</span>
+                  </div>
+                  <div className="d-flex justify-content-between small">
+                    <span className="text-muted">Revenue</span>
+                    <span className="fw-medium">{fmt$(ch.total_revenue)}</span>
+                  </div>
+                  <div className="d-flex justify-content-between small">
+                    <span className="text-muted">ROI</span>
+                    <span className={`fw-bold ${ch.roi > 0 ? 'text-success' : ch.roi < 0 ? 'text-danger' : ''}`}>
+                      {ch.roi > 0 ? '+' : ''}{(ch.roi * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Campaign Registry Table */}
+      <div className="card border-0 shadow-sm">
+        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+          <span>Registered Campaigns</span>
+          <small className="text-muted fw-normal">{campaigns.length} campaigns</small>
+        </div>
+        <div className="card-body p-0">
+          {loading ? (
+            <div className="p-4 text-center">
+              <div className="spinner-border spinner-border-sm me-2" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              Loading campaigns...
+            </div>
+          ) : campaigns.length === 0 ? (
+            <div className="p-4 text-center text-muted">
+              No campaigns found. Create a tracked campaign to get started.
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover mb-0" style={{ fontSize: '0.82rem' }}>
+                <thead className="table-light">
+                  <tr>
+                    <th style={{ minWidth: 160 }}>Name</th>
+                    <th>Channel</th>
+                    <th>Type</th>
+                    <th>Approval</th>
+                    <th style={{ minWidth: 200 }}>Tracking Link</th>
+                    <th>Destination</th>
+                    <th>Budget</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {campaigns.map(c => (
+                    <tr key={c.id}>
+                      <td className="fw-medium">{c.name}</td>
+                      <td>
+                        {c.channel
+                          ? <span className="badge bg-info text-dark">{c.channel.replace(/_/g, ' ')}</span>
+                          : <span className="text-muted">{'\u2014'}</span>}
+                      </td>
+                      <td className="text-muted small">{c.type.replace(/_/g, ' ')}</td>
+                      <td>
+                        <span className={`badge ${APPROVAL_BADGE[c.approval_status] || 'bg-secondary'}`}>
+                          {approvalLabel(c.approval_status)}
+                        </span>
+                      </td>
+                      <td>
+                        {c.tracking_link ? (
+                          <div className="d-flex align-items-center gap-1">
+                            <code className="small text-truncate" style={{ maxWidth: 200 }} title={c.tracking_link}>
+                              {c.tracking_link}
+                            </code>
+                            <button
+                              className="btn btn-sm btn-outline-secondary py-0 px-1"
+                              style={{ fontSize: '0.7rem' }}
+                              onClick={() => copyLink(c.tracking_link!, c.id)}
+                              title="Copy link"
+                            >
+                              {copied === c.id ? 'Copied!' : 'Copy'}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-muted small">Not generated</span>
+                        )}
+                      </td>
+                      <td className="small">{c.destination_path || '\u2014'}</td>
+                      <td className="small">
+                        {c.budget_cap != null
+                          ? <>{fmt$(Number(c.budget_spent || 0))} / {fmt$(Number(c.budget_cap))}</>
+                          : <span className="text-muted">{'\u2014'}</span>}
+                      </td>
+                      <td>
+                        <div className="d-flex gap-1 flex-wrap">
+                          {getActions(c).map(act => (
+                            <button
+                              key={act.action}
+                              className={`btn btn-sm ${act.variant} py-0`}
+                              style={{ fontSize: '0.72rem' }}
+                              disabled={actionLoading === `${c.id}:${act.action}`}
+                              onClick={() => handleAction(c.id, act.action)}
+                            >
+                              {actionLoading === `${c.id}:${act.action}` ? '...' : act.label}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Revenue Intelligence Tab (Original Content) ────────────────────────────
+
+function RevenueIntelligenceTab() {
   const [campaigns, setCampaigns] = useState<CampaignMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +514,6 @@ function AdminMarketingDashboardPage() {
     return <span className="ms-1">{sortAsc ? '\u2191' : '\u2193'}</span>;
   };
 
-  // Funnel data
   const funnelData = useMemo(() => {
     if (totals.visitors === 0) return [];
     return [
@@ -333,6 +730,39 @@ function AdminMarketingDashboardPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Main Page ──────────────────────────────────────────────────────────────
+
+function AdminMarketingDashboardPage() {
+  const [activeTab, setActiveTab] = useState<'revenue' | 'registry'>('revenue');
+
+  return (
+    <div>
+      {/* Tab Navigation */}
+      <ul className="nav nav-tabs mb-4">
+        <li className="nav-item">
+          <button
+            className={`nav-link ${activeTab === 'revenue' ? 'active' : ''}`}
+            onClick={() => setActiveTab('revenue')}
+          >
+            Revenue Intelligence
+          </button>
+        </li>
+        <li className="nav-item">
+          <button
+            className={`nav-link ${activeTab === 'registry' ? 'active' : ''}`}
+            onClick={() => setActiveTab('registry')}
+          >
+            Campaign Link Registry
+          </button>
+        </li>
+      </ul>
+
+      {activeTab === 'revenue' && <RevenueIntelligenceTab />}
+      {activeTab === 'registry' && <CampaignLinkRegistryTab />}
     </div>
   );
 }

@@ -135,6 +135,36 @@ const RULES: InferenceRule[] = [
       `Bounce rate: ${m.visitors.bounceRate.toFixed(1)}%`,
     ],
   },
+
+  // Campaign budget burn without proportional conversions
+  {
+    domain: 'campaign',
+    check: (m) =>
+      m.campaign.totalBudgetAllocated > 0 &&
+      (m.campaign.totalBudgetSpent / m.campaign.totalBudgetAllocated) > 0.8 &&
+      m.campaign.totalConversions < 5,
+    hypothesis: 'Campaign spend is near budget cap but conversions are not scaling — potential inefficiency.',
+    action: 'Review campaign targeting, creative performance, and conversion paths. Consider reallocating budget to higher-performing channels.',
+    confidence: (m) => Math.min(0.8, 0.5 + (m.campaign.totalBudgetSpent / m.campaign.totalBudgetAllocated) * 0.3),
+    signals: (m) => [
+      `Budget utilization: ${((m.campaign.totalBudgetSpent / m.campaign.totalBudgetAllocated) * 100).toFixed(0)}%`,
+      `Total conversions: ${m.campaign.totalConversions}`,
+      `Budget spent: $${m.campaign.totalBudgetSpent.toLocaleString()}`,
+    ],
+  },
+
+  // Channel dependency risk
+  {
+    domain: 'campaign',
+    check: (m) => m.campaign.liveCampaigns > 2 && m.campaign.activeCampaigns > 0,
+    hypothesis: 'Multiple live campaigns detected — verify channel diversification to reduce single-channel dependency.',
+    action: 'Review channel distribution across live campaigns. Ensure no single channel accounts for >70% of active campaigns.',
+    confidence: () => 0.6,
+    signals: (m) => [
+      `Live campaigns: ${m.campaign.liveCampaigns}`,
+      `Registered campaigns: ${m.campaign.registeredCampaigns}`,
+    ],
+  },
 ];
 
 // ─── Generate Inferences ────────────────────────────────────────────────────

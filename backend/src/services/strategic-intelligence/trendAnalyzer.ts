@@ -75,6 +75,10 @@ const TRACKED_METRICS = [
   'opportunities.pipelineValue',
   'opportunities.projectedRevenue',
   'opportunities.stalledCount',
+  'campaign.registeredCampaigns',
+  'campaign.liveCampaigns',
+  'campaign.totalBudgetAllocated',
+  'campaign.totalBudgetSpent',
 ];
 
 export async function analyzeStrategicTrends(): Promise<TrendReport> {

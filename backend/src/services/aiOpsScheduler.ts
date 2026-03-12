@@ -254,6 +254,18 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     },
     label: 'Strategic inference + recommendation cycle',
   },
+  {
+    agentName: 'CampaignTrafficEnforcement',
+    hardcodedSchedule: '0 */2 * * *',
+    dynamicImport: () => {
+      import('./campaignLinkService').then(({ flagUnregisteredTraffic }) => {
+        flagUnregisteredTraffic().catch((err) => {
+          console.error('[AI Ops] Campaign traffic enforcement cron error:', err);
+        });
+      });
+    },
+    label: 'Campaign traffic enforcement',
+  },
 ];
 
 /**

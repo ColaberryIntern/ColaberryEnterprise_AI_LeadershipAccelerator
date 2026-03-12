@@ -38,6 +38,10 @@ export interface StrategicMetrics {
     avgReplyRate: number;
     totalMeetings: number;
     totalConversions: number;
+    registeredCampaigns: number;
+    liveCampaigns: number;
+    totalBudgetAllocated: number;
+    totalBudgetSpent: number;
   };
   visitors: {
     total: number;
@@ -104,7 +108,7 @@ export async function getStrategicMetrics(): Promise<StrategicMetrics> {
     getOpportunitySummary().catch(() => ({ total_scored: 0, avg_score: 0, distribution: {}, stall_counts: {}, total_pipeline_value: 0 })),
     getForecastProjections().catch(() => ({ by_level: [], total_projected_enrollments: 0, total_projected_revenue: 0, weighted_pipeline_value: 0 })),
     getGovernanceOverview().catch(() => ({ total_agents: 0, active_agents: 0, errored_agents: 0, errors_24h: 0, system_status: 'healthy' as const, settings_sync: {} as any })),
-    aggregateCampaignMetrics().catch(() => ({ activeCampaigns: 0, totalSent: 0, avgOpenRate: 0, avgReplyRate: 0, totalMeetings: 0, totalConversions: 0 })),
+    aggregateCampaignMetrics().catch(() => ({ activeCampaigns: 0, totalSent: 0, avgOpenRate: 0, avgReplyRate: 0, totalMeetings: 0, totalConversions: 0, registeredCampaigns: 0, liveCampaigns: 0, totalBudgetAllocated: 0, totalBudgetSpent: 0 })),
   ]);
 
   // Compute agent health from KPIs
@@ -173,7 +177,24 @@ export async function getStrategicMetrics(): Promise<StrategicMetrics> {
 // ─── Campaign Aggregation ───────────────────────────────────────────────────
 
 async function aggregateCampaignMetrics() {
-  const activeCampaigns = await Campaign.count({ where: { status: 'active' } });
+  const [activeCampaigns, registeredCampaigns, liveCampaigns] = await Promise.all([
+    Campaign.count({ where: { status: 'active' } }),
+    Campaign.count({ where: { tracking_link: { [Op.ne]: null } } as any }),
+    Campaign.count({ where: { approval_status: 'live' } as any }),
+  ]) as [number, number, number];
+
+  // Budget aggregation
+  const budgetAgg = await Campaign.findAll({
+    attributes: [
+      [Campaign.sequelize!.fn('COALESCE', Campaign.sequelize!.fn('SUM', Campaign.sequelize!.cast(Campaign.sequelize!.col('budget_cap'), 'numeric')), 0), 'total_allocated'],
+      [Campaign.sequelize!.fn('COALESCE', Campaign.sequelize!.fn('SUM', Campaign.sequelize!.cast(Campaign.sequelize!.col('budget_spent'), 'numeric')), 0), 'total_spent'],
+    ],
+    where: { budget_cap: { [Op.ne]: null } } as any,
+    raw: true,
+  }).catch(() => [{ total_allocated: 0, total_spent: 0 }]) as any[];
+
+  const totalBudgetAllocated = Number(budgetAgg[0]?.total_allocated) || 0;
+  const totalBudgetSpent = Number(budgetAgg[0]?.total_spent) || 0;
 
   // Aggregate interaction outcomes for campaign metrics
   const outcomes = await InteractionOutcome.findAll({
@@ -200,5 +221,9 @@ async function aggregateCampaignMetrics() {
     avgReplyRate: totalSent > 0 ? (totalReplied / totalSent) * 100 : 0,
     totalMeetings,
     totalConversions,
+    registeredCampaigns,
+    liveCampaigns,
+    totalBudgetAllocated,
+    totalBudgetSpent,
   };
 }

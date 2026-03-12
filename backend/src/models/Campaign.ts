@@ -4,6 +4,8 @@ import { sequelize } from '../config/database';
 export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'behavioral_trigger' | 'alumni' | 'alumni_re_engagement';
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
 export type CampaignMode = 'standard' | 'autonomous';
+export type CampaignChannel = 'email' | 'sms' | 'social' | 'paid_search' | 'paid_social' | 'direct_mail' | 'referral' | 'organic';
+export type CampaignApprovalStatus = 'draft' | 'pending_approval' | 'approved' | 'live' | 'paused' | 'completed';
 
 interface CampaignAttributes {
   id?: string;
@@ -27,6 +29,16 @@ interface CampaignAttributes {
   campaign_mode?: CampaignMode;
   ramp_state?: Record<string, any> | null;
   evolution_config?: Record<string, any> | null;
+  destination_path?: string;
+  tracking_link?: string;
+  objective?: string;
+  channel?: CampaignChannel;
+  approval_status?: CampaignApprovalStatus;
+  approved_by?: string;
+  approved_at?: Date;
+  budget_cap?: number;
+  cost_per_lead_target?: number;
+  expected_roi?: number;
   created_by?: string;
   created_at?: Date;
   updated_at?: Date;
@@ -54,6 +66,16 @@ class Campaign extends Model<CampaignAttributes> implements CampaignAttributes {
   declare campaign_mode: CampaignMode;
   declare ramp_state: Record<string, any> | null;
   declare evolution_config: Record<string, any> | null;
+  declare destination_path: string;
+  declare tracking_link: string;
+  declare objective: string;
+  declare channel: CampaignChannel;
+  declare approval_status: CampaignApprovalStatus;
+  declare approved_by: string;
+  declare approved_at: Date;
+  declare budget_cap: number;
+  declare cost_per_lead_target: number;
+  declare expected_roi: number;
   declare created_by: string;
   declare created_at: Date;
   declare updated_at: Date;
@@ -173,6 +195,48 @@ Campaign.init(
       type: DataTypes.JSONB,
       allowNull: true,
       defaultValue: null,
+    },
+    destination_path: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    tracking_link: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    objective: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    channel: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
+    },
+    approval_status: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'draft',
+    },
+    approved_by: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'admin_users', key: 'id' },
+    },
+    approved_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    budget_cap: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    cost_per_lead_target: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    expected_roi: {
+      type: DataTypes.DECIMAL(8, 2),
+      allowNull: true,
     },
     created_by: {
       type: DataTypes.UUID,

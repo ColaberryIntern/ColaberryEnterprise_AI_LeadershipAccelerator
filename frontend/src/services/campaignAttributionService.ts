@@ -14,7 +14,7 @@ interface StoredCampaign {
 export function captureCampaignFromURL(): void {
   try {
     const params = new URLSearchParams(window.location.search);
-    const campaignId = params.get('campaign_id');
+    const campaignId = params.get('campaign_id') || params.get('cid');
 
     if (campaignId) {
       const stored: StoredCampaign = {

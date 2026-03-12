@@ -9,6 +9,15 @@ import {
 } from '../../services/campaignEvolutionService';
 import { CampaignVariant } from '../../models';
 import {
+  submitForApproval,
+  approveCampaign,
+  rejectCampaign,
+  goLive,
+  pauseCampaignApproval,
+  completeCampaignApproval,
+} from '../../services/campaignApprovalService';
+import { generateTrackedLink, getCampaignROI } from '../../services/campaignLinkService';
+import {
   handleListCampaigns,
   handleCreateCampaign,
   handleGetCampaign,
@@ -182,6 +191,93 @@ router.post('/api/admin/campaigns/:id/evolution/unfreeze', requireAdmin, async (
   try {
     await unfreezeEvolution(req.params.id as string);
     res.json({ ok: true });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── Campaign Link Registry & Approval Workflow ──────────────────────────
+
+router.post('/api/admin/campaigns/:id/submit-approval', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const campaign = await submitForApproval(req.params.id as string);
+    res.json({ ok: true, campaign });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/approve', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).admin?.id || (req as any).user?.id;
+    const campaign = await approveCampaign(req.params.id as string, adminId);
+    res.json({ ok: true, campaign });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/reject', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { reason } = req.body;
+    const campaign = await rejectCampaign(req.params.id as string, reason || 'No reason provided');
+    res.json({ ok: true, campaign });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/go-live', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const campaign = await goLive(req.params.id as string);
+    res.json({ ok: true, campaign });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/pause-approval', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const campaign = await pauseCampaignApproval(req.params.id as string);
+    res.json({ ok: true, campaign });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/complete-approval', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const campaign = await completeCampaignApproval(req.params.id as string);
+    res.json({ ok: true, campaign });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/campaigns/:id/roi', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const roi = await getCampaignROI(req.params.id as string);
+    res.json(roi);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/campaigns/:id/tracking-link', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const Campaign = (await import('../../models/Campaign')).default;
+    const campaign = await Campaign.findByPk(req.params.id as string);
+    if (!campaign) { res.status(404).json({ error: 'Campaign not found' }); return; }
+    res.json({ tracking_link: campaign.tracking_link || null });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/campaigns/:id/generate-link', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const link = await generateTrackedLink(req.params.id as string);
+    res.json({ ok: true, tracking_link: link });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
