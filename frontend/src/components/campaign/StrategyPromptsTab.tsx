@@ -49,6 +49,7 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
 
   // ── Rebuild Modal ─────────────────────────────────────────────────
   const [showRebuild, setShowRebuild] = useState(false);
+  const [rebuildMinimized, setRebuildMinimized] = useState(false);
   const [rebuildStep, setRebuildStep] = useState(0);
   const [rebuildError, setRebuildError] = useState<string | null>(null);
 
@@ -200,6 +201,7 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
 
   const handleRebuild = async () => {
     setShowRebuild(true);
+    setRebuildMinimized(false);
     setRebuildStep(1);
     setRebuildError(null);
 
@@ -422,9 +424,12 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
       {/* Rebuild Progress Modal */}
       <RebuildProgressModal
         show={showRebuild}
+        minimized={rebuildMinimized}
         currentStep={rebuildStep}
         error={rebuildError}
-        onClose={() => setShowRebuild(false)}
+        onClose={() => { setShowRebuild(false); setRebuildMinimized(false); }}
+        onMinimize={() => setRebuildMinimized(true)}
+        onRestore={() => setRebuildMinimized(false)}
       />
     </>
   );

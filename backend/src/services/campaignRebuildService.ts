@@ -14,7 +14,7 @@ function getClient(): OpenAI {
   if (!openaiClient) {
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = new OpenAI({ apiKey });
+    openaiClient = new OpenAI({ apiKey, timeout: 90_000 });
   }
   return openaiClient;
 }
@@ -170,6 +170,8 @@ export async function rebuildCampaignFromPrompt(
   const client = getClient();
   const model = (await getSetting('ai_model')) || env.aiModel;
 
+  console.log(`[CampaignRebuild] Starting rebuild for campaign ${campaignId}, model: ${model}`);
+
   const response = await client.chat.completions.create({
     model,
     temperature: 0.7,
@@ -225,6 +227,7 @@ Generate the full campaign structure.`,
     ],
   });
 
+  console.log(`[CampaignRebuild] AI response received, parsing...`);
   const raw = response.choices[0]?.message?.content?.trim() || '';
 
   // Parse JSON — strip markdown fences if present

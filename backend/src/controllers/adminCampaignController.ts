@@ -521,15 +521,20 @@ export async function handleReverseEngineer(req: Request, res: Response, next: N
     const result = await reverseEngineerCampaign(req.params.id as string);
     res.json(result);
   } catch (error: any) {
-    if (error.message.includes('not found')) {
+    console.error('[ReverseEngineer] Error:', error.message);
+    if (error.message?.includes('not found')) {
       res.status(404).json({ error: error.message });
       return;
     }
-    if (error.message.includes('not configured')) {
+    if (error.message?.includes('not configured')) {
       res.status(400).json({ error: 'OpenAI API key not configured' });
       return;
     }
-    next(error);
+    if (error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT') || error.code === 'ETIMEDOUT') {
+      res.status(504).json({ error: 'AI generation timed out. Please try again.' });
+      return;
+    }
+    res.status(500).json({ error: error.message || 'Reverse engineer failed' });
   }
 }
 
@@ -545,14 +550,19 @@ export async function handleRebuildCampaign(req: Request, res: Response, next: N
     const result = await rebuildCampaignFromPrompt(req.params.id as string, ai_system_prompt);
     res.json(result);
   } catch (error: any) {
-    if (error.message.includes('not found')) {
+    console.error('[RebuildCampaign] Error:', error.message);
+    if (error.message?.includes('not found')) {
       res.status(404).json({ error: error.message });
       return;
     }
-    if (error.message.includes('not configured')) {
+    if (error.message?.includes('not configured')) {
       res.status(400).json({ error: 'OpenAI API key not configured' });
       return;
     }
-    next(error);
+    if (error.message?.includes('timeout') || error.message?.includes('ETIMEDOUT') || error.code === 'ETIMEDOUT') {
+      res.status(504).json({ error: 'AI generation timed out. Please try again.' });
+      return;
+    }
+    res.status(500).json({ error: error.message || 'Rebuild failed' });
   }
 }
