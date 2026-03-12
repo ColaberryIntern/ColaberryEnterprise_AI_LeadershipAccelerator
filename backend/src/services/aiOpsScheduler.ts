@@ -26,6 +26,14 @@ import {
   runAdmissionsCallback,
   runAdmissionsConversationTaskScan,
   runAdmissionsAssistant,
+  runOpenclawSupervisor,
+  runOpenclawMarketSignal,
+  runOpenclawConversationDetection,
+  runOpenclawContentResponse,
+  runOpenclawBrowserWorker,
+  runOpenclawLearningOptimization,
+  runOpenclawInfraMonitor,
+  runOpenclawTechResearch,
 } from './aiOrchestrator';
 import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
@@ -257,7 +265,65 @@ export function startAIOpsScheduler(): void {
     });
   });
 
-  console.log('[AI Ops] Scheduler started (105 agents registered):');
+  // --- OpenClaw Autonomous Outreach Network Crons ---
+
+  // OpenClaw Supervisor: every 2 minutes
+  cron.schedule('*/2 * * * *', () => {
+    runOpenclawSupervisor().catch((err) => {
+      console.error('[AI Ops] OpenClaw supervisor cron error:', err);
+    });
+  });
+
+  // OpenClaw Market Signal: every 30 minutes
+  cron.schedule('*/30 * * * *', () => {
+    runOpenclawMarketSignal().catch((err) => {
+      console.error('[AI Ops] OpenClaw market signal cron error:', err);
+    });
+  });
+
+  // OpenClaw Conversation Detection: at :05 and :35
+  cron.schedule('5,35 * * * *', () => {
+    runOpenclawConversationDetection().catch((err) => {
+      console.error('[AI Ops] OpenClaw conversation detection cron error:', err);
+    });
+  });
+
+  // OpenClaw Content Response: at :10 and :40
+  cron.schedule('10,40 * * * *', () => {
+    runOpenclawContentResponse().catch((err) => {
+      console.error('[AI Ops] OpenClaw content response cron error:', err);
+    });
+  });
+
+  // OpenClaw Browser Worker: at :15 and :45
+  cron.schedule('15,45 * * * *', () => {
+    runOpenclawBrowserWorker().catch((err) => {
+      console.error('[AI Ops] OpenClaw browser worker cron error:', err);
+    });
+  });
+
+  // OpenClaw Learning Optimization: every 4 hours
+  cron.schedule('0 */4 * * *', () => {
+    runOpenclawLearningOptimization().catch((err) => {
+      console.error('[AI Ops] OpenClaw learning optimization cron error:', err);
+    });
+  });
+
+  // OpenClaw Infrastructure Monitor: every 5 minutes
+  cron.schedule('*/5 * * * *', () => {
+    runOpenclawInfraMonitor().catch((err) => {
+      console.error('[AI Ops] OpenClaw infra monitor cron error:', err);
+    });
+  });
+
+  // OpenClaw Tech Research: daily at 6 AM
+  cron.schedule('0 6 * * *', () => {
+    runOpenclawTechResearch().catch((err) => {
+      console.error('[AI Ops] OpenClaw tech research cron error:', err);
+    });
+  });
+
+  console.log('[AI Ops] Scheduler started (113 agents registered):');
   console.log('[AI Ops]   Campaign health scan: every 15 minutes');
   console.log('[AI Ops]   Campaign repair agent: every 20 minutes (offset)');
   console.log('[AI Ops]   Content optimization: every 6 hours');
@@ -286,4 +352,12 @@ export function startAIOpsScheduler(): void {
   console.log('[AI Ops]   Admissions assistant: every 10 minutes');
   console.log('[AI Ops]   Executive daily briefing: 7 AM daily');
   console.log('[AI Ops]   Executive weekly briefing: 7 AM Mondays');
+  console.log('[AI Ops]   OpenClaw supervisor: every 2 minutes');
+  console.log('[AI Ops]   OpenClaw market signal: every 30 minutes');
+  console.log('[AI Ops]   OpenClaw conversation detection: at :05,:35');
+  console.log('[AI Ops]   OpenClaw content response: at :10,:40');
+  console.log('[AI Ops]   OpenClaw browser worker: at :15,:45');
+  console.log('[AI Ops]   OpenClaw learning optimization: every 4 hours');
+  console.log('[AI Ops]   OpenClaw infra monitor: every 5 minutes');
+  console.log('[AI Ops]   OpenClaw tech research: daily at 6 AM');
 }

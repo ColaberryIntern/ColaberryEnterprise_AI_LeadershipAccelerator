@@ -85,6 +85,11 @@ import Alert from './Alert';
 import AlertEvent from './AlertEvent';
 import AlertSubscription from './AlertSubscription';
 import AlertResolution from './AlertResolution';
+import OpenclawSignal from './OpenclawSignal';
+import OpenclawTask from './OpenclawTask';
+import OpenclawSession from './OpenclawSession';
+import OpenclawResponse from './OpenclawResponse';
+import OpenclawLearning from './OpenclawLearning';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -478,6 +483,22 @@ Department.hasMany(Alert, { foreignKey: 'department_id', as: 'alerts' });
 Enrollment.hasMany(StudentNavigationEvent, { foreignKey: 'enrollment_id', as: 'navigationEvents' });
 StudentNavigationEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
+// --- OpenClaw Outreach Network associations ---
+OpenclawSignal.hasOne(OpenclawResponse, { foreignKey: 'signal_id', as: 'response' });
+OpenclawResponse.belongsTo(OpenclawSignal, { foreignKey: 'signal_id', as: 'signal' });
+
+OpenclawSession.hasMany(OpenclawResponse, { foreignKey: 'session_id', as: 'responses' });
+OpenclawResponse.belongsTo(OpenclawSession, { foreignKey: 'session_id', as: 'session' });
+
+OpenclawSignal.hasMany(OpenclawTask, { foreignKey: 'signal_id', as: 'tasks' });
+OpenclawTask.belongsTo(OpenclawSignal, { foreignKey: 'signal_id', as: 'signal' });
+
+OpenclawSession.hasMany(OpenclawTask, { foreignKey: 'session_id', as: 'tasks' });
+OpenclawTask.belongsTo(OpenclawSession, { foreignKey: 'session_id', as: 'session' });
+
+Campaign.hasMany(OpenclawResponse, { foreignKey: 'campaign_id', as: 'openclawResponses' });
+OpenclawResponse.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -543,4 +564,9 @@ export {
   AlertEvent,
   AlertSubscription,
   AlertResolution,
+  OpenclawSignal,
+  OpenclawTask,
+  OpenclawSession,
+  OpenclawResponse,
+  OpenclawLearning,
 };

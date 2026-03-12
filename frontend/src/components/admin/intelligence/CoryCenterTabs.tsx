@@ -19,10 +19,11 @@ import DeptTimelineTab from './tabs/DeptTimelineTab';
 import InnovationTab from './tabs/InnovationTab';
 import RevenueImpactTab from './tabs/RevenueImpactTab';
 import AlertsTab from './tabs/AlertsTab';
+import OpenclawTab from './tabs/OpenclawTab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue';
+type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
@@ -480,6 +481,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
     { key: 'dept-timeline', label: 'Dept Timeline' },
     { key: 'innovation', label: 'Innovation' },
     { key: 'revenue', label: 'Revenue' },
+    { key: 'outreach', label: 'Outreach' },
   ];
 
   return (
@@ -540,6 +542,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         {activeTab === 'dept-timeline' && <DeptTimelineTab entityFilter={entityFilter} />}
         {activeTab === 'innovation' && <InnovationTab entityFilter={entityFilter} />}
         {activeTab === 'revenue' && <RevenueImpactTab entityFilter={entityFilter} />}
+        {activeTab === 'outreach' && <OpenclawTab />}
       </div>
     </div>
   );

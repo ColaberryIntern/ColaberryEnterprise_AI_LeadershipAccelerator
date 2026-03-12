@@ -41,6 +41,14 @@ import { runAdmissionsCallComplianceAgent } from './agents/admissions/admissions
 import { runAdmissionsCallbackAgent } from './agents/admissions/admissionsCallbackAgent';
 import { runAdmissionsConversationTaskMonitor } from './agents/admissions/admissionsConversationTaskMonitor';
 import { runAdmissionsAssistantAgent } from './agents/admissions/admissionsAssistantAgent';
+import { runOpenclawSupervisorAgent } from './agents/openclaw/openclawSupervisorAgent';
+import { runOpenclawMarketSignalAgent } from './agents/openclaw/openclawMarketSignalAgent';
+import { runOpenclawConversationDetectionAgent } from './agents/openclaw/openclawConversationDetectionAgent';
+import { runOpenclawContentResponseAgent } from './agents/openclaw/openclawContentResponseAgent';
+import { runOpenclawBrowserWorkerAgent } from './agents/openclaw/openclawBrowserWorkerAgent';
+import { runOpenclawLearningOptimizationAgent } from './agents/openclaw/openclawLearningOptimizationAgent';
+import { runOpenclawInfraMonitorAgent } from './agents/openclaw/openclawInfraMonitorAgent';
+import { runOpenclawTechResearchAgent } from './agents/openclaw/openclawTechResearchAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -459,4 +467,38 @@ export async function runAllAdmissionsIntelligence(): Promise<(AgentExecutionRes
   results.push(await runAdmissionsInsights());
   results.push(await runAdmissionsExecutiveUpdate());
   return results;
+}
+
+/* ── OpenClaw Autonomous Outreach Network Agents ──────────────────── */
+
+export async function runOpenclawSupervisor(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawSupervisorAgent', runOpenclawSupervisorAgent);
+}
+
+export async function runOpenclawMarketSignal(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawMarketSignalAgent', runOpenclawMarketSignalAgent);
+}
+
+export async function runOpenclawConversationDetection(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawConversationDetectionAgent', runOpenclawConversationDetectionAgent);
+}
+
+export async function runOpenclawContentResponse(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawContentResponseAgent', runOpenclawContentResponseAgent);
+}
+
+export async function runOpenclawBrowserWorker(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawBrowserWorkerAgent', runOpenclawBrowserWorkerAgent);
+}
+
+export async function runOpenclawLearningOptimization(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawLearningOptimizationAgent', runOpenclawLearningOptimizationAgent);
+}
+
+export async function runOpenclawInfraMonitor(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawInfraMonitorAgent', runOpenclawInfraMonitorAgent);
+}
+
+export async function runOpenclawTechResearch(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawTechResearchAgent', runOpenclawTechResearchAgent);
 }

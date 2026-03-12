@@ -129,12 +129,21 @@ export type AiAgentType =
   | 'approval'
   // GitHub
   | 'github_automation'
+  // OpenClaw Outreach Network
+  | 'openclaw_supervisor'
+  | 'openclaw_research'
+  | 'openclaw_detection'
+  | 'openclaw_content'
+  | 'openclaw_browser'
+  | 'openclaw_learning'
+  | 'openclaw_infra_monitor'
+  | 'openclaw_tech_research'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw';
 
 interface AiAgentAttributes {
   id?: string;

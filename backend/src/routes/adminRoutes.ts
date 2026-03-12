@@ -24,6 +24,7 @@ import admissionsRoutes from './admin/admissionsRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
+import openclawRoutes from './admin/openclawRoutes';
 
 const router = Router();
 
@@ -52,5 +53,6 @@ router.use(admissionsRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);
+router.use(openclawRoutes);
 
 export default router;

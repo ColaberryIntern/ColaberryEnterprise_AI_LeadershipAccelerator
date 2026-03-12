@@ -31,6 +31,7 @@ const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
   autonomous: 'Intelligence',
   // Marketing
   outbound: 'Marketing',
+  openclaw: 'Marketing',
   // Strategy
   strategic: 'Strategy',
   // Education
@@ -57,7 +58,7 @@ const CATEGORY_TO_DEPARTMENT: Record<string, Department> = {
 const DEPARTMENT_TO_CATEGORIES: Record<Department, string[]> = {
   Executive: ['executive'],
   Strategy: ['strategic'],
-  Marketing: ['outbound'],
+  Marketing: ['outbound', 'openclaw'],
   Admissions: ['admissions', 'admissions_ops'],
   Alumni: ['alumni'],
   Partnerships: ['partnerships'],
