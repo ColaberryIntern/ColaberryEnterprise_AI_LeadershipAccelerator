@@ -290,11 +290,20 @@ function ImpactMetrics({ entityFilter }: { entityFilter?: { type: string; id: st
   const [status, setStatus] = useState<CoryStatusReport | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    getCoryStatus().then(setStatus).catch(() => {}).finally(() => setLoading(false));
+    getCoryStatus()
+      .then(setStatus)
+      .catch((err) => {
+        console.error('[ImpactMetrics] Failed to load:', err?.response?.status, err?.message);
+        setError(err?.response?.status === 401 ? 'Session expired — please log in again.' : `Failed to load metrics: ${err?.message || 'Unknown error'}`);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="text-center p-4 text-muted">Loading metrics...</div>;
+  if (error) return <div className="text-center p-4 text-muted">{error}</div>;
   if (!status) return <div className="text-center p-4 text-muted">Unable to load metrics.</div>;
 
   // Filter departments if entity filter active

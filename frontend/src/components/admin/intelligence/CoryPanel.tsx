@@ -406,6 +406,7 @@ export default function CoryPanel({
   const { response, loading: queryLoading, query } = useIntelligenceQuery();
   const { scope } = useIntelligenceContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastAssistantRef = useRef<HTMLDivElement>(null);
   const [queryCount, setQueryCount] = useState(0);
   const processedExternalRef = useRef<string | null>(null);
   const [coryStatus, setCoryStatus] = useState<'active' | 'thinking' | 'idle'>('active');
@@ -429,9 +430,13 @@ export default function CoryPanel({
     ];
   }, [scope]);
 
-  // Scroll to bottom on new messages
+  // Scroll to start of latest assistant response (so user reads from the top)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
+      lastAssistantRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, loading]);
 
   // Handle assistant pipeline responses
@@ -621,7 +626,11 @@ export default function CoryPanel({
 
         {/* Message list */}
         {messages.map((msg, i) => (
-          <div key={i} className={`mb-4 ${msg.role === 'user' ? 'text-end' : ''}`}>
+          <div
+            key={i}
+            ref={msg.role === 'assistant' && i === messages.length - 1 ? lastAssistantRef : undefined}
+            className={`mb-4 ${msg.role === 'user' ? 'text-end' : ''}`}
+          >
             {msg.role === 'user' ? (
               <div
                 className="d-inline-block px-3 py-2 rounded-3 text-white"
