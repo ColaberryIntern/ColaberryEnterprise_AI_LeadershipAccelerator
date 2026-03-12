@@ -1,6 +1,26 @@
 // Shared TypeScript interfaces for the Mini-Section Builder
 
-export type MiniSectionType = 'executive_reality_check' | 'ai_strategy' | 'prompt_template' | 'implementation_task' | 'knowledge_check';
+// Dynamic curriculum types — stored in curriculum_type_definitions table.
+// These are the built-in system types; custom types use arbitrary slugs.
+export type MiniSectionType = string;
+
+// Type definition from the API (curriculum_type_definitions table)
+export interface TypeDefinition {
+  id: string;
+  slug: string;
+  label: string;
+  student_label: string;
+  description: string;
+  icon: string;
+  badge_class: string;
+  can_create_variables: boolean;
+  can_create_artifacts: boolean;
+  applicable_prompt_pairs: string[];
+  default_prompts: Record<string, { system: string; user: string }>;
+  is_system: boolean;
+  is_active: boolean;
+  display_order: number;
+}
 
 export interface MiniSection {
   id: string;
@@ -232,6 +252,57 @@ export const TYPE_ICONS: Record<string, string> = {
   implementation_task: 'bi-clipboard-check',
   knowledge_check: 'bi-question-circle',
 };
+
+/** Build dynamic type maps from API-loaded type definitions */
+export function buildTypeOptions(defs: TypeDefinition[]): typeof TYPE_OPTIONS {
+  return defs.map(d => ({
+    value: d.slug,
+    label: d.label,
+    badge: d.badge_class,
+    studentLabel: d.student_label,
+    description: d.description,
+  }));
+}
+
+export function buildTypeBadgeMap(defs: TypeDefinition[]): Record<string, { badge: string; label: string }> {
+  const map: Record<string, { badge: string; label: string }> = {};
+  for (const d of defs) {
+    map[d.slug] = { badge: d.badge_class, label: d.student_label };
+  }
+  return map;
+}
+
+export function buildTypeIcons(defs: TypeDefinition[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const d of defs) {
+    map[d.slug] = d.icon;
+  }
+  return map;
+}
+
+export function buildTypeStudentLabels(defs: TypeDefinition[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const d of defs) {
+    map[d.slug] = d.student_label;
+  }
+  return map;
+}
+
+/** Build PROMPT_PAIRS dynamically from type definitions */
+export function buildPromptPairs(defs: TypeDefinition[]): typeof PROMPT_PAIRS {
+  const ALL_PAIRS = [
+    { key: 'concept', systemField: 'concept_prompt_system' as keyof MiniSection, userField: 'concept_prompt_user' as keyof MiniSection, fkField: 'concept_prompt_template_id' as keyof MiniSection, label: 'Concept Prompt' },
+    { key: 'build', systemField: 'build_prompt_system' as keyof MiniSection, userField: 'build_prompt_user' as keyof MiniSection, fkField: 'build_prompt_template_id' as keyof MiniSection, label: 'Build Prompt' },
+    { key: 'mentor', systemField: 'mentor_prompt_system' as keyof MiniSection, userField: 'mentor_prompt_user' as keyof MiniSection, fkField: 'mentor_prompt_template_id' as keyof MiniSection, label: 'Mentor Prompt' },
+    { key: 'kc', systemField: 'kc_prompt_system' as keyof MiniSection, userField: 'kc_prompt_user' as keyof MiniSection, fkField: 'concept_prompt_template_id' as keyof MiniSection, label: 'Knowledge Check Prompt' },
+    { key: 'reflection', systemField: 'reflection_prompt_system' as keyof MiniSection, userField: 'reflection_prompt_user' as keyof MiniSection, fkField: 'concept_prompt_template_id' as keyof MiniSection, label: 'Reflection Prompt' },
+  ];
+
+  return ALL_PAIRS.map(pair => ({
+    ...pair,
+    applicableTypes: defs.filter(d => d.applicable_prompt_pairs.includes(pair.key)).map(d => d.slug),
+  }));
+}
 
 /** Extract {{placeholder}} patterns from a template string */
 export function extractPlaceholders(template: string): string[] {

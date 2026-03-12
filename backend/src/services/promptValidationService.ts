@@ -168,7 +168,7 @@ export async function validateCompositePrompt(
   }
 
   // Type-specific constraint validation
-  const typeRules = getTypeRules();
+  const typeRules = await getTypeRules();
   for (const ms of miniSections) {
     const type = ms.mini_section_type;
     if (!type) {

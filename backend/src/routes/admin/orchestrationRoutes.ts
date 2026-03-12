@@ -570,4 +570,82 @@ router.get('/api/admin/orchestration/analytics/program/skill-detail/:skillId', r
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Curriculum Type Definitions ──────────────────────────────────────────
+import * as curriculumTypeService from '../../services/curriculumTypeService';
+
+router.get('/api/admin/orchestration/curriculum-types', requireAdmin, async (_req, res) => {
+  try {
+    const types = await curriculumTypeService.listTypes();
+    const usageCounts = await curriculumTypeService.getTypeUsageCounts();
+    res.json({ types, usageCounts });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/admin/orchestration/curriculum-types/all', requireAdmin, async (_req, res) => {
+  try {
+    const types = await curriculumTypeService.getAllTypes();
+    const usageCounts = await curriculumTypeService.getTypeUsageCounts();
+    res.json({ types, usageCounts });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/admin/orchestration/curriculum-types/:slug', requireAdmin, async (req, res) => {
+  try {
+    const t = await curriculumTypeService.getType(req.params.slug as string);
+    res.json(t);
+  } catch (err: any) { res.status(404).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/curriculum-types', requireAdmin, async (req, res) => {
+  try {
+    const t = await curriculumTypeService.createType(req.body);
+    res.status(201).json(t);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+router.put('/api/admin/orchestration/curriculum-types/:id', requireAdmin, async (req, res) => {
+  try {
+    const t = await curriculumTypeService.updateType(req.params.id as string, req.body);
+    res.json(t);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+router.delete('/api/admin/orchestration/curriculum-types/:id', requireAdmin, async (req, res) => {
+  try {
+    await curriculumTypeService.deleteType(req.params.id as string);
+    res.json({ deleted: true });
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/curriculum-types/:id/duplicate', requireAdmin, async (req, res) => {
+  try {
+    const { slug, label } = req.body || {};
+    const t = await curriculumTypeService.duplicateType(req.params.id as string, slug, label);
+    res.status(201).json(t);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/curriculum-types/generate', requireAdmin, async (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!description) { res.status(400).json({ error: 'description is required' }); return; }
+    const config = await curriculumTypeService.generateTypeFromDescription(description);
+    res.json({ generated: config });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/curriculum-types/:id/reverse-engineer', requireAdmin, async (req, res) => {
+  try {
+    const result = await curriculumTypeService.reverseEngineerType(req.params.id as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/orchestration/mini-sections/:id/reverse-engineer', requireAdmin, async (req, res) => {
+  try {
+    const result = await curriculumTypeService.reverseEngineerMiniSection(req.params.id as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;

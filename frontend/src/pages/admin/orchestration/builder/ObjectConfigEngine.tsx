@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { MiniSection, MiniSectionType, TYPE_OPTIONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult } from './types';
+import React, { useState, useCallback } from 'react';
+import api from '../../../../utils/api';
+import { MiniSection, MiniSectionType, TYPE_OPTIONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions } from './types';
 import PromptSection from './PromptSection';
 import VariableSection from './VariableSection';
 import SkillSection from './SkillSection';
@@ -52,6 +53,7 @@ interface Props {
   onApplySuggestionFix: (s: Suggestion) => void;
   onOpenDiagnostic: () => void;
   onOpenRepair: () => void;
+  typeDefinitions?: TypeDefinition[];
 }
 
 interface AccordionState {
@@ -71,6 +73,24 @@ export default function ObjectConfigEngine(props: Props) {
   const [expanded, setExpanded] = useState<AccordionState>({
     core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
   });
+  const [reversePrompt, setReversePrompt] = useState('');
+  const [reverseLoading, setReverseLoading] = useState(false);
+  const [showReverseModal, setShowReverseModal] = useState(false);
+
+  const handleReverseEngineer = useCallback(async () => {
+    if (!editing?.id) return;
+    setReverseLoading(true);
+    setShowReverseModal(true);
+    setReversePrompt('');
+    try {
+      const res = await api.post(`/api/admin/orchestration/mini-sections/${editing.id}/reverse-engineer`);
+      setReversePrompt(res.data.prompt || '');
+    } catch (err: any) {
+      setReversePrompt(`Error: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setReverseLoading(false);
+    }
+  }, [editing?.id]);
 
   if (!editing) {
     return (
@@ -85,7 +105,8 @@ export default function ObjectConfigEngine(props: Props) {
   }
 
   const editType = editing.mini_section_type;
-  const selectedTypeInfo = TYPE_OPTIONS.find(t => t.value === editType);
+  const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
+  const selectedTypeInfo = effectiveTypeOptions.find(t => t.value === editType);
   const canSave = !!editing.title && !!editType;
 
   const toggle = (key: keyof AccordionState) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
@@ -149,7 +170,7 @@ export default function ObjectConfigEngine(props: Props) {
                 }}
               >
                 <option value="">Select type...</option>
-                {TYPE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {effectiveTypeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
               {selectedTypeInfo && <div className="text-muted" style={{ fontSize: 10 }}>{selectedTypeInfo.description}</div>}
             </div>
@@ -280,10 +301,15 @@ export default function ObjectConfigEngine(props: Props) {
 
       {/* Footer */}
       <div className="card-footer bg-white py-2 d-flex justify-content-between">
-        <div>
+        <div className="d-flex gap-2">
           {editing.id && (
             <button className="btn btn-sm btn-outline-danger" onClick={() => props.onDelete(editing.id!)}>
               <i className="bi bi-trash me-1"></i>Delete
+            </button>
+          )}
+          {editing.id && !isNew && (
+            <button className="btn btn-sm btn-outline-secondary" onClick={handleReverseEngineer} title="Reverse Engineer Prompt">
+              <i className="bi bi-arrow-repeat me-1"></i>Reverse Engineer
             </button>
           )}
         </div>
@@ -294,6 +320,40 @@ export default function ObjectConfigEngine(props: Props) {
           </button>
         </div>
       </div>
+
+      {/* Reverse Engineer Modal */}
+      {showReverseModal && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) setShowReverseModal(false); }}>
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h6 className="modal-title fw-semibold"><i className="bi bi-arrow-repeat me-2"></i>Reverse Engineered Prompt</h6>
+                <button type="button" className="btn-close" onClick={() => setShowReverseModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                {reverseLoading ? (
+                  <div className="text-center py-4">
+                    <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <div className="small text-muted mt-2">Analyzing mini-section configuration...</div>
+                  </div>
+                ) : (
+                  <>
+                    <label className="form-label small fw-medium">Natural Language Description</label>
+                    <textarea className="form-control form-control-sm" rows={10} value={reversePrompt} onChange={e => setReversePrompt(e.target.value)} />
+                    <div className="form-text">This prompt describes how to recreate this mini-section. Copy and edit it to create variations.</div>
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setShowReverseModal(false)}>Close</button>
+                <button className="btn btn-sm btn-outline-primary" onClick={() => navigator.clipboard.writeText(reversePrompt)}>
+                  <i className="bi bi-clipboard me-1"></i>Copy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

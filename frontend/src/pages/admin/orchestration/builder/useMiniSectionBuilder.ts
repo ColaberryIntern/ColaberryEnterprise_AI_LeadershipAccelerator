@@ -3,6 +3,7 @@ import {
   MiniSection, MiniSectionType, Module, Lesson, PromptOption,
   SkillOption, VariableOption, ArtifactOption, DryRunResult, PromptBody, VariableMapData,
   QualityBreakdown, Suggestion, DiagnosticReport, RepairResult,
+  TypeDefinition,
 } from './types';
 
 interface BuilderProps {
@@ -55,18 +56,23 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
   const [inlineCreator, setInlineCreator] = useState<'variable' | 'skill' | 'artifact' | null>(null);
   const [showSimulation, setShowSimulation] = useState(false);
 
+  // Type definitions from API
+  const [typeDefinitions, setTypeDefinitions] = useState<TypeDefinition[]>([]);
+
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   // --- Reference data ---
   const refreshReferenceData = useCallback(async () => {
     try {
-      const [modData, promptData, varData, skillData, artifactData] = await Promise.all([
+      const [modData, promptData, varData, skillData, artifactData, typeData] = await Promise.all([
         fetch(`${apiUrl}/api/admin/orchestration/program/modules`, { headers }).then(r => r.json()),
         fetch(`${apiUrl}/api/admin/orchestration/prompts`, { headers }).then(r => r.json()),
         fetch(`${apiUrl}/api/admin/orchestration/variable-definitions`, { headers }).then(r => r.json()),
         fetch(`${apiUrl}/api/admin/orchestration/program/skills`, { headers }).then(r => r.json()),
         fetch(`${apiUrl}/api/admin/orchestration/program/artifacts`, { headers }).then(r => r.json()),
+        fetch(`${apiUrl}/api/admin/orchestration/curriculum-types`, { headers }).then(r => r.json()).catch(() => ({ types: [] })),
       ]);
+      setTypeDefinitions(typeData?.types || []);
       setModules(Array.isArray(modData) ? modData : []);
       setPrompts(Array.isArray(promptData) ? promptData : []);
 
@@ -383,6 +389,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     skillOptions, variableOptions, artifactOptions,
     promptBodies, fetchPromptBody,
     refreshReferenceData,
+    typeDefinitions,
 
     // Validation
     dryRun, variableMap, validating,

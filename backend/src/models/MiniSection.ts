@@ -1,7 +1,9 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type MiniSectionType = 'executive_reality_check' | 'ai_strategy' | 'prompt_template' | 'implementation_task' | 'knowledge_check';
+// Dynamic curriculum types — stored in curriculum_type_definitions table.
+// These are the built-in system types; custom types use arbitrary slugs.
+export type MiniSectionType = string;
 
 export interface MiniSectionAttributes {
   id?: string;
@@ -93,7 +95,7 @@ MiniSection.init(
       references: { model: 'curriculum_lessons', key: 'id' },
     },
     mini_section_type: {
-      type: DataTypes.ENUM('executive_reality_check', 'ai_strategy', 'prompt_template', 'implementation_task', 'knowledge_check'),
+      type: DataTypes.STRING(100),
       allowNull: false,
     },
     mini_section_order: {

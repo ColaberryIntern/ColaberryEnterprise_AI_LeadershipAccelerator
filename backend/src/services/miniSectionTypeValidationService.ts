@@ -1,19 +1,27 @@
 /**
  * Mini-Section Type Validation Service
  * Enforces type-specific permission rules and curriculum order constraints.
+ * Now loads rules dynamically from CurriculumTypeDefinition table.
  */
 
-import type { MiniSectionType, MiniSectionAttributes } from '../models/MiniSection';
+import type { MiniSectionAttributes } from '../models/MiniSection';
 import MiniSection from '../models/MiniSection';
 import VariableDefinition from '../models/VariableDefinition';
 import ArtifactDefinition from '../models/ArtifactDefinition';
+import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 
 export interface TypeValidationResult {
   valid: boolean;
   errors: string[];
 }
 
-const TYPE_RULES: Record<MiniSectionType, { canCreateVariables: boolean; canCreateArtifacts: boolean }> = {
+// In-memory cache for type rules (refreshed every 60s)
+let _typeRulesCache: Record<string, { canCreateVariables: boolean; canCreateArtifacts: boolean }> | null = null;
+let _typeRulesCacheTs = 0;
+const CACHE_TTL_MS = 60_000;
+
+// Fallback rules for the 5 system types (used if DB not yet seeded)
+const FALLBACK_RULES: Record<string, { canCreateVariables: boolean; canCreateArtifacts: boolean }> = {
   executive_reality_check: { canCreateVariables: false, canCreateArtifacts: false },
   ai_strategy:             { canCreateVariables: false, canCreateArtifacts: false },
   prompt_template:         { canCreateVariables: true,  canCreateArtifacts: false },
@@ -21,12 +29,39 @@ const TYPE_RULES: Record<MiniSectionType, { canCreateVariables: boolean; canCrea
   knowledge_check:         { canCreateVariables: false, canCreateArtifacts: false },
 };
 
-const VALID_TYPES: MiniSectionType[] = [
-  'executive_reality_check', 'ai_strategy', 'prompt_template', 'implementation_task', 'knowledge_check',
-];
+async function loadTypeRules(): Promise<Record<string, { canCreateVariables: boolean; canCreateArtifacts: boolean }>> {
+  if (_typeRulesCache && Date.now() - _typeRulesCacheTs < CACHE_TTL_MS) {
+    return _typeRulesCache;
+  }
+  try {
+    const types = await CurriculumTypeDefinition.findAll({
+      where: { is_active: true },
+      attributes: ['slug', 'can_create_variables', 'can_create_artifacts'],
+    });
+    const rules: Record<string, { canCreateVariables: boolean; canCreateArtifacts: boolean }> = {};
+    for (const t of types) {
+      rules[t.slug] = {
+        canCreateVariables: t.can_create_variables,
+        canCreateArtifacts: t.can_create_artifacts,
+      };
+    }
+    _typeRulesCache = rules;
+    _typeRulesCacheTs = Date.now();
+    return rules;
+  } catch {
+    // DB not ready yet — use fallback
+    return FALLBACK_RULES;
+  }
+}
 
-export function getTypeRules() {
-  return TYPE_RULES;
+export async function getTypeRules() {
+  return loadTypeRules();
+}
+
+/** Clear the cache (useful after type CRUD operations) */
+export function invalidateTypeRulesCache() {
+  _typeRulesCache = null;
+  _typeRulesCacheTs = 0;
 }
 
 /**
@@ -43,18 +78,21 @@ export async function validateMiniSectionType(data: Partial<MiniSectionAttribute
     return { valid: false, errors };
   }
 
-  if (!VALID_TYPES.includes(type)) {
-    errors.push(`Invalid mini_section_type: ${type}. Must be one of: ${VALID_TYPES.join(', ')}`);
+  const rules = await loadTypeRules();
+  const validTypes = Object.keys(rules);
+
+  if (!validTypes.includes(type)) {
+    errors.push(`Invalid mini_section_type: ${type}. Must be one of: ${validTypes.join(', ')}`);
     return { valid: false, errors };
   }
 
-  const rules = TYPE_RULES[type];
+  const typeRule = rules[type];
 
   // Check creates_variable_keys permission
   const createsVarKeys = data.creates_variable_keys;
   if (createsVarKeys && createsVarKeys.length > 0) {
-    if (!rules.canCreateVariables) {
-      errors.push(`Type "${type}" cannot create variables. Only "prompt_template" can set creates_variable_keys.`);
+    if (!typeRule.canCreateVariables) {
+      errors.push(`Type "${type}" cannot create variables.`);
     } else {
       // Validate keys exist in VariableDefinition
       const existing = await VariableDefinition.findAll({
@@ -81,8 +119,8 @@ export async function validateMiniSectionType(data: Partial<MiniSectionAttribute
   // Check creates_artifact_ids permission
   const createsArtIds = data.creates_artifact_ids;
   if (createsArtIds && createsArtIds.length > 0) {
-    if (!rules.canCreateArtifacts) {
-      errors.push(`Type "${type}" cannot create artifacts. Only "implementation_task" can set creates_artifact_ids.`);
+    if (!typeRule.canCreateArtifacts) {
+      errors.push(`Type "${type}" cannot create artifacts.`);
     } else {
       // Validate IDs exist in ArtifactDefinition
       const existing = await ArtifactDefinition.findAll({
@@ -116,6 +154,12 @@ export async function validateCurriculumOrder(
     return { valid: true, errors };
   }
 
+  // Load type rules to know which types can create variables
+  const rules = await loadTypeRules();
+  const varCreatorTypes = new Set(
+    Object.entries(rules).filter(([, r]) => r.canCreateVariables).map(([slug]) => slug)
+  );
+
   // Get all mini-sections for this lesson in order
   const allMiniSections = await MiniSection.findAll({
     where: { lesson_id: lessonId },
@@ -139,7 +183,7 @@ export async function validateCurriculumOrder(
     // Only accumulate variables from mini-sections BEFORE the current position
     if (ms.mini_section_order >= currentOrder) break;
 
-    if (ms.mini_section_type === 'prompt_template' && ms.creates_variable_keys?.length) {
+    if (varCreatorTypes.has(ms.mini_section_type) && ms.creates_variable_keys?.length) {
       for (const key of ms.creates_variable_keys) {
         availableKeys.add(key);
       }
@@ -158,8 +202,6 @@ export async function validateCurriculumOrder(
       if (laterCreator) {
         errors.push(`Variable "${key}" is created by mini-section at order ${laterCreator.mini_section_order}, but referenced at order ${currentOrder}. Move the creator before this mini-section.`);
       }
-      // Not an error if the variable simply isn't created by any mini-section —
-      // it may come from user input, LLM output, or prior lessons
     }
   }
 

@@ -4,6 +4,7 @@ import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import { SectionConfig, PromptTemplate, ProgramBlueprint, MiniSection, ArtifactDefinition } from '../models';
 import CurriculumModule from '../models/CurriculumModule';
 import * as variableService from './variableService';
+import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -500,6 +501,23 @@ async function buildCompositePrompt(
           parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
         }
         break;
+      default:
+        // Dynamic custom type — load definition for generation instructions
+        try {
+          const typeDef = await CurriculumTypeDefinition.findOne({ where: { slug: ms.mini_section_type } });
+          if (typeDef) {
+            parts.push(`Output: Generate content for custom section type "${typeDef.student_label}".`);
+            if (typeDef.description) parts.push(`Type Description: ${typeDef.description}`);
+            if (typeDef.can_create_variables && ms.creates_variable_keys?.length) {
+              parts.push(`Creates Variables: ${ms.creates_variable_keys.join(', ')}.`);
+            }
+          } else {
+            parts.push(`Output: Generate content for section type "${ms.mini_section_type}".`);
+          }
+        } catch {
+          parts.push(`Output: Generate content for section type "${ms.mini_section_type}".`);
+        }
+        break;
     }
 
     // Resolve prompts: prefer inline fields, fall back to FK templates
@@ -774,6 +792,22 @@ export async function buildCompositePromptForSimulation(
         }
         if (ms.associated_skill_ids?.length) {
           parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+        }
+        break;
+      default:
+        try {
+          const typeDef = await CurriculumTypeDefinition.findOne({ where: { slug: ms.mini_section_type } });
+          if (typeDef) {
+            parts.push(`Output: Generate content for custom section type "${typeDef.student_label}".`);
+            if (typeDef.description) parts.push(`Type Description: ${typeDef.description}`);
+            if (typeDef.can_create_variables && ms.creates_variable_keys?.length) {
+              parts.push(`Creates Variables: ${ms.creates_variable_keys.join(', ')}.`);
+            }
+          } else {
+            parts.push(`Output: Generate content for section type "${ms.mini_section_type}".`);
+          }
+        } catch {
+          parts.push(`Output: Generate content for section type "${ms.mini_section_type}".`);
         }
         break;
     }

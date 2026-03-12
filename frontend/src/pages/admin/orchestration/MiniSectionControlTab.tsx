@@ -229,6 +229,7 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                 onApplySuggestionFix={builder.applySuggestionFix}
                 onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
                 onOpenRepair={() => builder.setShowRepairModal(true)}
+                typeDefinitions={builder.typeDefinitions}
               />
             ) : (
               <div className="card border-0 shadow-sm">
