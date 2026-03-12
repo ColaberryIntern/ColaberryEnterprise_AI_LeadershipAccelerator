@@ -7,8 +7,7 @@ import Breadcrumb from '../../components/ui/Breadcrumb';
 import OverviewTab from '../../components/campaign/OverviewTab';
 import AnalyticsTab from '../../components/campaign/AnalyticsTab';
 import TargetingTab from '../../components/campaign/TargetingTab';
-import GTMStrategyTab from '../../components/campaign/GTMStrategyTab';
-import PromptsTab from '../../components/campaign/PromptsTab';
+import StrategyPromptsTab from '../../components/campaign/StrategyPromptsTab';
 import LeadsOutreachTab from '../../components/campaign/LeadsOutreachTab';
 import CRMTab from '../../components/campaign/CRMTab';
 import SettingsTab from '../../components/campaign/SettingsTab';
@@ -397,22 +396,12 @@ function AdminCampaignDetailPage() {
       )}
 
       {activeTab === 'gtm' && (
-        <>
-          <GTMStrategyTab
-            campaignId={id!}
-            campaign={campaign}
-            headers={headers}
-            onRefresh={fetchCampaign}
-          />
-          <hr className="my-4" />
-          <PromptsTab
-            campaignId={id!}
-            aiSystemPrompt={campaign.ai_system_prompt}
-            sequence={campaign.sequence}
-            headers={headers}
-            onRefresh={fetchCampaign}
-          />
-        </>
+        <StrategyPromptsTab
+          campaignId={id!}
+          campaign={campaign}
+          headers={headers}
+          onRefresh={fetchCampaign}
+        />
       )}
 
       {activeTab === 'leads' && (

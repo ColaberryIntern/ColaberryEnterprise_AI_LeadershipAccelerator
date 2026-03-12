@@ -21,6 +21,7 @@ import {
   getApolloQuota,
 } from '../services/apolloService';
 import { generatePreview, generateICPProfile } from '../services/aiMessageService';
+import { reverseEngineerCampaign, rebuildCampaignFromPrompt } from '../services/campaignRebuildService';
 import { getCampaignAnalytics } from '../services/campaignAnalyticsService';
 import {
   getCampaignSettings,
@@ -509,6 +510,49 @@ export async function handleGenerateICP(req: Request, res: Response, next: NextF
 
     res.json({ profile });
   } catch (error) {
+    next(error);
+  }
+}
+
+// ── Reverse Engineer ───────────────────────────────────────────────
+
+export async function handleReverseEngineer(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await reverseEngineerCampaign(req.params.id as string);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    if (error.message.includes('not configured')) {
+      res.status(400).json({ error: 'OpenAI API key not configured' });
+      return;
+    }
+    next(error);
+  }
+}
+
+// ── Rebuild Campaign ──────────────────────────────────────────────
+
+export async function handleRebuildCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { ai_system_prompt } = req.body;
+    if (!ai_system_prompt) {
+      res.status(400).json({ error: 'ai_system_prompt is required' });
+      return;
+    }
+    const result = await rebuildCampaignFromPrompt(req.params.id as string, ai_system_prompt);
+    res.json(result);
+  } catch (error: any) {
+    if (error.message.includes('not found')) {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    if (error.message.includes('not configured')) {
+      res.status(400).json({ error: 'OpenAI API key not configured' });
+      return;
+    }
     next(error);
   }
 }

@@ -8,7 +8,7 @@ import AdminCohortDetailPage from '../pages/admin/AdminCohortDetailPage';
 import AdminLeadsPage from '../pages/admin/AdminLeadsPage';
 import AdminLeadDetailPage from '../pages/admin/AdminLeadDetailPage';
 import AdminPipelinePage from '../pages/admin/AdminPipelinePage';
-import AdminSequencesPage from '../pages/admin/AdminSequencesPage';
+
 import AdminImportPage from '../pages/admin/AdminImportPage';
 import AdminRevenueDashboardPage from '../pages/admin/AdminRevenueDashboardPage';
 import AdminSettingsPage from '../pages/admin/AdminSettingsPage';
@@ -44,7 +44,7 @@ const adminRoutes = (
         <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />
         <Route path="/admin/campaigns/:id" element={<AdminCampaignDetailPage />} />
         <Route path="/admin/apollo" element={<AdminApolloPage />} />
-        <Route path="/admin/sequences" element={<AdminSequencesPage />} />
+        <Route path="/admin/sequences" element={<Navigate to="/admin/campaigns" replace />} />
         <Route path="/admin/import" element={<AdminImportPage />} />
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />

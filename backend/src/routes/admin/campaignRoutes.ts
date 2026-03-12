@@ -47,6 +47,8 @@ import {
   handleGhlTestSms,
   handleGhlResyncLead,
   handleGenerateICP,
+  handleReverseEngineer,
+  handleRebuildCampaign,
 } from '../../controllers/adminCampaignController';
 import {
   handleCreateICPProfile,
@@ -99,6 +101,8 @@ router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus)
 router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
 router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlResyncLead);
 router.post('/api/admin/campaigns/:id/generate-icp', requireAdmin, handleGenerateICP);
+router.post('/api/admin/campaigns/:id/reverse-engineer', requireAdmin, handleReverseEngineer);
+router.post('/api/admin/campaigns/:id/rebuild', requireAdmin, handleRebuildCampaign);
 
 // ICP Profiles
 router.get('/api/admin/icp-profiles', requireAdmin, handleListICPProfiles);

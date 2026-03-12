@@ -19,7 +19,6 @@ const adminNavSections: NavSection[] = [
   { label: 'Campaigns', links: [
     { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone' },
     { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast' },
-    { path: '/admin/sequences', label: 'Sequences', icon: 'list-check' },
     { path: '/admin/visitors', label: 'Visitors', icon: 'eye' },
   ]},
   { label: 'Program', links: [
