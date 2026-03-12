@@ -45,7 +45,7 @@ router.get('/api/admin/executive-awareness/badge', async (_req: Request, res: Re
 router.post('/api/admin/executive-awareness/acknowledge/:id', async (req: Request, res: Response) => {
   try {
     const adminId = (req as any).adminUser?.id || 'unknown';
-    const alert = await acknowledgeExecutiveEvent(req.params.id, adminId);
+    const alert = await acknowledgeExecutiveEvent(req.params.id as string, adminId);
     if (!alert) {
       res.status(404).json({ error: 'Event not found' });
       return;
