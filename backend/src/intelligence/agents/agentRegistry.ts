@@ -5,7 +5,7 @@
 
 import type { AgentExecutionResult } from '../../services/agents/types';
 
-export type AgentCategory = 'intelligence' | 'operations' | 'strategy' | 'memory' | 'meta';
+export type AgentCategory = 'intelligence' | 'operations' | 'strategy' | 'memory' | 'meta' | 'reporting';
 
 export interface IntelligenceAgentEntry {
   name: string;

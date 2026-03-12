@@ -20,10 +20,15 @@ import InnovationTab from './tabs/InnovationTab';
 import RevenueImpactTab from './tabs/RevenueImpactTab';
 import AlertsTab from './tabs/AlertsTab';
 import OpenclawTab from './tabs/OpenclawTab';
+import InsightsTab from './tabs/InsightsTab';
+import ReportsTab from './tabs/ReportsTab';
+import MapsTab from './tabs/MapsTab';
+import TrendsTab from './tabs/TrendsTab';
+import AgentPerformanceTab from './tabs/AgentPerformanceTab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach';
+type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach' | 'insights' | 'reports' | 'maps' | 'trends' | 'agent-performance';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
@@ -59,6 +64,7 @@ const DEPT_COLORS: Record<string, string> = {
   Platform: '#718096',
   Intelligence: '#e53e3e',
   Governance: '#1a365d',
+  Reporting: '#9f7aea',
   // Legacy mappings (backwards compat)
   Operations: '#718096',
   Growth: '#805ad5',
@@ -482,6 +488,11 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
     { key: 'innovation', label: 'Innovation' },
     { key: 'revenue', label: 'Revenue' },
     { key: 'outreach', label: 'Outreach' },
+    { key: 'insights', label: 'Insights' },
+    { key: 'reports', label: 'Reports' },
+    { key: 'maps', label: 'Maps' },
+    { key: 'trends', label: 'Trends' },
+    { key: 'agent-performance', label: 'Agent Perf' },
   ];
 
   return (
@@ -543,6 +554,11 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         {activeTab === 'innovation' && <InnovationTab entityFilter={entityFilter} />}
         {activeTab === 'revenue' && <RevenueImpactTab entityFilter={entityFilter} />}
         {activeTab === 'outreach' && <OpenclawTab />}
+        {activeTab === 'insights' && <InsightsTab />}
+        {activeTab === 'reports' && <ReportsTab />}
+        {activeTab === 'maps' && <MapsTab />}
+        {activeTab === 'trends' && <TrendsTab />}
+        {activeTab === 'agent-performance' && <AgentPerformanceTab />}
       </div>
     </div>
   );

@@ -138,12 +138,24 @@ export type AiAgentType =
   | 'openclaw_learning'
   | 'openclaw_infra_monitor'
   | 'openclaw_tech_research'
+  // Reporting department
+  | 'reporting_intelligence'
+  | 'insight_discovery'
+  | 'visualization_generation'
+  | 'narrative_generation'
+  | 'trend_analysis'
+  | 'department_reporter'
+  | 'executive_briefing_reporting'
+  | 'experiment_recommendation'
+  | 'revenue_opportunity_detection'
+  | 'agent_performance_analytics'
+  | 'knowledge_graph_builder'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting';
 
 interface AiAgentAttributes {
   id?: string;
