@@ -16,33 +16,6 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
-      name: 'send_document',
-      description:
-        'Send a document to the visitor via email. Use this when the visitor requests a document or you offer to send one and they agree. You MUST have their email address before calling this.',
-      parameters: {
-        type: 'object',
-        properties: {
-          document_type: {
-            type: 'string',
-            enum: ['program_overview', 'executive_briefing', 'enterprise_guide', 'pricing_guide'],
-            description: 'The type of document to send',
-          },
-          recipient_email: {
-            type: 'string',
-            description: 'The email address to send the document to',
-          },
-          recipient_name: {
-            type: 'string',
-            description: 'The name of the recipient (for the email greeting)',
-          },
-        },
-        required: ['document_type', 'recipient_email'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'schedule_callback',
       description:
         'Request a callback for a visitor who prefers phone contact. Use when visitor asks for a call or provides their phone number for follow-up.',
