@@ -9,6 +9,7 @@ import KnowledgeCheckSection from './KnowledgeCheckSection';
 import ValidationSection from './ValidationSection';
 import QualityScoreSection from './QualityScoreSection';
 import SuggestionSection from './SuggestionSection';
+import PreviewPanel from './PreviewPanel';
 import { PromptOption } from './types';
 
 interface Props {
@@ -54,6 +55,11 @@ interface Props {
   onOpenDiagnostic: () => void;
   onOpenRepair: () => void;
   typeDefinitions?: TypeDefinition[];
+  // Preview props
+  lessonTitle?: string;
+  lessonId?: string;
+  token?: string;
+  apiUrl?: string;
 }
 
 interface AccordionState {
@@ -66,13 +72,15 @@ interface AccordionState {
   validation: boolean;
   quality: boolean;
   suggestions: boolean;
+  preview: boolean;
 }
 
 export default function ObjectConfigEngine(props: Props) {
   const { editing, isNew, isDirty, miniSections, saving, error } = props;
   const [expanded, setExpanded] = useState<AccordionState>({
-    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
+    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false, preview: false,
   });
+  const [previewMode, setPreviewMode] = useState<'preview' | 'json'>('preview');
   const [reversePrompt, setReversePrompt] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
@@ -285,6 +293,47 @@ export default function ObjectConfigEngine(props: Props) {
             onApplyFix={props.onApplySuggestionFix}
           />
         ), !!editing.id)}
+
+        {/* Student Preview Section */}
+        {props.lessonId && (
+          <div className="border rounded mb-2">
+            <div
+              className="d-flex align-items-center gap-2 px-3 py-2"
+              style={{ cursor: 'pointer', backgroundColor: expanded.preview ? 'var(--color-bg-alt, #f7fafc)' : 'transparent' }}
+              onClick={() => toggle('preview')}
+            >
+              <i className="bi bi-eye" style={{ fontSize: 13 }}></i>
+              <span className="fw-semibold small">Student Preview</span>
+              {expanded.preview && (
+                <div className="btn-group btn-group-sm ms-auto me-2" onClick={e => e.stopPropagation()}>
+                  <button className={`btn ${previewMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
+                    onClick={() => setPreviewMode('preview')} style={{ fontSize: 10, padding: '1px 6px' }}>
+                    <i className="bi bi-eye me-1"></i>Preview
+                  </button>
+                  <button className={`btn ${previewMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`}
+                    onClick={() => setPreviewMode('json')} style={{ fontSize: 10, padding: '1px 6px' }}>
+                    <i className="bi bi-code me-1"></i>JSON
+                  </button>
+                </div>
+              )}
+              <span className={expanded.preview ? '' : 'ms-auto'} style={{ fontSize: 11 }}>{expanded.preview ? '\u25B2' : '\u25BC'}</span>
+            </div>
+            {expanded.preview && (
+              <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+                <PreviewPanel
+                  miniSections={miniSections}
+                  lessonTitle={props.lessonTitle || 'Untitled Section'}
+                  lessonId={props.lessonId}
+                  compact
+                  defaultViewMode={previewMode}
+                  selectedMiniSectionId={editing.id}
+                  token={props.token}
+                  apiUrl={props.apiUrl}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Diagnostic & Repair buttons */}
         {editing.id && (

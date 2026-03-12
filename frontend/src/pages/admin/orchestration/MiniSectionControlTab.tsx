@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import useMiniSectionBuilder from './builder/useMiniSectionBuilder';
 import StudentStructureTree from './builder/StudentStructureTree';
 import ObjectConfigEngine from './builder/ObjectConfigEngine';
-import PreviewPanel from './builder/PreviewPanel';
 import TestSimulationPanel from './builder/TestSimulationPanel';
 import InlineVariableCreator from './builder/InlineVariableCreator';
 import InlineSkillCreator from './builder/InlineSkillCreator';
@@ -14,8 +13,6 @@ import { Lesson } from './builder/types';
 
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
-  const [rightPanelMode, setRightPanelMode] = useState<'configure' | 'preview'>('configure');
-  const [previewMode, setPreviewMode] = useState<'preview' | 'json'>('preview');
 
   return (
     <div>
@@ -162,112 +159,61 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                 <StudentStructureTree
                   miniSections={builder.miniSections}
                   selectedId={builder.selectedMiniSectionId}
-                  onSelect={(id) => { builder.selectMiniSection(id); setRightPanelMode('configure'); }}
+                  onSelect={(id) => { builder.selectMiniSection(id); }}
                   onMove={builder.moveItem}
                   onDelete={builder.handleDelete}
                   isDirtyId={builder.isDirty ? builder.selectedMiniSectionId : null}
                   loading={builder.loading}
                 />
               </div>
-              {/* Configure / Preview toggle at bottom of left panel */}
-              <div className="card-footer bg-white py-2 d-flex gap-1">
-                <button
-                  className={`btn btn-sm flex-fill ${rightPanelMode === 'configure' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setRightPanelMode('configure')}
-                  style={{ fontSize: 11 }}
-                >
-                  <i className="bi bi-gear me-1"></i>Configure
-                </button>
-                <button
-                  className={`btn btn-sm flex-fill ${rightPanelMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => setRightPanelMode('preview')}
-                  style={{ fontSize: 11 }}
-                >
-                  <i className="bi bi-eye me-1"></i>Preview
-                </button>
-              </div>
             </div>
           </div>
 
-          {/* RIGHT PANEL — Configure or Preview */}
+          {/* RIGHT PANEL — Configure (with inline preview) */}
           <div className="col-lg-8">
-            {rightPanelMode === 'configure' ? (
-              <ObjectConfigEngine
-                editing={builder.editing}
-                isNew={builder.isNewItem}
-                isDirty={builder.isDirty}
-                miniSections={builder.miniSections}
-                prompts={builder.prompts}
-                skillOptions={builder.skillOptions}
-                variableOptions={builder.variableOptions}
-                artifactOptions={builder.artifactOptions}
-                variables={builder.variables}
-                systemVariables={builder.systemVariables}
-                artifacts={builder.artifacts}
-                promptBodies={builder.promptBodies}
-                fetchPromptBody={builder.fetchPromptBody}
-                dryRun={builder.dryRun}
-                variableMap={builder.variableMap}
-                validating={builder.validating}
-                onRevalidate={builder.runValidation}
-                onUpdate={builder.updateEditing}
-                onSave={builder.handleSave}
-                onCancel={builder.cancelEdit}
-                onDelete={builder.handleDelete}
-                saving={builder.saving}
-                error={builder.error}
-                onCreateVariable={() => builder.setInlineCreator('variable')}
-                onCreateSkill={() => builder.setInlineCreator('skill')}
-                onCreateArtifact={() => builder.setInlineCreator('artifact')}
-                qualityBreakdown={builder.qualityBreakdown}
-                qualityLoading={builder.qualityLoading}
-                onRefreshQuality={() => builder.fetchQualityScore()}
-                suggestions={builder.suggestions}
-                suggestionsLoading={builder.suggestionsLoading}
-                applyingSuggestion={builder.applyingSuggestion}
-                onRefreshSuggestions={() => builder.fetchSuggestions()}
-                onApplySuggestionFix={builder.applySuggestionFix}
-                onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
-                onOpenRepair={() => builder.setShowRepairModal(true)}
-                typeDefinitions={builder.typeDefinitions}
-              />
-            ) : (
-              <div className="card border-0 shadow-sm">
-                <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                  <span className="fw-semibold small">
-                    <i className="bi bi-eye me-1"></i>Student Preview
-                  </span>
-                  <div className="btn-group btn-group-sm">
-                    <button
-                      className={`btn ${previewMode === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
-                      onClick={() => setPreviewMode('preview')}
-                      style={{ fontSize: 11 }}
-                    >
-                      <i className="bi bi-eye me-1"></i>Preview
-                    </button>
-                    <button
-                      className={`btn ${previewMode === 'json' ? 'btn-primary' : 'btn-outline-primary'}`}
-                      onClick={() => setPreviewMode('json')}
-                      style={{ fontSize: 11 }}
-                    >
-                      <i className="bi bi-code me-1"></i>JSON
-                    </button>
-                  </div>
-                </div>
-                <div className="card-body">
-                  <PreviewPanel
-                    miniSections={builder.miniSections}
-                    lessonTitle={builder.selectedLesson?.title || 'Untitled Section'}
-                    lessonId={builder.selectedLessonId}
-                    compact={false}
-                    defaultViewMode={previewMode}
-                    selectedMiniSectionId={builder.selectedMiniSectionId}
-                    token={token}
-                    apiUrl={apiUrl}
-                  />
-                </div>
-              </div>
-            )}
+            <ObjectConfigEngine
+              editing={builder.editing}
+              isNew={builder.isNewItem}
+              isDirty={builder.isDirty}
+              miniSections={builder.miniSections}
+              prompts={builder.prompts}
+              skillOptions={builder.skillOptions}
+              variableOptions={builder.variableOptions}
+              artifactOptions={builder.artifactOptions}
+              variables={builder.variables}
+              systemVariables={builder.systemVariables}
+              artifacts={builder.artifacts}
+              promptBodies={builder.promptBodies}
+              fetchPromptBody={builder.fetchPromptBody}
+              dryRun={builder.dryRun}
+              variableMap={builder.variableMap}
+              validating={builder.validating}
+              onRevalidate={builder.runValidation}
+              onUpdate={builder.updateEditing}
+              onSave={builder.handleSave}
+              onCancel={builder.cancelEdit}
+              onDelete={builder.handleDelete}
+              saving={builder.saving}
+              error={builder.error}
+              onCreateVariable={() => builder.setInlineCreator('variable')}
+              onCreateSkill={() => builder.setInlineCreator('skill')}
+              onCreateArtifact={() => builder.setInlineCreator('artifact')}
+              qualityBreakdown={builder.qualityBreakdown}
+              qualityLoading={builder.qualityLoading}
+              onRefreshQuality={() => builder.fetchQualityScore()}
+              suggestions={builder.suggestions}
+              suggestionsLoading={builder.suggestionsLoading}
+              applyingSuggestion={builder.applyingSuggestion}
+              onRefreshSuggestions={() => builder.fetchSuggestions()}
+              onApplySuggestionFix={builder.applySuggestionFix}
+              onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
+              onOpenRepair={() => builder.setShowRepairModal(true)}
+              typeDefinitions={builder.typeDefinitions}
+              lessonTitle={builder.selectedLesson?.title}
+              lessonId={builder.selectedLessonId}
+              token={token}
+              apiUrl={apiUrl}
+            />
           </div>
         </div>
       )}
