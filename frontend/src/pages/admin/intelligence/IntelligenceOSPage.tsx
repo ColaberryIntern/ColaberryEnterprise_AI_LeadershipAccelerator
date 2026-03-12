@@ -1484,6 +1484,14 @@ function IntelligenceOSContent() {
     }
   }, [isMedium, isCompact]);
 
+  // Scroll center panel to top when department selection changes
+  const centerPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selectedEntity) {
+      centerPanelRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [selectedEntity]);
+
   // Department content now shown in center panel — no drawer auto-open
 
   // Auto-open Cory if arriving via ?cory=open (from GlobalCoryWidget click)
@@ -1836,7 +1844,7 @@ function IntelligenceOSContent() {
             </div>
           )}
 
-          <div className="flex-grow-1" style={{ minHeight: 0, overflow: 'auto' }}>
+          <div ref={centerPanelRef} className="flex-grow-1" style={{ minHeight: 0, overflow: 'auto' }}>
             <CoryCenterTabs onAgentClick={handleAgentClick}>
               <DynamicCanvas
                 visualizations={visualizations}
