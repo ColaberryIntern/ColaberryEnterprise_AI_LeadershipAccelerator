@@ -23,9 +23,13 @@ const ProgramOverviewTab: React.FC<Props> = ({ token, apiUrl }) => {
 
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` };
+    const safeFetch = (url: string) => fetch(url, { headers }).then(r => {
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json();
+    });
     Promise.all([
-      fetch(`${apiUrl}/api/admin/orchestration/program/modules`, { headers }).then(r => r.json()),
-      fetch(`${apiUrl}/api/admin/orchestration/program/sessions`, { headers }).then(r => r.json()),
+      safeFetch(`${apiUrl}/api/admin/orchestration/program/modules`),
+      safeFetch(`${apiUrl}/api/admin/orchestration/program/sessions`),
     ])
       .then(([mods, sess]) => {
         setModules(Array.isArray(mods) ? mods : []);
