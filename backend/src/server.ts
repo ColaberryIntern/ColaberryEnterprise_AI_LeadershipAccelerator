@@ -61,6 +61,32 @@ app.use(participantRoutes);
 
 app.use(errorHandler);
 
+// Explicit migration: ensure Campaign Link Registry columns exist even if alter sync fails
+async function ensureCampaignLinkColumns() {
+  const columns = [
+    { name: 'channel', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS channel VARCHAR(30)" },
+    { name: 'destination_path', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS destination_path VARCHAR(255)" },
+    { name: 'tracking_link', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS tracking_link VARCHAR(500)" },
+    { name: 'objective', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS objective TEXT" },
+    { name: 'approval_status', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS approval_status VARCHAR(30) DEFAULT 'draft'" },
+    { name: 'approved_by', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS approved_by UUID" },
+    { name: 'approved_at', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ" },
+    { name: 'budget_cap', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS budget_cap DECIMAL(10,2)" },
+    { name: 'cost_per_lead_target', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS cost_per_lead_target DECIMAL(10,2)" },
+    { name: 'expected_roi', sql: "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS expected_roi DECIMAL(8,2)" },
+  ];
+  for (const col of columns) {
+    try {
+      await sequelize.query(col.sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn(`[DB] Failed to ensure column ${col.name}:`, err.message);
+      }
+    }
+  }
+  console.log('[DB] Campaign link registry columns ensured');
+}
+
 async function start(): Promise<void> {
   // Ensure uploads directory exists
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -72,6 +98,7 @@ async function start(): Promise<void> {
     console.warn('[DB] sync({ alter: true }) failed, falling back to create-only sync:', err?.message);
     await sequelize.sync();
   }
+  await ensureCampaignLinkColumns();
   await seedProgramCurriculum();
   await seedDepartments();
 
