@@ -34,6 +34,7 @@ interface GraphNode {
   active_initiatives: number;
   team_size: number;
   tier: number;
+  isPrimary?: boolean;
   x?: number;
   y?: number;
 }
@@ -128,12 +129,23 @@ export default function DeptMapTab() {
     return () => ro.disconnect();
   }, []);
 
-  // Filter departments by active layer
-  const filteredDepts = useMemo(() => {
-    if (activeLayer === null) return departments;
+  // When a layer is active: show primary depts (in-layer) + neighbor depts (connected via edges), dimming neighbors
+  const { filteredDepts, primarySlugs } = useMemo(() => {
+    if (activeLayer === null) return { filteredDepts: departments, primarySlugs: null as Set<string> | null };
     const slugs = TIER_SLUGS[activeLayer];
-    if (!slugs) return departments;
-    return departments.filter((d) => slugs.has(d.slug));
+    if (!slugs) return { filteredDepts: departments, primarySlugs: null };
+
+    // Find neighbor slugs connected by edges
+    const neighborSlugs = new Set<string>();
+    for (const e of DEPT_EDGES) {
+      if (slugs.has(e.source) && !slugs.has(e.target)) neighborSlugs.add(e.target);
+      if (slugs.has(e.target) && !slugs.has(e.source)) neighborSlugs.add(e.source);
+    }
+    const allSlugs = new Set([...slugs, ...neighborSlugs]);
+    return {
+      filteredDepts: departments.filter((d) => allSlugs.has(d.slug)),
+      primarySlugs: slugs,
+    };
   }, [departments, activeLayer]);
 
   const graphData = useMemo(() => {
@@ -144,19 +156,23 @@ export default function DeptMapTab() {
     const nodes: GraphNode[] = filteredDepts.map((d) => {
       const config = DEPARTMENT_CATEGORIES[d.slug] || { label: d.name, color: '#718096', bgLight: '#f7fafc' };
       const sizeRatio = Math.min(d.team_size / maxTeam, 1);
+      const isPrimary = !primarySlugs || primarySlugs.has(d.slug);
       return {
         id: d.id,
         slug: d.slug,
         label: config.label,
-        color: config.color,
-        bgLight: config.bgLight,
-        val: 8 + sizeRatio * 18,  // range: 8–26 (prevents any from getting too huge)
+        color: isPrimary ? config.color : '#b0b8c4',
+        bgLight: isPrimary ? config.bgLight : '#f1f3f5',
+        val: isPrimary ? 8 + sizeRatio * 18 : 5 + sizeRatio * 10,  // neighbors are smaller
         health_score: d.health_score,
         innovation_score: d.innovation_score,
         initiative_count: d.initiative_count,
         active_initiatives: d.active_initiatives,
         team_size: d.team_size,
-        tier: activeLayer !== null ? 0 : (DEPT_TIER[d.slug] ?? 2), // flatten tier when filtering a single layer
+        tier: activeLayer !== null
+          ? (isPrimary ? 1 : (DEPT_TIER[d.slug] ?? 2) < activeLayer ? 0 : 2)  // neighbors above/below
+          : (DEPT_TIER[d.slug] ?? 2),
+        isPrimary,
       };
     });
 
@@ -168,29 +184,34 @@ export default function DeptMapTab() {
       .map((e) => ({ source: slugToId[e.source], target: slugToId[e.target], relationship: e.relationship }));
 
     return { nodes, links };
-  }, [filteredDepts, activeLayer]);
+  }, [filteredDepts, activeLayer, primarySlugs]);
 
   useEffect(() => {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
-    fg.d3Force('charge')?.strength(-200);
-    fg.d3Force('link')?.distance(55);
+    const isFiltered = activeLayer !== null;
+    const nodeCount = graphData.nodes.length;
+
+    // Stronger repulsion when filtered — fewer nodes need more space
+    fg.d3Force('charge')?.strength(isFiltered ? -400 : -200);
+    fg.d3Force('link')?.distance(isFiltered ? 100 : 55);
 
     // Spread vertically across the full canvas using tier levels
-    const maxTier = Math.max(...graphData.nodes.map((n) => n.tier), 1);
+    const maxTier = Math.max(...graphData.nodes.map((n) => n.tier), 1) || 1;
     fg.d3Force(
       'y',
       forceY((node: any) => {
         const t = (node as GraphNode).tier / maxTier;
-        return -dimensions.height * 0.38 + t * dimensions.height * 0.76;
-      }).strength(0.45)
+        const span = isFiltered ? 0.6 : 0.76;
+        return -dimensions.height * (span / 2) + t * dimensions.height * span;
+      }).strength(isFiltered ? 0.35 : 0.45)
     );
-    fg.d3Force('x', forceX(0).strength(0.06));
+    fg.d3Force('x', forceX(0).strength(isFiltered && nodeCount <= 6 ? 0.03 : 0.06));
 
     (fg as any).d3AlphaDecay?.(0.02);
     (fg as any).d3VelocityDecay?.(0.3);
     fg.d3ReheatSimulation();
-  }, [graphData, dimensions.height]);
+  }, [graphData, dimensions.height, activeLayer]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -329,20 +350,28 @@ export default function DeptMapTab() {
       const tgt = link.target as GraphNode;
       if (!src.x || !tgt.x) return;
 
+      // Cross-layer edges (primary↔neighbor) are bolder; neighbor↔neighbor dimmer
+      const bothPrimary = src.isPrimary !== false && tgt.isPrimary !== false;
+      const hasPrimary = src.isPrimary !== false || tgt.isPrimary !== false;
+      const opacity = bothPrimary ? 0.7 : hasPrimary ? 0.55 : 0.25;
+      const width = bothPrimary ? 1.2 : hasPrimary ? 1.5 : 0.8;
+
       ctx.beginPath();
       ctx.moveTo(src.x!, src.y!);
       ctx.lineTo(tgt.x!, tgt.y!);
-      ctx.strokeStyle = 'rgba(160, 174, 192, 0.7)';
-      ctx.lineWidth = 1.2 / globalScale;
+      ctx.strokeStyle = hasPrimary && !bothPrimary
+        ? `rgba(43, 108, 176, ${opacity})`  // blue tint for cross-layer
+        : `rgba(160, 174, 192, ${opacity})`;
+      ctx.lineWidth = width / globalScale;
       ctx.stroke();
 
       const midX = (src.x! + tgt.x!) / 2;
       const midY = (src.y! + tgt.y!) / 2;
       const labelSize = Math.max(6 / globalScale, 2);
-      ctx.font = `${labelSize}px -apple-system, sans-serif`;
+      ctx.font = `${hasPrimary && !bothPrimary ? 'bold ' : ''}${labelSize}px -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(113, 128, 150, 0.75)';
+      ctx.fillStyle = hasPrimary ? 'rgba(45, 55, 72, 0.8)' : 'rgba(113, 128, 150, 0.75)';
       ctx.fillText((link as GraphLink).relationship, midX, midY - 2 / globalScale);
     },
     []
@@ -383,7 +412,9 @@ export default function DeptMapTab() {
             Department Map
           </span>
           <span className="text-muted" style={{ fontSize: '0.65rem' }}>
-            {filteredDepts.length}/{departments.length} depts
+            {activeLayer !== null && primarySlugs
+              ? `${departments.filter((d) => primarySlugs.has(d.slug)).length}+${filteredDepts.length - departments.filter((d) => primarySlugs.has(d.slug)).length}`
+              : departments.length} depts
           </span>
         </div>
         <div className="d-flex gap-1 flex-wrap">
