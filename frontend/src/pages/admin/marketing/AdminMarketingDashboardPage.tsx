@@ -217,6 +217,226 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
   );
 }
 
+// ─── Edit Campaign Modal ────────────────────────────────────────────────────
+
+function EditCampaignModal({ campaign, onClose, onSaved }: { campaign: RegisteredCampaign; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    name: campaign.name || '',
+    type: campaign.type || 'warm_nurture',
+    channel: campaign.channel || 'email',
+    destination_path: campaign.destination_path || '',
+    objective: campaign.objective || '',
+    budget_cap: campaign.budget_cap != null ? String(campaign.budget_cap) : '',
+    cost_per_lead_target: campaign.cost_per_lead_target != null ? String(campaign.cost_per_lead_target) : '',
+    expected_roi: campaign.expected_roi != null ? String(campaign.expected_roi) : '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) { setErr('Name is required'); return; }
+    setSaving(true);
+    setErr('');
+    try {
+      const payload: Record<string, any> = {
+        name: form.name, type: form.type, channel: form.channel,
+        destination_path: form.destination_path || null,
+        objective: form.objective || null,
+      };
+      payload.budget_cap = form.budget_cap ? Number(form.budget_cap) : null;
+      payload.cost_per_lead_target = form.cost_per_lead_target ? Number(form.cost_per_lead_target) : null;
+      payload.expected_roi = form.expected_roi ? Number(form.expected_roi) : null;
+
+      await api.patch(`/api/admin/campaigns/${campaign.id}`, payload);
+
+      // Regenerate tracking link if channel and destination_path are set
+      if (form.channel && form.destination_path) {
+        await api.post(`/api/admin/campaigns/${campaign.id}/generate-link`).catch(() => {});
+      }
+
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      setErr(e.response?.data?.error || 'Failed to update campaign');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="modal-backdrop show" style={{ zIndex: 1050 }} />
+      <div className="modal show d-block" style={{ zIndex: 1055 }} role="dialog" aria-modal="true">
+        <div className="modal-dialog modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title fw-semibold">Edit Campaign</h5>
+              <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
+            </div>
+            <div className="modal-body">
+              {err && <div className="alert alert-danger py-2 small">{err}</div>}
+              <div className="row g-3">
+                <div className="col-md-8">
+                  <label className="form-label small fw-medium">Campaign Name *</label>
+                  <input className="form-control form-control-sm" value={form.name} onChange={e => set('name', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Type</label>
+                  <select className="form-select form-select-sm" value={form.type} onChange={e => set('type', e.target.value)}>
+                    {CAMPAIGN_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Channel</label>
+                  <select className="form-select form-select-sm" value={form.channel} onChange={e => set('channel', e.target.value)}>
+                    {CHANNELS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div className="col-md-8">
+                  <label className="form-label small fw-medium">Destination Path</label>
+                  <input className="form-control form-control-sm" placeholder="/strategy-call-prep" value={form.destination_path} onChange={e => set('destination_path', e.target.value)} />
+                </div>
+                <div className="col-12">
+                  <label className="form-label small fw-medium">Objective</label>
+                  <textarea className="form-control form-control-sm" rows={2} value={form.objective} onChange={e => set('objective', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Budget Cap ($)</label>
+                  <input type="number" className="form-control form-control-sm" value={form.budget_cap} onChange={e => set('budget_cap', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Target CPL ($)</label>
+                  <input type="number" className="form-control form-control-sm" value={form.cost_per_lead_target} onChange={e => set('cost_per_lead_target', e.target.value)} />
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label small fw-medium">Expected ROI (x)</label>
+                  <input type="number" step="0.1" className="form-control form-control-sm" value={form.expected_roi} onChange={e => set('expected_roi', e.target.value)} />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-sm btn-outline-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-sm btn-primary" onClick={handleSubmit} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Campaign Detail Modal ──────────────────────────────────────────────────
+
+function CampaignDetailModal({ campaign: c, onClose }: { campaign: RegisteredCampaign; onClose: () => void }) {
+  const [roi, setRoi] = useState<any>(null);
+  const [roiLoading, setRoiLoading] = useState(true);
+
+  useEffect(() => {
+    api.get(`/api/admin/campaigns/${c.id}/roi`)
+      .then(res => setRoi(res.data))
+      .catch(() => setRoi(null))
+      .finally(() => setRoiLoading(false));
+  }, [c.id]);
+
+  const DetailRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div className="d-flex justify-content-between py-1 border-bottom" style={{ fontSize: '0.85rem' }}>
+      <span className="text-muted">{label}</span>
+      <span className="fw-medium text-end" style={{ maxWidth: '60%', wordBreak: 'break-all' }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="modal-backdrop show" style={{ zIndex: 1050 }} />
+      <div className="modal show d-block" style={{ zIndex: 1055 }} role="dialog" aria-modal="true">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title fw-semibold">Campaign Details</h5>
+              <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
+            </div>
+            <div className="modal-body">
+              <div className="row g-4">
+                {/* Left column: Campaign Info */}
+                <div className="col-md-6">
+                  <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Campaign Info</h6>
+                  <DetailRow label="Name" value={c.name} />
+                  <DetailRow label="Type" value={c.type.replace(/_/g, ' ')} />
+                  <DetailRow label="Channel" value={c.channel ? c.channel.replace(/_/g, ' ') : '\u2014'} />
+                  <DetailRow label="Status" value={
+                    <span className={`badge ${APPROVAL_BADGE[c.approval_status] || 'bg-secondary'}`}>
+                      {approvalLabel(c.approval_status)}
+                    </span>
+                  } />
+                  <DetailRow label="Created" value={new Date(c.created_at).toLocaleDateString()} />
+                  {c.approved_at && <DetailRow label="Approved" value={new Date(c.approved_at).toLocaleDateString()} />}
+                  <DetailRow label="Objective" value={c.objective || '\u2014'} />
+                </div>
+
+                {/* Right column: Tracking & Budget */}
+                <div className="col-md-6">
+                  <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Tracking & Budget</h6>
+                  <DetailRow label="Destination" value={c.destination_path || '\u2014'} />
+                  <DetailRow label="Tracking Link" value={
+                    c.tracking_link
+                      ? <code className="small" style={{ wordBreak: 'break-all' }}>{c.tracking_link}</code>
+                      : '\u2014'
+                  } />
+                  <DetailRow label="Budget Cap" value={c.budget_cap != null ? fmt$(Number(c.budget_cap)) : '\u2014'} />
+                  <DetailRow label="Budget Spent" value={fmt$(Number(c.budget_spent || 0))} />
+                  <DetailRow label="Target CPL" value={c.cost_per_lead_target != null ? fmt$(Number(c.cost_per_lead_target)) : '\u2014'} />
+                  <DetailRow label="Expected ROI" value={c.expected_roi != null ? `${c.expected_roi}x` : '\u2014'} />
+                </div>
+              </div>
+
+              {/* ROI & Performance Section */}
+              <hr className="my-3" />
+              <h6 className="fw-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Performance & ROI</h6>
+              {roiLoading ? (
+                <div className="text-center py-3">
+                  <div className="spinner-border spinner-border-sm me-2" role="status">
+                    <span className="visually-hidden">Loading ROI...</span>
+                  </div>
+                  Loading performance data...
+                </div>
+              ) : roi ? (
+                <div className="row g-3">
+                  {[
+                    { label: 'Visitors', value: (roi.visitors || 0).toLocaleString() },
+                    { label: 'Leads', value: (roi.leads || 0).toLocaleString() },
+                    { label: 'Enrollments', value: (roi.enrollments || 0).toLocaleString() },
+                    { label: 'Revenue', value: fmt$(roi.revenue || 0) },
+                    { label: 'ROI', value: roi.roi != null ? `${(roi.roi * 100).toFixed(0)}%` : '\u2014' },
+                    { label: 'Cost/Lead', value: roi.cost_per_lead ? fmt$(roi.cost_per_lead) : '\u2014' },
+                  ].map(kpi => (
+                    <div className="col-4 col-md-2" key={kpi.label}>
+                      <div className="card border-0 bg-light">
+                        <div className="card-body text-center p-2">
+                          <div className="small text-muted">{kpi.label}</div>
+                          <div className="fw-bold" style={{ fontSize: '1rem' }}>{kpi.value}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted small">No performance data available yet.</div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-sm btn-outline-secondary" onClick={onClose}>Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Campaign Link Registry Tab ─────────────────────────────────────────────
 
 function CampaignLinkRegistryTab() {
@@ -224,6 +444,8 @@ function CampaignLinkRegistryTab() {
   const [channelROI, setChannelROI] = useState<ChannelROI[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<RegisteredCampaign | null>(null);
+  const [detailCampaign, setDetailCampaign] = useState<RegisteredCampaign | null>(null);
   const [actionLoading, setActionLoading] = useState('');
   const [copied, setCopied] = useState('');
 
@@ -293,6 +515,8 @@ function CampaignLinkRegistryTab() {
   return (
     <div>
       {showCreate && <CreateCampaignModal onClose={() => setShowCreate(false)} onCreated={fetchCampaigns} />}
+      {editingCampaign && <EditCampaignModal campaign={editingCampaign} onClose={() => setEditingCampaign(null)} onSaved={fetchCampaigns} />}
+      {detailCampaign && <CampaignDetailModal campaign={detailCampaign} onClose={() => setDetailCampaign(null)} />}
 
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
@@ -376,7 +600,15 @@ function CampaignLinkRegistryTab() {
                 <tbody>
                   {campaigns.map(c => (
                     <tr key={c.id}>
-                      <td className="fw-medium">{c.name}</td>
+                      <td className="fw-medium">
+                        <button
+                          className="btn btn-link p-0 text-start fw-medium text-decoration-none"
+                          style={{ fontSize: 'inherit', color: 'var(--color-primary-light)' }}
+                          onClick={() => setDetailCampaign(c)}
+                        >
+                          {c.name}
+                        </button>
+                      </td>
                       <td>
                         {c.channel
                           ? <span className="badge bg-info text-dark">{c.channel.replace(/_/g, ' ')}</span>
@@ -415,6 +647,20 @@ function CampaignLinkRegistryTab() {
                       </td>
                       <td>
                         <div className="d-flex gap-1 flex-wrap">
+                          <button
+                            className="btn btn-sm btn-outline-primary py-0"
+                            style={{ fontSize: '0.72rem' }}
+                            onClick={() => setDetailCampaign(c)}
+                          >
+                            View
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-primary py-0"
+                            style={{ fontSize: '0.72rem' }}
+                            onClick={() => setEditingCampaign(c)}
+                          >
+                            Edit
+                          </button>
                           {getActions(c).map(act => (
                             <button
                               key={act.action}
