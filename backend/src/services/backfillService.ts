@@ -65,10 +65,11 @@ export async function backfillInlinePrompts(): Promise<BackfillReport> {
         continue;
       }
 
-      // Copy template text into inline fields
+      // Copy template text into single prompt field (system field holds combined prompt)
+      const parts = [template.system_prompt, (template as any).user_prompt_template].filter(Boolean);
       await ms.update({
-        [mapping.systemField]: template.system_prompt || '',
-        [mapping.userField]: (template as any).user_prompt_template || '',
+        [mapping.systemField]: parts.join('\n\n'),
+        [mapping.userField]: '',
         prompt_source: 'hybrid',
       } as any);
       backfilledAny = true;

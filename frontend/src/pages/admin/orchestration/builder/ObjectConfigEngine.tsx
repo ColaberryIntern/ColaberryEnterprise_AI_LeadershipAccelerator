@@ -309,36 +309,24 @@ export default function ObjectConfigEngine(props: Props) {
                     <span className="text-muted" style={{ fontSize: 10 }}>Use <code style={{ fontSize: 10 }}>{'{{variable_key}}'}</code> for dynamic values</span>
                   </div>
                   {corePromptPairs
-                    // In Core, only show the primary prompt for each type — skip mentor prompt for concept types
                     .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
                     .map(pair => {
-                    const systemValue = (editing[pair.systemField] as string) || '';
-                    const userValue = (editing[pair.userField] as string) || '';
-                    // Only show user template for types that have student-facing prompts
-                    const showUserTemplate = editType === 'prompt_template' || editType === 'implementation_task';
+                    // Single combined prompt: primary field is systemField, merge legacy userField content
+                    const sysVal = (editing[pair.systemField] as string) || '';
+                    const usrVal = (editing[pair.userField] as string) || '';
+                    const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
                     return (
                       <div key={pair.key} className="mb-2">
                         <span className="text-muted fw-medium" style={{ fontSize: 10 }}>{pair.label}</span>
                         <HighlightedPromptEditor
-                          value={systemValue}
-                          onChange={val => props.onUpdate({ [pair.systemField]: val } as any)}
+                          value={combinedValue}
+                          onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
                           availableVars={coreAvailableVars}
                           allDefinedVars={coreAllDefinedVars}
-                          label="SYSTEM PROMPT"
-                          rows={3}
-                          placeholder="System instructions for the AI model..."
+                          label="PROMPT"
+                          rows={5}
+                          placeholder="Instructions for the AI model with {{variable}} placeholders..."
                         />
-                        {showUserTemplate && (
-                          <HighlightedPromptEditor
-                            value={userValue}
-                            onChange={val => props.onUpdate({ [pair.userField]: val } as any)}
-                            availableVars={coreAvailableVars}
-                            allDefinedVars={coreAllDefinedVars}
-                            label="USER TEMPLATE"
-                            rows={4}
-                            placeholder="User prompt template with {{variable}} placeholders..."
-                          />
-                        )}
                       </div>
                     );
                   })}

@@ -520,16 +520,18 @@ async function buildCompositePrompt(
         break;
     }
 
-    // Resolve prompts: prefer inline fields, fall back to FK templates
+    // Resolve prompts: merge system+user into single prompt (backward compat), fall back to FK templates
+    // Helper to merge legacy split fields
+    const mergePromptFields = (sys: string | undefined, usr: string | undefined): string => {
+      if (sys && usr) return sys + '\n\n' + usr;
+      return sys || usr || '';
+    };
+
     // Concept prompt
-    const conceptInlineSystem = (ms as any).concept_prompt_system;
-    const conceptInlineUser = (ms as any).concept_prompt_user;
-    if (conceptInlineUser || conceptInlineSystem) {
-      if (conceptInlineSystem) parts.push(`Concept System: ${conceptInlineSystem}`);
-      if (conceptInlineUser) {
-        const resolved = await resolveTemplate(conceptInlineUser, enrollmentId);
-        parts.push(`Concept Prompt: ${resolved}`);
-      }
+    const conceptInline = mergePromptFields((ms as any).concept_prompt_system, (ms as any).concept_prompt_user);
+    if (conceptInline) {
+      const resolved = await resolveTemplate(conceptInline, enrollmentId);
+      parts.push(`Concept Prompt: ${resolved}`);
     } else {
       const conceptPrompt = (ms as any).conceptPrompt;
       if (conceptPrompt?.user_prompt_template) {
@@ -539,14 +541,10 @@ async function buildCompositePrompt(
     }
 
     // Build prompt
-    const buildInlineSystem = (ms as any).build_prompt_system;
-    const buildInlineUser = (ms as any).build_prompt_user;
-    if (buildInlineUser || buildInlineSystem) {
-      if (buildInlineSystem) parts.push(`Build System: ${buildInlineSystem}`);
-      if (buildInlineUser) {
-        const resolved = await resolveTemplate(buildInlineUser, enrollmentId);
-        parts.push(`Build Prompt: ${resolved}`);
-      }
+    const buildInline = mergePromptFields((ms as any).build_prompt_system, (ms as any).build_prompt_user);
+    if (buildInline) {
+      const resolved = await resolveTemplate(buildInline, enrollmentId);
+      parts.push(`Build Prompt: ${resolved}`);
     } else {
       const buildPrompt = (ms as any).buildPrompt;
       if (buildPrompt?.user_prompt_template) {
@@ -556,14 +554,10 @@ async function buildCompositePrompt(
     }
 
     // Mentor prompt
-    const mentorInlineSystem = (ms as any).mentor_prompt_system;
-    const mentorInlineUser = (ms as any).mentor_prompt_user;
-    if (mentorInlineUser || mentorInlineSystem) {
-      if (mentorInlineSystem) parts.push(`Mentor System: ${mentorInlineSystem}`);
-      if (mentorInlineUser) {
-        const resolved = await resolveTemplate(mentorInlineUser, enrollmentId);
-        parts.push(`Mentor Prompt: ${resolved}`);
-      }
+    const mentorInline = mergePromptFields((ms as any).mentor_prompt_system, (ms as any).mentor_prompt_user);
+    if (mentorInline) {
+      const resolved = await resolveTemplate(mentorInline, enrollmentId);
+      parts.push(`Mentor Prompt: ${resolved}`);
     } else {
       const mentorPrompt = (ms as any).mentorPrompt;
       if (mentorPrompt?.user_prompt_template) {
@@ -572,13 +566,15 @@ async function buildCompositePrompt(
       }
     }
 
-    // KC and Reflection prompts (inline only, no FK equivalent)
-    if ((ms as any).kc_prompt_user) {
-      const resolved = await resolveTemplate((ms as any).kc_prompt_user, enrollmentId);
+    // KC and Reflection prompts
+    const kcInline = mergePromptFields((ms as any).kc_prompt_system, (ms as any).kc_prompt_user);
+    if (kcInline) {
+      const resolved = await resolveTemplate(kcInline, enrollmentId);
       parts.push(`Knowledge Check Prompt: ${resolved}`);
     }
-    if ((ms as any).reflection_prompt_user) {
-      const resolved = await resolveTemplate((ms as any).reflection_prompt_user, enrollmentId);
+    const reflectionInline = mergePromptFields((ms as any).reflection_prompt_system, (ms as any).reflection_prompt_user);
+    if (reflectionInline) {
+      const resolved = await resolveTemplate(reflectionInline, enrollmentId);
       parts.push(`Reflection Prompt: ${resolved}`);
     }
 
@@ -812,12 +808,15 @@ export async function buildCompositePromptForSimulation(
         break;
     }
 
-    // Resolve prompts: prefer inline fields, fall back to FK templates
-    const conceptInlineUser = (ms as any).concept_prompt_user;
-    const conceptInlineSystem = (ms as any).concept_prompt_system;
-    if (conceptInlineUser || conceptInlineSystem) {
-      if (conceptInlineSystem) parts.push(`Concept System: ${conceptInlineSystem}`);
-      if (conceptInlineUser) parts.push(`Concept Prompt: ${resolveWithTestVars(conceptInlineUser, testVariables)}`);
+    // Resolve prompts: merge system+user into single prompt (backward compat), fall back to FK templates
+    const mergeFields = (sys: string | undefined, usr: string | undefined): string => {
+      if (sys && usr) return sys + '\n\n' + usr;
+      return sys || usr || '';
+    };
+
+    const conceptInline = mergeFields((ms as any).concept_prompt_system, (ms as any).concept_prompt_user);
+    if (conceptInline) {
+      parts.push(`Concept Prompt: ${resolveWithTestVars(conceptInline, testVariables)}`);
     } else {
       const conceptPrompt = (ms as any).conceptPrompt;
       if (conceptPrompt?.user_prompt_template) {
@@ -825,11 +824,9 @@ export async function buildCompositePromptForSimulation(
       }
     }
 
-    const buildInlineUser = (ms as any).build_prompt_user;
-    const buildInlineSystem = (ms as any).build_prompt_system;
-    if (buildInlineUser || buildInlineSystem) {
-      if (buildInlineSystem) parts.push(`Build System: ${buildInlineSystem}`);
-      if (buildInlineUser) parts.push(`Build Prompt: ${resolveWithTestVars(buildInlineUser, testVariables)}`);
+    const buildInline = mergeFields((ms as any).build_prompt_system, (ms as any).build_prompt_user);
+    if (buildInline) {
+      parts.push(`Build Prompt: ${resolveWithTestVars(buildInline, testVariables)}`);
     } else {
       const buildPrompt = (ms as any).buildPrompt;
       if (buildPrompt?.user_prompt_template) {
@@ -837,11 +834,9 @@ export async function buildCompositePromptForSimulation(
       }
     }
 
-    const mentorInlineUser = (ms as any).mentor_prompt_user;
-    const mentorInlineSystem = (ms as any).mentor_prompt_system;
-    if (mentorInlineUser || mentorInlineSystem) {
-      if (mentorInlineSystem) parts.push(`Mentor System: ${mentorInlineSystem}`);
-      if (mentorInlineUser) parts.push(`Mentor Prompt: ${resolveWithTestVars(mentorInlineUser, testVariables)}`);
+    const mentorInline = mergeFields((ms as any).mentor_prompt_system, (ms as any).mentor_prompt_user);
+    if (mentorInline) {
+      parts.push(`Mentor Prompt: ${resolveWithTestVars(mentorInline, testVariables)}`);
     } else {
       const mentorPrompt = (ms as any).mentorPrompt;
       if (mentorPrompt?.user_prompt_template) {
@@ -849,11 +844,13 @@ export async function buildCompositePromptForSimulation(
       }
     }
 
-    if ((ms as any).kc_prompt_user) {
-      parts.push(`Knowledge Check Prompt: ${resolveWithTestVars((ms as any).kc_prompt_user, testVariables)}`);
+    const kcInline = mergeFields((ms as any).kc_prompt_system, (ms as any).kc_prompt_user);
+    if (kcInline) {
+      parts.push(`Knowledge Check Prompt: ${resolveWithTestVars(kcInline, testVariables)}`);
     }
-    if ((ms as any).reflection_prompt_user) {
-      parts.push(`Reflection Prompt: ${resolveWithTestVars((ms as any).reflection_prompt_user, testVariables)}`);
+    const reflectionInline = mergeFields((ms as any).reflection_prompt_system, (ms as any).reflection_prompt_user);
+    if (reflectionInline) {
+      parts.push(`Reflection Prompt: ${resolveWithTestVars(reflectionInline, testVariables)}`);
     }
 
     if (ms.associated_variable_keys?.length) {

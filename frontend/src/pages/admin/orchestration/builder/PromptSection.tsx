@@ -37,14 +37,16 @@ export default function PromptSection({ editing, miniSections, prompts, promptBo
     [variables]
   );
 
-  // Load from template: fetch body and copy into inline fields
+  // Load from template: fetch body and merge into single prompt field
   const handleLoadFromTemplate = async (promptKey: string, templateId: string, systemField: keyof MiniSection, userField: keyof MiniSection) => {
     setLoadingTemplate(promptKey);
     const body = await fetchPromptBody(templateId);
     if (body) {
+      // Merge system + user template into one field
+      const parts = [body.system_prompt, body.user_prompt_template].filter(Boolean);
       onUpdate({
-        [systemField]: body.system_prompt || '',
-        [userField]: body.user_prompt_template || '',
+        [systemField]: parts.join('\n\n'),
+        [userField]: '',
         prompt_source: 'hybrid',
       } as any);
     }
@@ -86,10 +88,12 @@ export default function PromptSection({ editing, miniSections, prompts, promptBo
       </div>
 
       {applicablePairs.map(pair => {
-        const systemValue = (editing[pair.systemField] as string) || '';
-        const userValue = (editing[pair.userField] as string) || '';
+        const sysVal = (editing[pair.systemField] as string) || '';
+        const usrVal = (editing[pair.userField] as string) || '';
+        // Merge legacy split fields into single value
+        const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
         const fkValue = (editing[pair.fkField] as string) || '';
-        const hasInlineContent = !!(systemValue || userValue);
+        const hasInlineContent = !!combinedValue;
         const isTemplateExpanded = expandedTemplate === pair.key;
 
         return (
@@ -114,14 +118,14 @@ export default function PromptSection({ editing, miniSections, prompts, promptBo
             {isTemplateExpanded && (
               <div className="mb-2 p-2 bg-light rounded" style={{ fontSize: 11 }}>
                 <div className="d-flex align-items-center gap-2 mb-1">
-                  <span className="text-muted fw-medium">Select template to copy into inline fields:</span>
+                  <span className="text-muted fw-medium">Select template to copy into prompt:</span>
                 </div>
                 <select
                   className="form-select form-select-sm"
                   value=""
                   onChange={e => {
                     if (e.target.value) {
-                      if (hasInlineContent && !window.confirm('This will overwrite existing inline prompt text. Continue?')) return;
+                      if (hasInlineContent && !window.confirm('This will overwrite existing prompt text. Continue?')) return;
                       handleLoadFromTemplate(pair.key, e.target.value, pair.systemField, pair.userField);
                     }
                   }}
@@ -134,26 +138,15 @@ export default function PromptSection({ editing, miniSections, prompts, promptBo
               </div>
             )}
 
-            {/* Inline system prompt editor */}
+            {/* Single combined prompt editor */}
             <HighlightedPromptEditor
-              value={systemValue}
-              onChange={val => onUpdate({ [pair.systemField]: val } as any)}
+              value={combinedValue}
+              onChange={val => onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
               availableVars={availableVars}
               allDefinedVars={allDefinedVars}
-              label="SYSTEM PROMPT"
-              rows={3}
-              placeholder="System instructions for the AI model..."
-            />
-
-            {/* Inline user prompt template editor */}
-            <HighlightedPromptEditor
-              value={userValue}
-              onChange={val => onUpdate({ [pair.userField]: val } as any)}
-              availableVars={availableVars}
-              allDefinedVars={allDefinedVars}
-              label="USER TEMPLATE"
-              rows={5}
-              placeholder="User prompt template with {{variable}} placeholders..."
+              label="PROMPT"
+              rows={6}
+              placeholder="Instructions for the AI model with {{variable}} placeholders..."
             />
           </div>
         );

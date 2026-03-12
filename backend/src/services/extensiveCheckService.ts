@@ -73,11 +73,11 @@ export async function extensiveCheckMiniSection(id: string): Promise<DiagnosticR
 async function checkPromptCompilation(ms: MiniSection): Promise<DiagnosticCategory> {
   const details: DiagnosticCheck[] = [];
   const promptFields: { field: string; label: string }[] = [
-    { field: 'concept_prompt_user', label: 'Concept User Prompt' },
-    { field: 'build_prompt_user', label: 'Build User Prompt' },
-    { field: 'mentor_prompt_user', label: 'Mentor User Prompt' },
-    { field: 'kc_prompt_user', label: 'KC User Prompt' },
-    { field: 'reflection_prompt_user', label: 'Reflection User Prompt' },
+    { field: 'concept_prompt_system', label: 'Concept Prompt' },
+    { field: 'build_prompt_system', label: 'Build Prompt' },
+    { field: 'mentor_prompt_system', label: 'Mentor Prompt' },
+    { field: 'kc_prompt_system', label: 'KC Prompt' },
+    { field: 'reflection_prompt_system', label: 'Reflection Prompt' },
   ];
 
   // Get all defined variable keys for placeholder resolution
@@ -331,9 +331,8 @@ export async function checkPreviewConfidence(id: string): Promise<{
   const varKeys = new Set(allVars.map(v => v.variable_key));
 
   // Check all inline prompts for unresolved placeholders
-  const promptFields = ['concept_prompt_user', 'concept_prompt_system', 'build_prompt_user', 'build_prompt_system',
-    'mentor_prompt_user', 'mentor_prompt_system', 'kc_prompt_user', 'kc_prompt_system',
-    'reflection_prompt_user', 'reflection_prompt_system'];
+  const promptFields = ['concept_prompt_system', 'build_prompt_system',
+    'mentor_prompt_system', 'kc_prompt_system', 'reflection_prompt_system'];
 
   let totalPlaceholders = 0;
   let resolvedPlaceholders = 0;
