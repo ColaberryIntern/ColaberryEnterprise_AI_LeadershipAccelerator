@@ -90,6 +90,14 @@ import OpenclawTask from './OpenclawTask';
 import OpenclawSession from './OpenclawSession';
 import OpenclawResponse from './OpenclawResponse';
 import OpenclawLearning from './OpenclawLearning';
+import GovernanceConfig from './GovernanceConfig';
+import CronScheduleConfig from './CronScheduleConfig';
+import CampaignGovernanceConfig from './CampaignGovernanceConfig';
+import RiskScoringConfig from './RiskScoringConfig';
+
+// --- Governance Center associations ---
+Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
+CampaignGovernanceConfig.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -569,4 +577,8 @@ export {
   OpenclawSession,
   OpenclawResponse,
   OpenclawLearning,
+  GovernanceConfig,
+  CronScheduleConfig,
+  CampaignGovernanceConfig,
+  RiskScoringConfig,
 };
