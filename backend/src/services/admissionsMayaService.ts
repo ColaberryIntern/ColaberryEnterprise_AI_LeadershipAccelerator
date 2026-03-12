@@ -109,7 +109,13 @@ IMPORTANT RULES:
 - If you don't know something, say so honestly and offer to connect them with the team
 - SAFETY: Never initiate more than one call to the same visitor within 24 hours
 - SAFETY: Never send restricted documents (executive briefing) to visitors who haven't completed information request
-- SAFETY: Always log every operational action you take`);
+- SAFETY: Always log every operational action you take
+
+FOLLOW-UP SUGGESTIONS (MANDATORY):
+At the end of EVERY response, include exactly two follow-up questions the visitor might want to ask next. Format them on the last two lines like this:
+{{SUGGEST:Short question label|Full question text}}
+{{SUGGEST:Short question label|Full question text}}
+The labels should be 3-6 words. The full question is what gets sent if they click it. Make them contextually relevant to what was just discussed. Anticipate their next question — guide them toward deeper engagement or a next step.`);
 
   return parts.join('\n');
 }

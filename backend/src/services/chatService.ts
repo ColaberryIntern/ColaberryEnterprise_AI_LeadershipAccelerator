@@ -386,20 +386,24 @@ export async function sendMessage(
     assistantMessage = response.choices[0]?.message;
   }
 
-  const reply = assistantMessage?.content?.trim() || 'I apologize, I had trouble generating a response. Could you try rephrasing your question?';
+  const rawReply = assistantMessage?.content?.trim() || 'I apologize, I had trouble generating a response. Could you try rephrasing your question?';
   const latencyMs = Date.now() - startTime;
 
-  // Save assistant response
+  // Extract follow-up suggestions from Maya's response
+  const { cleanMessage, suggestions } = extractSuggestions(rawReply);
+
+  // Save assistant response (clean, without suggestion markers)
   await ChatMessage.create({
     conversation_id: conversationId,
     role: 'assistant',
-    content: reply,
+    content: cleanMessage,
     tokens_used: tokensUsed,
     timestamp: new Date(),
     metadata: {
       model,
       latency_ms: latencyMs,
       ...(actionResults.length > 0 ? { actions_executed: actionResults } : {}),
+      ...(suggestions.length > 0 ? { suggestions } : {}),
     },
   } as any);
 
@@ -410,7 +414,11 @@ export async function sendMessage(
     updated_at: new Date(),
   } as any);
 
-  return { message: reply, conversation_id: conversationId };
+  return {
+    message: cleanMessage,
+    conversation_id: conversationId,
+    ...(suggestions.length > 0 ? { suggestions } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -659,4 +667,32 @@ export async function getChatStats(): Promise<{
     today_conversations: today,
     avg_messages: Math.round(Number((avgData as any)?.avg_messages || 0) * 10) / 10,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Extract follow-up suggestions from Maya's response
+// ---------------------------------------------------------------------------
+
+function extractSuggestions(text: string): {
+  cleanMessage: string;
+  suggestions: Array<{ label: string; value: string }>;
+} {
+  const suggestions: Array<{ label: string; value: string }> = [];
+  const suggestPattern = /\{\{SUGGEST:([^|]+)\|([^}]+)\}\}/g;
+
+  let match;
+  while ((match = suggestPattern.exec(text)) !== null) {
+    suggestions.push({
+      label: match[1].trim(),
+      value: match[2].trim(),
+    });
+  }
+
+  // Remove suggestion markers from the displayed message
+  const cleanMessage = text
+    .replace(/\{\{SUGGEST:[^}]+\}\}/g, '')
+    .replace(/\n+$/, '')
+    .trim();
+
+  return { cleanMessage, suggestions: suggestions.slice(0, 2) };
 }

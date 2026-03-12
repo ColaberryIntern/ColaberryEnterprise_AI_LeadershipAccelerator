@@ -9,6 +9,7 @@ interface ChatMessageData {
   content: string;
   timestamp?: string;
   visitor_type?: string;
+  suggestions?: Array<{ label: string; value: string }>;
 }
 
 interface QuickReply {
@@ -328,6 +329,9 @@ const MayaChatWidget: React.FC = () => {
             setIsExecutive(true);
             assistantMsg.visitor_type = 'ceo';
           }
+          if (res.data.suggestions?.length) {
+            assistantMsg.suggestions = res.data.suggestions;
+          }
           setMessages(prev => [...prev, assistantMsg]);
         }
       } else {
@@ -450,6 +454,38 @@ const MayaChatWidget: React.FC = () => {
                         <div style={{ color: 'var(--color-text, #2d3748)', fontSize: '15px', lineHeight: '1.7' }}>
                           {renderFormattedContent(msg.content)}
                         </div>
+                        {msg.suggestions && msg.suggestions.length > 0 && i === messages.length - 1 && !sending && (
+                          <div className="d-flex flex-wrap gap-2" style={{ marginTop: '12px' }}>
+                            {msg.suggestions.map((s, si) => (
+                              <button
+                                key={si}
+                                className="btn btn-outline-secondary btn-sm"
+                                style={{
+                                  borderRadius: '20px',
+                                  fontSize: '13px',
+                                  padding: '6px 16px',
+                                  borderColor: 'var(--color-border, #e2e8f0)',
+                                  color: 'var(--color-primary, #1a365d)',
+                                  backgroundColor: 'var(--color-bg-alt, #f7fafc)',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                onClick={() => handleSend(s.value)}
+                                onMouseEnter={e => {
+                                  e.currentTarget.style.backgroundColor = 'var(--color-primary, #1a365d)';
+                                  e.currentTarget.style.color = '#fff';
+                                  e.currentTarget.style.borderColor = 'var(--color-primary, #1a365d)';
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.backgroundColor = 'var(--color-bg-alt, #f7fafc)';
+                                  e.currentTarget.style.color = 'var(--color-primary, #1a365d)';
+                                  e.currentTarget.style.borderColor = 'var(--color-border, #e2e8f0)';
+                                }}
+                              >
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -714,6 +750,38 @@ const MayaChatWidget: React.FC = () => {
                     </div>
                   )}
                   {msg.role === 'assistant' ? renderFormattedContent(msg.content) : msg.content}
+                  {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && i === messages.length - 1 && !sending && (
+                    <div className="d-flex flex-wrap gap-1" style={{ marginTop: '8px' }}>
+                      {msg.suggestions.map((s, si) => (
+                        <button
+                          key={si}
+                          className="btn btn-outline-secondary btn-sm"
+                          style={{
+                            borderRadius: '16px',
+                            fontSize: '11px',
+                            padding: '3px 10px',
+                            borderColor: 'var(--color-border, #e2e8f0)',
+                            color: 'var(--color-primary, #1a365d)',
+                            backgroundColor: 'var(--color-bg-alt, #f7fafc)',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onClick={() => handleSend(s.value)}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.backgroundColor = 'var(--color-primary, #1a365d)';
+                            e.currentTarget.style.color = '#fff';
+                            e.currentTarget.style.borderColor = 'var(--color-primary, #1a365d)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.backgroundColor = 'var(--color-bg-alt, #f7fafc)';
+                            e.currentTarget.style.color = 'var(--color-primary, #1a365d)';
+                            e.currentTarget.style.borderColor = 'var(--color-border, #e2e8f0)';
+                          }}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
