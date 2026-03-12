@@ -34,6 +34,22 @@ import {
   runOpenclawLearningOptimization,
   runOpenclawInfraMonitor,
   runOpenclawTechResearch,
+  runExecutiveStrategyArchitect,
+  runGovernanceStrategyArchitect,
+  runStrategyFuturesArchitect,
+  runFinanceIntelligenceArchitect,
+  runOperationsOptimizationArchitect,
+  runOrchestrationEcosystemArchitect,
+  runInsightArchitect,
+  runPartnershipExpansionArchitect,
+  runGrowthExperimentArchitect,
+  runMarketingAutomationArchitect,
+  runAdmissionsConversionArchitect,
+  runInfrastructureEvolutionArchitect,
+  runPlatformInnovationArchitect,
+  runLearningInnovationArchitect,
+  runStudentSuccessArchitect,
+  runAlumniNetworkArchitect,
 } from './aiOrchestrator';
 import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
@@ -94,6 +110,24 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'OpenclawLearningOptimization', hardcodedSchedule: '0 */4 * * *', runner: runOpenclawLearningOptimization, label: 'OpenClaw learning optimization' },
   { agentName: 'OpenclawInfrastructureMonitor', hardcodedSchedule: '*/5 * * * *', runner: runOpenclawInfraMonitor, label: 'OpenClaw infra monitor' },
   { agentName: 'OpenclawTechResearch', hardcodedSchedule: '0 6 * * *', runner: runOpenclawTechResearch, label: 'OpenClaw tech research' },
+
+  // Department Strategy Architects (every 6 hours, staggered)
+  { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
+  { agentName: 'GovernanceStrategyArchitect', hardcodedSchedule: '2 */6 * * *', runner: runGovernanceStrategyArchitect, label: 'Governance strategy architect' },
+  { agentName: 'StrategyFuturesArchitect', hardcodedSchedule: '4 */6 * * *', runner: runStrategyFuturesArchitect, label: 'Strategy futures architect' },
+  { agentName: 'FinanceIntelligenceArchitect', hardcodedSchedule: '6 */6 * * *', runner: runFinanceIntelligenceArchitect, label: 'Finance intelligence architect' },
+  { agentName: 'OperationsOptimizationArchitect', hardcodedSchedule: '8 */6 * * *', runner: runOperationsOptimizationArchitect, label: 'Operations optimization architect' },
+  { agentName: 'OrchestrationEcosystemArchitect', hardcodedSchedule: '10 */6 * * *', runner: runOrchestrationEcosystemArchitect, label: 'Orchestration ecosystem architect' },
+  { agentName: 'InsightArchitect', hardcodedSchedule: '12 */6 * * *', runner: runInsightArchitect, label: 'Insight architect' },
+  { agentName: 'PartnershipExpansionArchitect', hardcodedSchedule: '14 */6 * * *', runner: runPartnershipExpansionArchitect, label: 'Partnership expansion architect' },
+  { agentName: 'GrowthExperimentArchitect', hardcodedSchedule: '16 */6 * * *', runner: runGrowthExperimentArchitect, label: 'Growth experiment architect' },
+  { agentName: 'MarketingAutomationArchitect', hardcodedSchedule: '18 */6 * * *', runner: runMarketingAutomationArchitect, label: 'Marketing automation architect' },
+  { agentName: 'AdmissionsConversionArchitect', hardcodedSchedule: '20 */6 * * *', runner: runAdmissionsConversionArchitect, label: 'Admissions conversion architect' },
+  { agentName: 'InfrastructureEvolutionArchitect', hardcodedSchedule: '22 */6 * * *', runner: runInfrastructureEvolutionArchitect, label: 'Infrastructure evolution architect' },
+  { agentName: 'PlatformInnovationArchitect', hardcodedSchedule: '24 */6 * * *', runner: runPlatformInnovationArchitect, label: 'Platform innovation architect' },
+  { agentName: 'LearningInnovationArchitect', hardcodedSchedule: '26 */6 * * *', runner: runLearningInnovationArchitect, label: 'Learning innovation architect' },
+  { agentName: 'StudentSuccessArchitect', hardcodedSchedule: '28 */6 * * *', runner: runStudentSuccessArchitect, label: 'Student success architect' },
+  { agentName: 'AlumniNetworkArchitect', hardcodedSchedule: '30 */6 * * *', runner: runAlumniNetworkArchitect, label: 'Alumni network architect' },
 ];
 
 // Executive briefings use dynamic imports, registered separately
@@ -138,12 +172,12 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
 export async function startAIOpsScheduler(): Promise<void> {
-  // Seed 11 departments on startup (idempotent)
+  // Seed 16 departments on startup (idempotent)
   seedDepartments().catch((err) => {
     console.error('[AI Ops] Failed to seed departments:', err.message);
   });
 
-  // Seed full agent registry on startup (idempotent — 105 agents)
+  // Seed full agent registry on startup (idempotent — 121 agents)
   seedAgentRegistry().catch((err) => {
     console.error('[AI Ops] Failed to seed agent registry:', err.message);
   });

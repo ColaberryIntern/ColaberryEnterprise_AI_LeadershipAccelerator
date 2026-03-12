@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import Breadcrumb from '../../components/ui/Breadcrumb';
+import { EventLedgerContent } from './AdminEventLedgerPage';
 
-type TabKey = 'system' | 'revenue' | 'automation' | 'communication' | 'integrations' | 'ai';
+type TabKey = 'system' | 'revenue' | 'automation' | 'communication' | 'integrations' | 'ai' | 'audit';
 
 interface TabDef {
   key: TabKey;
@@ -29,6 +30,7 @@ const TABS: TabDef[] = [
     badge: (s) => s.ghl_enabled ? { text: 'GHL ON', color: 'success' } : null,
   },
   { key: 'ai', label: 'AI Config' },
+  { key: 'audit', label: 'Audit Log' },
 ];
 
 type FieldProps = {
@@ -712,6 +714,7 @@ function AdminSettingsPage() {
       {activeTab === 'communication' && <CommunicationTab settings={settings} onChange={handleChange} saving={saving} setSaving={setSaving} />}
       {activeTab === 'integrations' && <IntegrationsTab settings={settings} onChange={handleChange} />}
       {activeTab === 'ai' && <AIConfigTab settings={settings} onChange={handleChange} />}
+      {activeTab === 'audit' && <EventLedgerContent />}
 
       {/* Sticky Save Bar */}
       <div

@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type DepartmentEventType = 'milestone' | 'risk' | 'achievement' | 'update' | 'launch' | 'review';
+export type DepartmentEventType = 'milestone' | 'risk' | 'achievement' | 'update' | 'launch' | 'review' | 'strategy_analysis' | 'initiative_created' | 'ticket_generated' | 'health_assessment' | 'opportunity_identified';
 
 interface DepartmentEventAttributes {
   id?: string;

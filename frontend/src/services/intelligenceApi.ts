@@ -334,4 +334,66 @@ export const chatWithDeptHead = (slug: string, message: string, history: Array<{
 export const evaluateIdea = (slug: string, idea: string) =>
   api.post<IdeaEvaluation>(`/departments/${slug}/evaluate-idea`, { idea });
 
+// ─── Department Strategy Layer ──────────────────────────────────────────────
+
+export interface StrategyAgentInfo {
+  id: string;
+  agent_name: string;
+  status: string;
+  enabled: boolean;
+  run_count: number;
+  error_count: number;
+  last_run_at: string | null;
+  last_duration_ms: number | null;
+  last_result: any;
+  config: Record<string, any>;
+}
+
+export interface StrategySummary {
+  total_departments: number;
+  total_initiatives: number;
+  active_initiatives: number;
+  completed_initiatives: number;
+  cross_dept_initiatives: number;
+  avg_health_score: number;
+  avg_innovation_score: number;
+  departments: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    color: string;
+    health_score: number;
+    innovation_score: number;
+    active_initiatives: number;
+    total_initiatives: number;
+    last_strategy_run: string | null;
+  }>;
+}
+
+export interface CrossDeptInitiative {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  progress: number;
+  risk_level: string;
+  created_by_agent: string | null;
+  supporting_departments: string[];
+  department: { id: string; name: string; slug: string; color: string };
+  supporting_department_details: Array<{ id: string; name: string; slug: string; color: string }>;
+}
+
+export const getStrategySummary = () =>
+  api.get<StrategySummary>('/strategy-summary');
+
+export const getCrossDeptInitiatives = () =>
+  api.get<{ initiatives: CrossDeptInitiative[] }>('/cross-dept-initiatives');
+
+export const getStrategyAgents = () =>
+  api.get<{ agents: StrategyAgentInfo[] }>('/strategy-agents');
+
+export const runDepartmentStrategy = (slug: string) =>
+  api.post<any>(`/departments/${slug}/run-strategy`);
+
 export default api;

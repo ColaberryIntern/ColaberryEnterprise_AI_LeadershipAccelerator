@@ -150,12 +150,14 @@ export type AiAgentType =
   | 'revenue_opportunity_detection'
   | 'agent_performance_analytics'
   | 'knowledge_graph_builder'
+  // Department Strategy Architects
+  | 'dept_strategy_architect'
   // Dynamic (created by AI COO)
   | 'dynamic';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting' | 'dept_strategy';
 
 interface AiAgentAttributes {
   id?: string;

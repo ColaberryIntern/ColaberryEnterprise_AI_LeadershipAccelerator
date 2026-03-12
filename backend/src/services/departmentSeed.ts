@@ -15,6 +15,11 @@ const DEPARTMENTS = [
   { slug: 'platform', name: 'Platform & Infrastructure', color: '#718096', bg_light: '#e2e8f0', mission: 'System reliability, performance monitoring, UX optimization, and deployment.' },
   { slug: 'intelligence', name: 'Intelligence & AI Ops', color: '#e53e3e', bg_light: '#fed7d7', mission: 'Agent fleet operations, data intelligence, trend detection, and autonomous operations.' },
   { slug: 'governance', name: 'Governance & Compliance', color: '#1a365d', bg_light: '#ebf4ff', mission: 'Safety, audit, policy enforcement, risk management, and approval workflows.' },
+  { slug: 'finance', name: 'Finance', color: '#d69e2e', bg_light: '#fefcbf', mission: 'Financial planning, cost optimization, revenue forecasting, and scholarship allocation.' },
+  { slug: 'operations', name: 'Operations', color: '#718096', bg_light: '#e2e8f0', mission: 'Workflow optimization, quality assurance, task assignment, and process improvement.' },
+  { slug: 'orchestration', name: 'Orchestration', color: '#3182ce', bg_light: '#bee3f8', mission: 'Agent fleet coordination, system performance, decision simulation, and hiring.' },
+  { slug: 'growth', name: 'Growth', color: '#805ad5', bg_light: '#e9d8fd', mission: 'Growth experiments, opportunity scanning, partnership development, and expansion.' },
+  { slug: 'infrastructure', name: 'Infrastructure', color: '#718096', bg_light: '#e2e8f0', mission: 'AI model performance, security monitoring, system health, and reliability.' },
 ];
 
 export async function seedDepartments(): Promise<void> {

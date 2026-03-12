@@ -49,6 +49,7 @@ import { runOpenclawBrowserWorkerAgent } from './agents/openclaw/openclawBrowser
 import { runOpenclawLearningOptimizationAgent } from './agents/openclaw/openclawLearningOptimizationAgent';
 import { runOpenclawInfraMonitorAgent } from './agents/openclaw/openclawInfraMonitorAgent';
 import { runOpenclawTechResearchAgent } from './agents/openclaw/openclawTechResearchAgent';
+import { runStrategyArchitectAgent } from './agents/strategy/strategyArchitectAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -501,4 +502,70 @@ export async function runOpenclawInfraMonitor(): Promise<AgentExecutionResult | 
 
 export async function runOpenclawTechResearch(): Promise<AgentExecutionResult | null> {
   return runAgent('OpenclawTechResearchAgent', runOpenclawTechResearchAgent);
+}
+
+// ─── Strategy Architect Agents (16 departments) ──────────────────────────────
+
+export async function runExecutiveStrategyArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('ExecutiveStrategyArchitect', runStrategyArchitectAgent);
+}
+
+export async function runGovernanceStrategyArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('GovernanceStrategyArchitect', runStrategyArchitectAgent);
+}
+
+export async function runStrategyFuturesArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('StrategyFuturesArchitect', runStrategyArchitectAgent);
+}
+
+export async function runFinanceIntelligenceArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('FinanceIntelligenceArchitect', runStrategyArchitectAgent);
+}
+
+export async function runOperationsOptimizationArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('OperationsOptimizationArchitect', runStrategyArchitectAgent);
+}
+
+export async function runOrchestrationEcosystemArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('OrchestrationEcosystemArchitect', runStrategyArchitectAgent);
+}
+
+export async function runInsightArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('InsightArchitect', runStrategyArchitectAgent);
+}
+
+export async function runPartnershipExpansionArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('PartnershipExpansionArchitect', runStrategyArchitectAgent);
+}
+
+export async function runGrowthExperimentArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('GrowthExperimentArchitect', runStrategyArchitectAgent);
+}
+
+export async function runMarketingAutomationArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('MarketingAutomationArchitect', runStrategyArchitectAgent);
+}
+
+export async function runAdmissionsConversionArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsConversionArchitect', runStrategyArchitectAgent);
+}
+
+export async function runInfrastructureEvolutionArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('InfrastructureEvolutionArchitect', runStrategyArchitectAgent);
+}
+
+export async function runPlatformInnovationArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('PlatformInnovationArchitect', runStrategyArchitectAgent);
+}
+
+export async function runLearningInnovationArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('LearningInnovationArchitect', runStrategyArchitectAgent);
+}
+
+export async function runStudentSuccessArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('StudentSuccessArchitect', runStrategyArchitectAgent);
+}
+
+export async function runAlumniNetworkArchitect(): Promise<AgentExecutionResult | null> {
+  return runAgent('AlumniNetworkArchitect', runStrategyArchitectAgent);
 }

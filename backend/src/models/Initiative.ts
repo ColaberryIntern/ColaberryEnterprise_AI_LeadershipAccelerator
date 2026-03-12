@@ -19,6 +19,9 @@ interface InitiativeAttributes {
   completed_date?: Date;
   revenue_impact?: number;
   risk_level?: InitiativeRiskLevel;
+  supporting_departments?: string[];
+  created_by_agent?: string;
+  parent_strategy_id?: string;
   tags?: string[];
   metadata?: Record<string, any>;
   created_at?: Date;
@@ -39,6 +42,9 @@ class Initiative extends Model<InitiativeAttributes> implements InitiativeAttrib
   declare completed_date: Date;
   declare revenue_impact: number;
   declare risk_level: InitiativeRiskLevel;
+  declare supporting_departments: string[];
+  declare created_by_agent: string;
+  declare parent_strategy_id: string;
   declare tags: string[];
   declare metadata: Record<string, any>;
   declare created_at: Date;
@@ -105,6 +111,19 @@ Initiative.init(
       allowNull: false,
       defaultValue: 'low',
     },
+    supporting_departments: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+    },
+    created_by_agent: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    parent_strategy_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     tags: {
       type: DataTypes.JSONB,
       allowNull: true,
@@ -125,6 +144,7 @@ Initiative.init(
       { fields: ['department_id'] },
       { fields: ['status'] },
       { fields: ['priority'] },
+      { fields: ['created_by_agent'] },
     ],
   }
 );

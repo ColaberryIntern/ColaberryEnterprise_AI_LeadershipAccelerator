@@ -10,6 +10,13 @@ import {
   getRevenueImpact,
 } from '../../services/departmentIntelligenceService';
 import { chatWithDeptHead, evaluateIdea, getDeptHeadInfo } from '../../services/deptHeadService';
+import {
+  getStrategySummary,
+  getCrossDepartmentInitiatives,
+} from '../../services/departmentInitiativeEngine';
+import { runStrategyArchitectAgent } from '../../services/agents/strategy/strategyArchitectAgent';
+import { STRATEGY_CONFIGS } from '../../services/agents/strategy/departmentStrategyConfigs';
+import { AiAgent } from '../../models';
 
 const router = Router();
 
@@ -140,6 +147,62 @@ router.post('/api/admin/intelligence/departments/:slug/evaluate-idea', async (re
     if (!idea) return res.status(400).json({ error: 'idea is required' });
     const evaluation = await evaluateIdea(req.params.slug as string, idea);
     res.json(evaluation);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Department Strategy Endpoints ──────────────────────────────────────────
+
+// GET /api/admin/intelligence/strategy-summary — Aggregate strategy stats
+router.get('/api/admin/intelligence/strategy-summary', async (_req: Request, res: Response) => {
+  try {
+    const summary = await getStrategySummary();
+    res.json(summary);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/intelligence/cross-dept-initiatives — Cross-department initiatives
+router.get('/api/admin/intelligence/cross-dept-initiatives', async (_req: Request, res: Response) => {
+  try {
+    const initiatives = await getCrossDepartmentInitiatives();
+    res.json({ initiatives });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/intelligence/strategy-agents — All 16 Strategy Architect agent statuses
+router.get('/api/admin/intelligence/strategy-agents', async (_req: Request, res: Response) => {
+  try {
+    const agents = await AiAgent.findAll({
+      where: { category: 'dept_strategy' },
+      order: [['agent_name', 'ASC']],
+      attributes: [
+        'id', 'agent_name', 'status', 'enabled', 'run_count', 'error_count',
+        'last_run_at', 'last_duration_ms', 'last_result', 'config',
+      ],
+    });
+    res.json({ agents });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/departments/:slug/run-strategy — Manual trigger
+router.post('/api/admin/intelligence/departments/:slug/run-strategy', async (req: Request, res: Response) => {
+  try {
+    const slug = req.params.slug as string;
+    const config = STRATEGY_CONFIGS[slug];
+    if (!config) return res.status(404).json({ error: `No strategy config for department: ${slug}` });
+
+    const result = await runStrategyArchitectAgent('manual', {
+      department_slug: slug,
+      agent_name: `StrategyArchitect_${slug}_manual`,
+    });
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

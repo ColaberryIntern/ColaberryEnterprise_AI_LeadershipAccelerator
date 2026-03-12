@@ -3,26 +3,38 @@ import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import ErrorBoundary from '../ui/ErrorBoundary';
 
-const adminNavLinks = [
-  { path: '/admin/dashboard', label: 'Dashboard', icon: 'grid' },
-  { path: '/admin/revenue', label: 'Revenue', icon: 'currency-dollar' },
-  { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone' },
-  { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast' },
-  { path: '/admin/pipeline', label: 'Pipeline', icon: 'funnel' },
-  { path: '/admin/opportunities', label: 'Opportunities', icon: 'graph-up-arrow' },
-  { path: '/admin/accelerator', label: 'Accelerator', icon: 'mortarboard' },
-  { path: '/admin/orchestration', label: 'Orchestration', icon: 'diagram-3' },
-  { path: '/admin/leads', label: 'Leads', icon: 'people' },
-  { path: '/admin/visitors', label: 'Visitors', icon: 'eye' },
-  { path: '/admin/apollo', label: 'Apollo', icon: 'rocket' },
-  { path: '/admin/sequences', label: 'Sequences', icon: 'list-check' },
-  { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
-  { path: '/admin/tickets', label: 'Tickets', icon: 'clipboard-check' },
-  { path: '/admin/events', label: 'Event Ledger', icon: 'journal' },
-  { path: '/admin/import', label: 'Import', icon: 'cloud-upload' },
-  { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
-  { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
-  { path: '/admin/settings', label: 'Settings', icon: 'gear' },
+interface NavLink { path: string; label: string; icon: string; }
+interface NavSection { label: string | null; links: NavLink[]; }
+
+const adminNavSections: NavSection[] = [
+  { label: null, links: [
+    { path: '/admin/dashboard', label: 'Dashboard', icon: 'grid' },
+  ]},
+  { label: 'Revenue', links: [
+    { path: '/admin/revenue', label: 'Revenue', icon: 'currency-dollar' },
+    { path: '/admin/pipeline', label: 'Pipeline', icon: 'funnel' },
+    { path: '/admin/opportunities', label: 'Opportunities', icon: 'graph-up-arrow' },
+    { path: '/admin/leads', label: 'Leads', icon: 'people' },
+  ]},
+  { label: 'Campaigns', links: [
+    { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone' },
+    { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast' },
+    { path: '/admin/sequences', label: 'Sequences', icon: 'list-check' },
+    { path: '/admin/visitors', label: 'Visitors', icon: 'eye' },
+  ]},
+  { label: 'Program', links: [
+    { path: '/admin/accelerator', label: 'Accelerator', icon: 'mortarboard' },
+    { path: '/admin/orchestration', label: 'Orchestration', icon: 'diagram-3' },
+  ]},
+  { label: 'Intelligence', links: [
+    { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
+    { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
+    { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
+  ]},
+  { label: 'System', links: [
+    { path: '/admin/tickets', label: 'Tickets', icon: 'clipboard-check' },
+    { path: '/admin/settings', label: 'Settings', icon: 'gear' },
+  ]},
 ];
 
 const iconPaths: Record<string, string> = {
@@ -114,32 +126,24 @@ function AdminLayout() {
 
           {/* Nav Links */}
           <nav className="admin-nav-section">
-            <div className="admin-nav-label">Main</div>
-            {adminNavLinks.slice(0, 9).map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-                aria-current={isActive(link.path) ? 'page' : undefined}
-              >
-                <AdminIcon name={link.icon} />
-                {link.label}
-              </Link>
-            ))}
-
-            <div className="admin-nav-label mt-3">Tools</div>
-            {adminNavLinks.slice(9).map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-                aria-current={isActive(link.path) ? 'page' : undefined}
-              >
-                <AdminIcon name={link.icon} />
-                {link.label}
-              </Link>
+            {adminNavSections.map((section, idx) => (
+              <React.Fragment key={section.label || 'top'}>
+                {section.label && (
+                  <div className={`admin-nav-label${idx > 0 ? ' mt-3' : ''}`}>{section.label}</div>
+                )}
+                {section.links.map((link) => (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    className={`admin-nav-link${isActive(link.path) ? ' active' : ''}`}
+                    onClick={() => setSidebarOpen(false)}
+                    aria-current={isActive(link.path) ? 'page' : undefined}
+                  >
+                    <AdminIcon name={link.icon} />
+                    {link.label}
+                  </Link>
+                ))}
+              </React.Fragment>
             ))}
           </nav>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
 import BatchActionBar from '../../components/admin/BatchActionBar';
@@ -55,6 +55,7 @@ const SOURCE_OPTIONS = [
 ];
 
 function AdminLeadsPage() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<LeadStats | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);
@@ -201,7 +202,13 @@ function AdminLeadsPage() {
           <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
             + Add Lead
           </button>
-          <button className="btn btn-outline-primary btn-sm" onClick={handleExport}>
+          <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/import')}>
+            Import CSV
+          </button>
+          <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/apollo')}>
+            Apollo Enrich
+          </button>
+          <button className="btn btn-outline-secondary btn-sm" onClick={handleExport}>
             Export CSV
           </button>
         </div>

@@ -13,7 +13,7 @@ interface LedgerEvent {
   created_at: string;
 }
 
-function AdminEventLedgerPage() {
+export function EventLedgerContent() {
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -82,11 +82,6 @@ function AdminEventLedgerPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Event Ledger' }]} />
-      <h1 className="h3 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
-        Event Ledger
-      </h1>
-
       {/* Filters */}
       <div className="card admin-table-card mb-4">
         <div className="card-body">
@@ -197,6 +192,18 @@ function AdminEventLedgerPage() {
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       </div>
+    </>
+  );
+}
+
+function AdminEventLedgerPage() {
+  return (
+    <>
+      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Event Ledger' }]} />
+      <h1 className="h3 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
+        Event Ledger
+      </h1>
+      <EventLedgerContent />
     </>
   );
 }
