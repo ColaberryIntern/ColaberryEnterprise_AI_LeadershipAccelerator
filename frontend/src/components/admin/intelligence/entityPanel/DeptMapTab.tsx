@@ -5,12 +5,19 @@ import { useIntelligenceContext } from '../../../../contexts/IntelligenceContext
 import { getDepartmentsApi, DepartmentSummary } from '../../../../services/intelligenceApi';
 import { DEPARTMENT_CATEGORIES } from './departmentConfig';
 
-// Vertical tier mapping — spread departments across 5 layers
+// 5-Layer organizational structure
+const LAYER_LABELS = ['Command', 'Strategy', 'Intelligence', 'Business', 'Delivery'];
+
 const DEPT_TIER: Record<string, number> = {
-  executive: 0, governance: 0,
-  strategy: 1, finance: 1,
+  // Layer 0 — Command: oversight, governance, security
+  executive: 0, governance: 0, security: 0,
+  // Layer 1 — Strategy: planning, finance, reporting
+  strategy: 1, finance: 1, reporting: 1,
+  // Layer 2 — Intelligence: AI ops, orchestration, operations
   intelligence: 2, orchestration: 2, operations: 2,
+  // Layer 3 — Business: growth, marketing, admissions, partnerships
   growth: 3, marketing: 3, admissions: 3, partnerships: 3,
+  // Layer 4 — Delivery: education, student success, alumni, platform, infrastructure
   education: 4, student_success: 4, alumni: 4, platform: 4, infrastructure: 4,
 };
 
@@ -75,6 +82,16 @@ const DEPT_EDGES: { source: string; target: string; relationship: string }[] = [
   // Strategy cross-links
   { source: 'strategy', target: 'growth', relationship: 'plans' },
   { source: 'strategy', target: 'partnerships', relationship: 'evaluates' },
+  // Security
+  { source: 'security', target: 'intelligence', relationship: 'protects' },
+  { source: 'security', target: 'governance', relationship: 'enforces' },
+  { source: 'security', target: 'platform', relationship: 'hardens' },
+  { source: 'security', target: 'infrastructure', relationship: 'monitors' },
+  // Reporting
+  { source: 'reporting', target: 'executive', relationship: 'briefings' },
+  { source: 'reporting', target: 'intelligence', relationship: 'analyzes' },
+  { source: 'reporting', target: 'strategy', relationship: 'informs' },
+  { source: 'reporting', target: 'finance', relationship: 'reports' },
 ];
 
 export default function DeptMapTab() {
@@ -379,6 +396,49 @@ export default function DeptMapTab() {
           minZoom={0.3}
           maxZoom={8}
         />
+
+        {/* Layer labels — positioned along the left edge at each tier level */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 18,
+            height: '100%',
+            zIndex: 5,
+            pointerEvents: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {LAYER_LABELS.map((label, i) => (
+            <div
+              key={label}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRight: '1px solid rgba(200,200,210,0.25)',
+                borderBottom: i < LAYER_LABELS.length - 1 ? '1px dashed rgba(200,200,210,0.3)' : 'none',
+              }}
+            >
+              <span
+                style={{
+                  writingMode: 'vertical-rl',
+                  transform: 'rotate(180deg)',
+                  fontSize: '0.55rem',
+                  fontWeight: 600,
+                  color: 'rgba(100,116,139,0.6)',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
 
         {/* Zoom controls */}
         <div

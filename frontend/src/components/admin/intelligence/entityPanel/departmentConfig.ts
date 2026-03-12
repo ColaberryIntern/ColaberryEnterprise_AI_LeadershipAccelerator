@@ -22,6 +22,7 @@ export const DEPARTMENT_CATEGORIES: Record<string, DepartmentConfig> = {
   strategy:        { label: 'Strategy',          color: '#553c9a', bgLight: '#e9d8fd' },
   student_success: { label: 'Student Success',   color: '#276749', bgLight: '#c6f6d5' },
   security:        { label: 'Security',          color: '#c53030', bgLight: '#fff5f5' },
+  reporting:       { label: 'Reporting',         color: '#6b46c1', bgLight: '#f3e8ff' },
 };
 
 export function formatScore(score: number): string {

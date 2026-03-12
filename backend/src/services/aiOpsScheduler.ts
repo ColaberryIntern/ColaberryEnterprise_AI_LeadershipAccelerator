@@ -263,7 +263,7 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
  * Called from schedulerService.startScheduler() to keep scheduling isolated.
  */
 export async function startAIOpsScheduler(): Promise<void> {
-  // Seed 17 departments on startup (idempotent)
+  // Seed 18 departments on startup (idempotent)
   seedDepartments().catch((err) => {
     console.error('[AI Ops] Failed to seed departments:', err.message);
   });

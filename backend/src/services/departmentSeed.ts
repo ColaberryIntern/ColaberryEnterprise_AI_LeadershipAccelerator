@@ -21,6 +21,7 @@ const DEPARTMENTS = [
   { slug: 'growth', name: 'Growth', color: '#805ad5', bg_light: '#e9d8fd', mission: 'Growth experiments, opportunity scanning, partnership development, and expansion.' },
   { slug: 'infrastructure', name: 'Infrastructure', color: '#718096', bg_light: '#e2e8f0', mission: 'AI model performance, security monitoring, system health, and reliability.' },
   { slug: 'security', name: 'Security Operations', color: '#c53030', bg_light: '#fff5f5', mission: 'Threat detection, vulnerability management, secret scanning, runtime protection, and AI safety monitoring.' },
+  { slug: 'reporting', name: 'Reporting & Analytics', color: '#6b46c1', bg_light: '#f3e8ff', mission: 'Data intelligence, insight discovery, trend analysis, visualization, executive briefings, and cross-department performance analytics.' },
 ];
 
 export async function seedDepartments(): Promise<void> {
