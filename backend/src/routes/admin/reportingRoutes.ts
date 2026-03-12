@@ -12,7 +12,7 @@ import * as reportingOrchestrationService from '../../services/reporting/reporti
 import * as insightPersonalizationService from '../../services/reporting/insightPersonalizationService';
 import * as intelligenceMapsService from '../../services/reporting/intelligenceMapsService';
 import * as coryKnowledgeGraphService from '../../services/reporting/coryKnowledgeGraphService';
-import { ReportingInsight } from '../../models';
+import { ReportingInsight, ContentFeedback } from '../../models';
 
 const router = Router();
 
@@ -337,6 +337,52 @@ router.post('/intelligence/reporting/executions/:id/track', async (req: Request,
     const accuracy_score = fieldCount > 0 ? Math.max(0, totalAccuracy / fieldCount) : 0;
     await record.update({ actual_outcome, accuracy_score, status: 'completed' });
     res.json({ accuracy_score, status: 'completed' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Content Feedback ─────────────────────────────────────────────────────
+
+router.post('/intelligence/reporting/feedback', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).adminUser?.id || 'anonymous';
+    const { content_type, content_key, feedback_type, metadata } = req.body;
+
+    if (!content_type || !content_key || !feedback_type) {
+      return res.status(400).json({ error: 'content_type, content_key, and feedback_type are required' });
+    }
+
+    const [feedback, created] = await ContentFeedback.findOrCreate({
+      where: { user_id: userId, content_type, content_key },
+      defaults: { user_id: userId, content_type, content_key, feedback_type, metadata: metadata || {} },
+    });
+
+    if (!created) {
+      await feedback.update({ feedback_type, metadata: metadata || {} });
+    }
+
+    res.json({ success: true, feedback_type, created });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/intelligence/reporting/feedback/summary', async (req: Request, res: Response) => {
+  try {
+    const { content_type, content_key } = req.query;
+    const where: any = {};
+    if (content_type) where.content_type = content_type;
+    if (content_key) where.content_key = content_key;
+
+    const all = await ContentFeedback.findAll({ where, raw: true });
+    const summary = {
+      useful: all.filter((f: any) => f.feedback_type === 'useful').length,
+      not_useful: all.filter((f: any) => f.feedback_type === 'not_useful').length,
+      favorite: all.filter((f: any) => f.feedback_type === 'favorite').length,
+      total: all.length,
+    };
+    res.json(summary);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

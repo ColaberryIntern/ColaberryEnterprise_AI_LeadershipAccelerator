@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getSystemKPIs, getKPIHistory, type KPISnapshotEntry } from '../../../../services/reportingApi';
+import FeedbackButtons from '../FeedbackButtons';
 
 const DEPARTMENTS = [
   'Marketing', 'Admissions', 'Education', 'Student_Success', 'Platform',
@@ -88,6 +89,9 @@ export default function ReportsTab() {
                       );
                     })}
                     {data.date && <div className="text-muted small mt-2">Updated: {data.date}</div>}
+                    <div className="mt-1">
+                      <FeedbackButtons contentType="kpi" contentKey={`kpi_${dept.toLowerCase()}`} />
+                    </div>
                   </div>
                 </div>
               </div>

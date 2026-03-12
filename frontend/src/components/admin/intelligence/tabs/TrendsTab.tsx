@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTrends } from '../../../../services/reportingApi';
+import FeedbackButtons from '../FeedbackButtons';
 
 export default function TrendsTab() {
   const [trendData, setTrendData] = useState<any>(null);
@@ -43,7 +44,8 @@ export default function TrendsTab() {
         <div className="card border-0 shadow-sm mb-3">
           <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
             <span>Enrollment Forecast</span>
-            <div className="d-flex gap-3">
+            <div className="d-flex gap-3 align-items-center">
+              <FeedbackButtons contentType="trend" contentKey={`enrollment_forecast_${horizon}d`} />
               <span className={`badge bg-${forecast.trend === 'up' ? 'success' : forecast.trend === 'down' ? 'danger' : 'secondary'}`}>
                 Trend: {forecast.trend}
               </span>

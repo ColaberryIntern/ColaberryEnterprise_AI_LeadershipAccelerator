@@ -255,3 +255,14 @@ export const getExecution = async (id: string): Promise<ExecutionEntry> => {
 export const trackExecution = async (id: string, actual_outcome: any): Promise<void> => {
   await api.post(`/executions/${id}/track`, { actual_outcome });
 };
+
+// ─── Content Feedback ────────────────────────────────────────────────────
+
+export const submitContentFeedback = async (
+  content_type: string,
+  content_key: string,
+  feedback_type: 'useful' | 'not_useful' | 'favorite',
+  metadata?: Record<string, any>,
+): Promise<void> => {
+  await api.post('/feedback', { content_type, content_key, feedback_type, metadata });
+};

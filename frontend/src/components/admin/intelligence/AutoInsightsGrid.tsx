@@ -1,4 +1,5 @@
 import React from 'react';
+import FeedbackButtons from './FeedbackButtons';
 
 interface Insight {
   title: string;
@@ -112,18 +113,24 @@ export default function AutoInsightsGrid({ insights, onInsightClick, onInvestiga
                 </small>
               )}
             </div>
-            {onInvestigate && (
-              <button
-                className="btn btn-sm btn-outline-primary mt-2"
-                style={{ fontSize: '0.68rem' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onInvestigate(insight);
-                }}
-              >
-                Investigate
-              </button>
-            )}
+            <div className="d-flex align-items-center gap-2 mt-2">
+              {onInvestigate && (
+                <button
+                  className="btn btn-sm btn-outline-primary"
+                  style={{ fontSize: '0.68rem' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onInvestigate(insight);
+                  }}
+                >
+                  Investigate
+                </button>
+              )}
+              <FeedbackButtons
+                contentType="auto_insight"
+                contentKey={`auto_${insight.title.replace(/\s+/g, '_').toLowerCase().slice(0, 80)}`}
+              />
+            </div>
           </div>
         </div>
       ))}

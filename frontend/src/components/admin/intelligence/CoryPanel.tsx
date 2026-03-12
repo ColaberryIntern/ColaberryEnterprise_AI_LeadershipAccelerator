@@ -3,6 +3,7 @@ import { useIntelligenceContext } from '../../../contexts/IntelligenceContext';
 import { useIntelligenceQuery } from '../../../hooks/useIntelligenceQuery';
 import { sendCoryCommand, type CoryResponse, type ExecutiveBriefing } from '../../../services/coryApi';
 import { simulateAutonomyCycle, runAutonomyCycle, type VisualizationSpec } from '../../../services/intelligenceApi';
+import FeedbackButtons from './FeedbackButtons';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -193,22 +194,28 @@ function BriefingCard({ briefing, onDrillDown }: { briefing: ExecutiveBriefing; 
               </div>
               <span style={{ fontSize: '0.58rem', color: 'var(--color-text-light)' }}>{briefing.confidence}% conf.</span>
             </div>
-            {hasDetails && (
-              <button
-                className="btn btn-sm"
-                style={{
-                  fontSize: '0.62rem',
-                  padding: '1px 8px',
-                  color: 'var(--color-primary-light)',
-                  border: '1px solid var(--color-primary-light)',
-                  background: 'transparent',
-                  borderRadius: 12,
-                }}
-                onClick={() => onDrillDown(`Tell me more about: ${primaryText.slice(0, 80)}`)}
-              >
-                Dive deeper
-              </button>
-            )}
+            <div className="d-flex align-items-center gap-1">
+              <FeedbackButtons
+                contentType="briefing"
+                contentKey={`briefing_${(primaryText || '').replace(/\s+/g, '_').toLowerCase().slice(0, 80)}`}
+              />
+              {hasDetails && (
+                <button
+                  className="btn btn-sm"
+                  style={{
+                    fontSize: '0.62rem',
+                    padding: '1px 8px',
+                    color: 'var(--color-primary-light)',
+                    border: '1px solid var(--color-primary-light)',
+                    background: 'transparent',
+                    borderRadius: 12,
+                  }}
+                  onClick={() => onDrillDown(`Tell me more about: ${primaryText.slice(0, 80)}`)}
+                >
+                  Dive deeper
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -752,6 +759,17 @@ export default function CoryPanel({
                     </div>
                   </details>
                 )}
+              </div>
+            )}
+
+            {/* Message feedback */}
+            {msg.role === 'assistant' && (
+              <div className="mt-2">
+                <FeedbackButtons
+                  contentType="briefing"
+                  contentKey={`cory_msg_${i}_${msg.timestamp.getTime()}`}
+                  size="sm"
+                />
               </div>
             )}
 

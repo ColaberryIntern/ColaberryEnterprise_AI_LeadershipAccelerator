@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
-import CoryBadge from './CoryBadge';
 import CoryExplainMenu from './CoryExplainMenu';
+import FeedbackButtons from './FeedbackButtons';
 
 const IntelLineChart = lazy(() => import('./charts/IntelLineChart'));
 const IntelBarChart = lazy(() => import('./charts/IntelBarChart'));
@@ -106,6 +106,7 @@ export default function ChartRenderer({ visualization, onCoryClick }: ChartRende
             onResult={onCoryClick ? (result: string) => onCoryClick(result) : undefined}
             size={18}
           />
+          <FeedbackButtons contentType="chart" contentKey={`${chart_type}_${title.replace(/\s+/g, '_').toLowerCase()}`} />
         </div>
         {kpis.length > 0 && (
           <div className="d-flex gap-1 flex-wrap">
