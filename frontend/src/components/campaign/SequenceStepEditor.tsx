@@ -213,6 +213,7 @@ export default function SequenceStepEditor({ steps, onChange, disabled }: Props)
               </div>
             </div>
 
+            {step.channel !== 'sms' && (
             <div className="mb-2">
               <label className="form-label small">
                 {step.channel === 'voice' ? 'Call Label / Subject' : 'Subject Line'}
@@ -225,11 +226,11 @@ export default function SequenceStepEditor({ steps, onChange, disabled }: Props)
                 disabled={disabled}
                 placeholder={
                   step.channel === 'voice' ? 'e.g. Intro call — identify pain, book meeting'
-                    : step.channel === 'sms' ? 'e.g. SMS follow-up after enrollment info'
                     : 'Email subject...'
                 }
               />
             </div>
+            )}
 
             {(step.channel === 'email' || !step.channel) && (
               <div>
