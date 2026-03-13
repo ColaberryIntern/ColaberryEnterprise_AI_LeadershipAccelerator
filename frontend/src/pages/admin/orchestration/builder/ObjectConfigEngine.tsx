@@ -86,7 +86,6 @@ interface AccordionState {
   prompts: boolean;
   variables: boolean;
   skills: boolean;
-  implTask: boolean;
   artifacts: boolean;
   kc: boolean;
   validation: boolean;
@@ -97,7 +96,7 @@ interface AccordionState {
 export default function ObjectConfigEngine(props: Props) {
   const { editing, isNew, isDirty, miniSections, saving, error } = props;
   const [expanded, setExpanded] = useState<AccordionState>({
-    core: true, prompts: true, variables: true, skills: false, implTask: true, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
+    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
   });
   const [showPreview, setShowPreview] = useState(false);
   const [reversePrompt, setReversePrompt] = useState('');
@@ -390,111 +389,16 @@ export default function ObjectConfigEngine(props: Props) {
           />
         ))}
 
-        {/* Implementation Task Section — always visible */}
-        {renderAccordion('implTask', 'Implementation Task', 'bi-clipboard-check', (() => {
-          const implMs = editType === 'implementation_task'
-            ? editing
-            : miniSections.find(ms => ms.mini_section_type === 'implementation_task');
-          const isCurrentType = editType === 'implementation_task';
-
-          if (!implMs) {
-            return (
-              <div className="text-center text-muted py-3" style={{ fontSize: 11 }}>
-                No implementation task found for this lesson.
-              </div>
-            );
-          }
-
-          if (!isCurrentType) {
-            // Show read-only summary for the lesson's implementation task
-            const implTitle = implMs.title || 'Implementation Task';
-            const implBuild = (implMs.build_prompt_system as string) || '';
-            const implMentor = (implMs.mentor_prompt_system as string) || '';
-            const implWorkstation = (implMs.reflection_prompt_system as string) || '';
-            const skillCount = (implMs.associated_skill_ids || []).length;
-            const artifactCount = (implMs.creates_artifact_ids || []).length;
-
-            return (
-              <div>
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <span className="badge bg-warning text-dark" style={{ fontSize: 9 }}>Implementation Task</span>
-                  <span className="fw-semibold small">{implTitle}</span>
-                </div>
-                <div className="d-flex gap-3 mb-2 flex-wrap" style={{ fontSize: 10 }}>
-                  <span className={implBuild ? 'text-success' : 'text-danger'}>
-                    <i className={`bi ${implBuild ? 'bi-check-circle' : 'bi-x-circle'} me-1`}></i>Task Requirements
-                  </span>
-                  <span className={implMentor ? 'text-success' : 'text-danger'}>
-                    <i className={`bi ${implMentor ? 'bi-check-circle' : 'bi-x-circle'} me-1`}></i>Mentor Prep
-                  </span>
-                  <span className={implWorkstation ? 'text-success' : 'text-danger'}>
-                    <i className={`bi ${implWorkstation ? 'bi-check-circle' : 'bi-x-circle'} me-1`}></i>AI Workstation
-                  </span>
-                  <span className="text-muted">{skillCount} skill{skillCount !== 1 ? 's' : ''}</span>
-                  <span className="text-muted">{artifactCount} artifact{artifactCount !== 1 ? 's' : ''}</span>
-                </div>
-                <div className="text-muted" style={{ fontSize: 10 }}>
-                  Click on the <strong>Implementation Task</strong> item in the left panel to edit prompts, skills, and artifacts.
-                </div>
-              </div>
-            );
-          }
-
-          // Full editors when editing the implementation task itself
-          return (
-            <div>
-              {[
-                { key: 'build', field: 'build_prompt_system' as keyof typeof editing, userField: 'build_prompt_user' as keyof typeof editing, label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
-                { key: 'mentor', field: 'mentor_prompt_system' as keyof typeof editing, userField: 'mentor_prompt_user' as keyof typeof editing, label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
-                { key: 'reflection', field: 'reflection_prompt_system' as keyof typeof editing, userField: 'reflection_prompt_user' as keyof typeof editing, label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
-              ].map(p => {
-                const sysVal = (editing[p.field] as string) || '';
-                const usrVal = (editing[p.userField] as string) || '';
-                const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
-                return (
-                  <div key={p.key} className="mb-3">
-                    <div className="d-flex align-items-center gap-1 mb-1">
-                      <span className="fw-semibold small">{p.label}</span>
-                      <i className="bi bi-info-circle text-muted" style={{ fontSize: 9 }} title={p.tooltip}></i>
-                    </div>
-                    <HighlightedPromptEditor
-                      value={combinedValue}
-                      onChange={val => props.onUpdate({ [p.field]: val, [p.userField]: '' } as any)}
-                      availableVars={coreAvailableVars}
-                      allDefinedVars={coreAllDefinedVars}
-                      label="PROMPT"
-                      rows={5}
-                      placeholder="Instructions for the AI model with {{variable}} placeholders..."
-                    />
-                  </div>
-                );
-              })}
-              <div className="border-top pt-2 mt-2">
-                <div className="fw-semibold small mb-1"><i className="bi bi-stars me-1"></i>Skills</div>
-                <SkillSection
-                  editing={editing}
-                  editType={editType}
-                  miniSectionId={editing.id}
-                  skillOptions={props.skillOptions}
-                  onUpdate={props.onUpdate}
-                  onCreateSkill={props.onCreateSkill}
-                  token={props.token}
-                  apiUrl={props.apiUrl}
-                />
-              </div>
-              <div className="border-top pt-2 mt-2">
-                <div className="fw-semibold small mb-1"><i className="bi bi-box me-1"></i>Artifacts</div>
-                <ArtifactSection
-                  editing={editing}
-                  artifactOptions={props.artifactOptions}
-                  artifacts={props.artifacts}
-                  onUpdate={props.onUpdate}
-                  onCreateArtifact={props.onCreateArtifact}
-                />
-              </div>
-            </div>
-          );
-        })())}
+        {/* Artifacts Section (implementation_task only) */}
+        {renderAccordion('artifacts', 'Artifacts', 'bi-box', (
+          <ArtifactSection
+            editing={editing}
+            artifactOptions={props.artifactOptions}
+            artifacts={props.artifacts}
+            onUpdate={props.onUpdate}
+            onCreateArtifact={props.onCreateArtifact}
+          />
+        ), editType === 'implementation_task')}
 
         {/* Knowledge Check Section (knowledge_check only) */}
         {renderAccordion('kc', 'Knowledge Check', 'bi-question-circle', (
