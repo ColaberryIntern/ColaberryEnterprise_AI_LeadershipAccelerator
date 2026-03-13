@@ -12,8 +12,6 @@ import { deptMatchesLayer, LAYER_LABELS } from './entityPanel/departmentConfig';
 import ActivityTab from './tabs/ActivityTab';
 import HealthTab from './tabs/HealthTab';
 import ErrorsTab from './tabs/ErrorsTab';
-import QAScanTab from './tabs/QAScanTab';
-import SafetyTab from './tabs/SafetyTab';
 import InitiativesTab from './tabs/InitiativesTab';
 import RoadmapTab from './tabs/RoadmapTab';
 import DeptTimelineTab from './tabs/DeptTimelineTab';
@@ -27,13 +25,12 @@ import MapsTab from './tabs/MapsTab';
 import TrendsTab from './tabs/TrendsTab';
 import AgentPerformanceTab from './tabs/AgentPerformanceTab';
 import DepartmentStrategyTab from './tabs/DepartmentStrategyTab';
-import SecurityTab from './tabs/SecurityTab';
 import ExecutionsTab from './tabs/ExecutionsTab';
 import FeedbackButtons from './FeedbackButtons';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'qa' | 'safety' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach' | 'insights' | 'reports' | 'maps' | 'trends' | 'agent-performance' | 'dept-strategy' | 'security' | 'executions';
+type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach' | 'insights' | 'reports' | 'maps' | 'trends' | 'agent-performance' | 'dept-strategy' | 'executions';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
@@ -520,9 +517,6 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
     {
       key: 'operations', label: 'Operations',
       tabs: [
-        { key: 'qa', label: 'QA & Scans' },
-        { key: 'safety', label: 'Safety' },
-        { key: 'security', label: 'Security' },
         { key: 'timeline', label: 'Decisions' },
         { key: 'dept-timeline', label: 'Dept Timeline' },
       ],
@@ -633,8 +627,6 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         {activeTab === 'activity' && <ActivityTab entityFilter={entityFilter} layerFilter={activeLayer} />}
         {activeTab === 'health' && <HealthTab entityFilter={entityFilter} layerFilter={activeLayer} />}
         {activeTab === 'errors' && <ErrorsTab onErrorCountChange={setErrorCount} entityFilter={entityFilter} layerFilter={activeLayer} />}
-        {activeTab === 'qa' && <QAScanTab entityFilter={entityFilter} layerFilter={activeLayer} />}
-        {activeTab === 'safety' && <SafetyTab entityFilter={entityFilter} layerFilter={activeLayer} />}
         {activeTab === 'timeline' && <ReasoningTimeline entityFilter={entityFilter} />}
         {activeTab === 'impact' && <ImpactMetrics entityFilter={entityFilter} layerFilter={activeLayer} />}
         {activeTab === 'initiatives' && <InitiativesTab entityFilter={entityFilter} layerFilter={activeLayer} />}
@@ -649,7 +641,6 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
         {activeTab === 'trends' && <TrendsTab />}
         {activeTab === 'agent-performance' && <AgentPerformanceTab />}
         {activeTab === 'dept-strategy' && <DepartmentStrategyTab />}
-        {activeTab === 'security' && <SecurityTab />}
         {activeTab === 'executions' && <ExecutionsTab />}
       </div>
     </div>

@@ -443,6 +443,7 @@ function AdminCampaignDetailPage() {
         <SettingsTab
           campaignId={id!}
           headers={headers}
+          campaignName={campaign.name}
           campaignMode={campaign.campaign_mode}
           campaignStatus={campaign.status}
           campaignType={campaign.type}

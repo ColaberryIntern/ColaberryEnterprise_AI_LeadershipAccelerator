@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CampaignSimulatorPanel from '../../pages/admin/ai-settings/CampaignSimulatorPanel';
 
 interface CampaignSettings {
   test_mode_enabled: boolean;
@@ -56,15 +57,17 @@ interface Props {
   campaignMode?: string;
   campaignStatus?: string;
   campaignType?: string;
+  campaignName?: string;
   onModeChange?: (mode: string) => void;
 }
 
-export default function SettingsTab({ campaignId, headers, campaignMode, campaignStatus, campaignType, onModeChange }: Props) {
+export default function SettingsTab({ campaignId, headers, campaignMode, campaignStatus, campaignType, campaignName, onModeChange }: Props) {
   const [settings, setSettings] = useState<CampaignSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [interestGroup, setInterestGroup] = useState<string | null>(null);
+  const [showSimulator, setShowSimulator] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -220,6 +223,32 @@ export default function SettingsTab({ campaignId, headers, campaignMode, campaig
         <i className="bi bi-info-circle"></i>
         <small>Campaign settings inherit from global settings. Changes here override global defaults for this campaign only.</small>
       </div>
+
+      {/* Time-Warp Simulator */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold">Campaign Time-Warp Simulator</div>
+        <div className="card-body d-flex justify-content-between align-items-center">
+          <div>
+            <p className="small text-muted mb-0">
+              Run through this campaign as a lead would experience it — with compressed time delays.
+              Test every touchpoint, channel, and AI response before going live.
+            </p>
+          </div>
+          <button
+            className="btn btn-sm btn-outline-primary ms-3 text-nowrap"
+            onClick={() => setShowSimulator(true)}
+          >
+            Launch Simulator
+          </button>
+        </div>
+      </div>
+      {showSimulator && (
+        <CampaignSimulatorPanel
+          campaignId={campaignId}
+          campaignName={campaignName || 'Campaign'}
+          onClose={() => setShowSimulator(false)}
+        />
+      )}
 
       {/* Test Mode */}
       <div className={`card border-0 shadow-sm mb-4 ${settings.test_mode_enabled ? 'border-danger border-2' : ''}`}>

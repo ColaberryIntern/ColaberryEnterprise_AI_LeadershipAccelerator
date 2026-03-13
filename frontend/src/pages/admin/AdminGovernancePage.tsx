@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import SafetyTab from '../../components/admin/intelligence/tabs/SafetyTab';
+import SecurityTab from '../../components/admin/intelligence/tabs/SecurityTab';
 
 interface Agent {
   id: number;
@@ -95,7 +97,7 @@ function formatAgentName(name: string): string {
 }
 
 export default function AdminGovernancePage() {
-  const [tab, setTab] = useState<'overview' | 'agents' | 'alerts' | 'controls'>('overview');
+  const [tab, setTab] = useState<'overview' | 'agents' | 'alerts' | 'controls' | 'safety' | 'security'>('overview');
   const [overview, setOverview] = useState<Overview | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -208,7 +210,7 @@ export default function AdminGovernancePage() {
 
       {/* Tabs */}
       <ul className="nav nav-tabs mb-4">
-        {(['overview', 'agents', 'alerts', 'controls'] as const).map((t) => (
+        {(['overview', 'agents', 'alerts', 'controls', 'safety', 'security'] as const).map((t) => (
           <li className="nav-item" key={t}>
             <button
               className={`nav-link d-flex align-items-center gap-2${tab === t ? ' active' : ''}`}
@@ -228,6 +230,8 @@ export default function AdminGovernancePage() {
       {tab === 'agents' && <AgentsTab agents={agents} onToggle={toggleAgent} />}
       {tab === 'alerts' && <AlertsTab alerts={alerts} />}
       {tab === 'controls' && <ControlsTab autonomyMode={autonomyMode} onUpdateMode={updateAutonomyMode} />}
+      {tab === 'safety' && <SafetyTab />}
+      {tab === 'security' && <SecurityTab />}
     </div>
   );
 }
