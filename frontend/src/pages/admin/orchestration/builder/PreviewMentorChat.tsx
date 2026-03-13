@@ -105,15 +105,25 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
           <i className="bi bi-robot" style={{ color: '#fff', fontSize: 13 }}></i>
         </div>
         <span className="fw-semibold" style={{ fontSize: 12, color: '#1e293b' }}>AI Mentor Preview</span>
-        <span className="badge bg-secondary ms-auto" style={{ fontSize: 9 }}>Preview Mode</span>
+        <span className="badge bg-secondary ms-auto" style={{ fontSize: 9 }}>Preview</span>
         {onClose && (
           <button
-            className="btn btn-sm p-0 ms-2"
+            className="btn btn-sm d-flex align-items-center justify-content-center ms-1"
             onClick={onClose}
-            style={{ color: '#64748b', border: 'none', background: 'none', fontSize: 14, lineHeight: 1 }}
-            title="Close mentor panel"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              color: '#64748b',
+              border: '1px solid #e2e8f0',
+              background: '#fff',
+              fontSize: 14,
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+            title="Collapse mentor panel"
           >
-            <i className="bi bi-x-lg"></i>
+            <i className="bi bi-chevron-right"></i>
           </button>
         )}
       </div>
