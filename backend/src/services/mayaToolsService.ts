@@ -22,6 +22,7 @@ import {
   buildSmsSummaryContent,
 } from './mayaConversationSummaryService';
 import { logCommunication } from './communicationLogService';
+import { getTestOverrides } from './settingsService';
 import type { MayaActionResult } from './mayaActionService';
 
 const { Op } = require('sequelize');
@@ -297,20 +298,23 @@ export async function initiateVoiceCall(
     return { success: false, summary: 'Phone number is required' };
   }
 
-  // 24h dedup check
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentCall = await CallContactLog.findOne({
-    where: {
-      visitor_id: visitorId,
-      call_timestamp: { [Op.gte]: oneDayAgo },
-    },
-  }).catch(() => null);
+  // 24h dedup check — skip in test mode
+  const testOverrides = await getTestOverrides();
+  if (!testOverrides.enabled) {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentCall = await CallContactLog.findOne({
+      where: {
+        visitor_id: visitorId,
+        call_timestamp: { [Op.gte]: oneDayAgo },
+      },
+    }).catch(() => null);
 
-  if (recentCall) {
-    return {
-      success: false,
-      summary: 'A call was already initiated for this visitor in the last 24 hours.',
-    };
+    if (recentCall) {
+      return {
+        success: false,
+        summary: 'A call was already initiated for this visitor in the last 24 hours.',
+      };
+    }
   }
 
   const lead = await resolveLeadForVisitor(visitorId);
