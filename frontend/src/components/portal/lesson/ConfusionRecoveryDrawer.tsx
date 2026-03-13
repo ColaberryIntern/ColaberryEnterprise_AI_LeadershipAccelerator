@@ -43,7 +43,6 @@ function parseRecovery(raw: string): RecoverySections {
     misconceptions: [],
   };
 
-  // Split by section headers (numbered bold headers)
   const parts = raw.split(/\*\*\d+\.\s*/);
 
   if (parts[1]) {
@@ -63,7 +62,6 @@ function parseRecovery(raw: string): RecoverySections {
     sections.misconceptions = items.length > 0 ? items : [text];
   }
 
-  // Fallback: if parsing produced nothing, put everything in thinkOfIt
   if (!sections.thinkOfIt && !sections.stepByStep.length && !sections.realWorld && !sections.misconceptions.length) {
     sections.thinkOfIt = raw;
   }
@@ -71,23 +69,72 @@ function parseRecovery(raw: string): RecoverySections {
   return sections;
 }
 
+/** Build generic static recovery content (no LLM needed) */
+function buildGenericSections(isLessonMode: boolean, props: ConfusionRecoveryDrawerProps): RecoverySections {
+  if (isLessonMode) {
+    const title = (props as LessonModeProps).lessonTitle;
+    return {
+      thinkOfIt: `It's completely normal to find "${title}" challenging at first. Complex topics often click after seeing them from a different angle. Take a moment to review the key points below, and remember — understanding builds in layers, not all at once.`,
+      stepByStep: [
+        'Re-read the concept snapshot section slowly, focusing on the bold key terms.',
+        'Look at the AI Strategy section — it shows how this concept applies to real AI adoption.',
+        'Review the prompt template to see the concept in action with a concrete example.',
+        'Try the implementation task — hands-on practice often makes abstract ideas click.',
+      ],
+      realWorld: 'Think of learning this like learning to drive. Reading about steering and braking feels abstract, but once you sit behind the wheel and practice, the concepts become intuitive. The same applies here — the implementation task is your "behind the wheel" moment.',
+      misconceptions: [
+        'Feeling confused doesn\'t mean you\'re falling behind — it means you\'re engaging with challenging material.',
+        'You don\'t need to understand everything perfectly before moving forward. Revisiting concepts later often deepens understanding.',
+        'The AI Mentor is available to explain any specific part that\'s unclear — don\'t hesitate to ask.',
+      ],
+    };
+  }
+
+  // KC mode
+  const kcProps = props as KCModeProps;
+  const userOpt = kcProps.options.find(o => o.startsWith(kcProps.userAnswer)) || kcProps.userAnswer;
+  const correctOpt = kcProps.options.find(o => o.startsWith(kcProps.correctAnswer)) || kcProps.correctAnswer;
+  return {
+    thinkOfIt: `The correct answer is "${correctOpt}". Your answer "${userOpt}" is a common choice — many learners initially lean that way. Let's break down why the correct answer fits better.`,
+    stepByStep: [
+      'Read the question again carefully, paying attention to key qualifying words like "most," "best," or "primary."',
+      'Consider what each answer option is really saying — some may be partially true but not the best fit.',
+      'Think about which option most directly and completely answers what\'s being asked.',
+      'Review the related lesson section to reinforce the underlying concept.',
+    ],
+    realWorld: 'Knowledge check questions are designed to test precise understanding, not just general awareness. In business, the difference between a "good" answer and the "best" answer often determines strategy success. The same precision applies here.',
+    misconceptions: [
+      'Getting a question wrong doesn\'t mean you don\'t understand the topic — it often means you understood part of it but missed a nuance.',
+      'Multiple options may seem correct, but the question asks for the most accurate or complete answer.',
+      'Use the AI Mentor to explore the specific concept behind this question for a deeper explanation.',
+    ],
+  };
+}
+
 export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerProps) {
   const { isOpen, onClose, lessonId } = props;
   const isLessonMode = props.mode === 'lesson';
   const { sendToMentor } = useMentorContext();
-  const [loading, setLoading] = useState(false);
   const [sections, setSections] = useState<RecoverySections | null>(null);
   const [helpfulFeedback, setHelpfulFeedback] = useState<boolean | null>(null);
-  const [hasError, setHasError] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [isAiEnhanced, setIsAiEnhanced] = useState(false);
 
-  const fetchRecovery = useCallback(() => {
-    setLoading(true);
-    setHasError(false);
-    setSections(null);
+  // Show generic content immediately on open
+  useEffect(() => {
+    if (!isOpen) return;
+    setHelpfulFeedback(null);
+    setIsAiEnhanced(false);
+    setAiLoading(false);
+    setSections(buildGenericSections(isLessonMode, props));
+  }, [isOpen]); // eslint-disable-line
+
+  const fetchAiRecovery = useCallback(() => {
+    setAiLoading(true);
 
     let prompt: string;
     if (isLessonMode) {
-      prompt = `The learner is confused about the lesson "${props.lessonTitle}".
+      prompt = `The learner is confused about the lesson "${(props as LessonModeProps).lessonTitle}".
 
 Provide a confusion recovery response with these 4 sections:
 
@@ -122,24 +169,13 @@ Provide a confusion recovery response with these 4 sections:
       context_type: 'knowledge_explanation',
     }).then(res => {
       setSections(parseRecovery(res.data.reply));
+      setIsAiEnhanced(true);
     }).catch(() => {
-      setHasError(true);
-      setSections({
-        thinkOfIt: 'Unable to load explanation. Click "Try Again" below or ask the AI Mentor directly.',
-        stepByStep: [],
-        realWorld: '',
-        misconceptions: [],
-      });
+      // Keep generic content, just stop loading
     }).finally(() => {
-      setLoading(false);
+      setAiLoading(false);
     });
   }, [isLessonMode, lessonId, props]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setHelpfulFeedback(null);
-    fetchRecovery();
-  }, [isOpen]); // Only trigger on open/close
 
   if (!isOpen) return null;
 
@@ -164,9 +200,7 @@ Provide a confusion recovery response with these 4 sections:
   };
 
   const headerLabel = isLessonMode ? "Let's Break This Down" : "Let's Clear This Up";
-  const loadingLabel = isLessonMode ? 'Getting a simpler explanation...' : 'Getting alternative explanation...';
 
-  // Section labels differ by mode
   const section1Label = isLessonMode ? 'Simpler Explanation' : 'Think of it this way...';
   const section2Label = isLessonMode ? 'Key Takeaways' : 'Step by Step';
   const section4Label = isLessonMode ? 'Common Sticking Points' : 'Common Misconceptions';
@@ -221,17 +255,17 @@ Provide a confusion recovery response with these 4 sections:
 
         {/* Body */}
         <div className="px-4 py-3 flex-grow-1">
-          {loading && (
-            <div className="d-flex flex-column align-items-center justify-content-center py-5">
-              <span className="spinner-border" role="status" style={{ width: 32, height: 32, color: '#f59e0b' }}>
-                <span className="visually-hidden">Loading...</span>
-              </span>
-              <span className="mt-2 small" style={{ color: '#92400e' }}>{loadingLabel}</span>
-            </div>
-          )}
-
           {sections && (
             <div className="d-flex flex-column gap-3">
+              {/* AI enhanced badge */}
+              {isAiEnhanced && (
+                <div className="d-flex align-items-center gap-1">
+                  <span className="badge" style={{ background: '#eef2ff', color: '#6366f1', fontSize: 10 }}>
+                    <i className="bi bi-stars me-1"></i>AI-Personalized
+                  </span>
+                </div>
+              )}
+
               {/* Section 1 */}
               {sections.thinkOfIt && (
                 <div className="p-3 rounded" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
@@ -308,14 +342,34 @@ Provide a confusion recovery response with these 4 sections:
 
         {/* Footer */}
         <div className="px-4 py-3 border-top" style={{ flexShrink: 0 }}>
-          {hasError && (
+          {/* Enhance with AI button — only show if not already AI-enhanced */}
+          {!isAiEnhanced && (
             <button
-              className="btn btn-sm btn-outline-warning d-flex align-items-center gap-2 w-100 justify-content-center mb-2"
-              onClick={fetchRecovery}
-              disabled={loading}
+              className="btn btn-sm d-flex align-items-center gap-2 w-100 justify-content-center mb-2"
+              style={{
+                background: aiLoading ? '#e2e8f0' : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+                color: '#4f46e5',
+                border: '1px solid #c7d2fe',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+              onClick={fetchAiRecovery}
+              disabled={aiLoading}
             >
-              <i className="bi bi-arrow-clockwise"></i>
-              Try Again
+              {aiLoading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm" role="status" style={{ width: 14, height: 14 }}>
+                    <span className="visually-hidden">Loading...</span>
+                  </span>
+                  Generating personalized explanation...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-stars"></i>
+                  Enhance with AI
+                </>
+              )}
             </button>
           )}
 
@@ -335,7 +389,7 @@ Provide a confusion recovery response with these 4 sections:
             Ask AI Mentor
           </button>
 
-          {sections && !hasError && helpfulFeedback === null && (
+          {sections && helpfulFeedback === null && (
             <div className="d-flex align-items-center justify-content-center gap-3 mt-3">
               <span className="small" style={{ color: '#64748b' }}>Did this help?</span>
               <button
