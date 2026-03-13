@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { CommunicationLog, CampaignSimulationStep } from '../models';
 import { InteractionOutcome } from '../models';
+import { processCallTranscript } from '../services/callTranscriptProcessor';
 
 /**
  * POST /api/webhook/synthflow/call-complete
@@ -88,6 +89,13 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
           source: 'synthflow_webhook',
         },
       } as any);
+    }
+
+    // Process transcript via AI to extract lead data (fire-and-forget)
+    if (transcript && commLog.lead_id) {
+      processCallTranscript(commLog.lead_id, transcript, call_id).catch((err: any) => {
+        console.warn('[Synthflow Webhook] Transcript processing failed:', err.message);
+      });
     }
 
     res.status(200).json({ ok: true, matched: true });

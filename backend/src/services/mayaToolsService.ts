@@ -21,6 +21,7 @@ import {
   generateConversationSummary,
   buildSmsSummaryContent,
 } from './mayaConversationSummaryService';
+import { logCommunication } from './communicationLogService';
 import type { MayaActionResult } from './mayaActionService';
 
 const { Op } = require('sequelize');
@@ -334,7 +335,7 @@ export async function initiateVoiceCall(
     }
   }
 
-  const callPrompt = `You are calling ${leadName} on behalf of Maya, Director of Admissions at Colaberry. They were just chatting with Maya about the AI Leadership Accelerator program. Here is the recent conversation context:\n\n${conversationContext}\n\nYour goal: Continue the conversation naturally, answer their questions about the program, and guide them toward booking a strategy call or enrollment.`;
+  const callPrompt = `You are calling ${leadName} on behalf of Maya, Director of Admissions at Colaberry. They were just chatting with Maya about the AI Leadership Accelerator program. Here is the recent conversation context:\n\n${conversationContext}\n\nYour goal: Continue the conversation naturally, answer their questions about the program, and guide them toward booking a strategy call or enrollment. During the conversation, try to naturally learn: their full name, company, job title, email address, what specifically interests them about the program, and any timeline or budget considerations. Don't interrogate — weave these into natural conversation.`;
 
   try {
     const result = await triggerVoiceCall({
@@ -363,6 +364,24 @@ export async function initiateVoiceCall(
       approved_by_agent: 'Maya',
       synthflow_call_id: result.data?.call_id || null,
     } as any).catch(() => {});
+
+    // Log to CommunicationLog so the Synthflow webhook can match this call
+    // and store the transcript for post-call processing
+    if (result.success && result.data?.call_id) {
+      logCommunication({
+        lead_id: lead?.id || null,
+        channel: 'voice',
+        direction: 'outbound',
+        delivery_mode: 'live',
+        status: 'pending',
+        to_address: phone,
+        provider: 'synthflow',
+        provider_message_id: result.data.call_id,
+        metadata: { visitor_id: visitorId, conversation_id: conversationId, source: 'maya_chat' },
+      } as any).catch((err: any) => {
+        console.warn('[MayaTools] CommunicationLog failed:', err.message);
+      });
+    }
 
     await logAction(visitorId, conversationId, 'voice_call_initiated', result.success ? 'completed' : 'failed', {
       lead_id: lead?.id,
