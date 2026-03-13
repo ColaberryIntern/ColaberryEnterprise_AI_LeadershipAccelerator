@@ -272,7 +272,7 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
             <button className="btn btn-outline-info btn-sm" onClick={handleReverseEngineer} disabled={reverseLoading}>
               {reverseLoading ? 'Analyzing...' : 'Reverse Engineer'}
             </button>
-            <button className="btn btn-primary btn-sm" onClick={handleSavePrompt} disabled={savingPrompt}>
+            <button className="btn btn-primary btn-sm" onClick={handleSavePrompt} disabled={!promptDirty && !savingPrompt}>
               {savingPrompt ? 'Saving...' : promptSaved ? 'Saved!' : 'Save Prompt'}
             </button>
             <button
