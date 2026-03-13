@@ -490,8 +490,32 @@ export async function scheduleStrategyCall(
       timezone: 'America/New_York',
     });
 
-    // Create appointment record
-    const lead = await resolveLeadForVisitor(visitorId);
+    // Resolve or auto-create lead so appointment, campaign, and SMS all work
+    let lead = await resolveLeadForVisitor(visitorId);
+    if (!lead) {
+      try {
+        lead = await Lead.create({
+          name,
+          email,
+          phone: phone || null,
+          company: company || null,
+          interest_area: 'strategy_call',
+          lead_source_type: 'inbound',
+          source: 'maya_chat',
+          visitor_id: visitorId,
+          pipeline_stage: 'new',
+          status: 'active',
+          lead_score: 50,
+          lead_temperature: 'hot',
+        } as any);
+        const visitor = await Visitor.findByPk(visitorId);
+        if (visitor) await visitor.update({ lead_id: lead.id } as any);
+        console.log(`[MayaTools] Auto-created lead ${lead.id} for strategy call booking`);
+      } catch (err: any) {
+        console.warn('[MayaTools] Auto-create lead failed:', err.message);
+      }
+    }
+
     if (lead) {
       await createAppointment({
         lead_id: lead.id,

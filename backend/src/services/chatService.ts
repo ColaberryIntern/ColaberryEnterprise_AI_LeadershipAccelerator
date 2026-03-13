@@ -15,7 +15,7 @@ import { getVisitorSignalSummary } from './behavioralSignalService';
 import { buildMayaSystemPrompt, generateMayaGreeting } from './admissionsMayaService';
 import { loadMemory, saveConversationToMemory, classifyVisitorType } from './admissionsMemoryService';
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
-import { executeMayaAction, MAYA_TOOLS } from './mayaActionService';
+import { executeMayaAction, MAYA_TOOLS, type MayaActionResult } from './mayaActionService';
 
 let openaiClient: OpenAI | null = null;
 
@@ -394,20 +394,33 @@ export async function sendMessage(
   let tokensUsed = response.usage?.total_tokens || 0;
   let assistantMessage = response.choices[0]?.message;
 
-  // Process tool calls if Maya invoked actions (e.g. send_document)
+  // Process tool calls — loop to support multi-step tool chains (max 5 rounds)
   const actionResults: string[] = [];
-  if (assistantMessage?.tool_calls && assistantMessage.tool_calls.length > 0) {
-    // Add the assistant message with tool calls to the conversation
+  let toolIterations = 0;
+  const MAX_TOOL_ITERATIONS = 5;
+
+  while (
+    assistantMessage?.tool_calls &&
+    assistantMessage.tool_calls.length > 0 &&
+    toolIterations < MAX_TOOL_ITERATIONS
+  ) {
+    toolIterations++;
     messages.push(assistantMessage as any);
 
     for (const toolCall of assistantMessage.tool_calls) {
       const fn = (toolCall as any).function;
-      const result = await executeMayaAction(
-        fn.name,
-        JSON.parse(fn.arguments),
-        conversation.visitor_id,
-        conversationId,
-      );
+      let result: MayaActionResult;
+      try {
+        result = await executeMayaAction(
+          fn.name,
+          JSON.parse(fn.arguments),
+          conversation.visitor_id,
+          conversationId,
+        );
+      } catch (err: any) {
+        console.error(`[Chat] Tool ${fn.name} error:`, err.message);
+        result = { success: false, summary: `Tool error: ${err.message}` };
+      }
 
       actionResults.push(result.summary);
 
@@ -419,12 +432,13 @@ export async function sendMessage(
       } as any);
     }
 
-    // Call OpenAI again so Maya can respond naturally after the action
+    // Call OpenAI again with tools so Maya can chain further actions
     response = await client.chat.completions.create({
       model,
       max_tokens: maxTokens,
       temperature: 0.7,
       messages,
+      tools: MAYA_TOOLS,
     });
 
     tokensUsed += response.usage?.total_tokens || 0;

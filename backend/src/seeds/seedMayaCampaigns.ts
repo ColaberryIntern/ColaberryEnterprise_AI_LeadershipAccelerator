@@ -353,14 +353,15 @@ export async function seedMayaCampaigns(): Promise<void> {
           sequence_id: sequence.id,
           interest_group: config.interest_group,
           ai_system_prompt: config.ai_system_prompt,
+          status: 'active',
         });
-        console.log(`  Updated campaign: ${config.name}`);
+        console.log(`  Updated campaign: ${config.name} (status: active)`);
       } else {
         await Campaign.create({
           name: config.name,
           description: config.description,
           type: 'warm_nurture',
-          status: 'draft', // Start as draft — activate manually after review
+          status: 'active',
           sequence_id: sequence.id,
           interest_group: config.interest_group,
           ai_system_prompt: config.ai_system_prompt,
@@ -375,7 +376,7 @@ export async function seedMayaCampaigns(): Promise<void> {
             max_leads_per_cycle: 50,
           },
         } as any);
-        console.log(`  Created campaign: ${config.name} (status: draft)`);
+        console.log(`  Created campaign: ${config.name} (status: active)`);
       }
     } catch (err: any) {
       console.error(`  Failed to seed "${config.name}":`, err.message);

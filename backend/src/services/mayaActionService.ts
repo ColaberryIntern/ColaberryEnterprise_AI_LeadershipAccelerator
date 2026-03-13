@@ -105,7 +105,7 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
     function: {
       name: 'initiate_voice_call',
       description:
-        'Start an AI voice call with the visitor via Synthflow. Use when: visitor asks to talk to someone, shows very high intent, or prefers phone. Requires confirmed phone number. Max 1 call per visitor per 24h.',
+        'Place an immediate AI voice call to the visitor via Synthflow. THIS IS THE DEFAULT when a visitor says "call me", asks to talk to someone, or provides their phone number for a call. Requires name (via capture_lead_details) and confirmed phone number. Max 1 call per visitor per 24h.',
       parameters: {
         type: 'object',
         properties: {
@@ -193,7 +193,7 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
     function: {
       name: 'schedule_callback',
       description:
-        'Request a callback for a visitor who prefers phone contact. Use when visitor asks for a call or provides their phone number for follow-up.',
+        'LAST RESORT ONLY — log a manual callback request for the admissions team. Do NOT use this when the visitor says "call me" — use initiate_voice_call instead to call them immediately. Only use schedule_callback if voice calling is unavailable or the visitor specifically wants a human team member to call later.',
       parameters: {
         type: 'object',
         properties: {
