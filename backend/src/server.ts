@@ -14,6 +14,7 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
@@ -60,6 +61,7 @@ app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
 app.use(participantRoutes);
+app.use(alumniReferralRoutes);
 
 app.use(errorHandler);
 

@@ -697,6 +697,12 @@ export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefre
   const [importResult, setImportResult] = useState<{ imported: number; duplicates: number; enrolled: number } | null>(null);
   const [maxLeads, setMaxLeads] = useState(100);
 
+  // Lead Intelligence scoring (cold_outbound only)
+  const isColdOutbound = campaignType === 'cold_outbound';
+  const [scorePreview, setScorePreview] = useState<any[] | null>(null);
+  const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
+  const [intelligenceSummary, setIntelligenceSummary] = useState<any | null>(null);
+
   // Enrolled leads summary
   const [enrolledLeads, setEnrolledLeads] = useState<EnrolledLead[]>([]);
   const [totalEnrolled, setTotalEnrolled] = useState(0);
@@ -870,10 +876,28 @@ export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefre
     setApolloResults([]);
     setSelectedApollo(new Set());
     setImportResult(null);
+    setScorePreview(null);
+    setIntelligenceSummary(null);
     try {
       const res = await api.post(`/api/admin/icp-profiles/${profileId}/search`, { page: 1, per_page: 25 });
       setApolloResults(res.data.people || []);
       setApolloTotal(res.data.total || 0);
+
+      // For cold outbound campaigns, fetch score preview
+      if (isColdOutbound) {
+        setScorePreviewLoading(true);
+        try {
+          const scoreRes = await api.post(`/api/admin/icp-profiles/${profileId}/score-preview`, {
+            campaign_id: campaignId,
+            max_results: 25,
+          });
+          setScorePreview(scoreRes.data.results || []);
+        } catch (scoreErr) {
+          console.error('Score preview failed:', scoreErr);
+        } finally {
+          setScorePreviewLoading(false);
+        }
+      }
     } catch (err: any) {
       console.error('Apollo search failed:', err);
       const msg = err?.response?.data?.error || err?.message || 'Apollo search failed';
@@ -896,6 +920,9 @@ export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefre
         duplicates: res.data.duplicates,
         enrolled: res.data.enrolled,
       });
+      if (res.data.intelligence_summary) {
+        setIntelligenceSummary(res.data.intelligence_summary);
+      }
       await loadEnrolledLeads();
       onRefresh();
     } catch (err: any) {
@@ -1134,66 +1161,219 @@ export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefre
               <>
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <span className="small text-muted">
-                    Showing {apolloResults.length} of {apolloTotal} results
+                    {isColdOutbound && scorePreview
+                      ? `Scored ${scorePreview.length} leads from pool of ${apolloTotal}`
+                      : `Showing ${apolloResults.length} of ${apolloTotal} results`}
                     {selectedApollo.size > 0 && ` (${selectedApollo.size} selected)`}
                   </span>
-                  <button
-                    className="btn btn-success btn-sm"
-                    onClick={() => handleImportAndEnroll(searchingProfile)}
-                    disabled={importing}
-                  >
-                    {importing ? 'Importing...' : `Import & Enroll All (up to ${maxLeads})`}
-                  </button>
+                  <div className="d-flex align-items-center gap-2">
+                    {isColdOutbound && (
+                      <span className="small text-muted">
+                        Scoring {Math.min(maxLeads * 3, 3000)} leads → importing top {maxLeads}
+                      </span>
+                    )}
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => handleImportAndEnroll(searchingProfile)}
+                      disabled={importing}
+                    >
+                      {importing
+                        ? 'Importing...'
+                        : isColdOutbound
+                          ? `Import Top ${maxLeads} by Score`
+                          : `Import & Enroll All (up to ${maxLeads})`}
+                    </button>
+                  </div>
                 </div>
-                <div className="table-responsive">
-                  <table className="table table-hover table-sm mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th style={{ width: '30px' }}>
-                          <input
-                            type="checkbox"
-                            checked={selectedApollo.size === apolloResults.length && apolloResults.length > 0}
-                            onChange={toggleAllApollo}
-                          />
-                        </th>
-                        <th>Name</th>
-                        <th>Title</th>
-                        <th>Company</th>
-                        <th>Industry</th>
-                        <th>Size</th>
-                        <th>Email</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {apolloResults.map((person) => (
-                        <tr key={person.id}>
-                          <td>
+
+                {/* Score preview table for cold outbound, regular table for others */}
+                {isColdOutbound && scorePreview ? (
+                  <div className="table-responsive">
+                    {scorePreviewLoading ? (
+                      <div className="text-center py-3">
+                        <div className="spinner-border spinner-border-sm" role="status">
+                          <span className="visually-hidden">Scoring...</span>
+                        </div>
+                        <span className="ms-2 small text-muted">Scoring leads...</span>
+                      </div>
+                    ) : (
+                      <table className="table table-hover table-sm mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Name</th>
+                            <th>Title</th>
+                            <th>Company</th>
+                            <th>Industry</th>
+                            <th>Size</th>
+                            <th className="text-center">Intelligence</th>
+                            <th className="text-center">Deal Prob.</th>
+                            <th className="text-center">Tier</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scorePreview.map((lead: any, i: number) => {
+                            const tierClass = lead.deal_probability_tier === 'A' ? 'bg-success'
+                              : lead.deal_probability_tier === 'B' ? 'bg-primary'
+                              : lead.deal_probability_tier === 'C' ? 'bg-warning text-dark'
+                              : 'bg-secondary';
+                            const intelClass = lead.intelligence_score >= 90 ? 'text-success fw-semibold'
+                              : lead.intelligence_score >= 60 ? 'text-warning fw-semibold'
+                              : 'text-muted';
+                            const dealClass = lead.deal_probability_score >= 70 ? 'text-success fw-semibold'
+                              : lead.deal_probability_score >= 50 ? 'text-warning fw-semibold'
+                              : 'text-muted';
+                            return (
+                              <tr key={i}>
+                                <td className="small fw-medium">
+                                  {lead.name}
+                                  {lead.linkedin_url && (
+                                    <a href={lead.linkedin_url} target="_blank" rel="noreferrer" className="ms-1 text-primary" title="LinkedIn">
+                                      &#128279;
+                                    </a>
+                                  )}
+                                </td>
+                                <td className="small">{lead.title || '—'}</td>
+                                <td className="small">{lead.company || '—'}</td>
+                                <td className="small">{lead.industry || '—'}</td>
+                                <td className="small">{lead.employee_count?.toLocaleString() || '—'}</td>
+                                <td className={`small text-center ${intelClass}`}>{lead.intelligence_score}/150</td>
+                                <td className={`small text-center ${dealClass}`}>{lead.deal_probability_score}/100</td>
+                                <td className="text-center">
+                                  <span className={`badge ${tierClass}`}>{lead.deal_probability_tier}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-hover table-sm mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th style={{ width: '30px' }}>
                             <input
                               type="checkbox"
-                              checked={selectedApollo.has(person.id)}
-                              onChange={() => toggleApolloSelect(person.id)}
+                              checked={selectedApollo.size === apolloResults.length && apolloResults.length > 0}
+                              onChange={toggleAllApollo}
                             />
-                          </td>
-                          <td className="small fw-medium">
-                            {person.name || `${person.first_name} ${person.last_name}`}
-                            {person.linkedin_url && (
-                              <a href={person.linkedin_url} target="_blank" rel="noreferrer" className="ms-1 text-primary" title="LinkedIn">
-                                &#128279;
-                              </a>
-                            )}
-                          </td>
-                          <td className="small">{person.title || '—'}</td>
-                          <td className="small">{person.organization?.name || '—'}</td>
-                          <td className="small">{person.organization?.industry || '—'}</td>
-                          <td className="small">{person.organization?.estimated_num_employees?.toLocaleString() || '—'}</td>
-                          <td className="small">{person.email || '—'}</td>
+                          </th>
+                          <th>Name</th>
+                          <th>Title</th>
+                          <th>Company</th>
+                          <th>Industry</th>
+                          <th>Size</th>
+                          <th>Email</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {apolloResults.map((person) => (
+                          <tr key={person.id}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={selectedApollo.has(person.id)}
+                                onChange={() => toggleApolloSelect(person.id)}
+                              />
+                            </td>
+                            <td className="small fw-medium">
+                              {person.name || `${person.first_name} ${person.last_name}`}
+                              {person.linkedin_url && (
+                                <a href={person.linkedin_url} target="_blank" rel="noreferrer" className="ms-1 text-primary" title="LinkedIn">
+                                  &#128279;
+                                </a>
+                              )}
+                            </td>
+                            <td className="small">{person.title || '—'}</td>
+                            <td className="small">{person.organization?.name || '—'}</td>
+                            <td className="small">{person.organization?.industry || '—'}</td>
+                            <td className="small">{person.organization?.estimated_num_employees?.toLocaleString() || '—'}</td>
+                            <td className="small">{person.email || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Section B2: Deal Intelligence Overview (cold_outbound only, after import) */}
+      {isColdOutbound && intelligenceSummary && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white fw-semibold">
+            Deal Intelligence Overview
+          </div>
+          <div className="card-body">
+            <div className="row g-3">
+              <div className="col-md-3">
+                <div className="text-muted small">Leads Scored</div>
+                <div className="fw-semibold">
+                  {intelligenceSummary.total_scored} scored → {intelligenceSummary.total_imported} imported
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="text-muted small">Avg Intelligence Score</div>
+                <div className="fw-semibold">{intelligenceSummary.avg_intelligence_score}/150</div>
+              </div>
+              <div className="col-md-3">
+                <div className="text-muted small">Avg Deal Probability</div>
+                <div className="fw-semibold">{intelligenceSummary.avg_deal_probability}/100</div>
+              </div>
+              <div className="col-md-3">
+                <div className="text-muted small">AI Signal Density</div>
+                <div className="fw-semibold">{intelligenceSummary.ai_signal_count} leads ({intelligenceSummary.ai_signal_pct}%)</div>
+              </div>
+            </div>
+
+            <hr className="my-3" />
+
+            <div className="row g-3">
+              <div className="col-md-4">
+                <div className="text-muted small mb-2">Probability Tier Distribution</div>
+                {(intelligenceSummary.tier_distribution || []).map((t: any) => (
+                  <div key={t.tier} className="d-flex align-items-center gap-2 mb-1">
+                    <span className={`badge ${
+                      t.tier === 'A' ? 'bg-success' : t.tier === 'B' ? 'bg-primary' : t.tier === 'C' ? 'bg-warning text-dark' : 'bg-secondary'
+                    }`} style={{ width: 28 }}>{t.tier}</span>
+                    <div className="flex-grow-1">
+                      <div className="progress" style={{ height: 8 }}>
+                        <div
+                          className={`progress-bar ${
+                            t.tier === 'A' ? 'bg-success' : t.tier === 'B' ? 'bg-primary' : t.tier === 'C' ? 'bg-warning' : 'bg-secondary'
+                          }`}
+                          style={{ width: `${t.pct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="small text-muted" style={{ minWidth: 50 }}>{t.count} ({t.pct}%)</span>
+                  </div>
+                ))}
+              </div>
+              <div className="col-md-4">
+                <div className="text-muted small mb-2">Top Industries</div>
+                {(intelligenceSummary.top_industries || []).slice(0, 5).map((ind: any) => (
+                  <div key={ind.name} className="d-flex justify-content-between small mb-1">
+                    <span>{ind.name}</span>
+                    <span className="text-muted">{ind.count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="col-md-4">
+                <div className="text-muted small mb-2">Authority Distribution</div>
+                {(intelligenceSummary.authority_distribution || []).map((auth: any) => (
+                  <div key={auth.level} className="d-flex justify-content-between small mb-1">
+                    <span>{auth.level}</span>
+                    <span className="text-muted">{auth.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

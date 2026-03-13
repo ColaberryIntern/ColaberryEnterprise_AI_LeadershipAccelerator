@@ -106,6 +106,10 @@ import ExecutiveNotificationPolicy from './ExecutiveNotificationPolicy';
 import SimulationAccuracy from './SimulationAccuracy';
 import ContentFeedback from './ContentFeedback';
 import CurriculumTypeDefinition from './CurriculumTypeDefinition';
+import AlumniReferralProfile from './AlumniReferralProfile';
+import AlumniReferral from './AlumniReferral';
+import ReferralActivityEvent from './ReferralActivityEvent';
+import ReferralCommission from './ReferralCommission';
 
 // --- Governance Center associations ---
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
@@ -533,6 +537,25 @@ InsightReplacement.belongsTo(ReportingInsight, { foreignKey: 'original_insight_i
 InsightReplacement.belongsTo(ReportingInsight, { foreignKey: 'replacement_insight_id', as: 'replacementInsight' });
 InsightReplacement.belongsTo(UserInsightFeedback, { foreignKey: 'triggered_by_feedback_id', as: 'triggeringFeedback' });
 
+// --- Alumni Referral System associations ---
+AlumniReferralProfile.hasMany(AlumniReferral, { foreignKey: 'profile_id', as: 'referrals' });
+AlumniReferral.belongsTo(AlumniReferralProfile, { foreignKey: 'profile_id', as: 'profile' });
+
+AlumniReferral.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(AlumniReferral, { foreignKey: 'lead_id', as: 'alumniReferrals' });
+
+AlumniReferral.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+Campaign.hasMany(AlumniReferral, { foreignKey: 'campaign_id', as: 'alumniReferrals' });
+
+AlumniReferral.hasMany(ReferralActivityEvent, { foreignKey: 'referral_id', as: 'activityEvents' });
+ReferralActivityEvent.belongsTo(AlumniReferral, { foreignKey: 'referral_id', as: 'referral' });
+
+AlumniReferral.hasOne(ReferralCommission, { foreignKey: 'referral_id', as: 'commission' });
+ReferralCommission.belongsTo(AlumniReferral, { foreignKey: 'referral_id', as: 'referral' });
+
+AlumniReferralProfile.hasMany(ReferralCommission, { foreignKey: 'profile_id', as: 'commissions' });
+ReferralCommission.belongsTo(AlumniReferralProfile, { foreignKey: 'profile_id', as: 'profile' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -619,4 +642,8 @@ export {
   SimulationAccuracy,
   ContentFeedback,
   CurriculumTypeDefinition,
+  AlumniReferralProfile,
+  AlumniReferral,
+  ReferralActivityEvent,
+  ReferralCommission,
 };

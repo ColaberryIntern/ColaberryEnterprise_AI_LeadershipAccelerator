@@ -7,6 +7,7 @@ import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
+import referralRoutes from './routes/referralRoutes';
 import AlumniChampionPage from './pages/AlumniChampionPage';
 import GlobalCoryWidget from './components/GlobalCoryWidget';
 
@@ -19,6 +20,7 @@ function App() {
         <Route path="/alumni-ai-champion" element={<AlumniChampionPage />} />
         {adminRoutes}
         {portalRoutes}
+        {referralRoutes}
         <Route element={<PublicLayout />}>
           {publicRoutes}
         </Route>

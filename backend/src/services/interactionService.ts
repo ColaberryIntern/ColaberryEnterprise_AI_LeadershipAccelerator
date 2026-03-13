@@ -82,6 +82,13 @@ export async function recordOutcome(params: RecordOutcomeParams): Promise<void> 
       console.error(`[InteractionService] Classification error:`, classErr.message);
     }
 
+    // Bridge to referral activity tracking (fire-and-forget)
+    try {
+      const { bridgeInteractionToReferral } = require('./referralEventBridge');
+      bridgeInteractionToReferral(params.lead_id, params.outcome, params.campaign_id).catch(() => {});
+    } catch {}
+
+
     // Update CampaignLead tracking if within a campaign
     if (params.campaign_id) {
       try {

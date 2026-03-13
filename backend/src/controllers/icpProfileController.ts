@@ -10,6 +10,7 @@ import {
   getProfileRecommendations,
   applyRecommendation,
   searchAndEnrollFromProfile,
+  scorePreviewFromProfile,
 } from '../services/icpProfileService';
 import {
   buildColdCampaign,
@@ -196,6 +197,27 @@ export async function handleGetSequenceTemplates(
   try {
     const templates = getSequenceTemplates();
     res.json({ templates });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ── Score Preview (cold_outbound) ───────────────────────────────────────
+
+export async function handleScorePreview(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const profileId = req.params.id as string;
+    const { campaign_id, max_results } = req.body;
+    if (!campaign_id) {
+      res.status(400).json({ error: 'campaign_id is required' });
+      return;
+    }
+    const result = await scorePreviewFromProfile(profileId, campaign_id, max_results || 25);
+    res.json(result);
   } catch (error) {
     next(error);
   }

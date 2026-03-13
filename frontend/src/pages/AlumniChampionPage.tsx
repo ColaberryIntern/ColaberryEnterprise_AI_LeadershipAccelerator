@@ -165,6 +165,15 @@ function AlumniChampionPage() {
                 Claim 50% Alumni Discount
               </button>
             </div>
+            <div className="mt-3">
+              <a
+                href="/referrals/login"
+                className="small fw-medium"
+                style={{ color: DARK.accent, textDecoration: 'none' }}
+              >
+                Already an alumni? Activate your referral account &rarr;
+              </a>
+            </div>
           </div>
         </section>
 
@@ -260,6 +269,55 @@ function AlumniChampionPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Referral Program */}
+        <section style={{ padding: '4rem 0' }}>
+          <div className="container">
+            <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>Earn $250 Per Referral</h2>
+            <p className="text-center mb-5" style={{ color: DARK.textMuted, maxWidth: '600px', margin: '0 auto' }}>
+              Know a company that could benefit from enterprise AI training? Refer them and earn a commission for every successful enrollment.
+            </p>
+            <div className="row g-4">
+              {[
+                {
+                  icon: '\u{1F3E2}',
+                  title: 'Corporate Sponsor',
+                  desc: 'Introduce the program to your company leadership. Add your referral contact, then download a sponsor kit to share internally.',
+                },
+                {
+                  icon: '\u{1F91D}',
+                  title: 'Introduced Referral',
+                  desc: 'Submit a contact and we reach out mentioning your name and Colaberry experience. The personal touch drives results.',
+                },
+                {
+                  icon: '\u{1F575}\uFE0F',
+                  title: 'Anonymous Referral',
+                  desc: 'Submit a company lead anonymously. They enter our standard corporate outreach — your name is never mentioned.',
+                },
+              ].map((path) => (
+                <div className="col-md-4" key={path.title}>
+                  <div
+                    className="h-100 p-4 rounded-3 text-center"
+                    style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
+                  >
+                    <div className="fs-1 mb-3" aria-hidden="true">{path.icon}</div>
+                    <h3 className="h5 fw-bold" style={{ color: DARK.accent }}>{path.title}</h3>
+                    <p className="small mb-0" style={{ color: DARK.textMuted }}>{path.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="text-center mt-4">
+              <a
+                href="/referrals/login"
+                className="btn fw-bold px-4"
+                style={{ background: DARK.accent, color: DARK.bg, border: 'none' }}
+              >
+                Activate My Alumni Referral Account
+              </a>
             </div>
           </div>
         </section>

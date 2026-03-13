@@ -1,8 +1,14 @@
 import { Op } from 'sequelize';
-import { ICPProfile, Campaign } from '../models';
+import { ICPProfile, Campaign, CampaignLead } from '../models';
 import { ApolloSearchParams, searchPeople, importApolloResults } from './apolloService';
 import { getInsights, getTargetingRecommendations } from './icpInsightService';
 import { enrollLeadsInCampaign } from './campaignService';
+import {
+  scoreLeadForColdCampaign,
+  buildIntelligenceSummary,
+  type CombinedLeadScore,
+  type IntelligenceSummary,
+} from './leadScoringEngine';
 
 // ── CRUD ────────────────────────────────────────────────────────────────
 
@@ -160,8 +166,8 @@ export async function searchApolloFromProfileBulk(
 
     currentPage++;
 
-    // Safety: max 10 pages
-    if (currentPage > 10) break;
+    // Safety: max 30 pages (3000 results for cold scoring pools)
+    if (currentPage > 30) break;
   }
 
   return allPeople.slice(0, maxLeads);
@@ -183,27 +189,112 @@ export async function searchAndEnrollFromProfile(
   profileId: string,
   campaignId: string,
   maxLeads = 100,
-): Promise<{ imported: number; duplicates: number; enrolled: number; errors: number; leads: any[] }> {
+): Promise<{
+  imported: number;
+  duplicates: number;
+  enrolled: number;
+  errors: number;
+  leads: any[];
+  intelligence_summary?: IntelligenceSummary;
+}> {
   const profile = await getICPProfile(profileId);
+  const campaign = await Campaign.findByPk(campaignId, { raw: true }) as any;
 
-  // 1. Search Apollo using profile filters
+  // ── Cold Outbound: Score → Rank → Import Top N ────────────────────
+  if (campaign?.type === 'cold_outbound') {
+    const poolSize = Math.min(maxLeads * 3, 3000);
+    console.log(`[ICP] Cold scoring: fetching pool of ${poolSize} for top ${maxLeads}`);
+
+    const people = await searchApolloFromProfileBulk(profileId, poolSize);
+    if (people.length === 0) {
+      return { imported: 0, duplicates: 0, enrolled: 0, errors: 0, leads: [], intelligence_summary: undefined };
+    }
+
+    // Score each lead with both engines
+    const icpIndustries = (profile as any).industries || [];
+    const scored: CombinedLeadScore[] = people.map((p: any) =>
+      scoreLeadForColdCampaign(p, icpIndustries)
+    );
+
+    // Rank by combined score, take top N
+    scored.sort((a, b) => b.combined_rank - a.combined_rank);
+    const topN = scored.slice(0, maxLeads);
+
+    console.log(`[ICP] Cold scoring: ${people.length} scored, top ${topN.length} selected (min rank: ${topN[topN.length - 1]?.combined_rank?.toFixed(1)})`);
+
+    // Import only the top N
+    const importResult = await importApolloResults(
+      topN.map((s) => s.person),
+      {
+        campaign_id: campaignId,
+        scoring_criteria: {
+          target_industries: icpIndustries,
+          company_size_min: (profile as any).company_size_min,
+          company_size_max: (profile as any).company_size_max,
+        },
+      },
+    );
+
+    // Enroll
+    let enrolled = 0;
+    if (importResult.leads.length > 0) {
+      const leadIds = importResult.leads.map((l: any) => l.id);
+      try {
+        const enrollResult = await enrollLeadsInCampaign(campaignId, leadIds);
+        enrolled = enrollResult.filter((r: any) => r.status === 'enrolled' || r.status === 'active').length;
+      } catch (err: any) {
+        console.error(`[ICP] Enrollment error for profile ${profileId}: ${err.message}`);
+      }
+
+      // Persist intelligence score breakdowns to CampaignLead.metadata
+      for (const scoredLead of topN) {
+        const email = (scoredLead.person.email || '').toLowerCase().trim();
+        const matchedLead = importResult.leads.find(
+          (l: any) => (l.email || '').toLowerCase().trim() === email
+        );
+        if (matchedLead) {
+          await CampaignLead.update(
+            {
+              metadata: {
+                intelligence_score: scoredLead.intelligence,
+                deal_probability: scoredLead.deal_probability,
+                combined_rank: scoredLead.combined_rank,
+              },
+            } as any,
+            { where: { campaign_id: campaignId, lead_id: matchedLead.id } },
+          );
+        }
+      }
+    }
+
+    const intelligence_summary = buildIntelligenceSummary(topN, importResult.imported);
+
+    return {
+      imported: importResult.imported,
+      duplicates: importResult.duplicates,
+      enrolled,
+      errors: importResult.errors,
+      leads: importResult.leads,
+      intelligence_summary,
+    };
+  }
+
+  // ── All other campaign types: existing flow unchanged ─────────────
   const people = await searchApolloFromProfileBulk(profileId, maxLeads);
 
   if (people.length === 0) {
     return { imported: 0, duplicates: 0, enrolled: 0, errors: 0, leads: [] };
   }
 
-  // 2. Import leads (dedup + create)
   const importResult = await importApolloResults(people, {
     campaign_id: campaignId,
     scoring_criteria: {
-      target_industries: profile.industries || [],
-      company_size_min: profile.company_size_min,
-      company_size_max: profile.company_size_max,
+      target_industries: (profile as any).industries || [],
+      company_size_min: (profile as any).company_size_min,
+      company_size_max: (profile as any).company_size_max,
     },
   });
 
-  // 3. Enroll all leads (new + existing duplicates) in campaign
   let enrolled = 0;
   if (importResult.leads.length > 0) {
     const leadIds = importResult.leads.map((l: any) => l.id);
@@ -615,4 +706,69 @@ export async function applyRecommendation(
   await profile.update({ recommendation_data: remaining } as any);
 
   return profile.reload();
+}
+
+// ── Score Preview (cold_outbound only, no DB writes) ────────────────────
+
+export async function scorePreviewFromProfile(
+  profileId: string,
+  campaignId: string,
+  maxResults = 25,
+): Promise<{
+  results: Array<{
+    name: string;
+    title: string;
+    company: string;
+    industry: string;
+    employee_count: number | null;
+    email: string;
+    linkedin_url: string;
+    intelligence_score: number;
+    deal_probability_score: number;
+    deal_probability_tier: string;
+    combined_rank: number;
+  }>;
+  pool_total: number;
+  summary: IntelligenceSummary;
+}> {
+  const profile = await getICPProfile(profileId);
+  const icpIndustries = (profile as any).industries || [];
+
+  // Fetch a preview sample from Apollo
+  const people = await searchApolloFromProfileBulk(profileId, Math.min(maxResults * 3, 300));
+
+  if (people.length === 0) {
+    return {
+      results: [],
+      pool_total: 0,
+      summary: buildIntelligenceSummary([], 0),
+    };
+  }
+
+  // Score all
+  const scored: CombinedLeadScore[] = people.map((p: any) =>
+    scoreLeadForColdCampaign(p, icpIndustries)
+  );
+  scored.sort((a, b) => b.combined_rank - a.combined_rank);
+
+  const topResults = scored.slice(0, maxResults);
+  const summary = buildIntelligenceSummary(scored, topResults.length);
+
+  return {
+    results: topResults.map((s) => ({
+      name: s.person.name || `${s.person.first_name} ${s.person.last_name}`.trim(),
+      title: s.person.title || '',
+      company: s.person.organization?.name || '',
+      industry: s.person.organization?.industry || '',
+      employee_count: s.person.organization?.estimated_num_employees || null,
+      email: s.person.email || '',
+      linkedin_url: s.person.linkedin_url || '',
+      intelligence_score: s.intelligence.total,
+      deal_probability_score: s.deal_probability.total,
+      deal_probability_tier: s.deal_probability.tier,
+      combined_rank: Math.round(s.combined_rank * 10) / 10,
+    })),
+    pool_total: people.length,
+    summary,
+  };
 }
