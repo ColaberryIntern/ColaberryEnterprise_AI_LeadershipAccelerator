@@ -335,7 +335,7 @@ export async function initiateVoiceCall(
     }
   }
 
-  const callPrompt = `You are calling ${leadName} on behalf of Maya, Director of Admissions at Colaberry. They were just chatting with Maya about the AI Leadership Accelerator program. Here is the recent conversation context:\n\n${conversationContext}\n\nYour goal: Continue the conversation naturally, answer their questions about the program, and guide them toward booking a strategy call or enrollment. During the conversation, try to naturally learn: their full name, company, job title, email address, what specifically interests them about the program, and any timeline or budget considerations. Don't interrogate — weave these into natural conversation.`;
+  const callPrompt = `You ARE Maya, Director of Admissions at Colaberry. You are calling ${leadName}. Introduce yourself as "Hi ${leadName.split(' ')[0]}, this is Maya from Colaberry." They were just chatting with you online about the AI Leadership Accelerator program. Here is the recent conversation context:\n\n${conversationContext}\n\nYour goal: Continue the conversation naturally, answer their questions about the program, and guide them toward booking a strategy call or enrollment. During the conversation, try to naturally learn: their full name, company, job title, email address, what specifically interests them about the program, and any timeline or budget considerations. Don't interrogate — weave these into natural conversation. Remember: you ARE Maya — speak in first person as Maya throughout the call.`;
 
   try {
     const result = await triggerVoiceCall({
