@@ -86,6 +86,7 @@ interface AccordionState {
   prompts: boolean;
   variables: boolean;
   skills: boolean;
+  implTask: boolean;
   artifacts: boolean;
   kc: boolean;
   validation: boolean;
@@ -96,7 +97,7 @@ interface AccordionState {
 export default function ObjectConfigEngine(props: Props) {
   const { editing, isNew, isDirty, miniSections, saving, error } = props;
   const [expanded, setExpanded] = useState<AccordionState>({
-    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
+    core: true, prompts: true, variables: true, skills: false, implTask: true, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
   });
   const [showPreview, setShowPreview] = useState(false);
   const [reversePrompt, setReversePrompt] = useState('');
@@ -389,7 +390,71 @@ export default function ObjectConfigEngine(props: Props) {
           />
         ))}
 
-        {/* Artifacts Section (implementation_task only) */}
+        {/* Implementation Task Section (implementation_task only) */}
+        {renderAccordion('implTask', 'Implementation Task', 'bi-clipboard-check', (
+          <div>
+            {/* Task-specific prompts */}
+            {[
+              { key: 'build', field: 'build_prompt_system' as keyof typeof editing, userField: 'build_prompt_user' as keyof typeof editing, label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
+              { key: 'mentor', field: 'mentor_prompt_system' as keyof typeof editing, userField: 'mentor_prompt_user' as keyof typeof editing, label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
+              { key: 'reflection', field: 'reflection_prompt_system' as keyof typeof editing, userField: 'reflection_prompt_user' as keyof typeof editing, label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
+            ].map(p => {
+              const sysVal = (editing[p.field] as string) || '';
+              const usrVal = (editing[p.userField] as string) || '';
+              const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
+              return (
+                <div key={p.key} className="mb-3">
+                  <div className="d-flex align-items-center gap-1 mb-1">
+                    <span className="fw-semibold small">{p.label}</span>
+                    <i className="bi bi-info-circle text-muted" style={{ fontSize: 9 }} title={p.tooltip}></i>
+                  </div>
+                  <HighlightedPromptEditor
+                    value={combinedValue}
+                    onChange={val => props.onUpdate({ [p.field]: val, [p.userField]: '' } as any)}
+                    availableVars={coreAvailableVars}
+                    allDefinedVars={coreAllDefinedVars}
+                    label="PROMPT"
+                    rows={5}
+                    placeholder="Instructions for the AI model with {{variable}} placeholders..."
+                  />
+                </div>
+              );
+            })}
+
+            {/* Skills auto-derive */}
+            <div className="border-top pt-2 mt-2">
+              <div className="fw-semibold small mb-1">
+                <i className="bi bi-stars me-1"></i>Skills
+              </div>
+              <SkillSection
+                editing={editing}
+                editType={editType}
+                miniSectionId={editing.id}
+                skillOptions={props.skillOptions}
+                onUpdate={props.onUpdate}
+                onCreateSkill={props.onCreateSkill}
+                token={props.token}
+                apiUrl={props.apiUrl}
+              />
+            </div>
+
+            {/* Artifacts */}
+            <div className="border-top pt-2 mt-2">
+              <div className="fw-semibold small mb-1">
+                <i className="bi bi-box me-1"></i>Artifacts
+              </div>
+              <ArtifactSection
+                editing={editing}
+                artifactOptions={props.artifactOptions}
+                artifacts={props.artifacts}
+                onUpdate={props.onUpdate}
+                onCreateArtifact={props.onCreateArtifact}
+              />
+            </div>
+          </div>
+        ), editType === 'implementation_task')}
+
+        {/* Artifacts Section — hidden for implementation_task (now inside Implementation Task section above) */}
         {renderAccordion('artifacts', 'Artifacts', 'bi-box', (
           <ArtifactSection
             editing={editing}
@@ -398,7 +463,7 @@ export default function ObjectConfigEngine(props: Props) {
             onUpdate={props.onUpdate}
             onCreateArtifact={props.onCreateArtifact}
           />
-        ), editType === 'implementation_task')}
+        ), false)}
 
         {/* Knowledge Check Section (knowledge_check only) */}
         {renderAccordion('kc', 'Knowledge Check', 'bi-question-circle', (
