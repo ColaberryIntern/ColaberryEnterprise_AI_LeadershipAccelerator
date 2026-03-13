@@ -126,6 +126,7 @@ const MayaChatWidget: React.FC = () => {
   const [isExecutive, setIsExecutive] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastAssistantRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const prevPathnameRef = useRef(location.pathname);
 
@@ -198,9 +199,15 @@ const MayaChatWidget: React.FC = () => {
     }
   }, []);
 
-  // Scroll to bottom
+  // Auto-scroll: for assistant messages, scroll to start of message; for visitor, scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role === 'assistant' && lastAssistantRef.current) {
+      lastAssistantRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // Focus input when opened
@@ -454,7 +461,7 @@ const MayaChatWidget: React.FC = () => {
           <div className="flex-grow-1 overflow-auto" style={{ backgroundColor: '#f9fafb' }}>
             <div style={{ maxWidth: '768px', margin: '0 auto', padding: '24px 24px 0' }}>
               {messages.map((msg, i) => (
-                <div key={i} style={{ marginBottom: '24px' }}>
+                <div key={i} style={{ marginBottom: '24px' }} ref={msg.role === 'assistant' && i === messages.length - 1 ? lastAssistantRef : undefined}>
                   {msg.role === 'assistant' ? (
                     <div className="d-flex gap-3" style={{ alignItems: 'flex-start' }}>
                       <div style={{ marginTop: '2px' }}>
@@ -624,6 +631,45 @@ const MayaChatWidget: React.FC = () => {
                   </svg>
                 </button>
               </div>
+              {/* Action bar — quick service path triggers */}
+              <div className="d-flex gap-2 mt-2">
+                <button
+                  className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                  style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '16px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
+                  onClick={() => handleSend("I'd like to talk to someone about the program")}
+                  disabled={sending}
+                  title="Request a call"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                  </svg>
+                  Call me
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                  style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '16px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
+                  onClick={() => handleSend("I'd like to book a strategy call")}
+                  disabled={sending}
+                  title="Book a strategy call"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  Book a call
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                  style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '16px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
+                  onClick={() => handleSend("Can I get an executive briefing?")}
+                  disabled={sending}
+                  title="Request executive briefing"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                  </svg>
+                  Executive briefing
+                </button>
+              </div>
               <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '11px', color: '#a0aec0' }}>
                 Maya is an AI assistant. Verify important details with our admissions team.
               </div>
@@ -735,6 +781,7 @@ const MayaChatWidget: React.FC = () => {
             {messages.map((msg, i) => (
               <div
                 key={i}
+                ref={msg.role === 'assistant' && i === messages.length - 1 ? lastAssistantRef : undefined}
                 className={`d-flex mb-3 ${msg.role === 'visitor' ? 'justify-content-end' : 'justify-content-start'}`}
               >
                 {msg.role === 'assistant' && (
@@ -848,48 +895,88 @@ const MayaChatWidget: React.FC = () => {
 
           {/* Input */}
           <div
-            className="d-flex align-items-end gap-2 px-3 py-2"
-            style={{ borderTop: '1px solid var(--color-border, #e2e8f0)', flexShrink: 0 }}
+            style={{ borderTop: '1px solid var(--color-border, #e2e8f0)', flexShrink: 0, padding: '8px 12px' }}
           >
-            <textarea
-              ref={inputRef}
-              className="form-control border-0 flex-grow-1"
-              placeholder="Message Maya..."
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              disabled={sending}
-              maxLength={2000}
-              rows={1}
-              style={{
-                backgroundColor: '#f7fafc',
-                resize: 'none',
-                fontSize: '14px',
-                lineHeight: '1.4',
-                maxHeight: '80px',
-                overflow: 'auto',
-                borderRadius: '8px',
-                padding: '8px 12px',
-              }}
-            />
-            <button
-              onClick={() => handleSend()}
-              disabled={!input.trim() || sending}
-              className="btn btn-sm px-2 flex-shrink-0"
-              style={{
-                backgroundColor: input.trim() ? 'var(--color-primary, #1a365d)' : 'var(--color-accent, #38a169)',
-                color: '#ffffff',
-                borderRadius: '8px',
-                minWidth: '36px',
-                height: '36px',
-                transition: 'background-color 0.15s ease',
-              }}
-              aria-label="Send message"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-            </button>
+            <div className="d-flex align-items-end gap-2">
+              <textarea
+                ref={inputRef}
+                className="form-control border-0 flex-grow-1"
+                placeholder="Message Maya..."
+                value={input}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                disabled={sending}
+                maxLength={2000}
+                rows={1}
+                style={{
+                  backgroundColor: '#f7fafc',
+                  resize: 'none',
+                  fontSize: '14px',
+                  lineHeight: '1.4',
+                  maxHeight: '80px',
+                  overflow: 'auto',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                }}
+              />
+              <button
+                onClick={() => handleSend()}
+                disabled={!input.trim() || sending}
+                className="btn btn-sm px-2 flex-shrink-0"
+                style={{
+                  backgroundColor: input.trim() ? 'var(--color-primary, #1a365d)' : 'var(--color-accent, #38a169)',
+                  color: '#ffffff',
+                  borderRadius: '8px',
+                  minWidth: '36px',
+                  height: '36px',
+                  transition: 'background-color 0.15s ease',
+                }}
+                aria-label="Send message"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              </button>
+            </div>
+            {/* Action bar — quick service path triggers */}
+            <div className="d-flex gap-2 mt-1" style={{ paddingLeft: '4px' }}>
+              <button
+                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
+                onClick={() => handleSend("I'd like to talk to someone about the program")}
+                disabled={sending}
+                title="Request a call"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                </svg>
+                Call
+              </button>
+              <button
+                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
+                onClick={() => handleSend("I'd like to book a strategy call")}
+                disabled={sending}
+                title="Book a strategy call"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                Book call
+              </button>
+              <button
+                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
+                onClick={() => handleSend("Can I get an executive briefing?")}
+                disabled={sending}
+                title="Request executive briefing"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                Briefing
+              </button>
+            </div>
           </div>
         </div>
       )}

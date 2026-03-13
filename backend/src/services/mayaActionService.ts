@@ -8,11 +8,186 @@ import AdmissionsActionLog from '../models/AdmissionsActionLog';
 import DocumentDeliveryLog from '../models/DocumentDeliveryLog';
 import { canDeliverDocument } from './admissionsWorkflowService';
 import { sendAdmissionsDocument } from './emailService';
+import {
+  captureLeadDetails,
+  updateLeadRecord,
+  sendSmsSummary,
+  initiateVoiceCall,
+  getAvailableSlots,
+  scheduleStrategyCall,
+  enrollInCampaign,
+  retrieveKnowledgeContent,
+} from './mayaToolsService';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 
 // ─── OpenAI Tool Definitions ────────────────────────────────────────────────
 
 export const MAYA_TOOLS: ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'capture_lead_details',
+      description:
+        'Capture visitor contact info. Use when they share name, email, phone, company, or title. Collect at minimum: first_name + email + phone before performing any actions. interest_type tracks which service they are most interested in.',
+      parameters: {
+        type: 'object',
+        properties: {
+          first_name: { type: 'string', description: "Visitor's first name" },
+          last_name: { type: 'string', description: "Visitor's last name" },
+          email: { type: 'string', description: "Visitor's email address" },
+          phone: { type: 'string', description: "Visitor's phone number" },
+          company: { type: 'string', description: "Visitor's company name" },
+          title: { type: 'string', description: "Visitor's job title" },
+          interest_type: {
+            type: 'string',
+            enum: ['executive_briefing', 'strategy_call', 'sponsorship', 'enrollment', 'general'],
+            description: 'Which service the visitor is most interested in',
+          },
+        },
+        required: ['first_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_lead_record',
+      description: "Update a specific field on the visitor's lead record.",
+      parameters: {
+        type: 'object',
+        properties: {
+          field: {
+            type: 'string',
+            enum: ['company', 'title', 'phone', 'email', 'interest_area'],
+            description: 'The field to update',
+          },
+          value: { type: 'string', description: 'The new value' },
+        },
+        required: ['field', 'value'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_document',
+      description:
+        'Send a program document to the visitor via email. Requires a confirmed email address. Supported types: executive_briefing, program_overview, enterprise_guide, pricing_guide.',
+      parameters: {
+        type: 'object',
+        properties: {
+          document_type: {
+            type: 'string',
+            enum: ['executive_briefing', 'program_overview', 'enterprise_guide', 'pricing_guide'],
+            description: 'Type of document to send',
+          },
+          recipient_email: { type: 'string', description: 'Email address to send the document to' },
+          recipient_name: { type: 'string', description: "Recipient's name for personalization" },
+        },
+        required: ['document_type', 'recipient_email'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_sms_summary',
+      description:
+        'Send an SMS summary of this conversation to the visitor\'s phone. Only use after 3+ message exchanges AND the visitor has confirmed their phone number AND they have agreed to receive a text. Always ask permission first.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'initiate_voice_call',
+      description:
+        'Start an AI voice call with the visitor via Synthflow. Use when: visitor asks to talk to someone, shows very high intent, or prefers phone. Requires confirmed phone number. Max 1 call per visitor per 24h.',
+      parameters: {
+        type: 'object',
+        properties: {
+          phone: { type: 'string', description: 'Phone number to call' },
+          context_summary: { type: 'string', description: 'Brief summary of what was discussed (optional)' },
+        },
+        required: ['phone'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_available_slots',
+      description:
+        'Check calendar availability for strategy calls. Returns available 30-min slots over the next 2 weeks. Use before schedule_strategy_call.',
+      parameters: {
+        type: 'object',
+        properties: {
+          days: { type: 'integer', description: 'Number of days to check (default 14)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'schedule_strategy_call',
+      description:
+        'Book a strategy call at a specific time. Must call get_available_slots first. Sends confirmation email + SMS. Requires name and email at minimum.',
+      parameters: {
+        type: 'object',
+        properties: {
+          slot_start: { type: 'string', description: 'ISO datetime of the slot to book (from get_available_slots)' },
+          name: { type: 'string', description: "Visitor's full name" },
+          email: { type: 'string', description: "Visitor's email address" },
+          company: { type: 'string', description: "Visitor's company" },
+          phone: { type: 'string', description: "Visitor's phone number" },
+        },
+        required: ['slot_start', 'name', 'email'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'enroll_in_campaign',
+      description:
+        'Enroll the visitor in the appropriate Maya nurture campaign based on their interest. Use after capturing lead details. The campaign will send follow-up emails and texts from Maya to guide them toward enrollment.',
+      parameters: {
+        type: 'object',
+        properties: {
+          interest_type: {
+            type: 'string',
+            enum: ['executive_briefing', 'strategy_call', 'sponsorship', 'enrollment', 'general'],
+            description: 'Which service path to enroll them in',
+          },
+        },
+        required: ['interest_type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'retrieve_knowledge',
+      description:
+        'Search the knowledge base for program information. Use when visitors ask detailed questions about the program, pricing, curriculum, or outcomes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query for the knowledge base' },
+          category: {
+            type: 'string',
+            enum: ['program', 'curriculum', 'pricing', 'outcomes', 'enterprise', 'logistics', 'faq', 'sponsorship'],
+            description: 'Optional category to narrow search',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -56,8 +231,24 @@ export async function executeMayaAction(
   conversationId: string,
 ): Promise<MayaActionResult> {
   switch (functionName) {
+    case 'capture_lead_details':
+      return captureLeadDetails(args, visitorId, conversationId);
+    case 'update_lead_record':
+      return updateLeadRecord(args, visitorId, conversationId);
     case 'send_document':
       return handleSendDocument(args, visitorId, conversationId);
+    case 'send_sms_summary':
+      return sendSmsSummary(args, visitorId, conversationId);
+    case 'initiate_voice_call':
+      return initiateVoiceCall(args, visitorId, conversationId);
+    case 'get_available_slots':
+      return getAvailableSlots(args, visitorId, conversationId);
+    case 'schedule_strategy_call':
+      return scheduleStrategyCall(args, visitorId, conversationId);
+    case 'enroll_in_campaign':
+      return enrollInCampaign(args, visitorId, conversationId);
+    case 'retrieve_knowledge':
+      return retrieveKnowledgeContent(args, visitorId, conversationId);
     case 'schedule_callback':
       return handleScheduleCallback(args, visitorId, conversationId);
     default:

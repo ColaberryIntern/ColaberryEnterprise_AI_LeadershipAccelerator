@@ -1,6 +1,7 @@
 import { buildMemoryContext, loadMemory, isCEO } from './admissionsMemoryService';
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
 import { getVisitorWorkflowStage } from './admissionsWorkflowService';
+import { buildPersonalizedContext } from './mayaPersonalizationService';
 import { Lead } from '../models';
 
 /**
@@ -75,38 +76,74 @@ Your goals:
     parts.push(`Be especially relevant and helpful — reference why you reached out.`);
   }
 
+  // Personalized context (lead data, campaigns, recent actions)
+  try {
+    const personalizedContext = await buildPersonalizedContext(params.visitorId, params.leadId);
+    if (personalizedContext) {
+      parts.push(`\n${personalizedContext}`);
+    }
+  } catch {
+    // Personalization is non-critical
+  }
+
   // Workflow stage context
   try {
     const workflow = await getVisitorWorkflowStage(params.visitorId);
     parts.push(`
 VISITOR WORKFLOW STAGE: ${workflow.stage} (${workflow.stageName})
-Completed steps: ${workflow.completedSteps.length > 0 ? workflow.completedSteps.join(', ') : 'none yet'}
-
-OPERATIONAL CAPABILITIES — You have tools to execute real actions:
-- schedule_callback: Request a callback for the visitor
-
-CRITICAL HONESTY RULE — NEVER PROMISE WHAT DOES NOT EXIST:
-- You do NOT have downloadable documents, PDFs, brochures, program overviews, executive briefings, pricing guides, or any files to send.
-- If a visitor asks for a document, brochure, or PDF, say honestly: "We don't have a pre-built document to send right now, but I can answer any questions you have about the program, pricing, or curriculum right here in our conversation. I can also arrange a strategy call where we'll cover everything in detail."
-- NEVER say "I'll send you..." or "Let me email you..." for any document. You cannot send documents.
-- Instead, offer to: (1) answer their questions directly, (2) schedule a strategy call, or (3) collect their email so the team can follow up personally.`);
+Completed steps: ${workflow.completedSteps.length > 0 ? workflow.completedSteps.join(', ') : 'none yet'}`);
   } catch {
     // Workflow context is non-critical
   }
+
+  // Operational capabilities — full tool list
+  parts.push(`
+OPERATIONAL CAPABILITIES — You have tools to execute real actions:
+- capture_lead_details: Collect and store visitor contact information
+- update_lead_record: Update a specific field on the lead record
+- send_document: Email program documents (executive briefing, program overview, etc.)
+- send_sms_summary: Text a conversation recap to the visitor
+- initiate_voice_call: Start an AI voice call with the visitor
+- get_available_slots: Check calendar availability for strategy calls
+- schedule_strategy_call: Book a 30-min strategy call on the calendar
+- enroll_in_campaign: Add lead to the appropriate Maya nurture campaign
+- retrieve_knowledge: Search the program knowledge base for facts
+- schedule_callback: Request a team callback
+
+SERVICE PATHS — Maya guides visitors through 4 service paths:
+1. EXECUTIVE BRIEFING: Visitor wants program overview → collect name, email, phone, company, title → send executive briefing document → enroll in Executive Briefing campaign
+2. STRATEGY CALL: Visitor wants to talk to leadership → collect name, email, company, phone → show available slots → book call → enroll in Strategy Call campaign
+3. SPONSORSHIP KIT: Corporate/group interest → collect name, email, company, job title → send sponsorship kit → enroll in Sponsorship campaign
+4. ENROLLMENT: Ready to enroll → collect name, email, company, phone → guide to enrollment page → enroll in Enrollment campaign
+
+REQUIRED INFORMATION RULES:
+- ALWAYS collect name + email + phone BEFORE performing any actions
+- For Executive Briefing: also need company + title
+- For Strategy Call: also need company
+- For Sponsorship Kit: also need company + job title
+- NEVER promise to email without a confirmed email address
+- NEVER promise to text without a confirmed phone number
+- If info is missing, ask for it naturally: "I'd love to send that over — what's the best email to reach you at?"
+
+CONVERSATION STRATEGY:
+- For complex topics or high-intent visitors, proactively offer a voice call
+- After meaningful conversations (3+ exchanges), offer to text a summary
+- When visitor data is available, personalize responses using their name/company
+- Use retrieve_knowledge for specific program facts rather than guessing
+- Always guide toward either enrollment or a strategy call with leadership`);
 
   // Rules
   parts.push(`
 IMPORTANT RULES:
 - Keep responses concise (2-4 sentences typical, longer only when explaining something detailed)
-- Never fabricate specific numbers, dates, or facts about the program — use your knowledge base or suggest they check the relevant page
-- If the visitor shares their name or email, acknowledge it warmly and remember it
+- Never fabricate specific numbers, dates, or facts about the program — use retrieve_knowledge or suggest they check the relevant page
+- If the visitor shares their name or email, acknowledge it warmly and call capture_lead_details immediately
 - Reference previous conversations and interests when you recognize a returning visitor
 - Use plain text, not markdown formatting (no ** or ## etc.)
 - Be conversational and warm while maintaining executive-level professionalism
 - If you don't know something, say so honestly and offer to connect them with the team
 - SAFETY: Never initiate more than one call to the same visitor within 24 hours
 - SAFETY: Always log every operational action you take
-- SAFETY: Never promise to send, email, or deliver any document, file, PDF, or brochure — you do not have this capability
 
 FOLLOW-UP SUGGESTIONS (MANDATORY):
 At the end of EVERY response, include exactly two follow-up questions the visitor might want to ask next. Format them on the last two lines like this:
@@ -118,7 +155,8 @@ The labels should be 3-6 words. The full question is what gets sent if they clic
 }
 
 /**
- * Generate a Maya greeting based on visitor type and context.
+ * Generate a Maya greeting based on visitor type, page context, and known identity.
+ * Uses the visitor's name when available and anticipates intent per landing page.
  */
 export async function generateMayaGreeting(params: {
   visitorType: string;
@@ -132,24 +170,45 @@ export async function generateMayaGreeting(params: {
     return `Welcome, Ali. It's great to see you. I'm Maya, your AI Director of Admissions. I have some insights on recent admissions activity ready for you whenever you'd like to review them.`;
   }
 
+  // Resolve visitor name from Lead if available
+  let nameTag = '';
+  if (memory?.lead_id) {
+    try {
+      const lead = await Lead.findByPk(memory.lead_id);
+      const leadName = lead?.getDataValue('name');
+      if (leadName) {
+        const firstName = leadName.split(' ')[0];
+        nameTag = `, ${firstName}`;
+      }
+    } catch {
+      // Non-critical — greet without name
+    }
+  }
+
+  // Returning visitor — personalized with name + interests
   if (isReturning && memory?.conversation_count > 0) {
     const interests = (memory.interests || []).slice(0, 2);
     const interestPhrase = interests.length > 0
       ? ` Last time we talked about ${interests.join(' and ')}.`
       : '';
-    return `Welcome back! I'm Maya, your admissions advisor.${interestPhrase} How can I help you today?`;
+    return `Welcome back${nameTag}! I'm Maya, your admissions advisor.${interestPhrase} How can I help you today?`;
   }
 
+  // Page-specific greetings that anticipate visitor intent and offer service paths
   const pageGreetings: Record<string, string> = {
-    pricing: `Hi there! I'm Maya, Director of Admissions. I see you're exploring our pricing — I'd love to help you understand the value and ROI of the program. What questions do you have?`,
-    enroll: `Hi! I'm Maya from Admissions. Exciting that you're looking at enrollment! I can walk you through the process or answer any last questions before you get started.`,
-    program: `Hello! I'm Maya, Director of Admissions at Colaberry. I'd love to tell you more about our AI Leadership Accelerator. What aspects of the program are you most interested in?`,
-    sponsorship: `Hi there! I'm Maya from Admissions. Are you exploring our program for your team or organization? I can share details about group enrollment and corporate sponsorship options.`,
-    strategy_call_prep: `Hello! I'm Maya, your admissions advisor. I can help you prepare for your strategy call or answer any questions you have beforehand.`,
+    homepage: `Hi${nameTag}! I'm Maya, Director of Admissions at Colaberry. I can help you explore our AI Leadership Accelerator — whether you'd like an executive briefing, want to see pricing, or are ready to book a strategy call. What interests you?`,
+    program: `Hi${nameTag}! I'm Maya. I see you're looking at our curriculum. I can walk you through the program, share an executive briefing, or help you book a strategy call with our leadership team. What would you like to know?`,
+    pricing: `Hi${nameTag}! I'm Maya, Director of Admissions. Evaluating ROI? I can break down our pricing, share the executive briefing with cost analysis, or set up a strategy call to discuss your organization's specific needs.`,
+    enroll: `Hi${nameTag}! I'm Maya from Admissions. Exciting that you're looking at enrollment! I can walk you through the process, answer last questions, or connect you with our team for a quick call. How can I help?`,
+    sponsorship: `Hi${nameTag}! I'm Maya from Admissions. Looking at corporate sponsorship? I can send you the full sponsorship kit or book a strategy call to discuss group enrollment options for your team.`,
+    advisory: `Hi${nameTag}! I'm Maya, Director of Admissions. Interested in our advisory services? I can share details or book a strategy call with our leadership team to discuss how we can help your organization.`,
+    contact: `Hi${nameTag}! I'm Maya. I'd love to help you connect with our team. Would you like to book a strategy call, get an executive briefing, or is there something specific I can help with?`,
+    strategy_call_prep: `Hi${nameTag}! I'm Maya, your admissions advisor. I can help you prepare for your strategy call — let me know if you have any questions beforehand.`,
+    case_studies: `Hi${nameTag}! I'm Maya. I see you're reviewing success stories — great way to see what's possible. Want me to share an executive briefing or book a strategy call to discuss how our program could work for your organization?`,
   };
 
   return pageGreetings[pageCategory] ||
-    `Hi there! I'm Maya, Director of Admissions at Colaberry. I'm here to help with any questions about our AI Leadership Accelerator. What would you like to know?`;
+    `Hi${nameTag}! I'm Maya, Director of Admissions at Colaberry. I'm here to help with any questions about our AI Leadership Accelerator — whether you want an executive briefing, to book a strategy call, or learn about our program. What interests you?`;
 }
 
 /**
