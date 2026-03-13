@@ -434,6 +434,13 @@ async function enrollPhaseBatch(
   const campaign = await Campaign.findByPk(campaignId, { raw: true }) as any;
   if (!campaign) return 0;
 
+  // Re-engagement campaigns receive leads only via lifecycle transitions
+  // (detectInactiveLeads), never via bulk enrollment.
+  if (['re_engagement', 'alumni_re_engagement'].includes(campaign.type)) {
+    console.log(`[Ramp] Skipping enrollPhaseBatch for re-engagement campaign ${campaignId} — leads arrive via lifecycle transitions`);
+    return 0;
+  }
+
   const phaseSize = rampState.phase_sizes[phase - 1];
 
   // Get already-enrolled lead IDs

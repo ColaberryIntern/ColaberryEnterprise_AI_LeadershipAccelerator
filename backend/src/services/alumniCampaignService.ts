@@ -329,9 +329,40 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
   await (championCampaign as any).update({ campaign_mode: 'autonomous' });
   await (reengageCampaign as any).update({ campaign_mode: 'autonomous' });
 
-  // 10. Initialize ramp for both
+  // 10. Initialize ramp for champion campaign only.
+  // Re-engagement campaign must NOT have leads enrolled at seed time —
+  // leads are moved into it by the lifecycle service (detectInactiveLeads)
+  // after 30 days of inactivity in the champion campaign.
   await initializeRamp(championCampaign.id);
-  await initializeRamp(reengageCampaign.id);
+
+  // Set ramp_state metadata on re-engagement so the ramp infrastructure
+  // is ready when leads arrive via lifecycle transitions, but do NOT
+  // call initializeRamp (which would enrollPhaseBatch immediately).
+  const reengageProfile = { phase_sizes: [10, 25, 50, -1] }; // alumni_re_engagement profile
+  const reengageLeadsPerPhase: Record<string, number> = {};
+  for (let i = 1; i <= reengageProfile.phase_sizes.length; i++) {
+    reengageLeadsPerPhase[String(i)] = 0;
+  }
+  await (reengageCampaign as any).update({
+    ramp_state: {
+      current_phase: 1,
+      phase_sizes: reengageProfile.phase_sizes,
+      leads_enrolled_per_phase: reengageLeadsPerPhase,
+      phase_started_at: new Date().toISOString(),
+      phase_health_score: null,
+      status: 'ramping',
+      evaluation_history: [],
+    },
+    evolution_config: {
+      enabled: true,
+      evolution_frequency_sends: 100,
+      evolution_frequency_hours: 24,
+      last_evolution_at: null,
+      sends_since_last_evolution: 0,
+      similarity_threshold: 0.70,
+      max_active_variants: 3,
+    },
+  });
 
   console.log(`[AlumniCampaign] Seed complete: champion=${championCampaign.id}, reengagement=${reengageCampaign.id}, enrolled=${enrolledCount}`);
 
