@@ -7,6 +7,7 @@ import KnowledgeChecks from './KnowledgeChecks';
 import ReflectionQuestions from './ReflectionQuestions';
 import LessonReactions from './LessonReactions';
 import LLMChooser from './LLMChooser';
+import ConfusionRecoveryDrawer from './ConfusionRecoveryDrawer';
 import { useMentorContext } from '../../../contexts/MentorContext';
 
 interface ConceptV2Props {
@@ -44,6 +45,7 @@ export default function ConceptV2({ content, lessonId, isCompleted, onCanComplet
   const { sendToMentor } = useMentorContext();
   const [quizScore, setQuizScore] = useState<number | null>(null);
   const [taskSubmitted, setTaskSubmitted] = useState(false);
+  const [showConfusionDrawer, setShowConfusionDrawer] = useState(false);
 
   const legacy = isLegacyChecks(content.knowledge_checks);
   const allChecks = legacy ? content.knowledge_checks : collectAllChecks(content.knowledge_checks);
@@ -115,12 +117,15 @@ export default function ConceptV2({ content, lessonId, isCompleted, onCanComplet
       {/* Reflection */}
       {reflectionData && <ReflectionQuestions data={reflectionData} lessonId={lessonId} />}
 
-      <LessonReactions onConfused={() => {
-        sendToMentor(
-          `I'm confused about the lesson "${content.concept_snapshot?.title || 'this lesson'}". Can you explain the key concepts in a simpler way?`,
-          'lesson_confusion'
-        );
-      }} />
+      <LessonReactions onConfused={() => setShowConfusionDrawer(true)} />
+
+      <ConfusionRecoveryDrawer
+        mode="lesson"
+        isOpen={showConfusionDrawer}
+        onClose={() => setShowConfusionDrawer(false)}
+        lessonId={lessonId}
+        lessonTitle={content.concept_snapshot?.title || 'this lesson'}
+      />
     </div>
   );
 }

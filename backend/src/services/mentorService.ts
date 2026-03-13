@@ -176,7 +176,7 @@ export async function sendMentorMessage(
       model: MODEL,
       messages: openaiMessages,
       temperature: 0.7,
-      max_tokens: contextType === 'implementation_briefing' ? 2048 : 1024,
+      max_tokens: (contextType === 'implementation_briefing' || contextType === 'knowledge_explanation') ? 2048 : 1024,
     });
 
     const replyContent = response.choices[0]?.message?.content || 'I apologize, I was unable to generate a response. Please try again.';

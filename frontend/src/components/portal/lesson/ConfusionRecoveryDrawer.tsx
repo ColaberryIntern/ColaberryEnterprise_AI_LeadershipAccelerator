@@ -1,16 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import portalApi from '../../../utils/portalApi';
 import { useMentorContext } from '../../../contexts/MentorContext';
 
-interface ConfusionRecoveryDrawerProps {
+interface BaseProps {
   isOpen: boolean;
   onClose: () => void;
+  lessonId: string;
+}
+
+interface KCModeProps extends BaseProps {
+  mode?: 'knowledge_check';
   question: string;
   userAnswer: string;
   correctAnswer: string;
   options: string[];
-  lessonId: string;
+  lessonTitle?: string;
 }
+
+interface LessonModeProps extends BaseProps {
+  mode: 'lesson';
+  lessonTitle: string;
+  question?: never;
+  userAnswer?: never;
+  correctAnswer?: never;
+  options?: never;
+}
+
+type ConfusionRecoveryDrawerProps = KCModeProps | LessonModeProps;
 
 interface RecoverySections {
   thinkOfIt: string;
@@ -29,18 +45,13 @@ function parseRecovery(raw: string): RecoverySections {
 
   // Split by section headers (numbered bold headers)
   const parts = raw.split(/\*\*\d+\.\s*/);
-  // parts[0] is before first header (usually empty)
-  // parts[1] = Alternative Explanation / Think of it this way
-  // parts[2] = Step-by-Step Breakdown
-  // parts[3] = Real-World Example
-  // parts[4] = Common Misconceptions
 
   if (parts[1]) {
     sections.thinkOfIt = parts[1].replace(/^[^*]*\*\*\s*/, '').replace(/\*\*/g, '').trim();
   }
   if (parts[2]) {
     const text = parts[2].replace(/^[^*]*\*\*\s*/, '').replace(/\*\*/g, '').trim();
-    const steps = text.split(/\n/).filter(l => l.trim()).map(l => l.replace(/^\d+[\.\)]\s*/, '').trim());
+    const steps = text.split(/\n/).filter(l => l.trim()).map(l => l.replace(/^\d+[\.)\]]\s*/, '').trim());
     sections.stepByStep = steps.length > 0 ? steps : [text];
   }
   if (parts[3]) {
@@ -60,31 +71,39 @@ function parseRecovery(raw: string): RecoverySections {
   return sections;
 }
 
-export default function ConfusionRecoveryDrawer({
-  isOpen,
-  onClose,
-  question,
-  userAnswer,
-  correctAnswer,
-  options,
-  lessonId,
-}: ConfusionRecoveryDrawerProps) {
+export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerProps) {
+  const { isOpen, onClose, lessonId } = props;
+  const isLessonMode = props.mode === 'lesson';
   const { sendToMentor } = useMentorContext();
   const [loading, setLoading] = useState(false);
   const [sections, setSections] = useState<RecoverySections | null>(null);
   const [helpfulFeedback, setHelpfulFeedback] = useState<boolean | null>(null);
+  const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    // Reset state on open
-    setSections(null);
-    setHelpfulFeedback(null);
+  const fetchRecovery = useCallback(() => {
     setLoading(true);
+    setHasError(false);
+    setSections(null);
 
-    const isCorrect = userAnswer === correctAnswer;
-    const prompt = `The learner is confused about this knowledge check question: "${question}"
-They answered: "${options.find(o => o.startsWith(userAnswer)) || userAnswer}" (${isCorrect ? 'CORRECT' : 'INCORRECT'})
-Correct answer: "${options.find(o => o.startsWith(correctAnswer)) || correctAnswer}"
+    let prompt: string;
+    if (isLessonMode) {
+      prompt = `The learner is confused about the lesson "${props.lessonTitle}".
+
+Provide a confusion recovery response with these 4 sections:
+
+1. **Simpler Explanation** — Explain the key concepts of this lesson in a completely different, simpler way. Use an analogy that would resonate with a business executive.
+
+2. **Key Takeaways** — Break down the 3-4 most important points from this lesson in simple, numbered steps.
+
+3. **Real-World Example** — Give a concrete business scenario that illustrates how these concepts apply in practice.
+
+4. **Common Sticking Points** — Explain the parts of this topic that executives typically find confusing and why.`;
+    } else {
+      const kcProps = props as KCModeProps;
+      const isCorrect = kcProps.userAnswer === kcProps.correctAnswer;
+      prompt = `The learner is confused about this knowledge check question: "${kcProps.question}"
+They answered: "${kcProps.options.find(o => o.startsWith(kcProps.userAnswer)) || kcProps.userAnswer}" (${isCorrect ? 'CORRECT' : 'INCORRECT'})
+Correct answer: "${kcProps.options.find(o => o.startsWith(kcProps.correctAnswer)) || kcProps.correctAnswer}"
 
 Provide a confusion recovery response with these 4 sections:
 
@@ -95,6 +114,7 @@ Provide a confusion recovery response with these 4 sections:
 3. **Real-World Example** — Give a concrete business scenario that illustrates this concept in action.
 
 4. **Common Misconceptions** — Explain why people commonly get this wrong and what thinking trap leads to the incorrect answer.`;
+    }
 
     portalApi.post('/api/portal/mentor/chat', {
       message: prompt,
@@ -103,8 +123,9 @@ Provide a confusion recovery response with these 4 sections:
     }).then(res => {
       setSections(parseRecovery(res.data.reply));
     }).catch(() => {
+      setHasError(true);
       setSections({
-        thinkOfIt: 'Unable to load explanation. Please try again or ask the AI Mentor directly.',
+        thinkOfIt: 'Unable to load explanation. Click "Try Again" below or ask the AI Mentor directly.',
         stepByStep: [],
         realWorld: '',
         misconceptions: [],
@@ -112,17 +133,43 @@ Provide a confusion recovery response with these 4 sections:
     }).finally(() => {
       setLoading(false);
     });
-  }, [isOpen, question, userAnswer, correctAnswer, options, lessonId]);
+  }, [isLessonMode, lessonId, props]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setHelpfulFeedback(null);
+    fetchRecovery();
+  }, [isOpen]); // Only trigger on open/close
 
   if (!isOpen) return null;
 
+  const contextLabel = isLessonMode
+    ? (props as LessonModeProps).lessonTitle
+    : (props as KCModeProps).question;
+
   const handleAskMentor = () => {
-    sendToMentor(
-      `I'm confused about this question: "${question}"\nI answered "${userAnswer}" but the correct answer is "${correctAnswer}". Can you help me understand this better?`,
-      'knowledge_explanation'
-    );
+    if (isLessonMode) {
+      sendToMentor(
+        `I'm confused about the lesson "${(props as LessonModeProps).lessonTitle}". Can you explain the key concepts in a simpler way?`,
+        'lesson_confusion'
+      );
+    } else {
+      const kcProps = props as KCModeProps;
+      sendToMentor(
+        `I'm confused about this question: "${kcProps.question}"\nI answered "${kcProps.userAnswer}" but the correct answer is "${kcProps.correctAnswer}". Can you help me understand this better?`,
+        'knowledge_explanation'
+      );
+    }
     onClose();
   };
+
+  const headerLabel = isLessonMode ? "Let's Break This Down" : "Let's Clear This Up";
+  const loadingLabel = isLessonMode ? 'Getting a simpler explanation...' : 'Getting alternative explanation...';
+
+  // Section labels differ by mode
+  const section1Label = isLessonMode ? 'Simpler Explanation' : 'Think of it this way...';
+  const section2Label = isLessonMode ? 'Key Takeaways' : 'Step by Step';
+  const section4Label = isLessonMode ? 'Common Sticking Points' : 'Common Misconceptions';
 
   return (
     <>
@@ -156,7 +203,7 @@ Provide a confusion recovery response with these 4 sections:
         >
           <div className="d-flex align-items-center gap-2">
             <span style={{ fontSize: 20 }}>💡</span>
-            <span className="fw-bold" style={{ color: '#78350f', fontSize: 16 }}>Let's Clear This Up</span>
+            <span className="fw-bold" style={{ color: '#78350f', fontSize: 16 }}>{headerLabel}</span>
           </div>
           <button
             className="btn btn-sm p-0"
@@ -167,9 +214,9 @@ Provide a confusion recovery response with these 4 sections:
           </button>
         </div>
 
-        {/* Question context */}
+        {/* Context banner */}
         <div className="px-4 py-3" style={{ background: '#fefce8', borderBottom: '1px solid #fde68a', flexShrink: 0 }}>
-          <p className="small mb-0" style={{ color: '#92400e', fontWeight: 600 }}>{question}</p>
+          <p className="small mb-0" style={{ color: '#92400e', fontWeight: 600 }}>{contextLabel}</p>
         </div>
 
         {/* Body */}
@@ -179,29 +226,29 @@ Provide a confusion recovery response with these 4 sections:
               <span className="spinner-border" role="status" style={{ width: 32, height: 32, color: '#f59e0b' }}>
                 <span className="visually-hidden">Loading...</span>
               </span>
-              <span className="mt-2 small" style={{ color: '#92400e' }}>Getting alternative explanation...</span>
+              <span className="mt-2 small" style={{ color: '#92400e' }}>{loadingLabel}</span>
             </div>
           )}
 
           {sections && (
             <div className="d-flex flex-column gap-3">
-              {/* Section 1: Think of it this way */}
+              {/* Section 1 */}
               {sections.thinkOfIt && (
                 <div className="p-3 rounded" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
                   <div className="d-flex align-items-center gap-2 mb-2">
                     <span style={{ fontSize: 16 }}>💡</span>
-                    <span className="fw-bold small" style={{ color: '#92400e' }}>Think of it this way...</span>
+                    <span className="fw-bold small" style={{ color: '#92400e' }}>{section1Label}</span>
                   </div>
                   <p className="small mb-0" style={{ color: '#78350f', lineHeight: 1.7 }}>{sections.thinkOfIt}</p>
                 </div>
               )}
 
-              {/* Section 2: Step by Step */}
+              {/* Section 2 */}
               {sections.stepByStep.length > 0 && (
                 <div>
                   <div className="d-flex align-items-center gap-2 mb-2">
                     <span style={{ fontSize: 16 }}>📝</span>
-                    <span className="fw-bold small" style={{ color: '#1e293b' }}>Step by Step</span>
+                    <span className="fw-bold small" style={{ color: '#1e293b' }}>{section2Label}</span>
                   </div>
                   <div className="d-flex flex-column gap-2">
                     {sections.stepByStep.map((step, i) => (
@@ -238,12 +285,12 @@ Provide a confusion recovery response with these 4 sections:
                 </div>
               )}
 
-              {/* Section 4: Common Misconceptions */}
+              {/* Section 4 */}
               {sections.misconceptions.length > 0 && (
                 <div>
                   <div className="d-flex align-items-center gap-2 mb-2">
                     <i className="bi bi-info-circle" style={{ color: '#475569', fontSize: 14 }}></i>
-                    <span className="fw-bold small" style={{ color: '#475569' }}>Common Misconceptions</span>
+                    <span className="fw-bold small" style={{ color: '#475569' }}>{section4Label}</span>
                   </div>
                   <div className="d-flex flex-column gap-1">
                     {sections.misconceptions.map((item, i) => (
@@ -261,6 +308,17 @@ Provide a confusion recovery response with these 4 sections:
 
         {/* Footer */}
         <div className="px-4 py-3 border-top" style={{ flexShrink: 0 }}>
+          {hasError && (
+            <button
+              className="btn btn-sm btn-outline-warning d-flex align-items-center gap-2 w-100 justify-content-center mb-2"
+              onClick={fetchRecovery}
+              disabled={loading}
+            >
+              <i className="bi bi-arrow-clockwise"></i>
+              Try Again
+            </button>
+          )}
+
           <button
             className="btn d-flex align-items-center gap-2 px-4 py-2 w-100 justify-content-center"
             style={{
@@ -277,7 +335,7 @@ Provide a confusion recovery response with these 4 sections:
             Ask AI Mentor
           </button>
 
-          {sections && helpfulFeedback === null && (
+          {sections && !hasError && helpfulFeedback === null && (
             <div className="d-flex align-items-center justify-content-center gap-3 mt-3">
               <span className="small" style={{ color: '#64748b' }}>Did this help?</span>
               <button
