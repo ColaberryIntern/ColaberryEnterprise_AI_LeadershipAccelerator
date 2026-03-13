@@ -670,7 +670,8 @@ function ProfileCard({
 
 // ── Main Component ─────────────────────────────────────────────────────
 
-export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTab }: Props) {
+export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefresh, onSwitchTab }: Props) {
+  const isAlumni = campaignType === 'alumni' || campaignType === 'alumni_re_engagement';
   const [profiles, setProfiles] = useState<ICPProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [recommendations, setRecommendations] = useState<Record<string, ICPRecommendation[]>>({});
@@ -937,7 +938,39 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
 
   return (
     <>
-      {/* Section A: ICP Profiles */}
+      {/* Alumni Data Source Banner */}
+      {isAlumni && (
+        <div className="card border-0 shadow-sm mb-4 border-start border-4 border-info">
+          <div className="card-body">
+            <div className="d-flex align-items-start gap-3">
+              <div className="fs-4" style={{ lineHeight: 1 }}>
+                <i className="bi bi-database" />
+              </div>
+              <div>
+                <h6 className="fw-semibold mb-1">Leads sourced from SQL Server (MSSQL)</h6>
+                <p className="text-muted small mb-2">
+                  All leads for this alumni campaign are imported directly from the Colaberry CCPP database. Lead generation,
+                  ICP profiling, and Apollo sourcing are not available for alumni campaigns — the alumni roster is the
+                  definitive lead source.
+                </p>
+                <div className="d-flex gap-3 flex-wrap small">
+                  <span className="d-flex align-items-center gap-1">
+                    <span className="badge bg-info bg-opacity-10 text-info" style={{ fontSize: '0.7rem' }}>Source</span>
+                    MSSQL &middot; CCPP Database
+                  </span>
+                  <span className="d-flex align-items-center gap-1">
+                    <span className="badge bg-info bg-opacity-10 text-info" style={{ fontSize: '0.7rem' }}>Sync</span>
+                    Alumni records imported at campaign activation
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Section A: ICP Profiles (hidden for alumni campaigns) */}
+      {!isAlumni && (<>
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
           <span>ICP Profiles ({profiles.length})</span>
@@ -1068,9 +1101,10 @@ export default function ICPLeadsTab({ campaignId, headers, onRefresh, onSwitchTa
           </div>
         </div>
       )}
+      </>)}
 
-      {/* Section B: Apollo Search Results */}
-      {searchingProfile && (
+      {/* Section B: Apollo Search Results (hidden for alumni) */}
+      {!isAlumni && searchingProfile && (
         <div className="card border-0 shadow-sm mb-4">
           <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
             <span>Apollo Search Results</span>
