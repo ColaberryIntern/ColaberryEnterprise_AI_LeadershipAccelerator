@@ -48,6 +48,24 @@ export function buildAutoFillMap(learnerProfile: Record<string, any> | null | un
     map['identified_use_case'] = learnerProfile.identified_use_case;
     map['use_case'] = learnerProfile.identified_use_case;
   }
+  if (learnerProfile.ai_maturity_level) {
+    // Map numeric levels (1-4) to descriptive strings for prompt context
+    const maturityMap: Record<number, string> = { 1: 'exploring', 2: 'piloting', 3: 'scaling', 4: 'embedded' };
+    const val = learnerProfile.ai_maturity_level;
+    map['ai_maturity_level'] = typeof val === 'number' ? (maturityMap[val] || String(val)) : String(val);
+  }
+  if (learnerProfile.company_size) {
+    map['company_size'] = String(learnerProfile.company_size);
+  }
+  if (learnerProfile.full_name) {
+    map['full_name'] = learnerProfile.full_name;
+  }
+  if (learnerProfile.email) {
+    map['email'] = learnerProfile.email;
+  }
+  if (learnerProfile.title) {
+    map['title'] = learnerProfile.title;
+  }
   if (learnerProfile.personalization_context_json) {
     for (const [key, val] of Object.entries(learnerProfile.personalization_context_json)) {
       if (val && !map[key]) map[key] = val as string;

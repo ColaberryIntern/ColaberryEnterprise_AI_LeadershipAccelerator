@@ -13,6 +13,51 @@ import {
   scoreMatch,
 } from './promptTemplateUtils';
 
+/* Human-friendly labels for known placeholder names */
+const FRIENDLY_LABELS: Record<string, string> = {
+  ai_maturity_level: 'AI Maturity Level',
+  company_size: 'Company Size',
+  company_name: 'Company Name',
+  company: 'Company Name',
+  industry: 'Industry',
+  sector: 'Industry',
+  role: 'Your Role',
+  goal: 'Primary Goal',
+  identified_use_case: 'AI Use Case',
+  use_case: 'AI Use Case',
+  full_name: 'Full Name',
+  email: 'Email Address',
+  title: 'Job Title',
+};
+
+/* Dropdown options for fields that should use selects (matches registration) */
+const DROPDOWN_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  ai_maturity_level: [
+    { value: 'exploring', label: 'Exploring — No AI in production' },
+    { value: 'piloting', label: 'Piloting — Running initial experiments' },
+    { value: 'scaling', label: 'Scaling — Deploying AI across teams' },
+    { value: 'embedded', label: 'Embedded — AI is core to operations' },
+  ],
+  company_size: [
+    { value: '1-49', label: '1-49 employees' },
+    { value: '50-249', label: '50-249 employees' },
+    { value: '250-999', label: '250-999 employees' },
+    { value: '1000-4999', label: '1,000-4,999 employees' },
+    { value: '5000+', label: '5,000+ employees' },
+  ],
+  industry: [
+    { value: 'Technology', label: 'Technology' },
+    { value: 'Finance & Banking', label: 'Finance & Banking' },
+    { value: 'Healthcare & Life Sciences', label: 'Healthcare & Life Sciences' },
+    { value: 'Manufacturing', label: 'Manufacturing' },
+    { value: 'Energy & Utilities', label: 'Energy & Utilities' },
+    { value: 'Retail & eCommerce', label: 'Retail & eCommerce' },
+    { value: 'Government & Public Sector', label: 'Government & Public Sector' },
+    { value: 'Logistics & Supply Chain', label: 'Logistics & Supply Chain' },
+    { value: 'Other', label: 'Other' },
+  ],
+};
+
 interface PromptTemplateProps {
   data: PromptTemplateData;
 }
@@ -99,22 +144,27 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Open modal with all placeholders pre-filled
+  // Open modal — only show placeholders that don't already have values
   const openRunModal = () => {
     const values: Record<string, string> = {};
     for (const ph of placeholders) {
       values[ph.name] = getEffectiveValue(ph.name);
     }
     setModalValues(values);
+    // If all values are filled, skip modal and go straight to LLM
+    const allFilled = placeholders.every(ph => values[ph.name]?.trim());
+    if (allFilled) {
+      runWithValues(values);
+      return;
+    }
     setShowModal(true);
   };
 
-  // Confirm from modal: save values + open LLM
-  const handleModalConfirm = async () => {
-    // Save all values to profile
+  const runWithValues = async (values: Record<string, string>) => {
+    // Save new values to profile
     const newValues: Record<string, string> = {};
     for (const ph of placeholders) {
-      const val = modalValues[ph.name]?.trim();
+      const val = values[ph.name]?.trim();
       if (val) newValues[ph.name] = val;
     }
     if (Object.keys(newValues).length > 0) {
@@ -123,10 +173,8 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
       await updateLearnerProfile({ personalization_context_json: merged });
       setSaving(false);
     }
-    // Update inline fill values with any modal edits
-    setFillValues(prev => ({ ...prev, ...modalValues }));
-    // Build and open directly (skip buildPersonalizedPrompt to avoid duplicate context)
-    const filled = buildFilledTemplate(modalValues);
+    setFillValues(prev => ({ ...prev, ...values }));
+    const filled = buildFilledTemplate(values);
     const encoded = encodeURIComponent(filled);
     if (selectedLLM.id === 'chatgpt') {
       window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
@@ -136,9 +184,19 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
       navigator.clipboard.writeText(filled).catch(() => {});
       window.open(selectedLLM.url, '_blank');
     }
+  };
+
+  // Confirm from modal: save values + open LLM
+  const handleModalConfirm = async () => {
+    await runWithValues(modalValues);
     setShowModal(false);
   };
 
+  // Only show placeholders in the modal that don't already have auto-fill values
+  const unfilledPlaceholders = placeholders.filter(ph => {
+    const autoVal = autoFillMap[ph.name] || autoFillMap[ph.name.toLowerCase()];
+    return !autoVal;
+  });
   const allModalFilled = placeholders.every(ph => modalValues[ph.name]?.trim());
 
   return (
@@ -245,34 +303,52 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
             </div>
 
             <div className="px-4 py-3" style={{ overflowY: 'auto', flex: 1 }}>
-              <p className="small mb-3" style={{ color: '#64748b' }}>
-                Review and adjust your prompt parameters before running.
-              </p>
-              {placeholders.map((ph, i) => {
-                const isAutoFilled = !!(autoFillMap[ph.name] || autoFillMap[ph.name.toLowerCase()]);
-                return (
-                  <div key={i} className="mb-3">
-                    <div className="d-flex align-items-center gap-2 mb-1">
-                      <label className="form-label small fw-medium mb-0" style={{ color: '#1e293b', fontSize: 12 }}>
-                        {ph.description || ph.name.replace(/_/g, ' ')}
-                      </label>
-                      {isAutoFilled && (
-                        <span className="badge" style={{ background: '#ecfdf5', color: '#047857', fontSize: 9, fontWeight: 500 }}>
-                          from profile
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      placeholder={ph.example || `Enter ${ph.name.replace(/_/g, ' ')}...`}
-                      value={modalValues[ph.name] || ''}
-                      onChange={(e) => setModalValues(prev => ({ ...prev, [ph.name]: e.target.value }))}
-                      style={{ fontSize: 12, borderColor: isAutoFilled ? '#a7f3d0' : '#c4b5fd' }}
-                    />
-                  </div>
-                );
-              })}
+              {unfilledPlaceholders.length > 0 ? (
+                <>
+                  <p className="small mb-3" style={{ color: '#64748b' }}>
+                    Please fill in the missing details to personalize your prompt.
+                  </p>
+                  {unfilledPlaceholders.map((ph, i) => {
+                    const label = FRIENDLY_LABELS[ph.name] || FRIENDLY_LABELS[ph.name.toLowerCase()] || ph.description || ph.name.replace(/_/g, ' ');
+                    const dropdownKey = Object.keys(DROPDOWN_OPTIONS).find(k => k === ph.name || k === ph.name.toLowerCase());
+                    const options = dropdownKey ? DROPDOWN_OPTIONS[dropdownKey] : null;
+
+                    return (
+                      <div key={i} className="mb-3">
+                        <label className="form-label small fw-medium mb-1" style={{ color: '#1e293b', fontSize: 12 }}>
+                          {label}
+                        </label>
+                        {options ? (
+                          <select
+                            className="form-select form-select-sm"
+                            value={modalValues[ph.name] || ''}
+                            onChange={(e) => setModalValues(prev => ({ ...prev, [ph.name]: e.target.value }))}
+                            style={{ fontSize: 12, borderColor: '#c4b5fd' }}
+                          >
+                            <option value="">Select {label.toLowerCase()}...</option>
+                            {options.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            placeholder={ph.example || `Enter ${label.toLowerCase()}...`}
+                            value={modalValues[ph.name] || ''}
+                            onChange={(e) => setModalValues(prev => ({ ...prev, [ph.name]: e.target.value }))}
+                            style={{ fontSize: 12, borderColor: '#c4b5fd' }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <p className="small mb-0" style={{ color: '#64748b' }}>
+                  All parameters are filled from your profile. Ready to run!
+                </p>
+              )}
             </div>
 
             <div className="d-flex gap-2 px-4 py-3" style={{ borderTop: '1px solid #e2e8f0', flexShrink: 0 }}>

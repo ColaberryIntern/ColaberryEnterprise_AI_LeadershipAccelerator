@@ -43,6 +43,10 @@ export interface LearnerProfile {
   role?: string;
   goal?: string;
   ai_maturity_level?: number;
+  company_size?: string;
+  full_name?: string;
+  email?: string;
+  title?: string;
   identified_use_case?: string;
   personalization_context_json?: Record<string, string>;
 }
@@ -276,6 +280,7 @@ export function AdminPreviewMentorProvider({ children }: { children: React.React
         role: 'Director of Strategy',
         goal: 'Implement AI Strategy',
         ai_maturity_level: 3,
+        company_size: '250-999',
         identified_use_case: 'Process Automation',
       },
       updateLearnerProfile: async () => {},
