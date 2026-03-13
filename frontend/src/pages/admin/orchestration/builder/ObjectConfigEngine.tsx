@@ -466,6 +466,20 @@ export default function ObjectConfigEngine(props: Props) {
                         <span className="fw-semibold small">Knowledge Check Config</span>
                       </div>
                       <KnowledgeCheckSection editing={editing} onUpdate={props.onUpdate} />
+
+                      {/* Confusion Recovery indicator */}
+                      <div className="mt-3 p-2 rounded" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span style={{ fontSize: 14 }}>💡</span>
+                          <span className="fw-semibold small" style={{ color: '#92400e' }}>Confusion Recovery</span>
+                          <span className="badge" style={{ fontSize: 8, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>Automatic</span>
+                        </div>
+                        <p className="small mb-0" style={{ color: '#78350f', fontSize: 10, lineHeight: 1.5 }}>
+                          When a student answers incorrectly, a recovery drawer opens automatically with:
+                          alternative explanation, step-by-step breakdown, real-world example, and common misconceptions.
+                          Uses the AI Mentor with question context — no additional prompt needed.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
