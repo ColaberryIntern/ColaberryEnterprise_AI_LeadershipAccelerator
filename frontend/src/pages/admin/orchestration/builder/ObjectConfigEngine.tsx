@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import api from '../../../../utils/api';
-import { MiniSection, MiniSectionType, TYPE_OPTIONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions, PROMPT_PAIRS, extractPlaceholders, computeAvailableVars } from './types';
-import PromptSection from './PromptSection';
+import { MiniSection, MiniSectionType, TYPE_OPTIONS, TYPE_ICONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions, PROMPT_PAIRS, extractPlaceholders, computeAvailableVars } from './types';
 import HighlightedPromptEditor from './HighlightedPromptEditor';
 import VariableSection from './VariableSection';
 import SkillSection from './SkillSection';
@@ -73,6 +72,7 @@ interface Props {
   onApplySuggestionFix: (s: Suggestion) => void;
   onOpenDiagnostic: () => void;
   onOpenRepair: () => void;
+  onSelectMiniSection?: (id: string) => void;
   typeDefinitions?: TypeDefinition[];
   // Preview props
   lessonTitle?: string;
@@ -82,12 +82,6 @@ interface Props {
 }
 
 interface AccordionState {
-  core: boolean;
-  prompts: boolean;
-  variables: boolean;
-  skills: boolean;
-  artifacts: boolean;
-  kc: boolean;
   validation: boolean;
   quality: boolean;
   suggestions: boolean;
@@ -96,7 +90,7 @@ interface AccordionState {
 export default function ObjectConfigEngine(props: Props) {
   const { editing, isNew, isDirty, miniSections, saving, error } = props;
   const [expanded, setExpanded] = useState<AccordionState>({
-    core: true, prompts: true, variables: true, skills: false, artifacts: false, kc: false, validation: false, quality: false, suggestions: false,
+    validation: false, quality: false, suggestions: false,
   });
   const [showPreview, setShowPreview] = useState(false);
   const [reversePrompt, setReversePrompt] = useState('');
@@ -140,7 +134,37 @@ export default function ObjectConfigEngine(props: Props) {
     }
   }, [editing?.id]);
 
+  const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
+
   if (!editing) {
+    // Show collapsed type sections as clickable entry points
+    if (miniSections.length > 0) {
+      return (
+        <div className="card border-0 shadow-sm">
+          <div className="card-body py-2">
+            {effectiveTypeOptions.map(type => {
+              const ms = miniSections.find(m => m.mini_section_type === type.value);
+              if (!ms) return null;
+              const typeIcon = TYPE_ICONS[type.value] || 'bi-circle';
+              return (
+                <div key={type.value} className="border rounded mb-2">
+                  <div
+                    className="d-flex align-items-center gap-2 px-3 py-2"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => props.onSelectMiniSection?.(ms.id)}
+                  >
+                    <i className={`bi ${typeIcon}`} style={{ fontSize: 13, color: 'var(--color-primary-light, #2b6cb0)' }}></i>
+                    <span className="fw-semibold small">{type.studentLabel}</span>
+                    <span className="text-muted ms-1" style={{ fontSize: 10 }}>{ms.title}</span>
+                    <span className="ms-auto" style={{ fontSize: 11 }}>{'\u25BC'}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="card border-0 shadow-sm">
         <div className="card-body text-center py-5">
@@ -152,7 +176,6 @@ export default function ObjectConfigEngine(props: Props) {
     );
   }
 
-  const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
   const selectedTypeInfo = effectiveTypeOptions.find(t => t.value === editType);
   const canSave = !!editing.title && !!editType;
 
@@ -255,157 +278,199 @@ export default function ObjectConfigEngine(props: Props) {
       <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
         {error && <div className="alert alert-danger small py-1 mb-2">{error}</div>}
 
-        {/* Core Section */}
-        {renderAccordion('core', 'Core', 'bi-gear', (
-          <div className="row g-2">
-            <div className="col-md-6">
-              <label className="form-label small fw-medium mb-0">Type <span className="text-danger">*</span></label>
-              <select
-                className="form-select form-select-sm"
-                value={editType || ''}
-                onChange={e => {
-                  const newType = e.target.value as MiniSectionType;
-                  const updates: Partial<MiniSection> = { mini_section_type: newType };
-                  if (newType !== 'prompt_template') updates.creates_variable_keys = [];
-                  if (newType !== 'implementation_task') updates.creates_artifact_ids = [];
-                  if (newType !== 'knowledge_check') updates.knowledge_check_config = { enabled: false, question_count: 3, pass_score: 70 };
-                  props.onUpdate(updates);
+        {/* New item — type selector */}
+        {isNew && (
+          <div className="mb-2">
+            <label className="form-label small fw-medium mb-0">Type <span className="text-danger">*</span></label>
+            <select
+              className="form-select form-select-sm"
+              value={editType || ''}
+              onChange={e => {
+                const newType = e.target.value as MiniSectionType;
+                const updates: Partial<MiniSection> = { mini_section_type: newType };
+                if (newType !== 'prompt_template') updates.creates_variable_keys = [];
+                if (newType !== 'implementation_task') updates.creates_artifact_ids = [];
+                if (newType !== 'knowledge_check') updates.knowledge_check_config = { enabled: false, question_count: 3, pass_score: 70 };
+                props.onUpdate(updates);
+              }}
+            >
+              <option value="">Select type...</option>
+              {effectiveTypeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+        )}
+
+        {/* Type-based configuration sections */}
+        {effectiveTypeOptions.map(type => {
+          const typeMiniSection = miniSections.find(m => m.mini_section_type === type.value);
+          const isActive = editing?.mini_section_type === type.value;
+          const typeIcon = TYPE_ICONS[type.value] || 'bi-circle';
+          const msTitle = isActive ? editing?.title : typeMiniSection?.title;
+
+          // For new items, only show the selected type
+          if (isNew && type.value !== editType) return null;
+          // For existing items, skip types with no mini-section (unless active)
+          if (!isNew && !typeMiniSection && !isActive) return null;
+
+          // Compute type-specific prompt pairs for this type
+          const typePromptPairs = PROMPT_PAIRS.filter(p => p.applicableTypes.includes(type.value));
+
+          return (
+            <div key={type.value} className="border rounded mb-2">
+              {/* Section header */}
+              <div
+                className="d-flex align-items-center gap-2 px-3 py-2"
+                style={{
+                  cursor: (typeMiniSection || isActive) ? 'pointer' : 'default',
+                  backgroundColor: isActive ? 'var(--color-bg-alt, #f7fafc)' : 'transparent',
+                }}
+                onClick={() => {
+                  if (!isActive && typeMiniSection && props.onSelectMiniSection) {
+                    props.onSelectMiniSection(typeMiniSection.id);
+                  }
                 }}
               >
-                <option value="">Select type...</option>
-                {effectiveTypeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-              {selectedTypeInfo && <div className="text-muted" style={{ fontSize: 10 }}>{selectedTypeInfo.description}</div>}
-            </div>
-            <div className="col-md-4">
-              <label className="form-label small fw-medium mb-0">Title <span className="text-danger">*</span></label>
-              <input className="form-control form-control-sm" value={editing.title || ''} onChange={e => props.onUpdate({ title: e.target.value })} />
-            </div>
-            <div className="col-md-2">
-              <label className="form-label small fw-medium mb-0">Weight</label>
-              <input className="form-control form-control-sm" type="number" step="0.1" value={editing.completion_weight ?? 1} onChange={e => props.onUpdate({ completion_weight: parseFloat(e.target.value) })} />
-            </div>
-            <div className="col-12">
-              <label className="form-label small fw-medium mb-0">Description</label>
-              <textarea className="form-control form-control-sm" rows={2} value={editing.description || ''} onChange={e => props.onUpdate({ description: e.target.value })} />
-            </div>
-            <div className="col-12">
-              <label className="form-label small fw-medium mb-0">Learning Goal</label>
-              <textarea
-                className="form-control form-control-sm"
-                rows={2}
-                value={editing.settings_json?.learning_goal || ''}
-                onChange={e => props.onUpdate({ settings_json: { ...(editing.settings_json || {}), learning_goal: e.target.value } })}
-                placeholder="What should the student learn from this section?"
-              />
-            </div>
-            {/* Inline Prompt Editors — shows prompt fields with variable highlighting */}
-            {corePromptPairs.length > 0 && (
-              <div className="col-12 mt-2">
-                <div className="border-top pt-2">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
-                    <span className="fw-semibold small">Prompts</span>
-                    <span className="text-muted" style={{ fontSize: 10 }}>Use <code style={{ fontSize: 10 }}>{'{{variable_key}}'}</code> for dynamic values</span>
-                  </div>
-                  {corePromptPairs
-                    .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
-                    .map(pair => {
-                    // Single combined prompt: primary field is systemField, merge legacy userField content
-                    const sysVal = (editing[pair.systemField] as string) || '';
-                    const usrVal = (editing[pair.userField] as string) || '';
-                    const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
-                    // Contextual labels for implementation_task
-                    const implLabels: Record<string, { label: string; tooltip: string }> = {
-                      build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
-                      mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
-                      reflection: { label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
-                    };
-                    const displayLabel = editType === 'implementation_task' && implLabels[pair.key]
-                      ? implLabels[pair.key].label : pair.label;
-                    const tooltip = editType === 'implementation_task' && implLabels[pair.key]
-                      ? implLabels[pair.key].tooltip : '';
-                    return (
-                      <div key={pair.key} className="mb-2">
-                        <span className="text-muted fw-medium" style={{ fontSize: 10 }} title={tooltip}>{displayLabel} {tooltip && <i className="bi bi-info-circle" style={{ fontSize: 9 }}></i>}</span>
-                        <HighlightedPromptEditor
-                          value={combinedValue}
-                          onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
-                          availableVars={coreAvailableVars}
-                          allDefinedVars={coreAllDefinedVars}
-                          label="PROMPT"
-                          rows={5}
-                          placeholder="Instructions for the AI model with {{variable}} placeholders..."
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                <i className={`bi ${typeIcon}`} style={{ fontSize: 13, color: isActive ? 'var(--color-primary-light, #2b6cb0)' : undefined }}></i>
+                <span className="fw-semibold small">{type.studentLabel}</span>
+                {msTitle && <span className="text-muted ms-1 text-truncate" style={{ fontSize: 10, maxWidth: 200 }}>{msTitle}</span>}
+                <span className="ms-auto" style={{ fontSize: 11 }}>{isActive ? '\u25B2' : '\u25BC'}</span>
               </div>
-            )}
-          </div>
-        ))}
 
-        {/* Prompts Section */}
-        {renderAccordion('prompts', 'Prompts', 'bi-chat-left-text', (
-          <PromptSection
-            editing={editing}
-            miniSections={miniSections}
-            prompts={props.prompts}
-            promptBodies={props.promptBodies}
-            systemVariables={props.systemVariables}
-            variables={props.variables}
-            fetchPromptBody={props.fetchPromptBody}
-            onUpdate={props.onUpdate}
-          />
-        ))}
+              {/* Section content — only shown for active type */}
+              {isActive && editing && (
+                <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+                  {/* Title & Details */}
+                  <div className="row g-2 mb-3">
+                    <div className="col-md-8">
+                      <label className="form-label small fw-medium mb-0">Title <span className="text-danger">*</span></label>
+                      <input className="form-control form-control-sm" value={editing.title || ''} onChange={e => props.onUpdate({ title: e.target.value })} />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-medium mb-0">Weight</label>
+                      <input className="form-control form-control-sm" type="number" step="0.1" value={editing.completion_weight ?? 1} onChange={e => props.onUpdate({ completion_weight: parseFloat(e.target.value) })} />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small fw-medium mb-0">Description</label>
+                      <textarea className="form-control form-control-sm" rows={2} value={editing.description || ''} onChange={e => props.onUpdate({ description: e.target.value })} />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small fw-medium mb-0">Learning Goal</label>
+                      <textarea className="form-control form-control-sm" rows={2} value={editing.settings_json?.learning_goal || ''} onChange={e => props.onUpdate({ settings_json: { ...(editing.settings_json || {}), learning_goal: e.target.value } })} placeholder="What should the student learn from this section?" />
+                    </div>
+                  </div>
 
-        {/* Variables Section */}
-        {renderAccordion('variables', 'Variables', 'bi-braces', (
-          <VariableSection
-            editing={editing}
-            miniSections={miniSections}
-            variables={props.variables}
-            systemVariables={props.systemVariables}
-            variableMap={props.variableMap}
-            promptBodies={props.promptBodies}
-            artifacts={props.artifacts}
-            onUpdate={props.onUpdate}
-            onCreateVariable={props.onCreateVariable}
-          />
-        ))}
+                  {/* Prompts */}
+                  {typePromptPairs.length > 0 && (
+                    <div className="mb-3 border-top pt-2">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
+                        <span className="fw-semibold small">Prompts</span>
+                        <span className="text-muted" style={{ fontSize: 10 }}>Use <code style={{ fontSize: 10 }}>{'{{variable_key}}'}</code> for dynamic values</span>
+                      </div>
+                      {typePromptPairs
+                        .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
+                        .map(pair => {
+                          const sysVal = (editing[pair.systemField] as string) || '';
+                          const usrVal = (editing[pair.userField] as string) || '';
+                          const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
+                          const implLabels: Record<string, { label: string; tooltip: string }> = {
+                            build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
+                            mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
+                            reflection: { label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
+                          };
+                          const displayLabel = editType === 'implementation_task' && implLabels[pair.key]
+                            ? implLabels[pair.key].label : pair.label;
+                          const tooltip = editType === 'implementation_task' && implLabels[pair.key]
+                            ? implLabels[pair.key].tooltip : '';
+                          return (
+                            <div key={pair.key} className="mb-2">
+                              <span className="text-muted fw-medium" style={{ fontSize: 10 }} title={tooltip}>{displayLabel} {tooltip && <i className="bi bi-info-circle" style={{ fontSize: 9 }}></i>}</span>
+                              <HighlightedPromptEditor
+                                value={combinedValue}
+                                onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
+                                availableVars={coreAvailableVars}
+                                allDefinedVars={coreAllDefinedVars}
+                                label="PROMPT"
+                                rows={5}
+                                placeholder="Instructions for the AI model with {{variable}} placeholders..."
+                              />
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
 
-        {/* Skills Section */}
-        {renderAccordion('skills', 'Skills', 'bi-stars', (
-          <SkillSection
-            editing={editing}
-            editType={editType}
-            miniSectionId={editing.id}
-            skillOptions={props.skillOptions}
-            onUpdate={props.onUpdate}
-            onCreateSkill={props.onCreateSkill}
-            token={props.token}
-            apiUrl={props.apiUrl}
-          />
-        ))}
+                  {/* Variables */}
+                  <div className="mb-3 border-top pt-2">
+                    <div className="d-flex align-items-center gap-2 mb-1">
+                      <i className="bi bi-braces" style={{ fontSize: 12 }}></i>
+                      <span className="fw-semibold small">Variables</span>
+                    </div>
+                    <VariableSection
+                      editing={editing}
+                      miniSections={miniSections}
+                      variables={props.variables}
+                      systemVariables={props.systemVariables}
+                      variableMap={props.variableMap}
+                      promptBodies={props.promptBodies}
+                      artifacts={props.artifacts}
+                      onUpdate={props.onUpdate}
+                      onCreateVariable={props.onCreateVariable}
+                    />
+                  </div>
 
-        {/* Artifacts Section (implementation_task only) */}
-        {renderAccordion('artifacts', 'Artifacts', 'bi-box', (
-          <ArtifactSection
-            editing={editing}
-            artifactOptions={props.artifactOptions}
-            artifacts={props.artifacts}
-            onUpdate={props.onUpdate}
-            onCreateArtifact={props.onCreateArtifact}
-          />
-        ), editType === 'implementation_task')}
+                  {/* Skills */}
+                  <div className="mb-3 border-top pt-2">
+                    <div className="d-flex align-items-center gap-2 mb-1">
+                      <i className="bi bi-stars" style={{ fontSize: 12 }}></i>
+                      <span className="fw-semibold small">Skills</span>
+                    </div>
+                    <SkillSection
+                      editing={editing}
+                      editType={editType}
+                      miniSectionId={editing.id}
+                      skillOptions={props.skillOptions}
+                      onUpdate={props.onUpdate}
+                      onCreateSkill={props.onCreateSkill}
+                      token={props.token}
+                      apiUrl={props.apiUrl}
+                    />
+                  </div>
 
-        {/* Knowledge Check Section (knowledge_check only) */}
-        {renderAccordion('kc', 'Knowledge Check', 'bi-question-circle', (
-          <KnowledgeCheckSection editing={editing} onUpdate={props.onUpdate} />
-        ), editType === 'knowledge_check')}
+                  {/* Artifacts (implementation_task only) */}
+                  {editType === 'implementation_task' && (
+                    <div className="mb-3 border-top pt-2">
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <i className="bi bi-box" style={{ fontSize: 12 }}></i>
+                        <span className="fw-semibold small">Artifacts</span>
+                      </div>
+                      <ArtifactSection
+                        editing={editing}
+                        artifactOptions={props.artifactOptions}
+                        artifacts={props.artifacts}
+                        onUpdate={props.onUpdate}
+                        onCreateArtifact={props.onCreateArtifact}
+                      />
+                    </div>
+                  )}
 
-        {/* Validation Section */}
+                  {/* Knowledge Check (knowledge_check only) */}
+                  {editType === 'knowledge_check' && (
+                    <div className="mb-3 border-top pt-2">
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <i className="bi bi-question-circle" style={{ fontSize: 12 }}></i>
+                        <span className="fw-semibold small">Knowledge Check Config</span>
+                      </div>
+                      <KnowledgeCheckSection editing={editing} onUpdate={props.onUpdate} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Diagnostic tools for active mini-section */}
         {renderAccordion('validation', 'Validation', 'bi-check-circle', (
           <ValidationSection
             editing={editing}
@@ -415,7 +480,6 @@ export default function ObjectConfigEngine(props: Props) {
           />
         ))}
 
-        {/* Quality Score Section */}
         {renderAccordion('quality', 'Quality Score', 'bi-graph-up', (
           <QualityScoreSection
             miniSectionId={editing.id}
@@ -425,7 +489,6 @@ export default function ObjectConfigEngine(props: Props) {
           />
         ), !!editing.id)}
 
-        {/* Suggestions Section */}
         {renderAccordion('suggestions', 'Improve to 100', 'bi-lightbulb', (
           <SuggestionSection
             miniSectionId={editing.id}
@@ -437,7 +500,6 @@ export default function ObjectConfigEngine(props: Props) {
           />
         ), !!editing.id)}
 
-        {/* Diagnostic & Repair buttons */}
         {editing.id && (
           <div className="d-flex gap-2 mt-2 mb-1">
             <button className="btn btn-sm btn-outline-primary flex-grow-1" onClick={props.onOpenDiagnostic}>
