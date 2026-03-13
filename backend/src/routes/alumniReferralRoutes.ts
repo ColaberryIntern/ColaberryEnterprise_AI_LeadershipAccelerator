@@ -3,6 +3,7 @@ import { requireAlumni } from '../middlewares/alumniAuth';
 import {
   handleAlumniLogin,
   handleGetProfile,
+  handleUpdateProfile,
   handleGetReferrals,
   handleSubmitReferral,
   handleGetTimeline,
@@ -16,6 +17,7 @@ router.post('/api/referrals/login', handleAlumniLogin);
 
 // Protected — requires alumni JWT
 router.get('/api/referrals/profile', requireAlumni, handleGetProfile);
+router.patch('/api/referrals/profile', requireAlumni, handleUpdateProfile);
 router.get('/api/referrals/list', requireAlumni, handleGetReferrals);
 router.post('/api/referrals/submit', requireAlumni, handleSubmitReferral);
 router.get('/api/referrals/:id/timeline', requireAlumni, handleGetTimeline);

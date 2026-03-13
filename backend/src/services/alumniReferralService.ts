@@ -103,6 +103,23 @@ export async function getProfile(profileId: string) {
   return profile;
 }
 
+export async function updateProfile(
+  profileId: string,
+  data: { alumni_phone?: string; alumni_cohort?: string },
+) {
+  const profile = await AlumniReferralProfile.findByPk(profileId);
+  if (!profile) throw Object.assign(new Error('Profile not found'), { statusCode: 404 });
+
+  const updates: Record<string, unknown> = {};
+  if (data.alumni_phone) updates.alumni_phone = data.alumni_phone;
+  if (data.alumni_cohort) updates.alumni_cohort = data.alumni_cohort;
+
+  if (Object.keys(updates).length > 0) {
+    await profile.update(updates);
+  }
+  return profile;
+}
+
 // ── Referral Submission ─────────────────────────────────────────────────
 
 export async function submitReferral(

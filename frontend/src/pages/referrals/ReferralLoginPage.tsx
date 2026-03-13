@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAlumniAuth } from '../../contexts/AlumniAuthContext';
+import MayaChatWidget from '../../components/MayaChatWidget';
 
 const DARK = {
   bg: '#0f1219',
@@ -53,7 +54,7 @@ function ReferralLoginPage() {
         <div className="text-center mb-4">
           <h2 className="fw-bold mb-2" style={{ color: DARK.text }}>AI Champion Network</h2>
           <p style={{ color: DARK.textMuted }}>
-            Activate your alumni referral account to start earning $250 per successful referral.
+            As a Colaberry graduate, activate your account to start earning $250 for every leader you refer to our Enterprise AI Leadership Accelerator.
           </p>
         </div>
 
@@ -119,6 +120,7 @@ function ReferralLoginPage() {
           </a>
         </div>
       </div>
+      <MayaChatWidget />
     </div>
   );
 }

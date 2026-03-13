@@ -4,6 +4,8 @@ interface AlumniProfile {
   id: string;
   alumni_email: string;
   alumni_name: string;
+  alumni_phone?: string;
+  alumni_cohort?: string;
   total_referrals: number;
   total_earnings: number;
 }

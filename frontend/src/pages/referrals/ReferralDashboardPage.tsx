@@ -4,6 +4,7 @@ import alumniApi from '../../utils/alumniApi';
 import { useAlumniAuth } from '../../contexts/AlumniAuthContext';
 import AddReferralModal from '../../components/referrals/AddReferralModal';
 import ReferralTimeline from '../../components/referrals/ReferralTimeline';
+import MayaChatWidget from '../../components/MayaChatWidget';
 
 interface Referral {
   id: string;
@@ -51,6 +52,24 @@ function ReferralDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [profilePhone, setProfilePhone] = useState(profile?.alumni_phone || '');
+  const [profileCohort, setProfileCohort] = useState(profile?.alumni_cohort || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileDismissed, setProfileDismissed] = useState(false);
+
+  const profileIncomplete = !profileDismissed && (!profile?.alumni_phone || !profile?.alumni_cohort);
+
+  const handleProfileSave = async () => {
+    setProfileSaving(true);
+    try {
+      await alumniApi.patch('/api/referrals/profile', {
+        alumni_phone: profilePhone.trim() || undefined,
+        alumni_cohort: profileCohort.trim() || undefined,
+      });
+      setProfileDismissed(true);
+    } catch {}
+    setProfileSaving(false);
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -91,6 +110,50 @@ function ReferralDashboardPage() {
       </nav>
 
       <div className="container py-4" style={{ maxWidth: 1000 }}>
+        {/* Profile Completion Banner */}
+        {profileIncomplete && (
+          <div className="alert alert-info d-flex align-items-start gap-3 mb-4" role="alert">
+            <div className="flex-grow-1">
+              <strong className="d-block mb-2">Complete your profile</strong>
+              <div className="row g-2">
+                <div className="col-sm-5">
+                  <input
+                    type="tel"
+                    className="form-control form-control-sm"
+                    placeholder="Phone number"
+                    value={profilePhone}
+                    onChange={(e) => setProfilePhone(e.target.value)}
+                  />
+                </div>
+                <div className="col-sm-5">
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    placeholder="Program graduated from (e.g. Data Analytics 2024)"
+                    value={profileCohort}
+                    onChange={(e) => setProfileCohort(e.target.value)}
+                  />
+                </div>
+                <div className="col-sm-2">
+                  <button
+                    className="btn btn-sm btn-primary w-100"
+                    onClick={handleProfileSave}
+                    disabled={profileSaving}
+                  >
+                    {profileSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              aria-label="Dismiss"
+              onClick={() => setProfileDismissed(true)}
+            />
+          </div>
+        )}
+
         {/* Earnings Summary */}
         <div className="row g-3 mb-4">
           {[
@@ -237,6 +300,7 @@ function ReferralDashboardPage() {
         onClose={() => setShowModal(false)}
         onSuccess={fetchData}
       />
+      <MayaChatWidget />
     </div>
   );
 }

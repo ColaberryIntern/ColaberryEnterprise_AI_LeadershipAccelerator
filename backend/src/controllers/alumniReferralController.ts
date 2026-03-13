@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import {
   verifyAndLoginAlumni,
   getProfile,
+  updateProfile,
   submitReferral,
   getReferrals,
   getReferralTimeline,
@@ -28,6 +29,18 @@ export async function handleGetProfile(req: Request, res: Response) {
     const profileId = req.alumni!.sub;
     const profile = await getProfile(profileId);
     res.json(profile);
+  } catch (err: any) {
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message });
+  }
+}
+
+export async function handleUpdateProfile(req: Request, res: Response) {
+  try {
+    const profileId = req.alumni!.sub;
+    const { alumni_phone, alumni_cohort } = req.body;
+    const updated = await updateProfile(profileId, { alumni_phone, alumni_cohort });
+    res.json(updated);
   } catch (err: any) {
     const status = err.statusCode || 500;
     res.status(status).json({ error: err.message });
