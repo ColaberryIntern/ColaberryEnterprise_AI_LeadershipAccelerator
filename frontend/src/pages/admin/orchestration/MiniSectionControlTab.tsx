@@ -9,7 +9,7 @@ import InlineArtifactCreator from './builder/InlineArtifactCreator';
 import BackfillButton from './builder/BackfillButton';
 import DiagnosticReportModal from './builder/DiagnosticReportModal';
 import AutoRepairModal from './builder/AutoRepairModal';
-import { Lesson } from './builder/types';
+import { Lesson, TYPE_OPTIONS, TYPE_ICONS } from './builder/types';
 
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
@@ -171,6 +171,31 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
 
           {/* RIGHT PANEL — Configure (with inline preview) */}
           <div className="col-lg-8">
+            {/* Type tabs — one per mini-section type */}
+            {builder.miniSections.length > 0 && (
+              <div className="d-flex border-bottom bg-white rounded-top shadow-sm mb-0" style={{ overflowX: 'auto' }}>
+                {TYPE_OPTIONS.map(type => {
+                  const ms = builder.miniSections.find(m => m.mini_section_type === type.value);
+                  const isActive = builder.editing?.mini_section_type === type.value;
+                  return (
+                    <button
+                      key={type.value}
+                      className={`btn btn-sm rounded-0 border-0 px-3 py-2 ${isActive ? 'fw-bold text-primary' : 'text-muted'}`}
+                      style={{
+                        fontSize: 11,
+                        whiteSpace: 'nowrap',
+                        borderBottom: isActive ? '2px solid var(--color-primary-light, #2b6cb0)' : '2px solid transparent',
+                      }}
+                      onClick={() => ms && builder.selectMiniSection(ms.id)}
+                      disabled={!ms}
+                    >
+                      <i className={`bi ${TYPE_ICONS[type.value] || 'bi-circle'} me-1`}></i>
+                      {type.studentLabel}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <ObjectConfigEngine
               editing={builder.editing}
               isNew={builder.isNewItem}
