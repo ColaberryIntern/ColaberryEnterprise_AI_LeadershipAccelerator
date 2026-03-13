@@ -72,7 +72,7 @@ interface Props {
   onApplySuggestionFix: (s: Suggestion) => void;
   onOpenDiagnostic: () => void;
   onOpenRepair: () => void;
-  onSelectMiniSection?: (id: string) => void;
+  onSelectMiniSection?: (id: string | null) => void;
   typeDefinitions?: TypeDefinition[];
   // Preview props
   lessonTitle?: string;
@@ -325,8 +325,12 @@ export default function ObjectConfigEngine(props: Props) {
                   backgroundColor: isActive ? 'var(--color-bg-alt, #f7fafc)' : 'transparent',
                 }}
                 onClick={() => {
-                  if (!isActive && typeMiniSection && props.onSelectMiniSection) {
-                    props.onSelectMiniSection(typeMiniSection.id);
+                  if (props.onSelectMiniSection) {
+                    if (isActive) {
+                      props.onSelectMiniSection(null);
+                    } else if (typeMiniSection) {
+                      props.onSelectMiniSection(typeMiniSection.id);
+                    }
                   }
                 }}
               >
