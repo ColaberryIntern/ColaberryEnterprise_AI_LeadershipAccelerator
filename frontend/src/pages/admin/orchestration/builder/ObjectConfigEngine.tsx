@@ -10,9 +10,9 @@ import ValidationSection from './ValidationSection';
 import QualityScoreSection from './QualityScoreSection';
 import SuggestionSection from './SuggestionSection';
 import ConceptV2 from '../../../../components/portal/lesson/ConceptV2';
-import { AdminPreviewMentorProvider } from '../../../../contexts/MentorContext';
+import { AdminPreviewMentorProvider, useMentorContext } from '../../../../contexts/MentorContext';
 import PreviewMentorChat from './PreviewMentorChat';
-import { generateMockV2Content } from './mockDataGenerator';
+import { generateMockV2Content, MockV2Content } from './mockDataGenerator';
 import { PromptOption } from './types';
 
 /* Mentor face SVG — matches the FAB in PortalMentorChat for admin preview */
@@ -89,21 +89,87 @@ interface AccordionState {
   suggestions: boolean;
 }
 
+/** Child component inside AdminPreviewMentorProvider — reads mentor context state */
+function PreviewContent({ mockContent, lessonId, token, apiUrl }: {
+  mockContent: MockV2Content;
+  lessonId: string;
+  token: string;
+  apiUrl: string;
+}) {
+  const { isMentorOpen, closeMentorPanel, openMentorPanel } = useMentorContext();
+
+  return (
+    <div className="card-body py-3" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'hidden', display: 'flex', gap: 12, position: 'relative' }}>
+      {/* Left: Student content preview */}
+      <div style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
+        <div className="mb-2 d-flex align-items-center gap-2">
+          <span className="badge bg-secondary" style={{ fontSize: 10 }}>Mock Data</span>
+          <span className="text-muted" style={{ fontSize: 11 }}>Preview with generated sample data.</span>
+        </div>
+        <ConceptV2
+          content={mockContent}
+          lessonId={lessonId}
+          isCompleted={false}
+        />
+      </div>
+      {/* Right: Mentor Chat — collapsible, driven by context */}
+      {isMentorOpen ? (
+        <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <PreviewMentorChat
+            token={token}
+            apiUrl={apiUrl}
+            lessonId={lessonId}
+            onClose={closeMentorPanel}
+          />
+        </div>
+      ) : (
+        <div style={{ position: 'sticky', top: 8, alignSelf: 'flex-start', flexShrink: 0 }}>
+          <button
+            className="btn p-0"
+            onClick={openMentorPanel}
+            title="Open AI Mentor Preview"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              border: '3px solid #fff',
+              boxShadow: '0 4px 20px rgba(99,102,241,0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+            }}
+          >
+            <PreviewMentorFace size={42} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ObjectConfigEngine(props: Props) {
   const { editing, isNew, isDirty, miniSections, saving, error } = props;
   const [expanded, setExpanded] = useState<AccordionState>({
     validation: false, quality: false, suggestions: false,
   });
   const [showPreview, setShowPreview] = useState(false);
-  const [mentorOpen, setMentorOpen] = useState(false);
   const [reversePrompt, setReversePrompt] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
 
+  // Build artifact ID -> name map for mock content generation
+  const artifactMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const a of props.artifacts || []) map[a.id] = a.name;
+    return map;
+  }, [props.artifacts]);
+
   // All useMemo/useCallback hooks MUST be before any early return to maintain hook order
   const mockContent = useMemo(
-    () => generateMockV2Content(miniSections, props.lessonTitle || 'Untitled Section'),
-    [miniSections, props.lessonTitle]
+    () => generateMockV2Content(miniSections, props.lessonTitle || 'Untitled Section', artifactMap),
+    [miniSections, props.lessonTitle, artifactMap]
   );
 
   const editType = editing?.mini_section_type;
@@ -239,60 +305,12 @@ export default function ObjectConfigEngine(props: Props) {
       </div>
       {showPreview ? (
         <AdminPreviewMentorProvider>
-          <div className="card-body py-3" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'hidden', display: 'flex', gap: 12, position: 'relative' }}>
-            {/* Left: Student content preview */}
-            <div style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
-              <div className="mb-2 d-flex align-items-center gap-2">
-                <span className="badge bg-secondary" style={{ fontSize: 10 }}>Mock Data</span>
-                <span className="text-muted" style={{ fontSize: 11 }}>Preview with generated sample data.</span>
-              </div>
-              <ConceptV2
-                content={mockContent}
-                lessonId={props.lessonId || ''}
-                isCompleted={false}
-              />
-            </div>
-            {/* Right: Mentor Chat — collapsible */}
-            {mentorOpen ? (
-              <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <PreviewMentorChat
-                  token={props.token || ''}
-                  apiUrl={props.apiUrl || ''}
-                  lessonId={props.lessonId}
-                  onClose={() => setMentorOpen(false)}
-                />
-              </div>
-            ) : (
-              <div
-                style={{
-                  position: 'sticky',
-                  top: 8,
-                  alignSelf: 'flex-start',
-                  flexShrink: 0,
-                }}
-              >
-                <button
-                  className="btn p-0"
-                  onClick={() => setMentorOpen(true)}
-                  title="Open AI Mentor Preview"
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                    border: '3px solid #fff',
-                    boxShadow: '0 4px 20px rgba(99,102,241,0.45)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <PreviewMentorFace size={42} />
-                </button>
-              </div>
-            )}
-          </div>
+          <PreviewContent
+            mockContent={mockContent}
+            lessonId={props.lessonId || ''}
+            token={props.token || ''}
+            apiUrl={props.apiUrl || ''}
+          />
         </AdminPreviewMentorProvider>
       ) : (
       <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>

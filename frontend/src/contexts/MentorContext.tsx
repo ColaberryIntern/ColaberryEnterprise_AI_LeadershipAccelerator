@@ -241,6 +241,15 @@ export function AdminPreviewMentorProvider({ children }: { children: React.React
   const [selectedLLMId, setSelectedLLMId] = useState('chatgpt');
   const selectedLLM = LLM_OPTIONS.find(l => l.id === selectedLLMId) || LLM_OPTIONS[0];
   const onMentorResponded = useRef<((response: string) => void) | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [pendingMsg, setPendingMsg] = useState<PendingMessage | null>(null);
+
+  const sendToMentor = useCallback((message: string, contextType: string) => {
+    setPendingMsg({ message, contextType });
+    setIsOpen(true);
+  }, []);
+
+  const clearPendingMessage = useCallback(() => setPendingMsg(null), []);
 
   const openLLMWithPrompt = useCallback(async (prompt: string) => {
     const encoded = encodeURIComponent(prompt);
@@ -261,18 +270,20 @@ export function AdminPreviewMentorProvider({ children }: { children: React.React
       llmOptions: LLM_OPTIONS,
       lessonContext: defaultLessonContext,
       updateLessonContext: () => {},
-      isMentorOpen: false,
-      openMentorPanel: () => {},
-      closeMentorPanel: () => {},
-      toggleMentorPanel: () => {},
-      pendingMentorMessage: null,
-      sendToMentor: () => {},
-      clearPendingMessage: () => {},
+      isMentorOpen: isOpen,
+      openMentorPanel: useCallback(() => setIsOpen(true), []),
+      closeMentorPanel: useCallback(() => setIsOpen(false), []),
+      toggleMentorPanel: useCallback(() => setIsOpen(prev => !prev), []),
+      pendingMentorMessage: pendingMsg,
+      sendToMentor,
+      clearPendingMessage,
       pendingPromptLabMessage: null,
       sendToPromptLab: () => {},
       clearPendingPromptLabMessage: () => {},
       onMentorResponded,
-      fireMentorResponded: () => {},
+      fireMentorResponded: useCallback((response: string) => {
+        onMentorResponded.current?.(response);
+      }, []),
       openLLMWithPrompt,
       learnerProfile: {
         company_name: 'Preview Corp',

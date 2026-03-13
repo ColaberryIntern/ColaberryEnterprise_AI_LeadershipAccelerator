@@ -143,8 +143,9 @@ function generatePromptTemplate(ms: MiniSectionInput, lessonTitle: string): Mock
   };
 }
 
-function generateImplementationTask(ms: MiniSectionInput, lessonTitle: string): MockV2Content['implementation_task'] {
+function generateImplementationTask(ms: MiniSectionInput, lessonTitle: string, artifactMap?: Record<string, string>): MockV2Content['implementation_task'] {
   const createsArtifacts = ms.creates_artifact_ids || [];
+  const artifactNames = createsArtifacts.map(id => artifactMap?.[id] || 'Deliverable');
   return {
     title: ms.title || `${lessonTitle} Implementation`,
     description: ms.description || `Apply the concepts from ${lessonTitle} to your organization's context and produce a deliverable artifact.`,
@@ -154,8 +155,8 @@ function generateImplementationTask(ms: MiniSectionInput, lessonTitle: string): 
       `Understand the key frameworks from ${lessonTitle}`,
       'Allocate focused time for analysis and artifact creation',
     ],
-    deliverable: createsArtifacts.length > 0
-      ? `Completed artifact(s): ${createsArtifacts.join(', ')}`
+    deliverable: artifactNames.length > 0
+      ? `Completed artifact(s): ${artifactNames.join(', ')}`
       : `A comprehensive analysis document applying ${ms.title} to your organization`,
     estimated_minutes: 45,
     getting_started: [
@@ -166,7 +167,6 @@ function generateImplementationTask(ms: MiniSectionInput, lessonTitle: string): 
     ],
     tools: [
       { name: 'Google Sheets', url: 'https://sheets.google.com', is_free: true },
-      { name: 'ChatGPT', url: 'https://chat.openai.com', is_free: true },
       { name: 'Canva', url: 'https://canva.com', is_free: true },
     ],
     evidence_requirements: [
@@ -174,7 +174,7 @@ function generateImplementationTask(ms: MiniSectionInput, lessonTitle: string): 
       { name: 'Execution Screenshot', description: 'Screenshot showing successful AI tool output', format: 'screenshot' },
     ],
     required_artifacts: createsArtifacts.map((id, i) => ({
-      name: `Artifact ${i + 1}`,
+      name: artifactNames[i] || `Artifact ${i + 1}`,
       description: `Deliverable artifact for ${ms.title}`,
       file_types: ['pdf', 'docx', 'pptx'],
       validation_criteria: 'Must include executive summary, analysis framework, and actionable recommendations',
@@ -280,7 +280,7 @@ function generateReflectionQuestions(ms: MiniSectionInput, lessonTitle: string):
  * Generate complete mock V2 content from an array of mini-sections for a lesson.
  * Each mini-section type maps to a specific V2 content section.
  */
-export function generateMockV2Content(miniSections: MiniSectionInput[], lessonTitle: string): MockV2Content {
+export function generateMockV2Content(miniSections: MiniSectionInput[], lessonTitle: string, artifactMap?: Record<string, string>): MockV2Content {
   const sorted = [...miniSections].sort((a, b) => a.mini_section_order - b.mini_section_order);
 
   const result: MockV2Content = {
@@ -304,7 +304,7 @@ export function generateMockV2Content(miniSections: MiniSectionInput[], lessonTi
         result.prompt_template = generatePromptTemplate(ms, lessonTitle);
         break;
       case 'implementation_task':
-        result.implementation_task = generateImplementationTask(ms, lessonTitle);
+        result.implementation_task = generateImplementationTask(ms, lessonTitle, artifactMap);
         break;
       case 'knowledge_check':
         result.knowledge_checks = generateKnowledgeChecks(ms, lessonTitle);

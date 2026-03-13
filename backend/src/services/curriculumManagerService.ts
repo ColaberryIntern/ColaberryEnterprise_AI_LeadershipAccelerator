@@ -7,7 +7,7 @@
 import {
   CurriculumModule, CurriculumLesson, MiniSection, ArtifactDefinition,
   PromptTemplate, SectionConfig, VariableDefinition, ProgramBlueprint,
-  LiveSession, SessionGate, VariableStore,
+  LiveSession, SessionGate, VariableStore, SkillDefinition,
 } from '../models';
 
 export interface IntegrityIssue {
@@ -402,14 +402,23 @@ export async function dryRunSectionBuild(lessonId: string): Promise<DryRunResult
     type: a.artifact_type,
   }));
 
-  // Collect linked skills from mini-sections
-  const linkedSkills = new Set<string>();
+  // Collect linked skills from mini-sections and resolve names
+  const skillIdSet = new Set<string>();
   for (const ms of miniSections) {
     if (ms.associated_skill_ids?.length) {
       for (const skillId of ms.associated_skill_ids) {
-        linkedSkills.add(skillId);
+        skillIdSet.add(skillId);
       }
     }
+  }
+  let linkedSkills: string[] = [];
+  if (skillIdSet.size > 0) {
+    const skills = await SkillDefinition.findAll({
+      where: { id: [...skillIdSet] },
+      attributes: ['id', 'name'],
+    });
+    const skillNameMap = new Map(skills.map((s: any) => [s.id, s.name]));
+    linkedSkills = [...skillIdSet].map(id => skillNameMap.get(id) || id);
   }
 
   // Check associated session
@@ -445,7 +454,7 @@ export async function dryRunSectionBuild(lessonId: string): Promise<DryRunResult
     typeBreakdown,
     requiredVariables: [...requiredVariables],
     linkedArtifacts,
-    linkedSkills: [...linkedSkills],
+    linkedSkills,
     associatedSession,
     sectionConfigExists: !!sectionConfig,
     warnings,

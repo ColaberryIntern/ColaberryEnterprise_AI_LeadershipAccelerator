@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { useMentorContext } from '../../../../contexts/MentorContext';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -37,6 +38,7 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { pendingMentorMessage, clearPendingMessage, onMentorResponded } = useMentorContext();
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,12 +66,21 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
       });
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.reply }]);
       setSuggestedPrompts(res.data.suggested_prompts || []);
+      onMentorResponded.current?.(res.data.reply);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Unable to get response. Check that OpenAI API key is configured.' }]);
     } finally {
       setSending(false);
     }
-  }, [input, sending, token, apiUrl, lessonId]);
+  }, [input, sending, token, apiUrl, lessonId, onMentorResponded]);
+
+  // Auto-send pending messages from ImplementationTask "Ask AI Mentor" button
+  useEffect(() => {
+    if (pendingMentorMessage && !sending) {
+      sendMessage(pendingMentorMessage.message);
+      clearPendingMessage();
+    }
+  }, [pendingMentorMessage, sending, sendMessage, clearPendingMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
