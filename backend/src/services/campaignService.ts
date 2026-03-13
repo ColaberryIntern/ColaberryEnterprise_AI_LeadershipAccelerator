@@ -505,7 +505,7 @@ const DEFAULT_SETTINGS = {
   auto_dnc_on_request: true,
   voicemail_enabled: true,
   pass_prior_conversations: true,
-  auto_reply_enabled: false,
+  auto_reply_enabled: true,
 };
 
 export async function getCampaignSettings(id: string) {

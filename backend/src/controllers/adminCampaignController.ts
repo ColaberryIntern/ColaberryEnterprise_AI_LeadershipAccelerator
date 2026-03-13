@@ -340,7 +340,7 @@ export async function handleGetCampaignSettings(req: Request, res: Response, nex
 
 export async function handleUpdateCampaignSettings(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const settings = await updateCampaignSettings(req.params.id as string, req.body);
+    const settings = await updateCampaignSettings(req.params.id as string, req.body.settings || req.body);
     res.json({ settings });
   } catch (error: any) {
     if (error.message.includes('not found')) {
