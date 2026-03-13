@@ -44,6 +44,97 @@ const TYPE_LABELS: Record<string, string> = {
   anonymous: 'Anonymous',
 };
 
+function generateSponsorKit(referral: Referral, alumniName: string) {
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Enterprise AI Leadership Accelerator</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;color:#2d3748;padding:48px;max-width:800px;margin:0 auto}
+.header{text-align:center;border-bottom:3px solid #1a365d;padding-bottom:24px;margin-bottom:32px}
+.header h1{color:#1a365d;font-size:24px;margin-bottom:4px}
+.header .sub{color:#718096;font-size:14px}
+.intro{background:#f7fafc;border-left:4px solid #1a365d;padding:16px 20px;margin-bottom:28px;font-size:14px;line-height:1.6}
+.intro strong{color:#1a365d}
+h2{color:#1a365d;font-size:16px;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px}
+.section{margin-bottom:28px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
+.card{background:#f7fafc;border-radius:8px;padding:16px}
+.card h3{color:#1a365d;font-size:14px;margin-bottom:6px}
+.card p{font-size:13px;color:#4a5568;line-height:1.5;margin:0}
+.outcomes li{font-size:13px;line-height:1.8;color:#4a5568}
+.outcomes li strong{color:#2d3748}
+.highlight{background:#1a365d;color:#fff;border-radius:8px;padding:20px;text-align:center;margin:28px 0}
+.highlight .price{font-size:28px;font-weight:700}
+.highlight .compare{font-size:13px;color:#a0aec0;margin-top:4px}
+.cta{text-align:center;margin-top:32px;padding-top:24px;border-top:2px solid #e2e8f0}
+.cta p{font-size:14px;color:#4a5568;margin-bottom:8px}
+.cta .link{color:#1a365d;font-weight:600;font-size:16px}
+.footer{text-align:center;margin-top:32px;font-size:12px;color:#a0aec0}
+@media print{body{padding:32px}@page{margin:0.5in}}
+</style></head><body>
+<div class="header">
+<h1>Enterprise AI Leadership Accelerator</h1>
+<div class="sub">Colaberry Enterprise AI Division</div>
+</div>
+
+<div class="intro">
+<strong>${alumniName}</strong>, a Colaberry graduate, thought this program would be valuable for
+<strong>${referral.contact_name}</strong> at <strong>${referral.company_name}</strong>.
+As someone who experienced Colaberry's approach to hands-on learning firsthand, they wanted to share this opportunity.
+</div>
+
+<div class="section">
+<h2>Program Overview</h2>
+<div class="grid">
+<div class="card"><h3>Format</h3><p>5-day intensive program. Live, instructor-led sessions with hands-on labs and executive coaching.</p></div>
+<div class="card"><h3>Who It's For</h3><p>Directors, VPs, CTOs, and senior leaders responsible for AI strategy and execution.</p></div>
+<div class="card"><h3>Cohort Size</h3><p>Limited to 15 participants per cohort for personalized attention and peer-level discussion.</p></div>
+<div class="card"><h3>Deliverables</h3><p>Working AI proof of concept, executive presentation deck, and a 90-day implementation roadmap.</p></div>
+</div>
+</div>
+
+<div class="section">
+<h2>What Graduates Have Achieved</h2>
+<ul class="outcomes">
+<li><strong>VP of Engineering, Fortune 500:</strong> Built AI document analysis system saving 70% processing time</li>
+<li><strong>Director of Data Science:</strong> Created AI readiness dashboard that secured $2M budget approval</li>
+<li><strong>CTO, Mid-Market SaaS:</strong> Deployed churn prediction model with 89% accuracy within 30 days</li>
+<li><strong>Head of Operations:</strong> Automated supply chain forecasting, reducing inventory costs by 35%</li>
+</ul>
+</div>
+
+<div class="highlight">
+<div class="price">$4,500</div>
+<div class="compare">vs. $50K–$150K for comparable consulting engagements</div>
+</div>
+
+<div class="section">
+<h2>Why This Program Is Different</h2>
+<div class="grid">
+<div class="card"><h3>Build, Don't Just Learn</h3><p>Leave with a working proof of concept — not just slides and theory.</p></div>
+<div class="card"><h3>Executive-Level Peers</h3><p>Learn alongside other senior leaders facing the same AI adoption challenges.</p></div>
+</div>
+</div>
+
+<div class="cta">
+<p>Schedule a 15-minute strategy call to explore if this is the right fit.</p>
+<div class="link">enterprise.colaberry.ai</div>
+</div>
+
+<div class="footer">Colaberry Enterprise AI Division &bull; enterprise.colaberry.ai</div>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `AI-Leadership-Accelerator_${referral.company_name.replace(/[^a-zA-Z0-9]/g, '_')}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function ReferralDashboardPage() {
   const { profile, logout } = useAlumniAuth();
   const navigate = useNavigate();
@@ -207,6 +298,7 @@ function ReferralDashboardPage() {
                       <th className="small fw-medium">Status</th>
                       <th className="small fw-medium">Last Activity</th>
                       <th className="small fw-medium">Commission</th>
+                      <th className="small fw-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -243,10 +335,24 @@ function ReferralDashboardPage() {
                                   : '—'}
                             </td>
                             <td className="small">{commissionStatus}</td>
+                            <td>
+                              {(r.referral_type === 'introduced' || r.referral_type === 'corporate_sponsor') && (
+                                <button
+                                  className="btn btn-sm btn-outline-primary"
+                                  style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateSponsorKit(r, profile?.alumni_name || 'A Colaberry Graduate');
+                                  }}
+                                >
+                                  Download Kit
+                                </button>
+                              )}
+                            </td>
                           </tr>
                           {expandedId === r.id && (
                             <tr>
-                              <td colSpan={6} className="p-0 border-0">
+                              <td colSpan={7} className="p-0 border-0">
                                 <ReferralTimeline
                                   referralId={r.id}
                                   onClose={() => setExpandedId(null)}
@@ -274,7 +380,7 @@ function ReferralDashboardPage() {
             },
             {
               title: 'Introduced Referral',
-              desc: 'We reach out to your contact mentioning your name and Colaberry experience.',
+              desc: 'We reach out to your contact mentioning your name and Colaberry experience. Download a presentation kit to share with them directly.',
               type: 'introduced',
             },
             {
