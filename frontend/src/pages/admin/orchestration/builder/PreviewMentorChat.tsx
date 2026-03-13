@@ -10,6 +10,7 @@ interface PreviewMentorChatProps {
   token: string;
   apiUrl: string;
   lessonId?: string;
+  onClose?: () => void;
 }
 
 /** Render markdown-lite: bold, code, lists */
@@ -29,7 +30,7 @@ function renderContent(text: string) {
   });
 }
 
-export default function PreviewMentorChat({ token, apiUrl, lessonId }: PreviewMentorChatProps) {
+export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: PreviewMentorChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -105,6 +106,16 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId }: PreviewMe
         </div>
         <span className="fw-semibold" style={{ fontSize: 12, color: '#1e293b' }}>AI Mentor Preview</span>
         <span className="badge bg-secondary ms-auto" style={{ fontSize: 9 }}>Preview Mode</span>
+        {onClose && (
+          <button
+            className="btn btn-sm p-0 ms-2"
+            onClick={onClose}
+            style={{ color: '#64748b', border: 'none', background: 'none', fontSize: 14, lineHeight: 1 }}
+            title="Close mentor panel"
+          >
+            <i className="bi bi-x-lg"></i>
+          </button>
+        )}
       </div>
 
       {/* Messages */}
