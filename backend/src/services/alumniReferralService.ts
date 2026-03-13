@@ -188,16 +188,20 @@ export async function submitReferral(
   });
 
   // 5. Find and assign campaign
+  // Referral contacts are corporate PROSPECTS — enroll them in prospect-facing campaigns,
+  // NOT alumni campaigns (those are for the alumni themselves).
   try {
-    const campaignTypeMap: Record<string, string> = {
-      corporate_sponsor: 'alumni',
-      introduced: 'alumni',
-      anonymous: 'cold_outbound',
+    const campaignNameMap: Record<string, string> = {
+      corporate_sponsor: 'Maya Sponsorship Campaign',
+      introduced: 'Maya Inbound Lead Campaign',
+      anonymous: 'Maya Inbound Lead Campaign',
     };
-    const targetType = campaignTypeMap[data.referral_type];
+    const targetName = campaignNameMap[data.referral_type];
 
     const campaign = await Campaign.findOne({
-      where: { type: targetType, status: 'active' },
+      where: { name: targetName, status: 'active' },
+    }) || await Campaign.findOne({
+      where: { type: 'warm_nurture', status: 'active' },
       order: [['created_at', 'DESC']],
     });
 
