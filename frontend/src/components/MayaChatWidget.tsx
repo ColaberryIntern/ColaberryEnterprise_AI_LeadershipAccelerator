@@ -125,6 +125,7 @@ const MayaChatWidget: React.FC = () => {
   const [isReturningVisitor, setIsReturningVisitor] = useState(false);
   const [isExecutive, setIsExecutive] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
+  const [callingActive, setCallingActive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastAssistantRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -355,6 +356,12 @@ const MayaChatWidget: React.FC = () => {
             assistantMsg.suggestions = res.data.suggestions;
           }
           setMessages(prev => [...prev, assistantMsg]);
+
+          // Detect voice call initiation from Maya's response
+          if (/call.{0,20}(initiated|placing|coming|shortly|ringing|on.{0,5}way)/i.test(res.data.message)) {
+            setCallingActive(true);
+            setTimeout(() => setCallingActive(false), 120000); // Reset after 2 min
+          }
         }
       } else {
         // No conversation yet — try to start one
@@ -634,16 +641,24 @@ const MayaChatWidget: React.FC = () => {
               {/* Action bar — quick service path triggers */}
               <div className="d-flex gap-2 mt-2">
                 <button
-                  className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-                  style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '16px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
-                  onClick={() => handleSend("I'd like someone to call me about the program")}
-                  disabled={sending}
-                  title="Request a call"
+                  className={`btn btn-sm d-flex align-items-center gap-1 ${callingActive ? '' : 'btn-outline-secondary'}`}
+                  style={{
+                    fontSize: '12px',
+                    padding: '4px 12px',
+                    borderRadius: '16px',
+                    borderColor: callingActive ? 'var(--color-accent, #38a169)' : 'var(--color-border, #e2e8f0)',
+                    color: callingActive ? 'var(--color-accent, #38a169)' : 'var(--color-text-light, #718096)',
+                    animation: callingActive ? 'mayaCallingPulse 1.5s ease-in-out infinite' : 'none',
+                    fontWeight: callingActive ? 600 : 400,
+                  }}
+                  onClick={() => !callingActive && handleSend("I'd like someone to call me about the program")}
+                  disabled={sending || callingActive}
+                  title={callingActive ? 'Call in progress' : 'Request a call'}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
                   </svg>
-                  Call me
+                  {callingActive ? 'Calling...' : 'Call me'}
                 </button>
                 <button
                   className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
@@ -941,16 +956,24 @@ const MayaChatWidget: React.FC = () => {
             {/* Action bar — quick service path triggers */}
             <div className="d-flex gap-2 mt-1" style={{ paddingLeft: '4px' }}>
               <button
-                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-                style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', borderColor: 'var(--color-border, #e2e8f0)', color: 'var(--color-text-light, #718096)' }}
-                onClick={() => handleSend("I'd like someone to call me about the program")}
-                disabled={sending}
-                title="Request a call"
+                className={`btn btn-sm d-flex align-items-center gap-1 ${callingActive ? '' : 'btn-outline-secondary'}`}
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  borderColor: callingActive ? 'var(--color-accent, #38a169)' : 'var(--color-border, #e2e8f0)',
+                  color: callingActive ? 'var(--color-accent, #38a169)' : 'var(--color-text-light, #718096)',
+                  animation: callingActive ? 'mayaCallingPulse 1.5s ease-in-out infinite' : 'none',
+                  fontWeight: callingActive ? 600 : 400,
+                }}
+                onClick={() => !callingActive && handleSend("I'd like someone to call me about the program")}
+                disabled={sending || callingActive}
+                title={callingActive ? 'Call in progress' : 'Request a call'}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
                 </svg>
-                Call me
+                {callingActive ? 'Calling...' : 'Call me'}
               </button>
               <button
                 className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
@@ -999,6 +1022,10 @@ const mayaStyles = `
     font-size: 20px;
     letter-spacing: 2px;
     color: #a0aec0;
+  }
+  @keyframes mayaCallingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
 `;
 
