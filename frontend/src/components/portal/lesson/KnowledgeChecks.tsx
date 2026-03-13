@@ -31,12 +31,26 @@ const REACTIONS = [
   { id: 'confused', emoji: '\uD83D\uDE15', label: 'Confused' },
 ];
 
-function getCorrectAnswer(q: Check): string {
-  if (q.correct_answer) return q.correct_answer;
-  if (q.correct_index !== undefined && q.options[q.correct_index]) {
-    return q.options[q.correct_index].charAt(0);
+const LETTER_TO_INDEX: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
+
+/** Resolve the correct answer to an option index string ("0", "1", "2", ...) */
+function getCorrectIndex(q: Check): string {
+  if (q.correct_index !== undefined) return q.correct_index.toString();
+  if (q.correct_answer) {
+    // If it's a single letter like "A", "B", map to index
+    const upper = q.correct_answer.trim().toUpperCase();
+    if (upper.length === 1 && LETTER_TO_INDEX[upper] !== undefined) {
+      return LETTER_TO_INDEX[upper].toString();
+    }
+    // If it's already a numeric string like "0", "1"
+    if (/^\d+$/.test(q.correct_answer.trim())) {
+      return q.correct_answer.trim();
+    }
+    // If it matches the first char of an option (legacy format like "A. text" → letter "A")
+    const matchIdx = q.options.findIndex(o => o.charAt(0).toUpperCase() === upper);
+    if (matchIdx >= 0) return matchIdx.toString();
   }
-  return 'A';
+  return '0';
 }
 
 export default function KnowledgeChecks({ data, lessonId, onComplete, initialAnswers, onSaveProgress }: KnowledgeChecksProps) {
@@ -70,25 +84,24 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
 
   const total = data.length;
   const q = data[currentIndex];
-  const correctAnswer = getCorrectAnswer(q);
+  const correctAnswer = getCorrectIndex(q);
 
   // Check if current question was already answered (from saved state)
   const savedCurrent = answeredQuestions[currentIndex];
   const isCurrentAnswered = answered || !!savedCurrent;
   const currentAnswer = selectedAnswer || savedCurrent?.answer || null;
 
-  const handleSelect = (letter: string) => {
+  const handleSelect = (optionIndex: string) => {
     if (isCurrentAnswered) return;
-    const isRight = letter === correctAnswer;
-    setSelectedAnswer(letter);
+    const isRight = optionIndex === correctAnswer;
+    setSelectedAnswer(optionIndex);
     setAnswered(true);
     if (isRight) {
       setScore(prev => prev + 1);
     }
-    // Save progress
-    const savedAnswer: SavedAnswer = { answer: letter, correct: isRight };
+    const savedAnswer: SavedAnswer = { answer: optionIndex, correct: isRight };
     setAnsweredQuestions(prev => ({ ...prev, [currentIndex]: savedAnswer }));
-    onSaveProgress?.(currentIndex, letter, isRight);
+    onSaveProgress?.(currentIndex, optionIndex, isRight);
   };
 
   const handleNext = () => {
@@ -110,9 +123,16 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
     }
   };
 
-  const handleAIFollowup = () => {
+  const handleAskMentor = () => {
     if (q.ai_followup_prompt) {
       sendToMentor(q.ai_followup_prompt, 'knowledge_explanation');
+    } else {
+      const correctIdx = parseInt(correctAnswer, 10);
+      const correctText = q.options[correctIdx] || 'the correct answer';
+      sendToMentor(
+        `I just answered a knowledge check question: "${q.question}". The correct answer is "${correctText}". Can you explain this concept further and give me 2 prompts I can use to explore this topic deeper?`,
+        'knowledge_explanation'
+      );
     }
   };
 
@@ -206,10 +226,10 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
           {/* Options */}
           <div className="d-flex flex-column gap-2 ps-4">
             {q.options.map((opt, oi) => {
-              const letter = opt.charAt(0);
-              const isSelected = displayAnswer === letter;
-              const isCorrectOpt = showAnswered && letter === correctAnswer;
-              const isWrong = showAnswered && isSelected && letter !== correctAnswer;
+              const optKey = oi.toString();
+              const isSelected = displayAnswer === optKey;
+              const isCorrectOpt = showAnswered && optKey === correctAnswer;
+              const isWrong = showAnswered && isSelected && optKey !== correctAnswer;
 
               let borderColor = '#e2e8f0';
               let bg = '#fff';
@@ -227,7 +247,7 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                     cursor: showAnswered ? 'default' : 'pointer',
                     transition: 'all 0.15s',
                   }}
-                  onClick={() => handleSelect(letter)}
+                  onClick={() => handleSelect(optKey)}
                 >
                   <input
                     type="radio"
@@ -257,26 +277,24 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
                 <span className="small" style={{ color: isCorrect ? '#047857' : '#991b1b' }}>{q.explanation}</span>
               </div>
 
-              {/* AI Followup button */}
-              {q.ai_followup_prompt && (
-                <div className="ps-4 mt-2">
-                  <button
-                    className="btn btn-sm d-flex align-items-center gap-1"
-                    style={{
-                      background: '#eef2ff',
-                      color: '#6366f1',
-                      border: '1px solid #c7d2fe',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                    onClick={handleAIFollowup}
-                  >
-                    <i className="bi bi-robot"></i>
-                    Explore Further with AI Mentor
-                  </button>
-                </div>
-              )}
+              {/* Ask AI Mentor button — always visible after answering */}
+              <div className="ps-4 mt-2">
+                <button
+                  className="btn btn-sm d-flex align-items-center gap-1"
+                  style={{
+                    background: '#eef2ff',
+                    color: '#6366f1',
+                    border: '1px solid #c7d2fe',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                  onClick={handleAskMentor}
+                >
+                  <i className="bi bi-robot"></i>
+                  Ask AI Mentor
+                </button>
+              </div>
 
               {/* Reaction Buttons */}
               {!reactions[currentIndex] && (
