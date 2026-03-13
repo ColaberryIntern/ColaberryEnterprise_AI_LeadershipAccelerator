@@ -10,6 +10,7 @@ import ValidationSection from './ValidationSection';
 import QualityScoreSection from './QualityScoreSection';
 import SuggestionSection from './SuggestionSection';
 import ConceptV2 from '../../../../components/portal/lesson/ConceptV2';
+import PreviewMentorChat from './PreviewMentorChat';
 import { generateMockV2Content } from './mockDataGenerator';
 import { PromptOption } from './types';
 
@@ -235,43 +236,26 @@ export default function ObjectConfigEngine(props: Props) {
         )}
       </div>
       {showPreview ? (
-        <div className="card-body py-3" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto', position: 'relative' }}>
-          <div className="mb-2 d-flex align-items-center gap-2">
-            <span className="badge bg-secondary" style={{ fontSize: 10 }}>Mock Data</span>
-            <span className="text-muted" style={{ fontSize: 11 }}>This preview uses generated sample data — not AI output.</span>
-          </div>
-          <ConceptV2
-            content={mockContent}
-            lessonId={props.lessonId || ''}
-            isCompleted={false}
-          />
-          {/* Mentor FAB — visual replica of the student-side AI Mentor button */}
-          <div
-            style={{
-              position: 'sticky',
-              bottom: 12,
-              display: 'flex',
-              justifyContent: 'flex-end',
-              pointerEvents: 'none',
-              marginTop: 16,
-            }}
-          >
-            <div
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                border: '3px solid #fff',
-                boxShadow: '0 4px 20px rgba(99,102,241,0.45)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-              }}
-            >
-              <PreviewMentorFace size={48} />
+        <div className="card-body py-3" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'hidden', display: 'flex', gap: 12 }}>
+          {/* Left: Student content preview */}
+          <div style={{ flex: 1, overflowY: 'auto', minWidth: 0 }}>
+            <div className="mb-2 d-flex align-items-center gap-2">
+              <span className="badge bg-secondary" style={{ fontSize: 10 }}>Mock Data</span>
+              <span className="text-muted" style={{ fontSize: 11 }}>Preview with generated sample data.</span>
             </div>
+            <ConceptV2
+              content={mockContent}
+              lessonId={props.lessonId || ''}
+              isCompleted={false}
+            />
+          </div>
+          {/* Right: Embedded Mentor Chat */}
+          <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <PreviewMentorChat
+              token={props.token || ''}
+              apiUrl={props.apiUrl || ''}
+              lessonId={props.lessonId}
+            />
           </div>
         </div>
       ) : (

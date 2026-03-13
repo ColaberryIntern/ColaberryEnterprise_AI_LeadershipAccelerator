@@ -657,4 +657,87 @@ router.post('/api/admin/orchestration/mini-sections/:id/reverse-engineer', requi
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Admin preview mentor chat — same as participant mentor but with admin auth and no enrollment
+router.post('/api/admin/orchestration/mentor-preview', requireAdmin, async (req, res) => {
+  try {
+    const { message, lesson_id } = req.body;
+    if (!message) return res.status(400).json({ error: 'message is required' });
+
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+
+    // Build a simple system prompt for admin preview
+    const CurriculumLesson = (await import('../../models/CurriculumLesson')).default;
+    const CurriculumModule = (await import('../../models/CurriculumModule')).default;
+    const parts: string[] = [
+      `You are an AI Leadership Mentor for the Colaberry Enterprise AI Leadership Accelerator.
+Your role is to guide executive learners through their AI strategy journey.
+Be warm, encouraging, professional. Use practical business-focused language.
+Keep responses concise (2-3 paragraphs max).
+At the end, suggest 2 ready-to-use prompts the learner can run in their chosen LLM.
+Format: SUGGESTED_PROMPTS: ["prompt 1", "prompt 2"]`,
+    ];
+
+    // Add lesson context if available
+    if (lesson_id) {
+      const lesson = await CurriculumLesson.findByPk(lesson_id, {
+        include: [{ model: CurriculumModule, as: 'module' }],
+      });
+      if (lesson) {
+        const mod = (lesson as any).module;
+        parts.push(`\nCURRENT LESSON: "${lesson.title}" (${lesson.lesson_type})`);
+        parts.push(`MODULE: ${mod?.title || 'Unknown'}`);
+        parts.push(`DESCRIPTION: ${lesson.description}`);
+      }
+
+      // Add mentor preparation prompt if available
+      const MiniSection = (await import('../../models/MiniSection')).default;
+      const implTask = await MiniSection.findOne({
+        where: { lesson_id, mini_section_type: 'implementation_task', is_active: true },
+      });
+      if (implTask?.mentor_prompt_system) {
+        parts.push('\nMENTOR PREPARATION CONTEXT:');
+        parts.push(implTask.mentor_prompt_system);
+      }
+    }
+
+    // Add mock learner profile for preview
+    parts.push('\nLEARNER CONTEXT (Preview Mode):');
+    parts.push('Company: Preview Corp');
+    parts.push('Industry: Technology');
+    parts.push('Role: Director of Strategy');
+    parts.push('Goal: Implement AI Strategy');
+    parts.push('AI Maturity: 3/5');
+
+    const response = await openai.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: 'system', content: parts.join('\n') },
+        { role: 'user', content: message },
+      ],
+      temperature: 0.7,
+      max_tokens: 2048,
+    });
+
+    let reply = response.choices[0]?.message?.content || 'Unable to generate response.';
+    let suggested_prompts: string[] = [];
+
+    const promptMatch = reply.match(/SUGGESTED_PROMPTS:\s*\[([^\]]+)\]/);
+    if (promptMatch) {
+      try {
+        suggested_prompts = JSON.parse(`[${promptMatch[1]}]`);
+      } catch {
+        suggested_prompts = promptMatch[1].split(',').map(s => s.trim().replace(/^["']|["']$/g, ''));
+      }
+      reply = reply.replace(/\n?SUGGESTED_PROMPTS:\s*\[([^\]]+)\]/, '').trim();
+    }
+
+    res.json({ reply, suggested_prompts });
+  } catch (err: any) {
+    console.error('[Admin Mentor Preview]', err);
+    res.status(500).json({ error: 'Failed to get mentor response' });
+  }
+});
+
 export default router;
