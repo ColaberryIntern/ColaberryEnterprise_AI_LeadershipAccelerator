@@ -169,44 +169,6 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
             dangerouslySetInnerHTML={{ __html: getDisplayHtml() }}
           />
 
-          {/* Inline inputs for unknown placeholders */}
-          {unknownPhs.length > 0 && (
-            <div className="mb-3">
-              <div className="d-flex align-items-center gap-1 mb-2">
-                <i className="bi bi-pencil-square" style={{ color: '#6366f1', fontSize: 12 }}></i>
-                <span className="fw-semibold" style={{ fontSize: 12, color: '#475569' }}>
-                  Fill in to personalize your prompt
-                </span>
-              </div>
-              {unknownPhs.map((ph, i) => (
-                <div key={i} className="mb-2">
-                  <label className="form-label small fw-medium mb-1" style={{ color: '#475569', fontSize: 12 }}>
-                    {ph.description || ph.name.replace(/_/g, ' ')}
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm"
-                    placeholder={ph.example || `Enter ${ph.name.replace(/_/g, ' ')}...`}
-                    value={fillValues[ph.name] || ''}
-                    onChange={(e) => setFillValues(prev => ({ ...prev, [ph.name]: e.target.value }))}
-                    style={{ fontSize: 12, borderColor: '#c4b5fd' }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Expected Output Shape */}
-          {data.expected_output_shape && (
-            <div className="p-3 rounded mb-3" style={{ background: '#f0f9ff', border: '1px solid #bae6fd' }}>
-              <div className="d-flex align-items-center gap-2 mb-1">
-                <i className="bi bi-file-earmark-text" style={{ color: '#0284c7', fontSize: 13 }}></i>
-                <span className="fw-semibold small" style={{ color: '#075985' }}>Expected Output</span>
-              </div>
-              <span style={{ fontSize: 12, color: '#0c4a6e' }}>{data.expected_output_shape}</span>
-            </div>
-          )}
-
           {/* Action buttons */}
           <div className="d-flex gap-2">
             <button
