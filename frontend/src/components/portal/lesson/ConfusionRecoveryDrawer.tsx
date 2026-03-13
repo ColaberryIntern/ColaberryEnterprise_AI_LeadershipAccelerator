@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import portalApi from '../../../utils/portalApi';
+import React, { useState, useEffect } from 'react';
 import { useMentorContext } from '../../../contexts/MentorContext';
 
 interface BaseProps {
@@ -33,40 +32,6 @@ interface RecoverySections {
   stepByStep: string[];
   realWorld: string;
   misconceptions: string[];
-}
-
-function parseRecovery(raw: string): RecoverySections {
-  const sections: RecoverySections = {
-    thinkOfIt: '',
-    stepByStep: [],
-    realWorld: '',
-    misconceptions: [],
-  };
-
-  const parts = raw.split(/\*\*\d+\.\s*/);
-
-  if (parts[1]) {
-    sections.thinkOfIt = parts[1].replace(/^[^*]*\*\*\s*/, '').replace(/\*\*/g, '').trim();
-  }
-  if (parts[2]) {
-    const text = parts[2].replace(/^[^*]*\*\*\s*/, '').replace(/\*\*/g, '').trim();
-    const steps = text.split(/\n/).filter(l => l.trim()).map(l => l.replace(/^\d+[\.)\]]\s*/, '').trim());
-    sections.stepByStep = steps.length > 0 ? steps : [text];
-  }
-  if (parts[3]) {
-    sections.realWorld = parts[3].replace(/^[^*]*\*\*\s*/, '').replace(/\*\*/g, '').trim();
-  }
-  if (parts[4]) {
-    const text = parts[4].replace(/^[^*]*\*\*\s*/, '').replace(/\*\*/g, '').trim();
-    const items = text.split(/\n/).filter(l => l.trim()).map(l => l.replace(/^[-•]\s*/, '').trim());
-    sections.misconceptions = items.length > 0 ? items : [text];
-  }
-
-  if (!sections.thinkOfIt && !sections.stepByStep.length && !sections.realWorld && !sections.misconceptions.length) {
-    sections.thinkOfIt = raw;
-  }
-
-  return sections;
 }
 
 /** Build generic static recovery content (no LLM needed) */
@@ -112,70 +77,18 @@ function buildGenericSections(isLessonMode: boolean, props: ConfusionRecoveryDra
 }
 
 export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerProps) {
-  const { isOpen, onClose, lessonId } = props;
+  const { isOpen, onClose } = props;
   const isLessonMode = props.mode === 'lesson';
   const { sendToMentor } = useMentorContext();
   const [sections, setSections] = useState<RecoverySections | null>(null);
   const [helpfulFeedback, setHelpfulFeedback] = useState<boolean | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [isAiEnhanced, setIsAiEnhanced] = useState(false);
 
   // Show generic content immediately on open
   useEffect(() => {
     if (!isOpen) return;
     setHelpfulFeedback(null);
-    setIsAiEnhanced(false);
-    setAiLoading(false);
     setSections(buildGenericSections(isLessonMode, props));
   }, [isOpen]); // eslint-disable-line
-
-  const fetchAiRecovery = useCallback(() => {
-    setAiLoading(true);
-
-    let prompt: string;
-    if (isLessonMode) {
-      prompt = `The learner is confused about the lesson "${(props as LessonModeProps).lessonTitle}".
-
-Provide a confusion recovery response with these 4 sections:
-
-1. **Simpler Explanation** — Explain the key concepts of this lesson in a completely different, simpler way. Use an analogy that would resonate with a business executive.
-
-2. **Key Takeaways** — Break down the 3-4 most important points from this lesson in simple, numbered steps.
-
-3. **Real-World Example** — Give a concrete business scenario that illustrates how these concepts apply in practice.
-
-4. **Common Sticking Points** — Explain the parts of this topic that executives typically find confusing and why.`;
-    } else {
-      const kcProps = props as KCModeProps;
-      const isCorrect = kcProps.userAnswer === kcProps.correctAnswer;
-      prompt = `The learner is confused about this knowledge check question: "${kcProps.question}"
-They answered: "${kcProps.options.find(o => o.startsWith(kcProps.userAnswer)) || kcProps.userAnswer}" (${isCorrect ? 'CORRECT' : 'INCORRECT'})
-Correct answer: "${kcProps.options.find(o => o.startsWith(kcProps.correctAnswer)) || kcProps.correctAnswer}"
-
-Provide a confusion recovery response with these 4 sections:
-
-1. **Alternative Explanation** — Explain the concept in a completely different way, using simple language and an analogy.
-
-2. **Step-by-Step Breakdown** — Break the reasoning into 3-4 simple numbered steps that lead to the correct answer.
-
-3. **Real-World Example** — Give a concrete business scenario that illustrates this concept in action.
-
-4. **Common Misconceptions** — Explain why people commonly get this wrong and what thinking trap leads to the incorrect answer.`;
-    }
-
-    portalApi.post('/api/portal/mentor/chat', {
-      message: prompt,
-      lesson_id: lessonId,
-      context_type: 'knowledge_explanation',
-    }).then(res => {
-      setSections(parseRecovery(res.data.reply));
-      setIsAiEnhanced(true);
-    }).catch(() => {
-      // Keep generic content, just stop loading
-    }).finally(() => {
-      setAiLoading(false);
-    });
-  }, [isLessonMode, lessonId, props]);
 
   if (!isOpen) return null;
 
@@ -186,13 +99,13 @@ Provide a confusion recovery response with these 4 sections:
   const handleAskMentor = () => {
     if (isLessonMode) {
       sendToMentor(
-        `I'm confused about the lesson "${(props as LessonModeProps).lessonTitle}". Can you explain the key concepts in a simpler way?`,
-        'lesson_confusion'
+        `I'm confused about the lesson "${(props as LessonModeProps).lessonTitle}". Please explain the key concepts in a simpler way using a real-world business analogy. Then give me exactly 2 suggested prompts I can use to explore this topic further and deepen my understanding.`,
+        'knowledge_explanation'
       );
     } else {
       const kcProps = props as KCModeProps;
       sendToMentor(
-        `I'm confused about this question: "${kcProps.question}"\nI answered "${kcProps.userAnswer}" but the correct answer is "${kcProps.correctAnswer}". Can you help me understand this better?`,
+        `I'm confused about this knowledge check question: "${kcProps.question}"\nI answered "${kcProps.userAnswer}" but the correct answer is "${kcProps.correctAnswer}".\n\nPlease explain why the correct answer is right using a simple analogy. Then give me exactly 2 suggested prompts I can use to explore this concept further and deepen my understanding.`,
         'knowledge_explanation'
       );
     }
@@ -257,15 +170,6 @@ Provide a confusion recovery response with these 4 sections:
         <div className="px-4 py-3 flex-grow-1">
           {sections && (
             <div className="d-flex flex-column gap-3">
-              {/* AI enhanced badge */}
-              {isAiEnhanced && (
-                <div className="d-flex align-items-center gap-1">
-                  <span className="badge" style={{ background: '#eef2ff', color: '#6366f1', fontSize: 10 }}>
-                    <i className="bi bi-stars me-1"></i>AI-Personalized
-                  </span>
-                </div>
-              )}
-
               {/* Section 1 */}
               {sections.thinkOfIt && (
                 <div className="p-3 rounded" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
@@ -342,37 +246,6 @@ Provide a confusion recovery response with these 4 sections:
 
         {/* Footer */}
         <div className="px-4 py-3 border-top" style={{ flexShrink: 0 }}>
-          {/* Enhance with AI button — only show if not already AI-enhanced */}
-          {!isAiEnhanced && (
-            <button
-              className="btn btn-sm d-flex align-items-center gap-2 w-100 justify-content-center mb-2"
-              style={{
-                background: aiLoading ? '#e2e8f0' : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
-                color: '#4f46e5',
-                border: '1px solid #c7d2fe',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 600,
-              }}
-              onClick={fetchAiRecovery}
-              disabled={aiLoading}
-            >
-              {aiLoading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm" role="status" style={{ width: 14, height: 14 }}>
-                    <span className="visually-hidden">Loading...</span>
-                  </span>
-                  Generating personalized explanation...
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-stars"></i>
-                  Enhance with AI
-                </>
-              )}
-            </button>
-          )}
-
           <button
             className="btn d-flex align-items-center gap-2 px-4 py-2 w-100 justify-content-center"
             style={{
