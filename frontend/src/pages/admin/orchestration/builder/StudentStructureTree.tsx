@@ -1,5 +1,5 @@
 import React from 'react';
-import { MiniSection, TYPE_BADGE_MAP, TYPE_ICONS, TYPE_STUDENT_LABEL, getScoreColor } from './types';
+import { MiniSection, TYPE_ICONS, getScoreColor } from './types';
 
 interface Props {
   miniSections: MiniSection[];
@@ -34,9 +34,7 @@ export default function StudentStructureTree({ miniSections, selectedId, onSelec
   return (
     <div className="d-flex flex-column gap-1" role="tree" aria-label="Student content structure">
       {miniSections.map((ms, i) => {
-        const typeInfo = TYPE_BADGE_MAP[ms.mini_section_type] || { badge: 'bg-dark', label: ms.mini_section_type || '?' };
         const icon = TYPE_ICONS[ms.mini_section_type] || 'bi-circle';
-        const studentLabel = TYPE_STUDENT_LABEL[ms.mini_section_type] || ms.mini_section_type;
         const isSelected = selectedId === ms.id;
         const isDirty = isDirtyId === ms.id;
 
@@ -88,15 +86,16 @@ export default function StudentStructureTree({ miniSections, selectedId, onSelec
 
             {/* Content */}
             <div className="d-flex flex-column" style={{ minWidth: 0, flex: 1 }}>
-              <div className="d-flex align-items-center gap-1">
-                <span className={`badge ${typeInfo.badge} flex-shrink-0`} style={{ fontSize: 8 }}>{studentLabel}</span>
-                {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 7 }}>unsaved</span>}
-                {ms.quality_score != null && (
-                  <span className={`badge ${getScoreColor(ms.quality_score)} flex-shrink-0`} style={{ fontSize: 7 }} title={`Quality: ${Math.round(ms.quality_score)}/100`}>
-                    {Math.round(ms.quality_score)}
-                  </span>
-                )}
-              </div>
+              {(isDirty || ms.quality_score != null) && (
+                <div className="d-flex align-items-center gap-1">
+                  {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 7 }}>unsaved</span>}
+                  {ms.quality_score != null && (
+                    <span className={`badge ${getScoreColor(ms.quality_score)} flex-shrink-0`} style={{ fontSize: 7 }} title={`Quality: ${Math.round(ms.quality_score)}/100`}>
+                      {Math.round(ms.quality_score)}
+                    </span>
+                  )}
+                </div>
+              )}
               <span className="text-truncate fw-medium" style={{ fontSize: 11 }}>{ms.title}</span>
             </div>
 
