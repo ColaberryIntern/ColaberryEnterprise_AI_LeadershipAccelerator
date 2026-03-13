@@ -1,5 +1,6 @@
 import { FollowUpSequence, Campaign, AdminUser } from '../models';
 import { seedAlumniCampaigns } from '../services/alumniCampaignService';
+import { seedAlumniReferralCampaign } from '../services/alumniReferralCampaignService';
 
 /**
  * Idempotent seed for all core campaigns.
@@ -123,6 +124,13 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     } catch (err: any) {
       console.warn('[Seed] Alumni campaigns seed skipped:', err?.message);
     }
+  }
+
+  // ─── 8. Alumni Referrals Campaign (for introduced referral contacts) ──
+  try {
+    await seedAlumniReferralCampaign();
+  } catch (err: any) {
+    console.warn('[Seed] Alumni referrals campaign seed skipped:', err?.message);
   }
 
   console.log('[Seed] All core campaigns seeded.');

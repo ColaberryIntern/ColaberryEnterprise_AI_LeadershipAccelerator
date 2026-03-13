@@ -178,6 +178,18 @@ export async function submitReferral(
 
   const lead = leadResult.lead;
 
+  // 3b. Populate alumni_context with referrer info for introduced referrals
+  if (data.referral_type === 'introduced') {
+    await lead.update({
+      alumni_context: {
+        referred_by_name: profile.alumni_name,
+        referred_by_email: profile.alumni_email,
+        referral_type: data.referral_type,
+        referral_relationship: 'alumni_introduction',
+      },
+    });
+  }
+
   // 4. Update referral with lead_id
   await referral.update({ lead_id: lead.id, status: 'lead_created' });
 
@@ -188,26 +200,48 @@ export async function submitReferral(
   });
 
   // 5. Find and assign campaign
-  // Referral contacts are corporate PROSPECTS — enroll them in prospect-facing campaigns,
-  // NOT alumni campaigns (those are for the alumni themselves).
+  // - corporate_sponsor / anonymous → cold outbound (alumni reaches out themselves, we enhance)
+  // - introduced → "Colaberry Alumni Referrals Campaign" (name-drops the referrer)
   try {
-    const campaignNameMap: Record<string, string> = {
-      corporate_sponsor: 'Maya Sponsorship Campaign',
-      introduced: 'Maya Inbound Lead Campaign',
-      anonymous: 'Maya Inbound Lead Campaign',
-    };
-    const targetName = campaignNameMap[data.referral_type];
-
-    const campaign = await Campaign.findOne({
-      where: { name: targetName, status: 'active' },
-    }) || await Campaign.findOne({
-      where: { type: 'warm_nurture', status: 'active' },
-      order: [['created_at', 'DESC']],
-    });
+    let campaign;
+    if (data.referral_type === 'introduced') {
+      campaign = await Campaign.findOne({
+        where: { name: 'Colaberry Alumni Referrals Campaign', status: 'active' },
+      });
+    } else {
+      // corporate_sponsor and anonymous → cold outbound
+      campaign = await Campaign.findOne({
+        where: { type: 'cold_outbound' },
+        order: [['created_at', 'DESC']],
+      });
+    }
+    // Fallback to any active warm_nurture
+    if (!campaign) {
+      campaign = await Campaign.findOne({
+        where: { type: 'warm_nurture', status: 'active' },
+        order: [['created_at', 'DESC']],
+      });
+    }
 
     if (campaign) {
       await enrollLeadsInCampaign(campaign.id, [lead.id]);
       await referral.update({ campaign_id: campaign.id, status: 'campaign_assigned' });
+
+      // Store referral metadata on CampaignLead for tracking
+      const campaignLead = await CampaignLead.findOne({
+        where: { campaign_id: campaign.id, lead_id: lead.id },
+      });
+      if (campaignLead) {
+        await campaignLead.update({
+          metadata: {
+            ...((campaignLead as any).metadata || {}),
+            referral_id: referral.id,
+            referred_by_name: profile.alumni_name,
+            referred_by_profile_id: profileId,
+            referral_type: data.referral_type,
+          },
+        });
+      }
 
       await ReferralActivityEvent.create({
         referral_id: referral.id,

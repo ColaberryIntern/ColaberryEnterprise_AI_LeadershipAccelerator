@@ -245,6 +245,7 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       linkedin_url: lead.linkedin_url || undefined,
       source: lead.source || undefined,
       form_type: lead.form_type || undefined,
+      alumni_context: lead.alumni_context || undefined,
     };
 
     // Load ICP profile intelligence (pain indicators, buying signals) for this campaign

@@ -159,14 +159,24 @@ function buildUserPrompt(params: GenerateMessageParams): string {
 
   if (lead.alumni_context) {
     const ac = lead.alumni_context;
-    parts.push(`\nALUMNI CONTEXT:`);
-    if (ac.years_since_registration) parts.push(`- Years Since Registration: ${ac.years_since_registration}`);
-    if (ac.career_stage) parts.push(`- Career Stage: ${ac.career_stage}`);
-    if (ac.program_type) parts.push(`- Program: ${ac.program_type}`);
-    if (ac.engagement_status) parts.push(`- Engagement Status: ${ac.engagement_status}`);
-    if (ac.mentor) parts.push(`- Mentor: ${ac.mentor}`);
-    if (ac.alumni_cohort) parts.push(`- Alumni Cohort: ${ac.alumni_cohort}`);
-    if (ac.class_name) parts.push(`- Class: ${ac.class_name}`);
+
+    // Referral context — lead was referred by a Colaberry alumni
+    if (ac.referred_by_name) {
+      parts.push(`\nREFERRAL CONTEXT:`);
+      parts.push(`- Referred by: ${ac.referred_by_name} (Colaberry alumni)`);
+      if (ac.referral_type) parts.push(`- Referral type: ${ac.referral_type}`);
+      parts.push(`- IMPORTANT: Mention ${ac.referred_by_name} naturally in the message to establish trust and warmth. This is a warm introduction, not a cold pitch.`);
+    } else {
+      // Standard alumni context (lead IS an alumni)
+      parts.push(`\nALUMNI CONTEXT:`);
+      if (ac.years_since_registration) parts.push(`- Years Since Registration: ${ac.years_since_registration}`);
+      if (ac.career_stage) parts.push(`- Career Stage: ${ac.career_stage}`);
+      if (ac.program_type) parts.push(`- Program: ${ac.program_type}`);
+      if (ac.engagement_status) parts.push(`- Engagement Status: ${ac.engagement_status}`);
+      if (ac.mentor) parts.push(`- Mentor: ${ac.mentor}`);
+      if (ac.alumni_cohort) parts.push(`- Alumni Cohort: ${ac.alumni_cohort}`);
+      if (ac.class_name) parts.push(`- Class: ${ac.class_name}`);
+    }
   }
 
   if (campaignContext) {
