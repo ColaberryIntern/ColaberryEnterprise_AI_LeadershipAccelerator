@@ -232,6 +232,60 @@ const PREVIEW_FALLBACK: MentorContextValue = {
   buildPersonalizedPrompt: (p: string) => p,
 };
 
+/** Lightweight provider for admin preview — real LLM state, mock learner profile, no portalApi */
+export function AdminPreviewMentorProvider({ children }: { children: React.ReactNode }) {
+  const [selectedLLMId, setSelectedLLMId] = useState('chatgpt');
+  const selectedLLM = LLM_OPTIONS.find(l => l.id === selectedLLMId) || LLM_OPTIONS[0];
+  const onMentorResponded = useRef<((response: string) => void) | null>(null);
+
+  const openLLMWithPrompt = useCallback(async (prompt: string) => {
+    const encoded = encodeURIComponent(prompt);
+    if (selectedLLM.id === 'chatgpt') {
+      window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
+    } else if (selectedLLM.id === 'claude') {
+      window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
+    } else {
+      try { await navigator.clipboard.writeText(prompt); } catch {}
+      window.open(selectedLLM.url, '_blank');
+    }
+  }, [selectedLLM]);
+
+  return (
+    <MentorContext.Provider value={{
+      selectedLLM,
+      setSelectedLLMById: setSelectedLLMId,
+      llmOptions: LLM_OPTIONS,
+      lessonContext: defaultLessonContext,
+      updateLessonContext: () => {},
+      isMentorOpen: false,
+      openMentorPanel: () => {},
+      closeMentorPanel: () => {},
+      toggleMentorPanel: () => {},
+      pendingMentorMessage: null,
+      sendToMentor: () => {},
+      clearPendingMessage: () => {},
+      pendingPromptLabMessage: null,
+      sendToPromptLab: () => {},
+      clearPendingPromptLabMessage: () => {},
+      onMentorResponded,
+      fireMentorResponded: () => {},
+      openLLMWithPrompt,
+      learnerProfile: {
+        company_name: 'Preview Corp',
+        industry: 'Technology',
+        role: 'Director of Strategy',
+        goal: 'Implement AI Strategy',
+        ai_maturity_level: 3,
+        identified_use_case: 'Process Automation',
+      },
+      updateLearnerProfile: async () => {},
+      buildPersonalizedPrompt: (p: string) => p,
+    }}>
+      {children}
+    </MentorContext.Provider>
+  );
+}
+
 export function useMentorContext() {
   const ctx = useContext(MentorContext);
   if (!ctx) {
