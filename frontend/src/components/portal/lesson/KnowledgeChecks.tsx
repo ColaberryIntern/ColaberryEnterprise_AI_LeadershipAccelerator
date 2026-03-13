@@ -123,6 +123,16 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
     }
   };
 
+  const handleRetake = () => {
+    setCurrentIndex(0);
+    setSelectedAnswer(null);
+    setAnswered(false);
+    setScore(0);
+    setQuizComplete(false);
+    setAnsweredQuestions({});
+    setReactions({});
+  };
+
   const handleAskMentor = () => {
     if (q.ai_followup_prompt) {
       sendToMentor(q.ai_followup_prompt, 'knowledge_explanation');
@@ -169,12 +179,31 @@ export default function KnowledgeChecks({ data, lessonId, onComplete, initialAns
             You got {score} out of {total} questions correct.
           </p>
           {!passed && (
-            <div className="p-3 rounded mb-3 d-inline-block" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-              <span style={{ fontSize: 13, color: '#92400e' }}>
-                <i className="bi bi-info-circle me-1"></i>
-                70% is needed to pass. Review the material and try again.
-              </span>
-            </div>
+            <>
+              <div className="p-3 rounded mb-3 d-inline-block" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+                <span style={{ fontSize: 13, color: '#92400e' }}>
+                  <i className="bi bi-info-circle me-1"></i>
+                  70% is needed to pass. Review the material and try again.
+                </span>
+              </div>
+              <div>
+                <button
+                  className="btn px-4 py-2"
+                  style={{
+                    background: '#6366f1',
+                    color: '#fff',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    border: 'none',
+                  }}
+                  onClick={handleRetake}
+                >
+                  <i className="bi bi-arrow-repeat me-1"></i>
+                  Retake Quiz
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
