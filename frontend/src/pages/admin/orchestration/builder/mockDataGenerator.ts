@@ -46,6 +46,8 @@ export interface MockV2Content {
     deliverable: string;
     estimated_minutes: number;
     getting_started: string[];
+    tools?: { name: string; url: string; is_free: boolean }[];
+    evidence_requirements?: { name: string; description: string; format: string }[];
     required_artifacts: { name: string; description: string; file_types: string[]; validation_criteria: string }[];
     scenario: string;
     steps: string[];
@@ -161,6 +163,15 @@ function generateImplementationTask(ms: MiniSectionInput, lessonTitle: string): 
       'Gather relevant organizational data and stakeholder input',
       'Use the provided framework to structure your analysis',
       'Draft your initial deliverable, then iterate using AI feedback',
+    ],
+    tools: [
+      { name: 'Google Sheets', url: 'https://sheets.google.com', is_free: true },
+      { name: 'ChatGPT', url: 'https://chat.openai.com', is_free: true },
+      { name: 'Canva', url: 'https://canva.com', is_free: true },
+    ],
+    evidence_requirements: [
+      { name: 'Strategy Document', description: 'PDF or DOCX with your analysis and recommendations', format: 'file' },
+      { name: 'Execution Screenshot', description: 'Screenshot showing successful AI tool output', format: 'screenshot' },
     ],
     required_artifacts: createsArtifacts.map((id, i) => ({
       name: `Artifact ${i + 1}`,

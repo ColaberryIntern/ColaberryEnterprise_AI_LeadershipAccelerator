@@ -66,6 +66,8 @@ interface ImplementationTaskProps {
     estimated_minutes?: number;
     getting_started?: string[];
     required_artifacts?: RequiredArtifact[];
+    tools?: { name: string; url: string; is_free: boolean }[];
+    evidence_requirements?: { name: string; description: string; format: string }[];
     scenario?: string;
     steps?: string[];
     evaluation_criteria?: string;
@@ -117,7 +119,7 @@ export default function ImplementationTask({ data, lessonId, onSubmit, initialTa
       .catch(() => {});
   }, [lessonId]);
 
-  // Use admin-defined artifacts if available, otherwise fall back to LLM-generated
+  // Use admin-defined artifacts if available, then LLM required_artifacts, then evidence_requirements
   const effectiveArtifacts: RequiredArtifact[] = orchContext?.artifactDefinitions?.length
     ? orchContext.artifactDefinitions.map(a => ({
         name: a.name,
@@ -127,7 +129,17 @@ export default function ImplementationTask({ data, lessonId, onSubmit, initialTa
         allow_screenshot: a.requires_screenshot || false,
         artifact_definition_id: a.id,
       }))
-    : (data.required_artifacts || []);
+    : data.required_artifacts?.length
+      ? data.required_artifacts
+      : (data.evidence_requirements || []).map(e => ({
+          name: e.name,
+          description: e.description,
+          file_types: e.format === 'screenshot' ? ['.png', '.jpg', '.jpeg']
+                    : e.format === 'code' ? ['.py', '.js', '.ts', '.txt']
+                    : ['.pdf', '.docx', '.xlsx', '.pptx', '.png', '.txt'],
+          validation_criteria: e.description,
+          allow_screenshot: e.format === 'screenshot',
+        }));
 
   const vars = orchContext?.resolvedVariables || {};
   const title = resolveVariablesInText(data.title || 'Implementation Task', vars);
@@ -135,6 +147,7 @@ export default function ImplementationTask({ data, lessonId, onSubmit, initialTa
   const requirements = data.requirements || data.steps || [];
   const deliverable = resolveVariablesInText(data.deliverable, vars);
   const estimatedMinutes = data.estimated_minutes || 30;
+  const tools = data.tools || [];
   const artifacts = effectiveArtifacts;
 
   const [briefingReceived, setBriefingReceived] = useState(initialTaskData?.briefing_received || false);
@@ -428,6 +441,36 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                 <span style={{ fontSize: 12, color: '#334155' }}>{req}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {tools.length > 0 && (
+          <div className="mb-3">
+            <span className="text-uppercase fw-bold d-block mb-2" style={{ fontSize: 10, color: '#8b5cf6', letterSpacing: 1 }}>Tools Needed</span>
+            <div className="d-flex flex-wrap gap-2">
+              {tools.map((tool, i) => (
+                <a
+                  key={i}
+                  href={tool.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="badge d-flex align-items-center gap-1"
+                  style={{
+                    background: tool.is_free ? '#ecfdf5' : '#fffbeb',
+                    color: tool.is_free ? '#047857' : '#92400e',
+                    border: `1px solid ${tool.is_free ? '#a7f3d0' : '#fde68a'}`,
+                    fontSize: 11,
+                    fontWeight: 500,
+                    padding: '5px 10px',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <i className="bi bi-box-arrow-up-right" style={{ fontSize: 9 }}></i>
+                  {tool.name}
+                  <span style={{ fontSize: 9, opacity: 0.7 }}>{tool.is_free ? 'Free' : 'Paid'}</span>
+                </a>
+              ))}
+            </div>
           </div>
         )}
 

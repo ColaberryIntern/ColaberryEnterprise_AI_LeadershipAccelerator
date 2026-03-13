@@ -621,24 +621,46 @@ export async function gradeArtifacts(
     missing_items: string[];
   }> = [];
 
+  const fs = await import('fs');
+  const pathMod = await import('path');
+
   for (const artifact of artifacts) {
+    // Read actual file content from uploaded submission
+    let fileContent = '';
+    try {
+      const submission = await AssignmentSubmission.findByPk(artifact.submission_id);
+      if (submission?.file_path) {
+        const ext = pathMod.extname(submission.file_path).toLowerCase();
+        if (['.txt', '.md', '.py', '.js', '.ts', '.java', '.csv', '.json', '.xml', '.html', '.css'].includes(ext)) {
+          fileContent = fs.readFileSync(submission.file_path, 'utf-8').substring(0, 10000);
+        }
+      }
+    } catch { /* ignore read errors */ }
+
+    const contentSection = fileContent
+      ? `\nFILE CONTENT:\n${fileContent}\n`
+      : '';
+
     const prompt = artifact.is_screenshot
       ? `You are grading a screenshot proof of a completed task.
 Artifact: "${artifact.name}"
 File: ${artifact.file_name}
 Validation criteria: ${artifact.validation_criteria}
 
-Based on the file name and type, provide grading feedback. Since we cannot view the screenshot contents directly in this context, provide feedback based on whether the file type is appropriate and general guidance on what should be visible.
+Since this is an image file, grade based on whether the file type is appropriate for a screenshot proof. Provide guidance on what should be visible in the screenshot.
 
 Respond in JSON: { "passed": true/false, "feedback": "...", "strengths": ["..."], "missing_items": ["..."] }`
       : `You are grading a submitted artifact for an enterprise AI training program.
 Artifact: "${artifact.name}"
 File: ${artifact.file_name} (${artifact.file_type})
 Validation criteria: ${artifact.validation_criteria}
+${contentSection}
+Grade this submission against the validation criteria. Be encouraging but rigorous.
+- Check if all requirements in the validation criteria are addressed
+- A score of "passed" means the learner demonstrated adequate understanding
+- If the content is a simulated/placeholder submission, mark as not passed
 
-Based on the file name, type, and validation criteria, provide grading feedback. Check if the file type matches what was requested. Provide constructive feedback.
-
-Respond in JSON: { "passed": true/false, "feedback": "...", "strengths": ["..."], "missing_items": ["..."] }`;
+Respond in JSON: { "passed": true/false, "feedback": "2-3 sentence assessment", "strengths": ["..."], "missing_items": ["..."] }`;
 
     try {
       const response = await openai.chat.completions.create({
@@ -652,7 +674,7 @@ Respond in JSON: { "passed": true/false, "feedback": "...", "strengths": ["..."]
       gradingResults.push({
         name: artifact.name,
         submission_id: artifact.submission_id,
-        passed: result.passed ?? true,
+        passed: result.passed ?? false,
         feedback: result.feedback || 'Submission received.',
         strengths: result.strengths || [],
         missing_items: result.missing_items || [],
@@ -661,10 +683,10 @@ Respond in JSON: { "passed": true/false, "feedback": "...", "strengths": ["..."]
       gradingResults.push({
         name: artifact.name,
         submission_id: artifact.submission_id,
-        passed: true,
-        feedback: 'Submission received. Auto-grading unavailable — manual review pending.',
+        passed: false,
+        feedback: 'Auto-grading unavailable. Please resubmit or contact support.',
         strengths: [],
-        missing_items: [],
+        missing_items: ['Unable to grade automatically'],
       });
     }
   }

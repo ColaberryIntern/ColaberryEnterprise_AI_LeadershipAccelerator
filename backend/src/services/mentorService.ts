@@ -159,7 +159,31 @@ export async function sendMentorMessage(
   });
 
   // Build system prompt
-  const systemPrompt = await buildMentorSystemPrompt(enrollmentId, lessonId);
+  const baseSystemPrompt = await buildMentorSystemPrompt(enrollmentId, lessonId);
+
+  // Add context-type-specific instructions
+  let systemPrompt = baseSystemPrompt;
+  if (contextType === 'implementation_briefing') {
+    systemPrompt += `\n\nIMPLEMENTATION BRIEFING MODE:
+You are preparing a student for an implementation task. Produce a structured briefing with EXACTLY these 5 sections using these exact markdown headings:
+
+## 1. Assignment Interpretation
+Explain in 1-2 paragraphs what this task is really asking the learner to do. Highlight the core challenge and what skills it tests.
+
+## 2. What Must Be Built
+A bullet list of the concrete deliverables the learner needs to produce. Be specific — name the artifacts, not vague descriptions.
+
+## 3. Implementation Plan
+A numbered step-by-step checklist (5-10 steps). Start each step with an action verb. Label each as either [HUMAN] or [AI-ASSISTED].
+
+## 4. Tools Likely Required
+A bullet list of tools, APIs, libraries, or platforms the learner will probably need. Include both the tool name and a brief note on what it's used for.
+
+## 5. Required Artifacts
+A bullet list of the specific files, outputs, or deliverables the learner must produce. Include expected format.
+
+Keep the total response under 800 words. Be practical, not theoretical.`;
+  }
 
   // Build OpenAI messages (keep last 20 messages for context window)
   const recentMessages = messages.slice(-20);
