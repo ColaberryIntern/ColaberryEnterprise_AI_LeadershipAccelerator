@@ -216,7 +216,10 @@ const PREVIEW_FALLBACK: MentorContextValue = {
   clearPendingPromptLabMessage: () => {},
   onMentorResponded: { current: null },
   fireMentorResponded: () => {},
-  openLLMWithPrompt: async () => {},
+  openLLMWithPrompt: async (prompt: string) => {
+    const encoded = encodeURIComponent(prompt);
+    window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
+  },
   learnerProfile: {
     company_name: 'Preview Corp',
     industry: 'Technology',

@@ -221,7 +221,7 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
               }}
               onClick={openRunModal}
             >
-              <i className={`bi ${selectedLLM.icon}`}></i> Run in {selectedLLM.name}
+              <i className="bi bi-magic"></i> Generate Prompt
             </button>
             <button
               className="btn d-flex align-items-center gap-2 px-3 py-2"
