@@ -701,6 +701,7 @@ export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefre
   const isColdOutbound = campaignType === 'cold_outbound';
   const [scorePreview, setScorePreview] = useState<any[] | null>(null);
   const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
+  const [scorePoolTotal, setScorePoolTotal] = useState(0);
   const [intelligenceSummary, setIntelligenceSummary] = useState<any | null>(null);
 
   // Enrolled leads summary
@@ -889,9 +890,10 @@ export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefre
         try {
           const scoreRes = await api.post(`/api/admin/icp-profiles/${profileId}/score-preview`, {
             campaign_id: campaignId,
-            max_results: 25,
+            max_results: 100,
           });
           setScorePreview(scoreRes.data.results || []);
+          setScorePoolTotal(scoreRes.data.pool_total || 0);
         } catch (scoreErr) {
           console.error('Score preview failed:', scoreErr);
         } finally {
@@ -1162,7 +1164,7 @@ export default function ICPLeadsTab({ campaignId, campaignType, headers, onRefre
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <span className="small text-muted">
                     {isColdOutbound && scorePreview
-                      ? `Scored ${scorePreview.length} leads from pool of ${apolloTotal}`
+                      ? `Showing top ${scorePreview.length} scored leads from pool of ${scorePoolTotal} (${apolloTotal.toLocaleString()} total matches)`
                       : `Showing ${apolloResults.length} of ${apolloTotal} results`}
                     {selectedApollo.size > 0 && ` (${selectedApollo.size} selected)`}
                   </span>
