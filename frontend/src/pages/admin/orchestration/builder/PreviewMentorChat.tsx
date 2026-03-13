@@ -48,11 +48,11 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
     setTimeout(scrollToBottom, 100);
   }, [messages, scrollToBottom]);
 
-  const sendMessage = useCallback(async (text?: string) => {
+  const sendMessage = useCallback(async (text?: string, displayText?: string) => {
     const msg = (text || input).trim();
     if (!msg || sending) return;
 
-    setMessages(prev => [...prev, { role: 'user', content: msg }]);
+    setMessages(prev => [...prev, { role: 'user', content: displayText || msg }]);
     setInput('');
     setSending(true);
     setSuggestedPrompts([]);
@@ -77,7 +77,7 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
   // Auto-send pending messages from ImplementationTask "Ask AI Mentor" button
   useEffect(() => {
     if (pendingMentorMessage && !sending) {
-      sendMessage(pendingMentorMessage.message);
+      sendMessage(pendingMentorMessage.message, pendingMentorMessage.displayText);
       clearPendingMessage();
     }
   }, [pendingMentorMessage, sending, sendMessage, clearPendingMessage]);

@@ -242,7 +242,7 @@ Please provide a structured briefing with:
 
 Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED] labels.`;
     }
-    sendToMentor(prompt, 'implementation_briefing');
+    sendToMentor(prompt, 'implementation_briefing', 'Prepare my implementation briefing');
   };
 
   const handleNotebookUpload = async (file: File) => {

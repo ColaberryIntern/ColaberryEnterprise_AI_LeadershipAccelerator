@@ -188,11 +188,11 @@ function PortalMentorChat() {
     }
   }, [isMentorOpen]);
 
-  const sendMessage = useCallback(async (text?: string, contextType?: string) => {
+  const sendMessage = useCallback(async (text?: string, contextType?: string, displayText?: string) => {
     const msg = (text || input).trim();
     if (!msg || sending) return;
 
-    const userMsg: Message = { role: 'user', content: msg, timestamp: new Date().toISOString() };
+    const userMsg: Message = { role: 'user', content: displayText || msg, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setSending(true);
@@ -226,7 +226,7 @@ function PortalMentorChat() {
   // Handle pending messages from lesson components
   useEffect(() => {
     if (pendingMentorMessage && !sending) {
-      sendMessage(pendingMentorMessage.message, pendingMentorMessage.contextType);
+      sendMessage(pendingMentorMessage.message, pendingMentorMessage.contextType, pendingMentorMessage.displayText);
       clearPendingMessage();
     }
   }, [pendingMentorMessage, sending, sendMessage, clearPendingMessage]);

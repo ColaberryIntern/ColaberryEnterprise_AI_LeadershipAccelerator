@@ -54,6 +54,7 @@ export interface LearnerProfile {
 interface PendingMessage {
   message: string;
   contextType: string;
+  displayText?: string;
 }
 
 interface MentorContextValue {
@@ -67,7 +68,7 @@ interface MentorContextValue {
   closeMentorPanel: () => void;
   toggleMentorPanel: () => void;
   pendingMentorMessage: PendingMessage | null;
-  sendToMentor: (message: string, contextType: string) => void;
+  sendToMentor: (message: string, contextType: string, displayText?: string) => void;
   clearPendingMessage: () => void;
   pendingPromptLabMessage: string | null;
   sendToPromptLab: (prompt: string) => void;
@@ -142,8 +143,8 @@ export function MentorContextProvider({ children }: { children: React.ReactNode 
   const closeMentorPanel = useCallback(() => setIsOpen(false), []);
   const toggleMentorPanel = useCallback(() => setIsOpen(prev => !prev), []);
 
-  const sendToMentor = useCallback((message: string, contextType: string) => {
-    setPendingMsg({ message, contextType });
+  const sendToMentor = useCallback((message: string, contextType: string, displayText?: string) => {
+    setPendingMsg({ message, contextType, displayText });
     setIsOpen(true);
   }, []);
 
@@ -244,8 +245,8 @@ export function AdminPreviewMentorProvider({ children }: { children: React.React
   const [isOpen, setIsOpen] = useState(false);
   const [pendingMsg, setPendingMsg] = useState<PendingMessage | null>(null);
 
-  const sendToMentor = useCallback((message: string, contextType: string) => {
-    setPendingMsg({ message, contextType });
+  const sendToMentor = useCallback((message: string, contextType: string, displayText?: string) => {
+    setPendingMsg({ message, contextType, displayText });
     setIsOpen(true);
   }, []);
 
