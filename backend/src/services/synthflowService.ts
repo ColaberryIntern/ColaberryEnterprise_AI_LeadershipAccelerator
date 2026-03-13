@@ -115,8 +115,10 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
       return { success: false, error: JSON.stringify(data) };
     }
 
-    console.log(`[Synthflow] ${params.callType} call initiated for ${params.name} (prompt-driven)`);
-    return { success: true, data };
+    // Extract call_id from Synthflow response (varies by API version)
+    const callId = data.call_id || data.id || data.data?.call_id || data.data?.id || null;
+    console.log(`[Synthflow] ${params.callType} call initiated for ${params.name}. call_id: ${callId}. Response keys: ${Object.keys(data).join(',')}`);
+    return { success: true, data: { ...data, call_id: callId } };
   } catch (error: any) {
     console.error('[Synthflow] Request failed:', error.message);
     return { success: false, error: error.message };
