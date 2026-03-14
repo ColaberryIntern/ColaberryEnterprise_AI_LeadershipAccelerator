@@ -7,10 +7,20 @@ interface Message {
   content: string;
 }
 
+interface ImplementationTaskData {
+  title: string;
+  description: string;
+  deliverable: string;
+  requirements: string[];
+  required_artifacts: { name: string; description: string; file_types: string[]; validation_criteria: string }[];
+}
+
 interface PreviewMentorChatProps {
   token: string;
   apiUrl: string;
   lessonId?: string;
+  lessonTitle?: string;
+  implementationTask?: ImplementationTaskData | null;
   onClose?: () => void;
 }
 
@@ -128,7 +138,7 @@ function renderMarkdown(text: string, fs: boolean): React.ReactNode[] {
   return elements;
 }
 
-export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: PreviewMentorChatProps) {
+export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle, implementationTask, onClose }: PreviewMentorChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -376,7 +386,34 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
               }}
               onClick={() => {
                 const lastMentorMsg = [...messages].reverse().find(m => m.role === 'assistant');
-                const prompt = `Continue helping me with this implementation task.\n\nMENTOR BRIEFING:\n${lastMentorMsg?.content || ''}`;
+                const task = implementationTask;
+                const artifactsList = task?.required_artifacts?.length
+                  ? `\n\nREQUIRED ARTIFACTS:\n${task.required_artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description} (${a.file_types.join(', ')})\n   Criteria: ${a.validation_criteria}`).join('\n\n')}`
+                  : '';
+                const prompt = `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
+
+ASSIGNMENT: ${task?.title || 'Implementation Task'}
+DESCRIPTION: ${task?.description || ''}
+DELIVERABLE: ${task?.deliverable || ''}
+
+REQUIREMENTS:
+${(task?.requirements || []).map((r, i) => `${i + 1}. ${r}`).join('\n')}
+${artifactsList}
+
+LESSON: ${lessonTitle || ''}
+
+MENTOR BRIEFING:
+${lastMentorMsg?.content || 'No briefing available yet.'}
+
+YOUR ROLE:
+Guide the learner through completing this assignment step by step. For each artifact:
+1. Explain what needs to be created
+2. Help them structure the content
+3. Provide templates or starting points
+4. Review their work when they share it
+
+Track progress through the requirements checklist. Be encouraging but thorough.
+Start by summarizing what they need to do and ask which artifact they want to work on first.`;
                 openLLMWithPrompt(prompt);
               }}
             >

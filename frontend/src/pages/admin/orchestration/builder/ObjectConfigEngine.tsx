@@ -90,9 +90,10 @@ interface AccordionState {
 }
 
 /** Child component inside AdminPreviewMentorProvider — reads mentor context state */
-function PreviewContent({ mockContent, lessonId, token, apiUrl }: {
+function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl }: {
   mockContent: MockV2Content;
   lessonId: string;
+  lessonTitle: string;
   token: string;
   apiUrl: string;
 }) {
@@ -119,6 +120,8 @@ function PreviewContent({ mockContent, lessonId, token, apiUrl }: {
             token={token}
             apiUrl={apiUrl}
             lessonId={lessonId}
+            lessonTitle={lessonTitle}
+            implementationTask={mockContent.implementation_task}
             onClose={closeMentorPanel}
           />
         </div>
@@ -308,6 +311,7 @@ export default function ObjectConfigEngine(props: Props) {
           <PreviewContent
             mockContent={mockContent}
             lessonId={props.lessonId || ''}
+            lessonTitle={props.lessonTitle || ''}
             token={props.token || ''}
             apiUrl={props.apiUrl || ''}
           />
