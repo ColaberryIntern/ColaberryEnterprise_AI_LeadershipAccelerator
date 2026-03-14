@@ -429,7 +429,11 @@ export async function getCampaignLeads(
   const offset = (page - 1) * limit;
 
   const where: any = { campaign_id: campaignId };
-  if (params.status) where.status = params.status;
+  if (params.status && params.status !== 'all') {
+    where.status = params.status;
+  } else {
+    where.status = { [Op.ne]: 'removed' };
+  }
 
   const { rows, count } = await CampaignLead.findAndCountAll({
     where,
