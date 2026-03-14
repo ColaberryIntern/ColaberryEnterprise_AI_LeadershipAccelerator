@@ -206,8 +206,7 @@ async function getTimedBusyBlocks(
 }
 
 export async function createBooking(data: BookingInput): Promise<BookingResult> {
-  const auth = getAuthClient();
-  const calendar = google.calendar({ version: 'v3', auth });
+  const calendar = getCalendarClient();
 
   const startTime = new Date(data.slotStart);
   const endTime = new Date(startTime.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
@@ -215,6 +214,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   // Pre-booking conflict check: verify the slot is still free (ignoring all-day events)
   const conflicts = await getTimedBusyBlocks(calendar, startTime, endTime);
   if (conflicts.length > 0) {
+    console.warn(`[Calendar] Conflict detected for ${startTime.toISOString()} - ${endTime.toISOString()}:`, JSON.stringify(conflicts));
     throw new AppError('This time slot is no longer available. Please select a different time.', 409);
   }
 
@@ -263,21 +263,12 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
     },
   };
 
-  // Try with Google Meet conference data using impersonation; fall back to plain event
+  // Try with Google Meet conference data; fall back to plain event.
+  // calendar already uses impersonated auth (via getCalendarClient) which is
+  // required for Meet link creation with domain-wide delegation.
   let event;
   try {
-    // Meet creation requires impersonating the calendar owner (domain-wide delegation)
-    const impersonateAuth = env.googleCalendarOwnerEmail
-      ? new google.auth.JWT({
-          email: env.googleServiceAccountEmail,
-          key: env.googlePrivateKey,
-          scopes: ['https://www.googleapis.com/auth/calendar'],
-          subject: env.googleCalendarOwnerEmail,
-        })
-      : auth;
-    const meetCalendar = google.calendar({ version: 'v3', auth: impersonateAuth });
-
-    event = await meetCalendar.events.insert({
+    event = await calendar.events.insert({
       calendarId: env.googleCalendarId,
       conferenceDataVersion: 1,
       sendNotifications: true,
