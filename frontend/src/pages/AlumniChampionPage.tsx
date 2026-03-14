@@ -55,7 +55,7 @@ function AlumniChampionPage() {
           }}
         >
           <div className="container text-center" style={{ maxWidth: '800px' }}>
-            <img src="/colaberry-logo-transparent.png?v=2" alt="Colaberry" height="48" className="mb-4" style={{ filter: 'brightness(0) invert(1)', opacity: 0.9 }} />
+            <img src="/colaberry-logo-transparent.png?v=3" alt="Colaberry" height="48" className="mb-4" />
             <h1 className="display-4 fw-bold mb-3" style={{ color: '#fff' }}>
               Become the AI Champion &mdash; Or Introduce One Inside Your Company
             </h1>
@@ -381,7 +381,7 @@ function AlumniChampionPage() {
                 {
                   icon: '\u{1F91D}',
                   title: 'Introduced Referral',
-                  desc: "Submit a contact and we reach out mentioning that you\u2019ve taken Colaberry Corporate training in the past. The personal touch drives results.",
+                  desc: "Submit a contact and we reach out mentioning that you\u2019ve taken Colaberry corporate training in the past. The personal touch drives results.",
                 },
                 {
                   icon: '\u{1F575}\uFE0F',
