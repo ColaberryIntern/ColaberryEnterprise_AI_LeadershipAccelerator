@@ -5,6 +5,7 @@ interface Props {
   onChange: (val: string) => void;
   availableVars: Set<string>;
   allDefinedVars: Set<string>;
+  sectionVars?: Set<string>;
   label: string;
   rows?: number;
   placeholder?: string;
@@ -13,15 +14,17 @@ interface Props {
 
 /**
  * Textarea with overlay div for {{placeholder}} highlighting.
- * Green = available, Yellow = defined but not yet available, Red = undefined.
+ * Purple = section variable, Green = available, Yellow = defined but not yet available, Red = undefined.
  * Shows clickable variable chips above the textarea for quick insertion.
  */
 export default function HighlightedPromptEditor({
-  value, onChange, availableVars, allDefinedVars, label, rows = 4, placeholder, disabled,
+  value, onChange, availableVars, allDefinedVars, sectionVars, label, rows = 4, placeholder, disabled,
 }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [validationIssues, setValidationIssues] = useState<{ key: string; status: 'available' | 'not_yet' | 'undefined' }[]>([]);
+  const [validationIssues, setValidationIssues] = useState<{ key: string; status: 'section' | 'available' | 'not_yet' | 'undefined' }[]>([]);
+
+  const sectionVarSet = sectionVars || new Set<string>();
 
   const insertVariable = useCallback((varKey: string) => {
     const ta = textareaRef.current;
@@ -50,17 +53,20 @@ export default function HighlightedPromptEditor({
     const keys = [...new Set(matches.map(m => m.replace(/\{\{|\}\}/g, '')))];
     const issues = keys.map(key => ({
       key,
-      status: availableVars.has(key) ? 'available' as const
+      status: sectionVarSet.has(key) ? 'section' as const
+        : availableVars.has(key) ? 'available' as const
         : allDefinedVars.has(key) ? 'not_yet' as const
         : 'undefined' as const,
     }));
     setValidationIssues(issues);
-  }, [value, availableVars, allDefinedVars]);
+  }, [value, availableVars, allDefinedVars, sectionVarSet]);
 
-  // Build highlighted HTML
+  // Build highlighted HTML — section vars get purple, then green/yellow/red
   const highlightedHtml = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\{\{(\w+)\}\}/g, (_match, key) => {
-      const cls = availableVars.has(key)
+      const cls = sectionVarSet.has(key)
+        ? 'hl-var-section'
+        : availableVars.has(key)
         ? 'hl-var-available'
         : allDefinedVars.has(key) ? 'hl-var-notyet' : 'hl-var-undefined';
       return `<mark class="${cls}">{{${key}}}</mark>`;
@@ -69,7 +75,7 @@ export default function HighlightedPromptEditor({
   const undefinedCount = validationIssues.filter(i => i.status === 'undefined').length;
   const notYetCount = validationIssues.filter(i => i.status === 'not_yet').length;
 
-  const hasVars = availableVars.size > 0 || allDefinedVars.size > 0;
+  const hasVars = availableVars.size > 0 || allDefinedVars.size > 0 || sectionVarSet.size > 0;
 
   return (
     <div className="mb-2">
@@ -88,7 +94,21 @@ export default function HighlightedPromptEditor({
           <span className="text-muted d-flex align-items-center" style={{ fontSize: 9 }}>
             <i className="bi bi-braces me-1"></i>Insert:
           </span>
-          {[...availableVars].sort().map(v => (
+          {/* Section variables — purple chips first */}
+          {[...sectionVarSet].sort().map(v => (
+            <button
+              key={`s-${v}`}
+              type="button"
+              className="btn btn-sm py-0 px-1"
+              style={{ fontSize: 9, background: 'rgba(128,90,213,0.15)', color: '#553c9a', border: '1px solid rgba(128,90,213,0.3)', borderRadius: 4 }}
+              onClick={() => insertVariable(v)}
+              title={`Insert {{${v}}} — section variable (auto-available)`}
+            >
+              {v}
+            </button>
+          ))}
+          {/* User-defined available variables — green chips */}
+          {[...availableVars].filter(v => !sectionVarSet.has(v)).sort().map(v => (
             <button
               key={v}
               type="button"
@@ -100,7 +120,8 @@ export default function HighlightedPromptEditor({
               {v}
             </button>
           ))}
-          {[...allDefinedVars].filter(v => !availableVars.has(v)).sort().map(v => (
+          {/* Not-yet-available variables — yellow chips */}
+          {[...allDefinedVars].filter(v => !availableVars.has(v) && !sectionVarSet.has(v)).sort().map(v => (
             <button
               key={v}
               type="button"
@@ -148,6 +169,7 @@ export default function HighlightedPromptEditor({
       </div>
       {/* Inline CSS for highlight marks */}
       <style>{`
+        .hl-var-section { background: rgba(128, 90, 213, 0.2); color: transparent; border-radius: 2px; padding: 0 1px; }
         .hl-var-available { background: rgba(56, 161, 105, 0.2); color: transparent; border-radius: 2px; padding: 0 1px; }
         .hl-var-notyet { background: rgba(236, 201, 75, 0.3); color: transparent; border-radius: 2px; padding: 0 1px; }
         .hl-var-undefined { background: rgba(229, 62, 62, 0.2); color: transparent; border-radius: 2px; padding: 0 1px; }

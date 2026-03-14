@@ -76,6 +76,10 @@ interface Props {
   onOpenRepair: () => void;
   onSelectMiniSection?: (id: string | null) => void;
   typeDefinitions?: TypeDefinition[];
+  // Section-level data
+  sectionVariableKeys?: string[];
+  sectionArtifactIds?: string[];
+  sectionSkillIds?: string[];
   // Preview props
   lessonTitle?: string;
   lessonId?: string;
@@ -194,6 +198,11 @@ export default function ObjectConfigEngine(props: Props) {
     new Set(props.variables.map(v => v.variable_key)),
     [props.variables]
   );
+  const sectionVarSet = useMemo(() => {
+    const keys = new Set(['section_title', 'section_description', 'section_learning_goal']);
+    for (const k of (props.sectionVariableKeys || [])) keys.add(k);
+    return keys;
+  }, [props.sectionVariableKeys]);
 
   const handleReverseEngineer = useCallback(async () => {
     if (!editing?.id) return;
@@ -493,6 +502,7 @@ export default function ObjectConfigEngine(props: Props) {
                                 onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
                                 availableVars={coreAvailableVars}
                                 allDefinedVars={coreAllDefinedVars}
+                                sectionVars={sectionVarSet}
                                 label="PROMPT"
                                 rows={5}
                                 placeholder="Instructions for the AI model with {{variable}} placeholders..."
@@ -517,6 +527,7 @@ export default function ObjectConfigEngine(props: Props) {
                       variableMap={props.variableMap}
                       promptBodies={props.promptBodies}
                       artifacts={props.artifacts}
+                      sectionVariableKeys={props.sectionVariableKeys}
                       onUpdate={props.onUpdate}
                       onCreateVariable={props.onCreateVariable}
                     />
@@ -533,6 +544,7 @@ export default function ObjectConfigEngine(props: Props) {
                       editType={editType}
                       miniSectionId={editing.id}
                       skillOptions={props.skillOptions}
+                      sectionSkillIds={props.sectionSkillIds}
                       onUpdate={props.onUpdate}
                       onCreateSkill={props.onCreateSkill}
                       token={props.token}
@@ -551,6 +563,7 @@ export default function ObjectConfigEngine(props: Props) {
                         editing={editing}
                         artifactOptions={props.artifactOptions}
                         artifacts={props.artifacts}
+                        sectionArtifactIds={props.sectionArtifactIds}
                         onUpdate={props.onUpdate}
                         onCreateArtifact={props.onCreateArtifact}
                       />

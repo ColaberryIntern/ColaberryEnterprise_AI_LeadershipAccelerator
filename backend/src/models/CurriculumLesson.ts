@@ -20,6 +20,9 @@ export interface CurriculumLessonAttributes {
   associated_session_id?: string;
   required_min_completion_before_session?: number;
   sort_order?: number;
+  section_variable_keys?: string[];
+  section_artifact_ids?: string[];
+  section_skill_ids?: string[];
   created_at?: Date;
 }
 
@@ -42,6 +45,9 @@ class CurriculumLesson extends Model<CurriculumLessonAttributes> implements Curr
   declare associated_session_id: string;
   declare required_min_completion_before_session: number;
   declare sort_order: number;
+  declare section_variable_keys: string[];
+  declare section_artifact_ids: string[];
+  declare section_skill_ids: string[];
   declare created_at: Date;
 }
 
@@ -129,6 +135,21 @@ CurriculumLesson.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+    },
+    section_variable_keys: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+    },
+    section_artifact_ids: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+    },
+    section_skill_ids: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
     },
     created_at: {
       type: DataTypes.DATE,

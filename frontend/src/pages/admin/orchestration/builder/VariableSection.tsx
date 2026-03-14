@@ -10,12 +10,13 @@ interface Props {
   variableMap: VariableMapData | null;
   promptBodies: Record<string, PromptBody>;
   artifacts: { id: string; name: string; artifact_type: string; produces_variable_keys?: string[] }[];
+  sectionVariableKeys?: string[];
   onUpdate: (updates: Partial<MiniSection>) => void;
   onCreateVariable: () => void;
 }
 
 export default function VariableSection({
-  editing, miniSections, variables, systemVariables, variableMap, promptBodies, artifacts, onUpdate, onCreateVariable,
+  editing, miniSections, variables, systemVariables, variableMap, promptBodies, artifacts, sectionVariableKeys, onUpdate, onCreateVariable,
 }: Props) {
   const editType = editing.mini_section_type;
   const currentOrder = editing.mini_section_order || miniSections.length + 1;
@@ -87,6 +88,31 @@ export default function VariableSection({
           )}
         </div>
       </div>
+
+      {/* 1b. Section Variables (inherited, read-only) */}
+      {((sectionVariableKeys && sectionVariableKeys.length > 0) || true) && (
+        <div className="mb-3">
+          <h6 className="small fw-semibold mb-1" style={{ fontSize: 11, color: '#553c9a' }}>
+            <i className="bi bi-diagram-3 me-1"></i>Section Variables
+            <span className="badge ms-1" style={{ fontSize: 8, background: 'rgba(128,90,213,0.12)', color: '#553c9a' }}>inherited</span>
+          </h6>
+          <div className="d-flex flex-wrap gap-1">
+            {['section_title', 'section_description', 'section_learning_goal'].map(k => (
+              <span key={k} className="badge" style={{ fontSize: 9, background: 'rgba(128,90,213,0.12)', color: '#553c9a', border: '1px solid rgba(128,90,213,0.2)' }}>
+                {`{{${k}}}`}
+              </span>
+            ))}
+            {(sectionVariableKeys || []).map(k => (
+              <span key={k} className="badge" style={{ fontSize: 9, background: 'rgba(128,90,213,0.12)', color: '#553c9a', border: '1px solid rgba(128,90,213,0.2)' }}>
+                {`{{${k}}}`}
+              </span>
+            ))}
+          </div>
+          <span className="text-muted" style={{ fontSize: 9 }}>
+            <i className="bi bi-info-circle me-1"></i>Edit in Section Control tab
+          </span>
+        </div>
+      )}
 
       {/* 2. Prompt Template Created Variables (prompt_template only) */}
       {editType === 'prompt_template' && (
@@ -221,6 +247,7 @@ export default function VariableSection({
 
       {/* Legend */}
       <div className="border-top pt-1 mt-2 d-flex gap-2 flex-wrap" style={{ fontSize: 8 }}>
+        <span className="badge" style={{ background: 'rgba(128,90,213,0.12)', color: '#553c9a', border: '1px solid rgba(128,90,213,0.2)' }}>Section</span>
         <span className="badge bg-light text-muted border">System</span>
         <span className="badge bg-success-subtle text-success border border-success">Available</span>
         <span className="badge bg-warning-subtle text-warning border border-warning">Not yet available</span>

@@ -1,4 +1,5 @@
 import { VariableStore, Enrollment } from '../models';
+import CurriculumLesson from '../models/CurriculumLesson';
 import { Op } from 'sequelize';
 
 export async function setVariable(
@@ -111,6 +112,16 @@ export async function getVariableDependencyGraph(enrollmentId: string): Promise<
     artifactId: v.artifact_id,
     updatedAt: v.updated_at,
   }));
+}
+
+export async function getSectionSystemVariables(lessonId: string): Promise<Record<string, string>> {
+  const lesson = await CurriculumLesson.findByPk(lessonId);
+  if (!lesson) return {};
+  return {
+    section_title: lesson.title || '',
+    section_description: lesson.description || '',
+    section_learning_goal: lesson.learning_goal || '',
+  };
 }
 
 export async function getVariableHistory(enrollmentId: string, key: string): Promise<any[]> {

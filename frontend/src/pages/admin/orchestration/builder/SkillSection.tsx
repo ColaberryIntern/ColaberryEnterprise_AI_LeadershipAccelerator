@@ -13,6 +13,7 @@ interface Props {
   editType?: string;
   miniSectionId?: string;
   skillOptions: { value: string; label: string; sub?: string }[];
+  sectionSkillIds?: string[];
   onUpdate: (updates: Partial<MiniSection>) => void;
   onCreateSkill: () => void;
   token?: string;
@@ -20,7 +21,7 @@ interface Props {
   onSkillsRecalculated?: () => void;
 }
 
-export default function SkillSection({ editing, editType, miniSectionId, skillOptions, onUpdate, onCreateSkill, token, apiUrl, onSkillsRecalculated }: Props) {
+export default function SkillSection({ editing, editType, miniSectionId, skillOptions, sectionSkillIds, onUpdate, onCreateSkill, token, apiUrl, onSkillsRecalculated }: Props) {
   const [recalculating, setRecalculating] = useState(false);
   const [recalcResult, setRecalcResult] = useState<RecalcResult | null>(null);
   const [recalcError, setRecalcError] = useState<string | null>(null);
@@ -57,6 +58,29 @@ export default function SkillSection({ editing, editType, miniSectionId, skillOp
 
   return (
     <div>
+      {/* Section-level skills (inherited) */}
+      {sectionSkillIds && sectionSkillIds.length > 0 && (
+        <div className="mb-2">
+          <h6 className="small fw-semibold mb-1" style={{ fontSize: 11, color: '#553c9a' }}>
+            <i className="bi bi-diagram-3 me-1"></i>Section Skills
+            <span className="badge ms-1" style={{ fontSize: 8, background: 'rgba(128,90,213,0.12)', color: '#553c9a' }}>inherited</span>
+          </h6>
+          <div className="d-flex flex-wrap gap-1">
+            {sectionSkillIds.map(id => {
+              const skill = skillOptions.find(s => s.value === id);
+              return (
+                <span key={id} className="badge" style={{ fontSize: 9, background: 'rgba(128,90,213,0.12)', color: '#553c9a', border: '1px solid rgba(128,90,213,0.2)' }}>
+                  {skill?.label || id.slice(0, 8)}
+                </span>
+              );
+            })}
+          </div>
+          <span className="text-muted" style={{ fontSize: 9 }}>
+            <i className="bi bi-info-circle me-1"></i>Edit in Section Control tab
+          </span>
+        </div>
+      )}
+
       {isImplementationTask && (
         <div className="mb-2">
           <div className="d-flex align-items-center gap-2 mb-2">

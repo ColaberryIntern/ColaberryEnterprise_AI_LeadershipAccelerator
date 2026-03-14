@@ -210,6 +210,9 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
               onOpenRepair={() => builder.setShowRepairModal(true)}
               onSelectMiniSection={builder.selectMiniSection}
               typeDefinitions={builder.typeDefinitions}
+              sectionVariableKeys={builder.sectionVariableKeys}
+              sectionArtifactIds={builder.sectionArtifactIds}
+              sectionSkillIds={builder.sectionSkillIds}
               lessonTitle={builder.selectedLesson?.title}
               lessonId={builder.selectedLessonId}
               token={token}

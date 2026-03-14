@@ -843,6 +843,10 @@ export async function getOrchestrationContext(enrollmentId: string, lessonId: st
 
   const resolvedVariables = await variableService.getAllVariables(enrollmentId);
 
+  // Inject section system variables (section_title, section_description, section_learning_goal)
+  const sectionSystemVars = await variableService.getSectionSystemVariables(lessonId);
+  Object.assign(resolvedVariables, sectionSystemVars);
+
   // Load global AI Workstation prompt from system settings
   const { getSetting } = await import('./settingsService');
   const globalPromptRaw = await getSetting('workstation_prompt');

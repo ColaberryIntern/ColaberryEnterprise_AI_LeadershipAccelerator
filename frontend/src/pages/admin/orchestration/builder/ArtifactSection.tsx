@@ -6,18 +6,41 @@ interface Props {
   editing: Partial<MiniSection>;
   artifactOptions: { value: string; label: string; sub?: string }[];
   artifacts: { id: string; name: string; artifact_type: string; produces_variable_keys?: string[] }[];
+  sectionArtifactIds?: string[];
   onUpdate: (updates: Partial<MiniSection>) => void;
   onCreateArtifact: () => void;
 }
 
-export default function ArtifactSection({ editing, artifactOptions, artifacts, onUpdate, onCreateArtifact }: Props) {
+export default function ArtifactSection({ editing, artifactOptions, artifacts, sectionArtifactIds, onUpdate, onCreateArtifact }: Props) {
   if (editing.mini_section_type !== 'implementation_task') return null;
 
   const linkedIds = editing.creates_artifact_ids || [];
   const linkedArtifacts = linkedIds.map(id => artifacts.find(a => a.id === id)).filter(Boolean);
 
+  const sectionArtifacts = (sectionArtifactIds || []).map(id => artifacts.find(a => a.id === id)).filter(Boolean);
+
   return (
     <div>
+      {/* Section-level artifacts (inherited) */}
+      {sectionArtifacts.length > 0 && (
+        <div className="mb-2">
+          <h6 className="small fw-semibold mb-1" style={{ fontSize: 11, color: '#553c9a' }}>
+            <i className="bi bi-diagram-3 me-1"></i>Section Artifacts
+            <span className="badge ms-1" style={{ fontSize: 8, background: 'rgba(128,90,213,0.12)', color: '#553c9a' }}>inherited</span>
+          </h6>
+          <div className="d-flex flex-wrap gap-1">
+            {sectionArtifacts.map(art => art && (
+              <span key={art.id} className="badge" style={{ fontSize: 9, background: 'rgba(128,90,213,0.12)', color: '#553c9a', border: '1px solid rgba(128,90,213,0.2)' }}>
+                {art.name}
+              </span>
+            ))}
+          </div>
+          <span className="text-muted" style={{ fontSize: 9 }}>
+            <i className="bi bi-info-circle me-1"></i>Edit in Section Control tab
+          </span>
+        </div>
+      )}
+
       <div className="d-flex justify-content-between align-items-center mb-1">
         <span></span>
         <button className="btn btn-link p-0" onClick={onCreateArtifact} style={{ fontSize: 10 }}>+ Create Artifact</button>

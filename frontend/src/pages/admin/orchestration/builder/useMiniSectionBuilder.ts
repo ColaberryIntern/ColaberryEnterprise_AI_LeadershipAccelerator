@@ -59,6 +59,11 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
   // Type definitions from API
   const [typeDefinitions, setTypeDefinitions] = useState<TypeDefinition[]>([]);
 
+  // Section-level assignments
+  const [sectionVariableKeys, setSectionVariableKeys] = useState<string[]>([]);
+  const [sectionArtifactIds, setSectionArtifactIds] = useState<string[]>([]);
+  const [sectionSkillIds, setSectionSkillIds] = useState<string[]>([]);
+
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   // --- Reference data ---
@@ -103,6 +108,19 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     }
   }, [initialLessonId]);
 
+  // --- Section-level data ---
+  const fetchSectionData = useCallback(async (lessonId: string) => {
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}`, { headers });
+      if (res.ok) {
+        const lesson = await res.json();
+        setSectionVariableKeys(lesson.section_variable_keys || []);
+        setSectionArtifactIds(lesson.section_artifact_ids || []);
+        setSectionSkillIds(lesson.section_skill_ids || []);
+      }
+    } catch { /* silent */ }
+  }, [apiUrl, token]);
+
   // --- Mini-section CRUD ---
   const fetchMiniSections = useCallback(async (lessonId: string) => {
     setLoading(true);
@@ -127,10 +145,14 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     clearQualityState();
     if (id) {
       fetchMiniSections(id);
+      fetchSectionData(id);
       runValidation(id);
       fetchVariableMap(id);
     } else {
       setMiniSections([]);
+      setSectionVariableKeys([]);
+      setSectionArtifactIds([]);
+      setSectionSkillIds([]);
     }
   };
 
@@ -386,6 +408,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
 
     // Reference data
     prompts, skills, variables, artifacts, systemVariables,
+    sectionVariableKeys, sectionArtifactIds, sectionSkillIds,
     skillOptions, variableOptions, artifactOptions,
     promptBodies, fetchPromptBody,
     refreshReferenceData,
