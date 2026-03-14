@@ -50,12 +50,34 @@ function AlumniChampionPage() {
         {/* ── Hero ── */}
         <section
           style={{
-            background: `linear-gradient(135deg, ${DARK.bg} 0%, #1a2332 50%, ${DARK.navy} 100%)`,
+            position: 'relative',
             padding: '5rem 0 4rem',
+            overflow: 'hidden',
           }}
         >
-          <div className="container text-center" style={{ maxWidth: '800px' }}>
-            <img src="/colaberry-logo-dark.png" alt="Colaberry" height="48" className="mb-4" />
+          {/* Background image */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: 'url("/hero-bg-team.jpg")',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          />
+          {/* Dark overlay for readability */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: `linear-gradient(135deg, rgba(15,18,25,0.88) 0%, rgba(26,35,50,0.85) 50%, rgba(26,54,93,0.88) 100%)`,
+            }}
+          />
+          <div className="container text-center" style={{ maxWidth: '800px', position: 'relative', zIndex: 1 }}>
+            <div className="d-flex align-items-center justify-content-center gap-2 mb-4">
+              <img src="/colaberry-icon.png" alt="" width="36" height="36" />
+              <span className="fw-bold" style={{ color: '#fff', fontSize: '1.5rem' }}>Colaberry Enterprise AI</span>
+            </div>
             <h1 className="display-4 fw-bold mb-3" style={{ color: '#fff' }}>
               Become the AI Champion &mdash; Or Introduce One Inside Your Company
             </h1>
