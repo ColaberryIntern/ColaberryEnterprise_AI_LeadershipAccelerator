@@ -122,10 +122,12 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
     function: {
       name: 'get_available_slots',
       description:
-        'Check calendar availability for strategy calls. Returns available 30-min slots over the next 2 weeks. Use before schedule_strategy_call.',
+        'Check calendar availability for strategy calls. BEFORE calling this, ask the visitor which day they prefer and whether they want morning, afternoon, or evening. Then pass their preferences to get 3 targeted options.',
       parameters: {
         type: 'object',
         properties: {
+          preferred_day: { type: 'string', description: "Day the visitor prefers, e.g. 'Monday', 'Tuesday', 'tomorrow', 'this week'. If not specified, returns next 3 available days." },
+          preferred_time: { type: 'string', enum: ['morning', 'afternoon', 'any'], description: "Time of day preference: morning (9am-12pm), afternoon (12pm-5pm), or any" },
           days: { type: 'integer', description: 'Number of days to check (default 14)' },
         },
       },
