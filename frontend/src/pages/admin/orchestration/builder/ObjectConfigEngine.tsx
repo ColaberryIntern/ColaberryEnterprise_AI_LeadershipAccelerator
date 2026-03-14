@@ -90,12 +90,13 @@ interface AccordionState {
 }
 
 /** Child component inside AdminPreviewMentorProvider — reads mentor context state */
-function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl }: {
+function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, workstationPrompt }: {
   mockContent: MockV2Content;
   lessonId: string;
   lessonTitle: string;
   token: string;
   apiUrl: string;
+  workstationPrompt?: string;
 }) {
   const { isMentorOpen, closeMentorPanel, openMentorPanel } = useMentorContext();
 
@@ -122,6 +123,7 @@ function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl }: {
             lessonId={lessonId}
             lessonTitle={lessonTitle}
             implementationTask={mockContent.implementation_task}
+            workstationPrompt={workstationPrompt}
             onClose={closeMentorPanel}
           />
         </div>
@@ -208,6 +210,10 @@ export default function ObjectConfigEngine(props: Props) {
 
   const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
 
+  // Extract workstation prompt from the implementation_task mini-section
+  const implMiniSection = miniSections.find(m => m.mini_section_type === 'implementation_task');
+  const workstationPrompt = implMiniSection?.reflection_prompt_system || '';
+
   if (!editing) {
     // Show collapsed type sections as clickable entry points
     if (miniSections.length > 0) {
@@ -233,6 +239,7 @@ export default function ObjectConfigEngine(props: Props) {
                 lessonTitle={props.lessonTitle || ''}
                 token={props.token || ''}
                 apiUrl={props.apiUrl || ''}
+                workstationPrompt={workstationPrompt}
               />
             </AdminPreviewMentorProvider>
           </div>
@@ -353,6 +360,7 @@ export default function ObjectConfigEngine(props: Props) {
             lessonTitle={props.lessonTitle || ''}
             token={props.token || ''}
             apiUrl={props.apiUrl || ''}
+            workstationPrompt={workstationPrompt}
           />
         </AdminPreviewMentorProvider>
       ) : (

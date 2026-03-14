@@ -21,6 +21,7 @@ interface PreviewMentorChatProps {
   lessonId?: string;
   lessonTitle?: string;
   implementationTask?: ImplementationTaskData | null;
+  workstationPrompt?: string;
   onClose?: () => void;
 }
 
@@ -138,7 +139,7 @@ function renderMarkdown(text: string, fs: boolean): React.ReactNode[] {
   return elements;
 }
 
-export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle, implementationTask, onClose }: PreviewMentorChatProps) {
+export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle, implementationTask, workstationPrompt, onClose }: PreviewMentorChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -387,10 +388,24 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
               onClick={() => {
                 const lastMentorMsg = [...messages].reverse().find(m => m.role === 'assistant');
                 const task = implementationTask;
-                const artifactsList = task?.required_artifacts?.length
-                  ? `\n\nREQUIRED ARTIFACTS:\n${task.required_artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description} (${a.file_types.join(', ')})\n   Criteria: ${a.validation_criteria}`).join('\n\n')}`
-                  : '';
-                const prompt = `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
+                let prompt: string;
+
+                if (workstationPrompt) {
+                  // Admin-configured workstation prompt with variable substitution
+                  prompt = workstationPrompt
+                    .replace(/\{task_title\}/g, task?.title || 'Implementation Task')
+                    .replace(/\{task_description\}/g, task?.description || '')
+                    .replace(/\{task_deliverable\}/g, task?.deliverable || '')
+                    .replace(/\{task_requirements\}/g, (task?.requirements || []).map((r, i) => `${i + 1}. ${r}`).join('\n'))
+                    .replace(/\{task_artifacts\}/g, (task?.required_artifacts || []).map((a, i) => `${i + 1}. ${a.name}: ${a.description}`).join('\n'))
+                    .replace(/\{lesson_title\}/g, lessonTitle || '')
+                    .replace(/\{mentor_briefing\}/g, lastMentorMsg?.content || 'No briefing available yet.');
+                } else {
+                  // Fallback hardcoded template
+                  const artifactsList = task?.required_artifacts?.length
+                    ? `\n\nREQUIRED ARTIFACTS:\n${task.required_artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description} (${a.file_types.join(', ')})\n   Criteria: ${a.validation_criteria}`).join('\n\n')}`
+                    : '';
+                  prompt = `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
 
 ASSIGNMENT: ${task?.title || 'Implementation Task'}
 DESCRIPTION: ${task?.description || ''}
@@ -414,6 +429,7 @@ Guide the learner through completing this assignment step by step. For each arti
 
 Track progress through the requirements checklist. Be encouraging but thorough.
 Start by summarizing what they need to do and ask which artifact they want to work on first.`;
+                }
                 openLLMWithPrompt(prompt);
               }}
             >
