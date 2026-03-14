@@ -13,11 +13,9 @@ import type { MayaActionResult } from './mayaActionService';
 import { Op } from 'sequelize';
 
 // Campaign name mapping by interest type
+// Only voice_call and general (inbound) have dedicated Maya campaigns.
+// All other interest types fall through to 'general' (Inbound Lead Campaign).
 const CAMPAIGN_MAP: Record<string, string> = {
-  executive_briefing: 'Maya Executive Briefing Campaign',
-  strategy_call: 'Maya Strategy Call Campaign',
-  sponsorship: 'Maya Sponsorship Campaign',
-  enrollment: 'Maya Enrollment Campaign',
   voice_call: 'Maya Voice Call Requested Campaign',
   general: 'Maya Inbound Lead Campaign',
 };

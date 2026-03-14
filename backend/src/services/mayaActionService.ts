@@ -158,14 +158,14 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
     function: {
       name: 'enroll_in_campaign',
       description:
-        'Enroll the visitor in the appropriate Maya nurture campaign based on their interest. Use after capturing lead details. The campaign will send follow-up emails and texts from Maya to guide them toward enrollment.',
+        'Enroll the visitor in a Maya nurture campaign. Use "voice_call" for visitors who requested a call, or "general" for all other inbound leads. Only two Maya campaigns exist — do NOT use this for leads already in a campaign.',
       parameters: {
         type: 'object',
         properties: {
           interest_type: {
             type: 'string',
-            enum: ['executive_briefing', 'strategy_call', 'sponsorship', 'enrollment', 'voice_call', 'general'],
-            description: 'Which service path to enroll them in',
+            enum: ['voice_call', 'general'],
+            description: 'Campaign type: "voice_call" for call requests, "general" for all other inbound leads',
           },
         },
         required: ['interest_type'],
