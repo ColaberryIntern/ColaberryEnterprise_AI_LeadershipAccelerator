@@ -237,7 +237,7 @@ function AlumniChampionPage() {
             </div>
             <div className="text-center mt-4">
               <a
-                href="/"
+                href="/enroll"
                 className="btn fw-bold px-4"
                 style={{ background: 'transparent', color: DARK.accent, border: `1px solid ${DARK.accent}` }}
               >
@@ -422,7 +422,7 @@ function AlumniChampionPage() {
             </p>
             <div className="d-flex justify-content-center gap-3 flex-wrap">
               <a
-                href="/"
+                href="/enroll"
                 className="btn btn-lg fw-bold px-4"
                 style={{ background: DARK.accent, color: DARK.bg, border: 'none' }}
               >
