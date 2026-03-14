@@ -430,12 +430,15 @@ export async function getAvailableSlots(
       };
     }
 
-    // Format into readable text — show top 8 slots across days
+    // Format into readable text — spread slots across the next 5 days,
+    // showing 3 representative slots per day (morning, midday, afternoon)
+    const MAX_DAYS = 5;
+    const SLOTS_PER_DAY = 3;
     const lines: string[] = [];
-    let slotCount = 0;
+    let totalSlots = 0;
 
     for (const dateEntry of availability.dates) {
-      if (slotCount >= 8) break;
+      if (lines.length >= MAX_DAYS) break;
 
       const dateObj = new Date(dateEntry.date + 'T12:00:00Z');
       const dayLabel = dateObj.toLocaleDateString('en-US', {
@@ -445,26 +448,38 @@ export async function getAvailableSlots(
         timeZone: 'America/New_York',
       });
 
-      const times: string[] = [];
-      for (const slot of dateEntry.slots) {
-        if (slotCount >= 8) break;
+      // Pick representative slots spread across the day
+      const slots = dateEntry.slots;
+      const picked: typeof slots = [];
+      if (slots.length <= SLOTS_PER_DAY) {
+        picked.push(...slots);
+      } else {
+        // Pick first, middle, and last to show range
+        picked.push(slots[0]);
+        picked.push(slots[Math.floor(slots.length / 2)]);
+        picked.push(slots[slots.length - 1]);
+      }
+
+      const times = picked.map((slot) => {
         const slotTime = new Date(slot.start);
         const timeLabel = slotTime.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           timeZone: 'America/New_York',
         });
-        times.push(`${timeLabel} (${slot.start})`);
-        slotCount++;
-      }
+        return `${timeLabel} (${slot.start})`;
+      });
 
+      totalSlots += picked.length;
       lines.push(`${dayLabel}: ${times.join(', ')}`);
     }
+
+    lines.push(`\nNote: These are representative times. If the visitor wants a different time on any of these days, call get_available_slots again to show all slots for that day.`);
 
     return {
       success: true,
       summary: `Available strategy call times (${availability.timezone}):\n${lines.join('\n')}`,
-      details: { slot_count: slotCount, timezone: availability.timezone },
+      details: { slot_count: totalSlots, timezone: availability.timezone },
     };
   } catch (err: any) {
     return { success: false, summary: `Unable to check calendar: ${err.message}` };
