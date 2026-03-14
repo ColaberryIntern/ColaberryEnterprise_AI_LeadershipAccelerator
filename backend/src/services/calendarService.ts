@@ -4,9 +4,9 @@ import { AppError } from '../utils/AppError';
 import { getTestOverrides } from './settingsService';
 
 const SLOT_DURATION_MINUTES = 30;
-const BUSINESS_HOUR_START = 9; // 9 AM ET
-const BUSINESS_HOUR_END = 17;  // 5 PM ET
-const BUSINESS_TIMEZONE = 'America/New_York';
+const BUSINESS_HOUR_START = 9; // 9 AM CT
+const BUSINESS_HOUR_END = 17;  // 5 PM CT
+const BUSINESS_TIMEZONE = 'America/Chicago';
 
 interface TimeSlot {
   start: string;
@@ -74,7 +74,7 @@ function isWeekday(date: Date): boolean {
   return day >= 1 && day <= 5;
 }
 
-function getETOffset(dateStr: string): string {
+function getTzOffset(dateStr: string): string {
   const noon = new Date(`${dateStr}T12:00:00Z`);
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: BUSINESS_TIMEZONE,
@@ -82,13 +82,14 @@ function getETOffset(dateStr: string): string {
   });
   const parts = formatter.formatToParts(noon);
   const tzName = parts.find((p) => p.type === 'timeZoneName')?.value;
-  return tzName === 'EDT' ? '-04:00' : '-05:00';
+  // CDT = -05:00, CST = -06:00
+  return tzName === 'CDT' ? '-05:00' : '-06:00';
 }
 
 function generateBusinessSlots(date: Date): TimeSlot[] {
   const slots: TimeSlot[] = [];
   const dateStr = date.toISOString().split('T')[0];
-  const offset = getETOffset(dateStr);
+  const offset = getTzOffset(dateStr);
 
   for (let hour = BUSINESS_HOUR_START; hour < BUSINESS_HOUR_END; hour++) {
     for (let min = 0; min < 60; min += SLOT_DURATION_MINUTES) {

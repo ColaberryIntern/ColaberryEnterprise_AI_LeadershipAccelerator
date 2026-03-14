@@ -445,7 +445,7 @@ export async function getAvailableSlots(
         weekday: 'long',
         month: 'long',
         day: 'numeric',
-        timeZone: 'America/New_York',
+        timeZone: 'America/Chicago',
       });
 
       // Pick representative slots spread across the day
@@ -465,7 +465,7 @@ export async function getAvailableSlots(
         const timeLabel = slotTime.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
-          timeZone: 'America/New_York',
+          timeZone: 'America/Chicago',
         });
         return `${timeLabel} (${slot.start})`;
       });
@@ -507,7 +507,7 @@ export async function scheduleStrategyCall(
       company: company || '',
       phone: phone || '',
       slotStart: slot_start,
-      timezone: 'America/New_York',
+      timezone: 'America/Chicago',
     });
 
     // Resolve or auto-create lead so appointment, campaign, and SMS all work
@@ -556,7 +556,7 @@ export async function scheduleStrategyCall(
       to: email,
       name,
       scheduledAt: new Date(slot_start),
-      timezone: 'America/New_York',
+      timezone: 'America/Chicago',
       meetLink: booking.meetLink || '',
     }).catch((err: any) => {
       console.warn('[MayaTools] Confirmation email failed:', err.message);
@@ -573,11 +573,11 @@ export async function scheduleStrategyCall(
           day: 'numeric',
           hour: 'numeric',
           minute: '2-digit',
-          timeZone: 'America/New_York',
+          timeZone: 'America/Chicago',
         });
         await sendSmsViaGhl(
           contactId,
-          `Hi ${name.split(' ')[0]}, your strategy call is confirmed for ${timeStr} ET. ${booking.meetLink ? `Join here: ${booking.meetLink}` : 'Check your email for the meeting link.'} — Maya, Colaberry`,
+          `Hi ${name.split(' ')[0]}, your strategy call is confirmed for ${timeStr} CT. ${booking.meetLink ? `Join here: ${booking.meetLink}` : 'Check your email for the meeting link.'} — Maya, Colaberry`,
         ).catch(() => {});
       }
     }
@@ -598,12 +598,12 @@ export async function scheduleStrategyCall(
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      timeZone: 'America/New_York',
+      timeZone: 'America/Chicago',
     });
 
     return {
       success: true,
-      summary: `Strategy call booked for ${timeStr} ET. Confirmation email sent to ${email}.${booking.meetLink ? ` Google Meet link: ${booking.meetLink}` : ''}`,
+      summary: `Strategy call booked for ${timeStr} CT. Confirmation email sent to ${email}.${booking.meetLink ? ` Google Meet link: ${booking.meetLink}` : ''}`,
       details: { slot_start, event_id: booking.eventId, meet_link: booking.meetLink },
     };
   } catch (err: any) {

@@ -26,8 +26,8 @@ export async function generateMeetLink(session: LiveSession): Promise<string | n
       requestBody: {
         summary: `[Accelerator] ${session.title}`,
         description: session.description || `Session ${session.session_number}`,
-        start: { dateTime: startDateTime, timeZone: 'America/New_York' },
-        end: { dateTime: endDateTime, timeZone: 'America/New_York' },
+        start: { dateTime: startDateTime, timeZone: 'America/Chicago' },
+        end: { dateTime: endDateTime, timeZone: 'America/Chicago' },
         conferenceData: {
           createRequest: {
             requestId: session.id,
