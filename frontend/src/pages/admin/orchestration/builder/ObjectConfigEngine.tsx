@@ -211,8 +211,47 @@ export default function ObjectConfigEngine(props: Props) {
   if (!editing) {
     // Show collapsed type sections as clickable entry points
     if (miniSections.length > 0) {
+      if (showPreview) {
+        return (
+          <div className="card border-0 shadow-sm">
+            <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+              <div className="d-flex align-items-center gap-2">
+                <button
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={() => setShowPreview(false)}
+                  style={{ fontSize: 11 }}
+                >
+                  <i className="bi bi-arrow-left me-1"></i>Back
+                </button>
+                <span className="fw-semibold small"><i className="bi bi-eye me-1"></i>Student Preview</span>
+              </div>
+            </div>
+            <AdminPreviewMentorProvider>
+              <PreviewContent
+                mockContent={mockContent}
+                lessonId={props.lessonId || ''}
+                lessonTitle={props.lessonTitle || ''}
+                token={props.token || ''}
+                apiUrl={props.apiUrl || ''}
+              />
+            </AdminPreviewMentorProvider>
+          </div>
+        );
+      }
       return (
         <div className="card border-0 shadow-sm">
+          <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+            <span className="fw-semibold small">
+              <i className="bi bi-list-nested me-1"></i>Components
+            </span>
+            <button
+              className="btn btn-sm btn-outline-primary"
+              onClick={() => setShowPreview(true)}
+              style={{ fontSize: 11 }}
+            >
+              <i className="bi bi-eye me-1"></i>Preview
+            </button>
+          </div>
           <div className="card-body py-2">
             {effectiveTypeOptions.map(type => {
               const ms = miniSections.find(m => m.mini_section_type === type.value);
