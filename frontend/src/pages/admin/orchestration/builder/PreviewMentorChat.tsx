@@ -22,6 +22,7 @@ interface PreviewMentorChatProps {
   lessonTitle?: string;
   implementationTask?: ImplementationTaskData | null;
   workstationPrompt?: string;
+  workstationTestMode?: boolean;
   onClose?: () => void;
 }
 
@@ -139,7 +140,7 @@ function renderMarkdown(text: string, fs: boolean): React.ReactNode[] {
   return elements;
 }
 
-export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle, implementationTask, workstationPrompt, onClose }: PreviewMentorChatProps) {
+export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle, implementationTask, workstationPrompt, workstationTestMode, onClose }: PreviewMentorChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -443,6 +444,10 @@ Guide the learner through completing this assignment step by step. For each arti
 
 Track progress through the requirements checklist. Be encouraging but thorough.
 Start by summarizing what they need to do and ask which artifact they want to work on first.`;
+                }
+                // Append test mode instructions if enabled
+                if (workstationTestMode) {
+                  prompt += `\n\nTEST MODE INSTRUCTIONS:\nI am in test mode. Walk me through the experience exactly as a real student would see it, but when you ask me to do work or submit something, instead of waiting for my submission, you should generate a realistic example yourself and continue as if I had submitted it. Keep the flow moving automatically — show me the full student journey from start to finish.`;
                 }
                 openLLMWithPrompt(prompt);
               }}

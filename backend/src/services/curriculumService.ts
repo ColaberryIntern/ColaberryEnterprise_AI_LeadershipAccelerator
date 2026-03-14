@@ -843,17 +843,14 @@ export async function getOrchestrationContext(enrollmentId: string, lessonId: st
 
   const resolvedVariables = await variableService.getAllVariables(enrollmentId);
 
-  // Load admin-configured AI Workstation prompt from implementation_task mini-section
+  // Load global AI Workstation prompt from system settings
+  const { getSetting } = await import('./settingsService');
+  const globalPromptRaw = await getSetting('workstation_prompt');
   let workstationPrompt: string | null = null;
-  const implTask = await MiniSection.findOne({
-    where: { lesson_id: lessonId, mini_section_type: 'implementation_task', is_active: true },
-  });
-  if (implTask) {
-    const raw = (implTask as any).reflection_prompt_system as string;
-    if (raw) {
-      workstationPrompt = await variableService.resolveTemplate(enrollmentId, raw);
-    }
+  if (globalPromptRaw) {
+    workstationPrompt = await variableService.resolveTemplate(enrollmentId, globalPromptRaw);
   }
+  const workstationTestMode = await getSetting('workstation_test_mode') || false;
 
   return {
     sectionConfig: {
@@ -878,6 +875,7 @@ export async function getOrchestrationContext(enrollmentId: string, lessonId: st
     })),
     mentorPromptTemplate,
     workstationPrompt,
+    workstationTestMode,
     resolvedVariables,
   };
 }

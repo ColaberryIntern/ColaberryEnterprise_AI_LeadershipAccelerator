@@ -38,6 +38,9 @@ const DEFAULTS: Record<string, any> = {
   digest_frequency: 'daily',     // 'daily' | 'weekly'
   digest_send_hour: 7,           // 0-23, hour in server timezone
   digest_send_day: 1,            // 0=Sun, 1=Mon, ..., 6=Sat (for weekly)
+  // AI Workstation (global prompt for all implementation tasks)
+  workstation_prompt: '',
+  workstation_test_mode: false,
   // GoHighLevel CRM
   ghl_enabled: false,
   ghl_api_key: '',

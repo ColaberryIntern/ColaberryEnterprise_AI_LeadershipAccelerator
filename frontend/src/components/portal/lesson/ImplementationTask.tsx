@@ -54,6 +54,7 @@ interface OrchestrationContext {
     user_prompt_template: string;
   } | null;
   workstationPrompt: string | null;
+  workstationTestMode: boolean;
   resolvedVariables: Record<string, string>;
 }
 
@@ -188,9 +189,10 @@ export default function ImplementationTask({ data, lessonId, onSubmit, initialTa
         artifacts: artifacts.map(a => ({ name: a.name, description: a.description, file_types: a.file_types, validation_criteria: a.validation_criteria })),
       },
       workstationPrompt: orchContext?.workstationPrompt || undefined,
+      workstationTestMode: orchContext?.workstationTestMode || false,
     });
-    return () => updateLessonContext({ currentSection: '', implementationTaskData: undefined, workstationPrompt: undefined });
-  }, [title, description, deliverable, requirements, artifacts, orchContext?.workstationPrompt, updateLessonContext]);
+    return () => updateLessonContext({ currentSection: '', implementationTaskData: undefined, workstationPrompt: undefined, workstationTestMode: undefined });
+  }, [title, description, deliverable, requirements, artifacts, orchContext?.workstationPrompt, orchContext?.workstationTestMode, updateLessonContext]);
 
   const handleMentorResponse = useCallback(() => {
     setBriefingReceived(true);

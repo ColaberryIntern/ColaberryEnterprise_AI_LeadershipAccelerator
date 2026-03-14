@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../../../utils/api';
 import { MiniSection, MiniSectionType, TYPE_OPTIONS, TYPE_ICONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions, PROMPT_PAIRS, extractPlaceholders, computeAvailableVars } from './types';
 import HighlightedPromptEditor from './HighlightedPromptEditor';
@@ -90,13 +90,14 @@ interface AccordionState {
 }
 
 /** Child component inside AdminPreviewMentorProvider — reads mentor context state */
-function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, workstationPrompt }: {
+function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, workstationPrompt, workstationTestMode }: {
   mockContent: MockV2Content;
   lessonId: string;
   lessonTitle: string;
   token: string;
   apiUrl: string;
   workstationPrompt?: string;
+  workstationTestMode?: boolean;
 }) {
   const { isMentorOpen, closeMentorPanel, openMentorPanel } = useMentorContext();
 
@@ -124,6 +125,7 @@ function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, wor
             lessonTitle={lessonTitle}
             implementationTask={mockContent.implementation_task}
             workstationPrompt={workstationPrompt}
+            workstationTestMode={workstationTestMode}
             onClose={closeMentorPanel}
           />
         </div>
@@ -210,9 +212,15 @@ export default function ObjectConfigEngine(props: Props) {
 
   const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
 
-  // Extract workstation prompt from the implementation_task mini-section
-  const implMiniSection = miniSections.find(m => m.mini_section_type === 'implementation_task');
-  const workstationPrompt = implMiniSection?.reflection_prompt_system || '';
+  // Fetch global workstation prompt from system settings
+  const [workstationPrompt, setWorkstationPrompt] = useState('');
+  const [workstationTestMode, setWorkstationTestMode] = useState(false);
+  useEffect(() => {
+    api.get('/api/admin/settings').then(res => {
+      setWorkstationPrompt(res.data.workstation_prompt || '');
+      setWorkstationTestMode(res.data.workstation_test_mode || false);
+    }).catch(() => {});
+  }, []);
 
   if (!editing) {
     // Show collapsed type sections as clickable entry points
@@ -240,6 +248,7 @@ export default function ObjectConfigEngine(props: Props) {
                 token={props.token || ''}
                 apiUrl={props.apiUrl || ''}
                 workstationPrompt={workstationPrompt}
+                workstationTestMode={workstationTestMode}
               />
             </AdminPreviewMentorProvider>
           </div>
@@ -361,6 +370,7 @@ export default function ObjectConfigEngine(props: Props) {
             token={props.token || ''}
             apiUrl={props.apiUrl || ''}
             workstationPrompt={workstationPrompt}
+            workstationTestMode={workstationTestMode}
           />
         </AdminPreviewMentorProvider>
       ) : (

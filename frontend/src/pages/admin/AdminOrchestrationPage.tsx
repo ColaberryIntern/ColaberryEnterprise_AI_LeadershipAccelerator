@@ -13,6 +13,7 @@ import MiniSectionControlTab from './orchestration/MiniSectionControlTab';
 import BulkConfigPanel from './orchestration/builder/BulkConfigPanel';
 import HealthDashboardTab from './orchestration/HealthDashboardTab';
 import CurriculumTypesTab from './orchestration/CurriculumTypesTab';
+import WorkstationTab from './orchestration/WorkstationTab';
 
 const API = process.env.REACT_APP_API_URL || '';
 
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'skills', label: 'Skills' },
   { id: 'gating', label: 'Gating & Variables' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'workstation', label: 'Workstation' },
   { id: 'bulk', label: 'Bulk Config' },
   { id: 'health', label: 'Health' },
 ];
@@ -77,6 +79,7 @@ export default function AdminOrchestrationPage() {
         {activeTab === 'skills' && <SkillControlTab {...tabProps} />}
         {activeTab === 'gating' && <GatingControlTab {...tabProps} />}
         {activeTab === 'analytics' && <AnalyticsTab {...tabProps} />}
+        {activeTab === 'workstation' && <WorkstationTab {...tabProps} />}
         {activeTab === 'bulk' && <BulkConfigPanel {...tabProps} onNavigateToLesson={handleNavigateToMiniSections} />}
         {activeTab === 'health' && <HealthDashboardTab {...tabProps} />}
       </ErrorBoundary>
