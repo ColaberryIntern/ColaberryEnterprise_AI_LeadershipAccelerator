@@ -422,6 +422,14 @@ export async function getAvailableSlots(
   const preferredDay: string | undefined = args.preferred_day;
   const preferredTime: string | undefined = args.preferred_time;
 
+  // Enforce preference collection — don't show slots without asking first
+  if (!preferredDay && !preferredTime) {
+    return {
+      success: false,
+      summary: 'You must ask the visitor which day they prefer (e.g. Monday, Tuesday, tomorrow) and whether they want a morning or afternoon slot BEFORE calling this tool. Ask them now, then call get_available_slots again with preferred_day and preferred_time.',
+    };
+  }
+
   try {
     const availability = await calendarGetSlots(days);
 
