@@ -28,7 +28,7 @@ const REFERRAL_STEPS: SequenceStep[] = [
   {
     delay_days: 0,
     channel: 'email',
-    subject: '{{name}}, a personal introduction from a colleague',
+    subject: '{{name}}, {{referred_by}} suggested we connect',
     body_template: '',
     step_goal: 'Warm intro via referral — establish connection, introduce program',
     ai_tone: 'warm, personal, consultative',
@@ -43,7 +43,7 @@ Keep under 200 words. Make it feel like a personal connection, not a marketing e
   {
     delay_days: 2,
     channel: 'email',
-    subject: 'What leaders are building in 5 days, {{name}}',
+    subject: '{{referred_by}} thought you\'d find this valuable, {{name}}',
     body_template: '',
     step_goal: 'Share program outcomes, reference referrer, suggest strategy call',
     ai_tone: 'informative, warm, credible',
@@ -107,10 +107,14 @@ export async function seedAlumniReferralCampaign(): Promise<void> {
   const CAMPAIGN_NAME = 'Colaberry Alumni Referrals Campaign';
   const SEQUENCE_NAME = 'Alumni Referral Introduction Sequence';
 
-  // Check if already exists
+  // Check if already exists — if so, just sync sequence steps
   const existing = await Campaign.findOne({ where: { name: CAMPAIGN_NAME } });
   if (existing) {
-    console.log(`[Seed] ${CAMPAIGN_NAME} already exists, skipping.`);
+    const seq = await FollowUpSequence.findOne({ where: { name: SEQUENCE_NAME } });
+    if (seq) {
+      await seq.update({ steps: REFERRAL_STEPS } as any);
+      console.log(`[Seed] ${CAMPAIGN_NAME} exists — synced sequence steps.`);
+    }
     return;
   }
 

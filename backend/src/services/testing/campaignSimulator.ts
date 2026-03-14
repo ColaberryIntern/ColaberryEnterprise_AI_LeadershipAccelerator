@@ -207,6 +207,7 @@ export async function executeSimulationStep(
         interest_area: lead.interest_area,
         lead_temperature: lead.lead_temperature,
         pipeline_stage: lead.pipeline_stage,
+        alumni_context: lead.alumni_context || undefined,
       },
       campaignContext: {
         name: sim.sequence?.name || 'Campaign',

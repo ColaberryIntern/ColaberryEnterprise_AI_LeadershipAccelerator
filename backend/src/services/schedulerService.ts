@@ -656,7 +656,8 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
         .replace(/\{\{cohort_name\}\}/g, nextCohort?.name || 'our next cohort')
         .replace(/\{\{cohort_start\}\}/g, nextCohort?.start_date || 'soon')
         .replace(/\{\{seats_remaining\}\}/g, String(nextCohort?.seats_remaining ?? 'limited'))
-        .replace(/\{\{conversation_history\}\}/g, conversationHistory);
+        .replace(/\{\{conversation_history\}\}/g, conversationHistory)
+        .replace(/\{\{referred_by\}\}/g, (lead as any)?.alumni_context?.referred_by_name || '');
     }
   }
 

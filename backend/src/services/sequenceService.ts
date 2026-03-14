@@ -94,7 +94,8 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
         .replace(/\{\{company\}\}/g, lead.company || '')
         .replace(/\{\{title\}\}/g, lead.title || '')
         .replace(/\{\{email\}\}/g, lead.email)
-        .replace(/\{\{phone\}\}/g, lead.phone || '');
+        .replace(/\{\{phone\}\}/g, lead.phone || '')
+        .replace(/\{\{referred_by\}\}/g, (lead as any).alumni_context?.referred_by_name || '');
 
     const subject = replaceVars(step.subject || '');
     const body = replaceVars(
