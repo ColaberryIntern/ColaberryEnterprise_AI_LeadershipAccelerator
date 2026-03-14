@@ -59,7 +59,9 @@ function stripHtml(html: string): string {
 /* ------------------------------------------------------------------ */
 export async function startSimulation(
   campaignId: string,
-  speedMode: SpeedMode
+  speedMode: SpeedMode,
+  leadOverrides?: { name?: string; company?: string; title?: string; industry?: string },
+  templateVars?: Record<string, string>,
 ): Promise<InstanceType<typeof CampaignSimulation>> {
   // Enforce concurrency limit
   const running = await CampaignSimulation.count({
@@ -81,6 +83,30 @@ export async function startSimulation(
 
   // Create or reuse test lead
   const testLead = await createTestLead(campaignId);
+
+  // Apply lead profile overrides from the UI
+  if (leadOverrides) {
+    const updates: Record<string, any> = {};
+    if (leadOverrides.name) updates.name = leadOverrides.name;
+    if (leadOverrides.company) updates.company = leadOverrides.company;
+    if (leadOverrides.title) updates.title = leadOverrides.title;
+    if (leadOverrides.industry) updates.industry = leadOverrides.industry;
+    if (Object.keys(updates).length > 0) {
+      await testLead.update(updates);
+      await testLead.reload();
+    }
+  }
+
+  // Apply custom template variables (e.g., referred_by → alumni_context)
+  if (templateVars && Object.keys(templateVars).length > 0) {
+    const ctx: Record<string, any> = (testLead as any).alumni_context || {};
+    if (templateVars.referred_by) {
+      ctx.referred_by_name = templateVars.referred_by;
+      ctx.referral_type = ctx.referral_type || 'introduced';
+    }
+    await testLead.update({ alumni_context: ctx } as any);
+    await testLead.reload();
+  }
 
   // Create simulation record
   const simulation = await CampaignSimulation.create({

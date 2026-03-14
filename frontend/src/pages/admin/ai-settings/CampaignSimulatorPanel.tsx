@@ -63,7 +63,38 @@ export default function CampaignSimulatorPanel({
   const [showCommLog, setShowCommLog] = useState(false);
   const pollRef = useRef<number | null>(null);
 
+  // Lead profile & template variable inputs
+  const [leadName, setLeadName] = useState('Ali Merchant');
+  const [leadCompany, setLeadCompany] = useState('Colaberry');
+  const [leadTitle, setLeadTitle] = useState('CEO');
+  const [leadIndustry, setLeadIndustry] = useState('Technology');
+  const [customVars, setCustomVars] = useState<string[]>([]);
+  const [varValues, setVarValues] = useState<Record<string, string>>({});
+
   const isActive = simulation && (simulation.status === 'running' || simulation.status === 'paused');
+
+  // Detect custom template variables from campaign sequence steps
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get(`/api/admin/campaigns/${campaignId}`);
+        const steps = data.sequence?.steps || [];
+        const standardVars = new Set(['name', 'company', 'title', 'email', 'phone', 'cohort_name', 'cohort_start', 'seats_remaining', 'conversation_history']);
+        const varPattern = /\{\{(\w+)\}\}/g;
+        const found = new Set<string>();
+        for (const s of steps) {
+          for (const text of [s.subject, s.body_template, s.sms_template]) {
+            if (!text) continue;
+            let m;
+            while ((m = varPattern.exec(text)) !== null) {
+              if (!standardVars.has(m[1])) found.add(m[1]);
+            }
+          }
+        }
+        setCustomVars(Array.from(found));
+      } catch { /* ignore */ }
+    })();
+  }, [campaignId]);
 
   const fetchState = useCallback(async (simId: string) => {
     try {
@@ -111,6 +142,8 @@ export default function CampaignSimulatorPanel({
     try {
       const { data } = await api.post(`/api/admin/simulations/campaigns/${campaignId}/start`, {
         speed_mode: speedMode,
+        lead_overrides: { name: leadName, company: leadCompany, title: leadTitle, industry: leadIndustry },
+        template_vars: varValues,
       });
       setSimulation(data);
       // Immediately fetch full state with steps
@@ -160,12 +193,14 @@ export default function CampaignSimulatorPanel({
               </div>
             )}
 
-            {/* Pre-start: Speed mode selection */}
+            {/* Pre-start: Speed mode + lead profile + template vars */}
             {!simulation && (
-              <div className="text-center py-4">
-                <p className="text-muted mb-3">
+              <div className="py-3">
+                <p className="text-muted mb-3 text-center">
                   Run through your entire campaign as a lead would experience it — with compressed time delays.
                 </p>
+
+                {/* Speed mode */}
                 <div className="d-flex justify-content-center gap-2 mb-4">
                   {SPEED_OPTIONS.map((opt) => (
                     <button
@@ -178,22 +213,80 @@ export default function CampaignSimulatorPanel({
                     </button>
                   ))}
                 </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleStart}
-                  disabled={starting}
-                >
-                  {starting ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-1" role="status">
-                        <span className="visually-hidden">Starting...</span>
-                      </span>
-                      Starting Simulation...
-                    </>
-                  ) : (
-                    'Start Simulation'
-                  )}
-                </button>
+
+                {/* Test lead profile */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-header bg-white py-2">
+                    <span className="small fw-semibold">Test Lead Profile</span>
+                  </div>
+                  <div className="card-body py-2">
+                    <div className="row g-2">
+                      <div className="col-md-3">
+                        <label className="form-label small fw-medium mb-1">Name</label>
+                        <input type="text" className="form-control form-control-sm" value={leadName} onChange={(e) => setLeadName(e.target.value)} />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label small fw-medium mb-1">Company</label>
+                        <input type="text" className="form-control form-control-sm" value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label small fw-medium mb-1">Title</label>
+                        <input type="text" className="form-control form-control-sm" value={leadTitle} onChange={(e) => setLeadTitle(e.target.value)} />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label small fw-medium mb-1">Industry</label>
+                        <input type="text" className="form-control form-control-sm" value={leadIndustry} onChange={(e) => setLeadIndustry(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom template variables (auto-detected from sequence) */}
+                {customVars.length > 0 && (
+                  <div className="card border-0 shadow-sm mb-3">
+                    <div className="card-header bg-white py-2">
+                      <span className="small fw-semibold">Campaign Variables</span>
+                      <span className="text-muted small ms-2">detected from sequence templates</span>
+                    </div>
+                    <div className="card-body py-2">
+                      <div className="row g-2">
+                        {customVars.map((v) => (
+                          <div className="col-md-4" key={v}>
+                            <label className="form-label small fw-medium mb-1">
+                              {v.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder={`{{${v}}}`}
+                              value={varValues[v] || ''}
+                              onChange={(e) => setVarValues((prev) => ({ ...prev, [v]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-center">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleStart}
+                    disabled={starting}
+                  >
+                    {starting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-1" role="status">
+                          <span className="visually-hidden">Starting...</span>
+                        </span>
+                        Starting Simulation...
+                      </>
+                    ) : (
+                      'Start Simulation'
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
