@@ -136,7 +136,8 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { pendingMentorMessage, clearPendingMessage, onMentorResponded } = useMentorContext();
+  const [isImplementationTask, setIsImplementationTask] = useState(false);
+  const { pendingMentorMessage, clearPendingMessage, onMentorResponded, selectedLLM, openLLMWithPrompt } = useMentorContext();
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -175,6 +176,9 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
   // Auto-send pending messages from ImplementationTask "Ask AI Mentor" button
   useEffect(() => {
     if (pendingMentorMessage && !sending) {
+      if (pendingMentorMessage.contextType === 'implementation_briefing') {
+        setIsImplementationTask(true);
+      }
       sendMessage(pendingMentorMessage.message, pendingMentorMessage.displayText);
       clearPendingMessage();
     }
@@ -348,8 +352,40 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
         </div>
       </div>
 
-      {/* Suggested Prompts */}
-      {suggestedPrompts.length > 0 && (
+      {/* Action bar: AI Workspace button in implementation mode, suggested prompts otherwise */}
+      {(isImplementationTask && !sending && messages.some(m => m.role === 'assistant')) ? (
+        <div
+          style={{
+            padding: fs ? '12px 16px' : '8px 12px',
+            borderTop: '1px solid #f1f5f9',
+            background: fs ? '#f7f7f8' : undefined,
+          }}
+        >
+          <div style={fs ? { maxWidth: 768, margin: '0 auto' } : {}}>
+            <button
+              className="btn d-flex align-items-center gap-2 w-100 justify-content-center"
+              style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: '#fff',
+                borderRadius: fs ? 12 : 8,
+                fontSize: fs ? 14 : 12,
+                padding: fs ? '12px 16px' : '10px 12px',
+                fontWeight: 600,
+                border: 'none',
+                boxShadow: '0 2px 8px rgba(16,185,129,0.3)',
+              }}
+              onClick={() => {
+                const lastMentorMsg = [...messages].reverse().find(m => m.role === 'assistant');
+                const prompt = `Continue helping me with this implementation task.\n\nMENTOR BRIEFING:\n${lastMentorMsg?.content || ''}`;
+                openLLMWithPrompt(prompt);
+              }}
+            >
+              <i className={`bi ${selectedLLM.icon}`} style={{ fontSize: fs ? 18 : 14 }}></i>
+              Open AI Workspace — Run in {selectedLLM.name}
+            </button>
+          </div>
+        </div>
+      ) : suggestedPrompts.length > 0 && !isImplementationTask ? (
         <div
           style={{
             padding: fs ? '8px 16px' : '4px 12px',
@@ -382,7 +418,7 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, onClose }: 
             ))}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Input */}
       <div
