@@ -63,6 +63,9 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
   const [sectionVariableKeys, setSectionVariableKeys] = useState<string[]>([]);
   const [sectionArtifactIds, setSectionArtifactIds] = useState<string[]>([]);
   const [sectionSkillIds, setSectionSkillIds] = useState<string[]>([]);
+  const [structurePrompt, setStructurePrompt] = useState<string>('');
+  const [lessonDescription, setLessonDescription] = useState<string>('');
+  const [lessonLearningGoal, setLessonLearningGoal] = useState<string>('');
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -117,6 +120,9 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
         setSectionVariableKeys(lesson.section_variable_keys || []);
         setSectionArtifactIds(lesson.section_artifact_ids || []);
         setSectionSkillIds(lesson.section_skill_ids || []);
+        setStructurePrompt(lesson.structure_prompt || '');
+        setLessonDescription(lesson.description || '');
+        setLessonLearningGoal(lesson.learning_goal || '');
       }
     } catch { /* silent */ }
   }, [apiUrl, token]);
@@ -153,6 +159,9 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
       setSectionVariableKeys([]);
       setSectionArtifactIds([]);
       setSectionSkillIds([]);
+      setStructurePrompt('');
+      setLessonDescription('');
+      setLessonLearningGoal('');
     }
   };
 
@@ -409,6 +418,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     // Reference data
     prompts, skills, variables, artifacts, systemVariables,
     sectionVariableKeys, sectionArtifactIds, sectionSkillIds,
+    structurePrompt, setStructurePrompt, lessonDescription, lessonLearningGoal,
     skillOptions, variableOptions, artifactOptions,
     promptBodies, fetchPromptBody,
     refreshReferenceData,

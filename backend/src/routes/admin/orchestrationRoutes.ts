@@ -355,6 +355,25 @@ router.get('/api/admin/orchestration/enrollments/:enrollmentId/sessions/:session
 router.get('/api/admin/orchestration/lessons/:id', requireAdmin, handleGetLesson);
 router.put('/api/admin/orchestration/lessons/:id', requireAdmin, handleUpdateLesson);
 
+// Section Structure Generation (AI-powered blueprint)
+router.post('/api/admin/orchestration/lessons/:id/generate-structure', requireAdmin, async (req, res) => {
+  try {
+    const { generateSectionStructure } = await import('../../services/structureGenerationService');
+    const { structure_prompt } = req.body;
+    if (!structure_prompt || typeof structure_prompt !== 'string') {
+      return res.status(400).json({ error: 'structure_prompt is required' });
+    }
+    // Optionally save the prompt to the lesson
+    const lesson = await CurriculumLesson.findByPk(req.params.id as string);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    await lesson.update({ structure_prompt });
+    const events = await generateSectionStructure(structure_prompt);
+    res.json({ events });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Structure generation failed' });
+  }
+});
+
 // Session Fields (completion threshold, variable keys, triggers)
 router.put('/api/admin/orchestration/sessions/:id/fields', requireAdmin, handleUpdateSessionFields);
 

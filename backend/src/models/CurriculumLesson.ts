@@ -20,6 +20,7 @@ export interface CurriculumLessonAttributes {
   associated_session_id?: string;
   required_min_completion_before_session?: number;
   sort_order?: number;
+  structure_prompt?: string;
   section_variable_keys?: string[];
   section_artifact_ids?: string[];
   section_skill_ids?: string[];
@@ -45,6 +46,7 @@ class CurriculumLesson extends Model<CurriculumLessonAttributes> implements Curr
   declare associated_session_id: string;
   declare required_min_completion_before_session: number;
   declare sort_order: number;
+  declare structure_prompt: string;
   declare section_variable_keys: string[];
   declare section_artifact_ids: string[];
   declare section_skill_ids: string[];
@@ -135,6 +137,10 @@ CurriculumLesson.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+    },
+    structure_prompt: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     section_variable_keys: {
       type: DataTypes.JSONB,

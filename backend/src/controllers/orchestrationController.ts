@@ -269,7 +269,7 @@ export async function handleUpdateLesson(req: Request, res: Response) {
     const allowedFields = [
       'learning_goal', 'mandatory', 'build_phase_flag', 'presentation_phase_flag',
       'associated_session_id', 'required_min_completion_before_session', 'sort_order',
-      'section_variable_keys', 'section_artifact_ids', 'section_skill_ids',
+      'structure_prompt', 'section_variable_keys', 'section_artifact_ids', 'section_skill_ids',
     ];
     const updates: any = {};
     for (const f of allowedFields) {

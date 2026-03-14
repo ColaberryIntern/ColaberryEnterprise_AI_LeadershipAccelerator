@@ -7,12 +7,64 @@ import InlineVariableCreator from './builder/InlineVariableCreator';
 import InlineSkillCreator from './builder/InlineSkillCreator';
 import InlineArtifactCreator from './builder/InlineArtifactCreator';
 import BackfillButton from './builder/BackfillButton';
+import SectionBlueprintCard from './builder/SectionBlueprintCard';
 import DiagnosticReportModal from './builder/DiagnosticReportModal';
 import AutoRepairModal from './builder/AutoRepairModal';
 import { Lesson } from './builder/types';
 
+interface GeneratedEvent {
+  type: string;
+  student_label: string;
+  title: string;
+  description: string;
+  learning_goal: string;
+}
+
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
+
+  const handleSaveStructurePrompt = async (prompt: string) => {
+    if (!builder.selectedLessonId) return;
+    builder.setStructurePrompt(prompt);
+    try {
+      await fetch(`${apiUrl}/api/admin/orchestration/lessons/${builder.selectedLessonId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ structure_prompt: prompt }),
+      });
+    } catch { /* silent save */ }
+  };
+
+  const handleApplyStructure = async (events: GeneratedEvent[]) => {
+    if (!builder.selectedLessonId) return;
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    for (const evt of events) {
+      const existing = builder.miniSections.find(ms => ms.mini_section_type === evt.type);
+      if (existing) {
+        // Update existing mini-section
+        await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${existing.id}`, {
+          method: 'PUT', headers,
+          body: JSON.stringify({ title: evt.title, description: evt.description }),
+        });
+      } else {
+        // Create new mini-section
+        const maxOrder = builder.miniSections.reduce((max, ms) => Math.max(max, ms.mini_section_order || 0), 0);
+        const order = maxOrder + 1;
+        await fetch(`${apiUrl}/api/admin/orchestration/lessons/${builder.selectedLessonId}/mini-sections`, {
+          method: 'POST', headers,
+          body: JSON.stringify({
+            mini_section_type: evt.type,
+            title: evt.title,
+            description: evt.description,
+            mini_section_order: order,
+            is_active: true,
+          }),
+        });
+      }
+    }
+    // Refresh mini-sections list
+    builder.selectLesson(builder.selectedLessonId);
+  };
 
   return (
     <div>
@@ -145,8 +197,20 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
         </div>
       ) : (
         <div className="row g-3">
-          {/* LEFT PANEL — Student Structure Mirror */}
+          {/* LEFT PANEL — Blueprint + Student Structure Mirror */}
           <div className="col-lg-4">
+            <SectionBlueprintCard
+              lessonId={builder.selectedLessonId}
+              lessonTitle={builder.selectedLesson?.title}
+              lessonDescription={builder.lessonDescription}
+              lessonLearningGoal={builder.lessonLearningGoal}
+              structurePrompt={builder.structurePrompt}
+              onPromptChange={handleSaveStructurePrompt}
+              miniSections={builder.miniSections}
+              token={token}
+              apiUrl={apiUrl}
+              onApply={handleApplyStructure}
+            />
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
                 <span className="fw-semibold small">
