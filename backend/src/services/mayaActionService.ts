@@ -105,11 +105,12 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
     function: {
       name: 'initiate_voice_call',
       description:
-        'Place an immediate AI voice call to the visitor via Synthflow. THIS IS THE DEFAULT when a visitor says "call me", asks to talk to someone, or provides their phone number for a call. Requires name (via capture_lead_details) and confirmed phone number. Max 1 call per visitor per 24h.',
+        'Place an immediate AI voice call to the visitor via Synthflow. THIS IS THE DEFAULT when a visitor says "call me", asks to talk to someone, or provides their phone number for a call. Always pass the visitor\'s name if known. Max 1 call per visitor per 24h.',
       parameters: {
         type: 'object',
         properties: {
           phone: { type: 'string', description: 'Phone number to call' },
+          name: { type: 'string', description: "Visitor's name — always include if you know it" },
           context_summary: { type: 'string', description: 'Brief summary of what was discussed (optional)' },
         },
         required: ['phone'],

@@ -293,7 +293,7 @@ export async function initiateVoiceCall(
   visitorId: string,
   conversationId: string,
 ): Promise<MayaActionResult> {
-  const { phone, context_summary } = args;
+  const { phone, name: argName, context_summary } = args;
   if (!phone) {
     return { success: false, summary: 'Phone number is required' };
   }
@@ -318,7 +318,8 @@ export async function initiateVoiceCall(
   }
 
   const lead = await resolveLeadForVisitor(visitorId);
-  const leadName = lead?.getDataValue('name') || 'Visitor';
+  // Prefer the name passed by Maya (from conversation) over the lead record
+  const leadName = argName || lead?.getDataValue('name') || 'Visitor';
 
   // Build conversation context from recent messages
   let conversationContext = context_summary || '';
