@@ -381,7 +381,7 @@ function AlumniChampionPage() {
                 {
                   icon: '\u{1F91D}',
                   title: 'Introduced Referral',
-                  desc: 'Submit a contact and we reach out mentioning your name and Colaberry experience. The personal touch drives results.',
+                  desc: "Submit a contact and we reach out mentioning that you\u2019ve taken Colaberry corporate training in the past. The personal touch drives results.",
                 },
                 {
                   icon: '\u{1F575}\uFE0F',
