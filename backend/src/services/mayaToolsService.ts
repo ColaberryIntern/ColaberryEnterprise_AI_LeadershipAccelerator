@@ -508,15 +508,19 @@ export async function getAvailableSlots(
       };
     }
 
-    // Pick 3 well-spaced options from the candidates
+    // Only use slots from the FIRST matching day so options stay on one date
+    const firstDay = candidates[0].dayLabel;
+    const sameDayCandidates = candidates.filter((c) => c.dayLabel === firstDay);
+
+    // Pick 3 well-spaced options from that day
     const picked: CandidateSlot[] = [];
-    if (candidates.length <= 3) {
-      picked.push(...candidates);
+    if (sameDayCandidates.length <= 3) {
+      picked.push(...sameDayCandidates);
     } else {
       // First, middle, last for good spread
-      picked.push(candidates[0]);
-      picked.push(candidates[Math.floor(candidates.length / 2)]);
-      picked.push(candidates[candidates.length - 1]);
+      picked.push(sameDayCandidates[0]);
+      picked.push(sameDayCandidates[Math.floor(sameDayCandidates.length / 2)]);
+      picked.push(sameDayCandidates[sameDayCandidates.length - 1]);
     }
 
     const optionLines = picked.map((s, i) => `${i + 1}. ${s.dayLabel} at ${s.timeLabel} [${s.iso}]`);
