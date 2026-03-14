@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
+import EmailPreview from './EmailPreview';
 
 interface CommLog {
   id: string;
@@ -179,7 +180,18 @@ export default function CommunicationLogPanel({ simulationId }: { simulationId: 
 
                   {isExpanded && (
                     <div className="mt-2 pt-2 border-top" onClick={(e) => e.stopPropagation()}>
-                      {c.body && (
+                      {c.channel === 'email' && c.body ? (
+                        <div className="mb-2">
+                          <EmailPreview
+                            from={c.from_address || undefined}
+                            to={c.to_address || undefined}
+                            subject={c.subject || undefined}
+                            body={c.body}
+                            date={c.created_at}
+                            messageId={c.provider_message_id || undefined}
+                          />
+                        </div>
+                      ) : c.body ? (
                         <div className="mb-2">
                           <div className="small fw-medium text-muted mb-1">Body</div>
                           <div
@@ -189,7 +201,7 @@ export default function CommunicationLogPanel({ simulationId }: { simulationId: 
                             {c.body.replace(/<[^>]+>/g, '')}
                           </div>
                         </div>
-                      )}
+                      ) : null}
 
                       {transcript && (
                         <div className="mb-2">

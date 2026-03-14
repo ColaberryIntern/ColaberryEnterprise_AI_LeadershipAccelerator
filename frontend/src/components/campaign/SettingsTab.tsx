@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import api from '../../utils/api';
 import CampaignSimulatorPanel from '../../pages/admin/ai-settings/CampaignSimulatorPanel';
 
 interface CampaignSettings {
@@ -68,10 +69,50 @@ export default function SettingsTab({ campaignId, headers, campaignMode, campaig
   const [saved, setSaved] = useState(false);
   const [interestGroup, setInterestGroup] = useState<string | null>(null);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [simStatus, setSimStatus] = useState<{ id: string; status: string; current_step_index: number; total_steps: number } | null>(null);
+  const simPollRef = useRef<number | null>(null);
+
+  const checkActiveSim = useCallback(async () => {
+    try {
+      const { data } = await api.get(`/api/admin/simulations/campaigns/${campaignId}/history`);
+      const active = (data || []).find((s: any) => s.status === 'running' || s.status === 'paused');
+      if (active) {
+        setSimStatus({ id: active.id, status: active.status, current_step_index: active.current_step_index, total_steps: active.total_steps });
+      } else {
+        setSimStatus(null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [campaignId]);
+
+  useEffect(() => {
+    if (!simStatus || (simStatus.status !== 'running' && simStatus.status !== 'paused')) {
+      if (simPollRef.current) { clearInterval(simPollRef.current); simPollRef.current = null; }
+      return;
+    }
+    if (showSimulator) {
+      if (simPollRef.current) { clearInterval(simPollRef.current); simPollRef.current = null; }
+      return;
+    }
+    simPollRef.current = window.setInterval(async () => {
+      try {
+        const { data } = await api.get(`/api/admin/simulations/${simStatus.id}`);
+        setSimStatus({ id: data.id, status: data.status, current_step_index: data.current_step_index, total_steps: data.total_steps });
+        if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'failed') {
+          if (simPollRef.current) { clearInterval(simPollRef.current); simPollRef.current = null; }
+        }
+      } catch {
+        // ignore
+      }
+    }, 3000);
+    return () => { if (simPollRef.current) { clearInterval(simPollRef.current); simPollRef.current = null; } };
+  }, [simStatus?.id, simStatus?.status, showSimulator]);
 
   useEffect(() => {
     fetchSettings();
-  }, [campaignId]);
+    checkActiveSim();
+  }, [campaignId, checkActiveSim]);
 
   const fetchSettings = async () => {
     try {
@@ -234,19 +275,44 @@ export default function SettingsTab({ campaignId, headers, campaignMode, campaig
               Test every touchpoint, channel, and AI response before going live.
             </p>
           </div>
-          <button
-            className="btn btn-sm btn-outline-primary ms-3 text-nowrap"
-            onClick={() => setShowSimulator(true)}
-          >
-            Launch Simulator
-          </button>
+          {simStatus && (simStatus.status === 'running' || simStatus.status === 'paused') ? (
+            <button
+              className="btn btn-sm ms-3 text-nowrap d-flex align-items-center gap-2 btn-outline-primary"
+              onClick={() => setShowSimulator(true)}
+            >
+              {simStatus.status === 'running' && (
+                <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, backgroundColor: '#198754', animation: 'cory-pulse 1.5s infinite' }} />
+              )}
+              {simStatus.status === 'paused' && (
+                <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, backgroundColor: '#ffc107' }} />
+              )}
+              {simStatus.status === 'running' ? 'Running' : 'Paused'} Step {simStatus.current_step_index + 1}/{simStatus.total_steps}
+            </button>
+          ) : simStatus && (simStatus.status === 'completed' || simStatus.status === 'failed') ? (
+            <div className="d-flex align-items-center gap-2 ms-3">
+              <span className={`badge bg-${simStatus.status === 'completed' ? 'success' : 'danger'}`}>
+                {simStatus.status === 'completed' ? 'Completed' : 'Failed'}
+              </span>
+              <button className="btn btn-sm btn-outline-primary text-nowrap" onClick={() => { setSimStatus(null); setShowSimulator(true); }}>
+                New Simulation
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn btn-sm btn-outline-primary ms-3 text-nowrap"
+              onClick={() => setShowSimulator(true)}
+            >
+              Launch Simulator
+            </button>
+          )}
         </div>
       </div>
       {showSimulator && (
         <CampaignSimulatorPanel
           campaignId={campaignId}
           campaignName={campaignName || 'Campaign'}
-          onClose={() => setShowSimulator(false)}
+          activeSimId={simStatus && (simStatus.status === 'running' || simStatus.status === 'paused') ? simStatus.id : undefined}
+          onClose={() => { setShowSimulator(false); checkActiveSim(); }}
         />
       )}
 

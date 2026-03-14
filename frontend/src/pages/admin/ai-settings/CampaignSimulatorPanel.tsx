@@ -3,6 +3,7 @@ import api from '../../../utils/api';
 import SimulationTimeline from './SimulationTimeline';
 import type { SimStep } from './SimulationTimeline';
 import CommunicationLogPanel from '../../../components/CommunicationLogPanel';
+import EmailPreview from '../../../components/EmailPreview';
 
 type SpeedMode = 'normal' | 'fast' | 'ultra' | 'instant';
 
@@ -45,10 +46,12 @@ const OUTCOME_OPTIONS = [
 export default function CampaignSimulatorPanel({
   campaignId,
   campaignName,
+  activeSimId,
   onClose,
 }: {
   campaignId: string;
   campaignName: string;
+  activeSimId?: string;
   onClose: () => void;
 }) {
   const [speedMode, setSpeedMode] = useState<SpeedMode>('fast');
@@ -77,6 +80,15 @@ export default function CampaignSimulatorPanel({
       console.error('Poll error:', err);
     }
   }, []);
+
+  // Auto-load existing simulation if activeSimId is provided
+  const didLoadRef = useRef(false);
+  useEffect(() => {
+    if (activeSimId && !didLoadRef.current) {
+      didLoadRef.current = true;
+      fetchState(activeSimId);
+    }
+  }, [activeSimId, fetchState]);
 
   // Start polling when simulation is active
   useEffect(() => {
@@ -271,18 +283,36 @@ export default function CampaignSimulatorPanel({
                         {/* AI Content (after execution) */}
                         {currentStep.ai_content && (
                           <div className="mb-3">
-                            <div className="fw-semibold mb-1">AI-Generated Content</div>
-                            {currentStep.ai_content.subject && (
-                              <div className="mb-1">
-                                <strong>Subject:</strong> {currentStep.ai_content.subject}
-                              </div>
+                            {currentStep.channel === 'email' ? (
+                              <>
+                                <EmailPreview
+                                  from={`Colaberry Simulator <${currentStep.details?.from || 'info@colaberry.com'}>`}
+                                  to={currentStep.details?.to}
+                                  subject={currentStep.ai_content.subject}
+                                  body={currentStep.ai_content.body}
+                                  date={currentStep.executed_at || currentStep.wait_started_at || undefined}
+                                  messageId={currentStep.details?.messageId}
+                                />
+                                <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                                  {currentStep.ai_content.tokens_used} tokens | {currentStep.ai_content.model}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="fw-semibold mb-1">AI-Generated Content</div>
+                                {currentStep.ai_content.subject && (
+                                  <div className="mb-1">
+                                    <strong>Subject:</strong> {currentStep.ai_content.subject}
+                                  </div>
+                                )}
+                                <div className="bg-light p-2 rounded" style={{ maxHeight: 200, overflow: 'auto' }}>
+                                  <div dangerouslySetInnerHTML={{ __html: currentStep.ai_content.body || '' }} />
+                                </div>
+                                <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                                  {currentStep.ai_content.tokens_used} tokens | {currentStep.ai_content.model}
+                                </div>
+                              </>
                             )}
-                            <div className="bg-light p-2 rounded" style={{ maxHeight: 200, overflow: 'auto' }}>
-                              <div dangerouslySetInnerHTML={{ __html: currentStep.ai_content.body || '' }} />
-                            </div>
-                            <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
-                              {currentStep.ai_content.tokens_used} tokens | {currentStep.ai_content.model}
-                            </div>
                           </div>
                         )}
 
@@ -372,6 +402,21 @@ export default function CampaignSimulatorPanel({
                               </div>
                             )}
 
+                            {/* Voice recording link */}
+                            {currentStep.details.recording_url && (
+                              <div className="mt-2">
+                                <a
+                                  href={currentStep.details.recording_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+                                >
+                                  <i className="bi bi-play-circle"></i>
+                                  Listen to Call Recording
+                                </a>
+                              </div>
+                            )}
+
                             {/* Voice transcript viewer */}
                             {currentStep.details.transcript && (
                               <div className="mt-2">
@@ -384,6 +429,13 @@ export default function CampaignSimulatorPanel({
                                     ? currentStep.details.transcript
                                     : JSON.stringify(currentStep.details.transcript, null, 2)}
                                 </div>
+                              </div>
+                            )}
+
+                            {/* Voice call status (fetch from Synthflow if no recording yet) */}
+                            {currentStep.channel === 'voice' && currentStep.details.call_id && !currentStep.details.recording_url && !currentStep.details.transcript && (
+                              <div className="mt-2 small text-muted">
+                                Call placed (ID: {currentStep.details.call_id}). Recording and transcript will appear once the call completes.
                               </div>
                             )}
 
