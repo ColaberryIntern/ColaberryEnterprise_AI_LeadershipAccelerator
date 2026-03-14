@@ -405,6 +405,7 @@ function ReferralDashboardPage() {
         show={showModal}
         onClose={() => setShowModal(false)}
         onSuccess={fetchData}
+        alumniName={profile?.alumni_name}
       />
       <MayaChatWidget />
     </div>
