@@ -55,7 +55,7 @@ function AlumniChampionPage() {
           }}
         >
           <div className="container text-center" style={{ maxWidth: '800px' }}>
-            <img src="/colaberry-logo.png" alt="Colaberry" height="48" className="mb-4" style={{ mixBlendMode: 'screen' }} />
+            <img src="/colaberry-logo.png" alt="Colaberry" height="48" className="mb-4" style={{ filter: 'brightness(0) invert(1)', opacity: 0.9 }} />
             <h1 className="display-4 fw-bold mb-3" style={{ color: '#fff' }}>
               Become the AI Champion &mdash; Or Introduce One Inside Your Company
             </h1>
