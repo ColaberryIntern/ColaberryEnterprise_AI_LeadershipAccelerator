@@ -535,7 +535,13 @@ export async function scheduleStrategyCall(
       routeLeadToCampaign(lead.id, 'strategy_call', visitorId, conversationId).catch(() => {});
     }
 
-    // Send confirmation email
+    // Google Calendar invite (with sendNotifications: true) handles the calendar invite email.
+    // Send a supplementary confirmation from Maya for a personal touch.
+    const confirmStartDate = new Date(slot_start);
+    const confirmTimeStr = confirmStartDate.toLocaleString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+    });
     await sendInterestEmail({ to: email, fullName: name }).catch((err: any) => {
       console.warn('[MayaTools] Confirmation email failed:', err.message);
     });

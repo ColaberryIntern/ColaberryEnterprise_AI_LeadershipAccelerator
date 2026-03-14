@@ -219,6 +219,10 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
       dateTime: endTime.toISOString(),
       timeZone: BUSINESS_TIMEZONE,
     },
+    attendees: [
+      { email: data.email, displayName: data.name },
+      ...(env.googleCalendarOwnerEmail ? [{ email: env.googleCalendarOwnerEmail }] : []),
+    ],
     reminders: {
       useDefault: false,
       overrides: [
@@ -245,6 +249,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
     event = await meetCalendar.events.insert({
       calendarId: env.googleCalendarId,
       conferenceDataVersion: 1,
+      sendNotifications: true,
       requestBody: {
         ...baseRequest,
         conferenceData: {
@@ -260,6 +265,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
     console.warn('[Calendar] Meet link creation failed, creating event without conference:', meetErr.message);
     event = await calendar.events.insert({
       calendarId: env.googleCalendarId,
+      sendNotifications: true,
       requestBody: baseRequest,
     });
   }
