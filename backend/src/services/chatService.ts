@@ -445,7 +445,14 @@ export async function sendMessage(
     assistantMessage = response.choices[0]?.message;
   }
 
-  const rawReply = assistantMessage?.content?.trim() || 'I apologize, I had trouble generating a response. Could you try rephrasing your question?';
+  // If OpenAI returned null content (common after tool failures), use the tool's
+  // summary so Maya gives a meaningful reply instead of generic "I apologize."
+  let rawReply = assistantMessage?.content?.trim();
+  if (!rawReply && actionResults.length > 0) {
+    rawReply = actionResults[actionResults.length - 1];
+    console.warn('[Chat] OpenAI returned null content after tool call, using tool summary as reply');
+  }
+  rawReply = rawReply || 'I apologize, I had trouble generating a response. Could you try again?';
   const latencyMs = Date.now() - startTime;
 
   // Extract follow-up suggestions from Maya's response

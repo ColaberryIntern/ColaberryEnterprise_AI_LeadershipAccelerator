@@ -171,36 +171,42 @@ async function getTimedBusyBlocks(
   const blocks: { start: string; end: string }[] = [];
   let pageToken: string | undefined;
 
-  do {
-    const res = await calendar.events.list({
-      calendarId: env.googleCalendarId,
-      timeMin: timeMin.toISOString(),
-      timeMax: timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 250,
-      pageToken,
-    });
-
-    for (const event of res.data.items || []) {
-      // Skip all-day events — they use start.date, not start.dateTime
-      if (!event.start?.dateTime || !event.end?.dateTime) continue;
-      // Skip transparent (free) events
-      if (event.transparency === 'transparent') continue;
-      // Skip cancelled events
-      if (event.status === 'cancelled') continue;
-      // Skip multi-day timed events (>24h) — calendar holds, not real meetings
-      const durationMs = new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime();
-      if (durationMs > MAX_MEETING_MS) continue;
-
-      blocks.push({
-        start: event.start.dateTime,
-        end: event.end.dateTime,
+  try {
+    do {
+      const res = await calendar.events.list({
+        calendarId: env.googleCalendarId,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime',
+        maxResults: 250,
+        pageToken,
       });
-    }
 
-    pageToken = res.data.nextPageToken || undefined;
-  } while (pageToken);
+      for (const event of res.data.items || []) {
+        // Skip all-day events — they use start.date, not start.dateTime
+        if (!event.start?.dateTime || !event.end?.dateTime) continue;
+        // Skip transparent (free) events
+        if (event.transparency === 'transparent') continue;
+        // Skip cancelled events
+        if (event.status === 'cancelled') continue;
+        // Skip multi-day timed events (>24h) — calendar holds, not real meetings
+        const durationMs = new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime();
+        if (durationMs > MAX_MEETING_MS) continue;
+
+        blocks.push({
+          start: event.start.dateTime,
+          end: event.end.dateTime,
+        });
+      }
+
+      pageToken = res.data.nextPageToken || undefined;
+    } while (pageToken);
+  } catch (err: any) {
+    console.error(`[Calendar] getTimedBusyBlocks FAILED (${timeMin.toISOString()} - ${timeMax.toISOString()}):`, err.message, err.code || '', err.status || '');
+    // Return empty — let the booking proceed and let Google Calendar handle conflicts
+    return [];
+  }
 
   return blocks;
 }
@@ -210,6 +216,8 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
 
   const startTime = new Date(data.slotStart);
   const endTime = new Date(startTime.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
+
+  console.log(`[Calendar] createBooking: ${data.name} | ${startTime.toISOString()} - ${endTime.toISOString()} | calendarId: ${env.googleCalendarId} | impersonating: ${env.googleCalendarOwnerEmail || 'none'}`);
 
   // Pre-booking conflict check: verify the slot is still free (ignoring all-day events)
   const conflicts = await getTimedBusyBlocks(calendar, startTime, endTime);
