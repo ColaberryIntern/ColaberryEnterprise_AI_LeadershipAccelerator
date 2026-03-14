@@ -484,14 +484,28 @@ function PortalMentorChat() {
                     let prompt: string;
                     if (lessonContext.workstationPrompt) {
                       // Admin-configured prompt with variable substitution
+                      const formattedReqs = taskData.requirements.map((r, i) => `${i + 1}. ${r}`).join('\n');
+                      const formattedArtifacts = taskData.artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description}`).join('\n');
+                      const mentorBriefing = lastMentorMsg?.content || 'No briefing available yet.';
                       prompt = lessonContext.workstationPrompt
+                        // Support both {task_*} and short variable names
                         .replace(/\{task_title\}/g, taskData.title)
+                        .replace(/\{title\}/g, taskData.title)
                         .replace(/\{task_description\}/g, taskData.description)
+                        .replace(/\{description\}/g, taskData.description)
                         .replace(/\{task_deliverable\}/g, taskData.deliverable)
-                        .replace(/\{task_requirements\}/g, taskData.requirements.map((r, i) => `${i + 1}. ${r}`).join('\n'))
-                        .replace(/\{task_artifacts\}/g, taskData.artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description}`).join('\n'))
+                        .replace(/\{deliverable\}/g, taskData.deliverable)
+                        .replace(/\{task_requirements\}/g, formattedReqs)
+                        .replace(/\{task_artifacts\}/g, formattedArtifacts)
                         .replace(/\{lesson_title\}/g, lessonContext.lessonTitle)
-                        .replace(/\{mentor_briefing\}/g, lastMentorMsg?.content || 'No briefing available yet.');
+                        .replace(/\{lessonTitle\}/g, lessonContext.lessonTitle)
+                        .replace(/\{mentor_briefing\}/g, mentorBriefing);
+                      // Replace illustrative requirements block if present
+                      prompt = prompt.replace(/1\. \{requirement 1\}\n2\. \{requirement 2\}\n\.\.\./g, formattedReqs);
+                      // Append mentor briefing if no placeholder was in the template
+                      if (!lessonContext.workstationPrompt.includes('{mentor_briefing}')) {
+                        prompt += '\n\nMENTOR BRIEFING:\n' + mentorBriefing;
+                      }
                     } else {
                       prompt = `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
 

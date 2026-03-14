@@ -392,14 +392,28 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
 
                 if (workstationPrompt) {
                   // Admin-configured workstation prompt with variable substitution
+                  const formattedReqs = (task?.requirements || []).map((r, i) => `${i + 1}. ${r}`).join('\n');
+                  const formattedArtifacts = (task?.required_artifacts || []).map((a, i) => `${i + 1}. ${a.name}: ${a.description}`).join('\n');
+                  const mentorBriefing = lastMentorMsg?.content || 'No briefing available yet.';
                   prompt = workstationPrompt
+                    // Support both {task_*} and short variable names
                     .replace(/\{task_title\}/g, task?.title || 'Implementation Task')
+                    .replace(/\{title\}/g, task?.title || 'Implementation Task')
                     .replace(/\{task_description\}/g, task?.description || '')
+                    .replace(/\{description\}/g, task?.description || '')
                     .replace(/\{task_deliverable\}/g, task?.deliverable || '')
-                    .replace(/\{task_requirements\}/g, (task?.requirements || []).map((r, i) => `${i + 1}. ${r}`).join('\n'))
-                    .replace(/\{task_artifacts\}/g, (task?.required_artifacts || []).map((a, i) => `${i + 1}. ${a.name}: ${a.description}`).join('\n'))
+                    .replace(/\{deliverable\}/g, task?.deliverable || '')
+                    .replace(/\{task_requirements\}/g, formattedReqs)
+                    .replace(/\{task_artifacts\}/g, formattedArtifacts)
                     .replace(/\{lesson_title\}/g, lessonTitle || '')
-                    .replace(/\{mentor_briefing\}/g, lastMentorMsg?.content || 'No briefing available yet.');
+                    .replace(/\{lessonTitle\}/g, lessonTitle || '')
+                    .replace(/\{mentor_briefing\}/g, mentorBriefing);
+                  // Replace illustrative requirements block if present
+                  prompt = prompt.replace(/1\. \{requirement 1\}\n2\. \{requirement 2\}\n\.\.\./g, formattedReqs);
+                  // Append mentor briefing if no placeholder was in the template
+                  if (!workstationPrompt.includes('{mentor_briefing}')) {
+                    prompt += '\n\nMENTOR BRIEFING:\n' + mentorBriefing;
+                  }
                 } else {
                   // Fallback hardcoded template
                   const artifactsList = task?.required_artifacts?.length
