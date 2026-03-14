@@ -24,6 +24,13 @@ const ARTIFACTS = [
   { icon: '\u{1F680}', title: '90-Day Deployment Plan', desc: 'Week-by-week execution milestones with resource allocation and KPIs' },
 ];
 
+const COMMISSION_TIERS = [
+  { participants: '1', commission: '$250' },
+  { participants: '4', commission: '$1,000' },
+  { participants: '10', commission: '$2,500' },
+  { participants: '20', commission: '$5,000' },
+];
+
 function AlumniChampionPage() {
   useEffect(() => {
     initTracker();
@@ -34,8 +41,8 @@ function AlumniChampionPage() {
   return (
     <>
       <SEOHead
-        title="Alumni AI Champion Program | Learn Enterprise AI & Earn Referral Income"
-        description="Advance your career with enterprise AI leadership skills. Learn how to deploy AI inside companies — and earn $250 per enrollment when you introduce it."
+        title="Alumni AI Champion Program | Enroll or Earn $250 Per Participant"
+        description="Enroll in the AI Leadership Accelerator or refer leaders and teams. Earn $250 per enrolled participant — including yourself if sponsored."
       />
 
       <div style={{ background: DARK.bg, color: DARK.text, minHeight: '100vh' }}>
@@ -48,17 +55,17 @@ function AlumniChampionPage() {
           }}
         >
           <div className="container text-center" style={{ maxWidth: '800px' }}>
-            <img src="/colaberry-logo.png" alt="Colaberry" height="48" className="mb-4" style={{ filter: 'brightness(1.2)' }} />
+            <img src="/colaberry-logo.png" alt="Colaberry" height="48" className="mb-4" style={{ mixBlendMode: 'screen' }} />
             <h1 className="display-4 fw-bold mb-3" style={{ color: '#fff' }}>
-              Become the AI Champion &mdash; And Lead AI Inside Your Company
+              Become the AI Champion &mdash; Or Introduce One Inside Your Company
             </h1>
             <p className="lead mb-4" style={{ color: DARK.textMuted, fontSize: '1.25rem' }}>
-              Advance your career with enterprise-level AI execution skills.
-              Then introduce the program to your organization and earn $250 per enrollment.
+              Enroll yourself, get sponsored by your company, or refer leaders and teams.
+              Earn $250 for every participant who enrolls &mdash; including yourself if your company pays.
             </p>
             <div className="d-flex justify-content-center gap-3 flex-wrap">
               <a
-                href="#why-alumni"
+                href="#how-it-works"
                 className="btn btn-lg fw-bold px-4"
                 style={{ background: DARK.accent, color: DARK.bg, border: 'none' }}
               >
@@ -69,100 +76,146 @@ function AlumniChampionPage() {
                 className="btn btn-lg px-4"
                 style={{ background: 'transparent', color: DARK.accent, border: `1px solid ${DARK.accent}` }}
               >
-                Already Enrolled? Activate Referral Benefits
+                Activate Referral Benefits
               </a>
             </div>
           </div>
         </section>
 
-        {/* ── Why This Program Is Built for Alumni ── */}
-        <section id="why-alumni" style={{ padding: '4rem 0' }}>
-          <div className="container">
-            <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>Why This Program Is Built for Alumni</h2>
+        {/* ── How This Opportunity Works ── */}
+        <section id="how-it-works" style={{ padding: '4rem 0' }}>
+          <div className="container" style={{ maxWidth: '900px' }}>
+            <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>How This Opportunity Works</h2>
             <p className="text-center mb-5" style={{ color: DARK.textMuted, maxWidth: '650px', margin: '0 auto' }}>
-              You already have the technical foundation. This program gives you the enterprise-level AI strategy skills to lead transformation inside any organization.
+              Two paths. No required order. You can do one, the other, or both.
             </p>
             <div className="row g-4">
-              {[
-                {
-                  icon: '\u{1F4C8}',
-                  title: 'Enterprise AI Strategy Skills',
-                  desc: 'Learn how organizations evaluate ROI, governance, and AI execution roadmaps.',
-                },
-                {
-                  icon: '\u{1F9E0}',
-                  title: 'Executive-Level Thinking',
-                  desc: 'Understand AI from the leadership perspective \u2014 not just technical.',
-                },
-                {
-                  icon: '\u{1F3AF}',
-                  title: 'AI Execution Blueprint',
-                  desc: 'Gain a structured model for deploying AI inside real companies.',
-                },
-                {
-                  icon: '\u{1F680}',
-                  title: 'Career Acceleration',
-                  desc: 'Position yourself as the internal AI transformation leader.',
-                },
-              ].map((card) => (
-                <div className="col-md-6 col-lg-3" key={card.title}>
+              {/* Path 1 */}
+              <div className="col-md-6">
+                <div
+                  className="h-100 p-4 rounded-3"
+                  style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
+                >
+                  <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 1 &mdash; Enroll Yourself</h3>
+                  {[
+                    'Join the AI Leadership Accelerator',
+                    'Ask your company to sponsor you',
+                    'Earn $250 if your company pays',
+                    'Become the AI Champion inside your organization',
+                  ].map((item) => (
+                    <div key={item} className="d-flex align-items-start gap-2 py-2" style={{ borderBottom: `1px solid ${DARK.border}` }}>
+                      <span style={{ color: DARK.green, fontSize: '1rem', lineHeight: '1.5' }}>{'\u2713'}</span>
+                      <span style={{ color: DARK.text, fontSize: '0.95rem' }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Path 2 */}
+              <div className="col-md-6">
+                <div
+                  className="h-100 p-4 rounded-3"
+                  style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
+                >
+                  <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 2 &mdash; Refer Others</h3>
+                  {[
+                    'Refer your boss',
+                    'Refer a leader or manager',
+                    'Refer a team',
+                    'Refer an entire department',
+                    'Earn $250 per enrolled participant',
+                  ].map((item) => (
+                    <div key={item} className="d-flex align-items-start gap-2 py-2" style={{ borderBottom: `1px solid ${DARK.border}` }}>
+                      <span style={{ color: DARK.green, fontSize: '1rem', lineHeight: '1.5' }}>{'\u2713'}</span>
+                      <span style={{ color: DARK.text, fontSize: '0.95rem' }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="text-center mt-4 mb-0" style={{ color: DARK.textMuted, fontStyle: 'italic' }}>
+              There is no required order. You can enroll yourself, refer others, or do both.
+            </p>
+          </div>
+        </section>
+
+        {/* ── Commission Multiplier ── */}
+        <section style={{ padding: '4rem 0', background: '#111827' }}>
+          <div className="container" style={{ maxWidth: '800px' }}>
+            <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>Your Commission Multiplies With Every Enrollment</h2>
+            <p className="text-center mb-4" style={{ color: DARK.textMuted }}>
+              You earn <strong style={{ color: DARK.green }}>$250 per enrolled participant</strong> &mdash; no cap.
+            </p>
+
+            {/* Commission table */}
+            <div
+              className="rounded-3 overflow-hidden mb-4"
+              style={{ border: `1px solid ${DARK.border}` }}
+            >
+              <div
+                className="d-flex fw-bold small"
+                style={{ background: DARK.border, padding: '0.75rem 1.5rem' }}
+              >
+                <div style={{ flex: 1, color: DARK.textMuted }}>Participants Enrolled</div>
+                <div style={{ flex: 1, textAlign: 'right', color: DARK.textMuted }}>Your Commission</div>
+              </div>
+              {COMMISSION_TIERS.map((tier, i) => (
+                <div
+                  key={tier.participants}
+                  className="d-flex align-items-center"
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: i === COMMISSION_TIERS.length - 1 ? 'rgba(104, 211, 145, 0.1)' : DARK.bgCard,
+                    borderTop: `1px solid ${DARK.border}`,
+                  }}
+                >
+                  <div style={{ flex: 1, color: DARK.text, fontWeight: 600 }}>{tier.participants}</div>
                   <div
-                    className="h-100 p-4 rounded-3 text-center"
-                    style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
+                    style={{
+                      flex: 1,
+                      textAlign: 'right',
+                      color: i === COMMISSION_TIERS.length - 1 ? DARK.green : DARK.accent,
+                      fontWeight: 'bold',
+                      fontSize: i === COMMISSION_TIERS.length - 1 ? '1.1rem' : '1rem',
+                    }}
                   >
-                    <div className="fs-1 mb-3" aria-hidden="true">{card.icon}</div>
-                    <h3 className="h5 fw-bold" style={{ color: '#fff' }}>{card.title}</h3>
-                    <p className="small mb-0" style={{ color: DARK.textMuted }}>{card.desc}</p>
+                    {tier.commission}
                   </div>
                 </div>
               ))}
             </div>
-            <div className="text-center mt-4">
-              <a
-                href="/"
-                className="btn fw-bold px-4"
-                style={{ background: DARK.accent, color: DARK.bg, border: 'none' }}
-              >
-                View Program Curriculum
-              </a>
-            </div>
-          </div>
-        </section>
 
-        {/* ── Who This Program Is For ── */}
-        <section style={{ padding: '4rem 0', background: '#111827' }}>
-          <div className="container" style={{ maxWidth: '700px' }}>
-            <h2 className="text-center fw-bold mb-4" style={{ color: '#fff' }}>Who This Program Is For</h2>
+            {/* Scenario examples */}
             <div
               className="p-4 rounded-3"
               style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
             >
-              {[
-                'Alumni ready to move into leadership roles',
-                'Technical professionals who want executive AI fluency',
-                'Managers exploring AI strategy for their teams',
-                'Consultants wanting enterprise AI frameworks',
-                'Professionals who want to champion AI internally',
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="d-flex align-items-start gap-3 py-2"
-                  style={{ borderBottom: `1px solid ${DARK.border}` }}
-                >
-                  <span style={{ color: DARK.green, fontSize: '1.1rem', lineHeight: '1.5' }}>{'\u2713'}</span>
-                  <span style={{ color: DARK.text }}>{item}</span>
-                </div>
-              ))}
+              <h3 className="h6 fw-bold mb-3" style={{ color: '#fff' }}>Real Scenarios</h3>
+              <div className="mb-3 pb-3" style={{ borderBottom: `1px solid ${DARK.border}` }}>
+                <p className="small mb-1" style={{ color: DARK.text }}>
+                  <strong style={{ color: DARK.accent }}>Your company sponsors you + 3 teammates</strong>
+                </p>
+                <p className="small mb-0" style={{ color: DARK.textMuted }}>
+                  4 enrollments = <strong style={{ color: DARK.green }}>$1,000</strong>
+                </p>
+              </div>
+              <div>
+                <p className="small mb-1" style={{ color: DARK.text }}>
+                  <strong style={{ color: DARK.accent }}>A department enrolls 10 leaders</strong>
+                </p>
+                <p className="small mb-0" style={{ color: DARK.textMuted }}>
+                  10 enrollments = <strong style={{ color: DARK.green }}>$2,500</strong>
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* ── Turn Your Learning Into Influence ── */}
+        {/* ── Use Your Position to Create Opportunity ── */}
         <section style={{ padding: '4rem 0' }}>
           <div className="container" style={{ maxWidth: '700px' }}>
-            <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>Turn Your Learning Into Influence</h2>
+            <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>Use Your Position to Create Opportunity</h2>
             <p className="text-center mb-4" style={{ color: DARK.textMuted }}>
-              After completing the program, you'll be equipped to:
+              Whether you take the program yourself or refer it to others, you are positioned to drive AI transformation inside organizations.
             </p>
             <div className="row g-3">
               {[
@@ -194,46 +247,35 @@ function AlumniChampionPage() {
           </div>
         </section>
 
-        {/* ── If You Want To… Comparison ── */}
+        {/* ── Who the AI Leadership Accelerator Is Designed For ── */}
         <section style={{ padding: '4rem 0', background: '#111827' }}>
-          <div className="container" style={{ maxWidth: '800px' }}>
-            <h2 className="text-center fw-bold mb-4" style={{ color: '#fff' }}>If You Want To&hellip;</h2>
-            <div className="row g-0">
-              {/* Left column */}
-              <div className="col-md-6">
-                <div className="p-4" style={{ borderRight: '1px solid ' + DARK.border }}>
-                  <h3 className="h6 fw-bold mb-3" style={{ color: DARK.accent }}>You Want</h3>
-                  {[
-                    'AI strategy skills',
-                    'Influence in your organization',
-                    'Career growth',
-                    'Additional income',
-                  ].map((item) => (
-                    <div key={item} className="d-flex align-items-center gap-2 py-2" style={{ borderBottom: `1px solid ${DARK.border}` }}>
-                      <span style={{ color: DARK.textMuted }}>{'\u25CB'}</span>
-                      <span style={{ color: DARK.text }}>{item}</span>
-                    </div>
-                  ))}
+          <div className="container" style={{ maxWidth: '700px' }}>
+            <h2 className="text-center fw-bold mb-4" style={{ color: '#fff' }}>Who the AI Leadership Accelerator Is Designed For</h2>
+            <div
+              className="p-4 rounded-3"
+              style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
+            >
+              {[
+                'Executives exploring AI strategy',
+                'Directors leading digital transformation',
+                'Managers building AI-capable teams',
+                'Senior technical leaders bridging tech and strategy',
+                'Internal AI champions driving adoption',
+                'Innovation leaders evaluating enterprise AI',
+              ].map((item) => (
+                <div
+                  key={item}
+                  className="d-flex align-items-start gap-3 py-2"
+                  style={{ borderBottom: `1px solid ${DARK.border}` }}
+                >
+                  <span style={{ color: DARK.green, fontSize: '1.1rem', lineHeight: '1.5' }}>{'\u2713'}</span>
+                  <span style={{ color: DARK.text }}>{item}</span>
                 </div>
-              </div>
-              {/* Right column */}
-              <div className="col-md-6">
-                <div className="p-4">
-                  <h3 className="h6 fw-bold mb-3" style={{ color: DARK.green }}>You Get</h3>
-                  {[
-                    'Build enterprise AI strategy',
-                    'Present AI initiatives to leadership',
-                    'Become the AI Champion',
-                    'Earn through internal referrals',
-                  ].map((item) => (
-                    <div key={item} className="d-flex align-items-center gap-2 py-2" style={{ borderBottom: `1px solid ${DARK.border}` }}>
-                      <span style={{ color: DARK.green }}>{'\u2713'}</span>
-                      <span style={{ color: DARK.text }}>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
+            <p className="text-center mt-3 mb-0 small" style={{ color: DARK.textMuted }}>
+              This is a leadership-focused enterprise AI execution program. Alumni can enroll or introduce it to leadership.
+            </p>
           </div>
         </section>
 
@@ -261,16 +303,35 @@ function AlumniChampionPage() {
           </div>
         </section>
 
-        {/* ── Referral Opportunity ── */}
+        {/* ── Earn $250 Per Enrolled Participant ── */}
         <section style={{ padding: '4rem 0', background: '#111827' }}>
           <div className="container">
             <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>
-              Earn $250 When You Introduce It to Your Organization
+              Earn $250 Per Enrolled Participant
             </h2>
-            <p className="text-center mb-5" style={{ color: DARK.textMuted, maxWidth: '650px', margin: '0 auto' }}>
-              Once you're part of the program, you can introduce it to other leaders inside your company or network.
-              Earn a commission for every successful enrollment.
-            </p>
+            <div className="text-center mb-5" style={{ maxWidth: '650px', margin: '0 auto' }}>
+              <p className="mb-2" style={{ color: DARK.textMuted }}>You earn commission when:</p>
+              <div className="d-flex flex-wrap justify-content-center gap-2 mb-3">
+                {[
+                  'You enroll and your company pays',
+                  'A leader enrolls',
+                  'A manager enrolls',
+                  'A team enrolls',
+                  'A department enrolls',
+                ].map((item) => (
+                  <span
+                    key={item}
+                    className="badge px-3 py-2"
+                    style={{ background: 'rgba(104, 211, 145, 0.15)', color: DARK.green, fontSize: '0.85rem', fontWeight: 500 }}
+                  >
+                    {'\u2713'} {item}
+                  </span>
+                ))}
+              </div>
+              <p className="small mb-0" style={{ color: DARK.textMuted }}>
+                Commission is calculated per enrolled participant. <strong style={{ color: DARK.green }}>No cap. No dependency.</strong>
+              </p>
+            </div>
 
             {/* How It Works */}
             <div className="row g-4 mb-5">
@@ -288,7 +349,7 @@ function AlumniChampionPage() {
                 {
                   step: '3',
                   title: 'Track & Earn',
-                  desc: 'Monitor your referrals in real time. Earn $250 for every leader who enrolls through your referral.',
+                  desc: 'Monitor your referrals in real time. Earn $250 for every participant who enrolls through your referral.',
                 },
               ].map((item) => (
                 <div className="col-md-4" key={item.step}>
@@ -357,7 +418,7 @@ function AlumniChampionPage() {
           <div className="container text-center" style={{ maxWidth: '650px' }}>
             <h2 className="fw-bold mb-3" style={{ color: '#fff' }}>Ready to Lead AI at Your Organization?</h2>
             <p className="mb-4" style={{ color: DARK.textMuted }}>
-              Build the skills to champion AI transformation &mdash; and earn when you spread the word.
+              Enroll in the program or start earning by referring leaders and teams.
             </p>
             <div className="d-flex justify-content-center gap-3 flex-wrap">
               <a
