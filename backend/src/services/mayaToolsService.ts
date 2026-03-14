@@ -591,6 +591,7 @@ export async function scheduleStrategyCall(
       details: { slot_start, event_id: booking.eventId, meet_link: booking.meetLink },
     };
   } catch (err: any) {
+    console.error(`[MayaTools] scheduleStrategyCall error (${err.statusCode || 'no-status'}):`, err.message);
     await logAction(visitorId, conversationId, 'strategy_call_booked', 'failed', {
       error: err.message,
     });

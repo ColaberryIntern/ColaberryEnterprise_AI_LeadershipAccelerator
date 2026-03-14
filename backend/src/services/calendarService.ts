@@ -50,6 +50,24 @@ function getAuthClient() {
   });
 }
 
+/**
+ * Return a Calendar client using impersonated auth when googleCalendarOwnerEmail
+ * is configured, otherwise plain service-account auth.
+ * This ensures getAvailableSlots and createBooking see the same calendar.
+ */
+function getCalendarClient() {
+  if (env.googleCalendarOwnerEmail) {
+    const impersonateAuth = new google.auth.JWT({
+      email: env.googleServiceAccountEmail,
+      key: env.googlePrivateKey,
+      scopes: ['https://www.googleapis.com/auth/calendar'],
+      subject: env.googleCalendarOwnerEmail,
+    });
+    return google.calendar({ version: 'v3', auth: impersonateAuth });
+  }
+  return google.calendar({ version: 'v3', auth: getAuthClient() });
+}
+
 function isWeekday(date: Date): boolean {
   const day = date.getDay();
   return day >= 1 && day <= 5;
@@ -92,8 +110,7 @@ function slotsOverlap(slot: TimeSlot, busyStart: string, busyEnd: string): boole
 }
 
 export async function getAvailableSlots(days: number = 21): Promise<AvailabilityResponse> {
-  const auth = getAuthClient();
-  const calendar = google.calendar({ version: 'v3', auth });
+  const calendar = getCalendarClient();
 
   const now = new Date();
   // Start from tomorrow to avoid same-day bookings
