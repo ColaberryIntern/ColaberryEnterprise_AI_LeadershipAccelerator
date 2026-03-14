@@ -107,6 +107,15 @@ export async function createLead(data: LeadInput) {
     return { lead: recentDuplicate, isDuplicate: true };
   }
 
+  // Duplicate check: same email (any age) — prevents unique constraint violation
+  const existingByEmail = await Lead.findOne({
+    where: { email: data.email },
+    order: [['created_at', 'DESC']],
+  });
+  if (existingByEmail) {
+    return { lead: existingByEmail, isDuplicate: true };
+  }
+
   // Duplicate check: same phone (normalized)
   if (data.phone) {
     const phoneMatch = await findLeadByNormalizedPhone(data.phone);
