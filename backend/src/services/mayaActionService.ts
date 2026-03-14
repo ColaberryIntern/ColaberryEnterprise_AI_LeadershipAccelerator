@@ -8,6 +8,7 @@ import AdmissionsActionLog from '../models/AdmissionsActionLog';
 import DocumentDeliveryLog from '../models/DocumentDeliveryLog';
 import { canDeliverDocument } from './admissionsWorkflowService';
 import { sendAdmissionsDocument } from './emailService';
+import { addMayaInteractionTag } from './mayaCampaignRouter';
 import {
   captureLeadDetails,
   updateLeadRecord,
@@ -40,7 +41,7 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
           title: { type: 'string', description: "Visitor's job title" },
           interest_type: {
             type: 'string',
-            enum: ['executive_briefing', 'strategy_call', 'sponsorship', 'enrollment', 'general'],
+            enum: ['executive_briefing', 'strategy_call', 'sponsorship', 'enrollment', 'voice_call', 'general'],
             description: 'Which service the visitor is most interested in',
           },
         },
@@ -163,7 +164,7 @@ export const MAYA_TOOLS: ChatCompletionTool[] = [
         properties: {
           interest_type: {
             type: 'string',
-            enum: ['executive_briefing', 'strategy_call', 'sponsorship', 'enrollment', 'general'],
+            enum: ['executive_briefing', 'strategy_call', 'sponsorship', 'enrollment', 'voice_call', 'general'],
             description: 'Which service path to enroll them in',
           },
         },
@@ -334,6 +335,11 @@ async function handleSendDocument(
     recipient_email,
     recipient_name: name,
   });
+
+  // Tag Maya interaction
+  if (memory?.lead_id) {
+    addMayaInteractionTag(memory.lead_id, 'maya_document_requested').catch(() => {});
+  }
 
   const docNames: Record<string, string> = {
     executive_briefing: 'Executive Briefing',

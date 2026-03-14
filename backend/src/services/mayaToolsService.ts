@@ -16,7 +16,7 @@ import {
 import { createAppointment } from './appointmentService';
 import { sendStrategyCallConfirmation } from './emailService';
 import { findRelevantKnowledge } from './admissionsKnowledgeService';
-import { routeLeadToCampaign } from './mayaCampaignRouter';
+import { routeLeadToCampaign, addMayaInteractionTag } from './mayaCampaignRouter';
 import {
   generateConversationSummary,
   buildSmsSummaryContent,
@@ -170,6 +170,16 @@ export async function captureLeadDetails(
       interest_type,
       is_new: isNew,
     });
+
+    // Tag Maya interaction
+    addMayaInteractionTag(lead.id, 'maya_chat_active').catch(() => {});
+
+    // Auto-enroll in Inbound Lead campaign if name+email+phone captured and no explicit interest
+    if (!interest_type && email && phone) {
+      routeLeadToCampaign(lead.id, 'general', visitorId, conversationId).catch((err: any) => {
+        console.warn('[MayaTools] Inbound campaign enrollment failed:', err.message);
+      });
+    }
 
     return {
       success: true,
@@ -398,6 +408,14 @@ export async function initiateVoiceCall(
       return { success: false, summary: 'Unable to initiate call right now. The team will follow up.' };
     }
 
+    // Tag + auto-enroll in Voice Call Requested campaign
+    if (lead?.id) {
+      addMayaInteractionTag(lead.id, 'maya_voice_call_requested').catch(() => {});
+      routeLeadToCampaign(lead.id, 'voice_call', visitorId, conversationId).catch((err: any) => {
+        console.warn('[MayaTools] Voice call campaign enrollment failed:', err.message);
+      });
+    }
+
     return {
       success: true,
       summary: `Voice call initiated to ${phone}. ${leadName} should receive a call shortly.`,
@@ -605,7 +623,8 @@ export async function scheduleStrategyCall(
         calendar_event_id: booking.eventId,
       } as any).catch(() => {});
 
-      // Enroll in strategy call campaign (fire-and-forget)
+      // Tag + enroll in strategy call campaign (fire-and-forget)
+      addMayaInteractionTag(lead.id, 'maya_strategy_call_interest').catch(() => {});
       routeLeadToCampaign(lead.id, 'strategy_call', visitorId, conversationId).catch(() => {});
     }
 

@@ -16,6 +16,7 @@ import { buildMayaSystemPrompt, generateMayaGreeting } from './admissionsMayaSer
 import { loadMemory, saveConversationToMemory, classifyVisitorType } from './admissionsMemoryService';
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
 import { executeMayaAction, MAYA_TOOLS, type MayaActionResult } from './mayaActionService';
+import { addMayaInteractionTag } from './mayaCampaignRouter';
 
 let openaiClient: OpenAI | null = null;
 
@@ -317,6 +318,11 @@ export async function startConversation(params: {
     message_count: 1,
   } as any);
 
+  // Tag Maya interaction on lead (fire-and-forget)
+  if (leadId) {
+    addMayaInteractionTag(leadId, 'maya_chat_started').catch(() => {});
+  }
+
   return {
     conversation_id: conversation.id,
     greeting,
@@ -553,6 +559,11 @@ export async function closeConversation(conversationId: string): Promise<void> {
     } catch (err) {
       // Non-critical
     }
+  }
+
+  // Tag Maya interaction on lead (fire-and-forget)
+  if (conversation.lead_id) {
+    addMayaInteractionTag(conversation.lead_id, 'maya_chat_completed').catch(() => {});
   }
 
   // Save conversation to admissions memory

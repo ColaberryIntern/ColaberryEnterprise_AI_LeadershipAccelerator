@@ -126,6 +126,7 @@ const MayaChatWidget: React.FC = () => {
   const [isExecutive, setIsExecutive] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(true);
   const [callingActive, setCallingActive] = useState(false);
+  const [smsSentActive, setSmsSentActive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastAssistantRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -361,6 +362,11 @@ const MayaChatWidget: React.FC = () => {
           if (/call.{0,20}(initiated|placing|coming|shortly|ringing|on.{0,5}way)/i.test(res.data.message)) {
             setCallingActive(true);
             setTimeout(() => setCallingActive(false), 120000); // Reset after 2 min
+          }
+          // Detect SMS summary sent from Maya's response
+          if (/text.{0,20}(sent|texted|summary.{0,10}(sent|on.{0,5}way))|just.{0,10}(texted|sent.{0,10}text)/i.test(res.data.message)) {
+            setSmsSentActive(true);
+            setTimeout(() => setSmsSentActive(false), 8000); // Brief indicator
           }
         }
       } else {
@@ -684,6 +690,24 @@ const MayaChatWidget: React.FC = () => {
                   </svg>
                   Executive briefing
                 </button>
+                {smsSentActive && (
+                  <span
+                    className="d-flex align-items-center gap-1"
+                    style={{
+                      fontSize: '12px',
+                      padding: '4px 12px',
+                      borderRadius: '16px',
+                      color: 'var(--color-accent, #38a169)',
+                      fontWeight: 600,
+                      animation: 'mayaCallingPulse 1.5s ease-in-out 2',
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                    </svg>
+                    SMS sent
+                  </span>
+                )}
               </div>
               <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '11px', color: '#a0aec0' }}>
                 Maya is an AI assistant. Verify important details with our admissions team.
@@ -999,6 +1023,24 @@ const MayaChatWidget: React.FC = () => {
                 </svg>
                 Briefing
               </button>
+              {smsSentActive && (
+                <span
+                  className="d-flex align-items-center gap-1"
+                  style={{
+                    fontSize: '11px',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    color: 'var(--color-accent, #38a169)',
+                    fontWeight: 600,
+                    animation: 'mayaCallingPulse 1.5s ease-in-out 2',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                  </svg>
+                  SMS sent
+                </span>
+              )}
             </div>
           </div>
         </div>

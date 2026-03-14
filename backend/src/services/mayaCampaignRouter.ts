@@ -1,10 +1,16 @@
 // ─── Maya Campaign Router ─────────────────────────────────────────────────────
 // Routes leads to the correct Maya campaign based on interest type / service path.
+// Campaign Precedence:
+//   1. Existing campaigns → Highest priority (never override)
+//   2. Maya Voice Call Campaign → Secondary (high-intent, can override nurture flows)
+//   3. Maya Inbound Lead Campaign → Fallback only (uncampaigned leads)
 
-import { Campaign } from '../models';
+import { Campaign, Lead } from '../models';
+import CampaignLead from '../models/CampaignLead';
 import { enrollLeadsInCampaign } from './campaignService';
 import AdmissionsActionLog from '../models/AdmissionsActionLog';
 import type { MayaActionResult } from './mayaActionService';
+import { Op } from 'sequelize';
 
 // Campaign name mapping by interest type
 const CAMPAIGN_MAP: Record<string, string> = {
@@ -12,11 +18,17 @@ const CAMPAIGN_MAP: Record<string, string> = {
   strategy_call: 'Maya Strategy Call Campaign',
   sponsorship: 'Maya Sponsorship Campaign',
   enrollment: 'Maya Enrollment Campaign',
+  voice_call: 'Maya Voice Call Requested Campaign',
   general: 'Maya Inbound Lead Campaign',
 };
 
 /**
  * Route a lead to the appropriate Maya campaign based on their interest type.
+ *
+ * Guard logic:
+ * - "general" (Inbound Lead): only enroll if lead has NO active campaign
+ * - "voice_call": high-intent — enroll unless already in the Voice Call campaign
+ * - All others (executive_briefing, strategy_call, sponsorship, enrollment): always enroll
  */
 export async function routeLeadToCampaign(
   leadId: number,
@@ -27,6 +39,40 @@ export async function routeLeadToCampaign(
   const campaignName = CAMPAIGN_MAP[interestType] || CAMPAIGN_MAP.general;
 
   try {
+    // ── Campaign precedence guards ──────────────────────────────────────────
+    if (interestType === 'general') {
+      // Inbound Lead campaign: ONLY if lead has NO active campaign at all
+      const existingEnrollment = await CampaignLead.findOne({
+        where: { lead_id: leadId, status: { [Op.in]: ['enrolled', 'active'] } },
+      });
+      if (existingEnrollment) {
+        await logAction(visitorId, conversationId, 'campaign_enrolled', 'skipped', {
+          lead_id: leadId,
+          campaign_name: campaignName,
+          reason: 'Lead already in active campaign — preserving attribution',
+          existing_campaign_id: existingEnrollment.campaign_id,
+        });
+        // Tag the Maya interaction instead
+        await addMayaInteractionTag(leadId, 'maya_chat_active');
+        return {
+          success: true,
+          summary: 'Lead already in an active campaign. Maya interaction tagged instead.',
+        };
+      }
+    }
+
+    if (interestType === 'voice_call') {
+      // Voice call: high-intent — enroll unless already in this specific campaign
+      const existingVoiceCall = await CampaignLead.findOne({
+        where: { lead_id: leadId, status: { [Op.in]: ['enrolled', 'active'] } },
+        include: [{ model: Campaign, as: 'campaign', where: { name: 'Maya Voice Call Requested Campaign' } }],
+      });
+      if (existingVoiceCall) {
+        return { success: true, summary: 'Lead already in Voice Call Requested campaign.' };
+      }
+      // Voice call CAN override existing nurture flows — proceed to enrollment
+    }
+
     const campaign = await Campaign.findOne({
       where: { name: campaignName, status: 'active' },
     });
@@ -102,6 +148,25 @@ export async function routeLeadToCampaign(
       success: false,
       summary: `Campaign enrollment failed: ${err.message}`,
     };
+  }
+}
+
+// ─── Maya Interaction Tagging ────────────────────────────────────────────────
+// Tracks Maya engagement independently of campaigns via tags on Lead.metadata.
+// This preserves marketing attribution while recording Maya activity.
+
+export async function addMayaInteractionTag(leadId: number, tag: string): Promise<void> {
+  try {
+    const lead = await Lead.findByPk(leadId);
+    if (!lead) return;
+    const metadata = (lead as any).metadata || {};
+    const tags: string[] = metadata.maya_tags || [];
+    if (!tags.includes(tag)) {
+      tags.push(tag);
+      await lead.update({ metadata: { ...metadata, maya_tags: tags } } as any);
+    }
+  } catch {
+    // Non-critical — tagging should never block actions
   }
 }
 
