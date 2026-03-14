@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
+import { getTestOverrides } from './settingsService';
 
 const SLOT_DURATION_MINUTES = 30;
 const BUSINESS_HOUR_START = 9; // 9 AM ET
@@ -218,6 +219,18 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
 
   const companyLabel = data.company ? ` (${data.company})` : '';
 
+  // In test mode, redirect the attendee email so invites go to the test inbox
+  let attendeeEmail = data.email;
+  try {
+    const test = await getTestOverrides();
+    if (test.enabled && test.email) {
+      console.log(`[Calendar] TEST MODE: redirecting attendee from ${data.email} to ${test.email}`);
+      attendeeEmail = test.email;
+    }
+  } catch {
+    // If settings DB fails, use original email
+  }
+
   const baseRequest = {
     summary: `Executive AI Strategy Call — ${data.name}${companyLabel}`,
     description: [
@@ -237,7 +250,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
       timeZone: BUSINESS_TIMEZONE,
     },
     attendees: [
-      { email: data.email, displayName: data.name },
+      { email: attendeeEmail, displayName: data.name },
       ...(env.googleCalendarOwnerEmail ? [{ email: env.googleCalendarOwnerEmail }] : []),
     ],
     reminders: {
