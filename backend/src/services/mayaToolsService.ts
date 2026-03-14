@@ -430,56 +430,66 @@ export async function getAvailableSlots(
       };
     }
 
-    // Format into readable text — spread slots across the next 5 days,
-    // showing 3 representative slots per day (morning, midday, afternoon)
-    const MAX_DAYS = 5;
-    const SLOTS_PER_DAY = 3;
-    const lines: string[] = [];
+    // Show next 3 available days with all slots, grouped by morning/afternoon.
+    // This gives the visitor full flexibility to pick any open time.
+    const MAX_DAYS = 3;
+    const dayBlocks: string[] = [];
     let totalSlots = 0;
 
     for (const dateEntry of availability.dates) {
-      if (lines.length >= MAX_DAYS) break;
+      if (dayBlocks.length >= MAX_DAYS) break;
 
       const dateObj = new Date(dateEntry.date + 'T12:00:00Z');
       const dayLabel = dateObj.toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
         day: 'numeric',
+        year: 'numeric',
         timeZone: 'America/Chicago',
       });
 
-      // Pick representative slots spread across the day
-      const slots = dateEntry.slots;
-      const picked: typeof slots = [];
-      if (slots.length <= SLOTS_PER_DAY) {
-        picked.push(...slots);
-      } else {
-        // Pick first, middle, and last to show range
-        picked.push(slots[0]);
-        picked.push(slots[Math.floor(slots.length / 2)]);
-        picked.push(slots[slots.length - 1]);
-      }
+      const morning: string[] = [];
+      const afternoon: string[] = [];
 
-      const times = picked.map((slot) => {
+      for (const slot of dateEntry.slots) {
         const slotTime = new Date(slot.start);
+        const hour = parseInt(
+          slotTime.toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Chicago' }),
+        );
         const timeLabel = slotTime.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           timeZone: 'America/Chicago',
         });
-        return `${timeLabel} (${slot.start})`;
-      });
+        const entry = `${timeLabel} [${slot.start}]`;
+        if (hour < 12) {
+          morning.push(entry);
+        } else {
+          afternoon.push(entry);
+        }
+      }
 
-      totalSlots += picked.length;
-      lines.push(`${dayLabel}: ${times.join(', ')}`);
+      totalSlots += dateEntry.slots.length;
+      let block = `📅 ${dayLabel}`;
+      if (morning.length) block += `\n  Morning: ${morning.join(', ')}`;
+      if (afternoon.length) block += `\n  Afternoon: ${afternoon.join(', ')}`;
+      dayBlocks.push(block);
     }
 
-    lines.push(`\nNote: These are representative times. If the visitor wants a different time on any of these days, call get_available_slots again to show all slots for that day.`);
+    const moreAvailable = availability.dates.length > MAX_DAYS;
+    const instructions = [
+      `Available times (Central Time):`,
+      '',
+      ...dayBlocks,
+      '',
+      `Present ALL times above to the visitor organized by day.`,
+      moreAvailable ? `${availability.dates.length - MAX_DAYS} more days available — if none of these work, ask which day they prefer and call get_available_slots again.` : '',
+    ].filter(Boolean).join('\n');
 
     return {
       success: true,
-      summary: `Available strategy call times (${availability.timezone}):\n${lines.join('\n')}`,
-      details: { slot_count: totalSlots, timezone: availability.timezone },
+      summary: instructions,
+      details: { slot_count: totalSlots, days_shown: dayBlocks.length, days_available: availability.dates.length, timezone: availability.timezone },
     };
   } catch (err: any) {
     return { success: false, summary: `Unable to check calendar: ${err.message}` };
