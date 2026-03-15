@@ -463,9 +463,10 @@ async function buildCompositePrompt(
     if (ms.description) parts.push(`Description: ${ms.description}`);
     if (ms.completion_weight !== 1.0) parts.push(`Weight: ${ms.completion_weight}`);
 
-    // Type-aware output — loaded from type definition, not hardcoded
+    // Type-aware output — loaded from type definition
+    let typeDef: any = null;
     try {
-      const typeDef = await CurriculumTypeDefinition.findOne({ where: { slug: ms.mini_section_type } });
+      typeDef = await CurriculumTypeDefinition.findOne({ where: { slug: ms.mini_section_type } });
       if (typeDef) {
         parts.push(`Output: Generate "${typeDef.student_label}" content.`);
         if (typeDef.can_create_variables && ms.creates_variable_keys?.length) {
@@ -491,7 +492,7 @@ async function buildCompositePrompt(
       parts.push(`Output: Generate content for "${ms.mini_section_type}".`);
     }
 
-    // Context variable substitution for inline prompts ({{section_title}}, {{mini_section_title}}, etc.)
+    // Context + structure variable substitution
     const contextVars: Record<string, string> = {
       'section_title': lesson.title,
       'section_description': lesson.description || '',
@@ -501,6 +502,13 @@ async function buildCompositePrompt(
       'mini_section_order': String(ms.mini_section_order),
       'mini_section_type': ms.mini_section_type || '',
     };
+    // Inject structure variables from type definition default_prompts
+    if (typeDef?.default_prompts) {
+      for (const [key, val] of Object.entries(typeDef.default_prompts as Record<string, { system: string; user: string }>)) {
+        const merged = val.system && val.user ? val.system + '\n' + val.user : val.system || val.user || '';
+        contextVars[`structure_${key}`] = merged;
+      }
+    }
     const substituteVars = (text: string): string => {
       let result = text;
       for (const [key, value] of Object.entries(contextVars)) {
@@ -509,52 +517,10 @@ async function buildCompositePrompt(
       return result;
     };
 
-    const mergePromptFields = (sys: string | undefined, usr: string | undefined): string => {
-      if (sys && usr) return sys + '\n\n' + usr;
-      return sys || usr || '';
-    };
-
-    // Concept prompt
-    const conceptInline = mergePromptFields((ms as any).concept_prompt_system, (ms as any).concept_prompt_user);
-    if (conceptInline) {
-      parts.push(`Concept Prompt:\n${substituteVars(conceptInline)}`);
-    } else {
-      const conceptPrompt = (ms as any).conceptPrompt;
-      if (conceptPrompt?.user_prompt_template) {
-        parts.push(`Concept Prompt:\n${substituteVars(conceptPrompt.user_prompt_template)}`);
-      }
-    }
-
-    // Build prompt
-    const buildInline = mergePromptFields((ms as any).build_prompt_system, (ms as any).build_prompt_user);
-    if (buildInline) {
-      parts.push(`Build Prompt:\n${substituteVars(buildInline)}`);
-    } else {
-      const buildPrompt = (ms as any).buildPrompt;
-      if (buildPrompt?.user_prompt_template) {
-        parts.push(`Build Prompt:\n${substituteVars(buildPrompt.user_prompt_template)}`);
-      }
-    }
-
-    // Mentor prompt
-    const mentorInline = mergePromptFields((ms as any).mentor_prompt_system, (ms as any).mentor_prompt_user);
-    if (mentorInline) {
-      parts.push(`Mentor Prompt:\n${substituteVars(mentorInline)}`);
-    } else {
-      const mentorPrompt = (ms as any).mentorPrompt;
-      if (mentorPrompt?.user_prompt_template) {
-        parts.push(`Mentor Prompt:\n${substituteVars(mentorPrompt.user_prompt_template)}`);
-      }
-    }
-
-    // KC and Reflection prompts
-    const kcInline = mergePromptFields((ms as any).kc_prompt_system, (ms as any).kc_prompt_user);
-    if (kcInline) {
-      parts.push(`Knowledge Check Prompt:\n${substituteVars(kcInline)}`);
-    }
-    const reflectionInline = mergePromptFields((ms as any).reflection_prompt_system, (ms as any).reflection_prompt_user);
-    if (reflectionInline) {
-      parts.push(`Reflection Prompt:\n${substituteVars(reflectionInline)}`);
+    // Single section prompt (stored in concept_prompt_system)
+    const sectionPrompt = (ms as any).concept_prompt_system || '';
+    if (sectionPrompt) {
+      parts.push(`Section Prompt:\n${substituteVars(sectionPrompt)}`);
     }
   }
   parts.push('');

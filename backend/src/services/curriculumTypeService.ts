@@ -210,28 +210,21 @@ export async function propagateTypePrompts(
 
   let updatedCount = 0;
 
+  // Merge all structure prompts into single structural block for concept_prompt_system
+  const structuralParts: string[] = [];
+  for (const [key, val] of Object.entries(newDefaultPrompts)) {
+    const merged = val.system && val.user ? val.system + '\n' + val.user : val.system || val.user || '';
+    if (merged) structuralParts.push(`[${key}]: ${merged}`);
+  }
+  const newStructural = structuralParts.join('\n');
+
   for (const ms of miniSections) {
-    const updates: Record<string, string> = {};
+    const currentFull = (ms as any).concept_prompt_system || '';
+    const { sectionSpecific } = decomposePrompt(currentFull);
+    const composed = composePrompt(newStructural, sectionSpecific);
 
-    for (const field of PROMPT_FIELD_MAP) {
-      const newDefault = newDefaultPrompts[field.key];
-      const newStructural = newDefault
-        ? (newDefault.system && newDefault.user
-            ? newDefault.system + '\n\n' + newDefault.user
-            : newDefault.system || newDefault.user || '')
-        : '';
-
-      const currentFull = (ms as any)[field.systemField] || '';
-      const { sectionSpecific } = decomposePrompt(currentFull);
-
-      const composed = composePrompt(newStructural, sectionSpecific);
-      if (composed !== currentFull) {
-        updates[field.systemField] = composed;
-      }
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await ms.update(updates);
+    if (composed !== currentFull) {
+      await ms.update({ concept_prompt_system: composed });
       updatedCount++;
     }
   }

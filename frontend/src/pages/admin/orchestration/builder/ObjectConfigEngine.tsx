@@ -461,12 +461,12 @@ export default function ObjectConfigEngine(props: Props) {
                 </div>
               </div>
 
-              {/* Available context variables */}
+              {/* Structure variables — these are injected into section prompts as {{structure_*}} */}
               <div className="mb-3 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 9 }}>
-                <span className="text-muted fw-medium me-1">Variables:</span>
-                {['section_title', 'section_description', 'section_learning_goal', 'mini_section_title', 'mini_section_description', 'mini_section_type'].map(v => (
-                  <span key={v} className="badge bg-light text-dark border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default' }} title={`Resolved at runtime from ${v.startsWith('section_') ? 'section' : 'mini-section'} fields`}>
-                    {`{{${v}}}`}
+                <span className="text-muted fw-medium me-1">Injected as variables:</span>
+                {applicablePairs.map(p => (
+                  <span key={p.key} className="badge border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default', background: 'rgba(13,110,253,0.08)', color: '#0d6efd' }} title={`Available in section prompts as {{structure_${p.key}}}`}>
+                    {`{{structure_${p.key}}}`}
                   </span>
                 ))}
               </div>
@@ -629,69 +629,64 @@ export default function ObjectConfigEngine(props: Props) {
                     </div>
                   </div>
 
-                  {/* Prompts — section-specific only (structural prompts in Structure tab) */}
-                  {typePromptPairs.length > 0 && (
-                    <div className="mb-3 border-top pt-2">
-                      <div className="d-flex align-items-center gap-2 mb-2">
-                        <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
-                        <span className="fw-semibold small">Section-Specific Prompts</span>
-                        <span className="text-muted" style={{ fontSize: 10 }}>Topic guidance unique to this mini-section</span>
+                  {/* Section Prompt — single unified prompt for this mini-section */}
+                  {(() => {
+                    const sysVal = (editing.concept_prompt_system as string) || '';
+                    const { structural, sectionSpecific } = decomposePrompt(sysVal);
+                    const hasStructural = !!structural;
+                    const isEmpty = !sectionSpecific;
+                    const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
+                    const structureVarKeys = (typeDef?.applicable_prompt_pairs || []).map((p: string) => `structure_${p}`);
+                    return (
+                      <div className="mb-3 border-top pt-2">
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
+                          <span className="fw-semibold small">Section Prompt</span>
+                          <span className="text-muted" style={{ fontSize: 10 }}>Guidance for generating this mini-section's content</span>
+                        </div>
+                        {/* Available variables — context + structure */}
+                        <div className="mb-2 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 9 }}>
+                          <span className="text-muted fw-medium me-1">Context:</span>
+                          {['section_title', 'section_description', 'section_learning_goal', 'mini_section_title', 'mini_section_description', 'mini_section_type'].map(v => (
+                            <span key={v} className="badge bg-light text-dark border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default' }} title={`Resolved at runtime from ${v.startsWith('section_') ? 'section' : 'mini-section'} fields`}>
+                              {`{{${v}}}`}
+                            </span>
+                          ))}
+                          {structureVarKeys.length > 0 && (
+                            <>
+                              <span className="text-muted fw-medium ms-2 me-1">Structure:</span>
+                              {structureVarKeys.map((v: string) => (
+                                <span key={v} className="badge border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default', background: 'rgba(13,110,253,0.08)', color: '#0d6efd' }} title={`Resolved from type definition Structure tab`}>
+                                  {`{{${v}}}`}
+                                </span>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                        {hasStructural && (
+                          <div className="mb-2 px-2 py-1 rounded d-flex align-items-center gap-1" style={{ background: 'rgba(13,110,253,0.06)', border: '1px solid rgba(13,110,253,0.15)', fontSize: 9 }}>
+                            <i className="bi bi-diagram-3" style={{ color: '#0d6efd' }}></i>
+                            <span className="text-muted">Structural prompt from type definition ({structural.length} chars)</span>
+                            <button className="btn btn-link p-0 ms-auto text-primary" style={{ fontSize: 9 }} onClick={() => setActiveTab('structure')}>
+                              View in Structure tab
+                            </button>
+                          </div>
+                        )}
+                        <PromptAccordion label="Section Prompt" tooltip="Single prompt that drives content generation for this mini-section" isEmpty={isEmpty} isDefault={false} charCount={sectionSpecific.length}>
+                          <HighlightedPromptEditor
+                            value={sectionSpecific}
+                            onChange={val => {
+                              const composed = composePrompt(structural, val);
+                              props.onUpdate({ concept_prompt_system: composed, concept_prompt_user: '' } as any);
+                            }}
+                            label="SECTION PROMPT"
+                            rows={5}
+                            placeholder="Write guidance for this mini-section. Use {{structure_concept}}, {{structure_build}} etc. to include output format specs from the type definition."
+                          />
+                        </PromptAccordion>
                       </div>
-                      {/* Available context variables */}
-                      <div className="mb-2 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 9 }}>
-                        <span className="text-muted fw-medium me-1">Variables:</span>
-                        {['section_title', 'section_description', 'section_learning_goal', 'mini_section_title', 'mini_section_description', 'mini_section_type'].map(v => (
-                          <span key={v} className="badge bg-light text-dark border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default' }} title={`Resolved at runtime from ${v.startsWith('section_') ? 'section' : 'mini-section'} fields`}>
-                            {`{{${v}}}`}
-                          </span>
-                        ))}
-                      </div>
-                      {typePromptPairs
-                        .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
-                        .map(pair => {
-                          const sysVal = (editing[pair.systemField] as string) || '';
-                          const usrVal = (editing[pair.userField] as string) || '';
-                          const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
-                          // Decompose to show only section-specific portion
-                          const { structural, sectionSpecific } = decomposePrompt(combinedValue);
-                          const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
-                          const hasStructural = !!structural;
-                          const isEmpty = !sectionSpecific;
-                          const implLabels: Record<string, { label: string; tooltip: string }> = {
-                            build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
-                            mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
-                            reflection: { label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
-                          };
-                          const displayLabel = editType === 'implementation_task' && implLabels[pair.key]
-                            ? implLabels[pair.key].label : pair.label;
-                          const tooltip = editType === 'implementation_task' && implLabels[pair.key]
-                            ? implLabels[pair.key].tooltip : '';
-                          return (
-                            <PromptAccordion key={pair.key} label={displayLabel} tooltip={tooltip} isEmpty={isEmpty} isDefault={false} charCount={sectionSpecific.length}>
-                              {hasStructural && (
-                                <div className="mb-2 px-2 py-1 rounded d-flex align-items-center gap-1" style={{ background: 'rgba(13,110,253,0.06)', border: '1px solid rgba(13,110,253,0.15)', fontSize: 9 }}>
-                                  <i className="bi bi-diagram-3" style={{ color: '#0d6efd' }}></i>
-                                  <span className="text-muted">Structural prompt from type definition ({structural.length} chars)</span>
-                                  <button className="btn btn-link p-0 ms-auto text-primary" style={{ fontSize: 9 }} onClick={() => setActiveTab('structure')}>
-                                    View in Structure tab
-                                  </button>
-                                </div>
-                              )}
-                              <HighlightedPromptEditor
-                                value={sectionSpecific}
-                                onChange={val => {
-                                  const composed = composePrompt(structural, val);
-                                  props.onUpdate({ [pair.systemField]: composed, [pair.userField]: '' } as any);
-                                }}
-                                label="SECTION-SPECIFIC"
-                                rows={5}
-                                placeholder="Write topic-specific instructions for this mini-section. Structural prompts are managed in the Structure tab."
-                              />
-                            </PromptAccordion>
-                          );
-                        })}
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Variables — only show for prompt_template (creates vars) */}
                   {editType === 'prompt_template' && (
