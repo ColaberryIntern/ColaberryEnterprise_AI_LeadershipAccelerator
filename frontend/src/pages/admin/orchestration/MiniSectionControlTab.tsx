@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import useMiniSectionBuilder from './builder/useMiniSectionBuilder';
 import ObjectConfigEngine from './builder/ObjectConfigEngine';
 import InlineVariableCreator from './builder/InlineVariableCreator';
@@ -24,6 +24,8 @@ interface GeneratedEvent {
 
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   const handleSaveStructurePrompt = async (prompt: string) => {
     if (!builder.selectedLessonId) return;
@@ -176,72 +178,95 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
       ) : (
         <div className="row g-3">
           {/* LEFT PANEL — Navigator + Blueprint + Pipeline */}
-          <div className="col-lg-3">
-            <CurriculumMapNavigator
-              modules={builder.modules}
-              selectedLessonId={builder.selectedLessonId}
-              onSelectLesson={id => builder.selectLesson(id)}
-            />
-
-            <SectionBlueprintCard
-              lessonId={builder.selectedLessonId}
-              lessonTitle={builder.selectedLesson?.title}
-              lessonDescription={builder.lessonDescription}
-              lessonLearningGoal={builder.lessonLearningGoal}
-              structurePrompt={builder.structurePrompt}
-              onPromptChange={handleSaveStructurePrompt}
-              miniSections={builder.miniSections}
-              token={token}
-              apiUrl={apiUrl}
-              onApply={handleApplyStructure}
-              sectionVariableKeys={builder.sectionVariableKeys}
-              sectionArtifactIds={builder.sectionArtifactIds}
-              sectionSkillIds={builder.sectionSkillIds}
-              onSectionAssignmentsChange={handleSectionAssignmentsChange}
-              variableOptions={builder.variableOptions.map(v => ({ value: v.value, label: v.label }))}
-              artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
-              skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
-            />
-
-            {/* Action Toolbar */}
-            <div className="d-flex gap-1 mb-2 flex-wrap">
-              <button className="btn btn-sm btn-primary py-0 px-2" style={{ fontSize: 10 }} onClick={builder.startCreate}>
-                <i className="bi bi-plus-lg me-1"></i>Add
+          <div style={{ flex: leftCollapsed ? '0 0 auto' : undefined, width: leftCollapsed ? 40 : undefined, transition: 'all 0.2s ease' }} className={leftCollapsed ? '' : 'col-lg-3'}>
+            {leftCollapsed ? (
+              <button
+                className="btn btn-sm btn-outline-secondary w-100 py-2"
+                onClick={() => setLeftCollapsed(false)}
+                title="Expand left panel"
+                style={{ fontSize: 10, writingMode: 'vertical-rl', height: 120 }}
+              >
+                <i className="bi bi-chevron-right"></i>
               </button>
-              <button className="btn btn-sm btn-outline-info py-0 px-2" style={{ fontSize: 10 }} onClick={() => builder.setShowSimulation(true)}>
-                <i className="bi bi-robot me-1"></i>Simulate
-              </button>
-              <BackfillButton token={token} apiUrl={apiUrl} onComplete={() => {
-                builder.refreshReferenceData();
-                if (builder.selectedLessonId) builder.selectLesson(builder.selectedLessonId);
-              }} />
-            </div>
-
-            {/* Mini-Section Pipeline */}
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                <span className="fw-semibold small">
-                  <i className="bi bi-signpost-split me-1" style={{ color: 'var(--color-primary, #1a365d)' }}></i>
-                  Pipeline
-                </span>
-                <span className="badge bg-info" style={{ fontSize: 9 }}>{builder.miniSections.length} steps</span>
-              </div>
-              <div className="card-body py-2">
-                <MiniSectionPipeline
-                  miniSections={builder.miniSections}
-                  selectedId={builder.selectedMiniSectionId}
-                  onSelect={id => builder.selectMiniSection(id)}
-                  onReorder={builder.reorderItems}
-                  onDelete={builder.handleDelete}
-                  isDirtyId={builder.isDirty ? builder.selectedMiniSectionId : null}
-                  loading={builder.loading}
+            ) : (
+              <>
+                <div className="d-flex justify-content-end mb-1">
+                  <button
+                    className="btn btn-sm btn-link text-muted p-0"
+                    onClick={() => setLeftCollapsed(true)}
+                    title="Collapse left panel"
+                    style={{ fontSize: 10 }}
+                  >
+                    <i className="bi bi-chevron-bar-left"></i>
+                  </button>
+                </div>
+                <CurriculumMapNavigator
+                  modules={builder.modules}
+                  selectedLessonId={builder.selectedLessonId}
+                  onSelectLesson={id => builder.selectLesson(id)}
                 />
-              </div>
-            </div>
+
+                <SectionBlueprintCard
+                  lessonId={builder.selectedLessonId}
+                  lessonTitle={builder.selectedLesson?.title}
+                  lessonDescription={builder.lessonDescription}
+                  lessonLearningGoal={builder.lessonLearningGoal}
+                  structurePrompt={builder.structurePrompt}
+                  onPromptChange={handleSaveStructurePrompt}
+                  miniSections={builder.miniSections}
+                  token={token}
+                  apiUrl={apiUrl}
+                  onApply={handleApplyStructure}
+                  sectionVariableKeys={builder.sectionVariableKeys}
+                  sectionArtifactIds={builder.sectionArtifactIds}
+                  sectionSkillIds={builder.sectionSkillIds}
+                  onSectionAssignmentsChange={handleSectionAssignmentsChange}
+                  variableOptions={builder.variableOptions.map(v => ({ value: v.value, label: v.label }))}
+                  artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
+                  skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
+                />
+
+                {/* Action Toolbar */}
+                <div className="d-flex gap-1 mb-2 flex-wrap">
+                  <button className="btn btn-sm btn-primary py-0 px-2" style={{ fontSize: 10 }} onClick={builder.startCreate}>
+                    <i className="bi bi-plus-lg me-1"></i>Add
+                  </button>
+                  <button className="btn btn-sm btn-outline-info py-0 px-2" style={{ fontSize: 10 }} onClick={() => builder.setShowSimulation(true)}>
+                    <i className="bi bi-robot me-1"></i>Simulate
+                  </button>
+                  <BackfillButton token={token} apiUrl={apiUrl} onComplete={() => {
+                    builder.refreshReferenceData();
+                    if (builder.selectedLessonId) builder.selectLesson(builder.selectedLessonId);
+                  }} />
+                </div>
+
+                {/* Mini-Section Pipeline */}
+                <div className="card border-0 shadow-sm">
+                  <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                    <span className="fw-semibold small">
+                      <i className="bi bi-signpost-split me-1" style={{ color: 'var(--color-primary, #1a365d)' }}></i>
+                      Pipeline
+                    </span>
+                    <span className="badge bg-info" style={{ fontSize: 9 }}>{builder.miniSections.length} steps</span>
+                  </div>
+                  <div className="card-body py-2">
+                    <MiniSectionPipeline
+                      miniSections={builder.miniSections}
+                      selectedId={builder.selectedMiniSectionId}
+                      onSelect={id => builder.selectMiniSection(id)}
+                      onReorder={builder.reorderItems}
+                      onDelete={builder.handleDelete}
+                      isDirtyId={builder.isDirty ? builder.selectedMiniSectionId : null}
+                      loading={builder.loading}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* CENTER PANEL — Object Config Engine */}
-          <div className="col-lg-5">
+          <div className="col" style={{ transition: 'all 0.2s ease' }}>
             <ObjectConfigEngine
               editing={builder.editing}
               isNew={builder.isNewItem}
@@ -292,36 +317,59 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
           </div>
 
           {/* RIGHT PANEL — Intelligence + Prompt Debugger */}
-          <div className="col-lg-4">
-            <SectionIntelligencePanel
-              sectionVariableKeys={builder.sectionVariableKeys}
-              sectionArtifactIds={builder.sectionArtifactIds}
-              sectionSkillIds={builder.sectionSkillIds}
-              miniSections={builder.miniSections}
-              variableOptions={builder.variableOptions.map(v => ({ value: v.value, label: v.label }))}
-              artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
-              skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
-              lessonTitle={builder.selectedLesson?.title}
-              editing={builder.editing}
-              dryRun={builder.dryRun}
-              validating={builder.validating}
-              onRevalidate={builder.runValidation}
-              qualityBreakdown={builder.qualityBreakdown}
-              qualityLoading={builder.qualityLoading}
-              onRefreshQuality={() => builder.fetchQualityScore()}
-              suggestions={builder.suggestions}
-              suggestionsLoading={builder.suggestionsLoading}
-              applyingSuggestion={builder.applyingSuggestion}
-              onRefreshSuggestions={() => builder.fetchSuggestions()}
-              onApplySuggestionFix={builder.applySuggestionFix}
-              onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
-              onOpenRepair={() => builder.setShowRepairModal(true)}
-            />
-            <PromptDebuggerPanel
-              lessonId={builder.selectedLessonId}
-              token={token}
-              apiUrl={apiUrl}
-            />
+          <div style={{ flex: rightCollapsed ? '0 0 auto' : undefined, width: rightCollapsed ? 40 : undefined, transition: 'all 0.2s ease' }} className={rightCollapsed ? '' : 'col-lg-4'}>
+            {rightCollapsed ? (
+              <button
+                className="btn btn-sm btn-outline-secondary w-100 py-2"
+                onClick={() => setRightCollapsed(false)}
+                title="Expand right panel"
+                style={{ fontSize: 10, writingMode: 'vertical-rl', height: 120 }}
+              >
+                <i className="bi bi-chevron-left"></i>
+              </button>
+            ) : (
+              <>
+                <div className="d-flex justify-content-start mb-1">
+                  <button
+                    className="btn btn-sm btn-link text-muted p-0"
+                    onClick={() => setRightCollapsed(true)}
+                    title="Collapse right panel"
+                    style={{ fontSize: 10 }}
+                  >
+                    <i className="bi bi-chevron-bar-right"></i>
+                  </button>
+                </div>
+                <SectionIntelligencePanel
+                  sectionVariableKeys={builder.sectionVariableKeys}
+                  sectionArtifactIds={builder.sectionArtifactIds}
+                  sectionSkillIds={builder.sectionSkillIds}
+                  miniSections={builder.miniSections}
+                  variableOptions={builder.variableOptions.map(v => ({ value: v.value, label: v.label }))}
+                  artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
+                  skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
+                  lessonTitle={builder.selectedLesson?.title}
+                  editing={builder.editing}
+                  dryRun={builder.dryRun}
+                  validating={builder.validating}
+                  onRevalidate={builder.runValidation}
+                  qualityBreakdown={builder.qualityBreakdown}
+                  qualityLoading={builder.qualityLoading}
+                  onRefreshQuality={() => builder.fetchQualityScore()}
+                  suggestions={builder.suggestions}
+                  suggestionsLoading={builder.suggestionsLoading}
+                  applyingSuggestion={builder.applyingSuggestion}
+                  onRefreshSuggestions={() => builder.fetchSuggestions()}
+                  onApplySuggestionFix={builder.applySuggestionFix}
+                  onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
+                  onOpenRepair={() => builder.setShowRepairModal(true)}
+                />
+                <PromptDebuggerPanel
+                  lessonId={builder.selectedLessonId}
+                  token={token}
+                  apiUrl={apiUrl}
+                />
+              </>
+            )}
           </div>
         </div>
       )}
