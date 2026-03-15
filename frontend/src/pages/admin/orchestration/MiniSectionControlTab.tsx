@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import useMiniSectionBuilder from './builder/useMiniSectionBuilder';
-import StudentStructureTree from './builder/StudentStructureTree';
 import ObjectConfigEngine from './builder/ObjectConfigEngine';
-import TestSimulationPanel from './builder/TestSimulationPanel';
 import InlineVariableCreator from './builder/InlineVariableCreator';
 import InlineSkillCreator from './builder/InlineSkillCreator';
 import InlineArtifactCreator from './builder/InlineArtifactCreator';
@@ -10,7 +8,11 @@ import BackfillButton from './builder/BackfillButton';
 import SectionBlueprintCard from './builder/SectionBlueprintCard';
 import DiagnosticReportModal from './builder/DiagnosticReportModal';
 import AutoRepairModal from './builder/AutoRepairModal';
-import { Lesson } from './builder/types';
+import CurriculumMapNavigator from './builder/CurriculumMapNavigator';
+import MiniSectionPipeline from './builder/MiniSectionPipeline';
+import SectionIntelligencePanel from './builder/SectionIntelligencePanel';
+import PromptDebuggerPanel from './builder/PromptDebuggerPanel';
+import AISimulationWorkspace from './builder/AISimulationWorkspace';
 
 interface GeneratedEvent {
   type: string;
@@ -37,11 +39,9 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
 
   const handleSectionAssignmentsChange = async (updates: { section_variable_keys?: string[]; section_artifact_ids?: string[]; section_skill_ids?: string[] }) => {
     if (!builder.selectedLessonId) return;
-    // Update local state immediately
     if (updates.section_variable_keys) builder.setSectionVariableKeys(updates.section_variable_keys);
     if (updates.section_artifact_ids) builder.setSectionArtifactIds(updates.section_artifact_ids);
     if (updates.section_skill_ids) builder.setSectionSkillIds(updates.section_skill_ids);
-    // Persist to backend
     try {
       await fetch(`${apiUrl}/api/admin/orchestration/lessons/${builder.selectedLessonId}`, {
         method: 'PUT',
@@ -57,13 +57,11 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
     for (const evt of events) {
       const existing = builder.miniSections.find(ms => ms.mini_section_type === evt.type);
       if (existing) {
-        // Update existing mini-section
         await fetch(`${apiUrl}/api/admin/orchestration/mini-sections/${existing.id}`, {
           method: 'PUT', headers,
           body: JSON.stringify({ title: evt.title, description: evt.description }),
         });
       } else {
-        // Create new mini-section
         const maxOrder = builder.miniSections.reduce((max, ms) => Math.max(max, ms.mini_section_order || 0), 0);
         const order = maxOrder + 1;
         await fetch(`${apiUrl}/api/admin/orchestration/lessons/${builder.selectedLessonId}/mini-sections`, {
@@ -78,7 +76,6 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
         });
       }
     }
-    // Refresh mini-sections list
     builder.selectLesson(builder.selectedLessonId);
   };
 
@@ -125,29 +122,16 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
         />
       )}
 
-      {/* Test AI Simulation Modal */}
+      {/* AI Simulation Workspace */}
       {builder.showSimulation && builder.selectedLessonId && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
-          <div className="modal-dialog modal-xl">
-            <div className="modal-content">
-              <div className="modal-header py-2">
-                <h6 className="modal-title" style={{ fontSize: 13 }}>
-                  <i className="bi bi-robot me-1"></i>Test AI Simulation
-                </h6>
-                <button className="btn-close" onClick={() => builder.setShowSimulation(false)} style={{ fontSize: 10 }} />
-              </div>
-              <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
-                <TestSimulationPanel
-                  miniSections={builder.miniSections}
-                  lessonTitle={builder.selectedLesson?.title || 'Untitled'}
-                  lessonId={builder.selectedLessonId}
-                  token={token}
-                  apiUrl={apiUrl}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <AISimulationWorkspace
+          miniSections={builder.miniSections}
+          lessonTitle={builder.selectedLesson?.title || 'Untitled'}
+          lessonId={builder.selectedLessonId}
+          token={token}
+          apiUrl={apiUrl}
+          onClose={() => builder.setShowSimulation(false)}
+        />
       )}
 
       {/* Diagnostic Report Modal */}
@@ -170,51 +154,35 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
         />
       )}
 
-      {/* Section Selector Bar */}
-      <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
-        <select
-          className="form-select form-select-sm"
-          style={{ maxWidth: 400 }}
-          value={builder.selectedLessonId}
-          onChange={e => builder.selectLesson(e.target.value)}
-        >
-          <option value="">Select a section...</option>
-          {builder.modules.map(m => (
-            <optgroup key={m.id} label={`Module ${m.module_number}: ${m.title}`}>
-              {(m.lessons || []).map((l: Lesson) => (
-                <option key={l.id} value={l.id}>Section {l.lesson_number}: {l.title}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        {builder.selectedLessonId && (
-          <>
-            <button className="btn btn-sm btn-primary" onClick={builder.startCreate}>
-              <i className="bi bi-plus-lg me-1"></i>Add
-            </button>
-            <button className="btn btn-sm btn-outline-info" onClick={() => builder.setShowSimulation(true)}>
-              <i className="bi bi-robot me-1"></i>Simulate AI
-            </button>
-            <BackfillButton token={token} apiUrl={apiUrl} onComplete={() => {
-              builder.refreshReferenceData();
-              if (builder.selectedLessonId) builder.selectLesson(builder.selectedLessonId);
-            }} />
-          </>
-        )}
-      </div>
-
       {!builder.selectedLessonId ? (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body text-center py-5">
-            <i className="bi bi-cursor-fill" style={{ fontSize: 36, color: 'var(--color-text-light)' }}></i>
-            <h6 className="fw-bold mt-3">Select a Section</h6>
-            <p className="text-muted small">Choose a section above to configure its mini-sections, preview content, and run simulations.</p>
+        <div className="row g-3">
+          <div className="col-lg-3">
+            <CurriculumMapNavigator
+              modules={builder.modules}
+              selectedLessonId={builder.selectedLessonId}
+              onSelectLesson={id => builder.selectLesson(id)}
+            />
+          </div>
+          <div className="col-lg-9">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body text-center py-5">
+                <i className="bi bi-cursor-fill" style={{ fontSize: 36, color: 'var(--color-text-light)' }}></i>
+                <h6 className="fw-bold mt-3">Select a Section</h6>
+                <p className="text-muted small">Choose a section from the navigator to configure its mini-sections, preview content, and run simulations.</p>
+              </div>
+            </div>
           </div>
         </div>
       ) : (
         <div className="row g-3">
-          {/* LEFT PANEL — Blueprint + Student Structure Mirror */}
-          <div className="col-lg-4">
+          {/* LEFT PANEL — Navigator + Blueprint + Pipeline */}
+          <div className="col-lg-3">
+            <CurriculumMapNavigator
+              modules={builder.modules}
+              selectedLessonId={builder.selectedLessonId}
+              onSelectLesson={id => builder.selectLesson(id)}
+            />
+
             <SectionBlueprintCard
               lessonId={builder.selectedLessonId}
               lessonTitle={builder.selectedLesson?.title}
@@ -234,20 +202,36 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
               artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
               skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
             />
+
+            {/* Action Toolbar */}
+            <div className="d-flex gap-1 mb-2 flex-wrap">
+              <button className="btn btn-sm btn-primary py-0 px-2" style={{ fontSize: 10 }} onClick={builder.startCreate}>
+                <i className="bi bi-plus-lg me-1"></i>Add
+              </button>
+              <button className="btn btn-sm btn-outline-info py-0 px-2" style={{ fontSize: 10 }} onClick={() => builder.setShowSimulation(true)}>
+                <i className="bi bi-robot me-1"></i>Simulate
+              </button>
+              <BackfillButton token={token} apiUrl={apiUrl} onComplete={() => {
+                builder.refreshReferenceData();
+                if (builder.selectedLessonId) builder.selectLesson(builder.selectedLessonId);
+              }} />
+            </div>
+
+            {/* Mini-Section Pipeline */}
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
                 <span className="fw-semibold small">
-                  <i className="bi bi-list-nested me-1"></i>
-                  {builder.selectedLesson?.title || 'Student View'}
+                  <i className="bi bi-signpost-split me-1" style={{ color: 'var(--color-primary, #1a365d)' }}></i>
+                  Pipeline
                 </span>
-                <span className="badge bg-info" style={{ fontSize: 10 }}>{builder.miniSections.length} items</span>
+                <span className="badge bg-info" style={{ fontSize: 9 }}>{builder.miniSections.length} steps</span>
               </div>
-              <div className="card-body py-2" style={{ maxHeight: 500, overflowY: 'auto' }}>
-                <StudentStructureTree
+              <div className="card-body py-2">
+                <MiniSectionPipeline
                   miniSections={builder.miniSections}
                   selectedId={builder.selectedMiniSectionId}
-                  onSelect={(id) => { builder.selectMiniSection(id); }}
-                  onMove={builder.moveItem}
+                  onSelect={id => builder.selectMiniSection(id)}
+                  onReorder={builder.reorderItems}
                   onDelete={builder.handleDelete}
                   isDirtyId={builder.isDirty ? builder.selectedMiniSectionId : null}
                   loading={builder.loading}
@@ -256,8 +240,8 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
             </div>
           </div>
 
-          {/* RIGHT PANEL — Configure (with inline preview) */}
-          <div className="col-lg-8">
+          {/* CENTER PANEL — Object Config Engine */}
+          <div className="col-lg-5">
             <ObjectConfigEngine
               editing={builder.editing}
               isNew={builder.isNewItem}
@@ -301,6 +285,25 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
               sectionArtifactIds={builder.sectionArtifactIds}
               sectionSkillIds={builder.sectionSkillIds}
               lessonTitle={builder.selectedLesson?.title}
+              lessonId={builder.selectedLessonId}
+              token={token}
+              apiUrl={apiUrl}
+            />
+          </div>
+
+          {/* RIGHT PANEL — Intelligence + Prompt Debugger */}
+          <div className="col-lg-4">
+            <SectionIntelligencePanel
+              sectionVariableKeys={builder.sectionVariableKeys}
+              sectionArtifactIds={builder.sectionArtifactIds}
+              sectionSkillIds={builder.sectionSkillIds}
+              miniSections={builder.miniSections}
+              variableOptions={builder.variableOptions.map(v => ({ value: v.value, label: v.label }))}
+              artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
+              skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
+              lessonTitle={builder.selectedLesson?.title}
+            />
+            <PromptDebuggerPanel
               lessonId={builder.selectedLessonId}
               token={token}
               apiUrl={apiUrl}

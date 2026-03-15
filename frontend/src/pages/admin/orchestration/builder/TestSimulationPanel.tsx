@@ -42,6 +42,7 @@ interface Props {
   lessonId: string;
   token: string;
   apiUrl: string;
+  onPromptCaptured?: (prompt: { system: string; user: string }) => void;
 }
 
 const PRESET_PROFILES: { label: string; profile: TestProfile }[] = [
@@ -59,7 +60,7 @@ const PRESET_PROFILES: { label: string; profile: TestProfile }[] = [
   },
 ];
 
-export default function TestSimulationPanel({ miniSections, lessonTitle, lessonId, token, apiUrl }: Props) {
+export default function TestSimulationPanel({ miniSections, lessonTitle, lessonId, token, apiUrl, onPromptCaptured }: Props) {
   const [profile, setProfile] = useState<TestProfile>(PRESET_PROFILES[0].profile);
   const [testVariables, setTestVariables] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
@@ -109,9 +110,10 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Simulation failed');
+      const promptUsed = data.promptUsed || null;
       setResult({
         content: data.content || null,
-        prompt: data.promptUsed || null,
+        prompt: promptUsed,
         meta: {
           tokens: data.tokenCount || 0,
           durationMs: data.durationMs || 0,
@@ -120,6 +122,7 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
           error: data.error,
         },
       });
+      if (promptUsed && onPromptCaptured) onPromptCaptured(promptUsed);
       fetchHistory();
     } catch (err: any) {
       setResult({

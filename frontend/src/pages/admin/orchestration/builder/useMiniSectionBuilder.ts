@@ -283,6 +283,19 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     } catch (err: any) { setError(err.message); }
   };
 
+  const reorderItems = async (orderedIds: string[]) => {
+    // Optimistic reorder
+    const reordered = orderedIds.map(id => miniSections.find(ms => ms.id === id)).filter(Boolean) as typeof miniSections;
+    if (reordered.length === miniSections.length) setMiniSections(reordered);
+    try {
+      await fetch(`${apiUrl}/api/admin/orchestration/lessons/${selectedLessonId}/mini-sections/reorder`, {
+        method: 'PUT', headers, body: JSON.stringify({ ordered_ids: orderedIds }),
+      });
+      fetchMiniSections(selectedLessonId);
+      fetchVariableMap(selectedLessonId);
+    } catch (err: any) { setError(err.message); }
+  };
+
   // --- Validation ---
   const runValidation = async (lessonId: string) => {
     setValidating(true);
@@ -413,7 +426,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
 
     // Data
     miniSections, editing, isNewItem, isDirty,
-    updateEditing, startCreate, handleSave, handleDelete, cancelEdit, moveItem,
+    updateEditing, startCreate, handleSave, handleDelete, cancelEdit, moveItem, reorderItems,
 
     // Reference data
     prompts, skills, variables, artifacts, systemVariables,

@@ -46,7 +46,7 @@ export default function AdminOrchestrationPage() {
   const tabProps = { token: token || '', apiUrl: API };
 
   return (
-    <div className="container-fluid py-4" style={{ maxWidth: 1200 }}>
+    <div className="container-fluid py-4" style={{ maxWidth: activeTab === 'mini-sections' ? 1600 : 1200 }}>
       <div className="mb-4">
         <h4 className="fw-bold mb-1" style={{ color: 'var(--color-primary, #1a365d)' }}>
           Orchestration Engine
