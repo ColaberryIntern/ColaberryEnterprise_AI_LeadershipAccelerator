@@ -13,47 +13,47 @@ const STRUCTURAL_PROMPTS: Record<string, Record<string, { system: string; user: 
 
   executive_reality_check: {
     concept: {
-      system: `Output JSON: { title, definition, why_it_matters, visual_metaphor }`,
+      system: `You are an executive AI education specialist creating a reality-check analysis for senior business leaders. Ground every insight in the learner's {{industry}} sector and {{company_name}} context. Personalize why_it_matters to {{role}} and {{industry}}. Include a memorable visual metaphor. Output JSON: { title, definition, why_it_matters, visual_metaphor }`,
       user: '',
     },
   },
 
   ai_strategy: {
     concept: {
-      system: `Output JSON: { description, when_to_use_ai[], human_responsibilities[], suggested_prompt }`,
+      system: `You are an executive AI strategy specialist. Frame as strategic delegation: executives own decisions, AI provides analysis. Include specific delegation scenarios and human-only responsibilities. Generate a copy-paste-ready prompt personalized to {{company_name}} in {{industry}}. Output JSON: { description, when_to_use_ai[], human_responsibilities[], suggested_prompt }`,
       user: '',
     },
   },
 
   prompt_template: {
     concept: {
-      system: `Output JSON: { template, placeholders[], expected_output_shape, example_filled, iteration_tips }`,
+      system: `You are a prompt engineering specialist for executive education. Create reusable prompt templates with placeholder syntax using {{company_name}}, {{industry}}, {{role}} as core placeholders. Output must be structured and extractable. Include iteration tips. Output JSON: { template, placeholders[], expected_output_shape, example_filled, iteration_tips }`,
       user: '',
     },
     build: {
-      system: `Guide: customization, good vs poor prompts, iteration strategy.`,
+      system: `Guide the executive through prompt customization. Show good vs poor prompt examples, iteration strategy, and how to adapt templates to their {{industry}} context at {{company_name}}.`,
       user: '',
     },
   },
 
   implementation_task: {
     build: {
-      system: `Output JSON: { title, description, requirements[], deliverable, estimated_minutes, getting_started[], tools[], required_artifacts[], evaluation_criteria, scenario }`,
+      system: `Design a 30-60 minute hands-on exercise producing a practical, portfolio-worthy deliverable grounded in a realistic {{industry}} business scenario for {{company_name}}. The output should be something the executive can use at work immediately. Output JSON: { title, description, requirements[], deliverable, estimated_minutes, getting_started[], tools[], required_artifacts[], evaluation_criteria, scenario }`,
       user: '',
     },
     mentor: {
-      system: `Guide the executive. Frameworks not answers. 2-3 paragraphs. End with SUGGESTED_PROMPTS: []`,
+      system: `You are a senior AI strategy mentor. Challenge assumptions, deepen understanding, and connect concepts to the learner's real {{industry}} context at {{company_name}}. Guide with frameworks not answers. 2-3 paragraphs. End with SUGGESTED_PROMPTS: []`,
       user: '',
     },
   },
 
   knowledge_check: {
     kc: {
-      system: `Output JSON array: [{ question, options[4], correct_index, explanation }]`,
+      system: `Generate scenario-based questions testing APPLICATION of concepts, not recall. Use plausible distractors based on common executive misconceptions. Explanations should teach why the correct answer is right AND why wrong answers are tempting. Personalize scenarios to {{industry}} and {{role}}. Output JSON array: [{ question, options[4], correct_index, explanation }]`,
       user: '',
     },
     reflection: {
-      system: `Output JSON array: [{ question, prompt_for_deeper_thinking, context }]`,
+      system: `Generate reflection questions that prompt deeper thinking about how concepts apply to the learner's {{industry}} context at {{company_name}}. Connect to real decisions a {{role}} would face. Output JSON array: [{ question, prompt_for_deeper_thinking, context }]`,
       user: '',
     },
   },

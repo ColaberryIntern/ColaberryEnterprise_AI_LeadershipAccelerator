@@ -522,6 +522,14 @@ async function buildCompositePrompt(
     if (sectionPrompt) {
       parts.push(`Section Prompt:\n${substituteVars(sectionPrompt)}`);
     }
+
+    // Auto-append structure prompts from type definition
+    if (typeDef?.default_prompts) {
+      for (const [key, val] of Object.entries(typeDef.default_prompts as Record<string, { system: string; user: string }>)) {
+        const merged = val.system && val.user ? val.system + '\n' + val.user : val.system || val.user || '';
+        if (merged) parts.push(`Structure [${key}]:\n${substituteVars(merged)}`);
+      }
+    }
   }
   parts.push('');
 
