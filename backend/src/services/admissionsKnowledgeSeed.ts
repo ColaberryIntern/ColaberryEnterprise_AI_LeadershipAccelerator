@@ -169,6 +169,22 @@ const SEED_ENTRIES: SeedEntry[] = [
     keywords: ['contact', 'reach', 'email', 'phone', 'talk'],
     priority: 7,
   },
+
+  // AI Champion Network
+  {
+    category: 'program',
+    title: 'AI Champion Network',
+    content: 'The AI Champion Network is our alumni and referral program. There are two paths: Path 1 — Enroll yourself in the AI Leadership Accelerator (your company can sponsor you), and earn $250 if your company pays. Path 2 — Refer others (leaders, managers, teams, or departments) and earn $250 per enrolled participant with no cap. Alumni can activate their referral account at enterprise.colaberry.ai/referrals/login. Three referral types are available: Corporate Sponsor (introduce the program to company leadership), Introduced Referral (we reach out mentioning your name), or Anonymous Referral (your name is never mentioned).',
+    keywords: ['champion', 'alumni', 'referral', 'refer', 'network', 'commission', 'earn', '$250', 'sponsor'],
+    priority: 8,
+  },
+  {
+    category: 'program',
+    title: 'AI Champion Referral Commission',
+    content: 'AI Champions earn $250 per enrolled participant — no cap. Examples: 1 enrollment = $250, 4 enrollments = $1,000, 10 enrollments = $2,500, 20 enrollments = $5,000. You earn commission when you enroll and your company pays, or when any leader, manager, team, or department enrolls through your referral.',
+    keywords: ['commission', 'earn', 'money', 'referral', 'champion', 'reward', 'incentive', 'payment'],
+    priority: 7,
+  },
 ];
 
 /**
