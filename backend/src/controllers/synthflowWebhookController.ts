@@ -12,17 +12,23 @@ import { processCallTranscript } from '../services/callTranscriptProcessor';
  */
 export async function handleSynthflowCallComplete(req: Request, res: Response): Promise<void> {
   try {
-    const {
-      call_id,
-      status,
-      duration,
-      transcript,
-      recording_url,
-      disposition,
-    } = req.body;
+    // Log raw payload to diagnose Synthflow's field names
+    console.log('[Synthflow Webhook] Raw payload:', JSON.stringify(req.body).slice(0, 2000));
+
+    const body = req.body || {};
+
+    // Synthflow may use different field names — normalize
+    const call_id = body.call_id || body._id || body.id || body.call?._id || body.call?.id || body.data?.call_id || null;
+    const status = body.status || body.call_status || body.call?.status || '';
+    const duration = body.duration || body.call_duration || body.call?.duration || null;
+    const transcript = body.transcript || body.call?.transcript || body.data?.transcript || '';
+    const recording_url = body.recording_url || body.call?.recording_url || body.data?.recording_url || '';
+    const disposition = body.disposition || body.call?.disposition || body.data?.disposition || '';
 
     if (!call_id) {
-      res.status(400).json({ error: 'Missing call_id' });
+      console.warn('[Synthflow Webhook] No call_id found. Payload keys:', Object.keys(body).join(', '));
+      // Accept it anyway with 200 so Synthflow doesn't retry, but log for debugging
+      res.status(200).json({ ok: true, matched: false, reason: 'no_call_id', keys: Object.keys(body) });
       return;
     }
 
