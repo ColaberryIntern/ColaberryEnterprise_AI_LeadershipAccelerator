@@ -157,6 +157,89 @@ export async function getTypeUsageCounts(): Promise<Record<string, number>> {
 }
 
 // ──────────────────────────────────────────────
+// Propagate Structural Prompts
+// ──────────────────────────────────────────────
+
+const PROMPT_DELIMITER = '\n\n---SECTION-SPECIFIC---\n\n';
+
+const PROMPT_FIELD_MAP: { key: string; systemField: string; userField: string }[] = [
+  { key: 'concept', systemField: 'concept_prompt_system', userField: 'concept_prompt_user' },
+  { key: 'build', systemField: 'build_prompt_system', userField: 'build_prompt_user' },
+  { key: 'mentor', systemField: 'mentor_prompt_system', userField: 'mentor_prompt_user' },
+  { key: 'kc', systemField: 'kc_prompt_system', userField: 'kc_prompt_user' },
+  { key: 'reflection', systemField: 'reflection_prompt_system', userField: 'reflection_prompt_user' },
+];
+
+function decomposePrompt(fullText: string): { structural: string; sectionSpecific: string } {
+  if (!fullText) return { structural: '', sectionSpecific: '' };
+  const idx = fullText.indexOf(PROMPT_DELIMITER);
+  if (idx === -1) return { structural: '', sectionSpecific: fullText };
+  return {
+    structural: fullText.substring(0, idx),
+    sectionSpecific: fullText.substring(idx + PROMPT_DELIMITER.length),
+  };
+}
+
+function composePrompt(structural: string, sectionSpecific: string): string {
+  const s = (structural || '').trim();
+  const ss = (sectionSpecific || '').trim();
+  if (!s && !ss) return '';
+  if (!s) return ss;
+  if (!ss) return s;
+  return s + PROMPT_DELIMITER + ss;
+}
+
+/**
+ * Update a type's default_prompts and propagate structural portions
+ * to all existing mini-sections of that type.
+ */
+export async function propagateTypePrompts(
+  typeId: string,
+  newDefaultPrompts: Record<string, { system: string; user: string }>
+): Promise<{ updated: number }> {
+  const typeDef = await CurriculumTypeDefinition.findByPk(typeId);
+  if (!typeDef) throw new Error('Curriculum type not found');
+
+  // Save new defaults to the type definition
+  await typeDef.update({ default_prompts: newDefaultPrompts });
+
+  // Find all mini-sections of this type
+  const miniSections = await MiniSection.findAll({
+    where: { mini_section_type: typeDef.slug },
+  });
+
+  let updatedCount = 0;
+
+  for (const ms of miniSections) {
+    const updates: Record<string, string> = {};
+
+    for (const field of PROMPT_FIELD_MAP) {
+      const newDefault = newDefaultPrompts[field.key];
+      const newStructural = newDefault
+        ? (newDefault.system && newDefault.user
+            ? newDefault.system + '\n\n' + newDefault.user
+            : newDefault.system || newDefault.user || '')
+        : '';
+
+      const currentFull = (ms as any)[field.systemField] || '';
+      const { sectionSpecific } = decomposePrompt(currentFull);
+
+      const composed = composePrompt(newStructural, sectionSpecific);
+      if (composed !== currentFull) {
+        updates[field.systemField] = composed;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await ms.update(updates);
+      updatedCount++;
+    }
+  }
+
+  return { updated: updatedCount };
+}
+
+// ──────────────────────────────────────────────
 // NLP — Generate Type from Description
 // ──────────────────────────────────────────────
 

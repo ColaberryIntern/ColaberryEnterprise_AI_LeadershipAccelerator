@@ -669,6 +669,15 @@ router.post('/api/admin/orchestration/curriculum-types/:id/reverse-engineer', re
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+router.put('/api/admin/orchestration/curriculum-types/:id/propagate-prompts', requireAdmin, async (req, res) => {
+  try {
+    const { default_prompts } = req.body;
+    if (!default_prompts) { res.status(400).json({ error: 'default_prompts is required' }); return; }
+    const result = await curriculumTypeService.propagateTypePrompts(req.params.id as string, default_prompts);
+    res.json(result);
+  } catch (err: any) { res.status(400).json({ error: err.message }); }
+});
+
 router.post('/api/admin/orchestration/mini-sections/:id/reverse-engineer', requireAdmin, async (req, res) => {
   try {
     const result = await curriculumTypeService.reverseEngineerMiniSection(req.params.id as string);

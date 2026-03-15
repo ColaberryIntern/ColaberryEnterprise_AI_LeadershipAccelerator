@@ -11,6 +11,7 @@ import { AdminPreviewMentorProvider, useMentorContext } from '../../../../contex
 import PreviewMentorChat from './PreviewMentorChat';
 import { generateMockV2Content, MockV2Content } from './mockDataGenerator';
 import { PromptOption } from './types';
+import { composePrompt, decomposePrompt } from './promptComposer';
 
 /* Mentor face SVG — matches the FAB in PortalMentorChat for admin preview */
 const PreviewMentorFace = ({ size = 40 }: { size?: number }) => (
@@ -191,10 +192,15 @@ export default function ObjectConfigEngine(props: Props) {
   const [expanded, setExpanded] = useState<AccordionState>({
     validation: false, quality: false, suggestions: false,
   });
-  const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState<'configure' | 'structure' | 'preview'>('configure');
   const [reversePrompt, setReversePrompt] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
+  // Structure tab state
+  const [structurePrompts, setStructurePrompts] = useState<Record<string, { system: string; user: string }>>({});
+  const [structureSaving, setStructureSaving] = useState(false);
+  const [structurePropagating, setStructurePropagating] = useState(false);
+  const [structureMessage, setStructureMessage] = useState('');
 
   // Build artifact ID -> name map for mock content generation
   const artifactMap = useMemo(() => {
@@ -244,14 +250,14 @@ export default function ObjectConfigEngine(props: Props) {
   if (!editing) {
     // Show collapsed type sections as clickable entry points
     if (miniSections.length > 0) {
-      if (showPreview) {
+      if (activeTab === 'preview') {
         return (
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
               <div className="d-flex align-items-center gap-2">
                 <button
                   className="btn btn-sm btn-outline-primary"
-                  onClick={() => setShowPreview(false)}
+                  onClick={() => setActiveTab('configure')}
                   style={{ fontSize: 11 }}
                 >
                   <i className="bi bi-arrow-left me-1"></i>Back
@@ -281,7 +287,7 @@ export default function ObjectConfigEngine(props: Props) {
             </span>
             <button
               className="btn btn-sm btn-outline-primary"
-              onClick={() => setShowPreview(true)}
+              onClick={() => setActiveTab('preview')}
               style={{ fontSize: 11 }}
             >
               <i className="bi bi-eye me-1"></i>Preview
@@ -355,22 +361,35 @@ export default function ObjectConfigEngine(props: Props) {
         <div className="d-flex align-items-center gap-2">
           <div className="btn-group btn-group-sm">
             <button
-              className={`btn ${!showPreview ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setShowPreview(false)}
+              className={`btn ${activeTab === 'configure' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setActiveTab('configure')}
               style={{ fontSize: 11 }}
             >
               <i className="bi bi-gear me-1"></i>{isNew ? 'New' : 'Configure'}
             </button>
             <button
-              className={`btn ${showPreview ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setShowPreview(true)}
+              className={`btn ${activeTab === 'structure' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => {
+                // Load current type definition's default_prompts into structure state
+                const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
+                setStructurePrompts(typeDef?.default_prompts ? JSON.parse(JSON.stringify(typeDef.default_prompts)) : {});
+                setStructureMessage('');
+                setActiveTab('structure');
+              }}
+              style={{ fontSize: 11 }}
+            >
+              <i className="bi bi-diagram-3 me-1"></i>Structure
+            </button>
+            <button
+              className={`btn ${activeTab === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setActiveTab('preview')}
               style={{ fontSize: 11 }}
             >
               <i className="bi bi-eye me-1"></i>Preview
             </button>
           </div>
           {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 8 }}>unsaved changes</span>}
-          {!showPreview && editing.quality_score != null && (
+          {activeTab === 'configure' && editing.quality_score != null && (
             <span className={`badge ${editing.quality_score >= 90 ? 'bg-info' : editing.quality_score >= 70 ? 'bg-success' : editing.quality_score >= 40 ? 'bg-warning text-dark' : 'bg-danger'}`} style={{ fontSize: 9 }}>
               Score: {Math.round(editing.quality_score)}
             </span>
@@ -380,7 +399,7 @@ export default function ObjectConfigEngine(props: Props) {
           <span className={`badge ${selectedTypeInfo.badge}`} style={{ fontSize: 9 }}>{selectedTypeInfo.studentLabel}</span>
         )}
       </div>
-      {showPreview ? (
+      {activeTab === 'preview' ? (
         <AdminPreviewMentorProvider>
           <PreviewContent
             mockContent={mockContent}
@@ -392,6 +411,120 @@ export default function ObjectConfigEngine(props: Props) {
             workstationTestMode={workstationTestMode}
           />
         </AdminPreviewMentorProvider>
+      ) : activeTab === 'structure' ? (
+      <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
+        {/* Structure Tab — type-level structural prompts */}
+        {(() => {
+          const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
+          const typeLabel = selectedTypeInfo?.studentLabel || editType || 'Unknown';
+          const typeCount = miniSections.filter(m => m.mini_section_type === editType).length;
+          const applicablePairs = PROMPT_PAIRS.filter(p => editType && p.applicableTypes.includes(editType))
+            .filter(p => !(p.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')));
+
+          const handleSaveStructure = async () => {
+            if (!typeDef?.id) return;
+            setStructureSaving(true);
+            setStructureMessage('');
+            try {
+              await api.put(`/api/admin/orchestration/curriculum-types/${typeDef.id}`, { default_prompts: structurePrompts });
+              setStructureMessage('Structure saved to type definition.');
+            } catch (err: any) {
+              setStructureMessage(`Error: ${err.response?.data?.error || err.message}`);
+            } finally {
+              setStructureSaving(false);
+            }
+          };
+
+          const handlePropagate = async () => {
+            if (!typeDef?.id) return;
+            setStructurePropagating(true);
+            setStructureMessage('');
+            try {
+              const res = await api.put(`/api/admin/orchestration/curriculum-types/${typeDef.id}/propagate-prompts`, { default_prompts: structurePrompts });
+              setStructureMessage(`Structure saved and propagated to ${res.data.updated} mini-section(s).`);
+            } catch (err: any) {
+              setStructureMessage(`Error: ${err.response?.data?.error || err.message}`);
+            } finally {
+              setStructurePropagating(false);
+            }
+          };
+
+          return (
+            <>
+              {/* Warning banner */}
+              <div className="alert alert-info small py-2 mb-3 d-flex align-items-start gap-2" style={{ fontSize: 10 }}>
+                <i className="bi bi-info-circle-fill mt-1" style={{ fontSize: 12 }}></i>
+                <div>
+                  <strong>Global structural prompts for "{typeLabel}".</strong><br />
+                  These define output format and pedagogical approach shared across all mini-sections of this type.
+                  Changes affect {typeCount > 1 ? `all ${typeCount} mini-sections` : `${typeCount} mini-section`} when propagated.
+                </div>
+              </div>
+
+              {applicablePairs.length === 0 && (
+                <div className="text-center text-muted py-4" style={{ fontSize: 11 }}>
+                  <i className="bi bi-slash-circle" style={{ fontSize: 24 }}></i>
+                  <div className="mt-2">No applicable prompt pairs for this type.</div>
+                </div>
+              )}
+
+              {applicablePairs.map(pair => {
+                const dp = structurePrompts[pair.key] || { system: '', user: '' };
+                const merged = dp.system && dp.user ? dp.system + '\n\n' + dp.user : dp.system || dp.user || '';
+                return (
+                  <PromptAccordion
+                    key={pair.key}
+                    label={`${pair.label} — Structural`}
+                    tooltip="Type-level structural prompt shared across all mini-sections of this type"
+                    isEmpty={!merged}
+                    isDefault={false}
+                    charCount={merged.length}
+                  >
+                    <HighlightedPromptEditor
+                      value={merged}
+                      onChange={val => {
+                        setStructurePrompts(prev => ({
+                          ...prev,
+                          [pair.key]: { system: val, user: '' },
+                        }));
+                      }}
+                      label="STRUCTURAL PROMPT"
+                      rows={6}
+                      placeholder="Define the output structure, format, and pedagogical approach for all mini-sections of this type..."
+                    />
+                  </PromptAccordion>
+                );
+              })}
+
+              {structureMessage && (
+                <div className={`alert ${structureMessage.startsWith('Error') ? 'alert-danger' : 'alert-success'} small py-1 mt-2`} style={{ fontSize: 10 }}>
+                  {structureMessage}
+                </div>
+              )}
+
+              <div className="d-flex gap-2 mt-3">
+                <button
+                  className="btn btn-sm btn-outline-primary flex-grow-1"
+                  onClick={handleSaveStructure}
+                  disabled={structureSaving || !typeDef?.id}
+                  style={{ fontSize: 10 }}
+                >
+                  {structureSaving ? <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Saving...</> : <><i className="bi bi-floppy me-1"></i>Save Structure</>}
+                </button>
+                <button
+                  className="btn btn-sm btn-primary flex-grow-1"
+                  onClick={handlePropagate}
+                  disabled={structurePropagating || !typeDef?.id}
+                  style={{ fontSize: 10 }}
+                  title="Save structure and update all existing mini-sections of this type"
+                >
+                  {structurePropagating ? <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Propagating...</> : <><i className="bi bi-broadcast me-1"></i>Propagate to All ({typeCount})</>}
+                </button>
+              </div>
+            </>
+          );
+        })()}
+      </div>
       ) : (
       <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
         {error && <div className="alert alert-danger small py-1 mb-2">{error}</div>}
@@ -486,13 +619,13 @@ export default function ObjectConfigEngine(props: Props) {
                     </div>
                   </div>
 
-                  {/* Prompts — collapsible with default detection */}
+                  {/* Prompts — section-specific only (structural prompts in Structure tab) */}
                   {typePromptPairs.length > 0 && (
                     <div className="mb-3 border-top pt-2">
                       <div className="d-flex align-items-center gap-2 mb-2">
                         <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
-                        <span className="fw-semibold small">Prompts</span>
-                        <span className="text-muted" style={{ fontSize: 10 }}>Learner data is appended automatically to all prompts</span>
+                        <span className="fw-semibold small">Section-Specific Prompts</span>
+                        <span className="text-muted" style={{ fontSize: 10 }}>Topic guidance unique to this mini-section</span>
                       </div>
                       {typePromptPairs
                         .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
@@ -500,11 +633,11 @@ export default function ObjectConfigEngine(props: Props) {
                           const sysVal = (editing[pair.systemField] as string) || '';
                           const usrVal = (editing[pair.userField] as string) || '';
                           const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
+                          // Decompose to show only section-specific portion
+                          const { structural, sectionSpecific } = decomposePrompt(combinedValue);
                           const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
-                          const defaultPrompt = typeDef?.default_prompts?.[pair.key];
-                          const defaultText = defaultPrompt ? (defaultPrompt.system && defaultPrompt.user ? defaultPrompt.system + '\n\n' + defaultPrompt.user : defaultPrompt.system || defaultPrompt.user || '') : '';
-                          const isDefault = defaultText && combinedValue === defaultText;
-                          const isEmpty = !combinedValue;
+                          const hasStructural = !!structural;
+                          const isEmpty = !sectionSpecific;
                           const implLabels: Record<string, { label: string; tooltip: string }> = {
                             build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
                             mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
@@ -515,19 +648,26 @@ export default function ObjectConfigEngine(props: Props) {
                           const tooltip = editType === 'implementation_task' && implLabels[pair.key]
                             ? implLabels[pair.key].tooltip : '';
                           return (
-                            <PromptAccordion key={pair.key} label={displayLabel} tooltip={tooltip} isEmpty={isEmpty} isDefault={!!isDefault} charCount={combinedValue.length}>
-                              <HighlightedPromptEditor
-                                value={combinedValue}
-                                onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
-                                label="PROMPT"
-                                rows={5}
-                                placeholder="Write prompt instructions naturally. Learner data is appended automatically."
-                              />
-                              {defaultText && !isDefault && (
-                                <button className="btn btn-link p-0 text-muted mt-1" style={{ fontSize: 9 }} onClick={() => props.onUpdate({ [pair.systemField]: defaultText, [pair.userField]: '' } as any)}>
-                                  <i className="bi bi-arrow-counterclockwise me-1"></i>Reset to default
-                                </button>
+                            <PromptAccordion key={pair.key} label={displayLabel} tooltip={tooltip} isEmpty={isEmpty} isDefault={false} charCount={sectionSpecific.length}>
+                              {hasStructural && (
+                                <div className="mb-2 px-2 py-1 rounded d-flex align-items-center gap-1" style={{ background: 'rgba(13,110,253,0.06)', border: '1px solid rgba(13,110,253,0.15)', fontSize: 9 }}>
+                                  <i className="bi bi-diagram-3" style={{ color: '#0d6efd' }}></i>
+                                  <span className="text-muted">Structural prompt from type definition ({structural.length} chars)</span>
+                                  <button className="btn btn-link p-0 ms-auto text-primary" style={{ fontSize: 9 }} onClick={() => setActiveTab('structure')}>
+                                    View in Structure tab
+                                  </button>
+                                </div>
                               )}
+                              <HighlightedPromptEditor
+                                value={sectionSpecific}
+                                onChange={val => {
+                                  const composed = composePrompt(structural, val);
+                                  props.onUpdate({ [pair.systemField]: composed, [pair.userField]: '' } as any);
+                                }}
+                                label="SECTION-SPECIFIC"
+                                rows={5}
+                                placeholder="Write topic-specific instructions for this mini-section. Structural prompts are managed in the Structure tab."
+                              />
                             </PromptAccordion>
                           );
                         })}
