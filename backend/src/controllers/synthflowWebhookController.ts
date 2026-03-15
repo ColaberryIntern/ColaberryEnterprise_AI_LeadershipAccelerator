@@ -17,13 +17,16 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
 
     const body = req.body || {};
 
-    // Synthflow may use different field names — normalize
-    const call_id = body.call_id || body._id || body.id || body.call?._id || body.call?.id || body.data?.call_id || null;
-    const status = body.status || body.call_status || body.call?.status || '';
-    const duration = body.duration || body.call_duration || body.call?.duration || null;
-    const transcript = body.transcript || body.call?.transcript || body.data?.transcript || '';
-    const recording_url = body.recording_url || body.call?.recording_url || body.data?.recording_url || '';
-    const disposition = body.disposition || body.call?.disposition || body.data?.disposition || '';
+    // Synthflow V2 nests most data under body.call.*
+    const call = body.call || {};
+    const call_id = call.call_id || body.call_id || call._id || body._id || null;
+    const status = call.status || body.status || '';
+    const duration = call.duration || body.duration || null;
+    const transcript = call.transcript || body.transcript || '';
+    const recording_url = call.recording_url || body.recording_url || '';
+    const disposition = call.end_call_reason || body.disposition || '';
+    const analysis = body.analysis || {};
+    const metadata = body.metadata || {};
 
     if (!call_id) {
       console.warn('[Synthflow Webhook] No call_id found. Payload keys:', Object.keys(body).join(', '));
@@ -72,7 +75,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     }
 
     // Update communication log with transcript and call data
-    const callCompleted = status === 'completed' || disposition === 'answered';
+    const callCompleted = status === 'completed';
     await commLog.update({
       status: callCompleted ? 'delivered' : 'failed',
       provider_response: {
@@ -81,7 +84,9 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
         duration,
         transcript,
         recording_url,
-        disposition,
+        end_call_reason: disposition,
+        analysis,
+        metadata,
         completed_at: new Date().toISOString(),
       },
     } as any);
@@ -105,9 +110,10 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
 
     // Create interaction outcome if lead_id exists
     if (commLog.lead_id && commLog.campaign_id) {
-      const outcome = disposition === 'answered' ? 'answered'
+      // Map Synthflow end_call_reason to outcome
+      const outcome = status === 'completed' ? 'answered'
         : disposition === 'voicemail' ? 'voicemail'
-        : disposition === 'declined' ? 'declined'
+        : disposition === 'no_answer' ? 'no_answer'
         : 'no_answer';
 
       await InteractionOutcome.create({
