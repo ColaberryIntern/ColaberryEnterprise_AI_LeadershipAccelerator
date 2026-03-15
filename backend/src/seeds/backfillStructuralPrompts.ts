@@ -13,91 +13,47 @@ const STRUCTURAL_PROMPTS: Record<string, Record<string, { system: string; user: 
 
   executive_reality_check: {
     concept: {
-      system: `Generate a concept_snapshot for "{{mini_section_title}}" in the context of {{section_title}}.
-
-Output JSON: { title, definition, why_it_matters, visual_metaphor }
-
-- definition: Operational business terms, grounded in the learner's industry and role
-- why_it_matters: Why this matters for the learner's specific organization
-- visual_metaphor: Accessible analogy that makes the concept tangible for executives`,
+      system: `Output JSON: { title, definition, why_it_matters, visual_metaphor }`,
       user: '',
     },
   },
 
   ai_strategy: {
     concept: {
-      system: `Generate an ai_strategy framework for "{{mini_section_title}}" within {{section_title}}.
-
-Output JSON: { description, when_to_use_ai[], human_responsibilities[], suggested_prompt }
-
-- when_to_use_ai: 3-4 scenarios where AI delegation is appropriate
-- human_responsibilities: 3-4 responsibilities that must remain human
-- suggested_prompt: Ready-to-use prompt personalized with learner's context variables`,
+      system: `Output JSON: { description, when_to_use_ai[], human_responsibilities[], suggested_prompt }`,
       user: '',
     },
   },
 
   prompt_template: {
     concept: {
-      system: `Generate a prompt_template for "{{mini_section_title}}" within {{section_title}}.
-
-Output JSON: { template, placeholders[], expected_output_shape, example_filled, iteration_tips }
-
-- template: Use {{placeholder}} syntax. Include {{company_name}}, {{industry}}, {{role}}
-- placeholders: Array of { name, description, example }
-- If creating variables, ensure output format makes values extractable`,
+      system: `Output JSON: { template, placeholders[], expected_output_shape, example_filled, iteration_tips }`,
       user: '',
     },
     build: {
-      system: `Generate build-phase guidance for the "{{mini_section_title}}" prompt template.
-
-Focus on: customization for their context, good vs poor prompts, iteration strategy, structured output requirements.`,
+      system: `Guide: customization, good vs poor prompts, iteration strategy.`,
       user: '',
     },
   },
 
   implementation_task: {
     build: {
-      system: `Generate an implementation_task for "{{mini_section_title}}" within {{section_title}}.
-
-Output JSON: { title, description, requirements[], deliverable, estimated_minutes, getting_started[], tools[], required_artifacts[], evaluation_criteria, scenario }
-
-- 30-60 minute time-bounded exercise producing a deliverable artifact
-- Ground in learner's business context
-- Reference prior sections' outputs as inputs`,
+      system: `Output JSON: { title, description, requirements[], deliverable, estimated_minutes, getting_started[], tools[], required_artifacts[], evaluation_criteria, scenario }`,
       user: '',
     },
     mentor: {
-      system: `You are the AI Mentor for "{{mini_section_title}}". Guide the executive through hands-on work without doing it for them.
-
-- Ask about their organization before advising
-- Provide frameworks, not answers
-- Validate against evaluation criteria
-- Keep responses to 2-3 paragraphs
-- End with SUGGESTED_PROMPTS: ["prompt 1", "prompt 2"]`,
+      system: `Guide the executive. Frameworks not answers. 2-3 paragraphs. End with SUGGESTED_PROMPTS: []`,
       user: '',
     },
   },
 
   knowledge_check: {
     kc: {
-      system: `Generate knowledge_checks for "{{mini_section_title}}" assessing {{section_learning_goal}}.
-
-Output JSON array: [{ question, options[4], correct_index, explanation }]
-
-- Scenario-based questions testing APPLICATION, not recall
-- Plausible distractors based on common executive misconceptions
-- Explanations that teach, not just confirm`,
+      system: `Output JSON array: [{ question, options[4], correct_index, explanation }]`,
       user: '',
     },
     reflection: {
-      system: `Generate reflection_questions connecting "{{mini_section_title}}" to the learner's organizational context.
-
-Output JSON array: [{ question, prompt_for_deeper_thinking, context }]
-
-- 2-3 questions linking lesson to their real situation
-- Push beyond theory to Monday-morning action
-- Address organizational barriers: culture, skills, governance`,
+      system: `Output JSON array: [{ question, prompt_for_deeper_thinking, context }]`,
       user: '',
     },
   },

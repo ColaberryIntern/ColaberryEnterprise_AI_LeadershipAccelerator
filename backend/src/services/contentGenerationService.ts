@@ -463,26 +463,15 @@ async function buildCompositePrompt(
     if (ms.description) parts.push(`Description: ${ms.description}`);
     if (ms.completion_weight !== 1.0) parts.push(`Weight: ${ms.completion_weight}`);
 
-    // Type-specific generation instructions
-    switch (ms.mini_section_type) {
-      case 'executive_reality_check':
-        parts.push('Output: Generate the concept_snapshot section — title, definition, why_it_matters, visual_metaphor.');
-        parts.push('Focus on dynamic contextual analysis using the learner\'s variables and industry context.');
-        break;
-      case 'ai_strategy':
-        parts.push('Output: Generate the ai_strategy section — description, when_to_use_ai, human_responsibilities, suggested_prompt.');
-        parts.push('Focus on strategic AI application frameworks aligned with curriculum goals.');
-        break;
-      case 'prompt_template':
-        parts.push('Output: Generate the prompt_template section — template with {{placeholders}}, placeholders array, expected_output_shape.');
-        if (ms.creates_variable_keys?.length) {
-          parts.push(`Creates Variables: ${ms.creates_variable_keys.join(', ')}. Ensure output is structured so these can be extracted.`);
+    // Type-aware output — loaded from type definition, not hardcoded
+    try {
+      const typeDef = await CurriculumTypeDefinition.findOne({ where: { slug: ms.mini_section_type } });
+      if (typeDef) {
+        parts.push(`Output: Generate "${typeDef.student_label}" content.`);
+        if (typeDef.can_create_variables && ms.creates_variable_keys?.length) {
+          parts.push(`Creates Variables: ${ms.creates_variable_keys.join(', ')}.`);
         }
-        break;
-      case 'implementation_task':
-        parts.push('Output: Generate the implementation_task section — title, description, requirements, deliverable, getting_started, required_artifacts.');
-        if (ms.creates_artifact_ids?.length) {
-          // Load artifact definitions for richer instructions
+        if (typeDef.can_create_artifacts && ms.creates_artifact_ids?.length) {
           try {
             const artDefs = await ArtifactDefinition.findAll({ where: { id: ms.creates_artifact_ids } });
             for (const art of artDefs) {
@@ -491,33 +480,15 @@ async function buildCompositePrompt(
             }
           } catch { /* non-critical */ }
         }
-        break;
-      case 'knowledge_check':
-        parts.push('Output: Generate knowledge_checks questions for the associated skills.');
-        if (ms.knowledge_check_config?.enabled) {
-          parts.push(`Questions: ${ms.knowledge_check_config.question_count}, pass score: ${ms.knowledge_check_config.pass_score}%`);
-        }
-        if (ms.associated_skill_ids?.length) {
-          parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
-        }
-        break;
-      default:
-        // Dynamic custom type — load definition for generation instructions
-        try {
-          const typeDef = await CurriculumTypeDefinition.findOne({ where: { slug: ms.mini_section_type } });
-          if (typeDef) {
-            parts.push(`Output: Generate content for custom section type "${typeDef.student_label}".`);
-            if (typeDef.description) parts.push(`Type Description: ${typeDef.description}`);
-            if (typeDef.can_create_variables && ms.creates_variable_keys?.length) {
-              parts.push(`Creates Variables: ${ms.creates_variable_keys.join(', ')}.`);
-            }
-          } else {
-            parts.push(`Output: Generate content for section type "${ms.mini_section_type}".`);
-          }
-        } catch {
-          parts.push(`Output: Generate content for section type "${ms.mini_section_type}".`);
-        }
-        break;
+      }
+      if (ms.knowledge_check_config?.enabled) {
+        parts.push(`Questions: ${ms.knowledge_check_config.question_count}, pass score: ${ms.knowledge_check_config.pass_score}%`);
+      }
+      if (ms.associated_skill_ids?.length) {
+        parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+      }
+    } catch {
+      parts.push(`Output: Generate content for "${ms.mini_section_type}".`);
     }
 
     // Context variable substitution for inline prompts ({{section_title}}, {{mini_section_title}}, etc.)
