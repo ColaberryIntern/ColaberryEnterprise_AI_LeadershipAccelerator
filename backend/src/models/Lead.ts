@@ -1,4 +1,4 @@
-import { DataTypes, Model } from 'sequelize';
+import { DataTypes, Model, Op } from 'sequelize';
 import { sequelize } from '../config/database';
 
 interface LeadAttributes {
@@ -297,6 +297,14 @@ Lead.init(
     sequelize,
     tableName: 'leads',
     timestamps: false,
+    defaultScope: {
+      where: {
+        source: { [Op.or]: [{ [Op.ne]: 'campaign_test' }, { [Op.is]: null as any }] },
+      },
+    },
+    scopes: {
+      withTest: {},
+    },
     indexes: [
       {
         unique: true,

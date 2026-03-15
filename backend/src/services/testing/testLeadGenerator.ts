@@ -115,8 +115,8 @@ export async function createTestLead(
   const testEmail = testOverrides.email || 'test@colaberry.com';
   const testPhone = testOverrides.phone || '';
 
-  // Reuse existing lead with this email (regardless of source)
-  const existing = await Lead.findOne({
+  // Reuse existing lead with this email (unscoped to include campaign_test leads)
+  const existing = await Lead.unscoped().findOne({
     where: { email: testEmail },
   });
 
@@ -140,7 +140,7 @@ export async function createTestLead(
 
   const p = persona ? PERSONA_ARCHETYPES[persona] : null;
 
-  const lead = await Lead.create({
+  const lead = await Lead.unscoped().create({
     name: p?.name || 'Campaign Test Lead',
     email: testEmail,
     phone: testPhone,

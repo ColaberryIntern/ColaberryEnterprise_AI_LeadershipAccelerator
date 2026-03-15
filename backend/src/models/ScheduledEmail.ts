@@ -21,6 +21,8 @@ interface ScheduledEmailAttributes {
   scheduled_for: Date;
   sent_at?: Date;
   status?: string;
+  processing_started_at?: Date | null;
+  processor_id?: string | null;
   ai_instructions?: string;
   ai_generated?: boolean;
   metadata?: Record<string, any>;
@@ -45,6 +47,8 @@ class ScheduledEmail extends Model<ScheduledEmailAttributes> implements Schedule
   declare scheduled_for: Date;
   declare sent_at: Date;
   declare status: string;
+  declare processing_started_at: Date | null;
+  declare processor_id: string | null;
   declare ai_instructions: string;
   declare ai_generated: boolean;
   declare metadata: Record<string, any>;
@@ -129,6 +133,17 @@ ScheduledEmail.init(
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: 'pending',
+      comment: 'pending | processing | sent | failed | cancelled | paused',
+    },
+    processing_started_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    processor_id: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: null,
     },
     ai_instructions: {
       type: DataTypes.TEXT,
@@ -152,6 +167,16 @@ ScheduledEmail.init(
     sequelize,
     tableName: 'scheduled_emails',
     timestamps: false,
+    indexes: [
+      {
+        name: 'idx_sched_emails_pending_scheduled',
+        fields: ['status', 'scheduled_for'],
+      },
+      {
+        name: 'idx_sched_emails_processing_started',
+        fields: ['processing_started_at'],
+      },
+    ],
   }
 );
 

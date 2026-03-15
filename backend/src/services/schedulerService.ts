@@ -1,5 +1,6 @@
 import cron from 'node-cron';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
+import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
 import { v4 as uuidv4 } from 'uuid';
 import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
@@ -15,7 +16,9 @@ import { detectSignalsForRecentSessions } from './behavioralSignalService';
 import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
-import { getSetting, getTestOverrides } from './settingsService';
+import { getSetting } from './settingsService';
+import { evaluateSend } from './communicationSafetyService';
+import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote } from './ghlService';
 import { logCommunication } from './communicationLogService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
@@ -365,19 +368,50 @@ function getCampaignSettingsFromRecord(campaign: any): Record<string, any> {
 }
 
 async function processScheduledActions(): Promise<void> {
-  const now = new Date();
-  const pendingActions = await ScheduledEmail.findAll({
-    where: {
-      status: 'pending',
-      scheduled_for: { [Op.lte]: now },
-    },
-    limit: 50, // Fetch more, will be limited per-campaign
-    order: [['scheduled_for', 'ASC']],
-  });
+  const processorId = `proc_${process.pid}_${Date.now()}`;
+
+  // Atomically claim pending actions using FOR UPDATE SKIP LOCKED
+  // This prevents race conditions if multiple scheduler instances run concurrently
+  let pendingActions: InstanceType<typeof ScheduledEmail>[];
+  try {
+    const t = await sequelize.transaction();
+    try {
+      const claimed = await sequelize.query(`
+        UPDATE scheduled_emails
+        SET status = 'processing',
+            processing_started_at = NOW(),
+            processor_id = :processorId
+        WHERE id IN (
+          SELECT id FROM scheduled_emails
+          WHERE status = 'pending'
+            AND scheduled_for <= NOW()
+            AND attempts_made < max_attempts
+          ORDER BY scheduled_for ASC
+          LIMIT 50
+          FOR UPDATE SKIP LOCKED
+        )
+        RETURNING *
+      `, {
+        replacements: { processorId },
+        type: QueryTypes.SELECT,
+        transaction: t,
+      });
+      await t.commit();
+
+      // Wrap raw results as ScheduledEmail instances
+      pendingActions = claimed.map((row: any) => ScheduledEmail.build(row, { isNewRecord: false }));
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
+  } catch (err: any) {
+    console.error(`[Scheduler] Failed to claim actions:`, err.message);
+    return;
+  }
 
   if (pendingActions.length === 0) return;
 
-  console.log(`[Scheduler] Processing ${pendingActions.length} scheduled actions`);
+  console.log(`[Scheduler] Processing ${pendingActions.length} scheduled actions (${processorId})`);
 
   // Group actions by campaign and apply per-campaign pacing
   const campaignCache: Record<string, any> = {};
@@ -435,39 +469,44 @@ async function processScheduledActions(): Promise<void> {
       // Step 1: AI content generation (for all channels)
       await generateAIContent(action);
 
-      // Step 2: Apply test mode overrides (global takes precedence over per-campaign)
-      let testApplied = false;
-      try {
-        const globalTest = await getTestOverrides();
-        if (globalTest.enabled) {
-          if (globalTest.email && channel === 'email') {
-            await action.update({ to_email: globalTest.email, subject: `[TEST \u2192 ${action.to_email}] ${action.subject}` } as any);
-            await action.reload();
-          }
-          if (globalTest.phone && (channel === 'voice' || channel === 'sms')) {
-            await action.update({ to_phone: globalTest.phone, subject: `[TEST] ${action.subject}` } as any);
-            await action.reload();
-          }
-          console.log(`[Scheduler] GLOBAL TEST MODE: action ${action.id} redirected`);
-          testApplied = true;
-        }
-      } catch {
-        // If settings DB fails, fall through to per-campaign test mode
+      // Step 2: Communication safety check (test mode, unsubscribe, rate limit)
+      const safetyDecision = await evaluateSend({
+        leadId: action.lead_id,
+        campaignId: action.campaign_id,
+        channel: channel as SendChannel,
+        toEmail: action.to_email,
+        toPhone: action.to_phone,
+        source: 'scheduler',
+      });
+
+      if (!safetyDecision.allowed) {
+        await action.update({
+          status: 'cancelled',
+          metadata: { ...(action.metadata || {}), blocked_reason: safetyDecision.blockedReason },
+        } as any);
+        console.log(`[Scheduler] BLOCKED action ${action.id}: ${safetyDecision.blockedReason}`);
+        continue;
       }
 
-      if (!testApplied && campaignSettings.test_mode_enabled) {
-        if (campaignSettings.test_email && (channel === 'email')) {
-          await action.update({ to_email: campaignSettings.test_email, subject: `[TEST] ${action.subject}` } as any);
+      if (safetyDecision.redirect) {
+        if (safetyDecision.redirect.email && channel === 'email') {
+          await action.update({
+            to_email: safetyDecision.redirect.email,
+            subject: `[TEST → ${action.to_email}] ${action.subject}`,
+          } as any);
           await action.reload();
         }
-        if (campaignSettings.test_phone && (channel === 'voice' || channel === 'sms')) {
-          await action.update({ to_phone: campaignSettings.test_phone, subject: `[TEST] ${action.subject}` } as any);
+        if (safetyDecision.redirect.phone && (channel === 'voice' || channel === 'sms')) {
+          await action.update({
+            to_phone: safetyDecision.redirect.phone,
+            subject: `[TEST] ${action.subject}`,
+          } as any);
           await action.reload();
         }
-        console.log(`[Scheduler] CAMPAIGN TEST MODE: action ${action.id} redirected`);
+        console.log(`[Scheduler] TEST MODE: action ${action.id} redirected (${safetyDecision.deliveryMode})`);
       }
 
-      // Step 3: Send via appropriate channel
+            // Step 3: Send via appropriate channel
       switch (channel) {
         case 'email':
           await processEmailAction(action);
@@ -497,17 +536,20 @@ async function processScheduledActions(): Promise<void> {
       const maxAttempts = action.max_attempts || 1;
 
       if (newAttempts < maxAttempts) {
-        // Retry: reschedule 30 minutes later
-        const retryAt = new Date(now.getTime() + 30 * 60 * 1000);
+        // Retry: reset to pending, reschedule 30 minutes later
+        const retryAt = new Date(Date.now() + 30 * 60 * 1000);
         await action.update({
+          status: 'pending',
           attempts_made: newAttempts,
           scheduled_for: retryAt,
+          processing_started_at: null,
+          processor_id: null,
         } as any);
         console.log(`[Scheduler] Retry ${newAttempts}/${maxAttempts} for action ${action.id}, next at ${retryAt.toISOString()}`);
       } else if (action.fallback_channel) {
         await handleFallback(action);
       } else {
-        await action.update({ status: 'failed', attempts_made: newAttempts } as any);
+        await action.update({ status: 'failed', attempts_made: newAttempts, processing_started_at: null, processor_id: null } as any);
         await logActivity({
           lead_id: action.lead_id,
           type: 'system',
@@ -517,6 +559,25 @@ async function processScheduledActions(): Promise<void> {
       }
     }
   }
+}
+
+/**
+ * Recover stale actions stuck in 'processing' for more than 10 minutes.
+ * Resets them to 'pending' so they can be re-claimed.
+ */
+async function recoverStaleActions(): Promise<number> {
+  const staleThreshold = new Date(Date.now() - 10 * 60 * 1000); // 10 min
+  const [count] = await ScheduledEmail.update(
+    { status: 'pending', processing_started_at: null, processor_id: null } as any,
+    {
+      where: {
+        status: 'processing',
+        processing_started_at: { [Op.lt]: staleThreshold },
+      },
+    },
+  );
+  if (count > 0) console.log(`[Scheduler] Recovered ${count} stale actions`);
+  return count;
 }
 
 async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
@@ -982,8 +1043,15 @@ export function startScheduler(): void {
     });
   });
 
-  // Detect no-show strategy calls every 15 minutes
+  // Recover stale processing actions every 15 minutes
   cron.schedule('*/15 * * * *', () => {
+    recoverStaleActions().catch((err) => {
+      console.error('[Scheduler] Stale recovery error:', err);
+    });
+  });
+
+  // Detect no-show strategy calls every 15 minutes
+  cron.schedule('2,17,32,47 * * * *', () => {
     instrumentCronJob('NoShowDetector', () => detectNoShows()).catch((err) => {
       console.error('[Scheduler] No-show detection error:', err);
     });
@@ -1301,4 +1369,103 @@ export function startScheduler(): void {
   startAIOpsScheduler().catch((err: any) => {
     console.error('[Scheduler] AI Ops scheduler startup error:', err.message);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Scheduler control API (Phase F — Admin Safety Controls)
+// ---------------------------------------------------------------------------
+
+let lastCycleAt: Date | null = null;
+let lastCycleProcessed = 0;
+
+/** Pause the scheduler by setting a system setting flag. */
+export async function pauseScheduler(adminId?: string): Promise<void> {
+  const { setSetting } = require('./settingsService');
+  await setSetting('scheduler_paused', true, adminId);
+  console.log(`[Scheduler] PAUSED by ${adminId || 'system'}`);
+}
+
+/** Resume the scheduler by clearing the pause flag. */
+export async function resumeScheduler(adminId?: string): Promise<void> {
+  const { setSetting } = require('./settingsService');
+  await setSetting('scheduler_paused', false, adminId);
+  console.log(`[Scheduler] RESUMED by ${adminId || 'system'}`);
+}
+
+/** Get the current scheduler status. */
+export async function getSchedulerStatus(): Promise<{
+  paused: boolean;
+  last_cycle_at: string | null;
+  pending_actions: number;
+  processing_actions: number;
+}> {
+  const { getSetting: getSettingFn } = require('./settingsService');
+  const paused = await getSettingFn('scheduler_paused');
+
+  const pendingCount = await ScheduledEmail.count({
+    where: { status: 'pending', scheduled_for: { [Op.lte]: new Date() } },
+  });
+  const processingCount = await ScheduledEmail.count({
+    where: { status: 'processing' },
+  });
+
+  return {
+    paused: paused === true || paused === 'true',
+    last_cycle_at: lastCycleAt?.toISOString() || null,
+    pending_actions: pendingCount,
+    processing_actions: processingCount,
+  };
+}
+
+/** Get launch readiness assessment. */
+export async function getLaunchReadiness(): Promise<{
+  pending_actions: { email: number; sms: number; voice: number };
+  active_campaigns: number;
+  enrolled_leads: number;
+  channels_configured: { email: boolean; sms: boolean; voice: boolean };
+  blockers: string[];
+  safe_to_launch: boolean;
+}> {
+  const { getSetting: gs } = require('./settingsService');
+
+  const [emailCount, smsCount, voiceCount] = await Promise.all([
+    ScheduledEmail.count({ where: { status: 'pending', channel: 'email' } }),
+    ScheduledEmail.count({ where: { status: 'pending', channel: 'sms' } }),
+    ScheduledEmail.count({ where: { status: 'pending', channel: 'voice' } }),
+  ]);
+
+  const activeCampaigns = await Campaign.count({ where: { status: 'active' } });
+  const enrolledLeads = await CampaignLead.count({ where: { status: 'active' } });
+
+  const smtpUser = await gs('smtp_user');
+  const synthflowKey = await gs('synthflow_api_key');
+  const ghlEnabled = await gs('ghl_enabled');
+
+  const emailConfigured = !!smtpUser;
+  const voiceConfigured = !!synthflowKey;
+  const smsConfigured = ghlEnabled === true || ghlEnabled === 'true';
+
+  const blockers: string[] = [];
+  if (!emailConfigured && emailCount > 0) blockers.push('SMTP not configured but email actions pending');
+  if (!voiceConfigured && voiceCount > 0) blockers.push('Synthflow not configured but voice actions pending');
+  if (!smsConfigured && smsCount > 0) blockers.push('GHL not enabled but SMS actions pending');
+
+  // Check for test leads enrolled in active campaigns
+  const testLeadEnrollments = await sequelize.query(
+    `SELECT COUNT(*) as count FROM campaign_leads cl
+     JOIN leads l ON cl.lead_id = l.id
+     WHERE l.source = 'campaign_test' AND cl.status = 'active'`,
+    { type: QueryTypes.SELECT },
+  ) as any[];
+  const testLeadCount = parseInt(testLeadEnrollments[0]?.count || '0', 10);
+  if (testLeadCount > 0) blockers.push(`${testLeadCount} test lead(s) enrolled in active campaigns`);
+
+  return {
+    pending_actions: { email: emailCount, sms: smsCount, voice: voiceCount },
+    active_campaigns: activeCampaigns,
+    enrolled_leads: enrolledLeads,
+    channels_configured: { email: emailConfigured, sms: smsConfigured, voice: voiceConfigured },
+    blockers,
+    safe_to_launch: blockers.length === 0,
+  };
 }

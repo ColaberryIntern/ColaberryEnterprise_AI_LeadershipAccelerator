@@ -7,6 +7,8 @@ import { Lead, InteractionOutcome, CampaignLead, CampaignSimulation, CampaignSim
 import { logActivity } from '../services/activityService';
 import { logCommunication } from '../services/communicationLogService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
+import { processOptOut } from '../services/unsubscribeEnforcementService';
+import ScheduledEmail from '../models/ScheduledEmail';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -114,6 +116,20 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
         user_agent: event.user_agent,
         url: event.url, // For click events
       });
+
+      // Process opt-out for unsub/spam events
+      if (outcome === 'unsubscribed') {
+        try {
+          const scheduledEmail = await ScheduledEmail.findByPk(scheduledEmailId, { attributes: ['id', 'lead_id', 'campaign_id'] });
+          if (scheduledEmail) {
+            const source = event.event === 'spam' ? 'mandrill_spam' : 'mandrill_unsub';
+            await processOptOut(scheduledEmail.lead_id, 'email', `Mandrill ${event.event} event`, source);
+            console.log(`[MandrillWebhook] Processed opt-out for lead ${scheduledEmail.lead_id} via ${source}`);
+          }
+        } catch (optOutErr: any) {
+          console.warn(`[MandrillWebhook] Opt-out processing failed:`, optOutErr.message);
+        }
+      }
 
       processed++;
     }

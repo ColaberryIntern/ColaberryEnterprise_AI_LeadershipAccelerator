@@ -31,6 +31,7 @@ import executiveAwarenessRoutes from './admin/executiveAwarenessRoutes';
 import strategicIntelligenceRoutes from './admin/strategicIntelligenceRoutes';
 import securityRoutes from './admin/securityRoutes';
 import deploymentRoutes from './admin/deploymentRoutes';
+import schedulerControlRoutes from './admin/schedulerControlRoutes';
 
 const router = Router();
 
@@ -66,5 +67,6 @@ router.use(executiveAwarenessRoutes);
 router.use(strategicIntelligenceRoutes);
 router.use(securityRoutes);
 router.use(deploymentRoutes);
+router.use(schedulerControlRoutes);
 
 export default router;

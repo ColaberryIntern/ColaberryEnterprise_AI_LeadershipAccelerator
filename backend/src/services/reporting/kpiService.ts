@@ -116,7 +116,10 @@ async function gatherDepartmentMetrics(department: string): Promise<Record<strin
 
   if (department === 'Admissions') {
     const newLeads = await Lead.count({
-      where: { created_at: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      where: {
+        created_at: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        source: { [Op.ne]: 'campaign_test' },
+      },
     });
     metrics.new_leads = newLeads;
   }
@@ -133,7 +136,7 @@ async function gatherSystemMetrics(): Promise<Record<string, number>> {
   const [totalAgents, activeAgents, totalLeads, totalCampaigns] = await Promise.all([
     AiAgent.count(),
     AiAgent.count({ where: { enabled: true } }),
-    Lead.count(),
+    Lead.count({ where: { source: { [Op.ne]: 'campaign_test' } } }),
     Campaign.count({ where: { status: 'active' } }),
   ]);
 

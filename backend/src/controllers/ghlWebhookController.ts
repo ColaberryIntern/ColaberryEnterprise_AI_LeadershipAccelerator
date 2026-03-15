@@ -5,6 +5,8 @@ import { addContactNote, sendSmsViaGhl } from '../services/ghlService';
 import { logCommunication, getLeadComms } from '../services/communicationLogService';
 import { generateMessage } from '../services/aiMessageService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
+import { checkLeadSendable } from '../services/communicationSafetyService';
+import { detectStopKeyword, processOptOut } from '../services/unsubscribeEnforcementService';
 
 export async function handleGhlSmsReply(req: Request, res: Response): Promise<void> {
   try {
@@ -43,6 +45,14 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
         order: [['enrolled_at', 'DESC']],
       });
       if (cl) campaignId = cl.campaign_id;
+    }
+
+    // STOP keyword detection — process opt-out before any auto-reply
+    if (detectStopKeyword(message)) {
+      console.log(`[GHL Webhook] STOP keyword detected from lead ${lead.id}`);
+      await processOptOut(lead.id, 'sms', message, 'stop_keyword');
+      res.status(200).json({ received: true, matched: true, lead_id: lead.id, opted_out: true });
+      return;
     }
 
     // Log activity
@@ -116,6 +126,14 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
       }
     } catch (simErr: any) {
       console.warn(`[GHL Webhook] Failed to resume simulation:`, simErr.message);
+    }
+
+    // --- Check if lead is allowed to receive replies ---
+    const leadSendable = await checkLeadSendable(lead.id);
+    if (!leadSendable.sendable) {
+      console.log(`[GHL Webhook] Lead ${lead.id} blocked from auto-reply: ${leadSendable.reason}`);
+      res.status(200).json({ received: true, matched: true, lead_id: lead.id, blocked: true, reason: leadSendable.reason });
+      return;
     }
 
     // --- Compose AI reply and push to GHL ---

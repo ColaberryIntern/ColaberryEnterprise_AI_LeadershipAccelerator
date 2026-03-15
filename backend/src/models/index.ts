@@ -112,6 +112,7 @@ import ReferralActivityEvent from './ReferralActivityEvent';
 import ReferralCommission from './ReferralCommission';
 import LandingPage from './LandingPage';
 import CampaignDeployment from './CampaignDeployment';
+import UnsubscribeEvent from './UnsubscribeEvent';
 
 // --- Governance Center associations ---
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
@@ -558,6 +559,10 @@ ReferralCommission.belongsTo(AlumniReferral, { foreignKey: 'referral_id', as: 'r
 AlumniReferralProfile.hasMany(ReferralCommission, { foreignKey: 'profile_id', as: 'commissions' });
 ReferralCommission.belongsTo(AlumniReferralProfile, { foreignKey: 'profile_id', as: 'profile' });
 
+// --- Unsubscribe Event associations ---
+Lead.hasMany(UnsubscribeEvent, { foreignKey: 'lead_id', as: 'unsubscribeEvents' });
+UnsubscribeEvent.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+
 // --- Campaign Deployment & Landing Page associations ---
 Campaign.hasMany(CampaignDeployment, { foreignKey: 'campaign_id', as: 'deployments' });
 CampaignDeployment.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
@@ -657,4 +662,5 @@ export {
   ReferralCommission,
   LandingPage,
   CampaignDeployment,
+  UnsubscribeEvent,
 };

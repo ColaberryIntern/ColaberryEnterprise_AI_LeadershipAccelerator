@@ -69,6 +69,11 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
   const lead = await Lead.findByPk(leadId);
   if (!lead) throw new Error('Lead not found');
 
+  // Guard: prevent test leads from being enrolled in production campaigns
+  if (lead.source === 'campaign_test') {
+    throw new Error('Cannot enroll test leads in production campaigns');
+  }
+
   const sequence = await FollowUpSequence.findByPk(sequenceId);
   if (!sequence || !sequence.is_active) throw new Error('Sequence not found or inactive');
 

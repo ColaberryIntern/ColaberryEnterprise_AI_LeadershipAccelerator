@@ -3,10 +3,10 @@
 // Promotes the in-memory KnowledgeGraph to persistent DB storage while
 // maintaining fast in-memory lookups via the existing KnowledgeGraph class.
 
+import { Op } from 'sequelize';
 import { KnowledgeNode, KnowledgeEdge, AiAgent, Campaign, Lead, Cohort, Enrollment } from '../../models';
 import { KnowledgeGraph, KGNode, KGEdge } from '../../intelligence/knowledge/knowledgeGraph';
 import type { KnowledgeNodeType } from '../../models/KnowledgeNode';
-import { Op } from 'sequelize';
 
 // ─── In-Memory Cache ──────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ export async function buildGraph(): Promise<{ nodes_created: number; edges_creat
   // 1. Gather all system entities
   const [campaigns, leads, agents, cohorts, enrollments] = await Promise.all([
     Campaign.findAll({ attributes: ['id', 'name', 'campaign_type', 'status'], raw: true }),
-    Lead.findAll({ attributes: ['id', 'name', 'email', 'company', 'pipeline_stage'], raw: true }),
+    Lead.findAll({ attributes: ['id', 'name', 'email', 'company', 'pipeline_stage'], where: { source: { [Op.ne]: 'campaign_test' } }, raw: true }),
     AiAgent.findAll({ attributes: ['id', 'agent_name', 'category', 'status'], where: { enabled: true }, raw: true }),
     Cohort.findAll({ attributes: ['id', 'name', 'status'], raw: true }),
     Enrollment.findAll({ attributes: ['id', 'lead_id', 'cohort_id', 'status'], raw: true }),

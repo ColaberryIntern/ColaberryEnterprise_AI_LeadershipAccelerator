@@ -31,6 +31,7 @@ export async function scanForOpportunities(): Promise<{
     where: {
       lead_score: { [Op.gte]: 70 },
       pipeline_stage: { [Op.in]: ['qualified', 'proposal', 'negotiation'] },
+      source: { [Op.ne]: 'campaign_test' },
     },
     attributes: ['id', 'name', 'company', 'lead_score', 'pipeline_stage'],
     limit: 20,

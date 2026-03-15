@@ -42,10 +42,12 @@ export async function getSimulationComms(simulationId: string): Promise<Instance
 
 export async function getLeadComms(
   leadId: number,
-  options?: { channel?: string; limit?: number }
+  options?: { channel?: string; limit?: number; includeSimulation?: boolean }
 ): Promise<InstanceType<typeof CommunicationLog>[]> {
   const where: any = { lead_id: leadId };
   if (options?.channel) where.channel = options.channel;
+  // Exclude simulation records by default — only include when explicitly requested
+  if (!options?.includeSimulation) where.simulation_id = null;
 
   return CommunicationLog.findAll({
     where,
