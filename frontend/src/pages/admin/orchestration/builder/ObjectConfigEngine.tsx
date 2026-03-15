@@ -12,6 +12,7 @@ import PreviewMentorChat from './PreviewMentorChat';
 import { generateMockV2Content, MockV2Content } from './mockDataGenerator';
 import { PromptOption } from './types';
 import { composePrompt, decomposePrompt } from './promptComposer';
+import TestSimulationPanel from './TestSimulationPanel';
 
 /* Mentor face SVG — matches the FAB in PortalMentorChat for admin preview */
 const PreviewMentorFace = ({ size = 40 }: { size?: number }) => (
@@ -192,7 +193,7 @@ export default function ObjectConfigEngine(props: Props) {
   const [expanded, setExpanded] = useState<AccordionState>({
     validation: false, quality: false, suggestions: false,
   });
-  const [activeTab, setActiveTab] = useState<'configure' | 'structure' | 'preview'>('configure');
+  const [activeTab, setActiveTab] = useState<'configure' | 'structure' | 'preview' | 'test'>('configure');
   const [reversePrompt, setReversePrompt] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
@@ -387,6 +388,13 @@ export default function ObjectConfigEngine(props: Props) {
             >
               <i className="bi bi-eye me-1"></i>Preview
             </button>
+            <button
+              className={`btn ${activeTab === 'test' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setActiveTab('test')}
+              style={{ fontSize: 11 }}
+            >
+              <i className="bi bi-flask me-1"></i>Test
+            </button>
           </div>
           {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 8 }}>unsaved changes</span>}
           {activeTab === 'configure' && editing.quality_score != null && (
@@ -534,6 +542,27 @@ export default function ObjectConfigEngine(props: Props) {
             </>
           );
         })()}
+      </div>
+      ) : activeTab === 'test' ? (
+      <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
+        <TestSimulationPanel
+          miniSections={miniSections.map(ms => ({
+            id: ms.id,
+            mini_section_type: ms.mini_section_type,
+            title: ms.title,
+            description: ms.description || '',
+            mini_section_order: ms.mini_section_order,
+            associated_skill_ids: ms.associated_skill_ids,
+            associated_variable_keys: ms.associated_variable_keys,
+            creates_variable_keys: ms.creates_variable_keys,
+            creates_artifact_ids: ms.creates_artifact_ids,
+            knowledge_check_config: ms.knowledge_check_config,
+          }))}
+          lessonTitle={props.lessonTitle || ''}
+          lessonId={props.lessonId || ''}
+          token={props.token || ''}
+          apiUrl={props.apiUrl || ''}
+        />
       </div>
       ) : (
       <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>

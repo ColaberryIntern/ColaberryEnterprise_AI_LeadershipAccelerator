@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PreviewPanel from './PreviewPanel';
 import { MockV2Content } from './mockDataGenerator';
 
@@ -45,6 +45,46 @@ interface Props {
   onPromptCaptured?: (prompt: { system: string; user: string }) => void;
 }
 
+// ── Random Test Data ────────────────────────────────────────────
+
+const RANDOM_INDUSTRIES = ['Healthcare', 'Financial Services', 'Retail', 'Manufacturing', 'Technology', 'Energy & Utilities', 'Education', 'Logistics & Supply Chain', 'Government', 'Media & Entertainment'];
+const RANDOM_COMPANIES = ['Meridian Health Systems', 'Atlas Capital Group', 'NovaTech Industries', 'Pinnacle Logistics', 'Summit Energy Corp', 'Horizon Retail Group', 'Catalyst Manufacturing', 'Vertex Financial', 'Beacon Education Partners', 'Frontier Media Inc.'];
+const RANDOM_ROLES = ['Chief Technology Officer', 'VP of Operations', 'Director of Strategy', 'Chief Data Officer', 'Head of Innovation', 'SVP Digital Transformation', 'Director of IT', 'Chief Operating Officer'];
+const RANDOM_GOALS = ['Implement AI-driven process automation', 'Build predictive analytics capability', 'Automate compliance and risk management', 'Deploy AI customer service solutions', 'Create AI-powered decision support', 'Optimize supply chain with ML', 'Develop AI governance framework', 'Scale AI from pilot to production'];
+const RANDOM_USE_CASES = ['Process automation', 'Predictive analytics', 'Customer service AI', 'Fraud detection', 'Demand forecasting', 'Document processing', 'Quality control', 'Risk assessment'];
+const RANDOM_SIZES = ['50-249', '250-999', '1000-4999', '5000+'];
+const RANDOM_VAR_VALUES: Record<string, string[]> = {
+  department_focus: ['Engineering', 'Operations', 'Finance', 'Marketing', 'HR', 'Sales', 'Customer Support'],
+  specific_challenge: ['Data silos across teams', 'Manual reporting overhead', 'Slow decision cycles', 'Talent retention', 'Customer churn'],
+  current_process: ['Manual spreadsheet tracking', 'Email-based approvals', 'Quarterly reviews', 'Ad-hoc reporting'],
+  desired_outcome: ['Real-time dashboards', '50% faster processing', 'Automated compliance', 'Predictive alerts'],
+  key_stakeholders: ['CEO, CFO, CTO', 'Board of Directors', 'Department Heads', 'IT Team Lead'],
+  timeline: ['30 days', '60 days', '90 days', '6 months'],
+  scope_area: ['Customer-facing operations', 'Internal processes', 'Supply chain', 'Financial reporting'],
+};
+
+function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function randomProfile(): TestProfile {
+  return {
+    industry: pick(RANDOM_INDUSTRIES),
+    company_name: pick(RANDOM_COMPANIES),
+    role: pick(RANDOM_ROLES),
+    ai_maturity_level: Math.floor(Math.random() * 5) + 1,
+    goal: pick(RANDOM_GOALS),
+    company_size: pick(RANDOM_SIZES),
+    identified_use_case: pick(RANDOM_USE_CASES),
+  };
+}
+
+function randomVarValue(key: string): string {
+  const pool = RANDOM_VAR_VALUES[key];
+  if (pool) return pick(pool);
+  return `test_${key}_${Math.floor(Math.random() * 100)}`;
+}
+
+// ── Preset Profiles ─────────────────────────────────────────────
+
 const PRESET_PROFILES: { label: string; profile: TestProfile }[] = [
   {
     label: 'Healthcare CTO',
@@ -60,6 +100,12 @@ const PRESET_PROFILES: { label: string; profile: TestProfile }[] = [
   },
 ];
 
+// ── Profile field keys for auto-fill detection ──────────────────
+
+const PROFILE_KEYS = ['industry', 'company_name', 'company', 'role', 'goal', 'ai_maturity_level', 'company_size', 'identified_use_case', 'full_name', 'email', 'title', 'sector'];
+
+// ── Component ───────────────────────────────────────────────────
+
 export default function TestSimulationPanel({ miniSections, lessonTitle, lessonId, token, apiUrl, onPromptCaptured }: Props) {
   const [profile, setProfile] = useState<TestProfile>(PRESET_PROFILES[0].profile);
   const [testVariables, setTestVariables] = useState<Record<string, string>>({});
@@ -73,10 +119,51 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  // Collect all variable keys from mini-sections
-  const allVarKeys = Array.from(new Set(
-    miniSections.flatMap(ms => [...(ms.associated_variable_keys || []), ...(ms.creates_variable_keys || [])])
-  ));
+  // Collect variable keys from mini-sections
+  const associatedVarKeys = useMemo(() => Array.from(new Set(
+    miniSections.flatMap(ms => ms.associated_variable_keys || [])
+  )), [miniSections]);
+
+  const createsVarKeys = useMemo(() => Array.from(new Set(
+    miniSections.flatMap(ms => ms.creates_variable_keys || [])
+  )), [miniSections]);
+
+  const allVarKeys = useMemo(() => Array.from(new Set([...associatedVarKeys, ...createsVarKeys])), [associatedVarKeys, createsVarKeys]);
+
+  // Variable collection preview — what auto-fills vs what prompts the learner
+  const profileMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    map.industry = profile.industry;
+    map.sector = profile.industry;
+    map.company_name = profile.company_name;
+    map.company = profile.company_name;
+    map.role = profile.role;
+    map.goal = profile.goal;
+    map.ai_maturity_level = String(profile.ai_maturity_level);
+    if (profile.company_size) map.company_size = profile.company_size;
+    if (profile.identified_use_case) { map.identified_use_case = profile.identified_use_case; map.use_case = profile.identified_use_case; }
+    // Merge test variables
+    for (const [k, v] of Object.entries(testVariables)) {
+      if (v) map[k] = v;
+    }
+    return map;
+  }, [profile, testVariables]);
+
+  const autoFilledVars = useMemo(() =>
+    associatedVarKeys.filter(k => profileMap[k]).map(k => ({ key: k, value: profileMap[k] })),
+    [associatedVarKeys, profileMap]
+  );
+
+  const unansweredVars = useMemo(() =>
+    associatedVarKeys.filter(k => !profileMap[k] && !PROFILE_KEYS.includes(k)),
+    [associatedVarKeys, profileMap]
+  );
+
+  // Custom variables (not profile fields)
+  const customVarKeys = useMemo(() =>
+    allVarKeys.filter(k => !PROFILE_KEYS.includes(k)),
+    [allVarKeys]
+  );
 
   useEffect(() => {
     if (lessonId) fetchHistory();
@@ -134,6 +221,15 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
     setRunning(false);
   };
 
+  const handleRandomize = () => {
+    setProfile(randomProfile());
+    const randomVars: Record<string, string> = {};
+    for (const key of customVarKeys) {
+      randomVars[key] = randomVarValue(key);
+    }
+    setTestVariables(randomVars);
+  };
+
   const deleteHistoryItem = async (id: string) => {
     try {
       await fetch(`${apiUrl}/api/admin/orchestration/simulate/${id}`, { method: 'DELETE', headers });
@@ -154,7 +250,7 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
     <div>
       {/* Profile Selection */}
       <div className="mb-2">
-        <div className="d-flex gap-1 mb-2 flex-wrap">
+        <div className="d-flex gap-1 mb-2 flex-wrap align-items-center">
           {PRESET_PROFILES.map(p => (
             <button
               key={p.label}
@@ -165,6 +261,9 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
               {p.label}
             </button>
           ))}
+          <button className="btn btn-sm btn-outline-warning" onClick={handleRandomize} style={{ fontSize: 10 }}>
+            <i className="bi bi-shuffle me-1"></i>Randomize All
+          </button>
         </div>
 
         {/* Editable profile fields */}
@@ -185,22 +284,43 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
             <label className="form-label mb-0 small fw-medium">AI Maturity (1-5)</label>
             <input className="form-control form-control-sm" style={{ fontSize: 11 }} type="number" min={1} max={5} value={profile.ai_maturity_level} onChange={e => setProfile({ ...profile, ai_maturity_level: parseInt(e.target.value) || 1 })} />
           </div>
-          <div className="col-9">
+          <div className="col-5">
             <label className="form-label mb-0 small fw-medium">Goal</label>
             <input className="form-control form-control-sm" style={{ fontSize: 11 }} value={profile.goal} onChange={e => setProfile({ ...profile, goal: e.target.value })} />
+          </div>
+          <div className="col-4">
+            <label className="form-label mb-0 small fw-medium">Company Size</label>
+            <input className="form-control form-control-sm" style={{ fontSize: 11 }} value={profile.company_size || ''} onChange={e => setProfile({ ...profile, company_size: e.target.value })} />
+          </div>
+          <div className="col-12">
+            <label className="form-label mb-0 small fw-medium">Identified Use Case</label>
+            <input className="form-control form-control-sm" style={{ fontSize: 11 }} value={profile.identified_use_case || ''} onChange={e => setProfile({ ...profile, identified_use_case: e.target.value })} />
           </div>
         </div>
       </div>
 
-      {/* Variable Overrides */}
-      {allVarKeys.length > 0 && (
+      {/* Custom Variable Overrides */}
+      {customVarKeys.length > 0 && (
         <div className="mb-2">
-          <label className="form-label small fw-medium mb-1">Variable Overrides</label>
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <label className="form-label small fw-medium mb-0">Custom Variables</label>
+            <button
+              className="btn btn-outline-warning py-0 px-1"
+              style={{ fontSize: 9 }}
+              onClick={() => {
+                const randomVars: Record<string, string> = {};
+                for (const key of customVarKeys) randomVars[key] = randomVarValue(key);
+                setTestVariables(randomVars);
+              }}
+            >
+              <i className="bi bi-shuffle me-1"></i>Randomize
+            </button>
+          </div>
           <div className="row g-1">
-            {allVarKeys.slice(0, 6).map(key => (
+            {customVarKeys.map(key => (
               <div key={key} className="col-6">
                 <div className="input-group input-group-sm">
-                  <span className="input-group-text" style={{ fontSize: 9, maxWidth: 100 }}>{key}</span>
+                  <span className="input-group-text" style={{ fontSize: 9, maxWidth: 120 }}>{key}</span>
                   <input className="form-control" style={{ fontSize: 10 }} value={testVariables[key] || ''} onChange={e => setTestVariables({ ...testVariables, [key]: e.target.value })} placeholder="test value..." />
                 </div>
               </div>
@@ -208,6 +328,51 @@ export default function TestSimulationPanel({ miniSections, lessonTitle, lessonI
           </div>
         </div>
       )}
+
+      {/* Variable Collection Preview — simulates the learner's experience */}
+      <div className="mb-2 border-top pt-2">
+        <div className="d-flex align-items-center gap-2 mb-1">
+          <i className="bi bi-input-cursor-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
+          <span className="fw-semibold small">Variable Collection Preview</span>
+          <span className="text-muted" style={{ fontSize: 10 }}>What the learner sees when running a prompt template</span>
+        </div>
+
+        {/* Auto-filled from profile */}
+        <div className="mb-1 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 10 }}>
+          <span className="text-muted fw-medium me-1">Auto-filled:</span>
+          {autoFilledVars.length === 0 ? (
+            <span className="text-muted" style={{ fontSize: 9 }}>None</span>
+          ) : autoFilledVars.map(v => (
+            <span key={v.key} className="badge bg-success-subtle text-success border" style={{ fontSize: 9 }}>
+              {v.key}: {v.value.length > 20 ? v.value.slice(0, 20) + '...' : v.value}
+            </span>
+          ))}
+        </div>
+
+        {/* Unanswered — would prompt learner */}
+        <div className="mb-1 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 10 }}>
+          <span className="text-muted fw-medium me-1">Would prompt learner:</span>
+          {unansweredVars.length === 0 ? (
+            <span className="text-muted" style={{ fontSize: 9 }}>None &mdash; all variables answered</span>
+          ) : unansweredVars.map(v => (
+            <span key={v} className="badge bg-warning-subtle text-warning border" style={{ fontSize: 9 }}>
+              {`{{${v}}}`} &mdash; unanswered
+            </span>
+          ))}
+        </div>
+
+        {/* Creates new variables */}
+        <div className="d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 10 }}>
+          <span className="text-muted fw-medium me-1">Creates new:</span>
+          {createsVarKeys.length === 0 ? (
+            <span className="text-muted" style={{ fontSize: 9 }}>None</span>
+          ) : createsVarKeys.map(v => (
+            <span key={v} className="badge bg-info-subtle text-info border" style={{ fontSize: 9 }}>
+              {`{{${v}}}`} &mdash; output
+            </span>
+          ))}
+        </div>
+      </div>
 
       {/* Run Button + Readiness Check */}
       <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
