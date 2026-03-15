@@ -396,6 +396,8 @@ export async function initiateVoiceCall(
       } as any).catch((err: any) => {
         console.warn('[MayaTools] CommunicationLog failed:', err.message);
       });
+    } else if (result.success) {
+      console.warn('[MayaTools] Voice call succeeded but call_id is null — webhook matching will fail. Response keys:', Object.keys(result.data || {}));
     }
 
     await logAction(visitorId, conversationId, 'voice_call_initiated', result.success ? 'completed' : 'failed', {
