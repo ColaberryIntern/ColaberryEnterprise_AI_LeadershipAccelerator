@@ -24,7 +24,12 @@ export function categorizePagePath(path: string): string {
     '/sponsorship': 'sponsorship',
     '/strategy-call-prep': 'strategy_call_prep',
     '/executive-overview': 'executive_overview',
+    '/champion': 'champion',
+    '/referrals/login': 'referrals',
   };
+
+  // Also match /referrals/* paths
+  if (cleaned.startsWith('/referrals')) return 'referrals';
 
   return categoryMap[cleaned] || 'other';
 }

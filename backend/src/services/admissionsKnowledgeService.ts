@@ -29,8 +29,15 @@ export async function findRelevantKnowledge(params: {
     order: [['priority', 'DESC']],
   });
 
+  // Restrict champion entries to champion/referral pages only
+  const isChampionPage = pageCategory === 'champion' || pageCategory === 'referrals';
+  const filteredEntries = allEntries.filter((entry) => {
+    if (entry.category === 'champion' && !isChampionPage) return false;
+    return true;
+  });
+
   // Score each entry by keyword overlap
-  const scored = allEntries.map((entry) => {
+  const scored = filteredEntries.map((entry) => {
     let score = 0;
     const keywords = (entry.keywords || []).map((k: string) => k.toLowerCase());
     const titleLower = entry.title.toLowerCase();
@@ -90,6 +97,8 @@ function mapPageToKnowledgeCategory(pageCategory: string): string {
     strategy_call_prep: 'faq',
     advisory: 'enterprise',
     sponsorship: 'sponsorship',
+    champion: 'champion',
+    referrals: 'champion',
   };
   return mapping[pageCategory] || 'faq';
 }

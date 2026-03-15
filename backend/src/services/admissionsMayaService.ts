@@ -43,6 +43,8 @@ Your goals:
     strategy_call_prep: 'the strategy call preparation page — they are preparing for a strategy call',
     advisory: 'the advisory services page — they are exploring advisory options',
     sponsorship: 'the corporate sponsorship page — they may be exploring group enrollment',
+    champion: 'the AI Champion Network page — they are exploring the alumni referral program where they can enroll themselves or refer others and earn $250 per enrolled participant',
+    referrals: 'the referral dashboard/login page — they are an alumni activating or managing their referral account',
   };
 
   const pageDesc = pageCategoryDescriptions[params.pageCategory] || `a page (${params.pageUrl})`;
@@ -269,6 +271,8 @@ export async function generateMayaGreeting(params: {
     contact: `Hi${nameTag}! I'm Maya. I'd love to help you connect with our team. Would you like to book a strategy call, get an executive briefing, or is there something specific I can help with?`,
     strategy_call_prep: `Hi${nameTag}! I'm Maya, your admissions advisor. I can help you prepare for your strategy call — let me know if you have any questions beforehand.`,
     case_studies: `Hi${nameTag}! I'm Maya. I see you're reviewing success stories — great way to see what's possible. Want me to share an executive briefing or book a strategy call to discuss how our program could work for your organization?`,
+    champion: `Hi${nameTag}! I'm Maya. Welcome to the AI Champion Network! I can help you understand how the referral program works — whether you want to enroll yourself, refer leaders and teams, or learn about the $250-per-participant commission. What would you like to know?`,
+    referrals: `Hi${nameTag}! I'm Maya. I see you're in the referral portal. I can help with activating your account, submitting referrals, or understanding commission details. What can I help with?`,
   };
 
   return pageGreetings[pageCategory] ||
