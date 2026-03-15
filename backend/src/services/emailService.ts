@@ -1257,7 +1257,7 @@ export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<vo
     return;
   }
 
-  const portalBaseUrl = env.frontendUrl || 'http://95.216.199.47:8888';
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
   const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}`;
 
   const r = await resolveEmailRecipient(
