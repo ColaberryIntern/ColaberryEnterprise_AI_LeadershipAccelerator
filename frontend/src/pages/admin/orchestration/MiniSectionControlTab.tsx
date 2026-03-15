@@ -13,6 +13,7 @@ import MiniSectionPipeline from './builder/MiniSectionPipeline';
 import SectionIntelligencePanel from './builder/SectionIntelligencePanel';
 import PromptDebuggerPanel from './builder/PromptDebuggerPanel';
 import AISimulationWorkspace from './builder/AISimulationWorkspace';
+import { PROMPT_PAIRS } from './builder/types';
 
 interface GeneratedEvent {
   type: string;
@@ -66,14 +67,27 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
       } else {
         const maxOrder = builder.miniSections.reduce((max, ms) => Math.max(max, ms.mini_section_order || 0), 0);
         const order = maxOrder + 1;
+        // Auto-populate default prompts from TypeDefinition
+        const promptDefaults: Record<string, string> = {};
+        const td = builder.typeDefinitions?.find(t => t.slug === evt.type);
+        if (td?.default_prompts) {
+          for (const pair of PROMPT_PAIRS) {
+            const dp = td.default_prompts[pair.key];
+            if (dp) {
+              const merged = dp.system && dp.user ? dp.system + '\n\n' + dp.user : dp.system || dp.user || '';
+              if (merged) promptDefaults[pair.systemField] = merged;
+            }
+          }
+        }
         await fetch(`${apiUrl}/api/admin/orchestration/lessons/${builder.selectedLessonId}/mini-sections`, {
           method: 'POST', headers,
           body: JSON.stringify({
             mini_section_type: evt.type,
             title: evt.title,
-            description: evt.description,
+            description: `${evt.description}${evt.learning_goal ? '\nLearning Goal: ' + evt.learning_goal : ''}`,
             mini_section_order: order,
             is_active: true,
+            ...promptDefaults,
           }),
         });
       }

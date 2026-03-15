@@ -90,6 +90,35 @@ interface AccordionState {
   suggestions: boolean;
 }
 
+/** Collapsible prompt editor — shows summary when collapsed */
+function PromptAccordion({ label, tooltip, isEmpty, isDefault, charCount, children }: {
+  label: string; tooltip: string; isEmpty: boolean; isDefault: boolean; charCount: number; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(!isEmpty);
+  const summary = isEmpty ? 'Empty — using type defaults' : isDefault ? 'Using default prompt' : `Custom prompt (${charCount} chars)`;
+  return (
+    <div className="mb-2">
+      <button
+        className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 w-100"
+        onClick={() => setOpen(!open)}
+        style={{ fontSize: 10, color: 'var(--color-text, #2d3748)' }}
+        title={tooltip}
+      >
+        <i className={`bi bi-chevron-${open ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
+        <span className="fw-medium">{label}</span>
+        {tooltip && <i className="bi bi-info-circle text-muted" style={{ fontSize: 8 }}></i>}
+        <span className="ms-auto text-muted" style={{ fontSize: 9 }}>
+          {isEmpty && <i className="bi bi-dash-circle me-1" style={{ fontSize: 8 }}></i>}
+          {!isEmpty && isDefault && <i className="bi bi-check-circle text-success me-1" style={{ fontSize: 8 }}></i>}
+          {!isEmpty && !isDefault && <i className="bi bi-pencil me-1" style={{ fontSize: 8 }}></i>}
+          {summary}
+        </span>
+      </button>
+      {open && <div className="ms-2 mt-1">{children}</div>}
+    </div>
+  );
+}
+
 /** Child component inside AdminPreviewMentorProvider — reads mentor context state */
 function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, workstationPrompt, workstationTestMode }: {
   mockContent: MockV2Content;
@@ -380,6 +409,19 @@ export default function ObjectConfigEngine(props: Props) {
                 if (newType !== 'prompt_template') updates.creates_variable_keys = [];
                 if (newType !== 'implementation_task') updates.creates_artifact_ids = [];
                 if (newType !== 'knowledge_check') updates.knowledge_check_config = { enabled: false, question_count: 3, pass_score: 70 };
+                // Auto-populate default prompts for new items
+                if (isNew && props.typeDefinitions?.length) {
+                  const td = props.typeDefinitions.find(t => t.slug === newType);
+                  if (td?.default_prompts) {
+                    for (const pair of PROMPT_PAIRS) {
+                      const dp = td.default_prompts[pair.key];
+                      if (dp) {
+                        const merged = dp.system && dp.user ? dp.system + '\n\n' + dp.user : dp.system || dp.user || '';
+                        if (merged) (updates as any)[pair.systemField] = merged;
+                      }
+                    }
+                  }
+                }
                 props.onUpdate(updates);
               }}
             >
@@ -432,27 +474,19 @@ export default function ObjectConfigEngine(props: Props) {
               {/* Section content — only shown for active type */}
               {isActive && editing && (
                 <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
-                  {/* Title & Details */}
+                  {/* Title & Description */}
                   <div className="row g-2 mb-3">
-                    <div className="col-md-8">
+                    <div className="col-12">
                       <label className="form-label small fw-medium mb-0">Title <span className="text-danger">*</span></label>
                       <input className="form-control form-control-sm" value={editing.title || ''} onChange={e => props.onUpdate({ title: e.target.value })} />
                     </div>
-                    <div className="col-md-4">
-                      <label className="form-label small fw-medium mb-0">Weight</label>
-                      <input className="form-control form-control-sm" type="number" step="0.1" value={editing.completion_weight ?? 1} onChange={e => props.onUpdate({ completion_weight: parseFloat(e.target.value) })} />
-                    </div>
                     <div className="col-12">
-                      <label className="form-label small fw-medium mb-0">Description</label>
-                      <textarea className="form-control form-control-sm" rows={2} value={editing.description || ''} onChange={e => props.onUpdate({ description: e.target.value })} />
-                    </div>
-                    <div className="col-12">
-                      <label className="form-label small fw-medium mb-0">Learning Goal</label>
-                      <textarea className="form-control form-control-sm" rows={2} value={editing.settings_json?.learning_goal || ''} onChange={e => props.onUpdate({ settings_json: { ...(editing.settings_json || {}), learning_goal: e.target.value } })} placeholder="What should the student learn from this section?" />
+                      <label className="form-label small fw-medium mb-0">Description & Learning Goal</label>
+                      <textarea className="form-control form-control-sm" rows={2} value={editing.description || ''} onChange={e => props.onUpdate({ description: e.target.value })} placeholder="Describe this section's purpose, context, and what students should learn" />
                     </div>
                   </div>
 
-                  {/* Prompts */}
+                  {/* Prompts — collapsible with default detection */}
                   {typePromptPairs.length > 0 && (
                     <div className="mb-3 border-top pt-2">
                       <div className="d-flex align-items-center gap-2 mb-2">
@@ -466,6 +500,11 @@ export default function ObjectConfigEngine(props: Props) {
                           const sysVal = (editing[pair.systemField] as string) || '';
                           const usrVal = (editing[pair.userField] as string) || '';
                           const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
+                          const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
+                          const defaultPrompt = typeDef?.default_prompts?.[pair.key];
+                          const defaultText = defaultPrompt ? (defaultPrompt.system && defaultPrompt.user ? defaultPrompt.system + '\n\n' + defaultPrompt.user : defaultPrompt.system || defaultPrompt.user || '') : '';
+                          const isDefault = defaultText && combinedValue === defaultText;
+                          const isEmpty = !combinedValue;
                           const implLabels: Record<string, { label: string; tooltip: string }> = {
                             build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
                             mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
@@ -476,8 +515,7 @@ export default function ObjectConfigEngine(props: Props) {
                           const tooltip = editType === 'implementation_task' && implLabels[pair.key]
                             ? implLabels[pair.key].tooltip : '';
                           return (
-                            <div key={pair.key} className="mb-2">
-                              <span className="text-muted fw-medium" style={{ fontSize: 10 }} title={tooltip}>{displayLabel} {tooltip && <i className="bi bi-info-circle" style={{ fontSize: 9 }}></i>}</span>
+                            <PromptAccordion key={pair.key} label={displayLabel} tooltip={tooltip} isEmpty={isEmpty} isDefault={!!isDefault} charCount={combinedValue.length}>
                               <HighlightedPromptEditor
                                 value={combinedValue}
                                 onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
@@ -485,40 +523,49 @@ export default function ObjectConfigEngine(props: Props) {
                                 rows={5}
                                 placeholder="Write prompt instructions naturally. Learner data is appended automatically."
                               />
-                            </div>
+                              {defaultText && !isDefault && (
+                                <button className="btn btn-link p-0 text-muted mt-1" style={{ fontSize: 9 }} onClick={() => props.onUpdate({ [pair.systemField]: defaultText, [pair.userField]: '' } as any)}>
+                                  <i className="bi bi-arrow-counterclockwise me-1"></i>Reset to default
+                                </button>
+                              )}
+                            </PromptAccordion>
                           );
                         })}
                     </div>
                   )}
 
-                  {/* Variables */}
-                  <div className="mb-3 border-top pt-2">
-                    <div className="d-flex align-items-center gap-2 mb-1">
-                      <i className="bi bi-braces" style={{ fontSize: 12 }}></i>
-                      <span className="fw-semibold small">Variables</span>
+                  {/* Variables — only show for prompt_template (creates vars) */}
+                  {editType === 'prompt_template' && (
+                    <div className="mb-3 border-top pt-2">
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <i className="bi bi-braces" style={{ fontSize: 12 }}></i>
+                        <span className="fw-semibold small">Variables</span>
+                      </div>
+                      <VariableSection
+                        editing={editing}
+                        variables={props.variables}
+                        systemVariables={props.systemVariables}
+                        sectionVariableKeys={props.sectionVariableKeys}
+                        onUpdate={props.onUpdate}
+                        onCreateVariable={props.onCreateVariable}
+                      />
                     </div>
-                    <VariableSection
-                      editing={editing}
-                      variables={props.variables}
-                      systemVariables={props.systemVariables}
-                      sectionVariableKeys={props.sectionVariableKeys}
-                      onUpdate={props.onUpdate}
-                      onCreateVariable={props.onCreateVariable}
-                    />
-                  </div>
+                  )}
 
-                  {/* Skills */}
-                  <div className="mb-3 border-top pt-2">
-                    <div className="d-flex align-items-center gap-2 mb-1">
-                      <i className="bi bi-stars" style={{ fontSize: 12 }}></i>
-                      <span className="fw-semibold small">Skills</span>
+                  {/* Skills — only show for knowledge_check (maps to skills) */}
+                  {editType === 'knowledge_check' && (
+                    <div className="mb-3 border-top pt-2">
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <i className="bi bi-stars" style={{ fontSize: 12 }}></i>
+                        <span className="fw-semibold small">Skills</span>
+                      </div>
+                      <SkillSection
+                        editing={editing}
+                        skillOptions={props.skillOptions}
+                        sectionSkillIds={props.sectionSkillIds}
+                      />
                     </div>
-                    <SkillSection
-                      editing={editing}
-                      skillOptions={props.skillOptions}
-                      sectionSkillIds={props.sectionSkillIds}
-                    />
-                  </div>
+                  )}
 
                   {/* Artifacts (implementation_task only) */}
                   {editType === 'implementation_task' && (
@@ -559,6 +606,22 @@ export default function ObjectConfigEngine(props: Props) {
                       </div>
                     </div>
                   )}
+
+                  {/* Advanced Settings (Weight) — collapsed by default */}
+                  <details className="mb-2 border-top pt-2">
+                    <summary className="d-flex align-items-center gap-1" style={{ fontSize: 10, cursor: 'pointer', color: 'var(--color-text-light, #718096)' }}>
+                      <i className="bi bi-gear" style={{ fontSize: 10 }}></i>
+                      <span className="fw-medium">Advanced Settings</span>
+                      {(editing.completion_weight ?? 1) !== 1 && (
+                        <span className="badge bg-warning text-dark ms-1" style={{ fontSize: 7 }}>Weight: {editing.completion_weight}</span>
+                      )}
+                    </summary>
+                    <div className="mt-2 ms-3">
+                      <label className="form-label small fw-medium mb-0">Completion Weight</label>
+                      <input className="form-control form-control-sm" type="number" step="0.1" style={{ maxWidth: 120 }} value={editing.completion_weight ?? 1} onChange={e => props.onUpdate({ completion_weight: parseFloat(e.target.value) })} />
+                      <span className="text-muted" style={{ fontSize: 9 }}>Default is 1.0. Adjust to change this section's contribution to overall completion.</span>
+                    </div>
+                  </details>
                 </div>
               )}
             </div>
