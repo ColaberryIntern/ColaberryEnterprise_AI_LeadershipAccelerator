@@ -67,8 +67,30 @@ function ReferralDashboardPage() {
   const [profileCohort, setProfileCohort] = useState(profile?.alumni_cohort || '');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileDismissed, setProfileDismissed] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState(profile?.alumni_email || '');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   const profileIncomplete = !profileDismissed && (!profile?.alumni_phone || !profile?.alumni_cohort);
+
+  const handleEmailSave = async () => {
+    if (!newEmail.trim() || !newEmail.includes('@')) {
+      setEmailError('Please enter a valid email address.');
+      return;
+    }
+    setEmailSaving(true);
+    setEmailError('');
+    try {
+      await alumniApi.patch('/api/referrals/profile', { alumni_email: newEmail.trim() });
+      setEditingEmail(false);
+      // Refresh page to pick up new email in auth context
+      window.location.reload();
+    } catch (err: any) {
+      setEmailError(err.response?.data?.error || 'Failed to update email.');
+    }
+    setEmailSaving(false);
+  };
 
   const handleProfileSave = async () => {
     setProfileSaving(true);
@@ -114,7 +136,38 @@ function ReferralDashboardPage() {
         <div className="container-fluid">
           <span className="navbar-brand text-white fw-bold mb-0">AI Champion Network</span>
           <div className="d-flex align-items-center gap-3">
-            <span className="text-white small">{profile?.alumni_name || profile?.alumni_email}</span>
+            {editingEmail ? (
+              <div className="d-flex align-items-center gap-2">
+                <input
+                  type="email"
+                  className="form-control form-control-sm"
+                  style={{ width: 220 }}
+                  value={newEmail}
+                  onChange={(e) => { setNewEmail(e.target.value); setEmailError(''); }}
+                  placeholder="New email address"
+                  autoFocus
+                />
+                <button className="btn btn-sm btn-light" onClick={handleEmailSave} disabled={emailSaving}>
+                  {emailSaving ? '...' : 'Save'}
+                </button>
+                <button className="btn btn-sm btn-outline-light" onClick={() => { setEditingEmail(false); setEmailError(''); }}>
+                  Cancel
+                </button>
+                {emailError && <span className="text-warning small">{emailError}</span>}
+              </div>
+            ) : (
+              <>
+                <span className="text-white small">{profile?.alumni_name || profile?.alumni_email}</span>
+                <button
+                  className="btn btn-sm btn-outline-light"
+                  style={{ fontSize: '0.7rem' }}
+                  onClick={() => { setNewEmail(profile?.alumni_email || ''); setEditingEmail(true); }}
+                  title="Change your email address"
+                >
+                  Change Email
+                </button>
+              </>
+            )}
             <button className="btn btn-sm btn-outline-light" onClick={handleLogout}>Log Out</button>
           </div>
         </div>
@@ -256,7 +309,7 @@ function ReferralDashboardPage() {
                             </td>
                             <td className="small">{commissionStatus}</td>
                             <td>
-                              {(r.referral_type === 'introduced' || r.referral_type === 'corporate_sponsor') && (
+                              {r.referral_type === 'corporate_sponsor' && (
                                 <button
                                   className="btn btn-sm btn-outline-primary"
                                   style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}
@@ -300,12 +353,12 @@ function ReferralDashboardPage() {
             },
             {
               title: 'Introduced Referral',
-              desc: 'We reach out to your contact mentioning your name and Colaberry experience. Download a presentation kit to share with them directly.',
+              desc: 'We reach out to your contact mentioning your Colaberry Corporate training. Click on their name to track progress.',
               type: 'introduced',
             },
             {
               title: 'Anonymous Referral',
-              desc: 'Submit a company lead anonymously. They enter our standard corporate outreach.',
+              desc: 'Submit a company lead anonymously. They enter our standard corporate outreach. Click on their name to track progress.',
               type: 'anonymous',
             },
           ].map((path) => (

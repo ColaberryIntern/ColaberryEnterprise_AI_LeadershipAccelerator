@@ -105,7 +105,7 @@ export async function getProfile(profileId: string) {
 
 export async function updateProfile(
   profileId: string,
-  data: { alumni_phone?: string; alumni_cohort?: string },
+  data: { alumni_phone?: string; alumni_cohort?: string; alumni_email?: string },
 ) {
   const profile = await AlumniReferralProfile.findByPk(profileId);
   if (!profile) throw Object.assign(new Error('Profile not found'), { statusCode: 404 });
@@ -113,6 +113,13 @@ export async function updateProfile(
   const updates: Record<string, unknown> = {};
   if (data.alumni_phone) updates.alumni_phone = data.alumni_phone;
   if (data.alumni_cohort) updates.alumni_cohort = data.alumni_cohort;
+  if (data.alumni_email) {
+    const existing = await AlumniReferralProfile.findOne({ where: { alumni_email: data.alumni_email } });
+    if (existing && existing.get('id') !== profileId) {
+      throw Object.assign(new Error('This email is already in use by another account'), { statusCode: 409 });
+    }
+    updates.alumni_email = data.alumni_email;
+  }
 
   if (Object.keys(updates).length > 0) {
     await profile.update(updates);

@@ -40,13 +40,7 @@ function AddReferralModal({ show, onClose, onSuccess }: AddReferralModalProps) {
     try {
       await alumniApi.post('/api/referrals/submit', form);
       onSuccess();
-      // For introduced / corporate_sponsor, show success screen with download
-      if (form.referral_type === 'introduced' || form.referral_type === 'corporate_sponsor') {
-        setSubmitted({ ...form });
-      } else {
-        setForm(initialForm);
-        onClose();
-      }
+      setSubmitted({ ...form });
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to submit referral. Please try again.');
     } finally {
@@ -69,9 +63,15 @@ function AddReferralModal({ show, onClose, onSuccess }: AddReferralModalProps) {
     onClose();
   };
 
-  // Success screen with download prompt
+  // Success screen — type-specific content
   if (submitted) {
-    const typeLabel = submitted.referral_type === 'corporate_sponsor' ? 'Corporate Sponsor' : 'Introduced Referral';
+    const typeLabels: Record<string, string> = {
+      corporate_sponsor: 'Corporate Sponsor',
+      introduced: 'Introduced Referral',
+      anonymous: 'Anonymous Referral',
+    };
+    const typeLabel = typeLabels[submitted.referral_type] || submitted.referral_type;
+
     return (
       <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
         <div className="modal-dialog modal-dialog-centered">
@@ -88,22 +88,50 @@ function AddReferralModal({ show, onClose, onSuccess }: AddReferralModalProps) {
               <p className="text-muted small mb-4">
                 {typeLabel} referral submitted successfully.
               </p>
-              <div className="card border-0 shadow-sm mx-auto" style={{ maxWidth: 380, backgroundColor: '#f7fafc' }}>
-                <div className="card-body py-3">
-                  <p className="small fw-medium mb-2" style={{ color: 'var(--color-primary)' }}>
-                    Download your presentation kit
-                  </p>
-                  <p className="text-muted small mb-3">
-                    A personalized one-pager you can share with {submitted.contact_name} to introduce the program.
-                  </p>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={handleDownloadKit}
-                  >
-                    Download Kit
-                  </button>
+
+              {submitted.referral_type === 'corporate_sponsor' && (
+                <div className="card border-0 shadow-sm mx-auto" style={{ maxWidth: 380, backgroundColor: '#f7fafc' }}>
+                  <div className="card-body py-3">
+                    <p className="small fw-medium mb-2" style={{ color: 'var(--color-primary)' }}>
+                      Download your presentation kit
+                    </p>
+                    <p className="text-muted small mb-3">
+                      A personalized one-pager you can share with {submitted.contact_name} to introduce the program.
+                    </p>
+                    <button className="btn btn-sm btn-primary" onClick={handleDownloadKit}>
+                      Download Kit
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {submitted.referral_type === 'introduced' && (
+                <div className="card border-0 shadow-sm mx-auto" style={{ maxWidth: 380, backgroundColor: '#f7fafc' }}>
+                  <div className="card-body py-3">
+                    <p className="small fw-medium mb-2" style={{ color: 'var(--color-primary)' }}>
+                      What happens next
+                    </p>
+                    <p className="text-muted small mb-0">
+                      We&rsquo;ll reach out to {submitted.contact_name} mentioning your Colaberry Corporate training.
+                      Click on their name in your referrals table to track every step.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {submitted.referral_type === 'anonymous' && (
+                <div className="card border-0 shadow-sm mx-auto" style={{ maxWidth: 380, backgroundColor: '#f7fafc' }}>
+                  <div className="card-body py-3">
+                    <p className="small fw-medium mb-2" style={{ color: 'var(--color-primary)' }}>
+                      What happens next
+                    </p>
+                    <p className="text-muted small mb-0">
+                      This lead has entered our standard corporate outreach pipeline.
+                      Click on their name in your referrals table to track progress.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="modal-footer bg-white border-top">
               <button className="btn btn-sm btn-outline-secondary" onClick={handleClose}>

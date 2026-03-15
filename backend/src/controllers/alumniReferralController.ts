@@ -38,8 +38,8 @@ export async function handleGetProfile(req: Request, res: Response) {
 export async function handleUpdateProfile(req: Request, res: Response) {
   try {
     const profileId = req.alumni!.sub;
-    const { alumni_phone, alumni_cohort } = req.body;
-    const updated = await updateProfile(profileId, { alumni_phone, alumni_cohort });
+    const { alumni_phone, alumni_cohort, alumni_email } = req.body;
+    const updated = await updateProfile(profileId, { alumni_phone, alumni_cohort, alumni_email });
     res.json(updated);
   } catch (err: any) {
     const status = err.statusCode || 500;
