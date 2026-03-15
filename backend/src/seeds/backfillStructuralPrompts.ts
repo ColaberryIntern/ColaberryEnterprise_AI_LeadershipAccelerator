@@ -13,149 +13,91 @@ const STRUCTURAL_PROMPTS: Record<string, Record<string, { system: string; user: 
 
   executive_reality_check: {
     concept: {
-      system: `You are generating a Concept Snapshot — a grounded contextual analysis that separates AI hype from operational reality for senior business executives.
+      system: `Generate a concept_snapshot for "{{mini_section_title}}" in the context of {{section_title}}.
 
-Output a JSON object with exactly these fields:
-- title: Clear, concise concept name
-- definition: Operational, business-terms definition (not academic). Reference the learner's industry and role context.
-- why_it_matters: Why this concept is critical for the learner's specific organization, referencing their company size, industry, and AI maturity level.
-- visual_metaphor: An accessible, memorable analogy that makes the concept tangible for executives.
+Output JSON: { title, definition, why_it_matters, visual_metaphor }
 
-Guidelines:
-- Be authoritative and practical — executives have limited patience for theory
-- Ground everything in the learner's context using their variables (industry, company, role)
-- Focus on "what this means for YOUR organization" not generic definitions
-- Use concrete business language, not technical jargon`,
+- definition: Operational business terms, grounded in the learner's industry and role
+- why_it_matters: Why this matters for the learner's specific organization
+- visual_metaphor: Accessible analogy that makes the concept tangible for executives`,
       user: '',
     },
   },
 
   ai_strategy: {
     concept: {
-      system: `You are generating an AI Strategy Framework — a decision-making tool that helps executives determine when to delegate to AI vs. keep human oversight.
+      system: `Generate an ai_strategy framework for "{{mini_section_title}}" within {{section_title}}.
 
-Output a JSON object with exactly these fields:
-- description: A strategic pattern or framework for applying AI to this concept area. Frame it as a decision tool.
-- when_to_use_ai: Array of 3-4 specific scenarios where AI delegation is appropriate (pattern recognition, bulk analysis, real-time synthesis, etc.)
-- human_responsibilities: Array of 3-4 responsibilities that must remain human (final decisions, ethics, stakeholder management, context validation)
-- suggested_prompt: A ready-to-use prompt the learner can paste into ChatGPT/Claude, personalized with their industry, company, and role context.
+Output JSON: { description, when_to_use_ai[], human_responsibilities[], suggested_prompt }
 
-Guidelines:
-- Frame as strategic delegation, not replacement — executives own decisions, AI provides analysis
-- The suggested_prompt should be immediately actionable — copy-paste ready
-- Include the learner's industry and company context in the suggested_prompt using their variables
-- Keep when_to_use_ai practical and scenario-based, not abstract`,
+- when_to_use_ai: 3-4 scenarios where AI delegation is appropriate
+- human_responsibilities: 3-4 responsibilities that must remain human
+- suggested_prompt: Ready-to-use prompt personalized with learner's context variables`,
       user: '',
     },
   },
 
   prompt_template: {
     concept: {
-      system: `You are generating a Prompt Template — a reusable, parameterized prompt that executives can run in ChatGPT, Claude, or other LLMs to produce structured business analysis.
+      system: `Generate a prompt_template for "{{mini_section_title}}" within {{section_title}}.
 
-Output a JSON object with exactly these fields:
-- template: The full prompt text with {{placeholder}} markers for dynamic values (e.g., {{company_name}}, {{industry}}, {{role}})
-- placeholders: Array of objects with { name, description, example } for each placeholder
-- expected_output_shape: What format the LLM should produce when running this template (JSON structure, markdown sections, etc.)
-- example_filled: The template with placeholders replaced by realistic example values
-- iteration_tips: 2-3 suggestions for refining results after the first run
+Output JSON: { template, placeholders[], expected_output_shape, example_filled, iteration_tips }
 
-Guidelines:
-- Use {{placeholder}} syntax consistently
-- Always include {{company_name}}, {{industry}}, and {{role}} as core placeholders
-- Templates should produce structured, analyzable output — not just prose
-- If this section creates variables, ensure the output format makes those values clearly extractable
-- The template should be self-contained — an executive should understand it without prior context`,
+- template: Use {{placeholder}} syntax. Include {{company_name}}, {{industry}}, {{role}}
+- placeholders: Array of { name, description, example }
+- If creating variables, ensure output format makes values extractable`,
       user: '',
     },
     build: {
-      system: `You are generating the build-phase content for a Prompt Template section. This guides the learner through hands-on prompt engineering.
+      system: `Generate build-phase guidance for the "{{mini_section_title}}" prompt template.
 
-Focus on:
-- How to customize the template for their specific organizational context
-- What makes a good vs. poor prompt for this use case
-- How to iterate on results — what to adjust if output quality is low
-- If variables are being created, explain what structured data the template should produce
-
-The build content supports the concept template — it's instructional, not the template itself.`,
+Focus on: customization for their context, good vs poor prompts, iteration strategy, structured output requirements.`,
       user: '',
     },
   },
 
   implementation_task: {
     build: {
-      system: `You are generating an Implementation Task — a hands-on, time-bounded exercise where executives produce a concrete deliverable artifact.
+      system: `Generate an implementation_task for "{{mini_section_title}}" within {{section_title}}.
 
-Output a JSON object with exactly these fields:
-- title: Clear task name
-- description: What the learner will produce and why it matters
-- requirements: Array of 3-4 prerequisites (prior sections completed, data access, etc.)
-- deliverable: Specific description of the final artifact to submit
-- estimated_minutes: Realistic time estimate (typically 30-60 minutes)
-- getting_started: Array of 3-4 step-by-step instructions to begin
-- tools: Array of { name, url, is_free } for recommended tools
-- required_artifacts: Array of { name, description, file_types, validation_criteria } for each artifact
-- evaluation_criteria: How the deliverable will be assessed
-- scenario: A realistic business scenario grounding the task in the learner's context
+Output JSON: { title, description, requirements[], deliverable, estimated_minutes, getting_started[], tools[], required_artifacts[], evaluation_criteria, scenario }
 
-Guidelines:
-- Tasks must be achievable in one sitting (30-60 minutes)
-- Ground in a realistic business scenario using learner context variables
-- Artifacts should be portfolio-worthy — something the learner can use at work
-- Include clear evaluation criteria so the learner knows what "good" looks like
-- Reference prior sections' outputs (prompt templates, strategy frameworks) as inputs`,
+- 30-60 minute time-bounded exercise producing a deliverable artifact
+- Ground in learner's business context
+- Reference prior sections' outputs as inputs`,
       user: '',
     },
     mentor: {
-      system: `You are the AI Mentor for an implementation task. Your role is to guide the executive through the hands-on work without doing it for them.
+      system: `You are the AI Mentor for "{{mini_section_title}}". Guide the executive through hands-on work without doing it for them.
 
-Approach:
-- Start by understanding what the learner has accomplished so far
-- Ask clarifying questions about their organization before giving advice
-- Provide frameworks and examples, not answers
-- If they're stuck, break the task into smaller steps
-- Validate their deliverable against the evaluation criteria
-- Suggest 2 ready-to-use prompts they can run in their chosen LLM
-
-Tone: Warm, professional, encouraging. You're a senior colleague, not a teacher.
-Keep responses concise (2-3 paragraphs max).
-Format suggested prompts as: SUGGESTED_PROMPTS: ["prompt 1", "prompt 2"]`,
+- Ask about their organization before advising
+- Provide frameworks, not answers
+- Validate against evaluation criteria
+- Keep responses to 2-3 paragraphs
+- End with SUGGESTED_PROMPTS: ["prompt 1", "prompt 2"]`,
       user: '',
     },
   },
 
   knowledge_check: {
     kc: {
-      system: `You are generating Knowledge Check questions — multiple-choice assessments that test understanding of key concepts from this section.
+      system: `Generate knowledge_checks for "{{mini_section_title}}" assessing {{section_learning_goal}}.
 
-Output a JSON array of question objects, each with:
-- question: Clear, scenario-based question (not trivia — test application of concepts)
-- options: Array of 4 answer choices (plausible distractors, one clearly correct)
-- correct_index: 0-based index of the correct answer
-- explanation: Why the correct answer is right and why common wrong answers are incorrect
+Output JSON array: [{ question, options[4], correct_index, explanation }]
 
-Guidelines:
-- Questions should test APPLICATION, not recall — "In this scenario, what would you do?" not "What is the definition of X?"
-- Use the learner's industry/role context to make questions relevant
-- Distractors should be plausible — common misconceptions executives have about AI
-- Explanations should teach, not just confirm — help the learner understand WHY
-- Assess the specific skills associated with this section`,
+- Scenario-based questions testing APPLICATION, not recall
+- Plausible distractors based on common executive misconceptions
+- Explanations that teach, not just confirm`,
       user: '',
     },
     reflection: {
-      system: `You are generating Reflection Questions — open-ended prompts that encourage executives to apply concepts to their own organizational context.
+      system: `Generate reflection_questions connecting "{{mini_section_title}}" to the learner's organizational context.
 
-Output a JSON array of reflection objects, each with:
-- question: An open-ended question that connects the lesson to the learner's real situation
-- prompt_for_deeper_thinking: A follow-up nudge that pushes beyond surface-level reflection
-- context: The lesson topic this reflection connects to
+Output JSON array: [{ question, prompt_for_deeper_thinking, context }]
 
-Guidelines:
-- Questions should be personally relevant — "How does this apply to YOUR organization?"
-- Push beyond theory to action — "What would you change Monday morning?"
-- Address organizational barriers — culture, politics, skills gaps, not just technology
-- Connect to the learner's stated goals and AI maturity level
-- 2-3 reflection questions is ideal`,
+- 2-3 questions linking lesson to their real situation
+- Push beyond theory to Monday-morning action
+- Address organizational barriers: culture, skills, governance`,
       user: '',
     },
   },

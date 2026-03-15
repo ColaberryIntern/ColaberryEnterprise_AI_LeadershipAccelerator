@@ -461,6 +461,16 @@ export default function ObjectConfigEngine(props: Props) {
                 </div>
               </div>
 
+              {/* Available context variables */}
+              <div className="mb-3 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 9 }}>
+                <span className="text-muted fw-medium me-1">Variables:</span>
+                {['section_title', 'section_description', 'section_learning_goal', 'mini_section_title', 'mini_section_description', 'mini_section_type'].map(v => (
+                  <span key={v} className="badge bg-light text-dark border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default' }} title={`Resolved at runtime from ${v.startsWith('section_') ? 'section' : 'mini-section'} fields`}>
+                    {`{{${v}}}`}
+                  </span>
+                ))}
+              </div>
+
               {applicablePairs.length === 0 && (
                 <div className="text-center text-muted py-4" style={{ fontSize: 11 }}>
                   <i className="bi bi-slash-circle" style={{ fontSize: 24 }}></i>
@@ -626,6 +636,15 @@ export default function ObjectConfigEngine(props: Props) {
                         <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
                         <span className="fw-semibold small">Section-Specific Prompts</span>
                         <span className="text-muted" style={{ fontSize: 10 }}>Topic guidance unique to this mini-section</span>
+                      </div>
+                      {/* Available context variables */}
+                      <div className="mb-2 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 9 }}>
+                        <span className="text-muted fw-medium me-1">Variables:</span>
+                        {['section_title', 'section_description', 'section_learning_goal', 'mini_section_title', 'mini_section_description', 'mini_section_type'].map(v => (
+                          <span key={v} className="badge bg-light text-dark border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default' }} title={`Resolved at runtime from ${v.startsWith('section_') ? 'section' : 'mini-section'} fields`}>
+                            {`{{${v}}}`}
+                          </span>
+                        ))}
                       </div>
                       {typePromptPairs
                         .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
