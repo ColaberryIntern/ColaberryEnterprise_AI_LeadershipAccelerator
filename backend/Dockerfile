@@ -6,6 +6,7 @@ COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
 RUN npm ci
 COPY backend/ ./backend/
+COPY frontend/src/pages/ ./frontend/src/pages/
 RUN npm run build:backend
 
 FROM node:20-alpine
@@ -13,6 +14,7 @@ WORKDIR /app
 COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend/package.json ./
+COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
 RUN mkdir -p /app/uploads/strategy-prep
 ENV NODE_ENV=production
 EXPOSE 3001

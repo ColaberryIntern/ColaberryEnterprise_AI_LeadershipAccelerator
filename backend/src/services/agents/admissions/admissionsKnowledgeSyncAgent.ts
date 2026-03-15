@@ -1,10 +1,11 @@
 // ─── Admissions Knowledge Sync Agent ──────────────────────────────────────────
-// Crawls all public website pages, extracts factual content via AI, and
+// Reads frontend page source files, extracts factual content via AI, and
 // auto-updates Maya's knowledge base so it stays in sync with the site.
 // Schedule: daily at 3 AM CT.
 
+import fs from 'fs';
+import path from 'path';
 import { chatCompletion } from '../../../intelligence/assistant/openaiHelper';
-import { scanPage } from '../../websiteScanner';
 import AdmissionsKnowledgeEntry from '../../../models/AdmissionsKnowledgeEntry';
 import type { AdmissionsKnowledgeCategory } from '../../../models/AdmissionsKnowledgeEntry';
 import type { AgentExecutionResult, AgentAction } from '../types';
@@ -14,18 +15,18 @@ const VALID_CATEGORIES: AdmissionsKnowledgeCategory[] = [
   'sponsorship', 'outcomes', 'logistics', 'champion',
 ];
 
-// Routes to crawl — all public-facing pages that contain program information
-const SYNC_ROUTES = [
-  '/',
-  '/program',
-  '/pricing',
-  '/sponsorship',
-  '/advisory',
-  '/case-studies',
-  '/enroll',
-  '/contact',
-  '/strategy-call-prep',
-  '/alumni-ai-champion',
+// Map routes to their source page files (relative to frontend/src/pages/)
+const PAGE_SOURCES: { route: string; file: string }[] = [
+  { route: '/', file: 'HomePage.tsx' },
+  { route: '/program', file: 'ProgramPage.tsx' },
+  { route: '/pricing', file: 'PricingPage.tsx' },
+  { route: '/sponsorship', file: 'SponsorshipPage.tsx' },
+  { route: '/advisory', file: 'AdvisoryPage.tsx' },
+  { route: '/case-studies', file: 'CaseStudiesPage.tsx' },
+  { route: '/enroll', file: 'EnrollPage.tsx' },
+  { route: '/contact', file: 'ContactPage.tsx' },
+  { route: '/strategy-call-prep', file: 'StrategyCallPrepPage.tsx' },
+  { route: '/alumni-ai-champion', file: 'AlumniChampionPage.tsx' },
 ];
 
 interface ExtractedEntry {
@@ -37,39 +38,88 @@ interface ExtractedEntry {
 }
 
 /**
- * Crawl a page and return its text content (headings + body text).
+ * Resolve the frontend pages directory.
+ * In Docker the source is at /app/frontend/src/pages (copied during build).
+ * Locally it's relative to the project root.
  */
-async function crawlPageText(route: string): Promise<string | null> {
+function getPagesDir(): string {
+  // Docker build copies frontend/ into /app/frontend/
+  const dockerPath = '/app/frontend/src/pages';
+  if (fs.existsSync(dockerPath)) return dockerPath;
+
+  // Local development — walk up from backend dist
+  const localPath = path.resolve(__dirname, '../../../../frontend/src/pages');
+  if (fs.existsSync(localPath)) return localPath;
+
+  // Fallback — try CWD-relative
+  const cwdPath = path.resolve(process.cwd(), 'frontend/src/pages');
+  return cwdPath;
+}
+
+/**
+ * Read a page source file and return its content.
+ */
+function readPageSource(file: string): string | null {
+  const pagesDir = getPagesDir();
+  const filePath = path.join(pagesDir, file);
   try {
-    const scan = await scanPage(route);
-    if (scan.error) {
-      console.warn(`[KnowledgeSync] Scan error for ${route}: ${scan.error}`);
-      return null;
-    }
-
-    const parts: string[] = [];
-
-    // Add headings with hierarchy
-    for (const h of scan.headings) {
-      parts.push(`${'#'.repeat(h.level)} ${h.text}`);
-    }
-
-    // Add text content
-    const textContent = scan.textNodes
-      .map((t) => t.text.trim())
-      .filter((t) => t.length > 10) // skip tiny fragments
-      .join('\n');
-
-    if (textContent) parts.push(textContent);
-
-    const combined = parts.join('\n').trim();
-    if (combined.length < 50) return null; // too little content
-
-    return combined;
-  } catch (err: any) {
-    console.warn(`[KnowledgeSync] Failed to crawl ${route}: ${err.message}`);
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    console.warn(`[KnowledgeSync] Cannot read ${filePath}`);
     return null;
   }
+}
+
+/**
+ * Strip JSX/HTML tags and extract visible text content from a TSX source file.
+ * Keeps string literals, template literals, and JSX text content.
+ */
+function extractVisibleText(source: string): string {
+  // Remove imports and type definitions
+  const lines = source.split('\n').filter((line) => {
+    const trimmed = line.trim();
+    return !trimmed.startsWith('import ') &&
+           !trimmed.startsWith('export type') &&
+           !trimmed.startsWith('export interface') &&
+           !trimmed.startsWith('//');
+  });
+
+  const code = lines.join('\n');
+
+  // Extract string literals between quotes (JSX text, props, etc.)
+  const strings: string[] = [];
+
+  // Match JSX text content (between > and <)
+  const jsxText = code.match(/>[^<>{]+</g);
+  if (jsxText) {
+    for (const match of jsxText) {
+      const text = match.slice(1).trim();
+      if (text.length > 3 && !/^[{}\s()]+$/.test(text)) {
+        strings.push(text);
+      }
+    }
+  }
+
+  // Match string literals in single/double quotes (for arrays, objects, etc.)
+  const quotedStrings = code.match(/'([^']{5,})'/g);
+  if (quotedStrings) {
+    for (const match of quotedStrings) {
+      const text = match.slice(1, -1);
+      if (!text.startsWith('/') && !text.includes('className') && !text.includes('style')) {
+        strings.push(text);
+      }
+    }
+  }
+
+  // Match template literal content
+  const templateStrings = code.match(/`([^`]{5,})`/g);
+  if (templateStrings) {
+    for (const match of templateStrings) {
+      strings.push(match.slice(1, -1).replace(/\$\{[^}]+\}/g, ''));
+    }
+  }
+
+  return strings.join('\n');
 }
 
 /**
@@ -79,9 +129,9 @@ async function extractEntriesFromPage(
   route: string,
   pageText: string,
 ): Promise<ExtractedEntry[]> {
-  const system = `You are extracting factual program information from a webpage of the Colaberry Enterprise AI Leadership Accelerator website.
+  const system = `You are extracting factual program information from the source code of a webpage of the Colaberry Enterprise AI Leadership Accelerator website.
 
-Given the page text, extract all distinct factual claims as knowledge entries.
+Given the extracted text from the ${route} page, identify all distinct factual claims as knowledge entries.
 
 Return a JSON object with key "entries" containing an array: { "entries": [{ "title": string, "content": string, "keywords": string[], "category": string, "priority": number }] }
 
@@ -91,12 +141,13 @@ Rules:
 - priority: 10 = critical facts (dates, pricing, duration), 8 = important (curriculum, outcomes, audience), 6 = supplementary
 - content should be concise factual statements (1-3 sentences max)
 - keywords should include the most searchable terms a visitor would use
-- Do NOT include navigation text, button labels, boilerplate, or CSS/styling text
+- Do NOT include navigation text, button labels, boilerplate, or styling text
 - Do NOT include vague/generic statements — only specific, factual program details
 - Titles should be descriptive and unique (e.g., "Program Duration" not "Duration")
-- If the page has very little factual content, return an empty entries array`;
+- If the page has very little factual content, return an empty entries array
+- Merge related facts into single entries (don't create one entry per sentence)`;
 
-  const user = `Page route: ${route}\n\nPage text:\n${pageText.slice(0, 8000)}`; // limit to avoid token overflow
+  const user = `Page route: ${route}\n\nExtracted text:\n${pageText.slice(0, 8000)}`;
 
   const result = await chatCompletion(system, user, {
     json: true,
@@ -134,7 +185,6 @@ function titleSimilarity(a: string, b: string): number {
   const nb = normalize(b);
   if (na === nb) return 1;
 
-  // Word overlap ratio
   const wordsA = new Set(na.split(/\s+/));
   const wordsB = new Set(nb.split(/\s+/));
   const intersection = [...wordsA].filter((w) => wordsB.has(w)).length;
@@ -155,19 +205,24 @@ export async function runAdmissionsKnowledgeSyncAgent(
 
   console.log('[KnowledgeSync] Starting knowledge base sync...');
 
-  // Step 1: Crawl all pages and extract text
+  // Step 1: Read all page source files and extract text
   const pageTexts: { route: string; text: string }[] = [];
-  for (const route of SYNC_ROUTES) {
-    const text = await crawlPageText(route);
-    if (text) {
+  for (const { route, file } of PAGE_SOURCES) {
+    const source = readPageSource(file);
+    if (!source) {
+      errors.push(`Cannot read source for ${route} (${file})`);
+      continue;
+    }
+    const text = extractVisibleText(source);
+    if (text.length > 50) {
       pageTexts.push({ route, text });
     }
   }
 
-  console.log(`[KnowledgeSync] Crawled ${pageTexts.length}/${SYNC_ROUTES.length} pages`);
+  console.log(`[KnowledgeSync] Read ${pageTexts.length}/${PAGE_SOURCES.length} page sources`);
 
   if (pageTexts.length === 0) {
-    errors.push('No pages could be crawled — site may be down');
+    errors.push('No page sources could be read');
     return {
       agent_name: 'AdmissionsKnowledgeSyncAgent',
       campaigns_processed: 0,
@@ -184,12 +239,13 @@ export async function runAdmissionsKnowledgeSyncAgent(
     try {
       const entries = await extractEntriesFromPage(route, text);
       allExtracted.push(...entries);
+      console.log(`[KnowledgeSync] Extracted ${entries.length} entries from ${route}`);
     } catch (err: any) {
       errors.push(`AI extraction failed for ${route}: ${err.message}`);
     }
   }
 
-  console.log(`[KnowledgeSync] Extracted ${allExtracted.length} entries from ${pageTexts.length} pages`);
+  console.log(`[KnowledgeSync] Total extracted: ${allExtracted.length} entries from ${pageTexts.length} pages`);
 
   // Deduplicate extracted entries by title
   const deduped = new Map<string, ExtractedEntry>();
@@ -287,14 +343,13 @@ export async function runAdmissionsKnowledgeSyncAgent(
   for (const existingEntry of existing) {
     const key = existingEntry.title.toLowerCase().trim();
     if (!matchedExistingTitles.has(key)) {
-      // Check if any extracted entry is similar
       const hasSimilar = extracted.some((e) => titleSimilarity(e.title, existingEntry.title) > 0.6);
       if (!hasSimilar) {
         flagged++;
         actions.push({
           campaign_id: '',
           action: 'knowledge_entry_flagged_stale',
-          reason: `Entry "${existingEntry.title}" not found on any crawled page — may be stale`,
+          reason: `Entry "${existingEntry.title}" not found on any page — may be stale`,
           confidence: 0.7,
           before_state: { title: existingEntry.title, category: existingEntry.category },
           after_state: null,
