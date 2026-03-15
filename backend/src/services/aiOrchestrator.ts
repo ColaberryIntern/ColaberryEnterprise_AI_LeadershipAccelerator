@@ -58,6 +58,7 @@ import { runRuntimeThreatMonitorAgent } from './agents/security/runtimeThreatMon
 import { runAccessControlGuardianAgent } from './agents/security/accessControlGuardianAgent';
 import { runAiSafetyMonitorAgent } from './agents/security/aiSafetyMonitorAgent';
 import { runAgentBehaviorMonitorAgent } from './agents/security/agentBehaviorMonitorAgent';
+import { runAdmissionsKnowledgeSyncAgent } from './agents/admissions/admissionsKnowledgeSyncAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -610,4 +611,8 @@ export async function runAiSafetyMonitor(): Promise<AgentExecutionResult | null>
 
 export async function runAgentBehaviorMonitor(): Promise<AgentExecutionResult | null> {
   return runAgent('AgentBehaviorMonitorAgent', runAgentBehaviorMonitorAgent);
+}
+
+export async function runAdmissionsKnowledgeSync(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsKnowledgeSyncAgent', runAdmissionsKnowledgeSyncAgent);
 }

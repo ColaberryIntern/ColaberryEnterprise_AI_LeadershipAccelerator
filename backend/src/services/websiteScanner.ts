@@ -15,6 +15,7 @@ const PUBLIC_ROUTES = [
   '/executive-overview/thank-you',
   '/strategy-call-prep',
   '/executive-roi-calculator',
+  '/alumni-ai-champion',
 ];
 
 /* ── Interfaces ─────────────────────────────────────────────────── */

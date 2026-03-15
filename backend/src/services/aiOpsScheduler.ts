@@ -58,6 +58,7 @@ import {
   runAccessControlGuardian,
   runAiSafetyMonitor,
   runAgentBehaviorMonitor,
+  runAdmissionsKnowledgeSync,
 } from './aiOrchestrator';
 import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
@@ -146,6 +147,9 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'AccessControlGuardianAgent', hardcodedSchedule: '0 5 * * *', runner: runAccessControlGuardian, label: 'Access control guardian' },
   { agentName: 'AISafetyMonitorAgent', hardcodedSchedule: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *', runner: runAiSafetyMonitor, label: 'AI safety monitor' },
   { agentName: 'AgentBehaviorMonitorAgent', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAgentBehaviorMonitor, label: 'Agent behavior monitor' },
+
+  // Admissions knowledge
+  { agentName: 'AdmissionsKnowledgeSyncAgent', hardcodedSchedule: '0 3 * * *', runner: runAdmissionsKnowledgeSync, label: 'Admissions knowledge sync' },
 ];
 
 // Executive briefings use dynamic imports, registered separately

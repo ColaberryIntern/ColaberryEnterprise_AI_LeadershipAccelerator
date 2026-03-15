@@ -1768,6 +1768,16 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'security_ops',
     description: 'Monitors agent fleet for anomalies: stuck agents (running >15min), error spikes (>5/hr), and execution duration outliers (>3x average). Every 10 minutes.',
   },
+  {
+    agent_name: 'AdmissionsKnowledgeSyncAgent',
+    agent_type: 'monitoring',
+    module: 'admissionsKnowledgeSyncAgent',
+    source_file: 'backend/src/services/agents/admissions/admissionsKnowledgeSyncAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 3 * * *',
+    category: 'admissions',
+    description: 'Crawls public website pages daily and auto-updates Maya knowledge base entries when content changes. Detects stale entries and flags them for review.',
+  },
 ];
 
 /**

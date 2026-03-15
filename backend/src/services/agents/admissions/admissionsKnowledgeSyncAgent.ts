@@ -1,0 +1,319 @@
+// ─── Admissions Knowledge Sync Agent ──────────────────────────────────────────
+// Crawls all public website pages, extracts factual content via AI, and
+// auto-updates Maya's knowledge base so it stays in sync with the site.
+// Schedule: daily at 3 AM CT.
+
+import { chatCompletion } from '../../../intelligence/assistant/openaiHelper';
+import { scanPage } from '../../websiteScanner';
+import AdmissionsKnowledgeEntry from '../../../models/AdmissionsKnowledgeEntry';
+import type { AdmissionsKnowledgeCategory } from '../../../models/AdmissionsKnowledgeEntry';
+import type { AgentExecutionResult, AgentAction } from '../types';
+
+const VALID_CATEGORIES: AdmissionsKnowledgeCategory[] = [
+  'program', 'curriculum', 'pricing', 'faq', 'enterprise',
+  'sponsorship', 'outcomes', 'logistics', 'champion',
+];
+
+// Routes to crawl — all public-facing pages that contain program information
+const SYNC_ROUTES = [
+  '/',
+  '/program',
+  '/pricing',
+  '/sponsorship',
+  '/advisory',
+  '/case-studies',
+  '/enroll',
+  '/contact',
+  '/strategy-call-prep',
+  '/alumni-ai-champion',
+];
+
+interface ExtractedEntry {
+  title: string;
+  content: string;
+  keywords: string[];
+  category: AdmissionsKnowledgeCategory;
+  priority: number;
+}
+
+/**
+ * Crawl a page and return its text content (headings + body text).
+ */
+async function crawlPageText(route: string): Promise<string | null> {
+  try {
+    const scan = await scanPage(route);
+    if (scan.error) {
+      console.warn(`[KnowledgeSync] Scan error for ${route}: ${scan.error}`);
+      return null;
+    }
+
+    const parts: string[] = [];
+
+    // Add headings with hierarchy
+    for (const h of scan.headings) {
+      parts.push(`${'#'.repeat(h.level)} ${h.text}`);
+    }
+
+    // Add text content
+    const textContent = scan.textNodes
+      .map((t) => t.text.trim())
+      .filter((t) => t.length > 10) // skip tiny fragments
+      .join('\n');
+
+    if (textContent) parts.push(textContent);
+
+    const combined = parts.join('\n').trim();
+    if (combined.length < 50) return null; // too little content
+
+    return combined;
+  } catch (err: any) {
+    console.warn(`[KnowledgeSync] Failed to crawl ${route}: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Use AI to extract knowledge entries from page text.
+ */
+async function extractEntriesFromPage(
+  route: string,
+  pageText: string,
+): Promise<ExtractedEntry[]> {
+  const system = `You are extracting factual program information from a webpage of the Colaberry Enterprise AI Leadership Accelerator website.
+
+Given the page text, extract all distinct factual claims as knowledge entries.
+
+Return a JSON object with key "entries" containing an array: { "entries": [{ "title": string, "content": string, "keywords": string[], "category": string, "priority": number }] }
+
+Rules:
+- category MUST be one of: program, curriculum, pricing, faq, enterprise, sponsorship, outcomes, logistics, champion
+- Use "champion" category ONLY for referral/alumni content
+- priority: 10 = critical facts (dates, pricing, duration), 8 = important (curriculum, outcomes, audience), 6 = supplementary
+- content should be concise factual statements (1-3 sentences max)
+- keywords should include the most searchable terms a visitor would use
+- Do NOT include navigation text, button labels, boilerplate, or CSS/styling text
+- Do NOT include vague/generic statements — only specific, factual program details
+- Titles should be descriptive and unique (e.g., "Program Duration" not "Duration")
+- If the page has very little factual content, return an empty entries array`;
+
+  const user = `Page route: ${route}\n\nPage text:\n${pageText.slice(0, 8000)}`; // limit to avoid token overflow
+
+  const result = await chatCompletion(system, user, {
+    json: true,
+    maxTokens: 2048,
+    temperature: 0.1,
+  });
+
+  if (!result) return [];
+
+  try {
+    const parsed = JSON.parse(result);
+    const entries: ExtractedEntry[] = (parsed.entries || [])
+      .filter((e: any) => e.title && e.content && e.category)
+      .map((e: any) => ({
+        title: String(e.title).slice(0, 200),
+        content: String(e.content).slice(0, 2000),
+        keywords: Array.isArray(e.keywords) ? e.keywords.map(String).slice(0, 10) : [],
+        category: VALID_CATEGORIES.includes(e.category) ? e.category : 'faq',
+        priority: Math.min(10, Math.max(1, Number(e.priority) || 6)),
+      }));
+
+    return entries;
+  } catch {
+    console.warn(`[KnowledgeSync] Failed to parse AI output for ${route}`);
+    return [];
+  }
+}
+
+/**
+ * Simple title similarity check (lowercase normalized).
+ */
+function titleSimilarity(a: string, b: string): number {
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (na === nb) return 1;
+
+  // Word overlap ratio
+  const wordsA = new Set(na.split(/\s+/));
+  const wordsB = new Set(nb.split(/\s+/));
+  const intersection = [...wordsA].filter((w) => wordsB.has(w)).length;
+  const union = new Set([...wordsA, ...wordsB]).size;
+  return union > 0 ? intersection / union : 0;
+}
+
+/**
+ * Main agent executor.
+ */
+export async function runAdmissionsKnowledgeSyncAgent(
+  _agentId: string,
+  _config: Record<string, any>,
+): Promise<AgentExecutionResult> {
+  const startTime = Date.now();
+  const actions: AgentAction[] = [];
+  const errors: string[] = [];
+
+  console.log('[KnowledgeSync] Starting knowledge base sync...');
+
+  // Step 1: Crawl all pages and extract text
+  const pageTexts: { route: string; text: string }[] = [];
+  for (const route of SYNC_ROUTES) {
+    const text = await crawlPageText(route);
+    if (text) {
+      pageTexts.push({ route, text });
+    }
+  }
+
+  console.log(`[KnowledgeSync] Crawled ${pageTexts.length}/${SYNC_ROUTES.length} pages`);
+
+  if (pageTexts.length === 0) {
+    errors.push('No pages could be crawled — site may be down');
+    return {
+      agent_name: 'AdmissionsKnowledgeSyncAgent',
+      campaigns_processed: 0,
+      actions_taken: actions,
+      errors,
+      duration_ms: Date.now() - startTime,
+      entities_processed: 0,
+    };
+  }
+
+  // Step 2: Extract entries from each page via AI
+  const allExtracted: ExtractedEntry[] = [];
+  for (const { route, text } of pageTexts) {
+    try {
+      const entries = await extractEntriesFromPage(route, text);
+      allExtracted.push(...entries);
+    } catch (err: any) {
+      errors.push(`AI extraction failed for ${route}: ${err.message}`);
+    }
+  }
+
+  console.log(`[KnowledgeSync] Extracted ${allExtracted.length} entries from ${pageTexts.length} pages`);
+
+  // Deduplicate extracted entries by title
+  const deduped = new Map<string, ExtractedEntry>();
+  for (const entry of allExtracted) {
+    const key = entry.title.toLowerCase().trim();
+    if (!deduped.has(key) || entry.priority > (deduped.get(key)?.priority || 0)) {
+      deduped.set(key, entry);
+    }
+  }
+  const extracted = [...deduped.values()];
+
+  // Step 3: Load existing entries
+  const existing = await AdmissionsKnowledgeEntry.findAll({ where: { active: true } });
+  const existingByTitle = new Map(existing.map((e) => [e.title.toLowerCase().trim(), e]));
+
+  let created = 0;
+  let updated = 0;
+  let unchanged = 0;
+
+  // Step 4: Compare and sync
+  const matchedExistingTitles = new Set<string>();
+
+  for (const entry of extracted) {
+    const titleKey = entry.title.toLowerCase().trim();
+
+    // Exact match
+    let match = existingByTitle.get(titleKey);
+
+    // Fuzzy match if no exact match
+    if (!match) {
+      for (const [existingKey, existingEntry] of existingByTitle) {
+        if (titleSimilarity(titleKey, existingKey) > 0.8) {
+          match = existingEntry;
+          break;
+        }
+      }
+    }
+
+    if (match) {
+      matchedExistingTitles.add(match.title.toLowerCase().trim());
+
+      // Check if content meaningfully changed
+      const contentChanged = match.content.trim() !== entry.content.trim();
+      const keywordsChanged = JSON.stringify(match.keywords?.sort()) !== JSON.stringify(entry.keywords.sort());
+
+      if (contentChanged || keywordsChanged) {
+        await match.update({
+          content: entry.content,
+          keywords: entry.keywords,
+          category: entry.category as any,
+          priority: entry.priority,
+        });
+        updated++;
+        actions.push({
+          campaign_id: '',
+          action: 'knowledge_entry_updated',
+          reason: `Content changed for "${entry.title}"`,
+          confidence: 0.9,
+          before_state: { content: match.content.slice(0, 100) },
+          after_state: { content: entry.content.slice(0, 100) },
+          result: 'success',
+          entity_type: 'system',
+          entity_id: match.id,
+        });
+      } else {
+        unchanged++;
+      }
+    } else {
+      // New entry
+      const newEntry = await AdmissionsKnowledgeEntry.create({
+        category: entry.category as any,
+        title: entry.title,
+        content: entry.content,
+        keywords: entry.keywords,
+        priority: entry.priority,
+        active: true,
+      });
+      created++;
+      actions.push({
+        campaign_id: '',
+        action: 'knowledge_entry_created',
+        reason: `New knowledge entry: "${entry.title}"`,
+        confidence: 0.85,
+        before_state: null,
+        after_state: { title: entry.title, category: entry.category },
+        result: 'success',
+        entity_type: 'system',
+        entity_id: newEntry.id,
+      });
+    }
+  }
+
+  // Step 5: Flag stale entries (exist in DB but not found on any page)
+  let flagged = 0;
+  for (const existingEntry of existing) {
+    const key = existingEntry.title.toLowerCase().trim();
+    if (!matchedExistingTitles.has(key)) {
+      // Check if any extracted entry is similar
+      const hasSimilar = extracted.some((e) => titleSimilarity(e.title, existingEntry.title) > 0.6);
+      if (!hasSimilar) {
+        flagged++;
+        actions.push({
+          campaign_id: '',
+          action: 'knowledge_entry_flagged_stale',
+          reason: `Entry "${existingEntry.title}" not found on any crawled page — may be stale`,
+          confidence: 0.7,
+          before_state: { title: existingEntry.title, category: existingEntry.category },
+          after_state: null,
+          result: 'flagged',
+          entity_type: 'system',
+          entity_id: existingEntry.id,
+        });
+      }
+    }
+  }
+
+  console.log(`[KnowledgeSync] Done: ${created} created, ${updated} updated, ${unchanged} unchanged, ${flagged} flagged stale`);
+
+  return {
+    agent_name: 'AdmissionsKnowledgeSyncAgent',
+    campaigns_processed: 0,
+    actions_taken: actions,
+    errors,
+    duration_ms: Date.now() - startTime,
+    entities_processed: created + updated + flagged,
+  };
+}
