@@ -1770,7 +1770,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
   },
   {
     agent_name: 'AdmissionsKnowledgeSyncAgent',
-    agent_type: 'monitoring',
+    agent_type: 'monitor',
     module: 'admissionsKnowledgeSyncAgent',
     source_file: 'backend/src/services/agents/admissions/admissionsKnowledgeSyncAgent.ts',
     trigger_type: 'cron',
