@@ -5,7 +5,7 @@
  * Run: cd backend && npx ts-node src/seeds/backfillStructuralPrompts.ts
  */
 import '../models'; // init associations
-import sequelize from '../config/database';
+import { sequelize } from '../config/database';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 import { propagateTypePrompts } from '../services/curriculumTypeService';
 
