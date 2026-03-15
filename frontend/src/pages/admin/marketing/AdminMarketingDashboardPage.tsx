@@ -235,6 +235,17 @@ function EditCampaignModal({ campaign, onClose, onSaved }: { campaign: Registere
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [landingPages, setLandingPages] = useState<{ value: string; label: string }[]>([]);
+
+  useEffect(() => {
+    api.get('/api/admin/landing-pages?marketing=true')
+      .then(res => {
+        setLandingPages(
+          (res.data || []).map((p: any) => ({ value: p.path, label: p.name }))
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
