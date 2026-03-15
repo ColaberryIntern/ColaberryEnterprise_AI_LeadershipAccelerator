@@ -100,20 +100,7 @@ function fmt$(n: number) {
   return `$${n.toLocaleString()}`;
 }
 
-// ─── Landing Pages ──────────────────────────────────────────────────────────
-
-const LANDING_PAGES = [
-  { value: '/', label: 'Home Page' },
-  { value: '/program', label: 'Program Overview' },
-  { value: '/pricing', label: 'Pricing' },
-  { value: '/enroll', label: 'Enrollment' },
-  { value: '/strategy-call-prep', label: 'Strategy Call Prep' },
-  { value: '/executive-roi-calculator', label: 'ROI Calculator' },
-  { value: '/sponsorship', label: 'Sponsorship' },
-  { value: '/advisory', label: 'Advisory' },
-  { value: '/case-studies', label: 'Case Studies' },
-  { value: '/contact', label: 'Contact' },
-];
+// ─── Landing Pages (loaded from API) ────────────────────────────────────────
 
 // ─── Create Campaign Modal ──────────────────────────────────────────────────
 
@@ -124,6 +111,17 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [landingPages, setLandingPages] = useState<{ value: string; label: string }[]>([]);
+
+  useEffect(() => {
+    api.get('/api/admin/landing-pages?marketing=true')
+      .then(res => {
+        setLandingPages(
+          (res.data || []).map((p: any) => ({ value: p.path, label: p.name }))
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -188,7 +186,7 @@ function CreateCampaignModal({ onClose, onCreated }: { onClose: () => void; onCr
                   <label className="form-label small fw-medium">Landing Page *</label>
                   <select className="form-select form-select-sm" value={form.destination_path} onChange={e => set('destination_path', e.target.value)}>
                     <option value="">Select a landing page...</option>
-                    {LANDING_PAGES.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
+                    {landingPages.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
                   </select>
                 </div>
                 <div className="col-12">
@@ -303,7 +301,7 @@ function EditCampaignModal({ campaign, onClose, onSaved }: { campaign: Registere
                   <label className="form-label small fw-medium">Landing Page</label>
                   <select className="form-select form-select-sm" value={form.destination_path} onChange={e => set('destination_path', e.target.value)}>
                     <option value="">Select a landing page...</option>
-                    {LANDING_PAGES.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
+                    {landingPages.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
                   </select>
                 </div>
                 <div className="col-12">

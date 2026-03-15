@@ -124,6 +124,18 @@ async function start(): Promise<void> {
   await seedProgramCurriculum();
   await seedDepartments();
   await seedCurriculumTypeDefinitions();
+
+  // Seed landing pages and migrate existing campaign deployments
+  try {
+    const { seedLandingPages, migrateExistingCampaigns } = await import('./services/deploymentService');
+    await seedLandingPages();
+    const migrationResult = await migrateExistingCampaigns();
+    if (migrationResult.migrated > 0) {
+      console.log(`[Deploy] Migrated ${migrationResult.migrated} campaigns to deployments`);
+    }
+  } catch (err: any) {
+    console.warn('[Deploy] Landing page / deployment seed failed:', err?.message);
+  }
   // Run campaign seeding in background — it may make slow external API calls (GHL)
   // that should not block server startup
   seedAllCampaigns().catch((err) =>

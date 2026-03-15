@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/ui/ToastProvider';
-import ConfirmModal from '../../components/ui/ConfirmModal';
 import Breadcrumb from '../../components/ui/Breadcrumb';
 import OverviewTab from '../../components/campaign/OverviewTab';
 import AnalyticsTab from '../../components/campaign/AnalyticsTab';
@@ -132,6 +131,7 @@ function AdminCampaignDetailPage() {
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
 
   // Campaign test state
   const [testRunning, setTestRunning] = useState(false);
@@ -250,14 +250,20 @@ function AdminCampaignDetailPage() {
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await fetch(`/api/admin/campaigns/${id}`, { method: 'DELETE', headers });
-      showToast('Campaign deleted.', 'success');
+      const res = await fetch(`/api/admin/campaigns/${id}`, { method: 'DELETE', headers });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Cannot archive campaign.', 'error');
+        return;
+      }
+      showToast('Campaign archived successfully.', 'success');
       navigate('/admin/campaigns');
     } catch (err) {
-      showToast('Failed to delete campaign.', 'error');
+      showToast('Failed to archive campaign.', 'error');
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);
+      setDeleteConfirmName('');
     }
   };
 
@@ -550,17 +556,46 @@ function AdminCampaignDetailPage() {
         </div>
       )}
 
-      {/* Delete Confirmation */}
-      <ConfirmModal
-        show={showDeleteConfirm}
-        title="Delete Campaign"
-        message="Are you sure you want to delete this campaign? This action cannot be undone."
-        confirmLabel="Delete Campaign"
-        confirmVariant="danger"
-        onConfirm={handleDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
-        loading={deleting}
-      />
+      {/* Strict Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content border-0 shadow">
+              <div className="modal-header bg-white border-bottom">
+                <h5 className="modal-title fw-semibold text-danger">Archive Campaign</h5>
+                <button type="button" className="btn-close" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmName(''); }} aria-label="Close" />
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-warning py-2 small mb-3">
+                  This will archive the campaign engine. All historical data (leads, emails, analytics) will be preserved but the campaign will no longer be active.
+                </div>
+                <p className="small text-muted mb-2">
+                  Type <strong>{campaign?.name}</strong> to confirm:
+                </p>
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  value={deleteConfirmName}
+                  onChange={(e) => setDeleteConfirmName(e.target.value)}
+                  placeholder="Campaign name"
+                />
+              </div>
+              <div className="modal-footer bg-white border-top">
+                <button className="btn btn-sm btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmName(''); }} disabled={deleting}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-sm btn-danger"
+                  onClick={handleDelete}
+                  disabled={deleting || deleteConfirmName !== campaign?.name}
+                >
+                  {deleting ? 'Archiving...' : 'Archive Campaign'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

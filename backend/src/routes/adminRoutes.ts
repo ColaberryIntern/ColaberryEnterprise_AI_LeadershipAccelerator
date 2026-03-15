@@ -30,6 +30,7 @@ import governanceCenterRoutes from './admin/governanceCenterRoutes';
 import executiveAwarenessRoutes from './admin/executiveAwarenessRoutes';
 import strategicIntelligenceRoutes from './admin/strategicIntelligenceRoutes';
 import securityRoutes from './admin/securityRoutes';
+import deploymentRoutes from './admin/deploymentRoutes';
 
 const router = Router();
 
@@ -64,5 +65,6 @@ router.use(governanceCenterRoutes);
 router.use(executiveAwarenessRoutes);
 router.use(strategicIntelligenceRoutes);
 router.use(securityRoutes);
+router.use(deploymentRoutes);
 
 export default router;

@@ -121,9 +121,10 @@ export async function handleUpdateCampaign(req: Request, res: Response, next: Ne
 
 export async function handleDeleteCampaign(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const deleted = await deleteCampaign(req.params.id as string);
-    if (!deleted) {
-      res.status(404).json({ error: 'Campaign not found' });
+    const result = await deleteCampaign(req.params.id as string);
+    if (!result.success) {
+      const status = result.error === 'Campaign not found' ? 404 : 409;
+      res.status(status).json({ error: result.error });
       return;
     }
     res.json({ success: true });

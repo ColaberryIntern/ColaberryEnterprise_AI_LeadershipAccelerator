@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity } from '../models';
+import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity, CampaignDeployment } from '../models';
 import StrategyCall from '../models/StrategyCall';
 import { enrollLeadInSequence } from './sequenceService';
 import { getSetting } from './settingsService';
@@ -183,20 +183,43 @@ export async function updateCampaign(id: string, updates: Record<string, any>) {
   });
 }
 
-export async function deleteCampaign(id: string) {
+export async function deleteCampaign(id: string): Promise<{ success: boolean; error?: string }> {
   const campaign = await Campaign.findByPk(id);
-  if (!campaign) return false;
+  if (!campaign) return { success: false, error: 'Campaign not found' };
 
-  // Cancel pending actions
+  // Block if active leads exist
+  const activeLeads = await CampaignLead.count({
+    where: { campaign_id: id, status: { [Op.notIn]: ['completed', 'removed'] } },
+  });
+  if (activeLeads > 0) {
+    return { success: false, error: `Campaign has ${activeLeads} active lead(s). Remove or complete them before archiving.` };
+  }
+
+  // Block if active deployments exist
+  const activeDeployments = await CampaignDeployment.count({
+    where: { campaign_id: id, status: 'active' },
+  });
+  if (activeDeployments > 0) {
+    return { success: false, error: 'This campaign is actively deployed. Remove deployments before archiving.' };
+  }
+
+  // Block if pending emails exist
+  const pendingEmails = await ScheduledEmail.count({
+    where: { campaign_id: id, status: 'pending' },
+  });
+  if (pendingEmails > 0) {
+    return { success: false, error: `Campaign has ${pendingEmails} pending email(s). Cancel them before archiving.` };
+  }
+
+  // Cancel any remaining scheduled items
   await ScheduledEmail.update(
     { status: 'cancelled' } as any,
-    { where: { campaign_id: id, status: 'pending' } }
+    { where: { campaign_id: id, status: { [Op.notIn]: ['sent', 'cancelled'] } } },
   );
 
-  // Remove campaign leads
-  await CampaignLead.destroy({ where: { campaign_id: id } });
-  await campaign.destroy();
-  return true;
+  // Soft-delete: archive instead of destroying — preserves all dependent data
+  await campaign.update({ status: 'archived' } as any);
+  return { success: true };
 }
 
 export async function activateCampaign(id: string) {

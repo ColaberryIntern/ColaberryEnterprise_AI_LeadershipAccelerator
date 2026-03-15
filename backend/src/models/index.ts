@@ -110,6 +110,8 @@ import AlumniReferralProfile from './AlumniReferralProfile';
 import AlumniReferral from './AlumniReferral';
 import ReferralActivityEvent from './ReferralActivityEvent';
 import ReferralCommission from './ReferralCommission';
+import LandingPage from './LandingPage';
+import CampaignDeployment from './CampaignDeployment';
 
 // --- Governance Center associations ---
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
@@ -556,6 +558,13 @@ ReferralCommission.belongsTo(AlumniReferral, { foreignKey: 'referral_id', as: 'r
 AlumniReferralProfile.hasMany(ReferralCommission, { foreignKey: 'profile_id', as: 'commissions' });
 ReferralCommission.belongsTo(AlumniReferralProfile, { foreignKey: 'profile_id', as: 'profile' });
 
+// --- Campaign Deployment & Landing Page associations ---
+Campaign.hasMany(CampaignDeployment, { foreignKey: 'campaign_id', as: 'deployments' });
+CampaignDeployment.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
+CampaignDeployment.belongsTo(LandingPage, { foreignKey: 'landing_page_id', as: 'landingPage' });
+LandingPage.hasMany(CampaignDeployment, { foreignKey: 'landing_page_id', as: 'deployments' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -646,4 +655,6 @@ export {
   AlumniReferral,
   ReferralActivityEvent,
   ReferralCommission,
+  LandingPage,
+  CampaignDeployment,
 };
