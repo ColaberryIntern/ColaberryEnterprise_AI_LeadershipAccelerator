@@ -1,4 +1,5 @@
 import { Op } from 'sequelize';
+import { sequelize } from '../config/database';
 import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity, CampaignDeployment } from '../models';
 import StrategyCall from '../models/StrategyCall';
 import { enrollLeadInSequence } from './sequenceService';
@@ -211,14 +212,18 @@ export async function deleteCampaign(id: string): Promise<{ success: boolean; er
     return { success: false, error: `Campaign has ${pendingEmails} pending email(s). Cancel them before archiving.` };
   }
 
-  // Cancel any remaining scheduled items
-  await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { campaign_id: id, status: { [Op.notIn]: ['sent', 'cancelled'] } } },
-  );
+  // Atomic: cancel emails + archive campaign in a single transaction
+  await sequelize.transaction(async (t: any) => {
+    // Cancel any remaining scheduled items
+    await ScheduledEmail.update(
+      { status: 'cancelled' } as any,
+      { where: { campaign_id: id, status: { [Op.notIn]: ['sent', 'cancelled'] } } , transaction: t },
+    );
 
-  // Soft-delete: archive instead of destroying — preserves all dependent data
-  await campaign.update({ status: 'archived' } as any);
+    // Soft-delete: archive instead of destroying — preserves all dependent data
+    await campaign.update({ status: 'archived' } as any, { transaction: t });
+  });
+
   return { success: true };
 }
 

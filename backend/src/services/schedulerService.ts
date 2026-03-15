@@ -400,6 +400,14 @@ async function processScheduledActions(): Promise<void> {
       campaignSettings = getCampaignSettingsFromRecord(campaignCache[campaignId]);
     }
 
+    // Guard: skip actions for non-active campaigns (archived, paused, completed, draft)
+    const cachedCampaign = campaignCache[campaignId];
+    if (cachedCampaign && cachedCampaign.status !== 'active') {
+      await action.update({ status: 'cancelled' } as any);
+      console.log(`[Scheduler] Cancelled action ${action.id} — campaign ${campaignId} is ${cachedCampaign.status}`);
+      continue;
+    }
+
     // Pacing: limit actions per campaign per cycle
     const maxPerCycle = campaignSettings.max_leads_per_cycle || 10;
     campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);

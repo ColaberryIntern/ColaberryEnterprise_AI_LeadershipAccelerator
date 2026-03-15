@@ -69,6 +69,12 @@ export async function createDeployment(data: {
 }) {
   const campaign = await Campaign.findByPk(data.campaign_id);
   if (!campaign) throw Object.assign(new Error('Campaign not found'), { statusCode: 404 });
+  if (campaign.status !== 'active') {
+    throw Object.assign(
+      new Error(`Cannot create deployment for campaign in '${campaign.status}' state`),
+      { statusCode: 409 },
+    );
+  }
 
   let landingPage: LandingPage | null = null;
   if (data.landing_page_id) {
