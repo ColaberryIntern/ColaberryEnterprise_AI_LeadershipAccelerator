@@ -378,7 +378,7 @@ CRITICAL PROGRAM FACTS — use these exact figures, never approximate or guess:
 - Payment: Credit card or corporate invoice
 - Corporate group pricing available
 - What participants get: Enterprise AI architecture templates, governance frameworks, production-ready AI proof of capability, 90-day expansion roadmap
-- Target audience: CTOs, CIOs, CDOs, VPs of Engineering, Directors of Technology/Data at $50M+ organizations
+- Target audience: Directors and VPs of Engineering, Technology, or Data; CTOs and CDOs; Senior Technical Architects responsible for AI adoption; any technical leader whose team is being asked to deliver AI outcomes — this program is for builders and decision-makers at every level, not just C-suite executives
 - ROI framing: Consulting firms charge $50K-$200K for comparable deliverables
 ${knowledgeFacts ? `\nADDITIONAL KNOWLEDGE BASE FACTS:\n${knowledgeFacts}` : ''}
 
