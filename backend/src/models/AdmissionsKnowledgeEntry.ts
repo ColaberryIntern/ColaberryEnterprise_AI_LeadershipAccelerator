@@ -9,7 +9,8 @@ export type AdmissionsKnowledgeCategory =
   | 'enterprise'
   | 'sponsorship'
   | 'outcomes'
-  | 'logistics';
+  | 'logistics'
+  | 'champion';
 
 interface AdmissionsKnowledgeEntryAttributes {
   id?: string;
