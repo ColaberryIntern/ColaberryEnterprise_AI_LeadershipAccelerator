@@ -418,6 +418,7 @@ export default function useMiniSectionBuilder({ token, apiUrl, initialLessonId }
     // Reference data
     prompts, skills, variables, artifacts, systemVariables,
     sectionVariableKeys, sectionArtifactIds, sectionSkillIds,
+    setSectionVariableKeys, setSectionArtifactIds, setSectionSkillIds,
     structurePrompt, setStructurePrompt, lessonDescription, lessonLearningGoal,
     skillOptions, variableOptions, artifactOptions,
     promptBodies, fetchPromptBody,

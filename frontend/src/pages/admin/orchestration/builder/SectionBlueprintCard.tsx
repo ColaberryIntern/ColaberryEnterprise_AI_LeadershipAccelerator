@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { MiniSection } from './types';
+import { MiniSection, VariableOption, ArtifactOption } from './types';
 
 interface GeneratedEvent {
   type: string;
@@ -8,6 +8,8 @@ interface GeneratedEvent {
   description: string;
   learning_goal: string;
 }
+
+interface SkillOptionItem { value: string; label: string; sub?: string }
 
 interface Props {
   lessonId: string;
@@ -20,6 +22,15 @@ interface Props {
   token: string;
   apiUrl: string;
   onApply: (events: GeneratedEvent[]) => void;
+  // Section-level assignments
+  sectionVariableKeys: string[];
+  sectionArtifactIds: string[];
+  sectionSkillIds: string[];
+  onSectionAssignmentsChange: (updates: { section_variable_keys?: string[]; section_artifact_ids?: string[]; section_skill_ids?: string[] }) => void;
+  // Reference data for multi-selects
+  variableOptions: { value: string; label: string }[];
+  artifactOptions: { value: string; label: string }[];
+  skillOptions: SkillOptionItem[];
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -62,9 +73,48 @@ Requirements:
 - Audience: senior business executives (aged 35-60)`;
 }
 
+function ToggleChips({ items, selected, onToggle, colorActive, colorBg }: {
+  items: { value: string; label: string }[];
+  selected: string[];
+  onToggle: (val: string) => void;
+  colorActive?: string;
+  colorBg?: string;
+}) {
+  return (
+    <div className="d-flex flex-wrap gap-1">
+      {items.map(item => {
+        const isSelected = selected.includes(item.value);
+        return (
+          <button
+            key={item.value}
+            type="button"
+            className="btn btn-sm py-0 px-1"
+            style={{
+              fontSize: 9,
+              background: isSelected ? (colorBg || 'rgba(128,90,213,0.15)') : 'transparent',
+              color: isSelected ? (colorActive || '#805ad5') : '#718096',
+              border: `1px solid ${isSelected ? (colorActive || '#805ad5') + '40' : '#e2e8f0'}`,
+              borderRadius: 4,
+            }}
+            onClick={() => onToggle(item.value)}
+          >
+            {isSelected && <i className="bi bi-check me-1" style={{ fontSize: 8 }}></i>}
+            {item.label}
+          </button>
+        );
+      })}
+      {items.length === 0 && (
+        <span className="text-muted" style={{ fontSize: 9 }}>No options available</span>
+      )}
+    </div>
+  );
+}
+
 export default function SectionBlueprintCard({
   lessonId, lessonTitle, lessonDescription, lessonLearningGoal,
   structurePrompt, onPromptChange, miniSections, token, apiUrl, onApply,
+  sectionVariableKeys, sectionArtifactIds, sectionSkillIds, onSectionAssignmentsChange,
+  variableOptions, artifactOptions, skillOptions,
 }: Props) {
   const [collapsed, setCollapsed] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -72,27 +122,22 @@ export default function SectionBlueprintCard({
   const [error, setError] = useState('');
   const [localPrompt, setLocalPrompt] = useState(structurePrompt);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showVars, setShowVars] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
+  const [showArtifacts, setShowArtifacts] = useState(false);
 
-  // Sync from parent
-  useEffect(() => {
-    setLocalPrompt(structurePrompt);
-  }, [structurePrompt]);
+  useEffect(() => { setLocalPrompt(structurePrompt); }, [structurePrompt]);
 
-  // Auto-populate default prompt if empty
   useEffect(() => {
     if (!structurePrompt && lessonTitle) {
-      const defaultPrompt = buildDefaultPrompt(lessonTitle, lessonDescription, lessonLearningGoal);
-      setLocalPrompt(defaultPrompt);
+      setLocalPrompt(buildDefaultPrompt(lessonTitle, lessonDescription, lessonLearningGoal));
     }
   }, [lessonTitle, lessonDescription, lessonLearningGoal, structurePrompt]);
 
-  // Debounced save
   const handlePromptEdit = useCallback((val: string) => {
     setLocalPrompt(val);
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      onPromptChange(val);
-    }, 1500);
+    saveTimer.current = setTimeout(() => { onPromptChange(val); }, 1500);
   }, [onPromptChange]);
 
   const handleGenerate = async () => {
@@ -127,6 +172,16 @@ export default function SectionBlueprintCard({
     }
   };
 
+  const toggleArrayItem = (arr: string[], val: string): string[] =>
+    arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val];
+
+  const varCount = sectionVariableKeys.length;
+  const skillCount = sectionSkillIds.length;
+  const artCount = sectionArtifactIds.length;
+  const assignmentSummary = (varCount + skillCount + artCount) > 0
+    ? `${varCount}V ${artCount}A ${skillCount}S`
+    : '';
+
   return (
     <div className="card border-0 shadow-sm mb-2">
       <div
@@ -137,12 +192,18 @@ export default function SectionBlueprintCard({
         <span className="fw-semibold small">
           <i className="bi bi-stars me-1" style={{ color: '#805ad5' }}></i>
           Section Blueprint
+          {assignmentSummary && (
+            <span className="badge ms-1" style={{ fontSize: 8, background: 'rgba(128,90,213,0.12)', color: '#553c9a' }}>
+              {assignmentSummary}
+            </span>
+          )}
         </span>
         <i className={`bi bi-chevron-${collapsed ? 'right' : 'down'} text-muted`} style={{ fontSize: 11 }}></i>
       </div>
 
       {!collapsed && (
         <div className="card-body py-2">
+          {/* Structure Prompt */}
           <textarea
             className="form-control form-control-sm mb-2"
             rows={8}
@@ -153,11 +214,7 @@ export default function SectionBlueprintCard({
           />
 
           <div className="d-flex gap-2 mb-2">
-            <button
-              className="btn btn-sm btn-primary flex-grow-1"
-              onClick={handleGenerate}
-              disabled={generating || !localPrompt.trim()}
-            >
+            <button className="btn btn-sm btn-primary flex-grow-1" onClick={handleGenerate} disabled={generating || !localPrompt.trim()}>
               {generating ? (
                 <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Generating...</>
               ) : (
@@ -165,11 +222,7 @@ export default function SectionBlueprintCard({
               )}
             </button>
             {!structurePrompt && localPrompt && (
-              <button
-                className="btn btn-sm btn-outline-secondary"
-                onClick={() => onPromptChange(localPrompt)}
-                title="Save prompt without generating"
-              >
+              <button className="btn btn-sm btn-outline-secondary" onClick={() => onPromptChange(localPrompt)} title="Save prompt without generating">
                 <i className="bi bi-save"></i>
               </button>
             )}
@@ -183,7 +236,7 @@ export default function SectionBlueprintCard({
 
           {/* Generated Results Preview */}
           {generatedEvents && (
-            <div>
+            <div className="mb-2">
               <h6 className="small fw-semibold mb-1" style={{ fontSize: 11 }}>
                 <i className="bi bi-check-circle text-success me-1"></i>Generated Structure
               </h6>
@@ -191,11 +244,7 @@ export default function SectionBlueprintCard({
                 {generatedEvents.map((evt, i) => {
                   const existing = miniSections.find(ms => ms.mini_section_type === evt.type);
                   return (
-                    <div
-                      key={evt.type}
-                      className="d-flex align-items-start gap-2 border rounded px-2 py-1"
-                      style={{ fontSize: 10, borderLeft: `3px solid ${TYPE_COLORS[evt.type] || '#718096'} !important` }}
-                    >
+                    <div key={evt.type} className="d-flex align-items-start gap-2 border rounded px-2 py-1" style={{ fontSize: 10 }}>
                       <span className="badge bg-light text-muted border mt-1" style={{ fontSize: 9, minWidth: 18 }}>{i + 1}</span>
                       <i className={`bi ${TYPE_ICONS[evt.type] || 'bi-circle'} mt-1`} style={{ color: TYPE_COLORS[evt.type], fontSize: 12 }}></i>
                       <div className="flex-grow-1" style={{ minWidth: 0 }}>
@@ -203,15 +252,10 @@ export default function SectionBlueprintCard({
                         <div className="text-muted text-truncate">{evt.description}</div>
                         <div className="text-muted fst-italic text-truncate" style={{ fontSize: 9 }}>Goal: {evt.learning_goal}</div>
                       </div>
-                      {existing && (
-                        <span className="badge bg-warning-subtle text-dark border" style={{ fontSize: 8 }} title={`Will update: ${existing.title}`}>
-                          update
-                        </span>
-                      )}
-                      {!existing && (
-                        <span className="badge bg-success-subtle text-success border" style={{ fontSize: 8 }}>
-                          new
-                        </span>
+                      {existing ? (
+                        <span className="badge bg-warning-subtle text-dark border" style={{ fontSize: 8 }}>update</span>
+                      ) : (
+                        <span className="badge bg-success-subtle text-success border" style={{ fontSize: 8 }}>new</span>
                       )}
                     </div>
                   );
@@ -223,9 +267,82 @@ export default function SectionBlueprintCard({
             </div>
           )}
 
-          {/* Current mini-section summary when no generation result */}
+          {/* ─── Section-Level Assignments ─── */}
+          <div className="border-top pt-2 mt-2">
+            <span className="text-muted fw-medium" style={{ fontSize: 10 }}>
+              <i className="bi bi-sliders me-1"></i>Section Assignments
+            </span>
+            <span className="text-muted d-block mb-1" style={{ fontSize: 9 }}>
+              Applied to all mini-sections in this section automatically
+            </span>
+
+            {/* Variables */}
+            <div className="mb-1">
+              <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 w-100" onClick={() => setShowVars(!showVars)} style={{ fontSize: 10 }}>
+                <i className={`bi bi-chevron-${showVars ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
+                <i className="bi bi-braces text-info"></i>
+                <span>Variables</span>
+                {varCount > 0 && <span className="badge bg-info-subtle text-info border ms-auto" style={{ fontSize: 8 }}>{varCount}</span>}
+              </button>
+              {showVars && (
+                <div className="ms-3 mt-1">
+                  <ToggleChips
+                    items={variableOptions}
+                    selected={sectionVariableKeys}
+                    onToggle={v => onSectionAssignmentsChange({ section_variable_keys: toggleArrayItem(sectionVariableKeys, v) })}
+                    colorActive="#0d6efd"
+                    colorBg="rgba(13,110,253,0.1)"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Artifacts */}
+            <div className="mb-1">
+              <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 w-100" onClick={() => setShowArtifacts(!showArtifacts)} style={{ fontSize: 10 }}>
+                <i className={`bi bi-chevron-${showArtifacts ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
+                <i className="bi bi-box text-warning"></i>
+                <span>Artifacts</span>
+                {artCount > 0 && <span className="badge bg-warning-subtle text-dark border ms-auto" style={{ fontSize: 8 }}>{artCount}</span>}
+              </button>
+              {showArtifacts && (
+                <div className="ms-3 mt-1">
+                  <ToggleChips
+                    items={artifactOptions}
+                    selected={sectionArtifactIds}
+                    onToggle={v => onSectionAssignmentsChange({ section_artifact_ids: toggleArrayItem(sectionArtifactIds, v) })}
+                    colorActive="#dd6b20"
+                    colorBg="rgba(221,107,32,0.1)"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Skills */}
+            <div className="mb-1">
+              <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 w-100" onClick={() => setShowSkills(!showSkills)} style={{ fontSize: 10 }}>
+                <i className={`bi bi-chevron-${showSkills ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
+                <i className="bi bi-award text-success"></i>
+                <span>Skills</span>
+                {skillCount > 0 && <span className="badge bg-success-subtle text-success border ms-auto" style={{ fontSize: 8 }}>{skillCount}</span>}
+              </button>
+              {showSkills && (
+                <div className="ms-3 mt-1">
+                  <ToggleChips
+                    items={skillOptions}
+                    selected={sectionSkillIds}
+                    onToggle={v => onSectionAssignmentsChange({ section_skill_ids: toggleArrayItem(sectionSkillIds, v) })}
+                    colorActive="#38a169"
+                    colorBg="rgba(56,161,105,0.1)"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mini-section summary */}
           {!generatedEvents && miniSections.length > 0 && (
-            <div className="text-muted" style={{ fontSize: 9 }}>
+            <div className="text-muted mt-2" style={{ fontSize: 9 }}>
               <i className="bi bi-info-circle me-1"></i>
               {miniSections.length} mini-section{miniSections.length !== 1 ? 's' : ''} exist — generate to preview updates
             </div>

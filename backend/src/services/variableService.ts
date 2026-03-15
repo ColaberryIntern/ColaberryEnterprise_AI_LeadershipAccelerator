@@ -124,6 +124,35 @@ export async function getSectionSystemVariables(lessonId: string): Promise<Recor
   };
 }
 
+/**
+ * Build a formatted key-value data block from all enrollment variables.
+ * Appended at the end of prompts instead of inline {{placeholder}} substitution.
+ */
+export async function buildLearnerDataBlock(enrollmentId: string): Promise<string> {
+  const vars = await getAllVariables(enrollmentId);
+  const sectionVars = Object.keys(vars).length > 0 ? vars : {};
+  const entries = Object.entries(sectionVars).filter(([_, v]) => v && v.trim());
+  if (entries.length === 0) return '';
+  const lines = entries.map(([k, v]) => {
+    const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return `${label}: ${v}`;
+  });
+  return '\n\n=== LEARNER DATA ===\n' + lines.join('\n');
+}
+
+/**
+ * Build a formatted data block from test variables (for admin simulation).
+ */
+export function buildTestDataBlock(testVars: Record<string, string>): string {
+  const entries = Object.entries(testVars).filter(([_, v]) => v && v.trim());
+  if (entries.length === 0) return '';
+  const lines = entries.map(([k, v]) => {
+    const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return `${label}: ${v}`;
+  });
+  return '\n\n=== LEARNER DATA ===\n' + lines.join('\n');
+}
+
 export async function getVariableHistory(enrollmentId: string, key: string): Promise<any[]> {
   const variables = await VariableStore.findAll({
     where: { enrollment_id: enrollmentId, variable_key: key },

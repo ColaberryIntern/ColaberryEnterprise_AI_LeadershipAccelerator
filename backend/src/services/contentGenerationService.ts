@@ -520,8 +520,7 @@ async function buildCompositePrompt(
         break;
     }
 
-    // Resolve prompts: merge system+user into single prompt (backward compat), fall back to FK templates
-    // Helper to merge legacy split fields
+    // Append prompts as-is (no inline variable substitution — data block appended at end)
     const mergePromptFields = (sys: string | undefined, usr: string | undefined): string => {
       if (sys && usr) return sys + '\n\n' + usr;
       return sys || usr || '';
@@ -530,63 +529,53 @@ async function buildCompositePrompt(
     // Concept prompt
     const conceptInline = mergePromptFields((ms as any).concept_prompt_system, (ms as any).concept_prompt_user);
     if (conceptInline) {
-      const resolved = await resolveTemplate(conceptInline, enrollmentId);
-      parts.push(`Concept Prompt: ${resolved}`);
+      parts.push(`Concept Prompt: ${conceptInline}`);
     } else {
       const conceptPrompt = (ms as any).conceptPrompt;
       if (conceptPrompt?.user_prompt_template) {
-        const resolved = await resolveTemplate(conceptPrompt.user_prompt_template, enrollmentId);
-        parts.push(`Concept Prompt: ${resolved}`);
+        parts.push(`Concept Prompt: ${conceptPrompt.user_prompt_template}`);
       }
     }
 
     // Build prompt
     const buildInline = mergePromptFields((ms as any).build_prompt_system, (ms as any).build_prompt_user);
     if (buildInline) {
-      const resolved = await resolveTemplate(buildInline, enrollmentId);
-      parts.push(`Build Prompt: ${resolved}`);
+      parts.push(`Build Prompt: ${buildInline}`);
     } else {
       const buildPrompt = (ms as any).buildPrompt;
       if (buildPrompt?.user_prompt_template) {
-        const resolved = await resolveTemplate(buildPrompt.user_prompt_template, enrollmentId);
-        parts.push(`Build Prompt: ${resolved}`);
+        parts.push(`Build Prompt: ${buildPrompt.user_prompt_template}`);
       }
     }
 
     // Mentor prompt
     const mentorInline = mergePromptFields((ms as any).mentor_prompt_system, (ms as any).mentor_prompt_user);
     if (mentorInline) {
-      const resolved = await resolveTemplate(mentorInline, enrollmentId);
-      parts.push(`Mentor Prompt: ${resolved}`);
+      parts.push(`Mentor Prompt: ${mentorInline}`);
     } else {
       const mentorPrompt = (ms as any).mentorPrompt;
       if (mentorPrompt?.user_prompt_template) {
-        const resolved = await resolveTemplate(mentorPrompt.user_prompt_template, enrollmentId);
-        parts.push(`Mentor Prompt: ${resolved}`);
+        parts.push(`Mentor Prompt: ${mentorPrompt.user_prompt_template}`);
       }
     }
 
     // KC and Reflection prompts
     const kcInline = mergePromptFields((ms as any).kc_prompt_system, (ms as any).kc_prompt_user);
     if (kcInline) {
-      const resolved = await resolveTemplate(kcInline, enrollmentId);
-      parts.push(`Knowledge Check Prompt: ${resolved}`);
+      parts.push(`Knowledge Check Prompt: ${kcInline}`);
     }
     const reflectionInline = mergePromptFields((ms as any).reflection_prompt_system, (ms as any).reflection_prompt_user);
     if (reflectionInline) {
-      const resolved = await resolveTemplate(reflectionInline, enrollmentId);
-      parts.push(`Reflection Prompt: ${resolved}`);
-    }
-
-    if (ms.associated_variable_keys?.length) {
-      parts.push(`Uses Variables: ${ms.associated_variable_keys.join(', ')}`);
+      parts.push(`Reflection Prompt: ${reflectionInline}`);
     }
   }
   parts.push('');
 
-  // Layer 4: Student Variables
+  // Layer 4: Learner Data (appended as key-value pairs for natural personalization)
   parts.push('=== LEARNER CONTEXT ===');
   parts.push(personalizationContext);
+  const learnerDataBlock = await variableService.buildLearnerDataBlock(enrollmentId);
+  if (learnerDataBlock) parts.push(learnerDataBlock);
 
   // Layer 5: Artifact Expectations
   try {
@@ -620,9 +609,8 @@ async function buildCompositePrompt(
     });
     const mentorPrompt = (sectionConfig as any)?.mentorPrompt;
     if (mentorPrompt?.user_prompt_template) {
-      const resolved = await resolveTemplate(mentorPrompt.user_prompt_template, enrollmentId);
       parts.push('\n=== MENTOR BRIEF ===');
-      parts.push(resolved);
+      parts.push(mentorPrompt.user_prompt_template);
     }
   } catch { /* non-critical */ }
 
@@ -816,52 +804,50 @@ export async function buildCompositePromptForSimulation(
 
     const conceptInline = mergeFields((ms as any).concept_prompt_system, (ms as any).concept_prompt_user);
     if (conceptInline) {
-      parts.push(`Concept Prompt: ${resolveWithTestVars(conceptInline, testVariables)}`);
+      parts.push(`Concept Prompt: ${conceptInline}`);
     } else {
       const conceptPrompt = (ms as any).conceptPrompt;
       if (conceptPrompt?.user_prompt_template) {
-        parts.push(`Concept Prompt: ${resolveWithTestVars(conceptPrompt.user_prompt_template, testVariables)}`);
+        parts.push(`Concept Prompt: ${conceptPrompt.user_prompt_template}`);
       }
     }
 
     const buildInline = mergeFields((ms as any).build_prompt_system, (ms as any).build_prompt_user);
     if (buildInline) {
-      parts.push(`Build Prompt: ${resolveWithTestVars(buildInline, testVariables)}`);
+      parts.push(`Build Prompt: ${buildInline}`);
     } else {
       const buildPrompt = (ms as any).buildPrompt;
       if (buildPrompt?.user_prompt_template) {
-        parts.push(`Build Prompt: ${resolveWithTestVars(buildPrompt.user_prompt_template, testVariables)}`);
+        parts.push(`Build Prompt: ${buildPrompt.user_prompt_template}`);
       }
     }
 
     const mentorInline = mergeFields((ms as any).mentor_prompt_system, (ms as any).mentor_prompt_user);
     if (mentorInline) {
-      parts.push(`Mentor Prompt: ${resolveWithTestVars(mentorInline, testVariables)}`);
+      parts.push(`Mentor Prompt: ${mentorInline}`);
     } else {
       const mentorPrompt = (ms as any).mentorPrompt;
       if (mentorPrompt?.user_prompt_template) {
-        parts.push(`Mentor Prompt: ${resolveWithTestVars(mentorPrompt.user_prompt_template, testVariables)}`);
+        parts.push(`Mentor Prompt: ${mentorPrompt.user_prompt_template}`);
       }
     }
 
     const kcInline = mergeFields((ms as any).kc_prompt_system, (ms as any).kc_prompt_user);
     if (kcInline) {
-      parts.push(`Knowledge Check Prompt: ${resolveWithTestVars(kcInline, testVariables)}`);
+      parts.push(`Knowledge Check Prompt: ${kcInline}`);
     }
     const reflectionInline = mergeFields((ms as any).reflection_prompt_system, (ms as any).reflection_prompt_user);
     if (reflectionInline) {
-      parts.push(`Reflection Prompt: ${resolveWithTestVars(reflectionInline, testVariables)}`);
-    }
-
-    if (ms.associated_variable_keys?.length) {
-      parts.push(`Uses Variables: ${ms.associated_variable_keys.join(', ')}`);
+      parts.push(`Reflection Prompt: ${reflectionInline}`);
     }
   }
   parts.push('');
 
-  // Layer 4: Learner Context
+  // Layer 4: Learner Context + Data Block
   parts.push('=== LEARNER CONTEXT ===');
   parts.push(personalizationContext);
+  const testDataBlock = variableService.buildTestDataBlock(testVariables);
+  if (testDataBlock) parts.push(testDataBlock);
 
   // Layer 5: Artifact Expectations
   try {

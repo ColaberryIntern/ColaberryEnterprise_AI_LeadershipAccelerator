@@ -11,12 +11,6 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
   const [saving, setSaving] = useState(false);
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
 
-  // Reference data for section-level assignments
-  const [allVariables, setAllVariables] = useState<any[]>([]);
-  const [allArtifacts, setAllArtifacts] = useState<any[]>([]);
-  const [allSkills, setAllSkills] = useState<any[]>([]);
-  const [refLoading, setRefLoading] = useState(false);
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -38,22 +32,6 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const fetchReferenceData = useCallback(async () => {
-    setRefLoading(true);
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [varRes, artRes, skillRes] = await Promise.all([
-        fetch(`${apiUrl}/api/admin/orchestration/variable-definitions`, { headers }),
-        fetch(`${apiUrl}/api/admin/orchestration/program/artifacts`, { headers }),
-        fetch(`${apiUrl}/api/admin/orchestration/program/skills`, { headers }),
-      ]);
-      if (varRes.ok) setAllVariables(await varRes.json());
-      if (artRes.ok) setAllArtifacts(await artRes.json());
-      if (skillRes.ok) setAllSkills(await skillRes.json());
-    } catch { /* silent */ }
-    finally { setRefLoading(false); }
-  }, [token, apiUrl]);
-
   const handleEdit = (lesson: any) => {
     setEditingLesson({
       id: lesson.id,
@@ -65,11 +43,7 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
       associated_session_id: lesson.associated_session_id || '',
       required_min_completion_before_session: lesson.required_min_completion_before_session || 0,
       sort_order: lesson.sort_order || 0,
-      section_variable_keys: lesson.section_variable_keys || [],
-      section_artifact_ids: lesson.section_artifact_ids || [],
-      section_skill_ids: lesson.section_skill_ids || [],
     });
-    fetchReferenceData();
   };
 
   const handleSave = async () => {
@@ -87,9 +61,6 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
           associated_session_id: editingLesson.associated_session_id || null,
           required_min_completion_before_session: editingLesson.required_min_completion_before_session || 0,
           sort_order: editingLesson.sort_order || 0,
-          section_variable_keys: editingLesson.section_variable_keys,
-          section_artifact_ids: editingLesson.section_artifact_ids,
-          section_skill_ids: editingLesson.section_skill_ids,
         }),
       });
       if (!res.ok) throw new Error('Failed to save');
@@ -97,13 +68,6 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
       fetchData();
     } catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
-  };
-
-  const toggleArrayItem = (field: string, value: string) => {
-    if (!editingLesson) return;
-    const arr: string[] = editingLesson[field] || [];
-    const updated = arr.includes(value) ? arr.filter((v: string) => v !== value) : [...arr, value];
-    setEditingLesson({ ...editingLesson, [field]: updated });
   };
 
   if (loading) return (
@@ -182,170 +146,10 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
                   </div>
                 </div>
 
-                <hr className="my-3" />
-
-                {/* Section-Level Assignments */}
-                <h6 className="fw-semibold small mb-3">
-                  <i className="bi bi-diagram-3 me-1"></i>Section-Level Assignments
-                  <span className="text-muted fw-normal ms-2" style={{ fontSize: 11 }}>
-                    Inherited by all mini-sections in this section
-                  </span>
-                </h6>
-
-                {refLoading ? (
-                  <div className="text-center py-3">
-                    <div className="spinner-border spinner-border-sm text-primary" role="status">
-                      <span className="visually-hidden">Loading...</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="row g-3">
-                    {/* Section Variables */}
-                    <div className="col-12">
-                      <div className="card border-0" style={{ background: 'rgba(128,90,213,0.04)', border: '1px solid rgba(128,90,213,0.15)' }}>
-                        <div className="card-body py-2">
-                          <div className="d-flex align-items-center justify-content-between mb-2">
-                            <span className="fw-semibold small" style={{ color: '#553c9a' }}>
-                              <i className="bi bi-braces me-1"></i>Variables
-                              <span className="badge ms-2" style={{ fontSize: 9, background: 'rgba(128,90,213,0.15)', color: '#553c9a' }}>
-                                {(editingLesson.section_variable_keys || []).length} assigned
-                              </span>
-                            </span>
-                          </div>
-                          <p className="text-muted mb-2" style={{ fontSize: 11 }}>
-                            Variables assigned here are available to all mini-sections in this section. They appear as purple chips in the prompt editor.
-                          </p>
-                          <div className="d-flex flex-wrap gap-1">
-                            {allVariables.map((v: any) => {
-                              const key = v.variable_key || v.key;
-                              const selected = (editingLesson.section_variable_keys || []).includes(key);
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  className="btn btn-sm py-0 px-2"
-                                  style={{
-                                    fontSize: 10,
-                                    background: selected ? 'rgba(128,90,213,0.2)' : 'transparent',
-                                    color: selected ? '#553c9a' : 'var(--color-text-light)',
-                                    border: `1px solid ${selected ? 'rgba(128,90,213,0.4)' : 'var(--color-border)'}`,
-                                    borderRadius: 4,
-                                  }}
-                                  onClick={() => toggleArrayItem('section_variable_keys', key)}
-                                >
-                                  {selected && <i className="bi bi-check-lg me-1"></i>}
-                                  {key}
-                                </button>
-                              );
-                            })}
-                            {allVariables.length === 0 && (
-                              <span className="text-muted" style={{ fontSize: 11 }}>No variable definitions found.</span>
-                            )}
-                          </div>
-                          {/* Auto-injected section variables info */}
-                          <div className="mt-2 d-flex flex-wrap gap-1">
-                            <span className="text-muted" style={{ fontSize: 9 }}>Auto-injected:</span>
-                            {['section_title', 'section_description', 'section_learning_goal'].map(k => (
-                              <span key={k} className="badge" style={{ fontSize: 9, background: 'rgba(128,90,213,0.12)', color: '#553c9a' }}>
-                                {`{{${k}}}`}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Section Artifacts */}
-                    <div className="col-md-6">
-                      <div className="card border-0" style={{ background: 'var(--color-bg-alt, #f7fafc)' }}>
-                        <div className="card-body py-2">
-                          <div className="d-flex align-items-center justify-content-between mb-2">
-                            <span className="fw-semibold small">
-                              <i className="bi bi-file-earmark-code me-1"></i>Artifacts
-                              <span className="badge bg-info ms-2" style={{ fontSize: 9 }}>
-                                {(editingLesson.section_artifact_ids || []).length} assigned
-                              </span>
-                            </span>
-                          </div>
-                          <p className="text-muted mb-2" style={{ fontSize: 11 }}>
-                            Artifacts assigned here apply to the Implementation Task in this section.
-                          </p>
-                          <div className="d-flex flex-wrap gap-1">
-                            {allArtifacts.map((a: any) => {
-                              const selected = (editingLesson.section_artifact_ids || []).includes(a.id);
-                              return (
-                                <button
-                                  key={a.id}
-                                  type="button"
-                                  className="btn btn-sm py-0 px-2"
-                                  style={{
-                                    fontSize: 10,
-                                    background: selected ? 'rgba(56,161,105,0.15)' : 'transparent',
-                                    color: selected ? '#276749' : 'var(--color-text-light)',
-                                    border: `1px solid ${selected ? 'rgba(56,161,105,0.3)' : 'var(--color-border)'}`,
-                                    borderRadius: 4,
-                                  }}
-                                  onClick={() => toggleArrayItem('section_artifact_ids', a.id)}
-                                >
-                                  {selected && <i className="bi bi-check-lg me-1"></i>}
-                                  {a.name}
-                                </button>
-                              );
-                            })}
-                            {allArtifacts.length === 0 && (
-                              <span className="text-muted" style={{ fontSize: 11 }}>No artifact definitions found.</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Section Skills */}
-                    <div className="col-md-6">
-                      <div className="card border-0" style={{ background: 'var(--color-bg-alt, #f7fafc)' }}>
-                        <div className="card-body py-2">
-                          <div className="d-flex align-items-center justify-content-between mb-2">
-                            <span className="fw-semibold small">
-                              <i className="bi bi-mortarboard me-1"></i>Skills
-                              <span className="badge bg-info ms-2" style={{ fontSize: 9 }}>
-                                {(editingLesson.section_skill_ids || []).length} assigned
-                              </span>
-                            </span>
-                          </div>
-                          <p className="text-muted mb-2" style={{ fontSize: 11 }}>
-                            Skills assigned here map to all mini-sections in this section.
-                          </p>
-                          <div className="d-flex flex-wrap gap-1">
-                            {allSkills.map((s: any) => {
-                              const selected = (editingLesson.section_skill_ids || []).includes(s.id);
-                              return (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  className="btn btn-sm py-0 px-2"
-                                  style={{
-                                    fontSize: 10,
-                                    background: selected ? 'rgba(43,108,176,0.15)' : 'transparent',
-                                    color: selected ? '#2b6cb0' : 'var(--color-text-light)',
-                                    border: `1px solid ${selected ? 'rgba(43,108,176,0.3)' : 'var(--color-border)'}`,
-                                    borderRadius: 4,
-                                  }}
-                                  onClick={() => toggleArrayItem('section_skill_ids', s.id)}
-                                >
-                                  {selected && <i className="bi bi-check-lg me-1"></i>}
-                                  {s.name}
-                                </button>
-                              );
-                            })}
-                            {allSkills.length === 0 && (
-                              <span className="text-muted" style={{ fontSize: 11 }}>No skill definitions found.</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <div className="text-muted mt-2" style={{ fontSize: 11 }}>
+                  <i className="bi bi-info-circle me-1"></i>
+                  Variables, skills, and artifacts are managed in the Section Blueprint on the Mini-Sections tab.
+                </div>
               </div>
               <div className="modal-footer">
                 <button className="btn btn-sm btn-outline-secondary" onClick={() => setEditingLesson(null)}>Cancel</button>

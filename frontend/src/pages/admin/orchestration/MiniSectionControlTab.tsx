@@ -35,6 +35,22 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
     } catch { /* silent save */ }
   };
 
+  const handleSectionAssignmentsChange = async (updates: { section_variable_keys?: string[]; section_artifact_ids?: string[]; section_skill_ids?: string[] }) => {
+    if (!builder.selectedLessonId) return;
+    // Update local state immediately
+    if (updates.section_variable_keys) builder.setSectionVariableKeys(updates.section_variable_keys);
+    if (updates.section_artifact_ids) builder.setSectionArtifactIds(updates.section_artifact_ids);
+    if (updates.section_skill_ids) builder.setSectionSkillIds(updates.section_skill_ids);
+    // Persist to backend
+    try {
+      await fetch(`${apiUrl}/api/admin/orchestration/lessons/${builder.selectedLessonId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+    } catch { /* silent save */ }
+  };
+
   const handleApplyStructure = async (events: GeneratedEvent[]) => {
     if (!builder.selectedLessonId) return;
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -210,6 +226,13 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
               token={token}
               apiUrl={apiUrl}
               onApply={handleApplyStructure}
+              sectionVariableKeys={builder.sectionVariableKeys}
+              sectionArtifactIds={builder.sectionArtifactIds}
+              sectionSkillIds={builder.sectionSkillIds}
+              onSectionAssignmentsChange={handleSectionAssignmentsChange}
+              variableOptions={builder.variableOptions.map(v => ({ value: v.value, label: v.label }))}
+              artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
+              skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
             />
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../../../utils/api';
-import { MiniSection, MiniSectionType, TYPE_OPTIONS, TYPE_ICONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions, PROMPT_PAIRS, extractPlaceholders, computeAvailableVars } from './types';
+import { MiniSection, MiniSectionType, TYPE_OPTIONS, TYPE_ICONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions, PROMPT_PAIRS } from './types';
 import HighlightedPromptEditor from './HighlightedPromptEditor';
 import VariableSection from './VariableSection';
 import SkillSection from './SkillSection';
@@ -188,22 +188,6 @@ export default function ObjectConfigEngine(props: Props) {
     PROMPT_PAIRS.filter(p => !editType || p.applicableTypes.includes(editType)),
     [editType]
   );
-  const currentOrder = editing?.mini_section_order ?? 999;
-  const systemVarKeys = useMemo(() => props.systemVariables.map(v => v.variable_key), [props.systemVariables]);
-  const coreAvailableVars = useMemo(() =>
-    computeAvailableVars(miniSections, currentOrder, systemVarKeys),
-    [miniSections, currentOrder, systemVarKeys]
-  );
-  const coreAllDefinedVars = useMemo(() =>
-    new Set(props.variables.map(v => v.variable_key)),
-    [props.variables]
-  );
-  const sectionVarSet = useMemo(() => {
-    const keys = new Set(['section_title', 'section_description', 'section_learning_goal']);
-    for (const k of (props.sectionVariableKeys || [])) keys.add(k);
-    return keys;
-  }, [props.sectionVariableKeys]);
-
   const handleReverseEngineer = useCallback(async () => {
     if (!editing?.id) return;
     setReverseLoading(true);
@@ -477,7 +461,7 @@ export default function ObjectConfigEngine(props: Props) {
                       <div className="d-flex align-items-center gap-2 mb-2">
                         <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
                         <span className="fw-semibold small">Prompts</span>
-                        <span className="text-muted" style={{ fontSize: 10 }}>Use <code style={{ fontSize: 10 }}>{'{{variable_key}}'}</code> for dynamic values</span>
+                        <span className="text-muted" style={{ fontSize: 10 }}>Learner data is appended automatically to all prompts</span>
                       </div>
                       {typePromptPairs
                         .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
@@ -500,12 +484,9 @@ export default function ObjectConfigEngine(props: Props) {
                               <HighlightedPromptEditor
                                 value={combinedValue}
                                 onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
-                                availableVars={coreAvailableVars}
-                                allDefinedVars={coreAllDefinedVars}
-                                sectionVars={sectionVarSet}
                                 label="PROMPT"
                                 rows={5}
-                                placeholder="Instructions for the AI model with {{variable}} placeholders..."
+                                placeholder="Write prompt instructions naturally. Learner data is appended automatically."
                               />
                             </div>
                           );
@@ -521,12 +502,8 @@ export default function ObjectConfigEngine(props: Props) {
                     </div>
                     <VariableSection
                       editing={editing}
-                      miniSections={miniSections}
                       variables={props.variables}
                       systemVariables={props.systemVariables}
-                      variableMap={props.variableMap}
-                      promptBodies={props.promptBodies}
-                      artifacts={props.artifacts}
                       sectionVariableKeys={props.sectionVariableKeys}
                       onUpdate={props.onUpdate}
                       onCreateVariable={props.onCreateVariable}
@@ -541,14 +518,8 @@ export default function ObjectConfigEngine(props: Props) {
                     </div>
                     <SkillSection
                       editing={editing}
-                      editType={editType}
-                      miniSectionId={editing.id}
                       skillOptions={props.skillOptions}
                       sectionSkillIds={props.sectionSkillIds}
-                      onUpdate={props.onUpdate}
-                      onCreateSkill={props.onCreateSkill}
-                      token={props.token}
-                      apiUrl={props.apiUrl}
                     />
                   </div>
 
@@ -561,11 +532,8 @@ export default function ObjectConfigEngine(props: Props) {
                       </div>
                       <ArtifactSection
                         editing={editing}
-                        artifactOptions={props.artifactOptions}
                         artifacts={props.artifacts}
                         sectionArtifactIds={props.sectionArtifactIds}
-                        onUpdate={props.onUpdate}
-                        onCreateArtifact={props.onCreateArtifact}
                       />
                     </div>
                   )}

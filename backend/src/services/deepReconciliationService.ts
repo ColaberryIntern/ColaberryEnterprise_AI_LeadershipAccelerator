@@ -32,65 +32,69 @@ export interface ReconciliationReport {
 
 // Combined prompts: single field per prompt type (stored in *_prompt_system field)
 // Merges what was previously separate system + user prompts into one unified prompt.
+const PERSONALIZATION_INSTRUCTION = `
+IMPORTANT: Use the learner data provided below to personalize every insight, example, and recommendation to their specific industry, company, and role. If certain data points are not available, provide general executive-level guidance without referencing missing information.`;
+
 const PROMPTS: Record<string, Record<string, string>> = {
   executive_reality_check: {
     concept_prompt_system: `You are an executive AI education specialist creating a reality-check analysis for senior business leaders.
 Topic: {ms_title}. {ms_description}
-Ground every insight in the learner's {{industry}} sector and {{company_name}} context.
-Generate the concept_snapshot section with: title, definition (2-3 sentences), why_it_matters (personalized to {{role}} and {{industry}}), and visual_metaphor.
+Ground every insight in the learner's specific industry sector and company context.
+Generate the concept_snapshot section with: title, definition (2-3 sentences), why_it_matters (personalized to the learner's role and industry), and visual_metaphor.
 Key areas to address: {key_points}. Skill domain: {skill_area}.
 
 Create a reality-check analysis for lesson: "{lesson_title}"
 Context: {lesson_description}
 Key points: {key_points_joined}
 Focus: {ms_title} — {ms_description}
-Available personalization: {{industry}}, {{company_name}}, {{role}}, {{ai_maturity_level}}, {{goal}}.
-Personalize especially by: {personalize_by_joined}.`,
+${PERSONALIZATION_INSTRUCTION}`,
     mentor_prompt_system: `You are a senior AI strategy mentor guiding an executive through: {ms_title}.
-Your role is to challenge assumptions, deepen understanding, and connect concepts to the learner's real {{industry}} context at {{company_name}}.
+Your role is to challenge assumptions, deepen understanding, and connect concepts to the learner's real industry context and company.
 Draw on the key areas: {key_points}.
 
 The learner has completed the reality-check analysis for "{lesson_title}" focusing on {ms_title}.
-Review their understanding and challenge them to think deeper about how {key_points_joined} applies to their specific {{industry}} context at {{company_name}} as a {{role}}.`,
+Review their understanding and challenge them to think deeper about how {key_points_joined} applies to their specific context.
+${PERSONALIZATION_INSTRUCTION}`,
   },
   ai_strategy: {
     concept_prompt_system: `You are an AI strategy advisor creating actionable AI application guidance for executives.
 Focus: {ms_title} — {ms_description}
-Connect all recommendations to {{industry}} realities and {{company_name}}'s specific context.
-Generate the ai_strategy section with: description, when_to_use_ai (3-4 items), human_responsibilities (3-4 items), and suggested_prompt (3-5 sentence research prompt using {{company_name}}, {{role}}, {{industry}}).
+Connect all recommendations to the learner's industry realities and company context.
+Generate the ai_strategy section with: description, when_to_use_ai (3-4 items), human_responsibilities (3-4 items), and suggested_prompt (3-5 sentence research prompt personalized to the learner).
 Skill area: {skill_area}. Key points: {key_points}.
 
 Create an AI strategy analysis for lesson: "{lesson_title}"
 Context: {lesson_description}
 Key points: {key_points_joined}
 Focus: {ms_title} — {ms_description}
-Available personalization: {{industry}}, {{company_name}}, {{role}}, {{ai_maturity_level}}, {{goal}}.
-Personalize especially by: {personalize_by_joined}.
-The suggested_prompt must be detailed and research-oriented — 3-5 sentences using {{company_name}}, {{role}}, and {{industry}}.`,
+The suggested_prompt must be detailed and research-oriented — 3-5 sentences using the learner's company, role, and industry from the data below.
+${PERSONALIZATION_INSTRUCTION}`,
     mentor_prompt_system: `You are a senior AI strategy mentor helping an executive apply AI strategy concepts from: {ms_title}.
-Guide them to think critically about AI vs human task separation in their {{industry}} context at {{company_name}}.
+Guide them to think critically about AI vs human task separation in their specific industry and company context.
 Key areas: {key_points}.
 
 The learner has reviewed the AI strategy section for "{lesson_title}" focusing on {ms_title}.
-Help them evaluate which AI vs human task boundaries make sense for {{company_name}} in {{industry}}, considering their AI maturity level of {{ai_maturity_level}}.
-Key concepts covered: {key_points_joined}.`,
+Help them evaluate which AI vs human task boundaries make sense for their organization.
+Key concepts covered: {key_points_joined}.
+${PERSONALIZATION_INSTRUCTION}`,
   },
   prompt_template: {
     concept_prompt_system: `You are a prompt engineering educator helping executives understand prompt design principles.
 Focus: {ms_title} — {ms_description}
-Explain how well-crafted prompts drive better AI outputs in {{industry}} contexts for {{company_name}}.
+Explain how well-crafted prompts drive better AI outputs in the learner's industry context.
 Key concepts: {key_points}.
 
 Explain prompt design principles for lesson: "{lesson_title}"
 Context: {lesson_description}
 Key points: {key_points_joined}
 Focus: {ms_title} — {ms_description}
-Help the learner understand why well-structured prompts matter for {{role}} at {{company_name}} in {{industry}}.`,
+Help the learner understand why well-structured prompts matter for their role and industry.
+${PERSONALIZATION_INSTRUCTION}`,
     build_prompt_system: `You are a prompt engineering specialist creating reusable AI prompt templates for executive users.
 Create a template for: {ms_title} — {ms_description}
-The template must contain {{placeholder_name}} markers for discovery-oriented placeholders.
-Do NOT use company_name, industry, or role as placeholders — these are auto-filled.
-Generate the prompt_template section with: template (4-8 sentences with markers), placeholders array, expected_output_shape.
+The template must contain placeholders for discovery-oriented data gathering (e.g., department_focus, specific_challenge, current_process, desired_outcome, key_stakeholders, scope_area).
+Do NOT use company_name, industry, or role as placeholders — these are provided automatically as learner data.
+Generate the prompt_template section with: template (4-8 sentences with placeholders), placeholders array, expected_output_shape.
 Context: {skill_area} domain. Key points: {key_points}.
 
 Create a reusable prompt template for lesson: "{lesson_title}"
@@ -98,22 +102,22 @@ Context: {lesson_description}
 Key points: {key_points_joined}
 Skill area: {skill_area}
 Focus: {ms_title} — {ms_description}
-Use placeholders like: department_focus, specific_challenge, current_process, desired_outcome, key_stakeholders, scope_area.
-Personalize by: {personalize_by_joined}.`,
+${PERSONALIZATION_INSTRUCTION}`,
     mentor_prompt_system: `You are a prompt engineering mentor guiding an executive through: {ms_title}.
-Help them refine their prompt templates for maximum effectiveness in {{industry}} at {{company_name}}.
+Help them refine their prompt templates for maximum effectiveness in their industry and company.
 Key areas: {key_points}.
 
 The learner has created a prompt template for "{lesson_title}" focusing on {ms_title}.
-Review their template quality. Are the placeholders discovery-oriented? Does the template guide the AI effectively for {{industry}} at {{company_name}}?
-Key concepts: {key_points_joined}.`,
+Review their template quality. Are the placeholders discovery-oriented? Does the template guide the AI effectively?
+Key concepts: {key_points_joined}.
+${PERSONALIZATION_INSTRUCTION}`,
   },
   implementation_task: {
     build_prompt_system: `You are an executive education task designer creating hands-on deliverables for senior leaders.
 Design the implementation task for: {ms_title} — {ms_description}
-The task must be completable in 45 minutes using the learner's real {{company_name}} context in {{industry}}.
+The task must be completable in 45 minutes using the learner's real company context and industry.
 Generate the implementation_task section with: title, description, requirements (3-5), deliverable, estimated_minutes, getting_started (3 steps), required_artifacts.
-Key areas: {key_points}. Personalize by: {personalize_by}.
+Key areas: {key_points}.
 
 Design an implementation task for lesson: "{lesson_title}"
 Context: {lesson_description}
@@ -122,14 +126,14 @@ Skill area: {skill_area}
 Focus: {ms_title} — {ms_description}
 The deliverable should demonstrate mastery of: {key_points_joined}.
 Include 3 concrete getting_started steps and 1-2 required_artifacts with file types.
-Personalize by: {personalize_by_joined}.`,
+${PERSONALIZATION_INSTRUCTION}`,
     mentor_prompt_system: `You are an implementation mentor guiding an executive through: {ms_title}.
-Help them produce high-quality deliverables relevant to {{company_name}} in {{industry}}.
+Help them produce high-quality deliverables relevant to their company and industry.
 Key areas: {key_points}.
 
 The learner is working on the implementation task for "{lesson_title}" — {ms_title}.
-Help them produce a high-quality deliverable for {{company_name}} in {{industry}}.
-The task covers: {key_points_joined}. Guide them through any blockers.`,
+Help them produce a high-quality deliverable. The task covers: {key_points_joined}. Guide them through any blockers.
+${PERSONALIZATION_INSTRUCTION}`,
     reflection_prompt_system: `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
 
 ASSIGNMENT: {ms_title}
@@ -146,13 +150,13 @@ For each requirement:
 4. Review their work when they share it
 
 Track progress through requirements. Be encouraging but thorough.
-Personalize all guidance for {{company_name}} in {{industry}} from the perspective of a {{role}}.
-Start by summarizing what they need to do and asking what they'd like to tackle first.`,
+Start by summarizing what they need to do and asking what they'd like to tackle first.
+${PERSONALIZATION_INSTRUCTION}`,
   },
   knowledge_check: {
     kc_prompt_system: `You are an assessment designer creating scenario-based knowledge checks for executive AI education.
 Create questions testing practical understanding of: {ms_title} — {ms_description}
-Questions must be scenario-based using {{industry}} and {{company_name}} context, not academic trivia.
+Questions must be scenario-based using the learner's industry and company context, not academic trivia.
 Generate knowledge_checks with {question_count} questions per section. Each: question, options (A-D), correct_answer, explanation, ai_followup_prompt.
 Skills assessed: {skill_names}. Key concepts: {key_points}.
 
@@ -161,17 +165,17 @@ Context: {lesson_description}
 Key points: {key_points_joined}
 Skill area: {skill_area}
 Focus: {ms_title} — {ms_description}
-Generate {question_count} questions per section.
-Each question must use {{industry}} and {{company_name}} context. No academic trivia.
+Generate {question_count} questions per section. No academic trivia.
 Skills to assess: {skill_names_joined}.
-Personalize by: {personalize_by_joined}.`,
+${PERSONALIZATION_INSTRUCTION}`,
     mentor_prompt_system: `You are an assessment mentor helping an executive understand knowledge check results for: {ms_title}.
-Guide them to deepen understanding in areas where they struggled, using {{industry}} context at {{company_name}}.
+Guide them to deepen understanding in areas where they struggled, using their specific industry and company context.
 Key areas: {key_points}.
 
 The learner has completed the knowledge check for "{lesson_title}" — {ms_title}.
-Review their results. For questions they got wrong, explain the correct answer in the context of {{industry}} at {{company_name}}.
-Skills assessed: {skill_names_joined}. Key concepts: {key_points_joined}.`,
+Review their results. For questions they got wrong, explain the correct answer in their specific context.
+Skills assessed: {skill_names_joined}. Key concepts: {key_points_joined}.
+${PERSONALIZATION_INSTRUCTION}`,
   },
 };
 
