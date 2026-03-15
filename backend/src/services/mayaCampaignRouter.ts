@@ -38,8 +38,11 @@ export async function routeLeadToCampaign(
 
   try {
     // ── Campaign precedence guards ──────────────────────────────────────────
-    if (interestType === 'general') {
-      // Inbound Lead campaign: ONLY if lead has NO active campaign at all
+    // Guard applies to the Inbound Lead Campaign regardless of the original interestType,
+    // since unmapped types (executive_briefing, strategy_call, etc.) fall through to it.
+    const isInboundCampaign = campaignName === CAMPAIGN_MAP.general;
+    if (isInboundCampaign) {
+      // Inbound Lead campaign: ONLY if lead has ZERO active campaigns
       const existingEnrollment = await CampaignLead.findOne({
         where: { lead_id: leadId, status: { [Op.in]: ['enrolled', 'active'] } },
       });
@@ -47,11 +50,12 @@ export async function routeLeadToCampaign(
         await logAction(visitorId, conversationId, 'campaign_enrolled', 'skipped', {
           lead_id: leadId,
           campaign_name: campaignName,
-          reason: 'Lead already in active campaign — preserving attribution',
+          interest_type: interestType,
+          reason: 'existing_active_campaign',
           existing_campaign_id: existingEnrollment.campaign_id,
         });
         // Tag the Maya interaction instead
-        await addMayaInteractionTag(leadId, 'maya_chat_active');
+        await addMayaInteractionTag(leadId, `maya_${interestType || 'chat'}_active`);
         return {
           success: true,
           summary: 'Lead already in an active campaign. Maya interaction tagged instead.',
