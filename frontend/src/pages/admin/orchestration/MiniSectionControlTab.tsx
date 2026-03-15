@@ -302,6 +302,20 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
               artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
               skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
               lessonTitle={builder.selectedLesson?.title}
+              editing={builder.editing}
+              dryRun={builder.dryRun}
+              validating={builder.validating}
+              onRevalidate={builder.runValidation}
+              qualityBreakdown={builder.qualityBreakdown}
+              qualityLoading={builder.qualityLoading}
+              onRefreshQuality={() => builder.fetchQualityScore()}
+              suggestions={builder.suggestions}
+              suggestionsLoading={builder.suggestionsLoading}
+              applyingSuggestion={builder.applyingSuggestion}
+              onRefreshSuggestions={() => builder.fetchSuggestions()}
+              onApplySuggestionFix={builder.applySuggestionFix}
+              onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
+              onOpenRepair={() => builder.setShowRepairModal(true)}
             />
             <PromptDebuggerPanel
               lessonId={builder.selectedLessonId}

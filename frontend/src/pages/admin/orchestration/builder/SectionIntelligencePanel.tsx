@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { MiniSection, TYPE_ICONS } from './types';
+import { MiniSection, TYPE_ICONS, DryRunResult, QualityBreakdown, Suggestion } from './types';
+import ValidationSection from './ValidationSection';
+import QualityScoreSection from './QualityScoreSection';
+import SuggestionSection from './SuggestionSection';
 
 interface Props {
   sectionVariableKeys: string[];
@@ -10,6 +13,21 @@ interface Props {
   artifactOptions: { value: string; label: string }[];
   skillOptions: { value: string; label: string }[];
   lessonTitle?: string;
+  // Diagnostic props
+  editing?: Partial<MiniSection> | null;
+  dryRun?: DryRunResult | null;
+  validating?: boolean;
+  onRevalidate?: () => void;
+  qualityBreakdown?: QualityBreakdown | null;
+  qualityLoading?: boolean;
+  onRefreshQuality?: () => void;
+  suggestions?: Suggestion[];
+  suggestionsLoading?: boolean;
+  applyingSuggestion?: string | null;
+  onRefreshSuggestions?: () => void;
+  onApplySuggestionFix?: (s: Suggestion) => void;
+  onOpenDiagnostic?: () => void;
+  onOpenRepair?: () => void;
 }
 
 function CollapsibleSection({ icon, title, count, color, children }: {
@@ -40,6 +58,10 @@ function CollapsibleSection({ icon, title, count, color, children }: {
 export default function SectionIntelligencePanel({
   sectionVariableKeys, sectionArtifactIds, sectionSkillIds, miniSections,
   variableOptions, artifactOptions, skillOptions, lessonTitle,
+  editing, dryRun, validating, onRevalidate,
+  qualityBreakdown, qualityLoading, onRefreshQuality,
+  suggestions, suggestionsLoading, applyingSuggestion, onRefreshSuggestions, onApplySuggestionFix,
+  onOpenDiagnostic, onOpenRepair,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -123,6 +145,65 @@ export default function SectionIntelligencePanel({
               {miniSections.length === 0 && <span className="text-muted">No mini-sections</span>}
             </div>
           </CollapsibleSection>
+
+          {/* Diagnostic Tools — shown when a mini-section is selected */}
+          {editing && (
+            <>
+              <hr className="my-2" style={{ opacity: 0.15 }} />
+              <div className="fw-semibold mb-1" style={{ fontSize: 10, color: 'var(--color-text-light, #718096)' }}>
+                <i className="bi bi-activity me-1"></i>Diagnostics
+                {editing.title && <span className="fw-normal ms-1">— {editing.title}</span>}
+              </div>
+
+              {/* Validation */}
+              <CollapsibleSection icon="bi-check-circle" title="Validation" count={0} color="#0d6efd">
+                <ValidationSection
+                  editing={editing}
+                  dryRun={dryRun || null}
+                  validating={validating || false}
+                  onRevalidate={onRevalidate || (() => {})}
+                />
+              </CollapsibleSection>
+
+              {/* Quality Score */}
+              {editing.id && (
+                <CollapsibleSection icon="bi-graph-up" title="Quality Score" count={0} color="#38a169">
+                  <QualityScoreSection
+                    miniSectionId={editing.id}
+                    qualityBreakdown={qualityBreakdown || null}
+                    loading={qualityLoading || false}
+                    onRefresh={onRefreshQuality || (() => {})}
+                  />
+                </CollapsibleSection>
+              )}
+
+              {/* Improve to 100 */}
+              {editing.id && (
+                <CollapsibleSection icon="bi-lightbulb" title="Improve to 100" count={suggestions?.length || 0} color="#dd6b20">
+                  <SuggestionSection
+                    miniSectionId={editing.id}
+                    suggestions={suggestions || []}
+                    loading={suggestionsLoading || false}
+                    applying={applyingSuggestion || null}
+                    onRefresh={onRefreshSuggestions || (() => {})}
+                    onApplyFix={onApplySuggestionFix || (() => {})}
+                  />
+                </CollapsibleSection>
+              )}
+
+              {/* Full Diagnostic + Auto-Repair buttons */}
+              {editing.id && (
+                <div className="d-flex gap-2 mt-2">
+                  <button className="btn btn-sm btn-outline-primary flex-grow-1 py-0" style={{ fontSize: 9 }} onClick={onOpenDiagnostic}>
+                    <i className="bi bi-clipboard2-pulse me-1"></i>Full Diagnostic
+                  </button>
+                  <button className="btn btn-sm btn-outline-warning flex-grow-1 py-0" style={{ fontSize: 9 }} onClick={onOpenRepair}>
+                    <i className="bi bi-wrench-adjustable me-1"></i>Auto-Repair
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

@@ -6,9 +6,6 @@ import VariableSection from './VariableSection';
 import SkillSection from './SkillSection';
 import ArtifactSection from './ArtifactSection';
 import KnowledgeCheckSection from './KnowledgeCheckSection';
-import ValidationSection from './ValidationSection';
-import QualityScoreSection from './QualityScoreSection';
-import SuggestionSection from './SuggestionSection';
 import ConceptV2 from '../../../../components/portal/lesson/ConceptV2';
 import { AdminPreviewMentorProvider, useMentorContext } from '../../../../contexts/MentorContext';
 import PreviewMentorChat from './PreviewMentorChat';
@@ -568,46 +565,6 @@ export default function ObjectConfigEngine(props: Props) {
           );
         })}
 
-        {/* Diagnostic tools for active mini-section */}
-        {renderAccordion('validation', 'Validation', 'bi-check-circle', (
-          <ValidationSection
-            editing={editing}
-            dryRun={props.dryRun}
-            validating={props.validating}
-            onRevalidate={props.onRevalidate}
-          />
-        ))}
-
-        {renderAccordion('quality', 'Quality Score', 'bi-graph-up', (
-          <QualityScoreSection
-            miniSectionId={editing.id}
-            qualityBreakdown={props.qualityBreakdown}
-            loading={props.qualityLoading}
-            onRefresh={props.onRefreshQuality}
-          />
-        ), !!editing.id)}
-
-        {renderAccordion('suggestions', 'Improve to 100', 'bi-lightbulb', (
-          <SuggestionSection
-            miniSectionId={editing.id}
-            suggestions={props.suggestions}
-            loading={props.suggestionsLoading}
-            applying={props.applyingSuggestion}
-            onRefresh={props.onRefreshSuggestions}
-            onApplyFix={props.onApplySuggestionFix}
-          />
-        ), !!editing.id)}
-
-        {editing.id && (
-          <div className="d-flex gap-2 mt-2 mb-1">
-            <button className="btn btn-sm btn-outline-primary flex-grow-1" onClick={props.onOpenDiagnostic}>
-              <i className="bi bi-clipboard2-pulse me-1"></i>Full Diagnostic
-            </button>
-            <button className="btn btn-sm btn-outline-warning flex-grow-1" onClick={props.onOpenRepair}>
-              <i className="bi bi-wrench-adjustable me-1"></i>Auto-Repair
-            </button>
-          </div>
-        )}
       </div>
       )}
 
