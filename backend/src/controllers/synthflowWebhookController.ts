@@ -4,7 +4,7 @@ import { CommunicationLog, CampaignSimulationStep, Lead } from '../models';
 import { InteractionOutcome } from '../models';
 import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
-import { sendSmsViaGhl, syncLeadToGhl } from '../services/ghlService';
+import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
 import OpenAI from 'openai';
 import { env } from '../config/env';
 import { getTestOverrides } from '../services/settingsService';
@@ -169,25 +169,35 @@ async function sendPostCallSms(leadId: number, transcript: string, callId: strin
   const leadName = (lead as any).name || (lead as any).first_name || 'there';
   const firstName = leadName.split(' ')[0];
 
-  // Ensure GHL contact exists (sync if needed)
-  let ghlContactId = (lead as any).ghl_contact_id;
-  if (!ghlContactId) {
-    console.log(`[PostCallSMS] Lead ${leadId} has no GHL contact — syncing now`);
-    const syncResult = await syncLeadToGhl(lead, 'voice_call', false, true);
-    ghlContactId = syncResult.contactId;
+  // In test mode, look up the test contact by test email instead of using the lead's stored GHL ID
+  let ghlContactId: string | null = null;
+  const testOverrides = await getTestOverrides();
+  const isTestMode = !!(testOverrides.enabled);
+
+  if (isTestMode && testOverrides.email) {
+    console.log(`[PostCallSMS] TEST MODE — looking up GHL contact for test email: ${testOverrides.email}`);
+    const testContact = await findContactByEmail(testOverrides.email);
+    if (testContact) {
+      ghlContactId = testContact.id;
+      console.log(`[PostCallSMS] TEST MODE — using test contact ${ghlContactId}`);
+    } else {
+      // Sync to create the test contact
+      const syncResult = await syncLeadToGhl(lead, 'voice_call', false, true);
+      ghlContactId = syncResult.contactId;
+    }
+  } else {
+    ghlContactId = (lead as any).ghl_contact_id;
     if (!ghlContactId) {
-      console.warn(`[PostCallSMS] Could not create GHL contact for lead ${leadId}. SMS skipped.`);
-      return;
+      console.log(`[PostCallSMS] Lead ${leadId} has no GHL contact — syncing now`);
+      const syncResult = await syncLeadToGhl(lead, 'voice_call', false, true);
+      ghlContactId = syncResult.contactId;
     }
   }
 
-  // Check test mode — log but still send (GHL test mode handles redirect)
-  try {
-    const test = await getTestOverrides();
-    if (test.enabled) {
-      console.log(`[PostCallSMS] TEST MODE active — GHL will use test contact`);
-    }
-  } catch { /* non-fatal */ }
+  if (!ghlContactId) {
+    console.warn(`[PostCallSMS] Could not resolve GHL contact for lead ${leadId}. SMS skipped.`);
+    return;
+  }
 
   // Summarize transcript via AI
   const smsBody = await summarizeTranscriptForSms(firstName, transcript);
@@ -222,7 +232,7 @@ async function summarizeTranscriptForSms(firstName: string, transcript: string):
 
 RULES:
 - Maximum 280 characters total
-- Include this link for booking: https://enterprise.colaberry.ai/strategy-call
+- Include this link for booking: https://enterprise.colaberry.ai/program
 - Sign off as "- Maya, Colaberry"
 - Do NOT use emojis
 - Write as a text message, not an email`,
@@ -232,9 +242,9 @@ RULES:
     });
 
     return response.choices[0]?.message?.content?.trim() ||
-      `Hi ${firstName}, thanks for chatting with me! I'd love to continue our conversation. Book a strategy call here: https://enterprise.colaberry.ai/strategy-call - Maya, Colaberry`;
+      `Hi ${firstName}, thanks for chatting with me! I'd love to continue our conversation. Book a strategy call here: https://enterprise.colaberry.ai/program - Maya, Colaberry`;
   } catch (err: any) {
     console.warn(`[PostCallSMS] AI summary failed: ${err.message}. Using fallback.`);
-    return `Hi ${firstName}, thanks for chatting with me about the AI Leadership Accelerator! Book a strategy call to continue our conversation: https://enterprise.colaberry.ai/strategy-call - Maya, Colaberry`;
+    return `Hi ${firstName}, thanks for chatting with me about the AI Leadership Accelerator! Book a strategy call to continue our conversation: https://enterprise.colaberry.ai/program - Maya, Colaberry`;
   }
 }
