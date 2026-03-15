@@ -16,6 +16,7 @@ import {
 import { createAppointment } from './appointmentService';
 import { sendStrategyCallConfirmation } from './emailService';
 import { findRelevantKnowledge } from './admissionsKnowledgeService';
+import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
 import { routeLeadToCampaign, addMayaInteractionTag } from './mayaCampaignRouter';
 import {
   generateConversationSummary,
@@ -350,7 +351,41 @@ export async function initiateVoiceCall(
     }
   }
 
-  const callPrompt = `You ARE Maya, Director of Admissions at Colaberry. You are calling ${leadName}. Introduce yourself as "Hi ${leadName.split(' ')[0]}, this is Maya from Colaberry." They were just chatting with you online about the AI Leadership Accelerator program. Here is the recent conversation context:\n\n${conversationContext}\n\nYour goal: Continue the conversation naturally, answer their questions about the program, and guide them toward booking a strategy call or enrollment. During the conversation, try to naturally learn: their full name, company, job title, email address, what specifically interests them about the program, and any timeline or budget considerations. Don't interrogate — weave these into natural conversation. Remember: you ARE Maya — speak in first person as Maya throughout the call.`;
+  // Fetch high-priority knowledge entries so the voice agent has accurate facts
+  let knowledgeFacts = '';
+  try {
+    const topEntries = await AdmissionsKnowledgeEntry.findAll({
+      where: { active: true, priority: { [Op.gte]: 9 } },
+      order: [['priority', 'DESC']],
+      limit: 15,
+    });
+    if (topEntries.length > 0) {
+      knowledgeFacts = topEntries
+        .map((e: any) => `- ${e.title}: ${e.content}`)
+        .join('\n');
+    }
+  } catch {
+    // Non-fatal — fall back to static facts only
+  }
+
+  const callPrompt = `You ARE Maya, Director of Admissions at Colaberry. You are calling ${leadName}. Introduce yourself as "Hi ${leadName.split(' ')[0]}, this is Maya from Colaberry." They were just chatting with you online about the AI Leadership Accelerator program.
+
+CRITICAL PROGRAM FACTS — use these exact figures, never approximate or guess:
+- Program name: Enterprise AI Leadership Accelerator
+- Price: $4,500 per participant (NOT $5,000 — always say forty-five hundred or four thousand five hundred)
+- Duration: 3 weeks, 5 live sessions
+- Format: Live, hands-on, with mentored project work
+- Payment: Credit card or corporate invoice
+- Corporate group pricing available
+- What participants get: Enterprise AI architecture templates, governance frameworks, production-ready AI proof of capability, 90-day expansion roadmap
+- Target audience: CTOs, CIOs, CDOs, VPs of Engineering, Directors of Technology/Data at $50M+ organizations
+- ROI framing: Consulting firms charge $50K-$200K for comparable deliverables
+${knowledgeFacts ? `\nADDITIONAL KNOWLEDGE BASE FACTS:\n${knowledgeFacts}` : ''}
+
+CONVERSATION CONTEXT (what was discussed in the chat before this call):
+${conversationContext}
+
+Your goal: Continue the conversation naturally, answer their questions about the program, and guide them toward booking a strategy call or enrollment. During the conversation, try to naturally learn: their full name, company, job title, email address, what specifically interests them about the program, and any timeline or budget considerations. Don't interrogate — weave these into natural conversation. Remember: you ARE Maya — speak in first person as Maya throughout the call.`;
 
   try {
     const result = await triggerVoiceCall({
