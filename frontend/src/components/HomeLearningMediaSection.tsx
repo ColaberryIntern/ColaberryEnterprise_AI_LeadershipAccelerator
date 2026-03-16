@@ -61,11 +61,11 @@ export default function HomeLearningMediaSection({ podcastUrl }: HomeLearningMed
             <div className="media-card card border-0 shadow-sm h-100" style={{ borderTop: '3px solid var(--color-accent)' }}>
               <div className="card-body p-4">
                 <h3 className="h5 fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>
-                  Hear the Story Behind the Program
+                  Hear How the Process Works
                 </h3>
                 <p className="text-muted small mb-3">
-                  Listen to a conversation explaining why the accelerator was created and how
-                  organizations are beginning to design and deploy real AI systems.
+                  Listen to a podcast where we break down exactly how the accelerator process works
+                  — from bringing your ideas to building a working AI system in 21 days.
                 </p>
 
                 {podcastUrl ? (
@@ -117,7 +117,7 @@ export default function HomeLearningMediaSection({ podcastUrl }: HomeLearningMed
                 )}
 
                 <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                  Deep dive conversation about the philosophy and structure of the accelerator.
+                  A breakdown of how the accelerator takes you from idea to working AI system.
                 </small>
               </div>
             </div>
