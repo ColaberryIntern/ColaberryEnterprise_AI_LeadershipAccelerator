@@ -20,14 +20,35 @@ interface InsightChartsProps {
   department: DemoDepartment;
 }
 
+const RADAR_TITLES: Record<string, string> = {
+  strategy: 'Strategic Impact Radar',
+  marketing: 'Channel Performance Radar',
+  operations: 'Operational Efficiency Radar',
+  sales: 'Sales Performance Radar',
+  finance: 'Financial Health Radar',
+  'customer-success': 'Customer Health Radar',
+};
+
+const BAR_TITLES: Record<string, string> = {
+  strategy: 'Investment Allocation',
+  marketing: 'Marketing Pipeline',
+  operations: 'Operational Throughput',
+  sales: 'Pipeline Stage Distribution',
+  finance: 'Revenue Breakdown',
+  'customer-success': 'Customer Lifecycle Distribution',
+};
+
 export default function InsightCharts({ department }: InsightChartsProps) {
+  const radarTitle = RADAR_TITLES[department.id] || 'Performance: Current vs. With AI';
+  const barTitle = BAR_TITLES[department.id] || `${department.name} Pipeline`;
+
   return (
     <div className="row g-4 mt-3 mb-3">
       {/* Radar Chart */}
       <div className="col-md-6">
         <div className="card border-0 shadow-sm h-100">
           <div className="card-body p-3">
-            <h4 className="h6 fw-semibold mb-3">Performance: Current vs. With AI</h4>
+            <h4 className="h6 fw-semibold mb-3">{radarTitle}</h4>
             <ResponsiveContainer width="100%" height={260}>
               <RadarChart data={department.radarData} cx="50%" cy="50%" outerRadius="75%">
                 <PolarGrid stroke="var(--color-border)" />
@@ -65,13 +86,11 @@ export default function InsightCharts({ department }: InsightChartsProps) {
         </div>
       </div>
 
-      {/* Bar Chart - Pipeline */}
+      {/* Bar Chart */}
       <div className="col-md-6">
         <div className="card border-0 shadow-sm h-100">
           <div className="card-body p-3">
-            <h4 className="h6 fw-semibold mb-3">
-              {department.name} Pipeline
-            </h4>
+            <h4 className="h6 fw-semibold mb-3">{barTitle}</h4>
             {department.pipelineData ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={department.pipelineData} layout="vertical">

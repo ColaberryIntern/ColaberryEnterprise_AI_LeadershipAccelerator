@@ -401,38 +401,62 @@ export interface DemoKpi {
   value: string;
   detail: string;
   color: string;
-  icon: string;
+  trend?: number;
 }
 
+const DEPARTMENT_KPIS: Record<string, DemoKpi[]> = {
+  strategy: [
+    { label: 'Initiative Progress', value: '72%', detail: '18 of 25 on track', color: '#1a365d', trend: 8 },
+    { label: 'Market Opportunity', value: '$12M', detail: 'combined TAM identified', color: '#38a169', trend: 15 },
+    { label: 'Execution Velocity', value: '3.2x', detail: 'vs. industry avg', color: '#805ad5', trend: 12 },
+    { label: 'Investment Efficiency', value: '4.1x', detail: 'ROI on AI spend', color: '#d69e2e', trend: 6 },
+    { label: 'Risk Exposure', value: 'LOW', detail: '14/100', color: '#38a169', trend: -5 },
+    { label: 'Innovation Index', value: '84', detail: '/100', color: '#e53e3e', trend: 11 },
+  ],
+  marketing: [
+    { label: 'MQL Growth', value: '+38%', detail: 'vs. prior quarter', color: '#e53e3e', trend: 38 },
+    { label: 'Acquisition Cost', value: '$112', detail: 'cost per lead', color: '#d69e2e', trend: -14 },
+    { label: 'Campaign ROI', value: '4.8x', detail: 'avg. return', color: '#38a169', trend: 22 },
+    { label: 'Conversion Rate', value: '6.2%', detail: 'lead to opp.', color: '#805ad5', trend: 12 },
+    { label: 'Engagement Score', value: '82', detail: '/100', color: '#1a365d', trend: 9 },
+    { label: 'Pipeline Value', value: '$2.4M', detail: 'contribution', color: '#319795', trend: 18 },
+  ],
+  operations: [
+    { label: 'Cycle Time', value: '2.1d', detail: 'avg. process duration', color: '#38a169', trend: -24 },
+    { label: 'Automation Rate', value: '62%', detail: 'processes automated', color: '#805ad5', trend: 18 },
+    { label: 'SLA Compliance', value: '94.7%', detail: 'on-time delivery', color: '#1a365d', trend: 3 },
+    { label: 'Efficiency Score', value: '87', detail: '/100', color: '#d69e2e', trend: 15 },
+    { label: 'Resolution Time', value: '4.2h', detail: 'avg. incident', color: '#e53e3e', trend: -31 },
+    { label: 'Cost Per Process', value: '$18', detail: 'down from $26', color: '#319795', trend: -30 },
+  ],
+  sales: [
+    { label: 'Pipeline Coverage', value: '3.8x', detail: 'vs. target', color: '#805ad5', trend: 14 },
+    { label: 'Win Rate', value: '28%', detail: 'qualified opps.', color: '#38a169', trend: 6 },
+    { label: 'Avg Deal Size', value: '$47K', detail: 'per closed deal', color: '#1a365d', trend: 11 },
+    { label: 'Sales Cycle', value: '42d', detail: 'avg. days to close', color: '#d69e2e', trend: -8 },
+    { label: 'Forecast Accuracy', value: '81%', detail: 'within 10% band', color: '#e53e3e', trend: 9 },
+    { label: 'Quota Attainment', value: '108%', detail: 'team average', color: '#319795', trend: 12 },
+  ],
+  finance: [
+    { label: 'Revenue Growth', value: '+18%', detail: 'YoY', color: '#38a169', trend: 18 },
+    { label: 'Gross Margin', value: '64.2%', detail: 'trailing 12mo', color: '#1a365d', trend: 3 },
+    { label: 'OpEx Ratio', value: '31%', detail: 'of revenue', color: '#d69e2e', trend: -4 },
+    { label: 'Cash Conversion', value: '38d', detail: 'cycle length', color: '#805ad5', trend: -12 },
+    { label: 'Budget Variance', value: '+2.1%', detail: 'within tolerance', color: '#e53e3e', trend: -6 },
+    { label: 'Forecast Accuracy', value: '88%', detail: 'quarterly', color: '#319795', trend: 7 },
+  ],
+  'customer-success': [
+    { label: 'Health Score', value: '78', detail: '/100 avg.', color: '#319795', trend: 8 },
+    { label: 'Retention Rate', value: '91.4%', detail: 'annual', color: '#38a169', trend: 4 },
+    { label: 'Churn Rate', value: '3.2%', detail: 'monthly', color: '#e53e3e', trend: -18 },
+    { label: 'Expansion Rev.', value: '+$420K', detail: 'upsell/cross-sell', color: '#805ad5', trend: 22 },
+    { label: 'Resolution Time', value: '2.8h', detail: 'avg. support ticket', color: '#d69e2e', trend: -15 },
+    { label: 'NPS', value: '62', detail: 'net promoter score', color: '#1a365d', trend: 11 },
+  ],
+};
+
 export function getKpisForDepartment(deptId: string): DemoKpi[] {
-  const base: DemoKpi[] = [
-    { label: 'System Risk', value: 'LOW', detail: '12/100', color: '#38a169', icon: '\u{1F6E1}\uFE0F' },
-    { label: 'Active Alerts', value: '1', detail: 'non-critical', color: '#d69e2e', icon: '\u26A0\uFE0F' },
-    { label: 'Lead Trend', value: '865', detail: '+107%', color: '#e53e3e', icon: '\u{1F4C8}' },
-    { label: 'System Health', value: '91', detail: '/100', color: '#38a169', icon: '\u{1F49A}' },
-    { label: 'Agent Status', value: '164', detail: 'agents', color: '#805ad5', icon: '\u{1F916}' },
-    { label: 'Process Activity', value: '1,822', detail: '24h events', color: '#1a365d', icon: '\u26A1' },
-  ];
-
-  // Slightly vary values per department for realism
-  const offsets: Record<string, number[]> = {
-    strategy: [0, 0, 12, 2, 0, 44],
-    marketing: [0, 1, -34, -1, 2, 128],
-    operations: [0, -1, 8, 3, -4, -86],
-    sales: [0, 2, 45, -2, 1, 64],
-    finance: [0, 0, -18, 1, -2, -42],
-    'customer-success': [0, 1, 22, 0, 3, 96],
-  };
-
-  const o = offsets[deptId] || [0, 0, 0, 0, 0, 0];
-  return base.map((kpi, i) => {
-    if (i === 2) return { ...kpi, value: String(865 + o[i]) };
-    if (i === 3) return { ...kpi, value: String(91 + o[i]) };
-    if (i === 4) return { ...kpi, value: String(164 + o[i]) };
-    if (i === 5) return { ...kpi, value: (1822 + o[i]).toLocaleString() };
-    if (i === 1) return { ...kpi, value: String(1 + o[i]) };
-    return kpi;
-  });
+  return DEPARTMENT_KPIS[deptId] || DEPARTMENT_KPIS.strategy;
 }
 
 // --- Executive Summary ---
