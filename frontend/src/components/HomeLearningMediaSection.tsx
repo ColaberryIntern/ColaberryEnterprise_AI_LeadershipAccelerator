@@ -68,6 +68,134 @@ export default function HomeLearningMediaSection({ podcastUrl }: HomeLearningMed
                   — from bringing your ideas to building a working AI system in 21 days.
                 </p>
 
+                {/* Podcast Thumbnail */}
+                <div
+                  className="rounded overflow-hidden mb-3"
+                  style={{ position: 'relative', background: '#020917' }}
+                >
+                  <svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', display: 'block' }}>
+                    <defs>
+                      <filter id="pcNodeGlow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                      <filter id="pcCoreGlow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                      <radialGradient id="pcCoreGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#00e5ff" stopOpacity="0.95"/>
+                        <stop offset="40%" stopColor="#0077ff" stopOpacity="0.85"/>
+                        <stop offset="100%" stopColor="#0033aa" stopOpacity="0.6"/>
+                      </radialGradient>
+                      <radialGradient id="pcN1" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#00c8ff" stopOpacity="0.9"/>
+                        <stop offset="100%" stopColor="#003380" stopOpacity="0.7"/>
+                      </radialGradient>
+                      <radialGradient id="pcN2" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#a855f7" stopOpacity="0.9"/>
+                        <stop offset="100%" stopColor="#3b0d6e" stopOpacity="0.7"/>
+                      </radialGradient>
+                      <radialGradient id="pcN3" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#00ffb8" stopOpacity="0.8"/>
+                        <stop offset="100%" stopColor="#004030" stopOpacity="0.6"/>
+                      </radialGradient>
+                      <linearGradient id="pcOverlay" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#020917" stopOpacity="0.92"/>
+                        <stop offset="38%" stopColor="#020917" stopOpacity="0.7"/>
+                        <stop offset="65%" stopColor="#020917" stopOpacity="0.05"/>
+                        <stop offset="100%" stopColor="#020917" stopOpacity="0"/>
+                      </linearGradient>
+                    </defs>
+                    {/* Background */}
+                    <rect width="640" height="360" fill="#020917"/>
+                    <rect width="640" height="198" y="162" fill="url(#pcBgHorizon)" opacity="0.6"/>
+                    {/* Glows */}
+                    <circle cx="435" cy="180" r="180" fill="#0078ff" opacity="0.08"/>
+                    <circle cx="435" cy="180" r="120" fill="#5000c8" opacity="0.06"/>
+                    {/* Connection lines */}
+                    <g opacity="0.5">
+                      <line x1="435" y1="180" x2="505" y2="105" stroke="#00c8ff" strokeWidth="0.8" strokeOpacity="0.55"/>
+                      <line x1="435" y1="180" x2="530" y2="170" stroke="#00c8ff" strokeWidth="0.7" strokeOpacity="0.5"/>
+                      <line x1="435" y1="180" x2="500" y2="245" stroke="#00c8ff" strokeWidth="0.8" strokeOpacity="0.55"/>
+                      <line x1="435" y1="180" x2="435" y2="270" stroke="#a855f7" strokeWidth="0.7" strokeOpacity="0.45"/>
+                      <line x1="435" y1="180" x2="365" y2="250" stroke="#00ffb8" strokeWidth="0.7" strokeOpacity="0.4"/>
+                      <line x1="435" y1="180" x2="345" y2="120" stroke="#00c8ff" strokeWidth="0.7" strokeOpacity="0.5"/>
+                      <line x1="435" y1="180" x2="375" y2="90" stroke="#a855f7" strokeWidth="0.7" strokeOpacity="0.4"/>
+                    </g>
+                    {/* Outer nodes */}
+                    <g filter="url(#pcNodeGlow)" opacity="0.7">
+                      <circle cx="550" cy="75" r="6" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="0.5" strokeOpacity="0.5"/>
+                      <circle cx="565" cy="130" r="5" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="0.5" strokeOpacity="0.5"/>
+                      <circle cx="575" cy="205" r="5" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="0.5" strokeOpacity="0.5"/>
+                      <circle cx="545" cy="275" r="5" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="0.5" strokeOpacity="0.4"/>
+                      <circle cx="300" cy="190" r="5" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="0.5" strokeOpacity="0.5"/>
+                    </g>
+                    {/* Primary nodes */}
+                    <g filter="url(#pcNodeGlow)">
+                      <circle cx="505" cy="105" r="14" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.8"/>
+                      <text x="505" y="103" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="4.5" fontWeight="700">SYSTEMS</text>
+                      <text x="505" y="109" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="3.5">DESIGN</text>
+
+                      <circle cx="530" cy="170" r="13" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.75"/>
+                      <text x="530" y="168" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="4" fontWeight="700">DATA</text>
+                      <text x="530" y="174" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="3.5">INTEL</text>
+
+                      <circle cx="500" cy="245" r="13" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="1" strokeOpacity="0.7"/>
+                      <text x="500" y="243" textAnchor="middle" fill="#00ffca" fontFamily="sans-serif" fontSize="4" fontWeight="700">DEPLOY</text>
+                      <text x="500" y="249" textAnchor="middle" fill="#00ffb8" fontFamily="sans-serif" fontSize="3.5">AGENTS</text>
+
+                      <circle cx="435" cy="270" r="13" fill="url(#pcN2)" stroke="#a855f7" strokeWidth="1" strokeOpacity="0.7"/>
+                      <text x="435" y="268" textAnchor="middle" fill="#d8b4fe" fontFamily="sans-serif" fontSize="4" fontWeight="700">GOVERN</text>
+                      <text x="435" y="274" textAnchor="middle" fill="#a855f7" fontFamily="sans-serif" fontSize="3.5">AI POLICY</text>
+
+                      <circle cx="365" cy="250" r="12" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="1" strokeOpacity="0.65"/>
+                      <text x="365" y="248" textAnchor="middle" fill="#00ffca" fontFamily="sans-serif" fontSize="4" fontWeight="700">TEAMS</text>
+                      <text x="365" y="254" textAnchor="middle" fill="#00ffb8" fontFamily="sans-serif" fontSize="3.5">AI-READY</text>
+
+                      <circle cx="345" cy="120" r="13" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.7"/>
+                      <text x="345" y="118" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="4" fontWeight="700">AI STRAT</text>
+                      <text x="345" y="124" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="3.5">ROADMAP</text>
+
+                      <circle cx="375" cy="90" r="12" fill="url(#pcN2)" stroke="#a855f7" strokeWidth="1" strokeOpacity="0.65"/>
+                      <text x="375" y="88" textAnchor="middle" fill="#d8b4fe" fontFamily="sans-serif" fontSize="4" fontWeight="700">INNOV</text>
+                      <text x="375" y="94" textAnchor="middle" fill="#a855f7" fontFamily="sans-serif" fontSize="3.5">AI LAB</text>
+                    </g>
+                    {/* Core */}
+                    <circle cx="435" cy="180" r="29" fill="rgba(0,40,120,0.3)" stroke="#0044cc" strokeWidth="0.8" strokeOpacity="0.4"/>
+                    <polygon points="435,154 456,167 456,193 435,206 414,193 414,167"
+                             fill="url(#pcCoreGrad)" stroke="#00e5ff" strokeWidth="1.2" strokeOpacity="0.9"
+                             filter="url(#pcCoreGlow)"/>
+                    <text x="435" y="178" textAnchor="middle" fill="#fff" fontFamily="sans-serif" fontSize="16" fontWeight="900" filter="url(#pcCoreGlow)">AI</text>
+                    <text x="435" y="190" textAnchor="middle" fill="rgba(0,230,255,0.8)" fontFamily="sans-serif" fontSize="5" fontWeight="600" letterSpacing="0.15em">CORE</text>
+                    {/* Pulsing ring */}
+                    <circle cx="435" cy="180" r="29" fill="none" stroke="#00e5ff" strokeWidth="1" strokeOpacity="0">
+                      <animate attributeName="r" values="29;45;29" dur="3s" repeatCount="indefinite"/>
+                      <animate attributeName="stroke-opacity" values="0.5;0;0.5" dur="3s" repeatCount="indefinite"/>
+                    </circle>
+                    {/* Text overlay gradient */}
+                    <rect width="640" height="360" fill="url(#pcOverlay)"/>
+                    {/* Text */}
+                    <text x="38" y="130" fill="#00c8ff" fontFamily="sans-serif" fontSize="8" fontWeight="600" letterSpacing="0.2em">COLABERRY &middot; AI EDUCATION</text>
+                    <text x="38" y="168" fill="#fff" fontFamily="sans-serif" fontSize="36" fontWeight="900" letterSpacing="-0.01em">BUILD YOUR</text>
+                    <text x="38" y="208" fill="#00c8ff" fontFamily="sans-serif" fontSize="36" fontWeight="900" letterSpacing="-0.01em">AI SYSTEM</text>
+                    <rect x="38" y="220" width="30" height="2" rx="1" fill="#0077ff"/>
+                    <text x="38" y="240" fill="rgba(180,210,255,0.9)" fontFamily="sans-serif" fontSize="9" fontWeight="700" letterSpacing="0.15em">ENTERPRISE AI LEADERSHIP ACCELERATOR</text>
+                    <text x="38" y="256" fill="rgba(130,170,220,0.7)" fontFamily="sans-serif" fontSize="7" letterSpacing="0.05em">Design &middot; Deploy &middot; Govern &middot; Scale</text>
+                    {/* Headphone icon + label */}
+                    <circle cx="50" cy="320" r="14" fill="url(#pcN1)" opacity="0.8"/>
+                    <text x="46" y="324" fill="#fff" fontFamily="sans-serif" fontSize="12">&#x1F3A7;</text>
+                    <text x="72" y="324" fill="rgba(180,210,255,0.85)" fontFamily="sans-serif" fontSize="6.5" fontWeight="600" letterSpacing="0.1em">LISTEN TO PROGRAM OVERVIEW</text>
+                    {/* Badge */}
+                    <rect x="530" y="18" width="90" height="20" rx="3" fill="rgba(0,50,120,0.5)" stroke="#0096ff" strokeWidth="0.5" strokeOpacity="0.3"/>
+                    <text x="575" y="31" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="5.5" fontWeight="700" letterSpacing="0.15em">EXECUTIVE</text>
+                    {/* Bottom bar */}
+                    <rect y="356" width="640" height="4" fill="url(#pcBarGrad)"/>
+                    <defs>
+                      <linearGradient id="pcBarGrad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#7b2fbe"/>
+                        <stop offset="30%" stopColor="#0055ff"/>
+                        <stop offset="60%" stopColor="#00c8ff"/>
+                        <stop offset="100%" stopColor="#00ffb8"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </div>
+
                 {podcastUrl ? (
                   <div className="mb-2">
                     <audio controls preload="metadata" style={{ width: '100%' }}>
@@ -76,43 +204,8 @@ export default function HomeLearningMediaSection({ podcastUrl }: HomeLearningMed
                     </audio>
                   </div>
                 ) : (
-                  <div
-                    className="rounded d-flex align-items-center justify-content-center mb-2"
-                    style={{
-                      background: 'linear-gradient(135deg, #1a365d, #2d3748)',
-                      padding: '56.25% 0 0 0',
-                      position: 'relative',
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <div className="podcast-play-btn" aria-hidden="true">
-                        &#9654;
-                      </div>
-                      <span
-                        className="text-light fw-semibold mt-2"
-                        style={{ fontSize: '0.85rem', opacity: 0.9 }}
-                      >
-                        Coming Soon
-                      </span>
-                      <span
-                        className="text-light mt-1"
-                        style={{ fontSize: '0.7rem', opacity: 0.6 }}
-                      >
-                        Podcast episode in production
-                      </span>
-                    </div>
+                  <div className="text-center py-3 mb-2">
+                    <span className="text-muted small fw-semibold">Coming Soon</span>
                   </div>
                 )}
 
