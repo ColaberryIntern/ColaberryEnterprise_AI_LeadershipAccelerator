@@ -464,17 +464,17 @@ export function getKpisForDepartment(deptId: string): DemoKpi[] {
 export function getExecutiveSummary(deptId: string): string {
   const summaries: Record<string, string> = {
     strategy:
-      'The AI system currently manages 878 leads across 5 pipeline stages. 8 enrollments across 3 cohorts. 11 campaigns configured (8 active). Intelligence agents discovered 118 internal data entities and processed 1,816 events in the past 24 hours. Strategic analysis identified 3 untapped market segments with $12M combined TAM.',
+      'Strategic initiative tracking shows 72% of programs on track (18 of 25), with execution velocity at 3.2x the industry average. AI agents have identified $12M in combined TAM across 3 untapped market segments. Investment efficiency remains strong at 4.1x ROI on AI spend, while risk exposure holds at LOW (14/100) — the Innovation Index has climbed to 84, up 11% this period.',
     marketing:
-      'The AI system is tracking 878 leads across 5 pipeline stages with 11 active campaigns. Marketing intelligence agents processed 1,950 events in the past 24 hours. LinkedIn campaigns are outperforming email by 38%, and the AI content calendar has identified 12 high-engagement content opportunities for this quarter.',
+      'Marketing intelligence is detecting strong momentum — MQL growth is up 38% vs. prior quarter while acquisition cost has dropped 14% to $112 per lead. Campaign ROI averages 4.8x across active channels, with a 6.2% lead-to-opportunity conversion rate driving $2.4M in pipeline contribution. AI agents are identifying high-engagement segments and recommending budget reallocation to top-performing campaigns.',
     operations:
-      'The AI system monitors 48 operational processes across 6 departments. Intelligence agents processed 1,736 events in the past 24 hours. Manual approval workflows are consuming 340 hours/month \u2014 the top 5 workflows have been flagged for immediate automation with an estimated 280 hours/month savings.',
+      'Operational efficiency analysis shows average cycle time reduced to 2.1 days (down 24%) with 62% of processes now automated. SLA compliance is at 94.7% and the overall efficiency score has reached 87/100. AI agents flagged incident resolution time improvements — now averaging 4.2 hours — and cost per process has dropped 30% from $26 to $18, indicating strong automation ROI.',
     sales:
-      'The AI system manages 878 leads across 5 pipeline stages with a current conversion rate of 7.4%. Intelligence agents processed 1,886 events in the past 24 hours. Deal velocity analysis shows enterprise deals closing 18 days slower than benchmark \u2014 AI-powered lead scoring could accelerate 26% of stalled deals.',
+      'Sales intelligence reports pipeline coverage at 3.8x target with a 28% win rate on qualified opportunities. Average deal size holds at $47K with the sales cycle shortened to 42 days (down 8%). Forecast accuracy has improved to 81% within the 10% band, and team quota attainment is at 108%. AI models are identifying deal acceleration opportunities in mid-stage pipeline.',
     finance:
-      'The AI system monitors $4.2M in monthly transaction volume across 6 cost centers. Intelligence agents processed 1,780 events in the past 24 hours. Invoice processing averages 4.2 days vs. the 1-day benchmark \u2014 automated processing could recover $380K annually.',
+      'Financial intelligence shows revenue growing at 18% YoY with gross margin stable at 64.2%. Operating expenses are well-controlled at 31% of revenue (down 4%), and the cash conversion cycle has tightened to 38 days. Budget variance remains within tolerance at +2.1%, while quarterly forecast accuracy has reached 88% — AI agents are detecting cost optimization opportunities across 3 departments.',
     'customer-success':
-      'The AI system tracks 232 active accounts with health scores across 5 dimensions. Intelligence agents processed 1,918 events in the past 24 hours. 12% of accounts are showing early churn signals with a 30-day intervention window \u2014 proactive outreach could retain $890K in annual revenue.',
+      'Customer health monitoring shows an average health score of 78/100 (up 8%) with annual retention at 91.4%. Monthly churn has decreased 18% to 3.2%, and AI models are detecting early risk indicators across the portfolio. Expansion revenue reached +$420K through upsell and cross-sell, with support resolution time averaging 2.8 hours. NPS has climbed to 62, up 11 points this period.',
   };
   return summaries[deptId] || summaries.strategy;
 }
