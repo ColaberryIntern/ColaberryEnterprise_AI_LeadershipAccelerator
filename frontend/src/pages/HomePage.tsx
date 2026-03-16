@@ -10,6 +10,7 @@ import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 import DreamBigSection from '../components/DreamBigSection';
+import HomeLearningMediaSection from '../components/HomeLearningMediaSection';
 import api from '../utils/api';
 
 const CoryDemoContainer = React.lazy(() => import('../components/demo/CoryDemoContainer'));
@@ -168,6 +169,9 @@ function HomePage() {
 
       {/* Dream Big — Ideation → Plan → Build → Deploy */}
       <DreamBigSection onOpenBooking={() => setShowBooking(true)} />
+
+      {/* Learning Media — Video + Podcast */}
+      <HomeLearningMediaSection />
 
       {/* Executive Problem Section */}
       <section className="section-alt" aria-label="The Challenge">
