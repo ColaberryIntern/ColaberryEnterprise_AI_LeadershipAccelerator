@@ -53,18 +53,42 @@ function ExecOverviewThankYouPage() {
               You're All Set
             </h1>
             <p className="lead text-muted">
-              Your Executive AI Overview + ROI Framework is on its way to your inbox.
-              Check your email in the next few minutes.
+              Your Deployment Blueprint is ready. Download it now or check your email for a copy.
             </p>
           </div>
 
+          {/* Immediate PDF Download */}
+          <div className="card border-0 shadow p-4 mb-4" style={{ background: '#f0fff4', borderLeft: '4px solid var(--color-accent)' }}>
+            <div className="d-flex align-items-center gap-3">
+              <span className="fs-2" aria-hidden="true">&#x1F4E5;</span>
+              <div className="flex-grow-1 text-start">
+                <h2 className="h5 fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>
+                  Your Deployment Blueprint Is Ready
+                </h2>
+                <p className="text-muted mb-0 small">
+                  15-page guide — from AI strategy to working prototype in 21 days.
+                </p>
+              </div>
+              <button
+                onClick={() => window.open('/assets/AI_Leadership_Accelerator_Deployment_Blueprint.pdf', '_blank')}
+                className="btn btn-lg btn-hero-primary flex-shrink-0"
+              >
+                Download Now
+              </button>
+            </div>
+          </div>
+
           <div className="card border-0 shadow-sm p-4 mb-4 text-start">
-            <h2 className="h5 fw-bold mb-3">What's Inside Your Executive Overview</h2>
+            <h2 className="h5 fw-bold mb-3">What's Inside Your Deployment Blueprint</h2>
             <ul className="mb-0">
-              <li className="mb-2">Full program curriculum — day-by-day breakdown</li>
-              <li className="mb-2">ROI framework — quantify savings vs. consulting engagements</li>
-              <li className="mb-2">Enterprise case studies with measurable outcomes</li>
-              <li className="mb-2">Executive templates — board deck, budget justification, vendor evaluation</li>
+              <li className="mb-2">Why most AI initiatives stall at strategy — and how to break through</li>
+              <li className="mb-2">The bridge from strategy to a working AI system your team actually built</li>
+              <li className="mb-2">Dream Bigger mandate — bring your own ideas and biggest challenges</li>
+              <li className="mb-2">Business context over technical skills — why domain expertise matters most</li>
+              <li className="mb-2">The AI development paradigm shift — building with Claude Code</li>
+              <li className="mb-2">The 21-Day Deployment Engine — week-by-week breakdown</li>
+              <li className="mb-2">Day 21 outcomes — what your team leaves with</li>
+              <li className="mb-2">Foundation for becoming an AI-enabled enterprise</li>
             </ul>
           </div>
 
