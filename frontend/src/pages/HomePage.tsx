@@ -9,6 +9,7 @@ import { getUTMParams } from '../services/utmService';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import ROIHighlightSection from '../components/ROIHighlightSection';
+import DreamBigSection from '../components/DreamBigSection';
 import api from '../utils/api';
 
 const CoryDemoContainer = React.lazy(() => import('../components/demo/CoryDemoContainer'));
@@ -164,6 +165,9 @@ function HomePage() {
       >
         <CoryDemoContainer onOpenBooking={() => setShowBooking(true)} />
       </Suspense>
+
+      {/* Dream Big — Ideation → Plan → Build → Deploy */}
+      <DreamBigSection onOpenBooking={() => setShowBooking(true)} />
 
       {/* Executive Problem Section */}
       <section className="section-alt" aria-label="The Challenge">
