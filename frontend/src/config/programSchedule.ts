@@ -20,6 +20,6 @@ export const PROGRAM_SCHEDULE = {
   pricingDescription:
     'The accelerator runs across 5 focused sessions spread over 3 weeks on Tuesdays and Thursdays. Each session is a structured 2-hour working session. Total participant time: approximately 10 hours plus applied work between sessions.',
   sponsorshipTimeline: '5 sessions, 3 weeks',
-  heroTagline: 'A 5-Session Executive AI Build Accelerator',
+  heroTagline: 'A 5-Session AI Deployment Accelerator',
   price: '$4,500',
 };

@@ -3,12 +3,12 @@ import React from 'react';
 const ARTIFACTS = [
   {
     icon: '\u{1F4CA}',
-    title: 'AI Readiness Assessment',
+    title: 'AI Deployment Readiness Scan',
     desc: 'Evaluate your organization\'s AI deployment readiness across 6 dimensions',
   },
   {
     icon: '\u{1F5FA}\uFE0F',
-    title: 'Enterprise AI Roadmap',
+    title: 'Enterprise AI Deployment Roadmap',
     desc: 'A 90-day prioritized deployment plan tailored to your organization',
   },
   {
@@ -18,7 +18,7 @@ const ARTIFACTS = [
   },
   {
     icon: '\u26A1',
-    title: 'Claude Code Execution Blueprint',
+    title: 'Claude Code Deployment Blueprint',
     desc: 'Production-ready AI coding workflows with security and audit controls',
   },
   {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
@@ -10,6 +10,8 @@ import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 import api from '../utils/api';
+
+const CoryDemoContainer = React.lazy(() => import('../components/demo/CoryDemoContainer'));
 
 function HomePage() {
   const navigate = useNavigate();
@@ -108,7 +110,7 @@ function HomePage() {
     <>
       <SEOHead
         title="Home"
-        description={`Colaberry Enterprise AI Leadership Accelerator — ${PROGRAM_SCHEDULE.heroTagline} for Directors and Technical Leaders. Build POCs, 90-Day Roadmaps, and Executive Decks internally.`}
+        description={`Colaberry Enterprise AI Leadership Accelerator — ${PROGRAM_SCHEDULE.heroTagline} for Directors and Technical Leaders. Deploy a real AI system in 3 weeks. POCs, Roadmaps, and Architecture internally.`}
       />
 
       {/* Hero Section */}
@@ -127,16 +129,14 @@ function HomePage() {
           />
           <CohortUrgencyBadge className="mb-3" />
           <h1 className="display-4 fw-bold text-light mb-4">
-            Build AI Solutions Inside Your Organization —<br />
-            Without Hiring a Consulting Firm
+            From AI Strategy to a Live System in 3 Weeks
           </h1>
           <p className="lead mb-4" style={{ maxWidth: '750px', margin: '0 auto' }}>
-            {PROGRAM_SCHEDULE.heroTagline} designed for Directors and
-            Technical Leaders responsible for AI strategy and deployment.
+            A hands-on deployment accelerator where your team builds and ships a production AI system — not a slide deck. For Directors and Technical Leaders.
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <a href="#download-overview" className="btn btn-lg btn-hero-primary">
-              Get Executive Briefing
+              Get the Deployment Blueprint
             </a>
             <Link to="/sponsorship" className="btn btn-lg btn-outline-light">
               🤝 Request Corporate Sponsorship Kit
@@ -145,20 +145,39 @@ function HomePage() {
         </div>
       </section>
 
+      {/* Cory AI Intelligence Demo */}
+      <Suspense
+        fallback={
+          <section className="section-alt py-5" aria-label="Loading demo">
+            <div className="container">
+              <div className="placeholder-glow text-center">
+                <span className="placeholder col-6 mb-3" style={{ height: 24 }}></span>
+                <span className="placeholder col-8 mb-4" style={{ height: 16 }}></span>
+                <div className="row g-4">
+                  <div className="col-md-4"><span className="placeholder col-12" style={{ height: 300 }}></span></div>
+                  <div className="col-md-8"><span className="placeholder col-12" style={{ height: 300 }}></span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+      >
+        <CoryDemoContainer onOpenBooking={() => setShowBooking(true)} />
+      </Suspense>
+
       {/* Executive Problem Section */}
       <section className="section-alt" aria-label="The Challenge">
         <div className="container content-medium">
-          <h2 className="text-center mb-4">🏢 The AI Mandate Is Now a Leadership Responsibility</h2>
+          <h2 className="text-center mb-4">Your Board Expects AI Results — Not Another Strategy Deck</h2>
           <p className="text-center text-muted mb-4">
-            Enterprise leaders are under mounting pressure to deliver AI results.
-            The gap between expectation and execution is widening.
+            The gap between AI strategy and AI deployment is where initiatives die. Every quarter without a live system is a quarter your competitors pull ahead.
           </p>
           <ul className="list-unstyled fs-5">
-            <li className="mb-3">📊 Board-level pressure to demonstrate AI ROI within 12 months</li>
-            <li className="mb-3">💸 Enterprise consulting firms charging $500K+ for AI strategy engagements</li>
-            <li className="mb-3">⏳ Hiring AI talent takes 6–18 months and costs $250K+ per senior hire</li>
-            <li className="mb-3">🔄 Pilot projects stall without internal ownership and architectural clarity</li>
-            <li className="mb-3">📋 Leadership teams lack the vocabulary to evaluate AI vendor proposals</li>
+            <li className="mb-3">📊 Board expecting deployed AI — not another feasibility study</li>
+            <li className="mb-3">💸 Consulting firms deliver slide decks for $500K+ with zero deployed systems</li>
+            <li className="mb-3">⏳ Internal AI hires take 6–18 months to find and another 6 to deliver</li>
+            <li className="mb-3">🔄 Pilot projects die in committee — no one owns the deployment path</li>
+            <li className="mb-3">📋 Your team can evaluate AI vendors but can't build or validate what they propose</li>
           </ul>
         </div>
       </section>
@@ -168,16 +187,16 @@ function HomePage() {
         <div className="container">
           <div className="row align-items-center g-5">
             <div className="col-lg-6">
-              <h2 className="mb-3">⚡ An Internal Capability Alternative to Consulting Firms</h2>
+              <h2 className="mb-3">⚡ What Your Team Deploys in 3 Weeks</h2>
               <p className="text-muted mb-4">
-                {PROGRAM_SCHEDULE.totalSessions} focused sessions over {PROGRAM_SCHEDULE.totalWeeks} weeks. Your team leaves with assets, not slides.
+                {PROGRAM_SCHEDULE.totalSessions} focused sessions over {PROGRAM_SCHEDULE.totalWeeks} weeks. Your team deploys a real system — not a prototype.
               </p>
               {[
-                '✅ A working AI Proof of Concept (POC) scoped to your organization',
-                '✅ A 90-Day AI Roadmap with prioritized initiatives',
-                '✅ An Executive Presentation Deck ready for board or C-suite review',
-                '✅ Enterprise AI Architecture Templates and governance frameworks',
-                '✅ Ongoing access to the Enterprise AI Advisory Labs',
+                '✅ A live AI system deployed inside your infrastructure',
+                '✅ A 90-Day expansion roadmap with your next 3 deployments scoped',
+                '✅ An executive deployment report ready for board review',
+                '✅ Production AI architecture patterns your team can replicate',
+                '✅ Ongoing access to deployment support and the AI Advisory Labs',
               ].map((outcome) => (
                 <div className="p-3 bg-white rounded shadow-sm text-start fs-5 mb-3" key={outcome}>
                   {outcome}
@@ -197,6 +216,8 @@ function HomePage() {
         </div>
       </section>
 
+      <ArtifactValueBlock />
+
       <ROIHighlightSection
         headline="See the Financial Impact in 60 Seconds."
         subtext="Small workflow automation gains compound into enterprise-level financial results."
@@ -211,16 +232,16 @@ function HomePage() {
             {[
               {
                 icon: '🏛️',
-                title: 'Built for Technical Executives',
+                title: 'Built for Deployers, Not Students',
                 description:
-                  'Designed for Directors, VPs, and CTOs — not beginners. Every session addresses the strategic and architectural decisions leaders actually face.',
+                  'Designed for Directors, VPs, and CTOs who need to ship. Every session addresses the deployment and architectural decisions leaders actually face.',
                 color: '#1a365d',
               },
               {
                 icon: '🏗️',
-                title: 'Production-Ready Architecture',
+                title: 'Ship in 3 Weeks, Not 3 Quarters',
                 description:
-                  'Participants build real POCs using enterprise-grade AI architecture patterns — not toy demos. Work is immediately deployable or presentable.',
+                  'Participants deploy real AI systems using production-grade architecture patterns — not toy demos. Work ships during the program, not after.',
                 color: '#e53e3e',
               },
               {
@@ -232,9 +253,9 @@ function HomePage() {
               },
               {
                 icon: '🌐',
-                title: 'Ongoing Enterprise AI Advisory Ecosystem',
+                title: 'Post-Deployment Support',
                 description:
-                  'Access to ongoing advisory engagements, peer cohort sessions, and Colaberry\'s enterprise AI architecture network beyond the accelerator.',
+                  'Access to ongoing deployment support, peer cohort sessions, and Colaberry\'s enterprise AI architecture network beyond the accelerator.',
                 color: '#805ad5',
               },
             ].map((item) => (
@@ -289,19 +310,19 @@ function HomePage() {
               <span className="badge rounded-pill px-3 py-2 mb-3 d-inline-block" style={{ background: '#fff3cd', color: '#856404', fontSize: '0.85rem' }}>
                 Next Cohort Enrollment Open
               </span>
-              <h2 className="mb-3" style={{ fontSize: '2rem' }}>Executive AI Accelerator Briefing</h2>
+              <h2 className="mb-3" style={{ fontSize: '2rem' }}>AI Deployment Blueprint</h2>
               <p className="text-muted mb-0" style={{ maxWidth: '680px', margin: '0 auto', fontSize: '1.1rem' }}>
-                Built for CTOs, CIOs, CDOs, and Directors ready to deploy internal AI capability within 30 days.
+                The deployment playbook for CTOs, CIOs, and Directors ready to ship their first AI system in 3 weeks.
               </p>
             </div>
 
             {/* Value Preview Cards */}
             <div className="row g-4 mb-5">
               {[
-                { icon: '📅', title: `${PROGRAM_SCHEDULE.totalWeeks}-Week Execution Roadmap`, description: 'Clear session-by-session transformation path' },
-                { icon: '💰', title: 'ROI & Cost Framework', description: 'Internal build vs consulting math' },
-                { icon: '🏢', title: 'Enterprise Case Studies', description: 'Documented deployment results' },
-                { icon: '🧱', title: 'AI Architecture Blueprint', description: 'Learn / Build / Manage model' },
+                { icon: '📅', title: `${PROGRAM_SCHEDULE.totalWeeks}-Week Deployment Timeline`, description: 'Clear session-by-session transformation path' },
+                { icon: '💰', title: 'Build vs Buy Cost Analysis', description: 'Internal build vs consulting math' },
+                { icon: '🏢', title: 'Deployment Case Studies', description: 'Documented deployment results' },
+                { icon: '🧱', title: 'Production Architecture Blueprint', description: 'Learn / Build / Manage model' },
               ].map((item) => (
                 <div className="col-md-6 col-lg-3" key={item.title}>
                   <div className="card card-lift h-100 border text-center p-3">
@@ -312,8 +333,6 @@ function HomePage() {
                 </div>
               ))}
             </div>
-
-            <ArtifactValueBlock />
 
             {/* Structured Briefing Form */}
             {briefingServerError && (
@@ -406,7 +425,7 @@ function HomePage() {
                 Organizations evaluating AI deployment within 90 days receive priority strategy sessions.
               </p>
               <button type="submit" className="btn btn-hero-primary btn-lg w-100" disabled={briefingSubmitting}>
-                {briefingSubmitting ? 'Submitting...' : 'Download Executive Briefing & Schedule Strategy Call →'}
+                {briefingSubmitting ? 'Submitting...' : 'Download Deployment Blueprint & Schedule Strategy Call →'}
               </button>
             </form>
 
@@ -435,11 +454,10 @@ function HomePage() {
       >
         <div className="container" style={{ maxWidth: '750px' }}>
           <h2 className="text-light mb-3" style={{ fontSize: '2rem' }}>
-            Ready to Deploy AI in the Next 30 Days?
+            Ready to Deploy Your First AI System?
           </h2>
           <p className="mb-4" style={{ opacity: 0.85, fontSize: '1.1rem' }}>
-            Schedule a 30-minute executive strategy session to align roadmap,
-            architecture, and internal capability.
+            Schedule a 30-minute executive strategy session to map your first system, timeline, and team requirements.
           </p>
           <p className="mb-4 small" style={{ opacity: 0.6 }}>
             Most executives schedule this call immediately after reviewing the briefing.
@@ -448,12 +466,12 @@ function HomePage() {
             className="btn btn-hero-primary btn-lg px-5"
             onClick={() => setShowBooking(true)}
           >
-            Schedule Executive Strategy Call →
+            Schedule Deployment Scoping Call →
           </button>
           <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
             <span className="small">✓ 30-minute focused session</span>
             <span className="small">✓ No obligation</span>
-            <span className="small">✓ Architecture-first discussion</span>
+            <span className="small">✓ Deployment-first discussion</span>
           </div>
         </div>
       </section>
