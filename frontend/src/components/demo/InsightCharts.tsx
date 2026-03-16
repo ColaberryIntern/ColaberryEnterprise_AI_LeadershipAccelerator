@@ -22,7 +22,7 @@ interface InsightChartsProps {
 
 export default function InsightCharts({ department }: InsightChartsProps) {
   return (
-    <div className="row g-4 mt-3">
+    <div className="row g-4 mt-3 mb-3">
       {/* Radar Chart */}
       <div className="col-md-6">
         <div className="card border-0 shadow-sm h-100">

@@ -356,6 +356,7 @@ export interface GraphNode {
   icon: string;
   agents: number;
   color: string;
+  bgLight?: string;
   position: { x: number; y: number };
   hasDepartmentData: boolean;
 }
@@ -367,13 +368,13 @@ export interface GraphEdge {
 }
 
 export const GRAPH_NODES: GraphNode[] = [
-  { id: 'strategy', label: 'Strategy', icon: '\u{1F3AF}', agents: 8, color: '#1a365d', position: { x: 300, y: 0 }, hasDepartmentData: true },
+  { id: 'strategy', label: 'Strategy', icon: '\u{1F3AF}', agents: 8, color: '#1a365d', bgLight: '#ebf8ff', position: { x: 300, y: 0 }, hasDepartmentData: true },
   { id: 'intelligence', label: 'Intelligence', icon: '\u{1F9E0}', agents: 22, color: '#4a5568', position: { x: 300, y: 120 }, hasDepartmentData: false },
-  { id: 'marketing', label: 'Marketing', icon: '\u{1F4E3}', agents: 16, color: '#e53e3e', position: { x: 80, y: 240 }, hasDepartmentData: true },
-  { id: 'sales', label: 'Sales', icon: '\u{1F4BC}', agents: 14, color: '#805ad5', position: { x: 300, y: 240 }, hasDepartmentData: true },
-  { id: 'operations', label: 'Operations', icon: '\u2699\uFE0F', agents: 12, color: '#38a169', position: { x: 520, y: 240 }, hasDepartmentData: true },
-  { id: 'finance', label: 'Finance', icon: '\u{1F4B0}', agents: 10, color: '#d69e2e', position: { x: 140, y: 380 }, hasDepartmentData: true },
-  { id: 'customer-success', label: 'Customer Success', icon: '\u{1F91D}', agents: 11, color: '#319795', position: { x: 460, y: 380 }, hasDepartmentData: true },
+  { id: 'marketing', label: 'Marketing', icon: '\u{1F4E3}', agents: 16, color: '#e53e3e', bgLight: '#fff5f5', position: { x: 80, y: 240 }, hasDepartmentData: true },
+  { id: 'sales', label: 'Sales', icon: '\u{1F4BC}', agents: 14, color: '#805ad5', bgLight: '#faf5ff', position: { x: 300, y: 240 }, hasDepartmentData: true },
+  { id: 'operations', label: 'Operations', icon: '\u2699\uFE0F', agents: 12, color: '#38a169', bgLight: '#f0fff4', position: { x: 520, y: 240 }, hasDepartmentData: true },
+  { id: 'finance', label: 'Finance', icon: '\u{1F4B0}', agents: 10, color: '#d69e2e', bgLight: '#fffff0', position: { x: 140, y: 380 }, hasDepartmentData: true },
+  { id: 'customer-success', label: 'Customer Success', icon: '\u{1F91D}', agents: 11, color: '#319795', bgLight: '#e6fffa', position: { x: 460, y: 380 }, hasDepartmentData: true },
   { id: 'platform', label: 'Platform', icon: '\u{1F5A5}\uFE0F', agents: 9, color: '#2b6cb0', position: { x: 0, y: 120 }, hasDepartmentData: false },
   { id: 'security', label: 'Security', icon: '\u{1F6E1}\uFE0F', agents: 7, color: '#c53030', position: { x: 600, y: 120 }, hasDepartmentData: false },
   { id: 'reporting', label: 'Reporting', icon: '\u{1F4CA}', agents: 5, color: '#718096', position: { x: 300, y: 480 }, hasDepartmentData: false },

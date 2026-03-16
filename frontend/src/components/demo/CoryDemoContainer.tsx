@@ -67,23 +67,17 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
           </p>
         </div>
 
-        {/* KPI Dashboard Row */}
-        <KpiOverviewRow kpis={kpis} />
-
-        {/* Executive Summary */}
-        <ExecutiveSummaryPanel summary={execSummary} />
-
-        {/* Main Layout: Graph/Grid Left + Report Right */}
+        {/* Admin-style layout: Graph LEFT, Intelligence Panel RIGHT */}
         <div className="row g-4">
-          {/* Left: Graph (desktop) / Card Grid (mobile) */}
+          {/* LEFT COLUMN: Department Graph */}
           <div className="col-lg-5">
             {/* Desktop: Zoomable Graph */}
-            <div className="d-none d-md-block">
+            <div className="d-none d-md-block" style={{ position: 'sticky', top: 24 }}>
               <Suspense
                 fallback={
                   <div
                     className="placeholder-glow rounded"
-                    style={{ height: 480, background: 'var(--color-bg-alt)' }}
+                    style={{ height: 520, background: 'var(--color-bg-alt)' }}
                   >
                     <span className="placeholder col-12 h-100" />
                   </div>
@@ -106,10 +100,17 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
             </div>
           </div>
 
-          {/* Right: Report Panel */}
+          {/* RIGHT COLUMN: KPIs → Summary → Report → Charts (stacked) */}
           <div className="col-lg-7">
+            {/* KPI Dashboard Row */}
+            <KpiOverviewRow kpis={kpis} />
+
+            {/* Executive Summary */}
+            <ExecutiveSummaryPanel summary={execSummary} />
+
+            {/* Report Panel or Loading */}
             {loading && selectedDept ? (
-              <div className="card border-0 shadow-sm h-100 d-flex align-items-center justify-content-center">
+              <div className="card border-0 shadow-sm d-flex align-items-center justify-content-center" style={{ minHeight: 300 }}>
                 <CoryLoadingAnimation
                   agentNames={selectedDept.agentNames}
                   onComplete={handleLoadingComplete}
@@ -118,10 +119,14 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
             ) : reportDept ? (
               <>
                 <DepartmentReportPanel department={reportDept} />
+
+                {/* Insight Charts (Radar + Bar) — stacked under report */}
+                <InsightCharts department={reportDept} />
+
                 <AskCoryInput onNavigate={scrollToDownload} />
               </>
             ) : (
-              <div className="card border-0 shadow-sm h-100 d-flex align-items-center justify-content-center p-5">
+              <div className="card border-0 shadow-sm d-flex align-items-center justify-content-center p-5" style={{ minHeight: 300 }}>
                 <p className="text-muted mb-0">
                   Select a department to view its AI intelligence report
                 </p>
@@ -129,9 +134,6 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
             )}
           </div>
         </div>
-
-        {/* Insight Charts (Radar + Bar) */}
-        {reportDept && <InsightCharts department={reportDept} />}
 
         {/* CTAs Below Demo */}
         <div className="text-center mt-5">

@@ -7,23 +7,33 @@ interface KpiOverviewRowProps {
 
 export default function KpiOverviewRow({ kpis }: KpiOverviewRowProps) {
   return (
-    <div className="row g-2 mb-4">
+    <div className="d-flex gap-3 flex-wrap mb-3">
       {kpis.map((kpi) => (
-        <div className="col-4 col-md-2" key={kpi.label}>
-          <div
-            className="card border-0 shadow-sm text-center p-2 h-100"
-            style={{ borderTop: `3px solid ${kpi.color}` }}
-          >
-            <div className="small mb-1" aria-hidden="true">{kpi.icon}</div>
-            <div className="fw-bold" style={{ fontSize: '1.1rem', color: kpi.color }}>
+        <div
+          key={kpi.label}
+          className="intel-card-float flex-fill"
+          style={{
+            minWidth: '140px',
+            maxWidth: '200px',
+            borderLeft: `4px solid ${kpi.color}`,
+          }}
+        >
+          <div className="card-body p-3">
+            <small
+              className="text-muted fw-medium text-uppercase"
+              style={{ fontSize: '0.65rem', letterSpacing: '0.5px' }}
+            >
+              {kpi.label}
+            </small>
+            <div
+              className="fw-bold mt-1"
+              style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}
+            >
               {kpi.value}
             </div>
-            <div className="text-muted" style={{ fontSize: '0.65rem' }}>
+            <small className="text-muted" style={{ fontSize: '0.7rem' }}>
               {kpi.detail}
-            </div>
-            <div className="text-muted fw-medium" style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {kpi.label}
-            </div>
+            </small>
           </div>
         </div>
       ))}

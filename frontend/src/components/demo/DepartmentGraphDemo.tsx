@@ -18,39 +18,49 @@ type GraphNodeData = GraphNode & { selected: boolean };
 
 function DepartmentNodeComponent({ data }: NodeProps<GraphNodeData>) {
   const isClickable = data.hasDepartmentData;
+  const size = isClickable ? 100 : 80;
 
   return (
     <div
-      className="text-center"
+      className="text-center d-flex flex-column align-items-center justify-content-center"
       style={{
-        background: '#fff',
-        border: `2px solid ${data.selected ? data.color : 'var(--color-border)'}`,
-        borderRadius: 12,
-        padding: '12px 16px',
-        minWidth: 120,
+        background: data.selected ? data.bgLight || '#f7fafc' : '#fff',
+        border: `3px solid ${data.selected ? data.color : 'var(--color-border)'}`,
+        borderRadius: '50%',
+        width: size,
+        height: size,
         cursor: isClickable ? 'pointer' : 'default',
         boxShadow: data.selected
-          ? `0 0 0 3px ${data.color}30`
-          : '0 1px 3px rgba(0,0,0,0.08)',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
+          ? `0 0 0 4px ${data.color}25, 0 2px 8px rgba(0,0,0,0.1)`
+          : '0 1px 4px rgba(0,0,0,0.08)',
+        transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
       }}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <div className="fs-5 mb-1" aria-hidden="true">{data.icon}</div>
-      <div className="fw-semibold small" style={{ color: data.color }}>
+      <div style={{ fontSize: isClickable ? '1.2rem' : '1rem', lineHeight: 1 }} aria-hidden="true">
+        {data.icon}
+      </div>
+      <div
+        className="fw-semibold"
+        style={{ fontSize: '0.6rem', color: data.color, lineHeight: 1.2, marginTop: 2 }}
+      >
         {data.label}
       </div>
-      <div className="text-muted" style={{ fontSize: '0.7rem' }}>
-        {data.agents} Agents
+      <div className="text-muted" style={{ fontSize: '0.55rem', lineHeight: 1 }}>
+        {data.agents}
       </div>
       {data.hasDepartmentData && (
         <span
-          className="demo-pulse-dot d-inline-block mt-1"
+          className="demo-pulse-dot"
           style={{
-            width: 6,
-            height: 6,
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            width: 8,
+            height: 8,
             borderRadius: '50%',
             backgroundColor: data.color,
+            display: 'block',
           }}
         />
       )}
@@ -149,7 +159,7 @@ export default function DepartmentGraphDemo({
     <div
       style={{
         width: '100%',
-        height: 480,
+        height: 520,
         borderRadius: 12,
         border: '1px solid var(--color-border)',
         overflow: 'hidden',

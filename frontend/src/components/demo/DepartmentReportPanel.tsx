@@ -1,7 +1,6 @@
 import React from 'react';
 import { DemoDepartment } from './demoData';
 import AgentActivityList from './AgentActivityList';
-import DemoRadarChart from './DemoRadarChart';
 
 interface DepartmentReportPanelProps {
   department: DemoDepartment;
@@ -23,7 +22,7 @@ export default function DepartmentReportPanel({
   department,
 }: DepartmentReportPanelProps) {
   return (
-    <div className="card border-0 shadow-sm h-100">
+    <div className="card border-0 shadow-sm">
       <div
         className="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2 py-3"
         style={{ borderBottom: `3px solid ${department.color}` }}
@@ -99,7 +98,7 @@ export default function DepartmentReportPanel({
         </div>
 
         {/* Business Impact */}
-        <div className="mb-4 p-3 rounded" style={{ background: department.bgLight }}>
+        <div className="p-3 rounded" style={{ background: department.bgLight }}>
           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div>
               <div className="small fw-semibold text-muted">Projected Impact</div>
@@ -114,12 +113,6 @@ export default function DepartmentReportPanel({
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Radar Chart */}
-        <div>
-          <h4 className="h6 fw-semibold mb-2">Performance: Current vs. With AI</h4>
-          <DemoRadarChart data={department.radarData} />
         </div>
       </div>
     </div>
