@@ -1,22 +1,29 @@
-import React, { useState, useCallback } from 'react';
-import { DEMO_DEPARTMENTS } from './demoData';
+import React, { useState, useCallback, lazy, Suspense } from 'react';
+import { DEMO_DEPARTMENTS, getKpisForDepartment, getExecutiveSummary } from './demoData';
 import DepartmentMapDemo from './DepartmentMapDemo';
 import CoryLoadingAnimation from './CoryLoadingAnimation';
 import DepartmentReportPanel from './DepartmentReportPanel';
 import AskCoryInput from './AskCoryInput';
+import KpiOverviewRow from './KpiOverviewRow';
+import ExecutiveSummaryPanel from './ExecutiveSummaryPanel';
+import InsightCharts from './InsightCharts';
+
+// Lazy-load the graph (heavy dependency: reactflow)
+const DepartmentGraphDemo = lazy(() => import('./DepartmentGraphDemo'));
 
 interface CoryDemoContainerProps {
   onOpenBooking: () => void;
 }
 
 export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerProps) {
-  // Default to Strategy department on mount (show report immediately)
   const [selectedId, setSelectedId] = useState<string>('strategy');
   const [loading, setLoading] = useState(false);
   const [reportDeptId, setReportDeptId] = useState<string>('strategy');
 
   const selectedDept = DEMO_DEPARTMENTS.find((d) => d.id === selectedId);
   const reportDept = DEMO_DEPARTMENTS.find((d) => d.id === reportDeptId);
+  const kpis = getKpisForDepartment(reportDeptId);
+  const execSummary = getExecutiveSummary(reportDeptId);
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -37,10 +44,7 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
   }, []);
 
   return (
-    <section
-      className="section-alt py-5"
-      aria-label="AI Intelligence System Demo"
-    >
+    <section className="section-alt py-5" aria-label="AI Intelligence System Demo">
       <div className="container">
         {/* Context Label + Heading */}
         <div className="text-center mb-4">
@@ -56,29 +60,54 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
             Example AI Operations Intelligence System
           </span>
           <h2 className="mb-2">See an AI Organization in Action</h2>
-          <p
-            className="text-muted mb-0"
-            style={{ maxWidth: '680px', margin: '0 auto' }}
-          >
-            This is a simplified demonstration of the type of AI systems
-            participants design and deploy during the accelerator. Click any
-            department to see its intelligence report.
+          <p className="text-muted mb-0" style={{ maxWidth: '680px', margin: '0 auto' }}>
+            This is a simplified demonstration of the type of AI intelligence systems
+            participants design and deploy during the accelerator. Click any department
+            to explore its analysis.
           </p>
         </div>
 
-        {/* 2-Column Layout */}
+        {/* KPI Dashboard Row */}
+        <KpiOverviewRow kpis={kpis} />
+
+        {/* Executive Summary */}
+        <ExecutiveSummaryPanel summary={execSummary} />
+
+        {/* Main Layout: Graph/Grid Left + Report Right */}
         <div className="row g-4">
-          {/* Left: Department Cards */}
-          <div className="col-md-4">
-            <DepartmentMapDemo
-              departments={DEMO_DEPARTMENTS}
-              selectedId={selectedId}
-              onSelect={handleSelect}
-            />
+          {/* Left: Graph (desktop) / Card Grid (mobile) */}
+          <div className="col-lg-5">
+            {/* Desktop: Zoomable Graph */}
+            <div className="d-none d-md-block">
+              <Suspense
+                fallback={
+                  <div
+                    className="placeholder-glow rounded"
+                    style={{ height: 480, background: 'var(--color-bg-alt)' }}
+                  >
+                    <span className="placeholder col-12 h-100" />
+                  </div>
+                }
+              >
+                <DepartmentGraphDemo
+                  selectedId={selectedId}
+                  onSelect={handleSelect}
+                />
+              </Suspense>
+            </div>
+
+            {/* Mobile: Card Grid Fallback */}
+            <div className="d-md-none">
+              <DepartmentMapDemo
+                departments={DEMO_DEPARTMENTS}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+              />
+            </div>
           </div>
 
           {/* Right: Report Panel */}
-          <div className="col-md-8">
+          <div className="col-lg-7">
             {loading && selectedDept ? (
               <div className="card border-0 shadow-sm h-100 d-flex align-items-center justify-content-center">
                 <CoryLoadingAnimation
@@ -101,6 +130,9 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
           </div>
         </div>
 
+        {/* Insight Charts (Radar + Bar) */}
+        {reportDept && <InsightCharts department={reportDept} />}
+
         {/* CTAs Below Demo */}
         <div className="text-center mt-5">
           <a
@@ -119,7 +151,7 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
         </div>
       </div>
 
-      {/* Pulse animation keyframes */}
+      {/* Animation keyframes */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(4px); }
@@ -132,11 +164,20 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
         }
+        @keyframes nodePulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
         @media (prefers-reduced-motion: reduce) {
           .demo-pulse-dot { animation: none; }
           @keyframes fadeIn {
             from { opacity: 1; transform: none; }
             to { opacity: 1; transform: none; }
+          }
+          @keyframes nodePulse {
+            from { transform: scale(1); }
+            to { transform: scale(1); }
           }
         }
       `}</style>

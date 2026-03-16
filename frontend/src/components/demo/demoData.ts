@@ -13,6 +13,7 @@ export interface DemoDepartment {
   impactValue: string;
   opportunityScore: number;
   radarData: { metric: string; current: number; potential: number }[];
+  pipelineData?: { stage: string; value: number }[];
 }
 
 export interface AskCoryResponse {
@@ -61,6 +62,13 @@ export const DEMO_DEPARTMENTS: DemoDepartment[] = [
       { metric: 'Alignment', current: 65, potential: 90 },
       { metric: 'Agility', current: 50, potential: 82 },
     ],
+    pipelineData: [
+      { stage: 'Initiatives Identified', value: 24 },
+      { stage: 'Under Review', value: 18 },
+      { stage: 'Approved', value: 12 },
+      { stage: 'In Progress', value: 8 },
+      { stage: 'Completed', value: 5 },
+    ],
   },
   {
     id: 'marketing',
@@ -101,6 +109,13 @@ export const DEMO_DEPARTMENTS: DemoDepartment[] = [
       { metric: 'Conversion', current: 48, potential: 82 },
       { metric: 'Engagement', current: 71, potential: 93 },
       { metric: 'Attribution', current: 40, potential: 78 },
+    ],
+    pipelineData: [
+      { stage: 'New Lead', value: 342 },
+      { stage: 'Contacted', value: 218 },
+      { stage: 'Meeting Scheduled', value: 87 },
+      { stage: 'Proposal Sent', value: 41 },
+      { stage: 'Closed', value: 19 },
     ],
   },
   {
@@ -143,6 +158,13 @@ export const DEMO_DEPARTMENTS: DemoDepartment[] = [
       { metric: 'Cost', current: 60, potential: 88 },
       { metric: 'Reliability', current: 75, potential: 95 },
     ],
+    pipelineData: [
+      { stage: 'Identified', value: 48 },
+      { stage: 'Assessed', value: 35 },
+      { stage: 'Automated', value: 22 },
+      { stage: 'Monitored', value: 18 },
+      { stage: 'Optimized', value: 12 },
+    ],
   },
   {
     id: 'sales',
@@ -183,6 +205,13 @@ export const DEMO_DEPARTMENTS: DemoDepartment[] = [
       { metric: 'Forecast', current: 55, potential: 88 },
       { metric: 'Velocity', current: 48, potential: 80 },
       { metric: 'Retention', current: 72, potential: 92 },
+    ],
+    pipelineData: [
+      { stage: 'Prospect', value: 285 },
+      { stage: 'Qualified', value: 164 },
+      { stage: 'Proposal', value: 72 },
+      { stage: 'Negotiation', value: 38 },
+      { stage: 'Won', value: 21 },
     ],
   },
   {
@@ -225,6 +254,13 @@ export const DEMO_DEPARTMENTS: DemoDepartment[] = [
       { metric: 'Visibility', current: 55, potential: 88 },
       { metric: 'Planning', current: 50, potential: 82 },
     ],
+    pipelineData: [
+      { stage: 'Invoices Pending', value: 156 },
+      { stage: 'Under Review', value: 82 },
+      { stage: 'Approved', value: 64 },
+      { stage: 'Processed', value: 48 },
+      { stage: 'Reconciled', value: 41 },
+    ],
   },
   {
     id: 'customer-success',
@@ -266,6 +302,13 @@ export const DEMO_DEPARTMENTS: DemoDepartment[] = [
       { metric: 'Health', current: 55, potential: 88 },
       { metric: 'Expansion', current: 40, potential: 78 },
     ],
+    pipelineData: [
+      { stage: 'Onboarding', value: 45 },
+      { stage: 'Adoption', value: 38 },
+      { stage: 'Healthy', value: 124 },
+      { stage: 'At Risk', value: 18 },
+      { stage: 'Churned', value: 7 },
+    ],
   },
 ];
 
@@ -304,3 +347,109 @@ export const ASK_CORY_RESPONSES: AskCoryResponse[] = [
 
 export const DEFAULT_CORY_RESPONSE =
   'Cory analyzes your entire organization \u2014 every department, every process, every opportunity. In the accelerator, you design an AI system like this for your own company. The demo above shows a fraction of what a deployed intelligence system surfaces.';
+
+// --- Graph Data for ReactFlow ---
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  icon: string;
+  agents: number;
+  color: string;
+  position: { x: number; y: number };
+  hasDepartmentData: boolean;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export const GRAPH_NODES: GraphNode[] = [
+  { id: 'strategy', label: 'Strategy', icon: '\u{1F3AF}', agents: 8, color: '#1a365d', position: { x: 300, y: 0 }, hasDepartmentData: true },
+  { id: 'intelligence', label: 'Intelligence', icon: '\u{1F9E0}', agents: 22, color: '#4a5568', position: { x: 300, y: 120 }, hasDepartmentData: false },
+  { id: 'marketing', label: 'Marketing', icon: '\u{1F4E3}', agents: 16, color: '#e53e3e', position: { x: 80, y: 240 }, hasDepartmentData: true },
+  { id: 'sales', label: 'Sales', icon: '\u{1F4BC}', agents: 14, color: '#805ad5', position: { x: 300, y: 240 }, hasDepartmentData: true },
+  { id: 'operations', label: 'Operations', icon: '\u2699\uFE0F', agents: 12, color: '#38a169', position: { x: 520, y: 240 }, hasDepartmentData: true },
+  { id: 'finance', label: 'Finance', icon: '\u{1F4B0}', agents: 10, color: '#d69e2e', position: { x: 140, y: 380 }, hasDepartmentData: true },
+  { id: 'customer-success', label: 'Customer Success', icon: '\u{1F91D}', agents: 11, color: '#319795', position: { x: 460, y: 380 }, hasDepartmentData: true },
+  { id: 'platform', label: 'Platform', icon: '\u{1F5A5}\uFE0F', agents: 9, color: '#2b6cb0', position: { x: 0, y: 120 }, hasDepartmentData: false },
+  { id: 'security', label: 'Security', icon: '\u{1F6E1}\uFE0F', agents: 7, color: '#c53030', position: { x: 600, y: 120 }, hasDepartmentData: false },
+  { id: 'reporting', label: 'Reporting', icon: '\u{1F4CA}', agents: 5, color: '#718096', position: { x: 300, y: 480 }, hasDepartmentData: false },
+];
+
+export const GRAPH_EDGES: GraphEdge[] = [
+  { id: 'e-strategy-intelligence', source: 'strategy', target: 'intelligence' },
+  { id: 'e-intelligence-marketing', source: 'intelligence', target: 'marketing' },
+  { id: 'e-intelligence-sales', source: 'intelligence', target: 'sales' },
+  { id: 'e-intelligence-operations', source: 'intelligence', target: 'operations' },
+  { id: 'e-marketing-sales', source: 'marketing', target: 'sales' },
+  { id: 'e-operations-finance', source: 'operations', target: 'finance' },
+  { id: 'e-sales-customer-success', source: 'sales', target: 'customer-success' },
+  { id: 'e-platform-intelligence', source: 'platform', target: 'intelligence' },
+  { id: 'e-security-operations', source: 'security', target: 'operations' },
+  { id: 'e-finance-reporting', source: 'finance', target: 'reporting' },
+  { id: 'e-customer-success-reporting', source: 'customer-success', target: 'reporting' },
+];
+
+// --- KPI Data ---
+
+export interface DemoKpi {
+  label: string;
+  value: string;
+  detail: string;
+  color: string;
+  icon: string;
+}
+
+export function getKpisForDepartment(deptId: string): DemoKpi[] {
+  const base: DemoKpi[] = [
+    { label: 'System Risk', value: 'LOW', detail: '12/100', color: '#38a169', icon: '\u{1F6E1}\uFE0F' },
+    { label: 'Active Alerts', value: '1', detail: 'non-critical', color: '#d69e2e', icon: '\u26A0\uFE0F' },
+    { label: 'Lead Trend', value: '865', detail: '+107%', color: '#e53e3e', icon: '\u{1F4C8}' },
+    { label: 'System Health', value: '91', detail: '/100', color: '#38a169', icon: '\u{1F49A}' },
+    { label: 'Agent Status', value: '164', detail: 'agents', color: '#805ad5', icon: '\u{1F916}' },
+    { label: 'Process Activity', value: '1,822', detail: '24h events', color: '#1a365d', icon: '\u26A1' },
+  ];
+
+  // Slightly vary values per department for realism
+  const offsets: Record<string, number[]> = {
+    strategy: [0, 0, 12, 2, 0, 44],
+    marketing: [0, 1, -34, -1, 2, 128],
+    operations: [0, -1, 8, 3, -4, -86],
+    sales: [0, 2, 45, -2, 1, 64],
+    finance: [0, 0, -18, 1, -2, -42],
+    'customer-success': [0, 1, 22, 0, 3, 96],
+  };
+
+  const o = offsets[deptId] || [0, 0, 0, 0, 0, 0];
+  return base.map((kpi, i) => {
+    if (i === 2) return { ...kpi, value: String(865 + o[i]) };
+    if (i === 3) return { ...kpi, value: String(91 + o[i]) };
+    if (i === 4) return { ...kpi, value: String(164 + o[i]) };
+    if (i === 5) return { ...kpi, value: (1822 + o[i]).toLocaleString() };
+    if (i === 1) return { ...kpi, value: String(1 + o[i]) };
+    return kpi;
+  });
+}
+
+// --- Executive Summary ---
+
+export function getExecutiveSummary(deptId: string): string {
+  const summaries: Record<string, string> = {
+    strategy:
+      'The AI system currently manages 878 leads across 5 pipeline stages. 8 enrollments across 3 cohorts. 11 campaigns configured (8 active). Intelligence agents discovered 118 internal data entities and processed 1,816 events in the past 24 hours. Strategic analysis identified 3 untapped market segments with $12M combined TAM.',
+    marketing:
+      'The AI system is tracking 878 leads across 5 pipeline stages with 11 active campaigns. Marketing intelligence agents processed 1,950 events in the past 24 hours. LinkedIn campaigns are outperforming email by 38%, and the AI content calendar has identified 12 high-engagement content opportunities for this quarter.',
+    operations:
+      'The AI system monitors 48 operational processes across 6 departments. Intelligence agents processed 1,736 events in the past 24 hours. Manual approval workflows are consuming 340 hours/month \u2014 the top 5 workflows have been flagged for immediate automation with an estimated 280 hours/month savings.',
+    sales:
+      'The AI system manages 878 leads across 5 pipeline stages with a current conversion rate of 7.4%. Intelligence agents processed 1,886 events in the past 24 hours. Deal velocity analysis shows enterprise deals closing 18 days slower than benchmark \u2014 AI-powered lead scoring could accelerate 26% of stalled deals.',
+    finance:
+      'The AI system monitors $4.2M in monthly transaction volume across 6 cost centers. Intelligence agents processed 1,780 events in the past 24 hours. Invoice processing averages 4.2 days vs. the 1-day benchmark \u2014 automated processing could recover $380K annually.',
+    'customer-success':
+      'The AI system tracks 232 active accounts with health scores across 5 dimensions. Intelligence agents processed 1,918 events in the past 24 hours. 12% of accounts are showing early churn signals with a 30-day intervention window \u2014 proactive outreach could retain $890K in annual revenue.',
+  };
+  return summaries[deptId] || summaries.strategy;
+}
