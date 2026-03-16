@@ -71,7 +71,7 @@ export default function HomeLearningMediaSection({ podcastUrl }: HomeLearningMed
                 {podcastUrl ? (
                   <div className="mb-2">
                     <audio controls preload="metadata" style={{ width: '100%' }}>
-                      <source src={podcastUrl} />
+                      <source src={podcastUrl} type="audio/mp4" />
                       Your browser does not support the audio element.
                     </audio>
                   </div>

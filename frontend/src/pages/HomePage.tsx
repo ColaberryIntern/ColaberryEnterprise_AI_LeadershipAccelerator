@@ -171,7 +171,7 @@ function HomePage() {
       <DreamBigSection onOpenBooking={() => setShowBooking(true)} />
 
       {/* Learning Media — Video + Podcast */}
-      <HomeLearningMediaSection />
+      <HomeLearningMediaSection podcastUrl="/assets/Build_Working_AI_Without_Writing_Code.m4a" />
 
       {/* Executive Problem Section */}
       <section className="section-alt" aria-label="The Challenge">
