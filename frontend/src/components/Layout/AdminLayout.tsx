@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import ErrorBoundary from '../ui/ErrorBoundary';
+import SafeModeBanner from '../admin/SafeModeBanner';
 
 interface NavLink { path: string; label: string; icon: string; }
 interface NavSection { label: string | null; links: NavLink[]; }
@@ -184,6 +185,9 @@ function AdminLayout() {
             <span className="fw-bold" style={{ color: 'var(--color-primary)' }}>Colaberry Admin</span>
           </div>
         )}
+
+        {/* Safe Mode Banner */}
+        {!isImmersive && <SafeModeBanner />}
 
         {/* Page Content */}
         <div className={isImmersive ? '' : 'container-fluid px-4 py-4'}>

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import { ContentGenerationLog } from '../models/ContentGenerationLog';
+import { logAiEvent } from './aiEventService';
 
 // ─── Shared OpenAI singleton ────────────────────────────────────────────────
 let _openai: OpenAI | null = null;
@@ -66,6 +67,7 @@ export interface LLMCallResult {
 const TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 1000;
+const SLOW_CALL_THRESHOLD_MS = 10_000;
 
 // ─── Main wrapper ───────────────────────────────────────────────────────────
 export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallResult> {
@@ -79,6 +81,27 @@ export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallRe
     .createHash('sha256')
     .update(systemPrompt + '||' + userPrompt)
     .digest('hex');
+
+  // Safe mode guard — serve cached content or reject
+  const { isSafeModeActive } = await import('./systemControlService');
+  if (await isSafeModeActive()) {
+    const cached = getCachedResponse(inputsHash);
+    if (cached) {
+      try {
+        await ContentGenerationLog.create({
+          lesson_id: lessonId, enrollment_id: enrollmentId || null,
+          generation_type: generationType, step, inputs_hash: inputsHash,
+          model_used: model, duration_ms: 0,
+          prompt_tokens: cached.usage.prompt_tokens,
+          completion_tokens: cached.usage.completion_tokens,
+          token_count: cached.usage.total_tokens,
+          success: true, retry_count: 0, error_message: null, cache_hit: true,
+        } as any);
+      } catch {}
+      return { content: cached.content, usage: cached.usage, cacheHit: true };
+    }
+    throw new Error('[SAFE MODE] LLM calls disabled. No cached content available.');
+  }
 
   // Check cache (unless force bypass)
   if (!force) {
@@ -171,6 +194,13 @@ export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallRe
         } as any);
       } catch (logErr) {
         console.error('[LLMWrapper] Failed to log success:', logErr);
+      }
+
+      // Slow call detection
+      if (durationMs > SLOW_CALL_THRESHOLD_MS) {
+        logAiEvent('LLMWrapper', 'SLOW_LLM_CALL_DETECTED', 'lesson', lessonId, {
+          step_name: step, duration_ms: durationMs, lesson_id: lessonId, model,
+        }).catch(() => {});
       }
 
       return { content, usage, cacheHit: false };

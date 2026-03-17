@@ -34,6 +34,8 @@ import {
   getThrottleMetrics,
 } from '../../services/launchSafety';
 import { collectTelemetry, markLaunchTime } from '../../services/launchTelemetry';
+import { getSystemHealthMetrics } from '../../services/systemHealthService';
+import { enableSafeMode, disableSafeMode, isSafeModeActive } from '../../services/systemControlService';
 
 const router = Router();
 
@@ -193,6 +195,48 @@ router.post('/api/admin/launch/mark-start', requireAdmin, async (_req, res) => {
 /** GET /api/admin/launch/throttle — Agent execution throttle metrics */
 router.get('/api/admin/launch/throttle', requireAdmin, async (_req, res) => {
   res.json(getThrottleMetrics());
+});
+
+// --- System Health & Safe Mode ---
+
+/** GET /api/admin/system-health — LLM system health metrics */
+router.get('/api/admin/system-health', requireAdmin, async (_req, res) => {
+  try {
+    const health = await getSystemHealthMetrics();
+    res.json(health);
+  } catch (err: any) {
+    console.error('[System Health] Failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** GET /api/admin/system/safe-mode — Check LLM safe mode status */
+router.get('/api/admin/system/safe-mode', requireAdmin, async (_req, res) => {
+  try {
+    const active = await isSafeModeActive();
+    res.json({ safe_mode_active: active });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /api/admin/system/safe-mode — Toggle LLM safe mode */
+router.post('/api/admin/system/safe-mode', requireAdmin, async (req, res) => {
+  try {
+    const { enabled, reason } = req.body;
+    const adminEmail = (req as any).admin?.email || 'unknown_admin';
+
+    if (enabled) {
+      await enableSafeMode(reason || 'Manual activation', adminEmail);
+      res.json({ success: true, safe_mode_active: true });
+    } else {
+      await disableSafeMode(adminEmail);
+      res.json({ success: true, safe_mode_active: false });
+    }
+  } catch (err: any) {
+    console.error('[Safe Mode] Failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;
