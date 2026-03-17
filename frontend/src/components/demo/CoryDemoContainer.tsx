@@ -30,6 +30,10 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
   const [demoPaused, setDemoPaused] = useState(false);
   const demoIndexRef = useRef(0);
 
+  // Cinematic zoom state
+  const [demoZoomTarget, setDemoZoomTarget] = useState<string | null>(null);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
+
   // Ali user detection — demo never auto-starts for admin users
   const adminUser = useAdminUser();
   const isAdminUser = adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin';
@@ -62,6 +66,8 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
   const stopDemo = useCallback(() => {
     setDemoActive(false);
     setDemoPaused(true);
+    setIsZoomedIn(false);
+    setDemoZoomTarget(null);
   }, []);
 
   // User-initiated selection: stop demo + select department
@@ -82,25 +88,45 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
     return () => clearTimeout(timeout);
   }, [isAdminUser, demoPaused]);
 
-  // ─── Demo Mode: Core cycling engine ────────────────────────────────
+  // ─── Demo Mode: Core cycling engine with cinematic zoom ────────────
   useEffect(() => {
     if (!demoActive || demoPaused) return;
 
-    // Select current department immediately on activation
+    // Select + zoom into current department immediately on activation
     const currentId = DEMO_SEQUENCE[demoIndexRef.current];
     setSelectedId(currentId);
     setLoading(true);
+    setDemoZoomTarget(currentId);
+    setIsZoomedIn(true);
     onDepartmentChange?.(currentId);
+
+    // Schedule zoom-out at 4s mark (2s before next department)
+    let zoomOutTimeout = setTimeout(() => {
+      setIsZoomedIn(false);
+    }, 4000);
 
     const interval = setInterval(() => {
       demoIndexRef.current = (demoIndexRef.current + 1) % DEMO_SEQUENCE.length;
       const nextId = DEMO_SEQUENCE[demoIndexRef.current];
+
+      // Select department + zoom in
       setSelectedId(nextId);
       setLoading(true);
+      setDemoZoomTarget(nextId);
+      setIsZoomedIn(true);
       onDepartmentChange?.(nextId);
+
+      // Schedule zoom-out at 4s into this cycle
+      clearTimeout(zoomOutTimeout);
+      zoomOutTimeout = setTimeout(() => {
+        setIsZoomedIn(false);
+      }, 4000);
     }, 6000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(zoomOutTimeout);
+    };
   }, [demoActive, demoPaused, onDepartmentChange]);
 
   const isDemoRunning = demoActive && !demoPaused;
@@ -175,6 +201,8 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
                 <DepartmentGraphDemo
                   selectedId={selectedId}
                   onSelect={handleUserSelect}
+                  demoZoomTarget={isDemoRunning ? demoZoomTarget : null}
+                  isZoomedIn={isDemoRunning && isZoomedIn}
                 />
               </Suspense>
             </div>

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -8,11 +8,12 @@ import ReactFlow, {
   Handle,
   Position,
   ReactFlowProvider,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { GRAPH_NODES, GRAPH_EDGES, GraphNode } from './demoData';
 
-type GraphNodeData = GraphNode & { selected: boolean };
+type GraphNodeData = GraphNode & { selected: boolean; demoZoomTarget: string | null };
 
 // --- Custom Node Component ---
 
@@ -33,7 +34,8 @@ function DepartmentNodeComponent({ data }: NodeProps<GraphNodeData>) {
         boxShadow: data.selected
           ? `0 0 0 4px ${data.color}25, 0 2px 8px rgba(0,0,0,0.1)`
           : '0 1px 4px rgba(0,0,0,0.08)',
-        transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
+        opacity: data.selected ? 1 : (data.demoZoomTarget ? 0.45 : 1),
+        transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s, opacity 0.4s',
       }}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
@@ -76,19 +78,47 @@ const nodeTypes = { department: DepartmentNodeComponent };
 interface InnerGraphProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  demoZoomTarget?: string | null;
+  isZoomedIn?: boolean;
 }
 
-function InnerGraph({ selectedId, onSelect }: InnerGraphProps) {
+function InnerGraph({ selectedId, onSelect, demoZoomTarget, isZoomedIn }: InnerGraphProps) {
+  const { setCenter, fitView } = useReactFlow();
+
+  // Cinematic zoom: animate viewport toward selected department node
+  useEffect(() => {
+    if (!demoZoomTarget) return;
+
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const animDuration = prefersReduced ? 0 : undefined;
+
+    const node = GRAPH_NODES.find((n) => n.id === demoZoomTarget);
+    if (!node) return;
+
+    if (isZoomedIn) {
+      // Zoom IN: center on node at 1.3x zoom
+      setCenter(node.position.x + 50, node.position.y + 50, {
+        zoom: 1.3,
+        duration: animDuration ?? 800,
+      });
+    } else {
+      // Zoom OUT: fit entire graph
+      fitView({ padding: 0.2, duration: animDuration ?? 600 });
+    }
+  }, [demoZoomTarget, isZoomedIn, setCenter, fitView]);
+
   const nodes: Node<GraphNodeData>[] = useMemo(
     () =>
       GRAPH_NODES.map((n) => ({
         id: n.id,
         type: 'department',
         position: n.position,
-        data: { ...n, selected: n.id === selectedId },
+        data: { ...n, selected: n.id === selectedId, demoZoomTarget: demoZoomTarget ?? null },
         draggable: false,
       })),
-    [selectedId],
+    [selectedId, demoZoomTarget],
   );
 
   const edges: Edge[] = useMemo(
@@ -149,11 +179,15 @@ function InnerGraph({ selectedId, onSelect }: InnerGraphProps) {
 interface DepartmentGraphDemoProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  demoZoomTarget?: string | null;
+  isZoomedIn?: boolean;
 }
 
 export default function DepartmentGraphDemo({
   selectedId,
   onSelect,
+  demoZoomTarget,
+  isZoomedIn,
 }: DepartmentGraphDemoProps) {
   return (
     <div
@@ -167,7 +201,12 @@ export default function DepartmentGraphDemo({
       }}
     >
       <ReactFlowProvider>
-        <InnerGraph selectedId={selectedId} onSelect={onSelect} />
+        <InnerGraph
+          selectedId={selectedId}
+          onSelect={onSelect}
+          demoZoomTarget={demoZoomTarget}
+          isZoomedIn={isZoomedIn}
+        />
       </ReactFlowProvider>
     </div>
   );
