@@ -226,6 +226,37 @@ export default function CampaignSimulatorPanel({
                   ))}
                 </div>
 
+                {/* Lead profile overrides */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-header bg-white py-2">
+                    <span className="small fw-semibold">Test Lead Profile</span>
+                  </div>
+                  <div className="card-body py-2">
+                    <div className="row g-2">
+                      <div className="col-md-6">
+                        <label className="form-label small fw-medium mb-1">Name</label>
+                        <input type="text" className="form-control form-control-sm"
+                          value={leadName} onChange={(e) => setLeadName(e.target.value)} />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label small fw-medium mb-1">Company</label>
+                        <input type="text" className="form-control form-control-sm"
+                          value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label small fw-medium mb-1">Title</label>
+                        <input type="text" className="form-control form-control-sm"
+                          value={leadTitle} onChange={(e) => setLeadTitle(e.target.value)} />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label small fw-medium mb-1">Industry</label>
+                        <input type="text" className="form-control form-control-sm"
+                          value={leadIndustry} onChange={(e) => setLeadIndustry(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Custom template variables (auto-detected from sequence) */}
                 {customVars.length > 0 && (
                   <div className="card border-0 shadow-sm mb-3">

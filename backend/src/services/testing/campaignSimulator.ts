@@ -232,7 +232,7 @@ export async function executeSimulationStep(
     return;
   }
 
-  const lead: any = await Lead.findByPk(sim.test_lead_id);
+  const lead: any = await (Lead as any).unscoped().findByPk(sim.test_lead_id);
   if (!lead) {
     await simStep.update({ status: 'failed', error_message: 'Test lead not found' } as any);
     return;
