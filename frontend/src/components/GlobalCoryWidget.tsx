@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import ExecutiveAwarenessPanel from './ExecutiveAwarenessPanel';
 import api from '../utils/api';
+import { useAdminUser } from '../hooks/useAdminUser';
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function GlobalCoryWidget() {
   const location = useLocation();
+  const adminUser = useAdminUser();
   const [isHovered, setIsHovered] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [badge, setBadge] = useState<{ count: number; maxSeverity: string }>({ count: 0, maxSeverity: 'none' });
@@ -14,6 +16,7 @@ export default function GlobalCoryWidget() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isAdmin = location.pathname.startsWith('/admin');
+  const isCoryAuthorized = adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin';
 
   const fetchBadge = useCallback(async () => {
     try {
@@ -50,6 +53,9 @@ export default function GlobalCoryWidget() {
 
   // Don't render on the Intelligence OS page itself (it has its own CoryOrb)
   if (location.pathname === '/admin/intelligence') return null;
+
+  // Only visible to ali@colaberry.com or super_admin
+  if (!isCoryAuthorized) return null;
 
   const handleClick = () => {
     if (isAdmin && badge.count > 0) {

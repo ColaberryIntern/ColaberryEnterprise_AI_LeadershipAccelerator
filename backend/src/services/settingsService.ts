@@ -41,6 +41,10 @@ const DEFAULTS: Record<string, any> = {
   // AI Workstation (global prompt for all implementation tasks)
   workstation_prompt: '',
   workstation_test_mode: false,
+  // AI Visibility & Behavior
+  ai_cory_visibility: 'super_admin_only',   // 'super_admin_only' | 'all_admins' | 'disabled'
+  ai_maya_auto_popup: false,
+  ai_maya_visitor_delay_seconds: 3,
   // GoHighLevel CRM
   ghl_enabled: false,
   ghl_api_key: '',

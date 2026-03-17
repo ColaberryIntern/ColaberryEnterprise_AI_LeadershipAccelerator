@@ -312,14 +312,7 @@ const MayaChatWidget: React.FC = () => {
     setInitialized(true);
   }, [conversationId, initialized, visitorId, location.pathname, isAdmin]);
 
-  // Auto-open for admin — Maya greets the boss immediately on page load
-  const adminAutoOpened = useRef(false);
-  useEffect(() => {
-    if (isAdmin && showButton && !isOpen && !initialized && !adminAutoOpened.current && visitorId) {
-      adminAutoOpened.current = true;
-      handleOpen('admin_greeting');
-    }
-  }, [isAdmin, showButton, isOpen, initialized, visitorId, handleOpen]);
+  // Maya no longer auto-opens — user must click to engage
 
   const handleClose = useCallback(() => {
     if (isFullScreen) {
