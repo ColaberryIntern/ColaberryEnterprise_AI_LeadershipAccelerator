@@ -128,8 +128,8 @@ function ProgramPage() {
           <FadeIn>
             <h2 className="text-center mb-3">Your Transformation in {PROGRAM_SCHEDULE.totalWeeks} Weeks</h2>
             <p className="text-center text-muted mb-4" style={{ maxWidth: '680px', margin: '0 auto' }}>
-              A structured progression that turns enterprise leaders into AI architects
-              inside their organization.
+              A structured progression where Colaberry AI Experts guide your team from
+              strategic alignment to deploying a working AI system inside your organization.
             </p>
             <div className="d-flex justify-content-center gap-3 flex-wrap mb-5">
               {PROGRAM_SCHEDULE.summaryBadges.map((badge: string, i: number) => (
@@ -362,7 +362,7 @@ function ProgramPage() {
                 </div>
                 <div className="col-md-6">
                   <ul className="text-muted small mb-0">
-                    <li className="deliverable-item">Complete executive slide deck</li>
+                    <li className="deliverable-item">Complete executive AI presentation</li>
                     <li className="deliverable-item">Prepare 90-Day expansion roadmap outline</li>
                   </ul>
                 </div>

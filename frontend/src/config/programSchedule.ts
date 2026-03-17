@@ -23,3 +23,8 @@ export const PROGRAM_SCHEDULE = {
   heroTagline: 'A 5-Session AI Deployment Accelerator',
   price: '$4,500',
 };
+
+export const STANDARD_CTAS = {
+  primary: 'Design Your AI System Blueprint',
+  secondary: 'Schedule an Executive AI Strategy Call',
+} as const;

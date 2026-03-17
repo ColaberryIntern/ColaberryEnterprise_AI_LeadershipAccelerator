@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import ROIHighlightSection from '../components/ROIHighlightSection';
+import { STANDARD_CTAS } from '../config/programSchedule';
 import api from '../utils/api';
 
 interface LocationState {
@@ -101,7 +102,7 @@ function ExecOverviewThankYouPage() {
               We'll review your AI priorities and show you how the accelerator maps to your goals.
             </p>
             <button onClick={() => setShowBooking(true)} className="btn btn-lg btn-accent">
-              Schedule an Executive AI Strategy Call
+              {STANDARD_CTAS.secondary}
             </button>
           </div>
 

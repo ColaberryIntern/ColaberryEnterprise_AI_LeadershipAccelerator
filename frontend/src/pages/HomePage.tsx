@@ -2,7 +2,7 @@ import React, { useState, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
-import { PROGRAM_SCHEDULE } from '../config/programSchedule';
+import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
 import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm } from '../utils/formValidation';
 import { getUTMParams } from '../services/utmService';
@@ -138,7 +138,7 @@ function HomePage() {
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <a href="#download-overview" className="btn btn-lg btn-hero-primary">
-              Design Your AI System Blueprint
+              {STANDARD_CTAS.primary}
             </a>
             <Link to="/sponsorship" className="btn btn-lg btn-outline-light">
               🤝 Request Corporate Sponsorship Kit
@@ -197,7 +197,7 @@ function HomePage() {
             <div className="col-lg-6">
               <h2 className="mb-3">⚡ What Your Team Deploys in 3 Weeks</h2>
               <p className="text-muted mb-4">
-                {PROGRAM_SCHEDULE.totalSessions} focused sessions over {PROGRAM_SCHEDULE.totalWeeks} weeks. Your team deploys a real system — not a slideshow.
+                {PROGRAM_SCHEDULE.totalSessions} focused sessions over {PROGRAM_SCHEDULE.totalWeeks} weeks. Your team deploys a real system with production-ready output.
               </p>
               {[
                 '✅ A live AI system',
@@ -474,7 +474,7 @@ function HomePage() {
             className="btn btn-hero-primary btn-lg px-5"
             onClick={() => setShowBooking(true)}
           >
-            Schedule an Executive AI Strategy Call
+            {STANDARD_CTAS.secondary}
           </button>
           <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
             <span className="small">✓ 30-minute focused session</span>

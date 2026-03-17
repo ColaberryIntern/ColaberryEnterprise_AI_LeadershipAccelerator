@@ -306,7 +306,7 @@ function AlumniChampionPage() {
           <div className="container">
             <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>What You'll Walk Away With</h2>
             <p className="text-center mb-5" style={{ color: DARK.textMuted, maxWidth: '650px', margin: '0 auto' }}>
-              Every participant in the Enterprise AI Leadership Accelerator leaves with production-ready artifacts &mdash; not slide decks.
+              Every participant in the Enterprise AI Leadership Accelerator leaves with production-ready artifacts you can deploy immediately.
             </p>
             <div className="row g-4 justify-content-center">
               {ARTIFACTS.map((item) => (

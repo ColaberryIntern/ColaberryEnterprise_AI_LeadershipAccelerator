@@ -135,8 +135,8 @@ function SponsorshipPage() {
               },
               {
                 step: 'Step 2',
-                title: 'Quantify the Speed-to-Value Advantage',
-                description: 'Months eliminated from typical AI initiative timeline × estimated monthly cost of delay.',
+                title: 'Quantify the Capability Multiplier',
+                description: 'Number of future AI initiatives your trained team can lead independently × estimated value per initiative.',
               },
               {
                 step: 'Step 3',

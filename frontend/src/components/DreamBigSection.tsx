@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { STANDARD_CTAS } from '../config/programSchedule';
 
 interface DreamBigSectionProps {
   onOpenBooking: () => void;
@@ -212,14 +213,14 @@ export default function DreamBigSection({ onOpenBooking }: DreamBigSectionProps)
         {/* CTAs */}
         <div className="text-center">
           <a href="#download-overview" className="btn btn-lg btn-hero-primary me-3 mb-2">
-            Design Your AI System Blueprint
+            {STANDARD_CTAS.primary}
           </a>
           <button
             type="button"
             className="btn btn-lg btn-outline-primary mb-2"
             onClick={onOpenBooking}
           >
-            Schedule an Executive AI Strategy Call
+            {STANDARD_CTAS.secondary}
           </button>
         </div>
       </div>

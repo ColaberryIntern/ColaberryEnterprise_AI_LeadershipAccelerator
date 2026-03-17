@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import { STANDARD_CTAS } from '../config/programSchedule';
 
 function AdvisoryPage() {
   const services = [
@@ -159,7 +160,7 @@ function AdvisoryPage() {
                 <div>
                   <h3 className="h5">Strategy Alignment Call</h3>
                   <p className="text-muted">
-                    30-minute scoping call with our Enterprise AI team to understand
+                    30-minute strategy call with our Enterprise AI team to understand
                     your roadmap, constraints, and objectives.
                   </p>
                 </div>
@@ -219,7 +220,7 @@ function AdvisoryPage() {
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <Link to="/contact" className="btn btn-accent btn-lg">
-              Schedule an Executive AI Strategy Call
+              {STANDARD_CTAS.secondary}
             </Link>
             <Link to="/program" className="btn btn-outline-light btn-lg">
               View the Accelerator

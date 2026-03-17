@@ -561,7 +561,7 @@ function DynamicPrepForm({ token }: { token: string }) {
                         }
                       />
                       <label className="form-check-label small" htmlFor="eval-consultants">
-                        Currently evaluating consultants
+                        Currently evaluating external partners
                       </label>
                     </div>
                   </div>

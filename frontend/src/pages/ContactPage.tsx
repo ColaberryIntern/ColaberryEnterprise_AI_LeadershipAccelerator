@@ -5,6 +5,7 @@ import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm, ValidationRules } from '../utils/formValidation';
 import { getUTMParams } from '../services/utmService';
 import api from '../utils/api';
+import { STANDARD_CTAS } from '../config/programSchedule';
 
 const VALIDATION_RULES: ValidationRules = {
   required: ['fullName', 'email', 'company', 'title'],
@@ -494,7 +495,7 @@ function ContactPage() {
             className="btn btn-hero-primary btn-lg px-5"
             onClick={() => setShowBooking(true)}
           >
-            Schedule an Executive AI Strategy Call
+            {STANDARD_CTAS.secondary}
           </button>
           <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
             <span className="small">30-minute focused session</span>

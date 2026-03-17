@@ -5,6 +5,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import { STANDARD_CTAS } from '../config/programSchedule';
 
 interface CaseStudy {
   emoji: string;
@@ -184,7 +185,7 @@ function CaseStudiesPage() {
               View the Accelerator
             </Link>
             <Link to="/contact" className="btn btn-outline-light btn-lg">
-              Schedule an Executive AI Strategy Call
+              {STANDARD_CTAS.secondary}
             </Link>
           </div>
         </div>

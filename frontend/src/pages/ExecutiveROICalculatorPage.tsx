@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
+import { STANDARD_CTAS } from '../config/programSchedule';
 
 /* ── Calculation ─────────────────────────────────────────────────── */
 
@@ -314,15 +315,15 @@ function ExecutiveROICalculatorPage() {
             Ready to Capture This ROI?
           </h2>
           <p className="text-muted mb-4">
-            Download the Executive Briefing or schedule a strategic alignment call
+            Download the Executive Briefing or schedule a strategy call
             to discuss how the program maps to your organization.
           </p>
           <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center">
-            <Link to="/" className="btn btn-primary btn-lg">
-              Download Executive Briefing &rarr;
+            <Link to="/#download-overview" className="btn btn-primary btn-lg">
+              {STANDARD_CTAS.primary}
             </Link>
-            <Link to="/executive-overview/thank-you" className="btn btn-outline-primary btn-lg">
-              Schedule Strategic Alignment
+            <Link to="/contact" className="btn btn-outline-primary btn-lg">
+              {STANDARD_CTAS.secondary}
             </Link>
           </div>
         </div>

@@ -34,7 +34,7 @@ function ArtifactValueBlock() {
       <div className="container">
         <h2 className="text-center mb-2">What You'll Walk Away With</h2>
         <p className="text-center text-muted mb-5" style={{ maxWidth: '650px', margin: '0 auto' }}>
-          Every participant leaves with production-ready artifacts — not slide decks.
+          Every participant leaves with production-ready artifacts you can deploy immediately.
         </p>
         <div className="row g-4 justify-content-center">
           {ARTIFACTS.map((item) => (
