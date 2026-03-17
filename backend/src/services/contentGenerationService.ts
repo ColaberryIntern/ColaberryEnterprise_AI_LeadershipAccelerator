@@ -108,7 +108,7 @@ export async function generateLessonContent(
       userPrompt,
       model: MODEL,
       temperature: 0.7,
-      maxTokens: 10000,
+      maxTokens: 12000,
       responseFormat: { type: 'json_object' },
     });
 

@@ -64,10 +64,15 @@ export interface LLMCallResult {
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-const TIMEOUT_MS = 15_000;
+const BASE_TIMEOUT_MS = 15_000;
+const TIMEOUT_PER_1K_TOKENS = 5_000; // 5s per 1,000 max_tokens requested
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 1000;
-const SLOW_CALL_THRESHOLD_MS = 10_000;
+const SLOW_CALL_THRESHOLD_MS = 30_000;
+
+function getTimeout(maxTokens: number): number {
+  return BASE_TIMEOUT_MS + Math.ceil(maxTokens / 1000) * TIMEOUT_PER_1K_TOKENS;
+}
 
 // ─── Main wrapper ───────────────────────────────────────────────────────────
 export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallResult> {
@@ -139,7 +144,7 @@ export async function callLLMWithAudit(params: LLMCallParams): Promise<LLMCallRe
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), getTimeout(maxTokens));
 
       const openaiParams: any = {
         model,
