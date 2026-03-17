@@ -1,9 +1,7 @@
 /**
- * One-time backfill: Fix sequences where all steps have delay_days=0
- * but are NOT T-minus campaigns (no minutes_before_call).
- *
- * These sequences were created before normalizeSequenceTiming() was added
- * and have broken timing (all steps on Day 0).
+ * One-time backfill: Fix sequences with broken timing.
+ * Catches: all-zero delay_days AND non-monotonic delay_days.
+ * Skips: T-minus campaigns (minutes_before_call), single-step sequences.
  *
  * Run: npx ts-node -r tsconfig-paths/register src/scripts/backfillSequenceTiming.ts
  */
@@ -33,14 +31,6 @@ async function main() {
       continue;
     }
 
-    const allZeroDelay = steps.every((s: any) => (s.delay_days || 0) === 0);
-
-    // Skip sequences that already have proper timing
-    if (!allZeroDelay) {
-      skippedOk++;
-      continue;
-    }
-
     const hasTMinus = steps.some((s: any) => s.minutes_before_call != null);
 
     // Skip T-minus campaigns — their delay_days=0 is intentional
@@ -50,12 +40,24 @@ async function main() {
       continue;
     }
 
-    // This is a broken standard campaign — all Day 0, no T-minus
+    // Detect broken timing: all-zero OR non-monotonic delay_days
+    const allZeroDelay = steps.every((s: any) => (s.delay_days || 0) === 0);
+    const isNonMonotonic = steps.some((s: any, i: number) => {
+      if (i === 0) return false;
+      return (s.delay_days || 0) < (steps[i - 1].delay_days || 0);
+    });
+
+    if (!allZeroDelay && !isNonMonotonic) {
+      skippedOk++;
+      continue;
+    }
+
+    const oldDays = steps.map((s: any) => s.delay_days || 0);
     const corrected = normalizeSequenceTiming(steps);
     const newDays = corrected.map((s: any) => s.delay_days);
 
     await (seq as any).update({ steps: corrected });
-    console.log(`[Backfill] FIXED sequence ${seq.id} "${(seq as any).name}": days=[${newDays.join(',')}]`);
+    console.log(`[Backfill] FIXED sequence ${seq.id} "${(seq as any).name}": [${oldDays.join(',')}] → [${newDays.join(',')}]`);
     fixed++;
   }
 
