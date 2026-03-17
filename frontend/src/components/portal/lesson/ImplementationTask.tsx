@@ -67,7 +67,7 @@ interface ImplementationTaskProps {
     estimated_minutes?: number;
     getting_started?: string[];
     required_artifacts?: RequiredArtifact[];
-    tools?: { name: string; url: string; is_free: boolean }[];
+    tools?: { name: string; url: string; is_free: boolean; purpose?: string }[];
     evidence_requirements?: { name: string; description: string; format: string }[];
     scenario?: string;
     steps?: string[];
@@ -481,7 +481,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                 >
                   <i className="bi bi-box-arrow-up-right" style={{ fontSize: 9 }}></i>
                   {tool.name}
-                  <span style={{ fontSize: 9, opacity: 0.7 }}>{tool.is_free ? 'Free' : 'Paid'}</span>
+                  <span style={{ fontSize: 9, opacity: 0.7 }}>{tool.purpose || (tool.is_free ? 'Free' : 'Paid')}</span>
                 </a>
               ))}
             </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useMentorContext } from '../../../contexts/MentorContext';
+import { buildFinalPrompt } from '../../../services/promptBuilder';
 
 interface AIStrategyProps {
   data: {
@@ -17,7 +18,7 @@ interface AIStrategyProps {
 }
 
 export default function AIStrategy({ data }: AIStrategyProps) {
-  const { selectedLLM, openLLMWithPrompt, learnerProfile, buildPersonalizedPrompt } = useMentorContext();
+  const { selectedLLM, openLLMWithPrompt, learnerProfile } = useMentorContext();
   const [copied, setCopied] = useState(false);
 
   const isNewShape = !!data.when_to_use_ai;
@@ -48,7 +49,21 @@ export default function AIStrategy({ data }: AIStrategyProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleRunInLLM = () => openLLMWithPrompt(suggestedPrompt);
+  const handleRunInLLM = () => {
+    const prompt = buildFinalPrompt({
+      learnerContext: learnerProfile ? {
+        company: learnerProfile.company_name,
+        industry: learnerProfile.industry,
+        role: learnerProfile.role,
+        goal: learnerProfile.goal,
+        ai_maturity: learnerProfile.ai_maturity_level ? `${learnerProfile.ai_maturity_level}/5` : undefined,
+        use_case: learnerProfile.identified_use_case,
+      } : undefined,
+      promptTemplate: suggestedPrompt,
+      aiStrategy: { description, when_to_use_ai: delegateItems },
+    });
+    openLLMWithPrompt(prompt);
+  };
 
   // Legacy layout for old data shape
   if (!isNewShape) {

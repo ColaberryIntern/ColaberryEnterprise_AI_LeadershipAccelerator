@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import portalApi from '../../utils/portalApi';
 import { useMentorContext } from '../../contexts/MentorContext';
+import { buildFinalPrompt } from '../../services/promptBuilder';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -136,6 +137,7 @@ function PortalMentorChat() {
     fireMentorResponded,
     openLLMWithPrompt,
     buildPersonalizedPrompt,
+    learnerProfile,
   } = useMentorContext();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -148,6 +150,15 @@ function PortalMentorChat() {
   const lastAssistantRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // ESC key exits fullscreen
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isFullscreen]);
 
   const lessonId = lessonContext.lessonId || undefined;
   const isImplementationTask = lessonContext.currentSection === 'implementation_task' && !!lessonContext.implementationTaskData;
@@ -480,63 +491,31 @@ function PortalMentorChat() {
                   onClick={() => {
                     const taskData = lessonContext.implementationTaskData!;
                     const lastMentorMsg = [...messages].reverse().find(m => m.role === 'assistant');
-                    // Use admin-configured workstation prompt if available, otherwise fallback
-                    let prompt: string;
-                    if (lessonContext.workstationPrompt) {
-                      // Admin-configured prompt with variable substitution
-                      const formattedReqs = taskData.requirements.map((r, i) => `${i + 1}. ${r}`).join('\n');
-                      const formattedArtifacts = taskData.artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description}`).join('\n');
-                      const mentorBriefing = lastMentorMsg?.content || 'No briefing available yet.';
-                      prompt = lessonContext.workstationPrompt
-                        // Support both {task_*} and short variable names
-                        .replace(/\{task_title\}/g, taskData.title)
-                        .replace(/\{title\}/g, taskData.title)
-                        .replace(/\{task_description\}/g, taskData.description)
-                        .replace(/\{description\}/g, taskData.description)
-                        .replace(/\{task_deliverable\}/g, taskData.deliverable)
-                        .replace(/\{deliverable\}/g, taskData.deliverable)
-                        .replace(/\{task_requirements\}/g, formattedReqs)
-                        .replace(/\{task_artifacts\}/g, formattedArtifacts)
-                        .replace(/\{lesson_title\}/g, lessonContext.lessonTitle)
-                        .replace(/\{lessonTitle\}/g, lessonContext.lessonTitle)
-                        .replace(/\{mentor_briefing\}/g, mentorBriefing);
-                      // Replace illustrative requirements block if present
-                      prompt = prompt.replace(/1\. \{requirement 1\}\n2\. \{requirement 2\}\n\.\.\./g, formattedReqs);
-                      // Append mentor briefing if no placeholder was in the template
-                      if (!lessonContext.workstationPrompt.includes('{mentor_briefing}')) {
-                        prompt += '\n\nMENTOR BRIEFING:\n' + mentorBriefing;
-                      }
-                    } else {
-                      prompt = `You are an AI-powered workspace coach helping a learner complete an implementation assignment for an AI Leadership course.
-
-ASSIGNMENT: ${taskData.title}
-DESCRIPTION: ${taskData.description}
-DELIVERABLE: ${taskData.deliverable}
-
-REQUIREMENTS:
-${taskData.requirements.map((r, i) => `${i + 1}. ${r}`).join('\n')}
-
-${taskData.artifacts.length > 0 ? `REQUIRED ARTIFACTS:\n${taskData.artifacts.map((a, i) => `${i + 1}. ${a.name}: ${a.description} (${a.file_types.join(', ')})\n   Criteria: ${a.validation_criteria}`).join('\n\n')}` : ''}
-
-LESSON: ${lessonContext.lessonTitle}
-
-MENTOR BRIEFING:
-${lastMentorMsg?.content || 'No briefing available yet.'}
-
-YOUR ROLE:
-Guide the learner through completing this assignment step by step. For each artifact:
-1. Explain what needs to be created
-2. Help them structure the content
-3. Provide templates or starting points
-4. Review their work when they share it
-
-Track progress through the requirements checklist. Be encouraging but thorough.
-Start by summarizing what they need to do and ask which artifact they want to work on first.`;
-                    }
-                    // Append test mode instructions if enabled
-                    if (lessonContext.workstationTestMode) {
-                      prompt += `\n\nTEST MODE INSTRUCTIONS:\nI am in test mode. Walk me through the experience exactly as a real student would see it, but when you ask me to do work or submit something, instead of waiting for my submission, you should generate a realistic example yourself and continue as if I had submitted it. Keep the flow moving automatically — show me the full student journey from start to finish.`;
-                    }
+                    const prompt = buildFinalPrompt({
+                      systemPrompt: lessonContext.workstationPrompt || undefined,
+                      learnerContext: learnerProfile ? {
+                        company: learnerProfile.company_name,
+                        industry: learnerProfile.industry,
+                        role: learnerProfile.role,
+                        goal: learnerProfile.goal,
+                        ai_maturity: learnerProfile.ai_maturity_level ? `${learnerProfile.ai_maturity_level}/5` : undefined,
+                        use_case: learnerProfile.identified_use_case,
+                      } : undefined,
+                      mentorOutput: lastMentorMsg?.content || 'No briefing available yet.',
+                      implementationTask: {
+                        title: taskData.title,
+                        description: taskData.description,
+                        deliverable: taskData.deliverable,
+                        requirements: taskData.requirements,
+                        artifacts: taskData.artifacts.map(a => ({
+                          name: a.name,
+                          description: a.description,
+                          file_types: a.file_types,
+                        })),
+                      },
+                      lessonTitle: lessonContext.lessonTitle,
+                      workstationTestMode: lessonContext.workstationTestMode,
+                    });
                     openLLMWithPrompt(prompt);
                   }}
                   disabled={sending}
