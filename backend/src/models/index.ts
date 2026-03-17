@@ -52,6 +52,7 @@ import Initiative from './Initiative';
 import DepartmentEvent from './DepartmentEvent';
 import BlueprintSnapshot from './BlueprintSnapshot';
 import TestSimulationResult from './TestSimulationResult';
+import ContentGenerationLog from './ContentGenerationLog';
 import AiAgent from './AiAgent';
 import AiAgentActivityLog from './AiAgentActivityLog';
 import CampaignHealth from './CampaignHealth';
@@ -652,6 +653,7 @@ export {
   AuditLog,
   BlueprintSnapshot,
   TestSimulationResult,
+  ContentGenerationLog,
   AiAgent,
   AiAgentActivityLog,
   CampaignHealth,

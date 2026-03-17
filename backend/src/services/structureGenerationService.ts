@@ -1,4 +1,3 @@
-import OpenAI from 'openai';
 import crypto from 'crypto';
 import { sequelize } from '../config/database';
 import MiniSection from '../models/MiniSection';
@@ -6,12 +5,8 @@ import VariableDefinition from '../models/VariableDefinition';
 import ArtifactDefinition from '../models/ArtifactDefinition';
 import SkillDefinition from '../models/SkillDefinition';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
+import { callLLMWithAudit } from './llmCallWrapper';
 
-let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return _openai;
-}
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 
 // ─── Basic Generation (existing) ─────────────────────────────────────────
@@ -61,22 +56,20 @@ const EXPECTED_TYPES = [
   'knowledge_check',
 ];
 
-export async function generateSectionStructure(structurePrompt: string): Promise<GeneratedEvent[]> {
-  const openai = getOpenAI();
-
-  const response = await openai.chat.completions.create({
+export async function generateSectionStructure(structurePrompt: string, lessonId?: string): Promise<GeneratedEvent[]> {
+  const llmResult = await callLLMWithAudit({
+    lessonId: lessonId || 'unknown',
+    generationType: 'admin_structure',
+    step: 'generate_section_structure',
+    systemPrompt: BASIC_SYSTEM_PROMPT,
+    userPrompt: structurePrompt,
     model: MODEL,
-    messages: [
-      { role: 'system', content: BASIC_SYSTEM_PROMPT },
-      { role: 'user', content: structurePrompt },
-    ],
     temperature: 0.7,
-    max_tokens: 1500,
-    response_format: { type: 'json_object' },
+    maxTokens: 1500,
+    responseFormat: { type: 'json_object' },
   });
 
-  const raw = response.choices[0]?.message?.content || '';
-  const parsed = JSON.parse(raw);
+  const parsed = JSON.parse(llmResult.content);
   const events: GeneratedEvent[] = parsed.events;
 
   if (!Array.isArray(events) || events.length !== 5) {
@@ -219,22 +212,20 @@ Rules:
  * Generate a comprehensive section blueprint from a description.
  * Returns the full spec including variables, artifacts, skills, and KC config.
  */
-export async function generateComprehensiveBlueprint(structurePrompt: string): Promise<GeneratedBlueprint> {
-  const openai = getOpenAI();
-
-  const response = await openai.chat.completions.create({
+export async function generateComprehensiveBlueprint(structurePrompt: string, lessonId?: string): Promise<GeneratedBlueprint> {
+  const llmResult = await callLLMWithAudit({
+    lessonId: lessonId || 'unknown',
+    generationType: 'admin_blueprint',
+    step: 'generate_comprehensive_blueprint',
+    systemPrompt: COMPREHENSIVE_SYSTEM_PROMPT,
+    userPrompt: structurePrompt,
     model: MODEL,
-    messages: [
-      { role: 'system', content: COMPREHENSIVE_SYSTEM_PROMPT },
-      { role: 'user', content: structurePrompt },
-    ],
     temperature: 0.7,
-    max_tokens: 3000,
-    response_format: { type: 'json_object' },
+    maxTokens: 3000,
+    responseFormat: { type: 'json_object' },
   });
 
-  const raw = response.choices[0]?.message?.content || '';
-  const parsed = JSON.parse(raw);
+  const parsed = JSON.parse(llmResult.content);
 
   const miniSections: GeneratedMiniSectionSpec[] = parsed.mini_sections;
   if (!Array.isArray(miniSections) || miniSections.length !== 5) {

@@ -157,6 +157,7 @@ export default function SectionBlueprintCard({
 }: Props) {
   const [collapsed, setCollapsed] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generationPhase, setGenerationPhase] = useState<'sending' | 'generating' | 'parsing' | 'ready' | null>(null);
   const [applying, setApplying] = useState(false);
   const [generatedEvents, setGeneratedEvents] = useState<GeneratedEvent[] | null>(null);
   const [generatedBlueprint, setGeneratedBlueprint] = useState<GeneratedBlueprint | null>(null);
@@ -186,11 +187,13 @@ export default function SectionBlueprintCard({
   const handleGenerate = async () => {
     if (!localPrompt.trim()) return;
     setGenerating(true);
+    setGenerationPhase('sending');
     setError('');
     setGeneratedEvents(null);
     setGeneratedBlueprint(null);
     setApplyResult(null);
     try {
+      setGenerationPhase('generating');
       if (useComprehensive) {
         // Comprehensive blueprint generation
         const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/generate-blueprint`, {
@@ -202,6 +205,7 @@ export default function SectionBlueprintCard({
           const err = await res.json().catch(() => ({ error: 'Request failed' }));
           throw new Error(err.error || `HTTP ${res.status}`);
         }
+        setGenerationPhase('parsing');
         const data = await res.json();
         setGeneratedBlueprint(data.blueprint);
       } else {
@@ -215,12 +219,15 @@ export default function SectionBlueprintCard({
           const err = await res.json().catch(() => ({ error: 'Request failed' }));
           throw new Error(err.error || `HTTP ${res.status}`);
         }
+        setGenerationPhase('parsing');
         const data = await res.json();
         setGeneratedEvents(data.events);
       }
+      setGenerationPhase('ready');
       setCollapsed(false);
     } catch (err: any) {
       setError(err.message || 'Generation failed');
+      setGenerationPhase(null);
     } finally {
       setGenerating(false);
     }
@@ -324,7 +331,11 @@ export default function SectionBlueprintCard({
           <div className="d-flex gap-2 mb-2">
             <button className="btn btn-sm btn-primary flex-grow-1" onClick={handleGenerate} disabled={generating || !localPrompt.trim()}>
               {generating ? (
-                <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Generating...</>
+                <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>
+                  {generationPhase === 'sending' ? 'Sending to AI...' :
+                   generationPhase === 'generating' ? 'Generating blueprint...' :
+                   generationPhase === 'parsing' ? 'Parsing response...' : 'Generating...'}
+                </>
               ) : (
                 <><i className="bi bi-stars me-1"></i>{useComprehensive ? 'Generate Blueprint' : 'Generate Structure'}</>
               )}
@@ -335,6 +346,28 @@ export default function SectionBlueprintCard({
               </button>
             )}
           </div>
+
+          {/* Generation progress steps */}
+          {generating && generationPhase && (
+            <div className="d-flex align-items-center gap-3 mb-2" style={{ fontSize: 10 }}>
+              {(['sending', 'generating', 'parsing'] as const).map((phase) => {
+                const labels = { sending: 'Sending', generating: 'AI Processing', parsing: 'Parsing' };
+                const phaseOrder = { sending: 0, generating: 1, parsing: 2, ready: 3 };
+                const currentOrder = phaseOrder[generationPhase] || 0;
+                const thisOrder = phaseOrder[phase];
+                const isDone = currentOrder > thisOrder;
+                const isActive = generationPhase === phase;
+                return (
+                  <span key={phase} className="d-flex align-items-center gap-1" style={{ color: isDone ? '#38a169' : isActive ? '#2b6cb0' : '#a0aec0' }}>
+                    {isDone ? <i className="bi bi-check-circle-fill" style={{ fontSize: 10 }}></i> :
+                     isActive ? <span className="spinner-border" style={{ width: 10, height: 10, borderWidth: 2 }}></span> :
+                     <i className="bi bi-circle" style={{ fontSize: 10 }}></i>}
+                    {labels[phase]}
+                  </span>
+                );
+              })}
+            </div>
+          )}
 
           {error && (
             <div className="alert alert-danger py-1 px-2 mb-2" style={{ fontSize: 10 }}>

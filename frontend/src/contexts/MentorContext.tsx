@@ -119,6 +119,7 @@ export function MentorContextProvider({ children }: { children: React.ReactNode 
 
   const buildPersonalizedPrompt = useCallback((prompt: string) => {
     if (!learnerProfile) return prompt;
+    if (prompt.includes('[Context about me:')) return prompt;
     const ctx: string[] = [];
     if (learnerProfile.company_name) ctx.push(`Company: ${learnerProfile.company_name}`);
     if (learnerProfile.industry) ctx.push(`Industry: ${learnerProfile.industry}`);

@@ -367,7 +367,7 @@ router.post('/api/admin/orchestration/lessons/:id/generate-structure', requireAd
     const lesson = await CurriculumLesson.findByPk(req.params.id as string);
     if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
     await lesson.update({ structure_prompt });
-    const events = await generateSectionStructure(structure_prompt);
+    const events = await generateSectionStructure(structure_prompt, req.params.id as string);
     res.json({ events });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Structure generation failed' });
@@ -385,7 +385,7 @@ router.post('/api/admin/orchestration/lessons/:id/generate-blueprint', requireAd
     const lesson = await CurriculumLesson.findByPk(req.params.id as string);
     if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
     await lesson.update({ structure_prompt });
-    const blueprint = await generateComprehensiveBlueprint(structure_prompt);
+    const blueprint = await generateComprehensiveBlueprint(structure_prompt, req.params.id as string);
     res.json({ blueprint });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Blueprint generation failed' });

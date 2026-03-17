@@ -1,16 +1,11 @@
-import OpenAI from 'openai';
 import CurriculumLesson from '../models/CurriculumLesson';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import { SectionConfig, PromptTemplate, ProgramBlueprint, MiniSection, ArtifactDefinition } from '../models';
 import CurriculumModule from '../models/CurriculumModule';
 import * as variableService from './variableService';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
+import { callLLMWithAudit } from './llmCallWrapper';
 
-let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return _openai;
-}
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 
 function buildPersonalizationContext(
@@ -104,26 +99,57 @@ export async function generateLessonContent(
   }
 
   try {
-    const response = await getOpenAI().chat.completions.create({
+    const llmResult = await callLLMWithAudit({
+      lessonId: lesson.id,
+      enrollmentId,
+      generationType: 'participant_content',
+      step: 'generate_lesson_content',
+      systemPrompt,
+      userPrompt,
       model: MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
       temperature: 0.7,
-      max_tokens: 10000,
-      response_format: { type: 'json_object' },
+      maxTokens: 10000,
+      responseFormat: { type: 'json_object' },
     });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) throw new Error('Empty response from LLM');
+    let parsed: any;
+    try {
+      parsed = JSON.parse(llmResult.content);
+    } catch (parseErr) {
+      // Attempt JSON repair on truncated responses: close open braces/brackets
+      console.warn('[ContentGeneration] JSON parse failed, attempting repair...');
+      let repaired = llmResult.content.trim();
+      let openBraces = 0, openBrackets = 0;
+      for (const ch of repaired) {
+        if (ch === '{') openBraces++;
+        else if (ch === '}') openBraces--;
+        else if (ch === '[') openBrackets++;
+        else if (ch === ']') openBrackets--;
+      }
+      while (openBrackets > 0) { repaired += ']'; openBrackets--; }
+      while (openBraces > 0) { repaired += '}'; openBraces--; }
+      try {
+        parsed = JSON.parse(repaired);
+        console.log('[ContentGeneration] JSON repair succeeded');
+      } catch {
+        console.error('[ContentGeneration] JSON repair failed, using full fallback');
+        return buildFallbackContent(lesson);
+      }
+    }
 
-    const parsed = JSON.parse(content);
-
-    // Validate v2 content has required fields — use fallback if truncated/malformed
+    // Merge partial results with fallback instead of discarding everything
     if (!parsed.content_version || !parsed.concept_snapshot) {
-      console.error('[ContentGeneration] Malformed v2 content, using fallback. Keys:', Object.keys(parsed));
-      return buildFallbackContent(lesson);
+      console.warn('[ContentGeneration] Partial v2 content, merging with fallback. Keys:', Object.keys(parsed));
+      const fallback = buildFallbackContent(lesson);
+      const merged = { ...fallback, ...parsed };
+      if (!merged.concept_snapshot?.title) merged.concept_snapshot = fallback.concept_snapshot;
+      if (!merged.ai_strategy?.description) merged.ai_strategy = fallback.ai_strategy;
+      if (!merged.prompt_template?.template) merged.prompt_template = fallback.prompt_template;
+      if (!merged.implementation_task?.title) merged.implementation_task = fallback.implementation_task;
+      if (!merged.knowledge_checks?.length) merged.knowledge_checks = fallback.knowledge_checks;
+      if (!merged.reflection_questions?.length) merged.reflection_questions = fallback.reflection_questions;
+      merged.content_version = 'v2';
+      return merged;
     }
 
     // Store output variables if SectionConfig defines variable_output_map
@@ -195,7 +221,7 @@ Return valid JSON with this exact schema:
     "description": "How AI applies to this concept in their industry (string)",
     "when_to_use_ai": ["3-4 specific tasks/decisions to delegate to AI (array of strings)"],
     "human_responsibilities": ["3-4 things that must stay human-owned (array of strings)"],
-    "suggested_prompt": "A detailed, research-oriented prompt personalized with their company name, role, and industry. Should start them on a practical research path relevant to this lesson. 3-5 sentences long. (string)"
+    "suggested_prompt": "A detailed, research-driven and action-oriented prompt personalized with their company name, role, and industry. MUST instruct the learner to research, investigate, analyze, and present findings — e.g. 'Research the top 3 AI applications in [industry], analyze their ROI for [company], and present a comparison table.' NEVER generate reflection questions, hypothetical scenarios, or 'What would you do if...' style prompts. 3-5 sentences long. (string)"
   },
   "prompt_template": {
     "template": "A detailed, multi-step reusable prompt template with {{placeholder_name}} markers embedded directly in the text (string). CRITICAL: The template text MUST contain {{double_curly_brace}} markers for EVERY placeholder listed in the placeholders array. Example: 'I am focused on {{department_focus}} and facing {{specific_challenge}}. Help me...' Do NOT write questions as plain text — embed {{placeholder_name}} markers where the user's answer belongs. The template should be 4-8 sentences and include specific instructions for the AI to follow, desired output format, and context. Do NOT use {{company_name}}, {{industry}}, or {{role}} — these are auto-filled. Instead use discovery-oriented placeholders that gather NEW information.",
@@ -288,7 +314,7 @@ IMPORTANT RULES:
 - For implementation_task.getting_started, provide 3 concrete first steps (e.g., "Open ChatGPT and paste the prompt template", "Gather your company's current AI tools list").
 - For implementation_task.required_artifacts, specify 1-3 concrete deliverables with appropriate file_types. For large artifacts like SSIS packages, set allow_screenshot to true. Common file types: .xlsx, .pdf, .docx, .pptx, .png, .csv
 - For prompt_template, the template string MUST contain {{placeholder_name}} markers for EVERY placeholder in the placeholders array. WRONG: "What challenge are you facing?" RIGHT: "I am facing {{specific_challenge}} in my {{department_focus}}." The markers get replaced with user values at runtime. Do NOT use company_name, industry, or role as placeholders — these are auto-filled. Use discovery-oriented placeholders: department_focus, specific_challenge, current_process, desired_outcome, key_stakeholders, scope_area, etc. Write placeholder descriptions as questions for the UI form labels.
-- For ai_strategy.suggested_prompt, write a detailed, personalized prompt that uses the learner's actual company/role/industry context. It should be 3-5 sentences and guide them toward practical research or analysis.
+- For ai_strategy.suggested_prompt, write a research-driven, action-oriented prompt that uses the learner's actual company/role/industry context. It MUST instruct the learner to investigate, analyze, compare, or present findings. NEVER generate reflection questions ("What would you do if..."), hypothetical scenarios, or open-ended philosophical prompts. Good: "Research X in your industry, analyze Y for your company, and create a Z." Bad: "What would happen if your company adopted AI?" 3-5 sentences.
 - Personalize ALL content to the learner's industry, company, role, and AI maturity level.
 - BUDGET AND TOOL RECOMMENDATIONS:
   * All solutions should assume development is done using Claude Code as the primary execution environment.
@@ -375,7 +401,7 @@ Create ALL 6 sections of the AI-Native Learning System model (concept_snapshot, 
 Do NOT include code_examples — this is executive training, not a coding course.
 The prompt template should be directly usable with ChatGPT, Claude, or similar AI tools.
 The implementation task assignment must use the learner's actual company/industry context and include required_artifacts with specific file types and validation criteria.
-The suggested_prompt in ai_strategy must be detailed and research-oriented — not a generic one-liner.
+The suggested_prompt in ai_strategy must be research-driven and action-oriented — instruct the learner to research, analyze, and present findings. NEVER generate reflection questions or "What would you do if..." prompts. Write: "Research X, analyze Y, present Z."
 Knowledge checks must be scenario-based, not trivia.`;
 }
 

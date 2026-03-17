@@ -77,6 +77,7 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
   const [modalValues, setModalValues] = useState<Record<string, string>>({});
   const [executionContext, setExecutionContext] = useState<ExecutionContext | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [fallbackPrompt, setFallbackPrompt] = useState<string | null>(null);
 
   const placeholders = derivePlaceholders(data);
   const autoFillMap = React.useMemo(() => buildAutoFillMap(learnerProfile), [learnerProfile]);
@@ -202,9 +203,11 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
         implementationTask,
       });
       setExecutionContext(ctx);
+      setFallbackPrompt(null);
       promptToSend = ctx.finalPrompt;
     } catch (err) {
       console.error('ExecutionContext build failed, falling back:', err);
+      setFallbackPrompt(promptToSend);
     }
 
     const encoded = encodeURIComponent(promptToSend);
@@ -350,6 +353,57 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
         onDismiss={() => setExecutionContext(null)}
         selectedLLM={selectedLLM}
       />
+
+      {/* Fallback workspace button when ExecutionContext build fails */}
+      {!executionContext && fallbackPrompt && (
+        <div
+          className="card border-0 shadow-sm mb-4"
+          style={{ borderLeft: '4px solid #f59e0b' }}
+        >
+          <div className="card-body d-flex align-items-center justify-content-between flex-wrap gap-2" style={{ padding: '12px 16px' }}>
+            <div className="d-flex align-items-center gap-2">
+              <i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b', fontSize: 14 }}></i>
+              <span style={{ fontSize: 12, color: '#64748b' }}>Context enrichment unavailable — prompt ready without extras</span>
+            </div>
+            <div className="d-flex gap-2">
+              <button
+                className="btn btn-sm d-flex align-items-center gap-2 px-3"
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 600, border: 'none',
+                }}
+                onClick={() => {
+                  const encoded = encodeURIComponent(fallbackPrompt);
+                  if (selectedLLM.id === 'chatgpt') {
+                    window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
+                  } else if (selectedLLM.id === 'claude') {
+                    window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
+                  } else {
+                    navigator.clipboard.writeText(fallbackPrompt).catch(() => {});
+                    window.open(selectedLLM.url, '_blank');
+                  }
+                }}
+              >
+                <i className={`bi ${selectedLLM.icon}`}></i>
+                Open in {selectedLLM.name}
+              </button>
+              <button
+                className="btn btn-sm d-flex align-items-center gap-2 px-3"
+                style={{
+                  background: '#f1f5f9', color: '#475569', borderRadius: 6, fontSize: 12,
+                  fontWeight: 600, border: '1px solid #e2e8f0',
+                }}
+                onClick={() => {
+                  navigator.clipboard.writeText(fallbackPrompt).catch(() => {});
+                }}
+              >
+                <i className="bi bi-clipboard"></i>
+                Copy Prompt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Review Parameters Modal */}
       {showModal && (
