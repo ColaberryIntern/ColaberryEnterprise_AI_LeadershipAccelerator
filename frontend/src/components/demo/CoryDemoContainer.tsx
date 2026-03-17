@@ -95,7 +95,7 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
     // Select + zoom into current department immediately on activation
     const currentId = DEMO_SEQUENCE[demoIndexRef.current];
     setSelectedId(currentId);
-    setLoading(true);
+    setReportDeptId(currentId);
     setDemoZoomTarget(currentId);
     setIsZoomedIn(true);
     onDepartmentChange?.(currentId);
@@ -111,7 +111,7 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
 
       // Select department + zoom in
       setSelectedId(nextId);
-      setLoading(true);
+      setReportDeptId(nextId);
       setDemoZoomTarget(nextId);
       setIsZoomedIn(true);
       onDepartmentChange?.(nextId);
