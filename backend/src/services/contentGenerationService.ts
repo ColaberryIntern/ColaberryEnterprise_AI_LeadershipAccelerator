@@ -289,7 +289,17 @@ IMPORTANT RULES:
 - For implementation_task.required_artifacts, specify 1-3 concrete deliverables with appropriate file_types. For large artifacts like SSIS packages, set allow_screenshot to true. Common file types: .xlsx, .pdf, .docx, .pptx, .png, .csv
 - For prompt_template, the template string MUST contain {{placeholder_name}} markers for EVERY placeholder in the placeholders array. WRONG: "What challenge are you facing?" RIGHT: "I am facing {{specific_challenge}} in my {{department_focus}}." The markers get replaced with user values at runtime. Do NOT use company_name, industry, or role as placeholders — these are auto-filled. Use discovery-oriented placeholders: department_focus, specific_challenge, current_process, desired_outcome, key_stakeholders, scope_area, etc. Write placeholder descriptions as questions for the UI form labels.
 - For ai_strategy.suggested_prompt, write a detailed, personalized prompt that uses the learner's actual company/role/industry context. It should be 3-5 sentences and guide them toward practical research or analysis.
-- Personalize ALL content to the learner's industry, company, role, and AI maturity level.`;
+- Personalize ALL content to the learner's industry, company, role, and AI maturity level.
+- BUDGET AND TOOL RECOMMENDATIONS:
+  * All solutions should assume development is done using Claude Code as the primary execution environment.
+  * Do NOT recommend external tools or platforms (n8n, Twilio, Zapier, etc.) unless absolutely necessary and clearly justified.
+  * When presenting budget options or cost estimates, use this 3-tier structure:
+    - Option 1 (Recommended): Lean Build — Built entirely using Claude Code, leveraging internal talent (interns + AI). Include training and onboarding costs in the initial investment. Frame as highest ROI and fastest to implement.
+    - Option 2: Scaled Internal — Claude Code plus additional internal resources or support. Higher cost range.
+    - Option 3 (Optional): Enterprise — May include external platforms. Clearly label as higher-cost alternative.
+  * Always include training cost as part of the initial investment in the recommended option.
+  * Frame the Claude Code approach as the most efficient, highest-ROI option.
+  * Avoid listing tools that Claude Code can replicate (workflow builders, basic automation platforms, simple API integrations).`;
 
 const ASSESSMENT_SYSTEM_PROMPT = `You are an expert AI assessment designer creating knowledge checks for executive education.
 Questions must be practical and scenario-based, not academic trivia.

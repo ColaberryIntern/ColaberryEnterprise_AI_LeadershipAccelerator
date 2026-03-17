@@ -205,7 +205,13 @@ export default function ConceptV2({ content, lessonId, isCompleted, onCanComplet
       {content.prompt_template && (
         <>
           <SectionStepLabel stepNumber={stepNumber('prompt')} totalSteps={steps.length} label="Prompt Lab" status={stepStatus('prompt')} />
-          <PromptTemplate data={content.prompt_template} onPromptGenerated={() => setPromptGenerated(true)} />
+          <PromptTemplate
+            data={content.prompt_template}
+            onPromptGenerated={() => setPromptGenerated(true)}
+            conceptSnapshot={content.concept_snapshot}
+            aiStrategy={content.ai_strategy}
+            implementationTask={content.implementation_task}
+          />
         </>
       )}
 

@@ -12,6 +12,8 @@ import {
   extractKeywords,
   scoreMatch,
 } from './promptTemplateUtils';
+import { buildExecutionContext, ExecutionContext } from '../../../services/executionContextBuilder';
+import ExecutionContextPanel from './ExecutionContextPanel';
 
 /* Human-friendly labels for known placeholder names */
 const FRIENDLY_LABELS: Record<string, string> = {
@@ -61,15 +63,20 @@ const DROPDOWN_OPTIONS: Record<string, { value: string; label: string }[]> = {
 interface PromptTemplateProps {
   data: PromptTemplateData;
   onPromptGenerated?: () => void;
+  conceptSnapshot?: any;
+  aiStrategy?: any;
+  implementationTask?: any;
 }
 
-export default function PromptTemplate({ data, onPromptGenerated }: PromptTemplateProps) {
-  const { learnerProfile, updateLearnerProfile, selectedLLM } = useMentorContext();
+export default function PromptTemplate({ data, onPromptGenerated, conceptSnapshot, aiStrategy, implementationTask }: PromptTemplateProps) {
+  const { learnerProfile, updateLearnerProfile, selectedLLM, lessonContext } = useMentorContext();
   const [copied, setCopied] = useState(false);
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [modalValues, setModalValues] = useState<Record<string, string>>({});
+  const [executionContext, setExecutionContext] = useState<ExecutionContext | null>(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   const placeholders = derivePlaceholders(data);
   const autoFillMap = React.useMemo(() => buildAutoFillMap(learnerProfile), [learnerProfile]);
@@ -140,7 +147,8 @@ export default function PromptTemplate({ data, onPromptGenerated }: PromptTempla
   };
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(filledTemplate);
+    const textToCopy = executionContext?.finalPrompt || filledTemplate;
+    navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     onPromptGenerated?.();
     setTimeout(() => setCopied(false), 2000);
@@ -176,15 +184,37 @@ export default function PromptTemplate({ data, onPromptGenerated }: PromptTempla
       setSaving(false);
     }
     setFillValues(prev => ({ ...prev, ...values }));
+    setHasGenerated(true);
     const filled = buildFilledTemplate(values);
-    const encoded = encodeURIComponent(filled);
+
+    // Build execution context with unified prompt
+    let promptToSend = filled;
+    try {
+      const ctx = buildExecutionContext({
+        filledPrompt: filled,
+        templateName: (data as any).title || 'Prompt Template',
+        placeholderValues: values,
+        learnerProfile,
+        lessonContext,
+        selectedLLM,
+        conceptSnapshot,
+        aiStrategy,
+        implementationTask,
+      });
+      setExecutionContext(ctx);
+      promptToSend = ctx.finalPrompt;
+    } catch (err) {
+      console.error('ExecutionContext build failed, falling back:', err);
+    }
+
+    const encoded = encodeURIComponent(promptToSend);
     onPromptGenerated?.();
     if (selectedLLM.id === 'chatgpt') {
       window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
     } else if (selectedLLM.id === 'claude') {
       window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
     } else {
-      navigator.clipboard.writeText(filled).catch(() => {});
+      navigator.clipboard.writeText(promptToSend).catch(() => {});
       window.open(selectedLLM.url, '_blank');
     }
   };
@@ -195,11 +225,23 @@ export default function PromptTemplate({ data, onPromptGenerated }: PromptTempla
     setShowModal(false);
   };
 
+  // Open edit modal — always opens with ALL placeholders regardless of fill state
+  const openEditModal = () => {
+    const values: Record<string, string> = {};
+    for (const ph of placeholders) {
+      values[ph.name] = getEffectiveValue(ph.name);
+    }
+    setModalValues(values);
+    setShowModal(true);
+  };
+
   // Only show placeholders in the modal that don't already have auto-fill values
   const unfilledPlaceholders = placeholders.filter(ph => {
     const autoVal = autoFillMap[ph.name] || autoFillMap[ph.name.toLowerCase()];
     return !autoVal;
   });
+  // When editing after generation, show all placeholders; otherwise show only unfilled
+  const displayPlaceholders = hasGenerated ? placeholders : unfilledPlaceholders;
   const allModalFilled = placeholders.every(ph => modalValues[ph.name]?.trim());
 
   return (
@@ -223,6 +265,14 @@ export default function PromptTemplate({ data, onPromptGenerated }: PromptTempla
           </button>
         </div>
         <div className="card-body" style={{ padding: 20 }}>
+          {/* Editability hint */}
+          {hasGenerated && (
+            <div className="d-flex align-items-center gap-2 mb-2" style={{ fontSize: 11, color: '#64748b' }}>
+              <i className="bi bi-info-circle"></i>
+              <span>Based on your inputs — you can update and regenerate at any time</span>
+            </div>
+          )}
+
           {/* Template preview */}
           <div
             className="p-3 rounded mb-3"
@@ -231,7 +281,7 @@ export default function PromptTemplate({ data, onPromptGenerated }: PromptTempla
           />
 
           {/* Action buttons */}
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 flex-wrap">
             <button
               className="btn d-flex align-items-center gap-2 px-3 py-2"
               style={{
@@ -261,9 +311,45 @@ export default function PromptTemplate({ data, onPromptGenerated }: PromptTempla
               <i className={`bi ${copied ? 'bi-check-lg' : 'bi-clipboard'}`}></i>
               {copied ? 'Copied!' : 'Copy'}
             </button>
+            {hasGenerated && (
+              <button
+                className="btn d-flex align-items-center gap-2 px-3 py-2"
+                style={{
+                  background: '#fff',
+                  color: '#6366f1',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  border: '1px solid #c7d2fe',
+                }}
+                onClick={openEditModal}
+              >
+                <i className="bi bi-pencil-square"></i> Edit Inputs
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Execution Context Panel */}
+      <ExecutionContextPanel
+        context={executionContext}
+        onOpenWorkspace={() => {
+          if (executionContext) {
+            const encoded = encodeURIComponent(executionContext.finalPrompt);
+            if (selectedLLM.id === 'chatgpt') {
+              window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
+            } else if (selectedLLM.id === 'claude') {
+              window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
+            } else {
+              navigator.clipboard.writeText(executionContext.finalPrompt).catch(() => {});
+              window.open(selectedLLM.url, '_blank');
+            }
+          }
+        }}
+        onDismiss={() => setExecutionContext(null)}
+        selectedLLM={selectedLLM}
+      />
 
       {/* Review Parameters Modal */}
       {showModal && (
@@ -306,12 +392,12 @@ export default function PromptTemplate({ data, onPromptGenerated }: PromptTempla
             </div>
 
             <div className="px-4 py-3" style={{ overflowY: 'auto', flex: 1 }}>
-              {unfilledPlaceholders.length > 0 ? (
+              {displayPlaceholders.length > 0 ? (
                 <>
                   <p className="small mb-3" style={{ color: '#64748b' }}>
-                    Please fill in the missing details to personalize your prompt.
+                    {hasGenerated ? 'Update your inputs and regenerate your prompt.' : 'Please fill in the missing details to personalize your prompt.'}
                   </p>
-                  {unfilledPlaceholders.map((ph, i) => {
+                  {displayPlaceholders.map((ph, i) => {
                     const label = FRIENDLY_LABELS[ph.name] || FRIENDLY_LABELS[ph.name.toLowerCase()] || ph.description || ph.name.replace(/_/g, ' ');
                     const dropdownKey = Object.keys(DROPDOWN_OPTIONS).find(k => k === ph.name || k === ph.name.toLowerCase());
                     const options = dropdownKey ? DROPDOWN_OPTIONS[dropdownKey] : null;

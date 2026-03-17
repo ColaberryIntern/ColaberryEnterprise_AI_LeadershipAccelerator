@@ -165,6 +165,7 @@ export default function ImplementationTask({ data, lessonId, onSubmit, onArtifac
   const [simulating, setSimulating] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [hasGradedThisSession, setHasGradedThisSession] = useState(initialAllPassed);
+  const [isSimulatedResult, setIsSimulatedResult] = useState(false);
   const [notebookUploading, setNotebookUploading] = useState(false);
   const [researchBrief, setResearchBrief] = useState<string | null>(initialTaskData?.research_brief || null);
 
@@ -384,13 +385,22 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
       saveProgress({ uploads: newUploads });
       setSimulating(false);
 
-      // Auto-grade after simulation
-      if (isRetry) {
-        // Small delay so state updates before grading
-        setTimeout(() => {
-          handleSubmitForReview();
-        }, 500);
-      }
+      // Build mock grading results — bypass real grader entirely
+      const mockResults: GradingResult[] = artifacts.map(artifact => ({
+        name: artifact.name,
+        submission_id: 'simulation',
+        passed: true,
+        feedback: 'This is a simulated result. Submit a real artifact for actual grading.',
+        strengths: ['Simulation completed successfully'],
+        missing_items: [],
+      }));
+      setGradingResults(mockResults);
+      setHasGradedThisSession(true);
+      setIsSimulatedResult(true);
+      setTaskCompleted(true);
+      onSubmit?.();
+      onArtifactsVerified?.(true);
+      saveProgress({ grading: mockResults, completed: true, simulated: true });
     } catch {
       alert('Simulation failed. Please try again.');
       setSimulating(false);
@@ -770,44 +780,62 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
         {/* Grading Report Card — only show after user actively grades */}
         {hasGradedThisSession && gradingResults.length > 0 && (
           <div className="mt-4 p-3 rounded" style={{
-            background: allPassed ? '#ecfdf5' : '#fefce8',
-            border: `1px solid ${allPassed ? '#a7f3d0' : '#fde68a'}`,
+            background: isSimulatedResult ? '#f5f3ff' : allPassed ? '#ecfdf5' : '#fefce8',
+            border: `1px solid ${isSimulatedResult ? '#c7d2fe' : allPassed ? '#a7f3d0' : '#fde68a'}`,
           }}>
             {/* Score */}
             <div className="text-center mb-3">
-              <div style={{
-                fontSize: 40, fontWeight: 800, lineHeight: 1,
-                color: allPassed ? '#10b981' : scorePercent >= 50 ? '#f59e0b' : '#ef4444',
-              }}>
-                {scorePercent}%
-              </div>
-              <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                {passedCount}/{gradingResults.length} artifact{gradingResults.length > 1 ? 's' : ''} passed
-              </div>
-              {allPassed && (
-                <div className="d-flex align-items-center justify-content-center gap-2 mt-2">
-                  <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
-                  <span className="fw-bold" style={{ color: '#047857', fontSize: 14 }}>All artifacts approved!</span>
-                </div>
-              )}
-              {!allPassed && (
-                <div className="d-flex align-items-center justify-content-center gap-2 mt-2">
-                  <i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b', fontSize: 16 }}></i>
-                  <span className="fw-bold" style={{ color: '#92400e', fontSize: 13 }}>
-                    {failedArtifacts.length} artifact{failedArtifacts.length > 1 ? 's' : ''} need{failedArtifacts.length === 1 ? 's' : ''} revision
-                  </span>
-                </div>
+              {isSimulatedResult ? (
+                <>
+                  <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: '#8b5cf6' }}>
+                    Demo Result
+                  </div>
+                  <div className="mt-2 p-2 rounded mx-auto" style={{ background: '#ede9fe', border: '1px solid #c7d2fe', maxWidth: 400 }}>
+                    <i className="bi bi-info-circle me-1" style={{ color: '#8b5cf6' }}></i>
+                    <span style={{ fontSize: 12, color: '#6d28d9' }}>
+                      Demo Mode: This is a simulated submission. Real submission required for final validation.
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{
+                    fontSize: 40, fontWeight: 800, lineHeight: 1,
+                    color: allPassed ? '#10b981' : scorePercent >= 50 ? '#f59e0b' : '#ef4444',
+                  }}>
+                    {scorePercent}%
+                  </div>
+                  <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                    {passedCount}/{gradingResults.length} artifact{gradingResults.length > 1 ? 's' : ''} passed
+                  </div>
+                  {allPassed && (
+                    <div className="d-flex align-items-center justify-content-center gap-2 mt-2">
+                      <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                      <span className="fw-bold" style={{ color: '#047857', fontSize: 14 }}>All artifacts approved!</span>
+                    </div>
+                  )}
+                  {!allPassed && (
+                    <div className="d-flex align-items-center justify-content-center gap-2 mt-2">
+                      <i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b', fontSize: 16 }}></i>
+                      <span className="fw-bold" style={{ color: '#92400e', fontSize: 13 }}>
+                        {failedArtifacts.length} artifact{failedArtifacts.length > 1 ? 's' : ''} need{failedArtifacts.length === 1 ? 's' : ''} revision
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             {/* Per-artifact results */}
             {gradingResults.map((result, ri) => (
               <div key={ri} className="p-2 rounded mb-2" style={{
-                background: result.passed ? '#f0fdf4' : '#fff7ed',
-                border: `1px solid ${result.passed ? '#bbf7d0' : '#fed7aa'}`,
+                background: isSimulatedResult ? '#faf5ff' : result.passed ? '#f0fdf4' : '#fff7ed',
+                border: `1px solid ${isSimulatedResult ? '#ddd6fe' : result.passed ? '#bbf7d0' : '#fed7aa'}`,
               }}>
                 <div className="d-flex align-items-center gap-2 mb-1">
-                  {result.passed ? (
+                  {isSimulatedResult ? (
+                    <span className="badge" style={{ background: '#f5f3ff', color: '#6d28d9', fontSize: 10 }}>DEMO</span>
+                  ) : result.passed ? (
                     <span className="badge" style={{ background: '#dcfce7', color: '#166534', fontSize: 10 }}>PASS</span>
                   ) : (
                     <span className="badge" style={{ background: '#fee2e2', color: '#991b1b', fontSize: 10 }}>NEEDS WORK</span>
@@ -815,7 +843,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                   <span className="fw-semibold" style={{ fontSize: 12, color: '#1e293b' }}>{result.name}</span>
                 </div>
                 <p className="mb-1" style={{ fontSize: 11, color: '#475569' }}>{result.feedback}</p>
-                {result.strengths.length > 0 && (
+                {!isSimulatedResult && result.strengths.length > 0 && (
                   <div className="mb-1">
                     <span style={{ fontSize: 10, color: '#047857', fontWeight: 600 }}>Strengths:</span>
                     <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#047857' }}>
@@ -823,7 +851,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                     </ul>
                   </div>
                 )}
-                {result.missing_items.length > 0 && (
+                {!isSimulatedResult && result.missing_items.length > 0 && (
                   <div>
                     <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600 }}>Missing:</span>
                     <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#dc2626' }}>
@@ -834,8 +862,27 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
               </div>
             ))}
 
-            {/* Retry button when not all passed */}
-            {!allPassed && (
+            {/* Submit Real Version button after simulation */}
+            {isSimulatedResult && (
+              <button
+                className="btn d-flex align-items-center justify-content-center gap-2 w-100 py-2 mt-2"
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none',
+                }}
+                onClick={() => {
+                  setGradingResults([]);
+                  setHasGradedThisSession(false);
+                  setIsSimulatedResult(false);
+                  setUploads([]);
+                }}
+              >
+                <i className="bi bi-upload"></i> Submit Real Version
+              </button>
+            )}
+
+            {/* Retry button when not all passed (real grading only) */}
+            {!isSimulatedResult && !allPassed && (
               <button
                 className="btn d-flex align-items-center justify-content-center gap-2 w-100 py-2 mt-2"
                 style={{

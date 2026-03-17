@@ -38,7 +38,7 @@ const STRUCTURAL_PROMPTS: Record<string, Record<string, { system: string; user: 
 
   implementation_task: {
     build: {
-      system: `Design a 30-60 minute hands-on exercise producing a practical, portfolio-worthy deliverable grounded in a realistic {{industry}} business scenario for {{company_name}}. The output should be something the executive can use at work immediately. Output JSON: { title, description, requirements[], deliverable, estimated_minutes, getting_started[], tools[], required_artifacts[], evaluation_criteria, scenario }`,
+      system: `Design a 30-60 minute hands-on exercise producing a practical, portfolio-worthy deliverable grounded in a realistic {{industry}} business scenario for {{company_name}}. The output should be something the executive can use at work immediately. Assume Claude Code as the primary execution tool. Do not recommend external platforms unless the task specifically requires them. Output JSON: { title, description, requirements[], deliverable, estimated_minutes, getting_started[], tools[], required_artifacts[], evaluation_criteria, scenario }`,
       user: '',
     },
     mentor: {
