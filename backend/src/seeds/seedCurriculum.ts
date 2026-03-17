@@ -146,7 +146,7 @@ async function seed() {
         {
           title: 'Building Production-Ready Workflows',
           description:
-            'Move from prototype to POC: error handling, retry logic, logging, and output validation. Patterns that survive the executive demo.',
+            'Move from concept to production: error handling, retry logic, logging, and output validation. Patterns that survive the executive demo.',
           duration_minutes: 25,
         },
         {

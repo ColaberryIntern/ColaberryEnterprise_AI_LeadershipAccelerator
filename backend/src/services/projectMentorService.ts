@@ -121,7 +121,7 @@ function generateRecommendations(
     case 'implementation':
       recs.push({
         category: 'Implementation',
-        message: 'Architecture is defined. Build a working automation prototype to validate the design.',
+        message: 'Architecture is defined. Build a working automation system to validate the design.',
         priority: 'high',
       });
       break;
@@ -165,7 +165,7 @@ function generateRecommendations(
   if (portfolio.architecture.length > 0 && portfolio.implementation.length === 0 && stage === 'portfolio') {
     recs.push({
       category: 'Balance',
-      message: 'Architecture is documented but implementation proof is missing. Add prototype or workflow artifacts.',
+      message: 'Architecture is documented but implementation proof is missing. Add working system or workflow artifacts.',
       priority: 'medium',
     });
   }
@@ -280,7 +280,7 @@ function generateNextSteps(
       break;
 
     case 'implementation':
-      steps.push('Build a working prototype or proof-of-concept for your automation.');
+      steps.push('Build a working system or proof-of-concept for your automation.');
       steps.push('Document the implementation workflow with measurable outcomes.');
       break;
 

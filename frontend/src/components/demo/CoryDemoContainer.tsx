@@ -60,10 +60,12 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
             Example AI Operations Intelligence System
           </span>
           <h2 className="mb-2">See an AI Organization in Action</h2>
-          <p className="text-muted mb-0" style={{ maxWidth: '680px', margin: '0 auto' }}>
+          <p className="text-muted mb-1" style={{ maxWidth: '680px', margin: '0 auto' }}>
             This is a simplified demonstration of the type of AI intelligence systems
-            participants design and deploy during the accelerator. Click any department
-            to explore its analysis.
+            participants design and deploy during the accelerator.
+          </p>
+          <p className="fs-5 fw-semibold mb-0" style={{ color: 'var(--color-primary)' }}>
+            Click any department to explore its analysis.
           </p>
         </div>
 

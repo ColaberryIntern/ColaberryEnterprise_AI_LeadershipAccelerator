@@ -56,9 +56,9 @@ const SEED_ENTRIES: SeedEntry[] = [
   },
   {
     category: 'curriculum',
-    title: 'Week 2 — Guided Prototype & Executive Positioning',
-    content: 'Week 2 covers the Prototype & Position phase. Session 3 (Tuesday): Build your working AI proof of capability with guided hands-on development using Claude Code and your chosen LLM. Session 4 (Thursday): Craft your executive presentation deck — board and C-suite ready for internal buy-in and budget approval. By end of Week 2, you have a working prototype and a polished executive pitch.',
-    keywords: ['week 2', 'prototype', 'build', 'session 3', 'session 4', 'executive', 'presentation'],
+    title: 'Week 2 — Guided Build & Executive Positioning',
+    content: 'Week 2 covers the Build & Position phase. Session 3 (Tuesday): Build your working AI proof of capability with guided hands-on development using Claude Code and your chosen LLM. Session 4 (Thursday): Craft your executive presentation deck — board and C-suite ready for internal buy-in and budget approval. By end of Week 2, you have a working system and a polished executive pitch.',
+    keywords: ['week 2', 'build', 'system', 'session 3', 'session 4', 'executive', 'presentation'],
     priority: 8,
   },
   {
@@ -96,7 +96,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'pricing',
     title: 'ROI and Value',
-    content: 'The program pays for itself through reduced consulting spend, faster AI deployment, and avoided missteps. Participants leave with a production-ready AI proof of capability — most organizations spend $50K-$200K to get a comparable deliverable from consulting firms. The 90-day expansion roadmap alone saves months of strategic planning time.',
+    content: 'The program pays for itself through reduced consulting spend, faster AI deployment, and avoided missteps. Participants leave with a production-ready AI proof of capability — most organizations spend $50K-$200K to get a comparable deliverable from external firms. The 90-day expansion roadmap alone saves months of strategic planning time.',
     keywords: ['roi', 'value', 'return', 'worth', 'investment', 'benefit', 'consulting'],
     priority: 9,
   },

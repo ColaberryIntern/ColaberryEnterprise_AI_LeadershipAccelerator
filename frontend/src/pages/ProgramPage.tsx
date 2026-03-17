@@ -146,7 +146,7 @@ function ProgramPage() {
               </div>
               <div className="timeline-step">
                 <div className="timeline-marker">W2</div>
-                <h3 className="h6 mb-1">⚙ Prototype &amp; Position</h3>
+                <h3 className="h6 mb-1">⚙ Build &amp; Position</h3>
                 <p className="text-muted small mb-0">Guided Build &amp; Executive Positioning</p>
               </div>
               <div className="timeline-step">
@@ -283,7 +283,7 @@ function ProgramPage() {
           <FadeIn>
             <div className="d-flex align-items-center mb-5">
               <span className="badge bg-primary fs-6 me-3 px-3 py-2">⚙ Week 2</span>
-              <h2 className="mb-0">Guided Prototype &amp; Executive Positioning</h2>
+              <h2 className="mb-0">Guided Build &amp; Executive Positioning</h2>
             </div>
           </FadeIn>
 
@@ -303,7 +303,7 @@ function ProgramPage() {
                 </ul>
                 <p className="mb-0">
                   <strong>✔ Goal:</strong>{' '}
-                  <span className="text-muted">Functional prototype framework operational</span>
+                  <span className="text-muted">Functional system framework operational</span>
                 </p>
               </div>
             </div>
@@ -343,7 +343,7 @@ function ProgramPage() {
                 </div>
                 <p className="mt-3 mb-0">
                   <strong>✔ Deliverable:</strong>{' '}
-                  <span className="text-muted">Polished prototype + executive presentation draft</span>
+                  <span className="text-muted">Polished working system + executive presentation draft</span>
                 </p>
               </div>
             </div>

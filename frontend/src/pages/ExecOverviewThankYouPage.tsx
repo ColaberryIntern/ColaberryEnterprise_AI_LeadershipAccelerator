@@ -66,7 +66,7 @@ function ExecOverviewThankYouPage() {
                   Your Deployment Blueprint Is Ready
                 </h2>
                 <p className="text-muted mb-0 small">
-                  15-page guide — from AI strategy to working prototype in 21 days.
+                  15-page guide — from AI strategy to working product in 21 days.
                 </p>
               </div>
               <button

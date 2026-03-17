@@ -22,7 +22,7 @@ function getQuickReplies(pathname: string): QuickReply[] {
   if (path.includes('pricing') || path.includes('investment')) {
     return [
       { label: "What's the investment?", value: "What's the program investment and what's included?" },
-      { label: 'ROI & value', value: 'How does this compare to hiring a consulting firm?' },
+      { label: 'ROI & value', value: 'How does this compare to external alternatives?' },
       { label: 'Group rates', value: 'Do you offer group or corporate rates?' },
     ];
   }

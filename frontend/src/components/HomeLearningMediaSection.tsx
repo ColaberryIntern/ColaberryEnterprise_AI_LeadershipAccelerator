@@ -127,33 +127,33 @@ export default function HomeLearningMediaSection({ podcastUrl }: HomeLearningMed
                     </g>
                     {/* Primary nodes */}
                     <g filter="url(#pcNodeGlow)">
-                      <circle cx="505" cy="105" r="14" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.8"/>
-                      <text x="505" y="103" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="4.5" fontWeight="700">SYSTEMS</text>
-                      <text x="505" y="109" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="3.5">DESIGN</text>
+                      <circle cx="505" cy="105" r="20" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.8"/>
+                      <text x="505" y="103" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="7" fontWeight="700">SYSTEMS</text>
+                      <text x="505" y="111" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="6">DESIGN</text>
 
-                      <circle cx="530" cy="170" r="13" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.75"/>
-                      <text x="530" y="168" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="4" fontWeight="700">DATA</text>
-                      <text x="530" y="174" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="3.5">INTEL</text>
+                      <circle cx="530" cy="170" r="18" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.75"/>
+                      <text x="530" y="168" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="7" fontWeight="700">DATA</text>
+                      <text x="530" y="176" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="6">INTEL</text>
 
-                      <circle cx="500" cy="245" r="13" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="1" strokeOpacity="0.7"/>
-                      <text x="500" y="243" textAnchor="middle" fill="#00ffca" fontFamily="sans-serif" fontSize="4" fontWeight="700">DEPLOY</text>
-                      <text x="500" y="249" textAnchor="middle" fill="#00ffb8" fontFamily="sans-serif" fontSize="3.5">AGENTS</text>
+                      <circle cx="500" cy="245" r="18" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="1" strokeOpacity="0.7"/>
+                      <text x="500" y="243" textAnchor="middle" fill="#00ffca" fontFamily="sans-serif" fontSize="7" fontWeight="700">DEPLOY</text>
+                      <text x="500" y="251" textAnchor="middle" fill="#00ffb8" fontFamily="sans-serif" fontSize="6">AGENTS</text>
 
-                      <circle cx="435" cy="270" r="13" fill="url(#pcN2)" stroke="#a855f7" strokeWidth="1" strokeOpacity="0.7"/>
-                      <text x="435" y="268" textAnchor="middle" fill="#d8b4fe" fontFamily="sans-serif" fontSize="4" fontWeight="700">GOVERN</text>
-                      <text x="435" y="274" textAnchor="middle" fill="#a855f7" fontFamily="sans-serif" fontSize="3.5">AI POLICY</text>
+                      <circle cx="435" cy="270" r="18" fill="url(#pcN2)" stroke="#a855f7" strokeWidth="1" strokeOpacity="0.7"/>
+                      <text x="435" y="268" textAnchor="middle" fill="#d8b4fe" fontFamily="sans-serif" fontSize="7" fontWeight="700">GOVERN</text>
+                      <text x="435" y="276" textAnchor="middle" fill="#a855f7" fontFamily="sans-serif" fontSize="6">AI POLICY</text>
 
-                      <circle cx="365" cy="250" r="12" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="1" strokeOpacity="0.65"/>
-                      <text x="365" y="248" textAnchor="middle" fill="#00ffca" fontFamily="sans-serif" fontSize="4" fontWeight="700">TEAMS</text>
-                      <text x="365" y="254" textAnchor="middle" fill="#00ffb8" fontFamily="sans-serif" fontSize="3.5">AI-READY</text>
+                      <circle cx="365" cy="250" r="16" fill="url(#pcN3)" stroke="#00ffb8" strokeWidth="1" strokeOpacity="0.65"/>
+                      <text x="365" y="248" textAnchor="middle" fill="#00ffca" fontFamily="sans-serif" fontSize="7" fontWeight="700">TEAMS</text>
+                      <text x="365" y="256" textAnchor="middle" fill="#00ffb8" fontFamily="sans-serif" fontSize="6">AI-READY</text>
 
-                      <circle cx="345" cy="120" r="13" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.7"/>
-                      <text x="345" y="118" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="4" fontWeight="700">AI STRAT</text>
-                      <text x="345" y="124" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="3.5">ROADMAP</text>
+                      <circle cx="345" cy="120" r="18" fill="url(#pcN1)" stroke="#00c8ff" strokeWidth="1" strokeOpacity="0.7"/>
+                      <text x="345" y="118" textAnchor="middle" fill="#00e5ff" fontFamily="sans-serif" fontSize="7" fontWeight="700">AI STRAT</text>
+                      <text x="345" y="126" textAnchor="middle" fill="#00c8ff" fontFamily="sans-serif" fontSize="6">ROADMAP</text>
 
-                      <circle cx="375" cy="90" r="12" fill="url(#pcN2)" stroke="#a855f7" strokeWidth="1" strokeOpacity="0.65"/>
-                      <text x="375" y="88" textAnchor="middle" fill="#d8b4fe" fontFamily="sans-serif" fontSize="4" fontWeight="700">INNOV</text>
-                      <text x="375" y="94" textAnchor="middle" fill="#a855f7" fontFamily="sans-serif" fontSize="3.5">AI LAB</text>
+                      <circle cx="375" cy="90" r="16" fill="url(#pcN2)" stroke="#a855f7" strokeWidth="1" strokeOpacity="0.65"/>
+                      <text x="375" y="88" textAnchor="middle" fill="#d8b4fe" fontFamily="sans-serif" fontSize="7" fontWeight="700">INNOV</text>
+                      <text x="375" y="96" textAnchor="middle" fill="#a855f7" fontFamily="sans-serif" fontSize="6">AI LAB</text>
                     </g>
                     {/* Core */}
                     <circle cx="435" cy="180" r="29" fill="rgba(0,40,120,0.3)" stroke="#0044cc" strokeWidth="0.8" strokeOpacity="0.4"/>

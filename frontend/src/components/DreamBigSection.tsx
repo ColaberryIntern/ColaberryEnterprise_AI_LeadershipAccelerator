@@ -45,14 +45,14 @@ const STEPS = [
       'Predictive analytics tools',
       'Process automation engines',
     ],
-    outcome: 'Functional AI Prototype',
+    outcome: 'Functional AI System',
   },
   {
     icon: '\u{1F680}',
     title: 'Deploy',
     color: '#e53e3e',
     description:
-      'Your working prototype becomes the starting point for implementation inside your organization. Leave with a system you can expand and scale.',
+      'Your working system becomes the starting point for implementation inside your organization. Leave with a system you can expand and scale.',
     examples: [
       'Deployable AI applications',
       'Production-ready architectures',
@@ -93,7 +93,8 @@ export default function DreamBigSection({ onOpenBooking }: DreamBigSectionProps)
       <div className="container">
         {/* Heading */}
         <div className="text-center mb-4">
-          <h2 className="mb-3">Dream Big. Build What You Always Wished Your Company Had.</h2>
+          <h2 className="display-6 fw-bold mb-4">How It Works</h2>
+          <h3 className="h3 mb-3">Dream Big. Build What You Always Wished Your Company Had.</h3>
           <p className="text-muted mb-0" style={{ maxWidth: 720, margin: '0 auto' }}>
             Bring your most ambitious ideas. In this accelerator, your team learns how to design
             and build AI systems tailored to your own organization.
@@ -203,16 +204,15 @@ export default function DreamBigSection({ onOpenBooking }: DreamBigSectionProps)
         </div>
 
         {/* Reinforcement */}
+        <h3 className="h4 fw-bold text-center mb-3">The 21-Day Engine: From Concept to Working Product</h3>
         <p className="text-center text-muted mb-5" style={{ maxWidth: 680, margin: '0 auto' }}>
-          Most AI initiatives take <strong>6–12 months</strong> to show results. In this
-          accelerator, your team goes from idea to working prototype in{' '}
-          <strong style={{ color: 'var(--color-primary)' }}>3 weeks</strong>.
+          In this accelerator, your team goes from idea to working product in 3 weeks.
         </p>
 
         {/* CTAs */}
         <div className="text-center">
           <a href="#download-overview" className="btn btn-lg btn-hero-primary me-3 mb-2">
-            Get the Deployment Blueprint
+            Get the Blueprint
           </a>
           <button
             type="button"

@@ -112,7 +112,7 @@ function HomePage() {
     <>
       <SEOHead
         title="Home"
-        description={`Colaberry Enterprise AI Leadership Accelerator — ${PROGRAM_SCHEDULE.heroTagline} for Directors and Technical Leaders. Deploy a real AI system in 3 weeks. POCs, Roadmaps, and Architecture internally.`}
+        description={`Colaberry Enterprise AI Leadership Accelerator — ${PROGRAM_SCHEDULE.heroTagline} for Business, Product, and Technical Leaders and Teams. Deploy a real AI system in 3 weeks. POCs, Roadmaps, and Architecture internally.`}
       />
 
       {/* Hero Section */}
@@ -134,11 +134,11 @@ function HomePage() {
             From AI Strategy to a Live System in 3 Weeks
           </h1>
           <p className="lead mb-4" style={{ maxWidth: '750px', margin: '0 auto' }}>
-            A hands-on deployment accelerator where your team builds and ships a production AI system — not a slide deck. For Directors and Technical Leaders.
+            A three-week immersive program where your team builds and ships a production AI system — not a slide deck. For Business, Product, and Technical Leaders and Teams.
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <a href="#download-overview" className="btn btn-lg btn-hero-primary">
-              Get the Deployment Blueprint
+              Get the Blueprint
             </a>
             <Link to="/sponsorship" className="btn btn-lg btn-outline-light">
               🤝 Request Corporate Sponsorship Kit
@@ -182,7 +182,7 @@ function HomePage() {
           </p>
           <ul className="list-unstyled fs-5">
             <li className="mb-3">📊 Board expecting deployed AI — not another feasibility study</li>
-            <li className="mb-3">💸 Consulting firms deliver slide decks for $500K+ with zero deployed systems</li>
+            <li className="mb-3">💸 Traditional approaches deliver strategy decks — but not deployed systems</li>
             <li className="mb-3">⏳ Internal AI hires take 6–18 months to find and another 6 to deliver</li>
             <li className="mb-3">🔄 Pilot projects die in committee — no one owns the deployment path</li>
             <li className="mb-3">📋 Your team can evaluate AI vendors but can't build or validate what they propose</li>
@@ -197,12 +197,12 @@ function HomePage() {
             <div className="col-lg-6">
               <h2 className="mb-3">⚡ What Your Team Deploys in 3 Weeks</h2>
               <p className="text-muted mb-4">
-                {PROGRAM_SCHEDULE.totalSessions} focused sessions over {PROGRAM_SCHEDULE.totalWeeks} weeks. Your team deploys a real system — not a prototype.
+                {PROGRAM_SCHEDULE.totalSessions} focused sessions over {PROGRAM_SCHEDULE.totalWeeks} weeks. Your team deploys a real system — not a slideshow.
               </p>
               {[
-                '✅ A live AI system deployed inside your infrastructure',
-                '✅ A 90-Day expansion roadmap with your next 3 deployments scoped',
-                '✅ An executive deployment report ready for board review',
+                '✅ A live AI system',
+                '✅ A 90-Day AI expansion roadmap',
+                '✅ An executive report ready for board review',
                 '✅ Production AI architecture patterns your team can replicate',
                 '✅ Ongoing access to deployment support and the AI Advisory Labs',
               ].map((outcome) => (
@@ -328,7 +328,7 @@ function HomePage() {
             <div className="row g-4 mb-5">
               {[
                 { icon: '📅', title: `${PROGRAM_SCHEDULE.totalWeeks}-Week Deployment Timeline`, description: 'Clear session-by-session transformation path' },
-                { icon: '💰', title: 'Build vs Buy Cost Analysis', description: 'Internal build vs consulting math' },
+                { icon: '💰', title: 'Build vs Buy Cost Analysis', description: 'Build vs outsource cost analysis' },
                 { icon: '🏢', title: 'Deployment Case Studies', description: 'Documented deployment results' },
                 { icon: '🧱', title: 'Production Architecture Blueprint', description: 'Learn / Build / Manage model' },
               ].map((item) => (

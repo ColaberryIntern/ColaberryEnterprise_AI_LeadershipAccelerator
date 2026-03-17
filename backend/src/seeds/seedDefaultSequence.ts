@@ -44,7 +44,7 @@ DO NOT: Read a script. Push hard for a sale. Make up information about the progr
 <ul>
   <li>Their team has experimented with AI tools but hasn't built anything production-ready</li>
   <li>They need a working proof of concept to get stakeholder buy-in</li>
-  <li>They want to build internal AI capability instead of depending on consultants</li>
+  <li>They want to build internal AI capability instead of depending on external vendors</li>
 </ul>
 
 <p>Which of these resonates most with you? Just hit reply — I read every response.</p>
@@ -101,7 +101,7 @@ KEY TALKING POINTS (use naturally, don't list them):
 - Director of Data Science created an AI readiness dashboard that secured $2M budget
 - CTO deployed a customer churn model with 89% accuracy within 30 days
 - Program delivers a working POC + executive deck + 90-day roadmap in 5 days
-- ROI: $4,500 investment vs $50K-$150K consulting engagement
+- ROI: $4,500 investment vs $50K-$150K external engagement
 
 TONE: Warm and familiar — this is a continuation of an existing relationship. Be consultative. If they express objections (timing, budget, relevance), acknowledge and address naturally. If not a fit, be gracious and offer to stay in touch.
 
@@ -123,9 +123,9 @@ DO NOT: Be pushy. Read a script. Make up details. Ignore what they've already to
 
 <div style="background:#f7fafc;border-left:4px solid #1a365d;padding:16px 20px;margin:16px 0;border-radius:0 8px 8px 0;">
   <strong>Program Investment:</strong> $4,500 per participant<br>
-  <strong>Average consulting engagement for similar outcomes:</strong> $50,000–$150,000<br>
+  <strong>Average external engagement for similar outcomes:</strong> $50,000–$150,000<br>
   <strong>ROI from first AI project deployed:</strong> 10–50x within 12 months<br>
-  <strong>Internal capability built:</strong> Permanent (not dependent on external consultants)
+  <strong>Internal capability built:</strong> Permanent (not dependent on external vendors)
 </div>
 
 <p>The program pays for itself with the first project your team deploys. Everything after that is pure upside.</p>

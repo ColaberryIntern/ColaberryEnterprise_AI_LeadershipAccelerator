@@ -251,7 +251,7 @@ const NEXT_ACTIONS: Record<string, string> = {
   strategy: 'Create your first AI strategy artifact through the Strategy lesson.',
   governance: 'Build governance artifacts — start with a Risk Register or Ethics Framework.',
   architecture: 'Design your system architecture showing data flow and AI integrations.',
-  implementation: 'Build a working prototype or proof-of-concept for your automation.',
+  implementation: 'Build a working system or proof-of-concept for your automation.',
   portfolio: 'Review and strengthen your portfolio for executive presentation.',
 };
 
