@@ -1,4 +1,4 @@
-import React, { useState, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { DEMO_DEPARTMENTS, getKpisForDepartment, getExecutiveSummary } from './demoData';
 import DepartmentMapDemo from './DepartmentMapDemo';
 import CoryLoadingAnimation from './CoryLoadingAnimation';
@@ -7,18 +7,32 @@ import AskCoryInput from './AskCoryInput';
 import KpiOverviewRow from './KpiOverviewRow';
 import ExecutiveSummaryPanel from './ExecutiveSummaryPanel';
 import InsightCharts from './InsightCharts';
+import { useAdminUser } from '../../hooks/useAdminUser';
 
 // Lazy-load the graph (heavy dependency: reactflow)
 const DepartmentGraphDemo = lazy(() => import('./DepartmentGraphDemo'));
 
+// Deterministic sequence derived from data source
+const DEMO_SEQUENCE = DEMO_DEPARTMENTS.map((d) => d.id);
+
 interface CoryDemoContainerProps {
   onOpenBooking: () => void;
+  onDepartmentChange?: (deptId: string) => void;
 }
 
-export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerProps) {
+export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }: CoryDemoContainerProps) {
   const [selectedId, setSelectedId] = useState<string>('strategy');
   const [loading, setLoading] = useState(false);
   const [reportDeptId, setReportDeptId] = useState<string>('strategy');
+
+  // Demo mode state
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoPaused, setDemoPaused] = useState(false);
+  const demoIndexRef = useRef(0);
+
+  // Ali user detection — demo never auto-starts for admin users
+  const adminUser = useAdminUser();
+  const isAdminUser = adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin';
 
   const selectedDept = DEMO_DEPARTMENTS.find((d) => d.id === selectedId);
   const reportDept = DEMO_DEPARTMENTS.find((d) => d.id === reportDeptId);
@@ -30,8 +44,9 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
       if (id === selectedId && !loading) return;
       setSelectedId(id);
       setLoading(true);
+      onDepartmentChange?.(id);
     },
-    [selectedId, loading],
+    [selectedId, loading, onDepartmentChange],
   );
 
   const handleLoadingComplete = useCallback(() => {
@@ -43,8 +58,59 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
     document.getElementById('download-overview')?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
+  // ─── Demo Mode: Stop on user interaction ───────────────────────────
+  const stopDemo = useCallback(() => {
+    setDemoActive(false);
+    setDemoPaused(true);
+  }, []);
+
+  // User-initiated selection: stop demo + select department
+  const handleUserSelect = useCallback(
+    (id: string) => {
+      stopDemo();
+      handleSelect(id);
+    },
+    [stopDemo, handleSelect],
+  );
+
+  // ─── Demo Mode: Auto-start after 5s for non-admin visitors ────────
+  useEffect(() => {
+    if (isAdminUser || demoPaused) return;
+    const timeout = setTimeout(() => {
+      setDemoActive(true);
+    }, 5000);
+    return () => clearTimeout(timeout);
+  }, [isAdminUser, demoPaused]);
+
+  // ─── Demo Mode: Core cycling engine ────────────────────────────────
+  useEffect(() => {
+    if (!demoActive || demoPaused) return;
+
+    // Select current department immediately on activation
+    const currentId = DEMO_SEQUENCE[demoIndexRef.current];
+    setSelectedId(currentId);
+    setLoading(true);
+    onDepartmentChange?.(currentId);
+
+    const interval = setInterval(() => {
+      demoIndexRef.current = (demoIndexRef.current + 1) % DEMO_SEQUENCE.length;
+      const nextId = DEMO_SEQUENCE[demoIndexRef.current];
+      setSelectedId(nextId);
+      setLoading(true);
+      onDepartmentChange?.(nextId);
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [demoActive, demoPaused, onDepartmentChange]);
+
+  const isDemoRunning = demoActive && !demoPaused;
+
   return (
-    <section className="section-alt py-5" aria-label="AI Intelligence System Demo">
+    <section
+      className="section-alt py-5"
+      aria-label="AI Intelligence System Demo"
+      onClick={isDemoRunning ? stopDemo : undefined}
+    >
       <div className="container">
         {/* Context Label + Heading */}
         <div className="text-center mb-4">
@@ -65,7 +131,9 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
             participants design and deploy during the accelerator.
           </p>
           <p className="fs-5 fw-semibold mb-0" style={{ color: 'var(--color-primary)' }}>
-            Click any department to explore its analysis.
+            {isDemoRunning
+              ? 'Click anywhere to take control.'
+              : 'Click any department to explore its analysis.'}
           </p>
         </div>
 
@@ -75,6 +143,25 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
           <div className="col-lg-5">
             {/* Desktop: Zoomable Graph */}
             <div className="d-none d-md-block" style={{ position: 'sticky', top: 24 }}>
+              {/* Live Demo indicator */}
+              {isDemoRunning && (
+                <span
+                  className="position-absolute badge"
+                  style={{
+                    top: 8,
+                    right: 8,
+                    zIndex: 10,
+                    background: 'rgba(26,54,93,0.85)',
+                    color: '#fff',
+                    fontSize: '0.7rem',
+                    padding: '4px 10px',
+                    borderRadius: 12,
+                    animation: 'fadeIn 0.3s ease',
+                  }}
+                >
+                  &#9654; Live Demo
+                </span>
+              )}
               <Suspense
                 fallback={
                   <div
@@ -87,7 +174,7 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
               >
                 <DepartmentGraphDemo
                   selectedId={selectedId}
-                  onSelect={handleSelect}
+                  onSelect={handleUserSelect}
                 />
               </Suspense>
             </div>
@@ -97,7 +184,7 @@ export default function CoryDemoContainer({ onOpenBooking }: CoryDemoContainerPr
               <DepartmentMapDemo
                 departments={DEMO_DEPARTMENTS}
                 selectedId={selectedId}
-                onSelect={handleSelect}
+                onSelect={handleUserSelect}
               />
             </div>
           </div>
