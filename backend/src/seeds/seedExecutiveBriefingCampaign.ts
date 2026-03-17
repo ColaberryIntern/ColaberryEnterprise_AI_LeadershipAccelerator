@@ -53,7 +53,7 @@ const BRIEFING_SEQUENCE = {
       channel: 'email' as const,
       subject: 'The ROI of acting on the briefing insights',
       body_template: '',
-      ai_instructions: `Write an ROI-focused email that ties back to specific themes from the Executive Briefing. Present the business case: the 5-day Accelerator at $4,500 per participant vs $50K-$150K for consulting engagements. Reference that the briefing outlined the problem (AI readiness gap, lack of internal capability); the program is the solution. Include a specific example: "One VP of Engineering used the ROI Framework from the briefing to justify internal AI training — saved their company $120K in the first year." CTA: Book a 15-minute strategy call. Sign off as Ali Merchant.`,
+      ai_instructions: `Write an ROI-focused email that ties back to specific themes from the Executive Briefing. Present the business case: the 5-day Accelerator delivers production-ready AI systems and permanent team capability in 3 weeks. Reference that the briefing outlined the problem (AI readiness gap, lack of internal capability); the program is the solution. Include a specific example: "One VP of Engineering used the ROI Framework from the briefing to justify internal AI training — saved their company $120K in the first year." CTA: Book a 15-minute strategy call. Sign off as Ali Merchant.`,
       ai_tone: 'professional, persuasive',
       ai_context_notes: '',
       step_goal: 'Make the business case for acting on briefing insights',

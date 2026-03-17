@@ -265,7 +265,7 @@ function buildSponsorshipKitHtml(data: SponsorshipKitEmailData): string {
 
   <h2>What's Inside the Kit</h2>
   <ul>
-    <li><strong>ROI Framework</strong> — Quantify the return on AI leadership development vs. consulting engagements</li>
+    <li><strong>ROI Framework</strong> — Quantify the return on AI leadership development vs. traditional timelines</li>
     <li><strong>Budget Justification Template</strong> — Ready-to-use language for procurement and finance approval</li>
     <li><strong>Executive Summary Deck</strong> — One-page board-ready positioning of the investment</li>
     <li><strong>Sponsor Alignment Guide</strong> — How to identify and engage the right internal champion</li>
@@ -567,7 +567,7 @@ function buildExecutiveOverviewHtml(data: ExecutiveOverviewEmailData): string {
 
   <h2>What's Inside the Executive Overview</h2>
   <ul>
-    <li><strong>ROI Framework:</strong> Calculate projected savings from internal AI capability vs. consulting engagements</li>
+    <li><strong>ROI Framework:</strong> Calculate projected savings from internal AI capability vs. traditional timelines</li>
     <li><strong>Case Studies:</strong> Real enterprise implementations with measurable outcomes</li>
     <li><strong>Executive Templates:</strong> Board presentation deck, budget justification, and vendor evaluation frameworks</li>
     <li><strong>Program Curriculum:</strong> Day-by-day breakdown of what participants build</li>

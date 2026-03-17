@@ -46,7 +46,7 @@ const COLD_SEQUENCE = {
       channel: 'email' as const,
       subject: 'The ROI math on AI leadership training',
       body_template: '',
-      ai_instructions: 'Write an ROI-focused email. Present the business case: $4,500 program vs $50K-$150K external engagement, 10-50x ROI from first deployed project, permanent internal capability. Reference their specific industry and how AI leaders in their sector are building capability. Include a clear CTA to schedule a 15-minute call.',
+      ai_instructions: 'Write an ROI-focused email. Present the business case: $4,500 program delivers production-ready output in 3 weeks — not quarters, 10-50x ROI from first deployed project, permanent internal capability. Reference their specific industry and how AI leaders in their sector are building capability. Include a clear CTA to schedule a 15-minute call.',
       ai_tone: 'professional',
       step_goal: 'ROI justification — help them build the internal business case',
       max_attempts: 1,
@@ -153,7 +153,7 @@ Key messaging points:
 - Enterprise AI Leadership Accelerator: 5-day intensive program
 - Executives build a working AI proof of concept, executive presentation, and 90-day roadmap
 - Limited to 15 participants per cohort
-- $4,500 investment vs $50K-$150K external engagement
+- $4,500 investment delivers production-ready AI systems in 3 weeks
 - Recent graduates achieved: 70% time savings, $2M budget approvals, 89% accuracy ML models
 
 Tone: Professional, peer-level, consultative. Never sound like marketing. Always reference the lead's specific context.`,

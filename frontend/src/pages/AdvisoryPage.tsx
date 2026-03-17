@@ -219,7 +219,7 @@ function AdvisoryPage() {
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <Link to="/contact" className="btn btn-accent btn-lg">
-              Schedule a Strategy Call
+              Schedule an Executive AI Strategy Call
             </Link>
             <Link to="/program" className="btn btn-outline-light btn-lg">
               View the Accelerator

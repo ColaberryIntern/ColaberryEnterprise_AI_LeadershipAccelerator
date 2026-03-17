@@ -9,7 +9,7 @@ function SponsorshipPage() {
     <>
       <SEOHead
         title="Corporate Sponsorship"
-        description="Enterprise AI Accelerator Sponsorship Kit — ROI comparison, cost justification templates, internal approval checklist. Build AI capability internally at a fraction of consulting costs."
+        description="Enterprise AI Accelerator Sponsorship Kit — ROI framework, cost justification templates, internal approval checklist. Build permanent AI capability across your leadership team."
       />
 
       {/* Header */}
@@ -28,72 +28,48 @@ function SponsorshipPage() {
         </div>
       </section>
 
-      {/* ROI Comparison */}
-      <section className="section" aria-label="ROI Comparison">
+      {/* What You Get */}
+      <section className="section" aria-label="What You Get">
         <div className="container">
-          <h2 className="text-center mb-5">📊 The Cost of the Alternatives</h2>
+          <h2 className="text-center mb-5">📊 What Your Organization Gets</h2>
           <div className="row g-4">
             <div className="col-md-4">
-              <div className="card card-lift h-100 border-0 shadow-sm p-4">
-                <div className="text-center mb-3">
-                  <span className="fs-1" aria-hidden="true">💸</span>
-                </div>
-                <h3 className="h5 text-center">External AI Consulting Firm</h3>
-                <p className="text-muted text-center mb-3">"AI Strategy Engagement"</p>
-                <ul className="list-unstyled">
-                  <li className="mb-2"><strong>💰 Cost:</strong> $250,000 – $750,000</li>
-                  <li className="mb-2"><strong>⏳ Timeline:</strong> 3–6 months</li>
-                  <li className="mb-2"><strong>📄 Output:</strong> Slide deck + recommendations</li>
-                  <li className="mb-2"><strong>🏗️ Internal capability built:</strong> ❌ None</li>
-                </ul>
+              <div className="card card-lift h-100 border-0 shadow-sm p-4 text-center">
+                <div className="fs-1 mb-3" aria-hidden="true">⚡</div>
+                <h3 className="h5">Speed to Production</h3>
+                <p className="text-muted mb-0">Go from AI strategy to a working system in {PROGRAM_SCHEDULE.sponsorshipTimeline} — not quarters. Your team deploys a real POC during the program.</p>
               </div>
             </div>
             <div className="col-md-4">
-              <div className="card card-lift h-100 border-0 shadow-sm p-4">
-                <div className="text-center mb-3">
-                  <span className="fs-1" aria-hidden="true">👤</span>
-                </div>
-                <h3 className="h5 text-center">Hire AI Architect</h3>
-                <p className="text-muted text-center mb-3">"Senior AI/ML Engineer"</p>
-                <ul className="list-unstyled">
-                  <li className="mb-2"><strong>💰 Cost:</strong> $200,000–$350,000/year</li>
-                  <li className="mb-2"><strong>⏳ Timeline:</strong> 6–18 months to hire</li>
-                  <li className="mb-2"><strong>📄 Output:</strong> One person's capability</li>
-                  <li className="mb-2"><strong>🏗️ Internal capability built:</strong> ⚠️ Limited to one hire</li>
-                </ul>
+              <div className="card card-lift h-100 border-0 shadow-sm p-4 text-center">
+                <div className="fs-1 mb-3" aria-hidden="true">🏗️</div>
+                <h3 className="h5">Permanent Team Capability</h3>
+                <p className="text-muted mb-0">Your entire leadership team gains hands-on AI architecture skills they apply repeatedly — across every future initiative.</p>
               </div>
             </div>
             <div className="col-md-4">
-              <div className="card card-lift h-100 border-primary border-2 shadow p-4" style={{ borderTop: '4px solid var(--color-accent)', background: 'linear-gradient(135deg, rgba(56,161,105,0.03) 0%, transparent 100%)' }}>
-                <div className="text-center mb-3">
-                  <span className="fs-1" aria-hidden="true">⚡</span>
-                </div>
-                <h3 className="h5 text-center">Colaberry Executive Accelerator</h3>
-                <p className="text-muted text-center mb-3">"Enterprise AI Accelerator"</p>
-                <ul className="list-unstyled">
-                  <li className="mb-2"><strong>💰 Cost:</strong> $4,500 per participant</li>
-                  <li className="mb-2"><strong>⏳ Timeline:</strong> {PROGRAM_SCHEDULE.sponsorshipTimeline}</li>
-                  <li className="mb-2"><strong>📄 Output:</strong> POC + Roadmap + Exec Deck + Templates</li>
-                  <li className="mb-2"><strong>🏗️ Internal capability built:</strong> ✅ Entire leadership team</li>
-                </ul>
+              <div className="card card-lift h-100 border-0 shadow-sm p-4 text-center">
+                <div className="fs-1 mb-3" aria-hidden="true">📦</div>
+                <h3 className="h5">Production-Ready Deliverables</h3>
+                <p className="text-muted mb-0">POC + 90-Day Roadmap + Executive Deck + Architecture Templates — everything needed for board approval and deployment.</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Internal Capability Benefits */}
-      <section className="section-alt" aria-label="Internal Capability Benefits">
+      {/* Why Organizations Choose the Accelerator */}
+      <section className="section-alt" aria-label="Why Organizations Choose the Accelerator">
         <div className="container">
-          <h2 className="text-center mb-5">🏗️ Why Internal Capability Beats External Consulting</h2>
+          <h2 className="text-center mb-5">🏗️ Why Organizations Choose the Accelerator</h2>
           <div className="row g-4">
             {[
-              { icon: '🔒', title: 'You Own the Knowledge', description: 'Unlike consulting engagements that leave when the contract ends, the capability stays with your team permanently.' },
-              { icon: '⚡', title: 'Speed of Execution', description: 'Internal teams can move faster than external engagements — no onboarding, no context-switching, no vendor coordination.' },
-              { icon: '💡', title: 'Context Advantage', description: 'Your team understands your systems, culture, and constraints. External consultants spend weeks just learning your environment.' },
+              { icon: '🔒', title: 'You Own the Knowledge', description: 'The capability stays with your team permanently. Every participant gains skills they apply across future initiatives.' },
+              { icon: '⚡', title: 'Speed to Deployment', description: 'Move from strategy to a working system in weeks, not quarters. No lengthy ramp-up or extended timelines.' },
+              { icon: '💡', title: 'Built on Your Context', description: 'Your team works on your actual challenges, data patterns, and infrastructure — not generic demos.' },
               { icon: '📈', title: 'Compound Returns', description: 'Skills and frameworks are applied repeatedly across initiatives. The ROI compounds with every new AI project your team leads.' },
-              { icon: '🛡️', title: 'Data Sovereignty', description: 'No external party requires access to sensitive internal data. All POC work happens on your infrastructure.' },
-              { icon: '💰', title: 'Fraction of the Cost', description: '10–100x more cost-effective per capability unit delivered. Train a team for less than one consulting engagement.' },
+              { icon: '🛡️', title: 'Data Sovereignty', description: 'All POC work happens on your infrastructure. No sensitive data leaves your environment.' },
+              { icon: '💰', title: 'Efficient Investment', description: '$4,500 per participant delivers production-ready output, permanent team capability, and board-ready deliverables.' },
             ].map((item) => (
               <div className="col-md-4" key={item.title}>
                 <div className="card card-lift h-100 border-0 shadow-sm text-center p-4">
@@ -154,8 +130,8 @@ function SponsorshipPage() {
             {[
               {
                 step: 'Step 1',
-                title: 'Calculate the Consulting Avoidance Cost',
-                description: 'If your organization was quoted $X for an AI strategy engagement, the accelerator delivers equivalent output at a fraction of the cost.',
+                title: 'Calculate the Speed-to-Value Gain',
+                description: 'Estimate months saved by deploying in 3 weeks vs. typical 6-12 month timelines. Multiply by monthly cost of delay.',
               },
               {
                 step: 'Step 2',

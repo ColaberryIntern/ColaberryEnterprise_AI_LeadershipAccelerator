@@ -134,11 +134,11 @@ function HomePage() {
             From AI Strategy to a Live System in 3 Weeks
           </h1>
           <p className="lead mb-4" style={{ maxWidth: '750px', margin: '0 auto' }}>
-            A three-week immersive program where your team builds and ships a production AI system — not a slide deck. For Business, Product, and Technical Leaders and Teams.
+            A three-week immersive program where your team builds and ships a production AI system — combining expert guidance with hands-on implementation. For Business, Product, and Technical Leaders and Teams.
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <a href="#download-overview" className="btn btn-lg btn-hero-primary">
-              Get the Blueprint
+              Design Your AI System Blueprint
             </a>
             <Link to="/sponsorship" className="btn btn-lg btn-outline-light">
               🤝 Request Corporate Sponsorship Kit
@@ -182,7 +182,7 @@ function HomePage() {
           </p>
           <ul className="list-unstyled fs-5">
             <li className="mb-3">📊 Board expecting deployed AI — not another feasibility study</li>
-            <li className="mb-3">💸 Traditional approaches deliver strategy decks — but not deployed systems</li>
+            <li className="mb-3">💸 The challenge is moving from AI strategy to deployed systems quickly</li>
             <li className="mb-3">⏳ Internal AI hires take 6–18 months to find and another 6 to deliver</li>
             <li className="mb-3">🔄 Pilot projects die in committee — no one owns the deployment path</li>
             <li className="mb-3">📋 Your team can evaluate AI vendors but can't build or validate what they propose</li>
@@ -240,7 +240,7 @@ function HomePage() {
             {[
               {
                 icon: '🏛️',
-                title: 'Built for Deployers, Not Students',
+                title: 'Built for Deployers, Not Dabblers',
                 description:
                   'Designed for Directors, VPs, and CTOs who need to ship. Every session addresses the deployment and architectural decisions leaders actually face.',
                 color: '#1a365d',
@@ -474,7 +474,7 @@ function HomePage() {
             className="btn btn-hero-primary btn-lg px-5"
             onClick={() => setShowBooking(true)}
           >
-            Schedule Deployment Scoping Call →
+            Schedule an Executive AI Strategy Call
           </button>
           <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
             <span className="small">✓ 30-minute focused session</span>

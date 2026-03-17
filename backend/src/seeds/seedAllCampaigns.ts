@@ -38,7 +38,7 @@ Key messaging points:
 - Enterprise AI Leadership Accelerator: 5-day intensive program
 - Executives build a working AI proof of concept, executive presentation, and 90-day roadmap
 - Limited to 15 participants per cohort
-- $4,500 investment vs $50K-$150K external engagement
+- $4,500 investment delivers production-ready AI systems in 3 weeks
 - Recent graduates achieved: 70% time savings, $2M budget approvals, 89% accuracy ML models
 
 Tone: Professional, peer-level, consultative. Never sound like marketing. Always reference the lead's specific context.`,

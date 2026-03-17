@@ -51,13 +51,13 @@ function estimateROI(
   const assumptions: string[] = [];
 
   // Implementation cost estimate based on project complexity
-  let implCost = '$50,000 - $150,000';
+  let implCost = '6-12 months (industry average)';
   if (portfolio.architecture.length > 0) {
-    implCost = '$75,000 - $200,000';
+    implCost = '9-18 months (industry average)';
     assumptions.push('Architecture artifacts indicate moderate system integration complexity');
   }
   if (portfolio.implementation.length >= 3) {
-    implCost = '$100,000 - $300,000';
+    implCost = '12-24 months (industry average)';
     assumptions.push('Multiple implementation artifacts suggest enterprise-scale deployment');
   }
 

@@ -327,7 +327,7 @@ function ContactPage() {
                           'Deploy AI POC',
                           'Train leadership team',
                           'AI governance & compliance',
-                          'Reduce consulting costs',
+                          'Accelerate time to production',
                         ].map((obj) => (
                           <button
                             key={obj}
@@ -494,7 +494,7 @@ function ContactPage() {
             className="btn btn-hero-primary btn-lg px-5"
             onClick={() => setShowBooking(true)}
           >
-            Schedule Executive Strategy Call
+            Schedule an Executive AI Strategy Call
           </button>
           <div className="d-flex justify-content-center gap-4 mt-4 flex-wrap" style={{ opacity: 0.7 }}>
             <span className="small">30-minute focused session</span>

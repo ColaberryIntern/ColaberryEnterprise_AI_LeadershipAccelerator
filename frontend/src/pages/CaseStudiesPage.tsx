@@ -28,14 +28,14 @@ function CaseStudiesPage() {
       companySize: '2,000–5,000 employees',
       role: 'VP of Technology',
       challenge:
-        'A regional bank\'s VP of Technology was tasked by the board with delivering an AI strategy within 60 days. The organization had been quoted $400K+ by two consulting firms. The internal team lacked the architectural vocabulary to evaluate proposals or build independently.',
+        'A regional bank\'s VP of Technology was tasked by the board with delivering an AI strategy within 60 days. The internal team lacked the architectural vocabulary to evaluate vendor proposals or build independently — and the board wanted results, not another feasibility study.',
       approach:
         'The VP and two senior architects completed the Executive Accelerator. During Session 3, they built a loan processing optimization POC using their actual (anonymized) data patterns. Session 5 produced a board-ready 90-Day AI Roadmap.',
       outcomes: [
         '🏗️ Working loan processing AI POC delivered on Day 3',
         '📅 Board-approved 90-Day AI Roadmap presented within 3 weeks of accelerator',
-        '💰 $380,000 in consulting fees avoided',
-        '⚡ Roadmap execution began 4 months earlier than projected external consulting timeline',
+        '⚡ 3-week deployment (vs. 6-12 month industry average)',
+        '📅 Roadmap execution began immediately — no multi-month planning phase',
       ],
       quote:
         '"We walked in not knowing how to evaluate AI vendors. We walked out with a POC running on our own infrastructure and a roadmap our board approved on first presentation."',
@@ -70,17 +70,17 @@ function CaseStudiesPage() {
       companySize: '500–2,000 employees',
       role: 'CTO',
       challenge:
-        'A mid-market manufacturer\'s CTO was facing board pressure to implement AI-driven predictive maintenance. The organization had IoT sensor data but no internal AI architecture capability. Vendor proposals ranged from $150K to $600K with multi-year lock-in contracts.',
+        'A mid-market manufacturer\'s CTO was facing board pressure to implement AI-driven predictive maintenance. The organization had IoT sensor data but no internal AI architecture capability — and needed to move from strategy to production quickly.',
       approach:
         'The CTO attended the accelerator with the Head of Engineering. The Day 3 POC was scoped to their actual sensor data schema (anonymized). The 90-Day Roadmap from Day 5 outlined a phased implementation using open-source tooling to avoid vendor lock-in.',
       outcomes: [
         '⚙️ Predictive maintenance POC validated in Day 3 — architecture confirmed viable',
         '📋 Vendor lock-in avoided through open-source architecture patterns',
-        '💰 $420,000 in proposed vendor contracts declined in favor of internal execution',
+        '💰 Built entirely in-house using open-source architecture patterns',
         '🚀 Production deployment completed 11 weeks post-accelerator',
       ],
       quote:
-        '"We were days away from signing a $450,000 vendor contract. The accelerator showed us we could build it ourselves. We did — in 11 weeks."',
+        '"The accelerator showed us we had the capability to build it ourselves. We went from strategy to production in 11 weeks."',
       attribution: 'CTO, Mid-Market Manufacturing Organization',
       image: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=800&q=80',
       imageAlt: 'Advanced manufacturing facility with IoT sensors and automation',
@@ -184,7 +184,7 @@ function CaseStudiesPage() {
               View the Accelerator
             </Link>
             <Link to="/contact" className="btn btn-outline-light btn-lg">
-              Request a Strategy Call
+              Schedule an Executive AI Strategy Call
             </Link>
           </div>
         </div>

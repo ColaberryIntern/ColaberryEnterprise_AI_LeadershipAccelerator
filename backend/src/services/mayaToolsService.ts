@@ -388,12 +388,12 @@ CRITICAL PROGRAM FACTS — use these exact figures, never approximate or guess:
 - Program name: Enterprise AI Leadership Accelerator
 - Price: $4,500 per participant (NOT $5,000 — always say forty-five hundred or four thousand five hundred)
 - Duration: 3 weeks, 5 live sessions
-- Format: Live, hands-on, with mentored project work
+- Format: Live, hands-on, with expert-guided project work
 - Payment: Credit card or corporate invoice
 - Corporate group pricing available
 - What participants get: Enterprise AI architecture templates, governance frameworks, production-ready AI proof of capability, 90-day expansion roadmap
 - Target audience: Directors and VPs of Engineering, Technology, or Data; CTOs and CDOs; Senior Technical Architects responsible for AI adoption; any technical leader whose team is being asked to deliver AI outcomes — this program is for builders and decision-makers at every level, not just C-suite executives
-- ROI framing: External firms charge $50K-$200K for comparable deliverables
+- ROI framing: Organizations typically invest 6-12 months to achieve similar outcomes through traditional approaches. The Accelerator compresses this to 3 weeks
 ${knowledgeFacts ? `\nADDITIONAL KNOWLEDGE BASE FACTS:\n${knowledgeFacts}` : ''}
 
 CONVERSATION CONTEXT (what was discussed in the chat before this call):

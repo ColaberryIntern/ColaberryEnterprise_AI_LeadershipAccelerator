@@ -101,7 +101,7 @@ function ExecOverviewThankYouPage() {
               We'll review your AI priorities and show you how the accelerator maps to your goals.
             </p>
             <button onClick={() => setShowBooking(true)} className="btn btn-lg btn-accent">
-              Schedule a 30-Minute Strategy Call
+              Schedule an Executive AI Strategy Call
             </button>
           </div>
 
@@ -146,7 +146,7 @@ function ExecOverviewThankYouPage() {
                 <h3 className="h6 fw-bold mb-1">Limited Cohort Seats Available</h3>
                 <p className="mb-0 small">
                   Each cohort is capped at 15 participants to ensure personalized instruction
-                  and hands-on mentoring. Seats are filling — don't wait to{' '}
+                  and hands-on expert guidance. Seats are filling — don't wait to{' '}
                   <Link to="/enroll" className="fw-bold">secure your spot</Link>.
                 </p>
               </div>

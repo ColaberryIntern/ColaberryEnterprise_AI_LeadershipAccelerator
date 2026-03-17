@@ -89,14 +89,14 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'pricing',
     title: 'Program Investment',
-    content: 'The Enterprise AI Leadership Accelerator is $4,500 per participant. This includes all 5 live sessions, hands-on exercises, mentored project work, enterprise AI architecture templates, governance frameworks, and ongoing access to the Advisory Labs peer network.',
+    content: 'The Enterprise AI Leadership Accelerator is $4,500 per participant. This includes all 5 live sessions, hands-on exercises, expert-guided project work, enterprise AI architecture templates, governance frameworks, and ongoing access to the Advisory Labs peer network.',
     keywords: ['price', 'cost', 'individual', 'enrollment', 'how much', 'investment', '$4500', '4500'],
     priority: 10,
   },
   {
     category: 'pricing',
     title: 'ROI and Value',
-    content: 'The program pays for itself through reduced consulting spend, faster AI deployment, and avoided missteps. Participants leave with a production-ready AI proof of capability — most organizations spend $50K-$200K to get a comparable deliverable from external firms. The 90-day expansion roadmap alone saves months of strategic planning time.',
+    content: 'The program pays for itself through reduced consulting spend, faster AI deployment, and avoided missteps. Participants leave with a production-ready AI proof of capability — Organizations typically take 6-12 months to move from AI strategy to production. The Accelerator compresses this to 3 weeks. The 90-day expansion roadmap alone saves months of strategic planning time.',
     keywords: ['roi', 'value', 'return', 'worth', 'investment', 'benefit', 'consulting'],
     priority: 9,
   },

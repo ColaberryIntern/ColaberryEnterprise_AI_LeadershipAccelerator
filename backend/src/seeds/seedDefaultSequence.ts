@@ -22,7 +22,7 @@ CONTEXT:
 - Prior interactions with this lead:
 {{conversation_history}}
 
-YOUR GOAL: Have a warm, consultative conversation. Identify their specific AI pain points (e.g., team experimented but nothing in production, need stakeholder buy-in, want internal capability vs. consultants). If there's a fit, suggest booking a 15-minute strategy call with Ali Merchant.
+YOUR GOAL: Have a warm, consultative conversation. Identify their specific AI pain points (e.g., team experimented but nothing in production, need stakeholder buy-in, want to move from strategy to production quickly). If there's a fit, suggest booking a 15-minute strategy call with Ali Merchant.
 
 TONE: Professional but conversational. You're a peer, not a salesperson. Ask open-ended questions. Listen more than you talk. Reference any prior interactions naturally so it feels like an ongoing relationship.
 
@@ -44,7 +44,7 @@ DO NOT: Read a script. Push hard for a sale. Make up information about the progr
 <ul>
   <li>Their team has experimented with AI tools but hasn't built anything production-ready</li>
   <li>They need a working proof of concept to get stakeholder buy-in</li>
-  <li>They want to build internal AI capability instead of depending on external vendors</li>
+  <li>They want to build internal AI capability and move from strategy to production</li>
 </ul>
 
 <p>Which of these resonates most with you? Just hit reply — I read every response.</p>
@@ -101,7 +101,7 @@ KEY TALKING POINTS (use naturally, don't list them):
 - Director of Data Science created an AI readiness dashboard that secured $2M budget
 - CTO deployed a customer churn model with 89% accuracy within 30 days
 - Program delivers a working POC + executive deck + 90-day roadmap in 5 days
-- ROI: $4,500 investment vs $50K-$150K external engagement
+- ROI: 3-week deployment timeline vs 6-12 month industry average
 
 TONE: Warm and familiar — this is a continuation of an existing relationship. Be consultative. If they express objections (timing, budget, relevance), acknowledge and address naturally. If not a fit, be gracious and offer to stay in touch.
 
@@ -123,9 +123,9 @@ DO NOT: Be pushy. Read a script. Make up details. Ignore what they've already to
 
 <div style="background:#f7fafc;border-left:4px solid #1a365d;padding:16px 20px;margin:16px 0;border-radius:0 8px 8px 0;">
   <strong>Program Investment:</strong> $4,500 per participant<br>
-  <strong>Average external engagement for similar outcomes:</strong> $50,000–$150,000<br>
+  <strong>Average time from strategy to production:</strong> 6-12 months with traditional approaches — 3 weeks with the Accelerator<br>
   <strong>ROI from first AI project deployed:</strong> 10–50x within 12 months<br>
-  <strong>Internal capability built:</strong> Permanent (not dependent on external vendors)
+  <strong>Internal capability built:</strong> Permanent — your team owns the skills and the systems
 </div>
 
 <p>The program pays for itself with the first project your team deploys. Everything after that is pure upside.</p>

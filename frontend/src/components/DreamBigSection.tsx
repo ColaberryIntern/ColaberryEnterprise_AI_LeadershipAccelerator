@@ -7,10 +7,10 @@ interface DreamBigSectionProps {
 const STEPS = [
   {
     icon: '\u{1F4A1}',
-    title: 'Ideation',
+    title: 'Ideate',
     color: '#1a365d',
     description:
-      'Examine your organization and identify problems or opportunities where AI could create meaningful improvements. Don\u2019t have an idea yet? Our mentors help you discover one.',
+      'Examine your organization and identify problems or opportunities where AI could create meaningful improvements. Don\u2019t have an idea yet? Our AI Experts help you discover one.',
     examples: [
       'Automating repetitive workflows',
       'Building internal analytics tools',
@@ -115,12 +115,12 @@ export default function DreamBigSection({ onOpenBooking }: DreamBigSectionProps)
               opportunities in your data, and automating the processes that slow your team down.
             </p>
             <p className="mb-2 text-muted">
-              In this accelerator, you bring YOUR ideas. Colaberry mentors help you expand them,
+              In this accelerator, you bring YOUR ideas. Colaberry AI Experts help you expand them,
               design the architecture, and begin building using modern AI development tools like{' '}
               <strong>Claude Code</strong>.
             </p>
             <p className="mb-0 text-muted">
-              Don&rsquo;t have a clear idea yet? That&rsquo;s fine. Our mentors help you discover
+              Don&rsquo;t have a clear idea yet? That&rsquo;s fine. Our AI Experts help you discover
               where AI can create the most value inside your organization.
             </p>
           </div>
@@ -212,14 +212,14 @@ export default function DreamBigSection({ onOpenBooking }: DreamBigSectionProps)
         {/* CTAs */}
         <div className="text-center">
           <a href="#download-overview" className="btn btn-lg btn-hero-primary me-3 mb-2">
-            Get the Blueprint
+            Design Your AI System Blueprint
           </a>
           <button
             type="button"
             className="btn btn-lg btn-outline-primary mb-2"
             onClick={onOpenBooking}
           >
-            Schedule a Deployment Scoping Call
+            Schedule an Executive AI Strategy Call
           </button>
         </div>
       </div>

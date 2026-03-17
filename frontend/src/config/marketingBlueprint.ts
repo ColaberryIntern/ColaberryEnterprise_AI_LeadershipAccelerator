@@ -49,13 +49,13 @@ export const MARKETING_BLUEPRINT: BlueprintRule[] = [
   {
     id: 'pos-002',
     category: 'marketing_strategy',
-    description: 'External cost comparison present',
+    description: 'Speed-to-value positioning present',
     required: true,
-    validationCriteria: 'Homepage must reference external engagement costs as contrast',
+    validationCriteria: 'Homepage must emphasize speed from strategy to deployed systems',
     severityWeight: 4,
     checkType: 'text_content',
     selector: 'body',
-    textPattern: '\\$500K|\\$500,000|500K\\+|external.*(engagement|firm)|traditional approach',
+    textPattern: 'strategy to.*(deploy|production|system)|3 [Ww]eeks|expert guidance.*implementation',
     appliesTo: ['/'],
   },
   {
