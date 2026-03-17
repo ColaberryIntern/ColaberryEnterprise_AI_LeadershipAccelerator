@@ -57,7 +57,7 @@ export default function GTMStrategyTab({ campaignId, campaign, headers, onRefres
 
   const steps = Array.isArray(campaign.sequence?.steps) ? campaign.sequence.steps : [];
   const isCountdown = steps.length > 0 && steps.every((s: any) => s.minutes_before_call);
-  const totalDays = steps.reduce((sum: number, s: any) => sum + (s.delay_days || 0), 0);
+  const totalDays = steps.length > 0 ? Math.max(...steps.map((s: any) => s.delay_days || 0)) : 0;
 
   return (
     <>
