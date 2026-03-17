@@ -17,8 +17,8 @@ import type { SpeedMode } from '../services/testing/timeWarpEngine';
 export async function handleStartSimulation(req: Request, res: Response) {
   try {
     const campaignId = req.params.id as string;
-    const { speed_mode = 'fast', lead_overrides, template_vars } = req.body;
-    const simulation = await startSimulation(campaignId, speed_mode as SpeedMode, lead_overrides, template_vars);
+    const { speed_mode = 'fast', lead_overrides, template_vars, appointment_time } = req.body;
+    const simulation = await startSimulation(campaignId, speed_mode as SpeedMode, lead_overrides, template_vars, appointment_time);
     res.json(simulation);
   } catch (err: any) {
     console.error('[SimController] Start error:', err.message);

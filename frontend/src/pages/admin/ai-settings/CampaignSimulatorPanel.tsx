@@ -70,6 +70,8 @@ export default function CampaignSimulatorPanel({
   const [leadIndustry, setLeadIndustry] = useState('Technology');
   const [customVars, setCustomVars] = useState<string[]>([]);
   const [varValues, setVarValues] = useState<Record<string, string>>({});
+  const [isTMinus, setIsTMinus] = useState(false);
+  const [appointmentTime, setAppointmentTime] = useState('');
 
   const isActive = simulation && (simulation.status === 'running' || simulation.status === 'paused');
 
@@ -92,6 +94,15 @@ export default function CampaignSimulatorPanel({
           }
         }
         setCustomVars(Array.from(found));
+        // Detect T-minus campaign
+        const tminus = steps.length > 0
+          && steps.every((s: any) => (s.delay_days || 0) === 0)
+          && steps.some((s: any) => s.minutes_before_call != null);
+        setIsTMinus(tminus);
+        if (tminus) {
+          const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          setAppointmentTime(d.toISOString().slice(0, 16));
+        }
       } catch { /* ignore */ }
     })();
   }, [campaignId]);
@@ -144,6 +155,7 @@ export default function CampaignSimulatorPanel({
         speed_mode: speedMode,
         lead_overrides: { name: leadName, company: leadCompany, title: leadTitle, industry: leadIndustry },
         template_vars: varValues,
+        appointment_time: isTMinus && appointmentTime ? appointmentTime : undefined,
       });
       setSimulation(data);
       // Immediately fetch full state with steps
@@ -237,6 +249,27 @@ export default function CampaignSimulatorPanel({
                             />
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Appointment date/time for T-minus campaigns */}
+                {isTMinus && (
+                  <div className="card border-0 shadow-sm mb-3">
+                    <div className="card-header bg-white py-2">
+                      <span className="small fw-semibold">Appointment Date & Time</span>
+                      <span className="text-muted small ms-2">for T-minus scheduling</span>
+                    </div>
+                    <div className="card-body py-2">
+                      <input
+                        type="datetime-local"
+                        className="form-control form-control-sm"
+                        value={appointmentTime}
+                        onChange={(e) => setAppointmentTime(e.target.value)}
+                      />
+                      <div className="text-muted small mt-1">
+                        AI will reference this exact date/time in generated messages.
                       </div>
                     </div>
                   </div>

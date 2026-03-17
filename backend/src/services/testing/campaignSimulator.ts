@@ -63,6 +63,7 @@ export async function startSimulation(
   speedMode: SpeedMode,
   leadOverrides?: { name?: string; company?: string; title?: string; industry?: string },
   templateVars?: Record<string, string>,
+  appointmentTime?: string,
 ): Promise<InstanceType<typeof CampaignSimulation>> {
   // Enforce concurrency limit
   const running = await CampaignSimulation.count({
@@ -113,12 +114,17 @@ export async function startSimulation(
   const isTMinus = steps.every((s: any) => (s.delay_days || 0) === 0)
     && steps.some((s: any) => s.minutes_before_call != null);
   if (isTMinus) {
-    const fakeApptTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h from now
+    const fakeApptTime = appointmentTime
+      ? new Date(appointmentTime)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000);
     await StrategyCall.findOrCreate({
       where: { lead_id: testLead.id },
       defaults: {
         id: uuidv4(),
         lead_id: testLead.id,
+        name: (testLead as any).name || 'Test Lead',
+        email: (testLead as any).email || 'test@simulation.local',
+        google_event_id: `sim-${uuidv4()}`,
         scheduled_at: fakeApptTime,
         timezone: 'America/Chicago',
         meet_link: 'https://meet.colaberry.ai/strategy-call-demo',
