@@ -17,6 +17,10 @@ export interface AssignmentSubmissionAttributes {
   reviewed_at?: Date;
   artifact_definition_id?: string;
   version_number?: number;
+  parent_version_id?: string;
+  is_latest?: boolean;
+  change_summary?: string;
+  diff_json?: any;
   created_at?: Date;
 }
 
@@ -36,6 +40,10 @@ class AssignmentSubmission extends Model<AssignmentSubmissionAttributes> impleme
   declare reviewed_at: Date;
   declare artifact_definition_id: string;
   declare version_number: number;
+  declare parent_version_id: string;
+  declare is_latest: boolean;
+  declare change_summary: string;
+  declare diff_json: any;
   declare created_at: Date;
 }
 
@@ -106,6 +114,24 @@ AssignmentSubmission.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 1,
+    },
+    parent_version_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'assignment_submissions', key: 'id' },
+    },
+    is_latest: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    change_summary: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    diff_json: {
+      type: DataTypes.JSONB,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,
