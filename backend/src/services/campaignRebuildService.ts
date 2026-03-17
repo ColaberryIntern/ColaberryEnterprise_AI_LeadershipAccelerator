@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { env } from '../config/env';
 import { getSetting } from './settingsService';
 import { Campaign, FollowUpSequence } from '../models';
-import { createSequence } from './sequenceService';
+import { createSequence, validateSequenceSteps, normalizeSequenceTiming } from './sequenceService';
 
 /* ------------------------------------------------------------------ */
 /*  OpenAI client (same pattern as aiMessageService)                   */
@@ -203,6 +203,22 @@ RULES FOR step_goal:
 - Must be specific and measurable (e.g., "Get alumni to click through to the landing page" not just "Introduce program")
 - Should describe the desired outcome, not the action
 
+TIMING:
+- There are TWO timing modes. Detect which one to use from the campaign system prompt:
+
+  MODE 1 — Standard (delay_days): For drip campaigns sent after enrollment.
+  Set delay_days to 0 for all steps. The system will calculate optimal spacing automatically.
+  Leave minutes_before_call as null.
+
+  MODE 2 — T-minus (minutes_before_call): For appointment-relative campaigns where
+  messages are sent BEFORE a scheduled call/meeting. Use this when the campaign prompt
+  references timing like "T-24h", "T-2h", "24 hours before the call", "before the appointment", etc.
+  Set delay_days to 0 AND set minutes_before_call to the number of minutes before
+  the appointment. Examples: T-24h = 1440, T-2h = 120, T-30min = 30, T-10min = 10.
+
+- Do NOT mix modes within a single campaign.
+- Focus on content quality. For standard campaigns, the system calculates spacing automatically.
+
 OTHER RULES:
 - Keep step subjects short and natural (not marketing-y) — 5-8 words max
 - Use appropriate channels: email for detailed content, SMS for quick nudges, voice for personal touch
@@ -221,6 +237,7 @@ Respond with ONLY valid JSON, no markdown fences:
     {
       "channel": "email|voice|sms",
       "delay_days": 0,
+      "minutes_before_call": null,
       "subject": "...",
       "step_goal": "...",
       "ai_instructions": "... (4-8 detailed sentences) ...",
@@ -269,6 +286,7 @@ Generate the full campaign structure. Remember: the ai_instructions for each ste
   const normalizedSteps = parsed.steps.map((s: any) => ({
     channel: s.channel || 'email',
     delay_days: s.delay_days ?? 0,
+    minutes_before_call: s.minutes_before_call ?? null,
     subject: s.subject || '',
     step_goal: s.step_goal || '',
     ai_instructions: s.ai_instructions || '',
@@ -280,6 +298,27 @@ Generate the full campaign structure. Remember: the ai_instructions for each ste
     voice_prompt: s.voice_prompt || '',
     sms_template: s.sms_template || '',
   }));
+
+  // Deterministic timing: ignore AI delay values, assign spacing based on channels.
+  // The AI generates content; the system generates timing.
+  const originalDays = normalizedSteps.map((s: any) => s.delay_days ?? 0);
+  const finalSteps = normalizeSequenceTiming(normalizedSteps);
+  const normalizedDays = finalSteps.map((s: any) => s.delay_days ?? 0);
+  const channels = finalSteps.map((s: any) => s.channel || 'email');
+
+  console.log(`[CampaignRebuild] campaign_sequence_normalized — campaign_id=${campaignId}, ` +
+    `original_days=[${originalDays}], normalized_days=[${normalizedDays}], channels=[${channels}]`);
+
+  // Validate the normalized timing (should always pass since normalizeSequenceTiming
+  // produces deterministic valid output, but verify as a safety net)
+  const validation = validateSequenceSteps(finalSteps);
+  if (!validation.valid) {
+    console.error(`[CampaignRebuild] Post-normalization validation failed:`, validation.errors);
+    throw new Error(`Sequence normalization produced invalid timing: ${validation.errors.join('; ')}`);
+  }
+  if (validation.warnings.length > 0) {
+    console.log(`[CampaignRebuild] Timing warnings for campaign ${campaignId}:`, validation.warnings);
+  }
 
   // Update campaign fields
   await campaign.update({
@@ -293,7 +332,7 @@ Generate the full campaign structure. Remember: the ai_instructions for each ste
   if (campaign.sequence_id) {
     sequence = await FollowUpSequence.findByPk(campaign.sequence_id);
     if (sequence) {
-      await sequence.update({ steps: normalizedSteps });
+      await sequence.update({ steps: finalSteps });
     }
   }
 
@@ -301,7 +340,7 @@ Generate the full campaign structure. Remember: the ai_instructions for each ste
     sequence = await createSequence({
       name: `${campaign.name} Sequence`,
       description: `Auto-generated sequence for ${campaign.name}`,
-      steps: normalizedSteps,
+      steps: finalSteps,
     });
     await campaign.update({ sequence_id: sequence.id });
   }
