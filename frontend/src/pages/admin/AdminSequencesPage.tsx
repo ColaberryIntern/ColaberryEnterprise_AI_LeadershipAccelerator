@@ -610,7 +610,15 @@ function AdminSequencesPage() {
                         <td>
                           <span className="badge bg-light text-dark">{seq.steps.length} steps</span>
                           <div className="text-muted small">
-                            {seq.steps.map((s) => `Day ${s.delay_days}`).join(', ')}
+                            {[...seq.steps].sort((a, b) => (a.delay_days || 0) - (b.delay_days || 0)).map((s: any) => {
+                              if (s.minutes_before_call) {
+                                const mins = s.minutes_before_call;
+                                if (mins >= 1440) return `T-${mins / 1440}d`;
+                                if (mins >= 60) return `T-${mins / 60}h`;
+                                return `T-${mins}min`;
+                              }
+                              return `Day ${s.delay_days || 0}`;
+                            }).join(', ')}
                           </div>
                         </td>
                         <td>

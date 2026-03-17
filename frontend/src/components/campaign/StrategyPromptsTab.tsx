@@ -17,6 +17,16 @@ interface Props {
   onRefresh: () => void;
 }
 
+const formatTiming = (step: any): string => {
+  if (step.minutes_before_call) {
+    const mins = step.minutes_before_call;
+    if (mins >= 1440) return `T-${mins / 1440}d`;
+    if (mins >= 60) return `T-${mins / 60}h`;
+    return `T-${mins}min`;
+  }
+  return step.delay_days ? `Day ${step.delay_days}` : 'Day 0';
+};
+
 export default function StrategyPromptsTab({ campaignId, campaign, headers, onRefresh }: Props) {
   // ── Section 1: AI System Prompt ──────────────────────────────────
   const [prompt, setPrompt] = useState(campaign.ai_system_prompt || '');
@@ -408,80 +418,88 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
         </div>
       </div>
 
-      {/* ═══ Sequence Overview (read-only summary) ═══ */}
-      {steps.length > 0 && steps[0].channel && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white d-flex justify-content-between align-items-center">
-            <span className="fw-semibold">Sequence Overview</span>
-            <span className="badge bg-light text-dark border">
-              {steps.length} step{steps.length !== 1 ? 's' : ''}
-              {' · '}
-              {(() => {
-                const maxDay = Math.max(...steps.map(s => s.delay_days || 0));
-                return `${maxDay} day${maxDay !== 1 ? 's' : ''}`;
-              })()}
-              {' · '}
-              {[...new Set(steps.map(s => s.channel))].map(ch =>
-                ch === 'email' ? 'Email' : ch === 'sms' ? 'SMS' : 'Voice'
-              ).join(', ')}
-            </span>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table table-hover mb-0" style={{ fontSize: '0.82rem' }}>
-                <thead className="table-light">
-                  <tr>
-                    <th style={{ width: 40 }}>#</th>
-                    <th style={{ width: 55 }}>Day</th>
-                    <th style={{ width: 75 }}>Channel</th>
-                    <th>Subject / Goal</th>
-                    <th style={{ width: 90 }}>Tone</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {steps.map((step, i) => {
-                    const channelColor = step.channel === 'email' ? '#0d6efd' : step.channel === 'sms' ? '#6f42c1' : '#198754';
-                    const channelLabel = step.channel === 'email' ? 'Email' : step.channel === 'sms' ? 'SMS' : 'Voice';
-                    return (
-                      <tr key={i}>
-                        <td className="text-muted">{i + 1}</td>
-                        <td>{step.delay_days || 0}</td>
-                        <td>
-                          <span
-                            className="badge"
-                            style={{
-                              backgroundColor: `${channelColor}15`,
-                              color: channelColor,
-                              border: `1px solid ${channelColor}40`,
-                              fontSize: '0.72rem',
-                            }}
-                          >
-                            {channelLabel}
-                          </span>
-                        </td>
-                        <td>
-                          {step.subject && (
-                            <div className="fw-medium" style={{ lineHeight: 1.3 }}>{step.subject}</div>
-                          )}
-                          {step.step_goal && (
-                            <div className="text-muted" style={{ fontSize: '0.78rem', lineHeight: 1.3 }}>
-                              {step.step_goal}
-                            </div>
-                          )}
-                          {!step.subject && !step.step_goal && (
-                            <span className="text-muted fst-italic">No subject or goal</span>
-                          )}
-                        </td>
-                        <td className="text-muted text-capitalize">{step.ai_tone || '—'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      {/* ═══ Sequence Overview (read-only summary from stored delay_days) ═══ */}
+      {steps.length > 0 && steps[0].channel && (() => {
+        // Sort: T-minus by minutes_before_call descending (earliest first), standard by delay_days ascending
+        const sortedSteps = isCountdown
+          ? [...steps].sort((a, b) => (b.minutes_before_call || 0) - (a.minutes_before_call || 0))
+          : [...steps].sort((a, b) => (a.delay_days || 0) - (b.delay_days || 0));
+        const campaignDuration = isCountdown
+          ? null
+          : Math.max(...sortedSteps.map(s => s.delay_days || 0));
+        const channelList = [...new Set(sortedSteps.map(s => s.channel))].map(ch =>
+          ch === 'email' ? 'Email' : ch === 'sms' ? 'SMS' : 'Voice'
+        ).join(', ');
+
+        return (
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white d-flex justify-content-between align-items-center">
+              <span className="fw-semibold">Sequence Overview</span>
+              <span className="badge bg-light text-dark border">
+                {sortedSteps.length} step{sortedSteps.length !== 1 ? 's' : ''}
+                {' · '}
+                {isCountdown ? 'Countdown' : `${campaignDuration} day${campaignDuration !== 1 ? 's' : ''}`}
+                {' · '}
+                {channelList}
+              </span>
+            </div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table table-hover mb-0" style={{ fontSize: '0.82rem' }}>
+                  <thead className="table-light">
+                    <tr>
+                      <th style={{ width: 40 }}>#</th>
+                      <th style={{ width: 75 }}>Timing</th>
+                      <th style={{ width: 75 }}>Channel</th>
+                      <th>Subject / Goal</th>
+                      <th style={{ width: 90 }}>Tone</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedSteps.map((step, i) => {
+                      const channelColor = step.channel === 'email' ? '#0d6efd' : step.channel === 'sms' ? '#6f42c1' : '#198754';
+                      const channelLabel = step.channel === 'email' ? 'Email' : step.channel === 'sms' ? 'SMS' : 'Voice';
+                      return (
+                        <tr key={i}>
+                          <td className="text-muted">{i + 1}</td>
+                          <td>{formatTiming(step)}</td>
+                          <td>
+                            <span
+                              className="badge"
+                              style={{
+                                backgroundColor: `${channelColor}15`,
+                                color: channelColor,
+                                border: `1px solid ${channelColor}40`,
+                                fontSize: '0.72rem',
+                              }}
+                            >
+                              {channelLabel}
+                            </span>
+                          </td>
+                          <td>
+                            {step.subject && (
+                              <div className="fw-medium" style={{ lineHeight: 1.3 }}>{step.subject}</div>
+                            )}
+                            {step.step_goal && (
+                              <div className="text-muted" style={{ fontSize: '0.78rem', lineHeight: 1.3 }}>
+                                {step.step_goal}
+                              </div>
+                            )}
+                            {!step.subject && !step.step_goal && (
+                              <span className="text-muted fst-italic">No subject or goal</span>
+                            )}
+                          </td>
+                          <td className="text-muted text-capitalize">{step.ai_tone || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ═══ Section 4: Sequence Steps ═══ */}
       <div className="card border-0 shadow-sm mb-4">

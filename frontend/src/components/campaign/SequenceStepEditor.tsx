@@ -4,6 +4,7 @@ type CampaignChannel = 'email' | 'voice' | 'sms';
 
 export interface SequenceStep {
   delay_days: number;
+  minutes_before_call?: number | null;
   channel: CampaignChannel;
   subject: string;
   body_template: string;

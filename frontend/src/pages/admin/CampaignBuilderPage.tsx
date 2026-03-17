@@ -587,7 +587,13 @@ export default function CampaignBuilderPage() {
                           >
                             {s.channel || 'email'}
                           </span>
-                          <span className="small fw-medium">Day {s.delay_days}</span>
+                          <span className="small fw-medium">
+                            {s.minutes_before_call
+                              ? (s.minutes_before_call >= 1440 ? `T-${s.minutes_before_call / 1440}d`
+                                 : s.minutes_before_call >= 60 ? `T-${s.minutes_before_call / 60}h`
+                                 : `T-${s.minutes_before_call}min`)
+                              : `Day ${s.delay_days || 0}`}
+                          </span>
                           <span className="small text-muted">— {s.step_goal?.replace(/_/g, ' ')}</span>
                         </div>
                         <div className="small text-muted mt-1" style={{ maxWidth: '600px' }}>
@@ -686,8 +692,12 @@ export default function CampaignBuilderPage() {
                     {selectedTemplateData?.name || selectedTemplate}
                   </div>
                   <div className="small text-muted">
-                    {selectedTemplateData?.stepCount} steps over{' '}
-                    {selectedTemplateData?.steps?.[selectedTemplateData.steps.length - 1]?.delay_days || '?'} days
+                    {selectedTemplateData?.stepCount} steps{' · '}
+                    {selectedTemplateData?.steps?.some((s: any) => s.minutes_before_call)
+                      ? 'Countdown'
+                      : `${selectedTemplateData?.steps?.length
+                          ? Math.max(...selectedTemplateData.steps.map((s: any) => s.delay_days || 0))
+                          : '?'} days`}
                   </div>
                 </div>
               </div>
