@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMentorContext } from '../../../contexts/MentorContext';
 
 interface ReflectionQuestion {
@@ -10,11 +10,18 @@ interface ReflectionQuestion {
 interface ReflectionQuestionsProps {
   data: ReflectionQuestion[];
   lessonId: string;
+  onReflectionDone?: () => void;
 }
 
-export default function ReflectionQuestions({ data, lessonId }: ReflectionQuestionsProps) {
+export default function ReflectionQuestions({ data, lessonId, onReflectionDone }: ReflectionQuestionsProps) {
   const { sendToMentor, lessonContext } = useMentorContext();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (data && data.length > 0 && expanded.size >= data.length) {
+      onReflectionDone?.();
+    }
+  }, [expanded.size, data, onReflectionDone]);
 
   if (!data || data.length === 0) return null;
 

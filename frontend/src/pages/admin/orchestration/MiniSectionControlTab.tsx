@@ -231,6 +231,7 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                   token={token}
                   apiUrl={apiUrl}
                   onApply={handleApplyStructure}
+                  onBlueprintApplied={() => builder.selectedLessonId && builder.selectLesson(builder.selectedLessonId)}
                   sectionVariableKeys={builder.sectionVariableKeys}
                   sectionArtifactIds={builder.sectionArtifactIds}
                   sectionSkillIds={builder.sectionSkillIds}

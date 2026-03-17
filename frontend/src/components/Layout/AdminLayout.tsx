@@ -24,6 +24,7 @@ const adminNavSections: NavSection[] = [
   { label: 'Program', links: [
     { path: '/admin/accelerator', label: 'Accelerator', icon: 'mortarboard' },
     { path: '/admin/orchestration', label: 'Orchestration', icon: 'diagram-3' },
+    { path: '/admin/projects', label: 'Projects', icon: 'rocket' },
   ]},
   { label: 'Intelligence', links: [
     { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },

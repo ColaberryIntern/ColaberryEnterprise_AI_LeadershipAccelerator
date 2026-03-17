@@ -75,6 +75,7 @@ interface ImplementationTaskProps {
   };
   lessonId: string;
   onSubmit?: () => void;
+  onArtifactsVerified?: (verified: boolean) => void;
   initialTaskData?: any;
 }
 
@@ -103,7 +104,7 @@ function resolveVariablesInText(text: string, vars: Record<string, string>): str
   return result;
 }
 
-export default function ImplementationTask({ data, lessonId, onSubmit, initialTaskData }: ImplementationTaskProps) {
+export default function ImplementationTask({ data, lessonId, onSubmit, onArtifactsVerified, initialTaskData }: ImplementationTaskProps) {
   const { sendToMentor, onMentorResponded, updateLessonContext } = useMentorContext();
 
   const [orchContext, setOrchContext] = useState<OrchestrationContext | null>(null);
@@ -331,6 +332,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
       // Always mark task complete after grading — feedback is informational, not a gate
       setTaskCompleted(true);
       onSubmit?.();
+      onArtifactsVerified?.(true);
       saveProgress({ grading: result.grading, completed: true });
     } catch {
       alert('Grading failed. Please try again.');
@@ -756,7 +758,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                     background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                     color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none',
                   }}
-                  onClick={() => { setTaskCompleted(true); onSubmit?.(); saveProgress({ completed: true }); }}
+                  onClick={() => { setTaskCompleted(true); onSubmit?.(); onArtifactsVerified?.(true); saveProgress({ completed: true }); }}
                 >
                   <i className="bi bi-check-circle"></i> Mark Task as Complete
                 </button>

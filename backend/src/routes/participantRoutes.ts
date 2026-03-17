@@ -22,6 +22,7 @@ import {
   handleGetSessionChat, handlePostSessionChat,
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
+import projectRoutes from './projectRoutes';
 
 const router = Router();
 
@@ -96,6 +97,9 @@ router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requir
     res.status(500).json({ error: err.message });
   }
 });
+
+// Project endpoints
+router.use(projectRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);

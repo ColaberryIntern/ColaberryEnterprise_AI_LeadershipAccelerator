@@ -12,6 +12,7 @@ import GovernanceCOOTab from './ai-settings/GovernanceCOOTab';
 import GovernanceAutonomyTab from './ai-settings/GovernanceAutonomyTab';
 import WebsiteIntelligenceTab from './ai-settings/WebsiteIntelligenceTab';
 import AdminAdmissionsTab from './ai-settings/AdminAdmissionsTab';
+import CoryCOOTab from './ai-settings/CoryCOOTab';
 
 interface Agent {
   id: string;
@@ -100,6 +101,7 @@ interface Overview {
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
+  { key: 'command-center', label: 'Command Center' },
   { key: 'coo', label: 'AI COO' },
   { key: 'registry', label: 'Agent Registry' },
   { key: 'autonomy', label: 'Autonomy & Safety' },
@@ -474,6 +476,7 @@ function AdminAISettingsPage() {
           governanceAlerts={governanceAlerts}
         />
       )}
+      {activeTab === 'command-center' && <CoryCOOTab />}
       {activeTab === 'coo' && <GovernanceCOOTab />}
       {activeTab === 'autonomy' && <GovernanceAutonomyTab />}
       {activeTab === 'controls' && (

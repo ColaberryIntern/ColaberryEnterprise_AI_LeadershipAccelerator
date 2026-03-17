@@ -1,6 +1,7 @@
 import React from 'react';
 import ConceptV1 from './ConceptV1';
 import ConceptV2 from './ConceptV2';
+import { StepInfo } from './LessonStepTracker';
 
 interface ConceptLessonProps {
   content: any;
@@ -8,11 +9,12 @@ interface ConceptLessonProps {
   isCompleted: boolean;
   onCanCompleteChange?: (canComplete: boolean) => void;
   onQuizScoreChange?: (score: number) => void;
+  onStepStatusChange?: (steps: StepInfo[]) => void;
   quizResponses?: any;
   taskData?: any;
 }
 
-export default function ConceptLesson({ content, lessonId, isCompleted, onCanCompleteChange, onQuizScoreChange, quizResponses, taskData }: ConceptLessonProps) {
+export default function ConceptLesson({ content, lessonId, isCompleted, onCanCompleteChange, onQuizScoreChange, onStepStatusChange, quizResponses, taskData }: ConceptLessonProps) {
   // Legacy V1 fallback only for cached content without V2 markers
   if (content.content_version !== 'v2' && !content.concept_snapshot && content.concept_explanation) {
     return <ConceptV1 content={content} />;
@@ -24,6 +26,7 @@ export default function ConceptLesson({ content, lessonId, isCompleted, onCanCom
       isCompleted={isCompleted}
       onCanCompleteChange={onCanCompleteChange}
       onQuizScoreChange={onQuizScoreChange}
+      onStepStatusChange={onStepStatusChange}
       quizResponses={quizResponses}
       taskData={taskData}
     />

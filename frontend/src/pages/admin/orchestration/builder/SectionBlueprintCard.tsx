@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { MiniSection, VariableOption, ArtifactOption } from './types';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { MiniSection } from './types';
 
 interface GeneratedEvent {
   type: string;
@@ -7,6 +7,44 @@ interface GeneratedEvent {
   title: string;
   description: string;
   learning_goal: string;
+}
+
+interface GeneratedVarSpec {
+  key: string;
+  display_name: string;
+  description: string;
+}
+
+interface GeneratedArtifactSpec {
+  name: string;
+  description: string;
+  evaluation_criteria: string;
+}
+
+interface GeneratedMiniSectionSpec {
+  type: string;
+  student_label: string;
+  title: string;
+  description: string;
+  learning_goal: string;
+  section_prompt: string;
+  skill_domain: string;
+  variables: GeneratedVarSpec[];
+  artifact: GeneratedArtifactSpec | null;
+  knowledge_check_config: { enabled: boolean; question_count: number; pass_score: number } | null;
+}
+
+interface GeneratedBlueprint {
+  mini_sections: GeneratedMiniSectionSpec[];
+  skill_domain: string;
+}
+
+interface ApplyResult {
+  created_mini_sections: { id: string; type: string; title: string }[];
+  created_variables: { id: string; key: string; display_name: string }[];
+  created_artifacts: { id: string; name: string }[];
+  matched_skill: { id: string; skill_id: string; name: string } | null;
+  created_skill: { id: string; skill_id: string; name: string } | null;
 }
 
 interface SkillOptionItem { value: string; label: string; sub?: string }
@@ -22,6 +60,7 @@ interface Props {
   token: string;
   apiUrl: string;
   onApply: (events: GeneratedEvent[]) => void;
+  onBlueprintApplied?: () => void;
   // Section-level assignments
   sectionVariableKeys: string[];
   sectionArtifactIds: string[];
@@ -112,19 +151,23 @@ function ToggleChips({ items, selected, onToggle, colorActive, colorBg }: {
 
 export default function SectionBlueprintCard({
   lessonId, lessonTitle, lessonDescription, lessonLearningGoal,
-  structurePrompt, onPromptChange, miniSections, token, apiUrl, onApply,
+  structurePrompt, onPromptChange, miniSections, token, apiUrl, onApply, onBlueprintApplied,
   sectionVariableKeys, sectionArtifactIds, sectionSkillIds, onSectionAssignmentsChange,
   variableOptions, artifactOptions, skillOptions,
 }: Props) {
   const [collapsed, setCollapsed] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [generatedEvents, setGeneratedEvents] = useState<GeneratedEvent[] | null>(null);
+  const [generatedBlueprint, setGeneratedBlueprint] = useState<GeneratedBlueprint | null>(null);
+  const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
   const [error, setError] = useState('');
   const [localPrompt, setLocalPrompt] = useState(structurePrompt);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showVars, setShowVars] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(false);
+  const [useComprehensive, setUseComprehensive] = useState(true);
 
   useEffect(() => { setLocalPrompt(structurePrompt); }, [structurePrompt]);
 
@@ -145,18 +188,36 @@ export default function SectionBlueprintCard({
     setGenerating(true);
     setError('');
     setGeneratedEvents(null);
+    setGeneratedBlueprint(null);
+    setApplyResult(null);
     try {
-      const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/generate-structure`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ structure_prompt: localPrompt }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(err.error || `HTTP ${res.status}`);
+      if (useComprehensive) {
+        // Comprehensive blueprint generation
+        const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/generate-blueprint`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ structure_prompt: localPrompt }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Request failed' }));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        setGeneratedBlueprint(data.blueprint);
+      } else {
+        // Basic generation (legacy)
+        const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/generate-structure`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ structure_prompt: localPrompt }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Request failed' }));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        setGeneratedEvents(data.events);
       }
-      const data = await res.json();
-      setGeneratedEvents(data.events);
       setCollapsed(false);
     } catch (err: any) {
       setError(err.message || 'Generation failed');
@@ -165,10 +226,35 @@ export default function SectionBlueprintCard({
     }
   };
 
-  const handleApply = () => {
+  const handleApplyBasic = () => {
     if (generatedEvents) {
       onApply(generatedEvents);
       setGeneratedEvents(null);
+    }
+  };
+
+  const handleApplyBlueprint = async () => {
+    if (!generatedBlueprint) return;
+    setApplying(true);
+    setError('');
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/lessons/${lessonId}/apply-blueprint`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blueprint: generatedBlueprint }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Apply failed' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data: ApplyResult = await res.json();
+      setApplyResult(data);
+      setGeneratedBlueprint(null);
+      if (onBlueprintApplied) onBlueprintApplied();
+    } catch (err: any) {
+      setError(err.message || 'Apply failed');
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -181,6 +267,11 @@ export default function SectionBlueprintCard({
   const assignmentSummary = (varCount + skillCount + artCount) > 0
     ? `${varCount}V ${artCount}A ${skillCount}S`
     : '';
+
+  // Count what the blueprint will create
+  const blueprintVarCount = generatedBlueprint?.mini_sections.reduce((sum, ms) => sum + (ms.variables?.length || 0), 0) || 0;
+  const blueprintArtCount = generatedBlueprint?.mini_sections.filter(ms => ms.artifact).length || 0;
+  const blueprintKcCount = generatedBlueprint?.mini_sections.filter(ms => ms.knowledge_check_config).length || 0;
 
   return (
     <div className="card border-0 shadow-sm mb-2">
@@ -213,12 +304,29 @@ export default function SectionBlueprintCard({
             style={{ fontSize: 11, fontFamily: 'monospace', lineHeight: 1.5 }}
           />
 
+          {/* Generation Mode Toggle */}
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <div className="form-check form-switch" style={{ fontSize: 10 }}>
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="comprehensiveToggle"
+                checked={useComprehensive}
+                onChange={e => setUseComprehensive(e.target.checked)}
+                style={{ width: 28, height: 14 }}
+              />
+              <label className="form-check-label text-muted" htmlFor="comprehensiveToggle">
+                {useComprehensive ? 'Full Blueprint (vars + artifacts + skills)' : 'Basic (titles only)'}
+              </label>
+            </div>
+          </div>
+
           <div className="d-flex gap-2 mb-2">
             <button className="btn btn-sm btn-primary flex-grow-1" onClick={handleGenerate} disabled={generating || !localPrompt.trim()}>
               {generating ? (
                 <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Generating...</>
               ) : (
-                <><i className="bi bi-stars me-1"></i>Generate Structure</>
+                <><i className="bi bi-stars me-1"></i>{useComprehensive ? 'Generate Blueprint' : 'Generate Structure'}</>
               )}
             </button>
             {!structurePrompt && localPrompt && (
@@ -234,7 +342,127 @@ export default function SectionBlueprintCard({
             </div>
           )}
 
-          {/* Generated Results Preview */}
+          {/* ─── Apply Result Summary ─── */}
+          {applyResult && (
+            <div className="alert alert-success py-2 px-2 mb-2" style={{ fontSize: 10 }}>
+              <div className="fw-semibold mb-1"><i className="bi bi-check-circle me-1"></i>Blueprint Applied</div>
+              <div>{applyResult.created_mini_sections.length} mini-sections created</div>
+              {applyResult.created_variables.length > 0 && (
+                <div>{applyResult.created_variables.length} variables: {applyResult.created_variables.map(v => v.key).join(', ')}</div>
+              )}
+              {applyResult.created_artifacts.length > 0 && (
+                <div>{applyResult.created_artifacts.length} artifacts: {applyResult.created_artifacts.map(a => a.name).join(', ')}</div>
+              )}
+              {applyResult.matched_skill && <div>Skill matched: {applyResult.matched_skill.name}</div>}
+              {applyResult.created_skill && <div>Skill created: {applyResult.created_skill.name}</div>}
+              <button className="btn btn-sm btn-outline-success mt-1" onClick={() => setApplyResult(null)} style={{ fontSize: 9 }}>
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* ─── Comprehensive Blueprint Preview ─── */}
+          {generatedBlueprint && (
+            <div className="mb-2">
+              <h6 className="small fw-semibold mb-1" style={{ fontSize: 11 }}>
+                <i className="bi bi-check-circle text-success me-1"></i>Generated Blueprint
+                <span className="text-muted fw-normal ms-2" style={{ fontSize: 9 }}>
+                  {blueprintVarCount} vars &middot; {blueprintArtCount} artifacts &middot; {blueprintKcCount} KC &middot; skill: {generatedBlueprint.skill_domain}
+                </span>
+              </h6>
+
+              <div className="d-flex flex-column gap-1 mb-2">
+                {generatedBlueprint.mini_sections.map((spec, i) => {
+                  const existing = miniSections.find(ms => ms.mini_section_type === spec.type);
+                  return (
+                    <div key={spec.type} className="border rounded px-2 py-1" style={{ fontSize: 10 }}>
+                      <div className="d-flex align-items-start gap-2">
+                        <span className="badge bg-light text-muted border mt-1" style={{ fontSize: 9, minWidth: 18 }}>{i + 1}</span>
+                        <i className={`bi ${TYPE_ICONS[spec.type] || 'bi-circle'} mt-1`} style={{ color: TYPE_COLORS[spec.type], fontSize: 12 }}></i>
+                        <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                          <div className="fw-semibold">{spec.title}</div>
+                          <div className="text-muted text-truncate">{spec.description}</div>
+                          <div className="text-muted fst-italic text-truncate" style={{ fontSize: 9 }}>Goal: {spec.learning_goal}</div>
+                        </div>
+                        {existing ? (
+                          <span className="badge bg-warning-subtle text-dark border" style={{ fontSize: 8 }}>replace</span>
+                        ) : (
+                          <span className="badge bg-success-subtle text-success border" style={{ fontSize: 8 }}>new</span>
+                        )}
+                      </div>
+
+                      {/* Sub-items: variables, artifact, KC config */}
+                      {(spec.variables?.length > 0 || spec.artifact || spec.knowledge_check_config) && (
+                        <div className="ms-4 mt-1 d-flex flex-wrap gap-1">
+                          {spec.variables?.map(v => (
+                            <span key={v.key} className="badge bg-info-subtle text-info border" style={{ fontSize: 8 }} title={v.description}>
+                              <i className="bi bi-braces me-1" style={{ fontSize: 7 }}></i>{v.display_name}
+                            </span>
+                          ))}
+                          {spec.artifact && (
+                            <span className="badge bg-warning-subtle text-dark border" style={{ fontSize: 8 }} title={spec.artifact.evaluation_criteria}>
+                              <i className="bi bi-box me-1" style={{ fontSize: 7 }}></i>{spec.artifact.name}
+                            </span>
+                          )}
+                          {spec.knowledge_check_config && (
+                            <span className="badge bg-danger-subtle text-danger border" style={{ fontSize: 8 }}>
+                              <i className="bi bi-question-circle me-1" style={{ fontSize: 7 }}></i>
+                              {spec.knowledge_check_config.question_count}Q / {spec.knowledge_check_config.pass_score}%
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Summary bar */}
+              <div className="d-flex gap-1 mb-2 flex-wrap" style={{ fontSize: 9 }}>
+                <span className="badge bg-light text-dark border">
+                  <i className="bi bi-award me-1"></i>Skill: {generatedBlueprint.skill_domain}
+                </span>
+                {blueprintVarCount > 0 && (
+                  <span className="badge bg-info-subtle text-info border">
+                    {blueprintVarCount} variable{blueprintVarCount !== 1 ? 's' : ''} will be created
+                  </span>
+                )}
+                {blueprintArtCount > 0 && (
+                  <span className="badge bg-warning-subtle text-dark border">
+                    {blueprintArtCount} artifact{blueprintArtCount !== 1 ? 's' : ''} will be created
+                  </span>
+                )}
+                {miniSections.length > 0 && (
+                  <span className="badge bg-danger-subtle text-danger border">
+                    {miniSections.length} existing mini-section{miniSections.length !== 1 ? 's' : ''} will be replaced
+                  </span>
+                )}
+              </div>
+
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-sm btn-success flex-grow-1"
+                  onClick={handleApplyBlueprint}
+                  disabled={applying}
+                >
+                  {applying ? (
+                    <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Applying...</>
+                  ) : (
+                    <><i className="bi bi-check2-all me-1"></i>Apply Blueprint</>
+                  )}
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setGeneratedBlueprint(null)}
+                  disabled={applying}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Basic Generated Results Preview (legacy) ─── */}
           {generatedEvents && (
             <div className="mb-2">
               <h6 className="small fw-semibold mb-1" style={{ fontSize: 11 }}>
@@ -261,7 +489,7 @@ export default function SectionBlueprintCard({
                   );
                 })}
               </div>
-              <button className="btn btn-sm btn-success w-100" onClick={handleApply}>
+              <button className="btn btn-sm btn-success w-100" onClick={handleApplyBasic}>
                 <i className="bi bi-check2-all me-1"></i>Apply to Mini-Sections
               </button>
             </div>
@@ -341,7 +569,7 @@ export default function SectionBlueprintCard({
           </div>
 
           {/* Mini-section summary */}
-          {!generatedEvents && miniSections.length > 0 && (
+          {!generatedEvents && !generatedBlueprint && !applyResult && miniSections.length > 0 && (
             <div className="text-muted mt-2" style={{ fontSize: 9 }}>
               <i className="bi bi-info-circle me-1"></i>
               {miniSections.length} mini-section{miniSections.length !== 1 ? 's' : ''} exist — generate to preview updates

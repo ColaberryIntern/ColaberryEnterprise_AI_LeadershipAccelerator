@@ -28,6 +28,7 @@ import IntelligenceSettingsPage from '../pages/admin/intelligence/IntelligenceSe
 import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketingDashboardPage';
 import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
 import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
+import AdminProjectOverview from '../pages/admin/AdminProjectOverview';
 const adminRoutes = (
   <>
     <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -59,6 +60,7 @@ const adminRoutes = (
         <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
+        <Route path="/admin/projects" element={<AdminProjectOverview />} />
       </Route>
     </Route>
   </>

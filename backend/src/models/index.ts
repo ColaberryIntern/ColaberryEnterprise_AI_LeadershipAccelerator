@@ -113,6 +113,18 @@ import ReferralCommission from './ReferralCommission';
 import LandingPage from './LandingPage';
 import CampaignDeployment from './CampaignDeployment';
 import UnsubscribeEvent from './UnsubscribeEvent';
+import Project from './Project';
+import ProjectArtifact from './ProjectArtifact';
+import ProposedAgentAction from './ProposedAgentAction';
+import AgentWriteAudit from './AgentWriteAudit';
+import StrategicInitiative from './StrategicInitiative';
+import RequirementsGenerationJob from './RequirementsGenerationJob';
+import MayaConversationOutcome from './MayaConversationOutcome';
+import MentorIntervention from './MentorIntervention';
+
+// --- Maya Conversation Outcome associations ---
+Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
+MayaConversationOutcome.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 
 // --- Governance Center associations ---
 Campaign.hasOne(CampaignGovernanceConfig, { foreignKey: 'campaign_id', as: 'governanceConfig' });
@@ -397,6 +409,16 @@ AiAgentActivityLog.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 CampaignError.belongsTo(AiAgentActivityLog, { foreignKey: 'repair_attempt_id', as: 'repairAttempt' });
 AiAgentActivityLog.hasMany(CampaignError, { foreignKey: 'repair_attempt_id', as: 'repairedErrors' });
 
+// --- Agent Governance associations ---
+AiAgent.hasMany(ProposedAgentAction, { foreignKey: 'agent_id', as: 'proposedActions' });
+ProposedAgentAction.belongsTo(AiAgent, { foreignKey: 'agent_id', as: 'agent' });
+
+Campaign.hasMany(ProposedAgentAction, { foreignKey: 'campaign_id', as: 'proposedAgentActions' });
+ProposedAgentAction.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+
+AiAgent.hasMany(AgentWriteAudit, { foreignKey: 'agent_id', as: 'writeAudits' });
+AgentWriteAudit.belongsTo(AiAgent, { foreignKey: 'agent_id', as: 'agent' });
+
 // Orchestration Health associations
 AiAgent.hasMany(OrchestrationHealth, { foreignKey: 'agent_id', as: 'orchestrationHealthSnapshots' });
 OrchestrationHealth.belongsTo(AiAgent, { foreignKey: 'agent_id', as: 'agent' });
@@ -509,6 +531,37 @@ Department.hasMany(Alert, { foreignKey: 'department_id', as: 'alerts' });
 // Student Navigation Event associations
 Enrollment.hasMany(StudentNavigationEvent, { foreignKey: 'enrollment_id', as: 'navigationEvents' });
 StudentNavigationEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- AssignmentSubmission version chain ---
+AssignmentSubmission.belongsTo(AssignmentSubmission, { foreignKey: 'parent_version_id', as: 'previousVersion' });
+AssignmentSubmission.hasMany(AssignmentSubmission, { foreignKey: 'parent_version_id', as: 'nextVersions' });
+
+// --- Project associations ---
+Enrollment.hasOne(Project, { foreignKey: 'enrollment_id', as: 'project' });
+Project.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+ProgramBlueprint.hasMany(Project, { foreignKey: 'program_id', as: 'projects' });
+Project.belongsTo(ProgramBlueprint, { foreignKey: 'program_id', as: 'program' });
+
+Project.hasMany(ProjectArtifact, { foreignKey: 'project_id', as: 'projectArtifacts', onDelete: 'CASCADE' });
+ProjectArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
+ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
+
+AssignmentSubmission.hasMany(ProjectArtifact, { foreignKey: 'submission_id', as: 'projectArtifacts' });
+ProjectArtifact.belongsTo(AssignmentSubmission, { foreignKey: 'submission_id', as: 'submission' });
+
+// --- Mentor Intervention associations ---
+Project.hasMany(MentorIntervention, { foreignKey: 'project_id', as: 'interventions', onDelete: 'CASCADE' });
+MentorIntervention.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+AssignmentSubmission.hasMany(MentorIntervention, { foreignKey: 'artifact_submission_id', as: 'interventions' });
+MentorIntervention.belongsTo(AssignmentSubmission, { foreignKey: 'artifact_submission_id', as: 'submission' });
+
+// --- Requirements Generation Job associations ---
+Project.hasMany(RequirementsGenerationJob, { foreignKey: 'project_id', as: 'requirementsJobs' });
+RequirementsGenerationJob.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
 // --- OpenClaw Outreach Network associations ---
 OpenclawSignal.hasOne(OpenclawResponse, { foreignKey: 'signal_id', as: 'response' });
@@ -663,4 +716,12 @@ export {
   LandingPage,
   CampaignDeployment,
   UnsubscribeEvent,
+  Project,
+  ProjectArtifact,
+  ProposedAgentAction,
+  AgentWriteAudit,
+  StrategicInitiative,
+  RequirementsGenerationJob,
+  MayaConversationOutcome,
+  MentorIntervention,
 };

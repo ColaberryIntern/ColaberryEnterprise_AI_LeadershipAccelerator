@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import { useMentorContext } from '../../contexts/MentorContext';
 import ConceptLesson from '../../components/portal/lesson/ConceptLesson';
+import ModuleCompletionPanel from '../../components/portal/lesson/ModuleCompletionPanel';
+import { StepInfo } from '../../components/portal/lesson/LessonStepTracker';
 
 interface LessonData {
   instance: {
@@ -43,6 +45,7 @@ function PortalLessonPage() {
   const [completionResult, setCompletionResult] = useState<any>(null);
   const [canComplete, setCanComplete] = useState(true);
   const [conceptQuizScore, setConceptQuizScore] = useState<number | null>(null);
+  const [stepStatuses, setStepStatuses] = useState<StepInfo[]>([]);
   const { updateLessonContext } = useMentorContext();
 
   const startLesson = useCallback(async () => {
@@ -230,12 +233,22 @@ function PortalLessonPage() {
       )}
 
       {/* Unified Section Content — all lesson types render through ConceptV2 */}
+      {/* Module Completion Panel */}
+      {completionResult?.passed && !completionResult.next_lesson && data.module && (
+        <ModuleCompletionPanel
+          moduleName={data.module.title}
+          moduleNumber={data.module.module_number}
+          onContinue={() => navigate('/portal/curriculum')}
+        />
+      )}
+
       <ConceptLesson
         content={content}
         lessonId={lesson.id}
         isCompleted={isCompleted}
         onCanCompleteChange={setCanComplete}
         onQuizScoreChange={setConceptQuizScore}
+        onStepStatusChange={setStepStatuses}
         quizResponses={instance.quiz_responses_json}
         taskData={instance.structured_responses_json?.task_progress}
       />
@@ -255,18 +268,18 @@ function PortalLessonPage() {
           </button>
 
           <div className="d-flex align-items-center gap-3">
-            {/* Section indicators */}
+            {/* Dynamic section indicators */}
             <div className="d-none d-md-flex align-items-center gap-2 me-2">
-              {[
-                { icon: 'bi-lightbulb', label: 'Concept' },
-                { icon: 'bi-robot', label: 'AI Strategy' },
-                { icon: 'bi-terminal', label: 'Prompt Lab' },
-                { icon: 'bi-kanban', label: 'Task' },
-                { icon: 'bi-patch-question', label: 'Check' },
-                { icon: 'bi-chat-square-quote', label: 'Reflect' },
-              ].map((s, i) => (
-                <div key={i} className="d-flex align-items-center gap-1" style={{ fontSize: 11, color: '#94a3b8' }}>
-                  <i className={`bi ${s.icon}`}></i>
+              {stepStatuses.map((s, i) => (
+                <div
+                  key={i}
+                  className="d-flex align-items-center gap-1"
+                  style={{
+                    fontSize: 11,
+                    color: s.status === 'completed' ? 'var(--color-accent)' : s.status === 'active' ? 'var(--color-primary)' : '#94a3b8',
+                  }}
+                >
+                  <i className={`bi ${s.status === 'completed' ? 'bi-check-circle-fill' : s.icon}`}></i>
                   <span>{s.label}</span>
                 </div>
               ))}

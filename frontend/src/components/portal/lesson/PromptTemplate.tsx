@@ -60,9 +60,10 @@ const DROPDOWN_OPTIONS: Record<string, { value: string; label: string }[]> = {
 
 interface PromptTemplateProps {
   data: PromptTemplateData;
+  onPromptGenerated?: () => void;
 }
 
-export default function PromptTemplate({ data }: PromptTemplateProps) {
+export default function PromptTemplate({ data, onPromptGenerated }: PromptTemplateProps) {
   const { learnerProfile, updateLearnerProfile, selectedLLM } = useMentorContext();
   const [copied, setCopied] = useState(false);
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
@@ -141,6 +142,7 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
   const handleCopy = () => {
     navigator.clipboard.writeText(filledTemplate);
     setCopied(true);
+    onPromptGenerated?.();
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -176,6 +178,7 @@ export default function PromptTemplate({ data }: PromptTemplateProps) {
     setFillValues(prev => ({ ...prev, ...values }));
     const filled = buildFilledTemplate(values);
     const encoded = encodeURIComponent(filled);
+    onPromptGenerated?.();
     if (selectedLLM.id === 'chatgpt') {
       window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
     } else if (selectedLLM.id === 'claude') {

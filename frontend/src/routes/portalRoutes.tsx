@@ -12,6 +12,10 @@ import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
 import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
 import PortalAssignmentsPage from '../pages/portal/PortalAssignmentsPage';
 import PortalProgressPage from '../pages/portal/PortalProgressPage';
+import ProjectDashboard from '../pages/project/ProjectDashboard';
+import ProjectArtifacts from '../pages/project/ProjectArtifacts';
+import ProjectPortfolio from '../pages/project/ProjectPortfolio';
+import ExecutiveDeliverable from '../pages/project/ExecutiveDeliverable';
 
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
@@ -26,6 +30,10 @@ const portalRoutes = (
         <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
+        <Route path="/portal/project" element={<ProjectDashboard />} />
+        <Route path="/portal/project/artifacts" element={<ProjectArtifacts />} />
+        <Route path="/portal/project/portfolio" element={<ProjectPortfolio />} />
+        <Route path="/portal/project/executive" element={<ExecutiveDeliverable />} />
       </Route>
     </Route>
   </Route>
