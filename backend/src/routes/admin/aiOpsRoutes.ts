@@ -36,6 +36,7 @@ import {
 import { collectTelemetry, markLaunchTime } from '../../services/launchTelemetry';
 import { getSystemHealthMetrics } from '../../services/systemHealthService';
 import { enableSafeMode, disableSafeMode, isSafeModeActive } from '../../services/systemControlService';
+import { getAutoResponseStatus } from '../../services/systemAutoResponseService';
 
 const router = Router();
 
@@ -203,7 +204,7 @@ router.get('/api/admin/launch/throttle', requireAdmin, async (_req, res) => {
 router.get('/api/admin/system-health', requireAdmin, async (_req, res) => {
   try {
     const health = await getSystemHealthMetrics();
-    res.json(health);
+    res.json({ ...health, auto_response: getAutoResponseStatus() });
   } catch (err: any) {
     console.error('[System Health] Failed:', err.message);
     res.status(500).json({ error: err.message });

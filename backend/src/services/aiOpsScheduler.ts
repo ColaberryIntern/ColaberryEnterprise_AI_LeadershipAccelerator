@@ -396,5 +396,17 @@ export async function startAIOpsScheduler(): Promise<void> {
     scheduledCount++;
   }
 
+  // System auto-response — runs every minute
+  cron.schedule('* * * * *', async () => {
+    try {
+      const { evaluateAndRespond } = await import('./systemAutoResponseService');
+      await evaluateAndRespond();
+    } catch (err: any) {
+      console.error('[AI Ops] Auto-response error:', err.message);
+    }
+  });
+  console.log('[AI Ops]   System Auto-Response: * * * * * [hardcoded]');
+  scheduledCount++;
+
   console.log(`[AI Ops] Scheduler started: ${scheduledCount} agents scheduled, ${skippedCount} disabled`);
 }
