@@ -539,6 +539,13 @@ async function buildCompositePrompt(
   const learnerDataBlock = await variableService.buildLearnerDataBlock(enrollmentId);
   if (learnerDataBlock) parts.push(learnerDataBlock);
 
+  // Layer 4b: Project Context (from Project model — additive, non-breaking)
+  try {
+    const { buildProjectContextBlock } = await import('./projectVariableService');
+    const projectBlock = await buildProjectContextBlock(enrollmentId);
+    if (projectBlock) parts.push(projectBlock);
+  } catch { /* non-critical — project system may not be initialized */ }
+
   // Layer 5: Artifact Expectations
   try {
     const artifacts = await ArtifactDefinition.findAll({ where: { lesson_id: lesson.id } });

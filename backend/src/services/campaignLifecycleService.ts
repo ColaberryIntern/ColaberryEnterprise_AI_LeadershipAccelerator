@@ -308,10 +308,10 @@ export async function detectReengagementComplete(): Promise<{
         completed_at: null,
       });
 
-      // Create fresh scheduled actions
+      // Create fresh scheduled actions (force=true: intentional lifecycle re-entry)
       const primaryCampaign = await Campaign.findByPk(primaryCampaignId, { raw: true }) as any;
       if (primaryCampaign?.sequence_id) {
-        await enrollLeadInSequence(cl.lead_id, primaryCampaign.sequence_id, primaryCampaignId);
+        await enrollLeadInSequence(cl.lead_id, primaryCampaign.sequence_id, primaryCampaignId, true);
       }
 
       // Mark re-engagement lead as completed cycle

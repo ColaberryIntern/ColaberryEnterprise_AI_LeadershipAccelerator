@@ -23,6 +23,17 @@ import {
   handleDiscoverAgents,
   handleGetAgentHealthScores,
 } from '../../controllers/aiOpsController';
+import { emergencyStopAllAgents, resumeAgentsAfterStop } from '../../services/agentPermissionService';
+import {
+  activateKillSwitch,
+  deactivateKillSwitch,
+  isKillSwitchActive,
+  activateWarRoom,
+  deactivateWarRoom,
+  getWarRoomStatus,
+  getThrottleMetrics,
+} from '../../services/launchSafety';
+import { collectTelemetry, markLaunchTime } from '../../services/launchTelemetry';
 
 const router = Router();
 
@@ -66,5 +77,122 @@ router.get('/api/admin/ai-ops/campaigns/:id/timeline', requireAdmin, handleGetCa
 // --- Agent Discovery & Health Scores ---
 router.post('/api/admin/ai-ops/discover', requireAdmin, handleDiscoverAgents);
 router.get('/api/admin/ai-ops/health/agents', requireAdmin, handleGetAgentHealthScores);
+
+// --- Emergency Controls ---
+
+/**
+ * POST /api/admin/ai-ops/emergency-stop
+ * Immediately disable ALL agents. Requires { reason: string }.
+ */
+router.post('/api/admin/ai-ops/emergency-stop', requireAdmin, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason) {
+      res.status(400).json({ error: 'reason is required' });
+      return;
+    }
+    const adminEmail = (req as any).admin?.email || 'unknown_admin';
+    const count = await emergencyStopAllAgents(reason, adminEmail);
+    res.json({ success: true, agents_disabled: count, reason, stopped_by: adminEmail });
+  } catch (err: any) {
+    console.error('[Emergency Stop] Failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/ai-ops/emergency-resume
+ * Re-enable agents after emergency stop. Optional { agent_names: string[] } to selectively resume.
+ */
+router.post('/api/admin/ai-ops/emergency-resume', requireAdmin, async (req, res) => {
+  try {
+    const { agent_names } = req.body;
+    const count = await resumeAgentsAfterStop(agent_names);
+    res.json({ success: true, agents_resumed: count, selective: !!agent_names });
+  } catch (err: any) {
+    console.error('[Emergency Resume] Failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Launch Safety Controls ---
+
+/** POST /api/admin/system/kill-switch — Activate or deactivate the global kill switch */
+router.post('/api/admin/system/kill-switch', requireAdmin, async (req, res) => {
+  try {
+    const { activate, reason } = req.body;
+    const adminEmail = (req as any).admin?.email || 'unknown_admin';
+
+    if (activate) {
+      if (!reason) {
+        res.status(400).json({ error: 'reason is required to activate kill switch' });
+        return;
+      }
+      const result = await activateKillSwitch(reason, adminEmail);
+      res.json({ success: true, active: true, ...result });
+    } else {
+      await deactivateKillSwitch(adminEmail);
+      res.json({ success: true, active: false });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** GET /api/admin/system/kill-switch — Check kill switch status */
+router.get('/api/admin/system/kill-switch', requireAdmin, async (_req, res) => {
+  try {
+    const active = await isKillSwitchActive();
+    res.json({ active });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /api/admin/launch/war-room — Activate or deactivate war room mode */
+router.post('/api/admin/launch/war-room', requireAdmin, async (req, res) => {
+  try {
+    const { activate } = req.body;
+    if (activate === false) {
+      deactivateWarRoom();
+      res.json({ success: true, active: false });
+    } else {
+      const result = await activateWarRoom();
+      res.json({ success: true, ...result });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** GET /api/admin/launch/war-room — War room status */
+router.get('/api/admin/launch/war-room', requireAdmin, async (_req, res) => {
+  try {
+    res.json(getWarRoomStatus());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** GET /api/admin/launch/telemetry — Real-time launch metrics */
+router.get('/api/admin/launch/telemetry', requireAdmin, async (_req, res) => {
+  try {
+    const telemetry = await collectTelemetry();
+    res.json(telemetry);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /api/admin/launch/mark-start — Mark the launch start time for uptime tracking */
+router.post('/api/admin/launch/mark-start', requireAdmin, async (_req, res) => {
+  markLaunchTime();
+  res.json({ success: true, marked_at: new Date().toISOString() });
+});
+
+/** GET /api/admin/launch/throttle — Agent execution throttle metrics */
+router.get('/api/admin/launch/throttle', requireAdmin, async (_req, res) => {
+  res.json(getThrottleMetrics());
+});
 
 export default router;

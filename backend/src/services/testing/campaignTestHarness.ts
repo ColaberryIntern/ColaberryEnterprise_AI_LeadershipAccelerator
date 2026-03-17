@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { Op } from 'sequelize';
 import { Campaign, CampaignLead, ScheduledEmail, CampaignTestRun, CampaignTestStep } from '../../models';
 import { createTestLead } from './testLeadGenerator';
 import { getTestOverrides } from '../settingsService';
@@ -134,6 +135,7 @@ export async function runCampaignTest(
         status: 'pending',
         max_attempts: 1,
         attempts_made: 0,
+        is_test_action: true,
         metadata: { is_test: true, test_run_id: testRun.id },
       });
       return { scheduled_email_id: se.id, to_email: testEmail, status: 'created' };
@@ -264,6 +266,28 @@ export async function runCampaignTest(
 
   const totalDurationMs = results.reduce((sum, r) => sum + r.duration_ms, 0);
   const status = stepsFailed === 0 ? 'passed' : stepsPassed === 0 ? 'failed' : 'partial';
+
+  // Cleanup: cancel ALL unsent test ScheduledEmails for this test lead.
+  // Covers pending, processing, and paused — anything that hasn't been sent yet.
+  // Scoped to this campaign AND any orphaned actions (campaign_id IS NULL).
+  if (testLead) {
+    try {
+      const [cancelledCount] = await ScheduledEmail.update(
+        { status: 'cancelled' } as any,
+        {
+          where: {
+            lead_id: testLead.id,
+            status: { [Op.in]: ['pending', 'processing', 'paused'] },
+          },
+        },
+      );
+      if (cancelledCount > 0) {
+        console.log(`[TestHarness] Cancelled ${cancelledCount} pending test action(s) for test lead ${testLead.id}`);
+      }
+    } catch {
+      // Non-critical cleanup failure
+    }
+  }
 
   // Cleanup: remove test CampaignLead
   if (campaignLead) {

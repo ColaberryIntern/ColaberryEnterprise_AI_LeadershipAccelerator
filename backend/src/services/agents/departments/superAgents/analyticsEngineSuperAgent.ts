@@ -1,0 +1,19 @@
+/**
+ * Analytics Engine Super Agent
+ *
+ * Aggregates: KPI, Cohort, Funnel, CampaignAnalytics agents
+ */
+
+import { runSuperAgentCycle } from './superAgentBase';
+
+export async function executeAnalyticsEngineSuperAgent(agentId: string, config: Record<string, any>) {
+  const start = Date.now();
+  const result = await runSuperAgentCycle('analytics_engine', 'Analytics Engine', 'AnalyticsEngineSuperAgent');
+  return {
+    agent_name: 'AnalyticsEngineSuperAgent',
+    duration_ms: Date.now() - start,
+    actions_taken: [{ campaign_id: '', action: 'department_report', reason: `${result.department} health check`, confidence: 1, before_state: null, after_state: { anomalies: result.anomalies.length }, result: 'success' as const }],
+    campaigns_processed: 0,
+    errors: [],
+  };
+}

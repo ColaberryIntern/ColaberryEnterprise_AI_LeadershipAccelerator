@@ -1,5 +1,9 @@
 import { Lead } from '../../models';
 import { getTestOverrides } from '../settingsService';
+import { env } from '../../config/env';
+
+/** Safe email domain for test leads — never routes to real inboxes */
+export const TEST_EMAIL_DOMAIN = env.campaignTestEmailDomain;
 
 // ── Persona Archetypes ──────────────────────────────────────────────────
 
@@ -112,12 +116,19 @@ export async function createTestLead(
   persona?: PersonaArchetype,
 ): Promise<InstanceType<typeof Lead>> {
   const testOverrides = await getTestOverrides();
-  const testEmail = testOverrides.email || 'test@colaberry.com';
   const testPhone = testOverrides.phone || '';
 
-  // Reuse existing lead with this email (unscoped to include campaign_test leads)
+  // Always use the safe test domain for the lead record.
+  // The test email override (ali@colaberry.com) is used as the SEND target by the
+  // test harness, but the lead's stored email must use the unroutable test domain
+  // so the scheduler can never accidentally send to a real inbox.
+  const testEmail = `campaign-qa${TEST_EMAIL_DOMAIN}`;
+
+  // Reuse existing SYNTHETIC test lead only (source='campaign_test').
+  // CRITICAL: never return a real production lead — that causes the test harness
+  // to create ScheduledEmails for real leads, which the scheduler then sends.
   const existing = await Lead.unscoped().findOne({
-    where: { email: testEmail },
+    where: { source: 'campaign_test' },
   });
 
   if (existing) {

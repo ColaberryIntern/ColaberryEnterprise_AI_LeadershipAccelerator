@@ -24,7 +24,9 @@ import {
 } from './mayaConversationSummaryService';
 import { logCommunication } from './communicationLogService';
 import { getTestOverrides } from './settingsService';
+import StrategyCall from '../models/StrategyCall';
 import type { MayaActionResult } from './mayaActionService';
+import { updateBookingState } from './mayaConversationIntelligenceService';
 
 const { Op } = require('sequelize');
 
@@ -84,68 +86,80 @@ export async function captureLeadDetails(
     let lead: InstanceType<typeof Lead>;
     let isNew = false;
 
-    if (visitor.lead_id) {
-      // Update existing lead
-      lead = (await Lead.findByPk(visitor.lead_id))!;
-      if (!lead) {
-        return { success: false, summary: 'Linked lead record not found' };
+    // ── Lead identity resolution ─────────────────────────────────────────
+    // EMAIL is the canonical identifier.  When an email is provided we
+    // always resolve (or create) by email — never by visitor linkage alone.
+    // This prevents different people sharing a browser/session from
+    // overwriting each other's lead records.
+
+    // Step 1: Try to find existing lead by email (canonical lookup)
+    let emailLead: InstanceType<typeof Lead> | null = null;
+    if (email) {
+      emailLead = await Lead.findOne({
+        where: require('sequelize').where(
+          require('sequelize').fn('LOWER', require('sequelize').col('email')),
+          email.toLowerCase(),
+        ),
+      });
+    }
+
+    // Step 2: Resolve the visitor-linked lead (if any)
+    const visitorLead = visitor.lead_id ? await Lead.findByPk(visitor.lead_id) : null;
+
+    if (emailLead) {
+      // Email match found — this is the authoritative lead record.
+      lead = emailLead;
+      const updates: Record<string, any> = {};
+      // Only update name if lead has no name or email matches (same person)
+      if (!lead.getDataValue('name') || lead.email?.toLowerCase() === email.toLowerCase()) {
+        updates.name = fullName;
       }
+      if (phone && !lead.phone) updates.phone = phone;
+      if (company && !lead.company) updates.company = company;
+      if (title && !(lead as any).title) updates.title = title;
+      if (interest_type) updates.interest_area = interest_type;
+      if (Object.keys(updates).length > 0) await lead.update(updates);
+    } else if (visitorLead && !email) {
+      // No email provided and visitor has a linked lead — update non-identity
+      // fields only (name enrichment is safe, email overwrite is not).
+      lead = visitorLead;
       const updates: Record<string, any> = { name: fullName };
-      if (email) updates.email = email;
-      if (phone) updates.phone = phone;
-      if (company) updates.company = company;
-      if (title) updates.title = title;
+      if (phone && !lead.phone) updates.phone = phone;
+      if (company && !lead.company) updates.company = company;
+      if (title && !(lead as any).title) updates.title = title;
       if (interest_type) updates.interest_area = interest_type;
       await lead.update(updates);
     } else {
-      // Check if lead exists by email
-      let existingLead: InstanceType<typeof Lead> | null = null;
-      if (email) {
-        existingLead = await Lead.findOne({
-          where: require('sequelize').where(
-            require('sequelize').fn('LOWER', require('sequelize').col('email')),
-            email.toLowerCase(),
-          ),
-        });
-      }
-
-      if (existingLead) {
-        lead = existingLead;
-        const updates: Record<string, any> = { name: fullName };
-        if (phone && !lead.phone) updates.phone = phone;
-        if (company && !lead.company) updates.company = company;
-        if (title && !(lead as any).title) updates.title = title;
-        if (interest_type) updates.interest_area = interest_type;
-        await lead.update(updates);
-      } else {
-        // Create new lead
-        lead = await Lead.create({
-          name: fullName,
-          email: email || null,
-          phone: phone || null,
-          company: company || null,
-          title: title || null,
-          interest_area: interest_type || 'general',
-          lead_source_type: 'inbound',
-          source: 'maya_chat',
-          visitor_id: visitorId,
-          pipeline_stage: 'new',
-          status: 'active',
-          lead_score: 25,
-          lead_temperature: 'warm',
-        } as any);
-        isNew = true;
-      }
-
-      // Link visitor to lead
-      await visitor.update({ lead_id: lead.id } as any);
-
-      // Update admissions memory with lead_id
-      await AdmissionsMemory.update(
-        { lead_id: lead.id },
-        { where: { visitor_id: visitorId } },
-      ).catch(() => {});
+      // No email match and either no visitor lead or email provided for a new person.
+      // Create a fresh lead record.
+      lead = await Lead.create({
+        name: fullName,
+        email: email || null,
+        phone: phone || null,
+        company: company || null,
+        title: title || null,
+        interest_area: interest_type || 'general',
+        lead_source_type: 'inbound',
+        source: 'maya_chat',
+        visitor_id: visitorId,
+        pipeline_stage: 'new',
+        status: 'active',
+        lead_score: 25,
+        lead_temperature: 'warm',
+      } as any);
+      isNew = true;
     }
+
+    // Link visitor to the resolved/created lead
+    if (visitor.lead_id !== lead.id) {
+      await visitor.update({ lead_id: lead.id } as any);
+    }
+
+    // Update admissions memory with lead_id
+    await AdmissionsMemory.update(
+      { lead_id: lead.id },
+      { where: { visitor_id: visitorId } },
+    ).catch(() => {});
 
     // Sync to GHL (fire-and-forget)
     syncNewLeadToGhl(lead).catch((err: any) => {
@@ -595,7 +609,11 @@ export async function getAvailableSlots(
       details: { options: picked.length, total_matching: candidates.length, timezone: availability.timezone },
     };
   } catch (err: any) {
-    return { success: false, summary: `Unable to check calendar: ${err.message}` };
+    console.error('[MayaTools] getAvailableSlots error:', err.message);
+    return {
+      success: false,
+      summary: "I'm having trouble checking the calendar right now. Apologize to the visitor and ask them to try again in a moment, or offer to have the team reach out to schedule directly.",
+    };
   }
 }
 
@@ -610,6 +628,45 @@ export async function scheduleStrategyCall(
 
   if (!slot_start || !name || !email) {
     return { success: false, summary: 'slot_start, name, and email are required' };
+  }
+
+  // ── Dedup guard: prevent multiple bookings within 24 hours ──────────
+  try {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const existingCall = await StrategyCall.findOne({
+      where: {
+        email: require('sequelize').where(
+          require('sequelize').fn('LOWER', require('sequelize').col('email')),
+          email.toLowerCase(),
+        ),
+        status: 'scheduled',
+        created_at: { [Op.gte]: oneDayAgo },
+      },
+    });
+
+    if (existingCall) {
+      const existingTime = new Date(existingCall.scheduled_at).toLocaleString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'America/Chicago',
+      });
+      await logAction(visitorId, conversationId, 'strategy_call_booked', 'skipped', {
+        email,
+        reason: 'duplicate_within_24h',
+        existing_call_id: existingCall.id,
+        existing_scheduled_at: existingCall.scheduled_at,
+      });
+      return {
+        success: false,
+        summary: `A strategy call is already scheduled for ${email} on ${existingTime} CT. If they need to reschedule, ask them to reply to the confirmation email or contact the team directly.`,
+      };
+    }
+  } catch (dedupErr: any) {
+    // Non-fatal — log and proceed with booking rather than blocking
+    console.warn('[MayaTools] Dedup check failed, proceeding:', dedupErr.message);
   }
 
   try {
@@ -650,15 +707,17 @@ export async function scheduleStrategyCall(
     }
 
     if (lead) {
+      // Use the canonical startTime from the Google Calendar booking result
+      // to avoid slot_start parsing inconsistencies (FIX 4)
       await createAppointment({
         lead_id: lead.id,
         title: 'Executive AI Strategy Call',
-        scheduled_at: new Date(slot_start),
+        scheduled_at: booking.startTime,
         type: 'strategy_call',
-        status: 'scheduled',
         notes: `Booked via Maya chat. Meet link: ${booking.meetLink || 'N/A'}`,
-        calendar_event_id: booking.eventId,
-      } as any).catch(() => {});
+      } as any).catch((err: any) => {
+        console.error('[MayaTools] Appointment creation failed:', err.message);
+      });
 
       // Tag + enroll in strategy call campaign (fire-and-forget)
       addMayaInteractionTag(lead.id, 'maya_strategy_call_interest').catch(() => {});
@@ -704,6 +763,14 @@ export async function scheduleStrategyCall(
       name,
       email,
     });
+
+    // Record booking completion in conversation intelligence (fire-and-forget)
+    updateBookingState(conversationId, {
+      offered: true,
+      clicked: true,
+      completed: true,
+      bookingId: booking.eventId,
+    }).catch(() => {});
 
     const startDate = new Date(slot_start);
     const timeStr = startDate.toLocaleString('en-US', {

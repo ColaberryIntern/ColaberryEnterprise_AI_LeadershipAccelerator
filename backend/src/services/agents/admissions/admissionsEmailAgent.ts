@@ -3,6 +3,7 @@ import AdmissionsActionLog from '../../../models/AdmissionsActionLog';
 import AdmissionsMemory from '../../../models/AdmissionsMemory';
 import { logCommunication } from '../../communicationLogService';
 import { logAgentActivity } from '../../aiEventService';
+import { evaluateSend } from '../../communicationSafetyService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const AGENT_NAME = 'AdmissionsEmailAgent';
@@ -48,14 +49,41 @@ export async function runAdmissionsEmailAgent(
       return buildResult(actions, errors, startTime);
     }
 
-    // Log communication (actual sending delegated to emailService)
+    // Safety check: evaluate whether this send is allowed
+    const sendDecision = await evaluateSend({
+      leadId: memory.lead_id,
+      channel: 'email',
+      toEmail: email,
+      source: 'manual',
+    });
+
+    if (!sendDecision.allowed) {
+      errors.push(`Email blocked: ${sendDecision.blockedReason}`);
+      actions.push({
+        campaign_id: '',
+        action: 'email_blocked',
+        reason: `Email blocked by safety service: ${sendDecision.blockedReason}`,
+        confidence: 1.0,
+        before_state: { email_type },
+        after_state: { blocked: true, reason: sendDecision.blockedReason },
+        result: 'skipped',
+        entity_type: 'visitor',
+        entity_id: visitor_id,
+      });
+      return buildResult(actions, errors, startTime);
+    }
+
+    const targetEmail = sendDecision.redirect?.email || email;
+
+    // Log communication as "queued" — actual sending is delegated to emailService.
+    // Status is "queued" (not "sent") since this agent does not call mailer.sendMail() directly.
     await logCommunication({
       lead_id: memory.lead_id,
       channel: 'email',
       direction: 'outbound',
-      delivery_mode: 'live',
-      status: 'sent',
-      to_address: email,
+      delivery_mode: sendDecision.testMode ? 'test_redirect' : 'live',
+      status: 'queued',
+      to_address: targetEmail,
       subject,
       body,
       provider: 'smtp',
@@ -65,18 +93,18 @@ export async function runAdmissionsEmailAgent(
       visitor_id,
       conversation_id: config.conversation_id || null,
       action_type: 'send_email',
-      action_details: { email_type, subject, to: email },
+      action_details: { email_type, subject, to: targetEmail },
       status: 'completed',
       agent_name: AGENT_NAME,
     });
 
     actions.push({
       campaign_id: '',
-      action: 'email_sent',
-      reason: `Sent ${email_type} email to ${email}`,
+      action: 'email_queued',
+      reason: `Queued ${email_type} email to ${targetEmail}`,
       confidence: 0.9,
       before_state: { email_type },
-      after_state: { status: 'sent', to: email },
+      after_state: { status: 'queued', to: targetEmail },
       result: 'success',
       entity_type: 'visitor',
       entity_id: visitor_id,

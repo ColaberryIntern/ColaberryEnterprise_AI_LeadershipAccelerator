@@ -62,6 +62,15 @@ import { runAdmissionsKnowledgeSyncAgent } from './agents/admissions/admissionsK
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
+// Super agent executors
+import { executeCampaignOpsSuperAgent } from './agents/departments/superAgents/campaignOpsSuperAgent';
+import { executeLeadIntelligenceSuperAgent } from './agents/departments/superAgents/leadIntelligenceSuperAgent';
+import { executeContentEngineSuperAgent } from './agents/departments/superAgents/contentEngineSuperAgent';
+import { executeAnalyticsEngineSuperAgent } from './agents/departments/superAgents/analyticsEngineSuperAgent';
+import { executeSystemResilienceSuperAgent } from './agents/departments/superAgents/systemResilienceSuperAgent';
+import { executeAdmissionsSuperAgent } from './agents/departments/superAgents/admissionsSuperAgent';
+import { executePartnershipSuperAgent } from './agents/departments/superAgents/partnershipSuperAgent';
+import { executeFinanceSuperAgent } from './agents/departments/superAgents/financeSuperAgent';
 
 // Re-export seedAgentRegistry for callers
 export { seedAgentRegistry as seedAgents };
@@ -615,4 +624,38 @@ export async function runAgentBehaviorMonitor(): Promise<AgentExecutionResult | 
 
 export async function runAdmissionsKnowledgeSync(): Promise<AgentExecutionResult | null> {
   return runAgent('AdmissionsKnowledgeSyncAgent', runAdmissionsKnowledgeSyncAgent);
+}
+
+// ─── Department Super Agents ─────────────────────────────────────────────────
+
+export async function runCampaignOpsSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('CampaignOpsSuperAgent', executeCampaignOpsSuperAgent);
+}
+
+export async function runLeadIntelligenceSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('LeadIntelligenceSuperAgent', executeLeadIntelligenceSuperAgent);
+}
+
+export async function runContentEngineSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('ContentEngineSuperAgent', executeContentEngineSuperAgent);
+}
+
+export async function runAnalyticsEngineSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('AnalyticsEngineSuperAgent', executeAnalyticsEngineSuperAgent);
+}
+
+export async function runSystemResilienceSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('SystemResilienceSuperAgent', executeSystemResilienceSuperAgent);
+}
+
+export async function runAdmissionsSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('AdmissionsSuperAgent', executeAdmissionsSuperAgent);
+}
+
+export async function runPartnershipSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('PartnershipSuperAgent', executePartnershipSuperAgent);
+}
+
+export async function runFinanceSuperAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('FinanceSuperAgent', executeFinanceSuperAgent);
 }

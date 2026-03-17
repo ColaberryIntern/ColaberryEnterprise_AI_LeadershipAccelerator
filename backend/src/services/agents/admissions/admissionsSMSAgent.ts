@@ -4,6 +4,7 @@ import AdmissionsMemory from '../../../models/AdmissionsMemory';
 import { sendSmsViaGhl } from '../../ghlService';
 import { logCommunication } from '../../communicationLogService';
 import { logAgentActivity } from '../../aiEventService';
+import { evaluateSend } from '../../communicationSafetyService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const AGENT_NAME = 'AdmissionsSMSAgent';
@@ -49,8 +50,37 @@ export async function runAdmissionsSMSAgent(
       return buildResult(actions, errors, startTime);
     }
 
+    // Safety check: evaluate whether this send is allowed
+    const sendDecision = await evaluateSend({
+      leadId: memory.lead_id,
+      channel: 'sms',
+      toPhone: (lead as any)?.phone || '',
+      source: 'manual',
+    });
+
+    if (!sendDecision.allowed) {
+      errors.push(`Send blocked: ${sendDecision.blockedReason}`);
+      actions.push({
+        campaign_id: '',
+        action: 'sms_blocked',
+        reason: `Send blocked by safety service: ${sendDecision.blockedReason}`,
+        confidence: 1.0,
+        before_state: { sms_type },
+        after_state: { blocked: true, reason: sendDecision.blockedReason },
+        result: 'skipped',
+        entity_type: 'visitor',
+        entity_id: visitor_id,
+      });
+      return buildResult(actions, errors, startTime);
+    }
+
+    // If test mode, redirect phone number
+    const targetContactId = sendDecision.redirect?.phone
+      ? ghlContactId // GHL contact ID stays the same; test redirect handled at GHL level
+      : ghlContactId;
+
     // Send via GHL
-    const result = await sendSmsViaGhl(ghlContactId, message);
+    const result = await sendSmsViaGhl(targetContactId, message);
 
     const status = result.success ? 'sent' : 'failed';
 
@@ -58,7 +88,7 @@ export async function runAdmissionsSMSAgent(
       lead_id: memory.lead_id,
       channel: 'sms',
       direction: 'outbound',
-      delivery_mode: 'live',
+      delivery_mode: sendDecision.testMode ? 'test_redirect' : 'live',
       status,
       to_address: (lead as any)?.phone || '',
       body: message,

@@ -25,6 +25,7 @@ interface ScheduledEmailAttributes {
   processor_id?: string | null;
   ai_instructions?: string;
   ai_generated?: boolean;
+  is_test_action?: boolean;
   metadata?: Record<string, any>;
   created_at?: Date;
 }
@@ -51,6 +52,7 @@ class ScheduledEmail extends Model<ScheduledEmailAttributes> implements Schedule
   declare processor_id: string | null;
   declare ai_instructions: string;
   declare ai_generated: boolean;
+  declare is_test_action: boolean;
   declare metadata: Record<string, any>;
   declare created_at: Date;
 }
@@ -153,6 +155,12 @@ ScheduledEmail.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    is_test_action: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: 'True for actions created by campaign test harness — scheduler blocks sends to non-test domains',
     },
     metadata: {
       type: DataTypes.JSONB,

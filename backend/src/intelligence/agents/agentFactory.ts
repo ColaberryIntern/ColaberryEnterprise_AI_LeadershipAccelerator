@@ -130,7 +130,8 @@ export interface DepartmentSummary {
 
 /**
  * Create a new agent dynamically. Validates uniqueness, enforces limits,
- * creates DB record, and registers in the in-memory agent registry.
+ * creates DB record in PENDING APPROVAL state (disabled until admin activates).
+ * The agent is NOT registered in-memory until approved and activated.
  */
 export async function createAgent(spec: AgentSpec): Promise<any> {
   // Validate name uniqueness
@@ -155,12 +156,12 @@ export async function createAgent(spec: AgentSpec): Promise<any> {
   const categories = DEPARTMENT_TO_CATEGORIES[spec.department];
   const category = categories ? categories[0] : 'ai_ops';
 
-  // Create DB record
+  // Create DB record — DISABLED and PENDING APPROVAL until admin activates
   const agent = await AiAgent.create({
     agent_name: spec.name,
     agent_type: 'dynamic',
-    status: 'idle',
-    enabled: true,
+    status: 'paused',
+    enabled: false,
     trigger_type: spec.trigger_type || 'on_demand',
     schedule: spec.schedule || '',
     category,
@@ -170,20 +171,42 @@ export async function createAgent(spec: AgentSpec): Promise<any> {
       department: spec.department,
       responsibilities: spec.responsibilities,
       created_by: 'cory_coo',
+      pending_approval: true,
     },
     run_count: 0,
     error_count: 0,
   } as any);
 
+  // NOTE: Agent is NOT registered in-memory until approved via activatePendingAgent()
+  console.log(`[Agent Factory] Created agent "${spec.name}" in ${spec.department} (PENDING APPROVAL)`);
+  return agent;
+}
+
+/**
+ * Activate a pending agent after admin approval.
+ * Sets enabled=true, registers in-memory executor.
+ */
+export async function activatePendingAgent(agentId: string): Promise<any> {
+  const agent = await AiAgent.findByPk(agentId);
+  if (!agent) throw new Error('Agent not found');
+  if (agent.agent_type !== 'dynamic') throw new Error('Only dynamic agents can be activated via this flow');
+
+  await agent.update({
+    enabled: true,
+    status: 'idle',
+    config: { ...(agent.config || {}), pending_approval: false, activated_at: new Date().toISOString() },
+    updated_at: new Date(),
+  });
+
   // Register in-memory with a generic executor
   registerAgent({
-    name: spec.name,
+    name: agent.agent_name,
     category: 'operations',
-    description: spec.responsibilities,
+    description: agent.description || '',
     executor: async (_agentId: string, _config: Record<string, any>): Promise<AgentExecutionResult> => {
       const start = Date.now();
       return {
-        agent_name: spec.name,
+        agent_name: agent.agent_name,
         campaigns_processed: 0,
         actions_taken: [],
         errors: [],
@@ -192,7 +215,7 @@ export async function createAgent(spec: AgentSpec): Promise<any> {
     },
   });
 
-  console.log(`[Agent Factory] Created agent "${spec.name}" in ${spec.department} department`);
+  console.log(`[Agent Factory] Activated agent "${agent.agent_name}"`);
   return agent;
 }
 

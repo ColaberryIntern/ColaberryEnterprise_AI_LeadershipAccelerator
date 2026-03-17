@@ -17,6 +17,7 @@ import { loadMemory, saveConversationToMemory, classifyVisitorType } from './adm
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
 import { executeMayaAction, MAYA_TOOLS, type MayaActionResult } from './mayaActionService';
 import { addMayaInteractionTag } from './mayaCampaignRouter';
+import { recordConversationOutcome } from './mayaConversationIntelligenceService';
 
 let openaiClient: OpenAI | null = null;
 
@@ -565,6 +566,12 @@ export async function closeConversation(conversationId: string): Promise<void> {
   if (conversation.lead_id) {
     addMayaInteractionTag(conversation.lead_id, 'maya_chat_completed').catch(() => {});
   }
+
+  // Record conversation outcome intelligence (fire-and-forget)
+  recordConversationOutcome({
+    conversationId,
+    leadId: conversation.lead_id ?? null,
+  }).catch(() => {});
 
   // Save conversation to admissions memory
   saveConversationToMemory(conversationId).catch(() => {});

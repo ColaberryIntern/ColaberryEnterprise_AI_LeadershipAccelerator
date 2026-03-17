@@ -168,6 +168,14 @@ export async function updateSubmission(submissionId: string, data: Partial<{
     (data as any).reviewed_at = new Date();
   }
   await sub.update(data);
+
+  // Trigger portfolio enhancement refresh (non-blocking)
+  if (data.status === 'reviewed' || data.score !== undefined) {
+    import('./portfolioEnhancementService').then(svc =>
+      svc.refreshProjectOutputs(sub.enrollment_id)
+    ).catch(err => console.error('[Accelerator] Portfolio refresh failed:', err.message));
+  }
+
   return sub;
 }
 

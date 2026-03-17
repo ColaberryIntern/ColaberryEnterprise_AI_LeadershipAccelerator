@@ -4,6 +4,7 @@ import {
   Campaign,
   FollowUpSequence,
   Lead,
+  StrategyCall,
   CampaignSimulation,
   CampaignSimulationStep,
 } from '../../models';
@@ -106,6 +107,26 @@ export async function startSimulation(
     }
     await testLead.update({ alumni_context: ctx } as any);
     await testLead.reload();
+  }
+
+  // For T-minus campaigns, create a fake strategy call so AI has appointment context
+  const isTMinus = steps.every((s: any) => (s.delay_days || 0) === 0)
+    && steps.some((s: any) => s.minutes_before_call != null);
+  if (isTMinus) {
+    const fakeApptTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h from now
+    await StrategyCall.findOrCreate({
+      where: { lead_id: testLead.id },
+      defaults: {
+        id: uuidv4(),
+        lead_id: testLead.id,
+        scheduled_at: fakeApptTime,
+        timezone: 'America/Chicago',
+        meet_link: 'https://meet.colaberry.ai/strategy-call-demo',
+        status: 'confirmed',
+        source: 'simulation',
+      } as any,
+    });
+    console.log(`[Simulator] Created fake strategy call for T-minus simulation (${fakeApptTime.toISOString()})`);
   }
 
   // Create simulation record
@@ -219,6 +240,22 @@ export async function executeSimulationStep(
   try {
     const testOverrides = await getTestOverrides();
 
+    // Look up appointment for T-minus campaigns
+    let appointmentContext: { scheduled_at: string; timezone: string; meet_link: string } | undefined;
+    try {
+      const strategyCall = await StrategyCall.findOne({
+        where: { lead_id: lead.id },
+        order: [['scheduled_at', 'DESC']],
+      });
+      if (strategyCall) {
+        appointmentContext = {
+          scheduled_at: (strategyCall as any).scheduled_at.toISOString(),
+          timezone: (strategyCall as any).timezone || 'America/Chicago',
+          meet_link: (strategyCall as any).meet_link || '',
+        };
+      }
+    } catch { /* non-critical */ }
+
     // Generate AI content
     const aiResult = await generateMessage({
       channel: (stepDef.channel || 'email') as 'email' | 'sms' | 'voice',
@@ -243,6 +280,7 @@ export async function executeSimulationStep(
       },
       tone: stepDef.ai_tone,
       context_notes: stepDef.ai_context_notes,
+      appointmentContext,
     });
 
     await simStep.update({

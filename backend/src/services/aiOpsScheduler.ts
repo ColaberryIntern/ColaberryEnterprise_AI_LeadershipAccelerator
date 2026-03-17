@@ -59,11 +59,22 @@ import {
   runAiSafetyMonitor,
   runAgentBehaviorMonitor,
   runAdmissionsKnowledgeSync,
+  // Super agents
+  runCampaignOpsSuperAgent,
+  runLeadIntelligenceSuperAgent,
+  runContentEngineSuperAgent,
+  runAnalyticsEngineSuperAgent,
+  runSystemResilienceSuperAgent,
+  runAdmissionsSuperAgent,
+  runPartnershipSuperAgent,
+  runFinanceSuperAgent,
 } from './aiOrchestrator';
 import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
+import { runCoryStrategicCycle, runSelfEvolution } from './cory/coryBrain';
 import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
 import { resolveAllCronSchedules, ResolvedCronSchedule } from './governanceResolutionService';
+import { expireStaleProposals } from './proposalCleanupService';
 
 // ─── Schedule Registry ──────────────────────────────────────────────────────
 // Maps agent_name (matching cron_schedule_configs rows) to runner + hardcoded default.
@@ -92,7 +103,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Intelligence layer
   { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAutonomousCycle, label: 'Autonomous engine' },
-  { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runStrategicCycle, label: 'AI COO strategic cycle' },
+  { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runCoryStrategicCycle, label: 'Cory Brain strategic cycle' },
   { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
 
@@ -150,6 +161,22 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Admissions knowledge
   { agentName: 'AdmissionsKnowledgeSyncAgent', hardcodedSchedule: '0 3 * * *', runner: runAdmissionsKnowledgeSync, label: 'Admissions knowledge sync' },
+
+  // Governance cleanup
+  { agentName: 'ProposalCleanupService', hardcodedSchedule: '0 2 * * *', runner: async () => { await expireStaleProposals(); return null as any; }, label: 'Proposal expiration cleanup' },
+
+  // Department super agents (staggered every 30 min)
+  { agentName: 'CampaignOpsSuperAgent', hardcodedSchedule: '3,33 * * * *', runner: runCampaignOpsSuperAgent, label: 'Campaign Ops super agent' },
+  { agentName: 'LeadIntelligenceSuperAgent', hardcodedSchedule: '5,35 * * * *', runner: runLeadIntelligenceSuperAgent, label: 'Lead Intelligence super agent' },
+  { agentName: 'ContentEngineSuperAgent', hardcodedSchedule: '7,37 * * * *', runner: runContentEngineSuperAgent, label: 'Content Engine super agent' },
+  { agentName: 'AnalyticsEngineSuperAgent', hardcodedSchedule: '9,39 * * * *', runner: runAnalyticsEngineSuperAgent, label: 'Analytics Engine super agent' },
+  { agentName: 'SystemResilienceSuperAgent', hardcodedSchedule: '11,41 * * * *', runner: runSystemResilienceSuperAgent, label: 'System Resilience super agent' },
+  { agentName: 'AdmissionsSuperAgent', hardcodedSchedule: '13,43 * * * *', runner: runAdmissionsSuperAgent, label: 'Admissions super agent' },
+  { agentName: 'PartnershipSuperAgent', hardcodedSchedule: '15,45 * * * *', runner: runPartnershipSuperAgent, label: 'Partnership super agent' },
+  { agentName: 'FinanceSuperAgent', hardcodedSchedule: '17,47 * * * *', runner: runFinanceSuperAgent, label: 'Finance super agent' },
+
+  // Cory self-evolution cycle (every 6 hours, offset from strategic cycle)
+  { agentName: 'CoryEvolutionCycle', hardcodedSchedule: '20 */6 * * *', runner: async () => { await runSelfEvolution(); return null as any; }, label: 'Cory self-evolution cycle' },
 ];
 
 // Executive briefings use dynamic imports, registered separately
@@ -269,6 +296,18 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
       });
     },
     label: 'Campaign traffic enforcement',
+  },
+  {
+    agentName: 'IntelligenceRetentionCycle',
+    hardcodedSchedule: '15 3 * * *',
+    dynamicImport: () => {
+      import('./cory/intelligenceRetention').then(({ runRetentionCycle }) => {
+        runRetentionCycle().catch((err) => {
+          console.error('[AI Ops] Intelligence retention cron error:', err);
+        });
+      });
+    },
+    label: 'Intelligence data retention (daily 03:15)',
   },
 ];
 

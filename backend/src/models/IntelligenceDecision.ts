@@ -50,6 +50,8 @@ interface IntelligenceDecisionAttributes {
   monitor_results?: Record<string, any>;
   monitor_next_at?: Date;
   reasoning?: string;
+  observation_count?: number;
+  last_seen_at?: Date;
   timestamp?: Date;
 }
 
@@ -73,6 +75,8 @@ class IntelligenceDecision extends Model<IntelligenceDecisionAttributes> impleme
   declare monitor_results: Record<string, any>;
   declare monitor_next_at: Date;
   declare reasoning: string;
+  declare observation_count: number;
+  declare last_seen_at: Date;
   declare timestamp: Date;
 }
 
@@ -154,6 +158,15 @@ IntelligenceDecision.init(
     },
     reasoning: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    observation_count: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    last_seen_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     timestamp: {

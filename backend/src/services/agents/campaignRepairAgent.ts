@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { ScheduledEmail, Campaign, CampaignLead } from '../../models';
 import CampaignError from '../../models/CampaignError';
 import { logAgentActivity, logAiEvent } from '../aiEventService';
+import { checkLeadSendable } from '../communicationSafetyService';
 import type { AgentExecutionResult, AgentAction } from './types';
 
 const AGENT_NAME = 'CampaignRepairAgent';
@@ -40,6 +41,24 @@ export async function runCampaignRepairAgent(agentId: string): Promise<AgentExec
       };
 
       try {
+        // Check if lead is still sendable before retrying
+        if (action.lead_id) {
+          const leadCheck = await checkLeadSendable(action.lead_id);
+          if (!leadCheck.sendable) {
+            await action.update({ status: 'cancelled' });
+            actions.push({
+              campaign_id: action.campaign_id || '',
+              action: 'retry_skipped_unsendable_lead',
+              reason: `Skipped retry — lead ${leadCheck.reason}`,
+              confidence: 1.0,
+              before_state: beforeState,
+              after_state: { status: 'cancelled', reason: leadCheck.reason },
+              result: 'skipped',
+            });
+            continue;
+          }
+        }
+
         const newScheduledFor = new Date(Date.now() + RETRY_DELAY_MINUTES * 60 * 1000);
         await action.update({
           status: 'pending',

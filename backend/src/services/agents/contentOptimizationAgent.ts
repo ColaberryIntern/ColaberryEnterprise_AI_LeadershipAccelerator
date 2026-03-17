@@ -2,6 +2,7 @@ import { Op, fn, col } from 'sequelize';
 import { Campaign, ScheduledEmail, InteractionOutcome } from '../../models';
 import { generateMessage } from '../aiMessageService';
 import { logAgentActivity, logAiEvent } from '../aiEventService';
+import { createProposal } from '../agentPermissionService';
 import type { AgentExecutionResult, AgentAction } from './types';
 
 const AGENT_NAME = 'ContentOptimizationAgent';
@@ -10,7 +11,9 @@ const OPEN_RATE_THRESHOLD = 0.10; // 10%
 const REPLY_RATE_THRESHOLD = 0.01; // 1%
 
 /**
- * Detect campaigns with low open/reply rates and rewrite pending email subjects/bodies.
+ * Detect campaigns with low open/reply rates and PROPOSE rewrites for pending emails.
+ * This agent operates in SUGGEST-ONLY mode — it creates ProposedAgentAction records
+ * instead of directly modifying ScheduledEmail content. An admin must approve proposals.
  */
 export async function runContentOptimizationAgent(
   agentId: string,
@@ -89,53 +92,62 @@ export async function runContentOptimizationAgent(
             needsBodyRewrite,
           );
 
+          // Generate rewrite using a generic placeholder (content is a proposal, not final)
           const result = await generateMessage({
             channel: 'email',
             ai_instructions: rewriteInstruction,
-            lead: { name: 'Optimization Preview' } as any,
+            lead: { name: '{{name}}' } as any,
           });
 
           if (result && result.subject && result.body) {
-            const updateFields: Record<string, any> = {};
+            const proposedChanges: Record<string, any> = {};
             if (needsSubjectRewrite && result.subject) {
-              updateFields.subject = result.subject;
+              proposedChanges.subject = result.subject;
             }
             if (needsBodyRewrite && result.body) {
-              updateFields.body = result.body;
-              updateFields.ai_generated = true;
+              proposedChanges.body = result.body;
+              proposedChanges.ai_generated = true;
             }
 
-            await email.update(updateFields);
-
-            const afterState = {
-              subject: updateFields.subject || email.subject,
-              body: (updateFields.body || email.body)?.substring(0, 200),
-            };
+            // Create a proposal instead of directly modifying the email
+            await createProposal(
+              agentId,
+              AGENT_NAME,
+              needsSubjectRewrite ? 'subject_rewrite' : 'body_rewrite',
+              'scheduled_emails',
+              email.id,
+              proposedChanges,
+              beforeState,
+              `Open rate ${(openRate * 100).toFixed(1)}%, reply rate ${(replyRate * 100).toFixed(1)}% — below thresholds`,
+              0.75,
+              campaign.id,
+            );
 
             await logAgentActivity({
               agent_id: agentId,
               campaign_id: campaign.id,
-              action: needsSubjectRewrite ? 'subject_rewrite' : 'body_rewrite',
+              action: needsSubjectRewrite ? 'propose_subject_rewrite' : 'propose_body_rewrite',
               reason: `Open rate ${(openRate * 100).toFixed(1)}%, reply rate ${(replyRate * 100).toFixed(1)}% — below thresholds`,
               confidence: 0.75,
               before_state: beforeState,
-              after_state: afterState,
+              after_state: proposedChanges,
               result: 'success',
               details: {
                 scheduled_email_id: email.id,
                 open_rate: openRate,
                 reply_rate: replyRate,
                 tokens_used: result.tokens_used,
+                mode: 'proposal',
               },
             });
 
             actions.push({
               campaign_id: campaign.id,
-              action: needsSubjectRewrite ? 'subject_rewrite' : 'body_rewrite',
-              reason: `Rewrote content for low engagement`,
+              action: needsSubjectRewrite ? 'propose_subject_rewrite' : 'propose_body_rewrite',
+              reason: `Proposed content rewrite for low engagement (pending approval)`,
               confidence: 0.75,
               before_state: beforeState,
-              after_state: afterState,
+              after_state: proposedChanges,
               result: 'success',
             });
 
@@ -159,7 +171,7 @@ export async function runContentOptimizationAgent(
     if (actionCount > 0) {
       await logAiEvent(AGENT_NAME, 'optimization_run_completed', undefined, undefined, {
         campaigns_analyzed: campaignIds.size,
-        rewrites_performed: actionCount,
+        proposals_created: actionCount,
         errors_count: errors.length,
       });
     }

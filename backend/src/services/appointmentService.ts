@@ -6,18 +6,35 @@ interface CreateAppointmentParams {
   admin_user_id?: string;
   title: string;
   description?: string;
-  scheduled_at: string;
+  scheduled_at: string | Date;
   duration_minutes?: number;
   type: string;
 }
 
 export async function createAppointment(params: CreateAppointmentParams) {
+  // Normalize and validate the scheduled_at timestamp to prevent date corruption
+  const scheduledDate = params.scheduled_at instanceof Date
+    ? params.scheduled_at
+    : new Date(params.scheduled_at);
+
+  if (isNaN(scheduledDate.getTime())) {
+    throw new Error(`Invalid scheduled_at datetime: ${params.scheduled_at}`);
+  }
+
+  // Sanity check: reject dates more than 1 year in the past (likely a parsing bug)
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  if (scheduledDate < oneYearAgo) {
+    console.error(`[AppointmentService] Rejected stale timestamp: ${scheduledDate.toISOString()} (input: ${params.scheduled_at})`);
+    throw new Error(`Appointment date ${scheduledDate.toISOString()} appears to be in the past. Input: ${params.scheduled_at}`);
+  }
+
   return Appointment.create({
     lead_id: params.lead_id,
     admin_user_id: params.admin_user_id || null,
     title: params.title,
     description: params.description || null,
-    scheduled_at: new Date(params.scheduled_at),
+    scheduled_at: scheduledDate.toISOString(),
     duration_minutes: params.duration_minutes || 30,
     type: params.type,
     status: 'scheduled',

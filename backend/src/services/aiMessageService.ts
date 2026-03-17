@@ -54,6 +54,11 @@ export interface GenerateMessageParams {
   };
   tone?: string;
   context_notes?: string;
+  appointmentContext?: {
+    scheduled_at: string;
+    timezone: string;
+    meet_link: string;
+  };
 }
 
 export interface GenerateMessageResult {
@@ -194,6 +199,25 @@ function buildUserPrompt(params: GenerateMessageParams): string {
     if (cohortContext.name) parts.push(`- Program: ${cohortContext.name}`);
     if (cohortContext.start_date) parts.push(`- Starts: ${cohortContext.start_date}`);
     if (cohortContext.seats_remaining !== undefined) parts.push(`- Seats Remaining: ${cohortContext.seats_remaining}`);
+  }
+
+  if (params.appointmentContext) {
+    const appt = params.appointmentContext;
+    const apptDate = new Date(appt.scheduled_at);
+    const formatted = apptDate.toLocaleString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: appt.timezone,
+      timeZoneName: 'short',
+    });
+    parts.push(`\nAPPOINTMENT DETAILS:`);
+    parts.push(`- Scheduled: ${formatted}`);
+    parts.push(`- Timezone: ${appt.timezone}`);
+    if (appt.meet_link) parts.push(`- Meeting Link: ${appt.meet_link}`);
+    parts.push(`- IMPORTANT: Reference the EXACT appointment date and time. Do NOT use vague phrases like "soon" or "in a few days".`);
   }
 
   if (conversationHistory && conversationHistory !== 'No prior interactions with this lead.') {

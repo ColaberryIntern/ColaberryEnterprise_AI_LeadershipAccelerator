@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { Campaign, CampaignTestRun, CampaignTestStep, ScheduledEmail } from '../../models';
 import { runCampaignTest } from '../testing/campaignTestHarness';
+import { checkLeadSendable } from '../communicationSafetyService';
 import type { AgentExecutionResult, AgentAction } from './types';
 
 /**
@@ -64,6 +65,39 @@ export async function runCampaignSelfHealingAgent(
         });
 
         for (const email of failedEmails) {
+          // Skip test actions — never retry test harness emails
+          if (email.is_test_action) {
+            await email.update({ status: 'cancelled' });
+            actions.push({
+              campaign_id: campaignId,
+              action: 'retry_skipped_test_action',
+              reason: `Cancelled test action ${email.id} — test actions are not retried`,
+              confidence: 1.0,
+              before_state: { status: 'failed' },
+              after_state: { status: 'cancelled' },
+              result: 'skipped',
+            });
+            continue;
+          }
+
+          // Check if lead is still sendable before retrying
+          if (email.lead_id) {
+            const leadCheck = await checkLeadSendable(email.lead_id);
+            if (!leadCheck.sendable) {
+              await email.update({ status: 'cancelled' });
+              actions.push({
+                campaign_id: campaignId,
+                action: 'retry_skipped_unsendable_lead',
+                reason: `Cancelled retry for email ${email.id} — lead ${leadCheck.reason}`,
+                confidence: 1.0,
+                before_state: { status: 'failed' },
+                after_state: { status: 'cancelled', reason: leadCheck.reason },
+                result: 'skipped',
+              });
+              continue;
+            }
+          }
+
           await email.update({
             status: 'pending',
             scheduled_for: new Date(Date.now() + 5 * 60 * 1000),

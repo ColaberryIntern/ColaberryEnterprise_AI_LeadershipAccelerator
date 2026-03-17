@@ -1,5 +1,6 @@
 import AiAgent from '../models/AiAgent';
 import type { AiAgentType, AiAgentTriggerType, AiAgentCategory } from '../models/AiAgent';
+import { Op } from 'sequelize';
 
 interface AgentSeedEntry {
   agent_name: string;
@@ -1778,6 +1779,88 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'admissions',
     description: 'Crawls public website pages daily and auto-updates Maya knowledge base entries when content changes. Detects stale entries and flags them for review.',
   },
+
+  // --- Department Super Agents ---
+  {
+    agent_name: 'CampaignOpsSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/campaignOpsSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '3,33 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from CampaignHealthScanner, RepairAgent, QAAgent, SelfHealingAgent. Detects anomalies and produces department report for Campaign Operations.',
+  },
+  {
+    agent_name: 'LeadIntelligenceSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/leadIntelligenceSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '5,35 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from lead scoring, enrichment, routing, and qualification agents. Produces department report for Lead Intelligence.',
+  },
+  {
+    agent_name: 'ContentEngineSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/contentEngineSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '7,37 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from content optimization, copy variant, and subject line agents. Produces department report for Content Engine.',
+  },
+  {
+    agent_name: 'AnalyticsEngineSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/analyticsEngineSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '9,39 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from KPI, cohort, funnel, and campaign analytics agents. Produces department report for Analytics Engine.',
+  },
+  {
+    agent_name: 'SystemResilienceSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/systemResilienceSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '11,41 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from error recovery, system health, database optimizer, and cache manager agents. Produces department report for System Resilience.',
+  },
+  {
+    agent_name: 'AdmissionsSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/admissionsSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '13,43 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from all admissions intelligence and operations agents. Produces department report for Admissions.',
+  },
+  {
+    agent_name: 'PartnershipSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/partnershipSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '15,45 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from partner outreach and performance agents. Produces department report for Partnerships.',
+  },
+  {
+    agent_name: 'FinanceSuperAgent',
+    agent_type: 'super_agent',
+    module: 'superAgents',
+    source_file: 'backend/src/services/agents/departments/superAgents/financeSuperAgent.ts',
+    trigger_type: 'cron',
+    schedule: '17,47 * * * *',
+    category: 'dept_super',
+    description: 'Aggregates signals from budget, ROI, and cost optimization agents. Produces department report for Finance.',
+  },
 ];
 
 /**
@@ -1806,6 +1889,67 @@ export async function seedAgentRegistry(): Promise<void> {
       });
     } else {
       console.log(`[AI Ops] Registered agent: ${entry.agent_name}`);
+    }
+
+    // Safety: Force-disable agents that bypass safety pipelines
+    // ContentOptimizationAgent overwrites email content with fake lead name — CRITICAL safety issue
+    if (entry.agent_name === 'ContentOptimizationAgent' && agent.enabled) {
+      await agent.update({ enabled: false, status: 'paused' });
+      console.warn(`[AI Ops] SAFETY: Disabled ${entry.agent_name} — must use suggestion-only mode`);
+    }
+  }
+
+  // Assign agent_group to existing agents for super-agent aggregation
+  await assignAgentGroups();
+}
+
+// ─── Agent Group Assignment ────────────────────────────────────────────────
+// Maps agent names to their super-agent group. This is additive — does not
+// remove agents or change any other field.
+
+const AGENT_GROUP_MAP: Record<string, string[]> = {
+  campaign_ops: [
+    'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent',
+    'CampaignSelfHealingAgent', 'ContentOptimizationAgent', 'ConversationOptimizationAgent',
+  ],
+  lead_intelligence: [
+    'ApolloLeadIntelligenceAgent', 'BehavioralSignalDetector', 'IntentScoreRecomputer',
+    'BehavioralTriggerEvaluator', 'OpportunityScoreRecomputer', 'ICPInsightComputer',
+  ],
+  content_engine: [
+    'ContentOptimizationAgent', 'ConversationOptimizationAgent',
+  ],
+  analytics_engine: [
+    'InsightArchitect',
+  ],
+  system_resilience: [
+    'OrchestrationHealthAgent', 'OrchestrationAutoRepairAgent', 'PromptMonitorAgent',
+  ],
+  admissions: [
+    'AdmissionsVisitorIdentityAgent', 'AdmissionsVisitorActivityAgent',
+    'AdmissionsConversationMemoryAgent', 'AdmissionsIntentDetectionAgent',
+    'AdmissionsProactiveOutreachAgent', 'AdmissionsConversationContinuityAgent',
+    'AdmissionsHighIntentLeadAgent', 'AdmissionsInsightsAgent', 'AdmissionsExecutiveUpdateAgent',
+    'AdmissionsDocumentDeliveryAgent', 'AdmissionsEmailAgent', 'AdmissionsSMSAgent',
+    'AdmissionsAppointmentAgent', 'AdmissionsSynthflowCallAgent', 'AdmissionsCallGovernanceAgent',
+    'AdmissionsCallComplianceAgent', 'AdmissionsCallbackAgent', 'AdmissionsConversationTaskMonitor',
+    'AdmissionsAssistantAgent', 'AdmissionsKnowledgeSyncAgent',
+  ],
+  partnership: [
+    'PartnershipExpansionArchitect',
+  ],
+  finance: [
+    'FinanceIntelligenceArchitect',
+  ],
+};
+
+async function assignAgentGroups(): Promise<void> {
+  for (const [group, agentNames] of Object.entries(AGENT_GROUP_MAP)) {
+    for (const name of agentNames) {
+      await AiAgent.update(
+        { agent_group: group },
+        { where: { agent_name: name, agent_group: { [Op.eq]: null as any } } },
+      );
     }
   }
 }

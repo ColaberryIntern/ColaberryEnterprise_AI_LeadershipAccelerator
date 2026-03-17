@@ -2,6 +2,7 @@ import { buildMemoryContext, loadMemory, isCEO } from './admissionsMemoryService
 import { buildKnowledgeContext } from './admissionsKnowledgeService';
 import { getVisitorWorkflowStage } from './admissionsWorkflowService';
 import { buildPersonalizedContext } from './mayaPersonalizationService';
+import { getCampaignContext, formatCampaignContextForPrompt } from './campaignContextService';
 import { Lead } from '../models';
 
 /**
@@ -96,6 +97,33 @@ VISITOR WORKFLOW STAGE: ${workflow.stage} (${workflow.stageName})
 Completed steps: ${workflow.completedSteps.length > 0 ? workflow.completedSteps.join(', ') : 'none yet'}`);
   } catch {
     // Workflow context is non-critical
+  }
+
+  // Campaign context — read-only awareness of active campaigns for this lead
+  if (params.leadId) {
+    try {
+      const campaignCtx = await getCampaignContext(params.leadId);
+      if (campaignCtx) {
+        parts.push(`\n${formatCampaignContextForPrompt(campaignCtx)}`);
+        // Structured log for tracking campaign-awareness usage
+        console.log(JSON.stringify({
+          event: 'maya_campaign_context_used',
+          leadId: params.leadId,
+          visitorId: params.visitorId,
+          activeCampaigns: campaignCtx.activeCampaigns.map((c) => ({
+            campaignName: c.campaignName,
+            campaignStep: c.currentStepIndex,
+            nextTouchInHours: c.nextTouchInHours,
+          })),
+          engagementSignals: campaignCtx.engagementSignals,
+          nextTouchWithinHours: campaignCtx.nextTouchWithinHours,
+          recentTouchWithinHours: campaignCtx.recentTouchWithinHours,
+          timestamp: new Date().toISOString(),
+        }));
+      }
+    } catch {
+      // Campaign context is non-critical — proceed without it
+    }
   }
 
   // Operational capabilities — full tool list

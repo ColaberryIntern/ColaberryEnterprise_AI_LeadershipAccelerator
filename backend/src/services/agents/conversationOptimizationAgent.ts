@@ -1,6 +1,7 @@
 import { Op, fn, col } from 'sequelize';
 import { Campaign, ScheduledEmail, InteractionOutcome } from '../../models';
 import { logAgentActivity, logAiEvent } from '../aiEventService';
+import { createProposal } from '../agentPermissionService';
 import type { AgentExecutionResult, AgentAction } from './types';
 
 const AGENT_NAME = 'ConversationOptimizationAgent';
@@ -8,7 +9,9 @@ const MIN_SENT_PER_STEP = 5;
 const DROPOFF_THRESHOLD = 0.80; // If reply rate drops > 80% from previous step
 
 /**
- * Detect step-level conversation dropoffs and optimize AI instructions for future sends.
+ * Detect step-level conversation dropoffs and PROPOSE AI instruction enhancements.
+ * This agent operates in SUGGEST-ONLY mode — creates ProposedAgentAction records
+ * instead of directly modifying ScheduledEmail instructions. An admin must approve.
  */
 export async function runConversationOptimizationAgent(
   agentId: string,
@@ -105,43 +108,54 @@ export async function runConversationOptimizationAgent(
           );
 
           try {
-            await email.update({ ai_instructions: enhancedInstructions });
+            const proposedChanges = { ai_instructions: enhancedInstructions };
+            const dropoffReason = `Step ${stepIndices[i]} reply rate (${(currReplyRate * 100).toFixed(1)}%) dropped significantly from step ${stepIndices[i - 1]} (${(prevReplyRate * 100).toFixed(1)}%)`;
 
-            const afterState = {
-              ai_instructions: enhancedInstructions.substring(0, 200),
-              step_index: email.step_index,
-            };
+            // Create a proposal instead of directly modifying the email
+            await createProposal(
+              agentId,
+              AGENT_NAME,
+              'propose_instruction_enhancement',
+              'scheduled_emails',
+              email.id,
+              proposedChanges,
+              beforeState,
+              dropoffReason,
+              0.70,
+              campaign.id,
+            );
 
             await logAgentActivity({
               agent_id: agentId,
               campaign_id: campaign.id,
-              action: 'enhance_step_instructions',
-              reason: `Step ${stepIndices[i]} reply rate (${(currReplyRate * 100).toFixed(1)}%) dropped significantly from step ${stepIndices[i - 1]} (${(prevReplyRate * 100).toFixed(1)}%)`,
+              action: 'propose_instruction_enhancement',
+              reason: dropoffReason,
               confidence: 0.70,
               before_state: beforeState,
-              after_state: afterState,
+              after_state: proposedChanges,
               result: 'success',
               details: {
                 scheduled_email_id: email.id,
                 step_index: stepIndices[i],
                 prev_reply_rate: prevReplyRate,
                 curr_reply_rate: currReplyRate,
+                mode: 'proposal',
               },
             });
 
             actions.push({
               campaign_id: campaign.id,
-              action: 'enhance_step_instructions',
-              reason: `Enhanced AI instructions at step ${stepIndices[i]} due to dropoff`,
+              action: 'propose_instruction_enhancement',
+              reason: `Proposed instruction enhancement at step ${stepIndices[i]} (pending approval)`,
               confidence: 0.70,
               before_state: beforeState,
-              after_state: afterState,
+              after_state: proposedChanges,
               result: 'success',
             });
 
             actionCount++;
           } catch (err: any) {
-            errors.push(`Instruction enhancement failed for email ${email.id}: ${err.message}`);
+            errors.push(`Instruction enhancement proposal failed for email ${email.id}: ${err.message}`);
           }
         }
       }
@@ -150,7 +164,7 @@ export async function runConversationOptimizationAgent(
     if (actionCount > 0) {
       await logAiEvent(AGENT_NAME, 'optimization_run_completed', undefined, undefined, {
         campaigns_analyzed: campaignIds.size,
-        instructions_enhanced: actionCount,
+        proposals_created: actionCount,
         errors_count: errors.length,
       });
     }

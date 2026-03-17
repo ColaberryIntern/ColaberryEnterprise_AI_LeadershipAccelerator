@@ -374,6 +374,41 @@ router.post('/api/admin/orchestration/lessons/:id/generate-structure', requireAd
   }
 });
 
+// Comprehensive Structure Generation (returns full blueprint with vars, artifacts, skills)
+router.post('/api/admin/orchestration/lessons/:id/generate-blueprint', requireAdmin, async (req, res) => {
+  try {
+    const { generateComprehensiveBlueprint } = await import('../../services/structureGenerationService');
+    const { structure_prompt } = req.body;
+    if (!structure_prompt || typeof structure_prompt !== 'string') {
+      return res.status(400).json({ error: 'structure_prompt is required' });
+    }
+    const lesson = await CurriculumLesson.findByPk(req.params.id as string);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    await lesson.update({ structure_prompt });
+    const blueprint = await generateComprehensiveBlueprint(structure_prompt);
+    res.json({ blueprint });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Blueprint generation failed' });
+  }
+});
+
+// Apply a generated blueprint — creates all entities (mini-sections, vars, artifacts, skills)
+router.post('/api/admin/orchestration/lessons/:id/apply-blueprint', requireAdmin, async (req, res) => {
+  try {
+    const { applySectionBlueprint } = await import('../../services/structureGenerationService');
+    const { blueprint } = req.body;
+    if (!blueprint || !Array.isArray(blueprint.mini_sections)) {
+      return res.status(400).json({ error: 'blueprint with mini_sections array is required' });
+    }
+    const lesson = await CurriculumLesson.findByPk(req.params.id as string);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    const result = await applySectionBlueprint(req.params.id as string, blueprint);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Blueprint apply failed' });
+  }
+});
+
 // Session Fields (completion threshold, variable keys, triggers)
 router.put('/api/admin/orchestration/sessions/:id/fields', requireAdmin, handleUpdateSessionFields);
 

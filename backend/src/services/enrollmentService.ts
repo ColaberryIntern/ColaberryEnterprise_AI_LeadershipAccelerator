@@ -20,7 +20,7 @@ export async function createPendingEnrollment(
   data: CreateCheckoutSessionInput,
   stripeSessionId: string
 ): Promise<Enrollment> {
-  return Enrollment.create({
+  const enrollment = await Enrollment.create({
     full_name: data.full_name,
     email: data.email,
     company: data.company,
@@ -32,6 +32,13 @@ export async function createPendingEnrollment(
     payment_status: 'failed', // Pending until webhook confirms — use 'failed' as default
     payment_method: 'credit_card',
   });
+
+  // Auto-create project (non-blocking)
+  import('./projectService').then(ps =>
+    ps.createProjectForEnrollment(enrollment.id)
+  ).catch(err => console.error('[Project] Auto-create failed:', err.message));
+
+  return enrollment;
 }
 
 export async function createInvoiceEnrollment(
@@ -50,6 +57,11 @@ export async function createInvoiceEnrollment(
     payment_status: 'pending_invoice',
     payment_method: 'invoice',
   });
+
+  // Auto-create project (non-blocking)
+  import('./projectService').then(ps =>
+    ps.createProjectForEnrollment(enrollment.id)
+  ).catch(err => console.error('[Project] Auto-create failed:', err.message));
 
   // Increment seats immediately for invoice requests
   await Cohort.increment('seats_taken', {
@@ -125,6 +137,11 @@ export async function createAdminEnrollment(data: {
   });
 
   await Cohort.increment('seats_taken', { by: 1, where: { id: data.cohort_id } });
+
+  // Auto-create project (non-blocking)
+  import('./projectService').then(ps =>
+    ps.createProjectForEnrollment(enrollment.id)
+  ).catch(err => console.error('[Project] Auto-create failed:', err.message));
 
   return enrollment;
 }

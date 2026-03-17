@@ -166,11 +166,13 @@ export type AiAgentType =
   | 'strategic_cycle'
   | 'meta_agent_loop'
   // Dynamic (created by AI COO)
-  | 'dynamic';
+  | 'dynamic'
+  // Department super agents
+  | 'super_agent';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting' | 'dept_strategy' | 'security_ops';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting' | 'dept_strategy' | 'security_ops' | 'dept_super';
 
 interface AiAgentAttributes {
   id?: string;
@@ -193,6 +195,12 @@ interface AiAgentAttributes {
   error_count?: number;
   last_error?: string;
   last_error_at?: Date;
+  // Execution limits
+  max_runs_per_hour?: number;
+  max_writes_per_execution?: number;
+  max_proposals_per_run?: number;
+  // Super-agent grouping
+  agent_group?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -217,6 +225,10 @@ class AiAgent extends Model<AiAgentAttributes> implements AiAgentAttributes {
   declare error_count: number;
   declare last_error: string;
   declare last_error_at: Date;
+  declare max_runs_per_hour: number;
+  declare max_writes_per_execution: number;
+  declare max_proposals_per_run: number;
+  declare agent_group: string;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -307,6 +319,24 @@ AiAgent.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // Execution limits — null means unlimited (use system defaults)
+    max_runs_per_hour: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    max_writes_per_execution: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    max_proposals_per_run: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    // Super-agent grouping — links subordinate agents to their super agent
+    agent_group: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -324,6 +354,7 @@ AiAgent.init(
       { fields: ['category'] },
       { fields: ['enabled'] },
       { fields: ['trigger_type'] },
+      { fields: ['agent_group'] },
     ],
   }
 );

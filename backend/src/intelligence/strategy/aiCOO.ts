@@ -9,6 +9,38 @@ import { analyzeCostEfficiency, type CostInsight } from '../agents/CostOptimizat
 import { proposeGrowthExperiments, type ExperimentProposal } from '../agents/GrowthExperimentAgent';
 import { enforceGovernance, type GovernanceReport } from '../agents/GovernanceAgent';
 import { getVectorMemory } from '../memory/vectorMemory';
+import IntelligenceDecision from '../../models/IntelligenceDecision';
+import { v4 as uuidv4 } from 'uuid';
+import { Op } from 'sequelize';
+import { logAiEvent } from '../../services/aiEventService';
+
+// ─── Insight Dedup Window ────────────────────────────────────────────────────
+// Before inserting a new insight, check if an identical problem_detected exists
+// within the last 60 minutes. If so, update observation_count + last_seen_at
+// instead of creating a duplicate row.
+
+const DEDUP_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
+
+async function upsertInsight(attrs: Record<string, any>): Promise<boolean> {
+  const existing = await IntelligenceDecision.findOne({
+    where: {
+      problem_detected: attrs.problem_detected,
+      timestamp: { [Op.gte]: new Date(Date.now() - DEDUP_WINDOW_MS) },
+    },
+    order: [['timestamp', 'DESC']],
+  });
+
+  if (existing) {
+    await existing.update({
+      observation_count: (existing.observation_count || 1) + 1,
+      last_seen_at: new Date(),
+    });
+    return false; // not a new row
+  }
+
+  await IntelligenceDecision.create(attrs as any);
+  return true; // new row created
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -116,6 +148,97 @@ export async function runStrategicCycle(): Promise<StrategicReport> {
 
   if (executiveSummary.length > 0) {
     console.log(`[AI COO] Strategic cycle: ${executiveSummary.join(' | ')} [${durationMs}ms]`);
+  }
+
+  // ─── Persist insights to intelligence_decisions table ──────────────────────
+  const traceId = uuidv4();
+  let persistedCount = 0;
+
+  try {
+    const sharedContext = {
+      overview: { risk_areas: overview.risk_areas, opportunity_areas: overview.opportunity_areas, fleet: overview.agent_fleet_health },
+      revenue: { bottleneck: revenue.bottleneck, at_risk: revenue.estimated_revenue_at_risk },
+      governance: { compliant: governance.compliant, violations_count: governance.violations.length },
+    };
+
+    // Persist each risk area as a decision (deduped within 60min window)
+    for (const risk of overview.risk_areas) {
+      const isNew = await upsertInsight({
+        trace_id: traceId,
+        problem_detected: `Risk detected: ${risk}`,
+        analysis_summary: executiveSummary.join('. '),
+        risk_score: Math.min(80, 40 + overview.risk_areas.length * 10),
+        confidence_score: 70,
+        risk_tier: overview.risk_areas.length > 3 ? 'risky' : 'moderate',
+        execution_status: 'proposed',
+        reasoning: `Identified during strategic cycle. ${overview.risk_areas.length} total risks detected.`,
+        action_details: sharedContext,
+      });
+      if (isNew) persistedCount++;
+    }
+
+    // Persist revenue bottleneck (deduped)
+    if (revenue.bottleneck) {
+      const isNew = await upsertInsight({
+        trace_id: traceId,
+        problem_detected: `Revenue bottleneck: ${revenue.bottleneck}`,
+        analysis_summary: `Estimated revenue at risk: $${revenue.estimated_revenue_at_risk}`,
+        recommended_action: 'update_campaign_config',
+        risk_score: revenue.estimated_revenue_at_risk > 10000 ? 70 : 40,
+        confidence_score: 65,
+        risk_tier: revenue.estimated_revenue_at_risk > 10000 ? 'moderate' : 'safe',
+        execution_status: 'proposed',
+        reasoning: `Revenue funnel analysis detected bottleneck. ${revenue.recommendations.length} recommendations available.`,
+        action_details: { bottleneck: revenue.bottleneck, recommendations: revenue.recommendations, funnel_stages: revenue.funnel_stages },
+      });
+      if (isNew) persistedCount++;
+    }
+
+    // Persist experiment proposals (deduped)
+    for (const experiment of experiments) {
+      const isNew = await upsertInsight({
+        trace_id: traceId,
+        problem_detected: `Experiment proposed: ${experiment.hypothesis || 'Growth experiment'}`,
+        analysis_summary: `${experiment.hypothesis} — ${experiment.metric} over ${experiment.duration_hours}h (${experiment.control} vs ${experiment.variant})`,
+        recommended_action: 'launch_ab_test',
+        risk_score: 20,
+        confidence_score: 60,
+        risk_tier: 'safe',
+        execution_status: 'proposed',
+        reasoning: `Growth experiment agent proposed this experiment during strategic cycle.`,
+        action_details: experiment,
+      });
+      if (isNew) persistedCount++;
+    }
+
+    // Persist governance violations (deduped)
+    for (const violation of governance.violations) {
+      const isNew = await upsertInsight({
+        trace_id: traceId,
+        problem_detected: `Governance violation: ${typeof violation === 'string' ? violation : JSON.stringify(violation)}`,
+        analysis_summary: `Governance compliance check failed. ${governance.violations.length} violation(s) detected.`,
+        risk_score: 75,
+        confidence_score: 90,
+        risk_tier: 'risky',
+        execution_status: 'proposed',
+        reasoning: `Governance agent flagged this violation during strategic cycle.`,
+        action_details: { violation, metrics: governance.metrics },
+      });
+      if (isNew) persistedCount++;
+    }
+
+    if (persistedCount > 0) {
+      await logAiEvent('AICOOStrategicCycle', 'insights_persisted', 'intelligence_decisions', traceId, {
+        count: persistedCount,
+        risks: overview.risk_areas.length,
+        experiments: experiments.length,
+        violations: governance.violations.length,
+        has_bottleneck: !!revenue.bottleneck,
+      });
+      console.log(`[AI COO] Persisted ${persistedCount} insights to intelligence_decisions (trace: ${traceId})`);
+    }
+  } catch (err) {
+    console.error('[AI COO] Failed to persist insights:', err);
   }
 
   const report: StrategicReport = {

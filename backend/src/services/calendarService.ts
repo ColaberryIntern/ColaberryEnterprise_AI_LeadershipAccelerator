@@ -4,8 +4,9 @@ import { AppError } from '../utils/AppError';
 import { getTestOverrides } from './settingsService';
 
 const SLOT_DURATION_MINUTES = 30;
-const BUSINESS_HOUR_START = 9; // 9 AM CT
-const BUSINESS_HOUR_END = 17;  // 5 PM CT
+const BUFFER_MINUTES = 15;      // Buffer between consecutive bookable slots
+const BUSINESS_HOUR_START = 9;   // 9 AM CT
+const BUSINESS_HOUR_END = 17;    // 5 PM CT
 const BUSINESS_TIMEZONE = 'America/Chicago';
 
 interface TimeSlot {
@@ -108,7 +109,11 @@ function slotsOverlap(slot: TimeSlot, busyStart: string, busyEnd: string): boole
   const slotEndMs = new Date(slot.end).getTime();
   const busyStartMs = new Date(busyStart).getTime();
   const busyEndMs = new Date(busyEnd).getTime();
-  return slotStartMs < busyEndMs && slotEndMs > busyStartMs;
+  // Add buffer after each busy block to prevent back-to-back scheduling
+  const bufferedBusyEndMs = busyEndMs + BUFFER_MINUTES * 60 * 1000;
+  // Also add buffer before the busy block so a slot doesn't end right when one starts
+  const bufferedBusyStartMs = busyStartMs - BUFFER_MINUTES * 60 * 1000;
+  return slotStartMs < bufferedBusyEndMs && slotEndMs > bufferedBusyStartMs;
 }
 
 export async function getAvailableSlots(days: number = 21): Promise<AvailabilityResponse> {
@@ -125,6 +130,8 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
 
   // Use events.list instead of freebusy so we can distinguish all-day events
   // from timed events. All-day events (start.date) should NOT block time slots.
+  // If the calendar API fails, propagate the error so callers know availability
+  // could not be verified (fail-closed).
   const busyBlocks = await getTimedBusyBlocks(calendar, startDate, endDate);
 
   // Generate available slots per day
@@ -204,8 +211,9 @@ async function getTimedBusyBlocks(
     } while (pageToken);
   } catch (err: any) {
     console.error(`[Calendar] getTimedBusyBlocks FAILED (${timeMin.toISOString()} - ${timeMax.toISOString()}):`, err.message, err.code || '', err.status || '');
-    // Return empty — let the booking proceed and let Google Calendar handle conflicts
-    return [];
+    // Fail closed — do NOT return empty and allow bookings when availability is unknown.
+    // Callers must handle this error and reject the booking attempt.
+    throw new AppError('Calendar availability could not be verified. Please try again.', 503);
   }
 
   return blocks;

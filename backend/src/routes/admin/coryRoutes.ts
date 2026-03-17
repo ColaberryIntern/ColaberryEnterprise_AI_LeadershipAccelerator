@@ -3,11 +3,20 @@
 // timeline, departments, and agent management.
 
 import { Router, Request, Response } from 'express';
+import { Op } from 'sequelize';
 import { executeCoryCommand, getCoryStatus, getCoryNarrative } from '../../intelligence/strategy/coryEngine';
 import { getReasoningTimeline } from '../../intelligence/strategy/reasoningTimeline';
 import { createAgent, retireAgent, getDepartmentSummary, editAgent } from '../../intelligence/agents/agentFactory';
 import { AiAgent } from '../../models';
 import { getDepartmentForCategory, type Department } from '../../intelligence/agents/agentFactory';
+import { getCOODashboardData, proposeNewAgent, runSelfEvolution } from '../../services/cory/coryBrain';
+import { getRetentionStats } from '../../services/cory/intelligenceRetention';
+import IntelligenceDecision from '../../models/IntelligenceDecision';
+import AgentTask from '../../models/AgentTask';
+import { getRecentInitiatives, getInitiativeStats, approveInitiative, rejectInitiative } from '../../services/cory/coryInitiatives';
+import AgentCreationProposal from '../../models/AgentCreationProposal';
+import StrategicInitiative from '../../models/StrategicInitiative';
+import { activatePendingAgent } from '../../intelligence/agents/agentFactory';
 
 // Convert department_slug (e.g. 'finance') to Department name (e.g. 'Finance')
 const SLUG_TO_DEPT: Record<string, Department> = {
@@ -145,6 +154,193 @@ router.get('/api/admin/intelligence/cory/agents', async (_req: Request, res: Res
       trigger_type: a.trigger_type,
     }));
     res.json({ agents: grouped });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── COO Dashboard ───────────────────────────────────────────────────────────
+
+// GET /api/admin/intelligence/cory/coo-dashboard — Full COO dashboard data
+router.get('/api/admin/intelligence/cory/coo-dashboard', async (_req: Request, res: Response) => {
+  try {
+    const data = await getCOODashboardData();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Agent Creation Proposals ────────────────────────────────────────────────
+
+// GET /api/admin/intelligence/cory/agent-proposals — List agent creation proposals
+router.get('/api/admin/intelligence/cory/agent-proposals', async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as string || undefined;
+    const where = status ? { status } : {};
+    const proposals = await AgentCreationProposal.findAll({
+      where,
+      order: [['created_at', 'DESC']],
+      limit: 50,
+    });
+    res.json({ proposals });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/cory/agent-proposals/:id/approve — Approve proposal
+router.post('/api/admin/intelligence/cory/agent-proposals/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const proposal = await AgentCreationProposal.findByPk(req.params.id as string);
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    if (proposal.status !== 'pending') return res.status(400).json({ error: `Proposal already ${proposal.status}` });
+
+    // Create the agent
+    const agent = await createAgent({
+      name: proposal.agent_name,
+      role: 'general',
+      department: (proposal.department || 'Intelligence') as Department,
+      responsibilities: proposal.purpose,
+      trigger_type: (proposal.trigger_type as any) || 'cron',
+      schedule: proposal.schedule || undefined,
+    });
+
+    // Activate it
+    await activatePendingAgent(agent.id);
+
+    // Update proposal status
+    await proposal.update({
+      status: 'approved',
+      reviewed_by: (req as any).admin?.email || 'admin',
+      reviewed_at: new Date(),
+    });
+
+    res.json({ success: true, agent, proposal });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/cory/agent-proposals/:id/reject — Reject proposal
+router.post('/api/admin/intelligence/cory/agent-proposals/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const proposal = await AgentCreationProposal.findByPk(req.params.id as string);
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    if (proposal.status !== 'pending') return res.status(400).json({ error: `Proposal already ${proposal.status}` });
+
+    await proposal.update({
+      status: 'rejected',
+      reviewed_by: (req as any).admin?.email || 'admin',
+      reviewed_at: new Date(),
+    });
+
+    res.json({ success: true, proposal });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─── Strategic Initiatives ──────────────────────────────────────────────────
+
+// GET /api/admin/intelligence/cory/initiatives — List strategic initiatives
+router.get('/api/admin/intelligence/cory/initiatives', async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+    const initiatives = await getRecentInitiatives(limit);
+    const stats = await getInitiativeStats();
+    res.json({ initiatives, stats });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/intelligence/cory/initiatives/:id — Get initiative detail
+router.get('/api/admin/intelligence/cory/initiatives/:id', async (req: Request, res: Response) => {
+  try {
+    const initiative = await StrategicInitiative.findByPk(req.params.id as string);
+    if (!initiative) return res.status(404).json({ error: 'Initiative not found' });
+    res.json({ initiative });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/cory/initiatives/:id/approve — Approve initiative
+router.post('/api/admin/intelligence/cory/initiatives/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const reviewedBy = (req as any).admin?.email || 'admin';
+    const initiative = await approveInitiative(req.params.id as string, reviewedBy);
+    res.json({ success: true, initiative });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/cory/initiatives/:id/reject — Reject initiative
+router.post('/api/admin/intelligence/cory/initiatives/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const reviewedBy = (req as any).admin?.email || 'admin';
+    const reason = req.body.reason;
+    const initiative = await rejectInitiative(req.params.id as string, reviewedBy, reason);
+    res.json({ success: true, initiative });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/intelligence/cory/evolution/run — Trigger self-evolution cycle
+router.post('/api/admin/intelligence/cory/evolution/run', async (_req: Request, res: Response) => {
+  try {
+    const result = await runSelfEvolution();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── System Health ──────────────────────────────────────────────────────────
+
+// GET /api/admin/intelligence/cory/system-health — Cory observability data
+router.get('/api/admin/intelligence/cory/system-health', async (_req: Request, res: Response) => {
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Run queries in parallel
+    const [
+      agentFleet,
+      insightsLastHour,
+      tasksToday,
+      initiativeStats,
+      retention,
+    ] = await Promise.all([
+      // Agent fleet status
+      AiAgent.findAll({ attributes: ['status', 'enabled'] }).then(agents => {
+        const total = agents.length;
+        const healthy = agents.filter((a: any) => a.enabled && (a.status === 'idle' || a.status === 'running')).length;
+        const errored = agents.filter((a: any) => a.status === 'error').length;
+        const paused = agents.filter((a: any) => a.status === 'paused' || !a.enabled).length;
+        return { total, healthy, errored, paused };
+      }),
+      // Insights generated in last hour
+      IntelligenceDecision.count({ where: { timestamp: { [Op.gte]: oneHourAgo } } }),
+      // Tasks created today
+      AgentTask.count({ where: { created_at: { [Op.gte]: oneDayAgo } } }),
+      // Initiative stats
+      getInitiativeStats(),
+      // Retention stats
+      getRetentionStats().catch(() => null),
+    ]);
+
+    res.json({
+      agent_fleet: agentFleet,
+      insights_last_hour: insightsLastHour,
+      tasks_today: tasksToday,
+      initiatives: initiativeStats,
+      retention,
+      checked_at: new Date().toISOString(),
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

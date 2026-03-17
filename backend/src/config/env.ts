@@ -70,4 +70,7 @@ export const env = {
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+
+  // Campaign Test Safety
+  campaignTestEmailDomain: process.env.CAMPAIGN_TEST_EMAIL_DOMAIN || '@colaberry-test.local',
 };

@@ -6,6 +6,7 @@ import { triggerVoiceCall } from '../../synthflowService';
 import { logCommunication } from '../../communicationLogService';
 import { runAdmissionsCallGovernanceAgent } from './admissionsCallGovernanceAgent';
 import { logAgentActivity } from '../../aiEventService';
+import { evaluateSend } from '../../communicationSafetyService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const AGENT_NAME = 'AdmissionsSynthflowCallAgent';
@@ -86,10 +87,45 @@ export async function runAdmissionsSynthflowCallAgent(
       return buildResult(actions, errors, startTime);
     }
 
-    // Step 3: Trigger Synthflow call
+    // Step 3: Communication safety check (test mode, unsubscribe, rate limit)
+    const sendDecision = await evaluateSend({
+      leadId: memory.lead_id,
+      channel: 'voice',
+      toPhone: phone,
+      source: 'manual',
+    });
+
+    if (!sendDecision.allowed) {
+      errors.push(`Call blocked: ${sendDecision.blockedReason}`);
+      await CallContactLog.create({
+        visitor_id,
+        call_type,
+        campaign_source: campaign_source || null,
+        reason_for_call: reason,
+        approved_by_agent: AGENT_NAME,
+        call_status: 'blocked',
+      });
+      actions.push({
+        campaign_id: '',
+        action: 'call_blocked_by_safety',
+        reason: `Call blocked by safety service: ${sendDecision.blockedReason}`,
+        confidence: 1.0,
+        before_state: { call_type, phone },
+        after_state: { blocked: true, reason: sendDecision.blockedReason },
+        result: 'skipped',
+        entity_type: 'visitor',
+        entity_id: visitor_id,
+      });
+      return buildResult(actions, errors, startTime);
+    }
+
+    // Use test redirect phone if in test mode
+    const targetPhone = sendDecision.redirect?.phone || phone;
+
+    // Step 4: Trigger Synthflow call
     const callResult = await triggerVoiceCall({
       name: lead?.getDataValue('name') || 'Prospect',
-      phone,
+      phone: targetPhone,
       callType: 'interest',
       context: {
         lead_name: lead?.getDataValue('name') || '',
@@ -115,9 +151,9 @@ export async function runAdmissionsSynthflowCallAgent(
       lead_id: memory.lead_id,
       channel: 'voice',
       direction: 'outbound',
-      delivery_mode: 'live',
+      delivery_mode: sendDecision.testMode ? 'test_redirect' : 'live',
       status: callStatus,
-      to_address: phone,
+      to_address: targetPhone,
       provider: 'synthflow',
       provider_message_id: callResult.data?.call_id || null,
       metadata: { call_type, reason },

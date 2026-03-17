@@ -269,6 +269,22 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       }
     }
 
+    // Look up the lead's upcoming strategy call for appointment-aware messaging
+    let appointmentContext: { scheduled_at: string; timezone: string; meet_link: string } | undefined;
+    try {
+      const strategyCall = await StrategyCall.findOne({
+        where: { lead_id: action.lead_id, scheduled_at: { [Op.gte]: new Date() } },
+        order: [['scheduled_at', 'ASC']],
+      });
+      if (strategyCall) {
+        appointmentContext = {
+          scheduled_at: (strategyCall as any).scheduled_at.toISOString(),
+          timezone: (strategyCall as any).timezone || 'America/Chicago',
+          meet_link: (strategyCall as any).meet_link || '',
+        };
+      }
+    } catch { /* non-critical */ }
+
     const result = await generateMessage({
       channel: channel as 'email' | 'sms' | 'voice',
       ai_instructions: action.ai_instructions,
@@ -282,6 +298,7 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
         start_date: nextCohort.start_date,
         seats_remaining: nextCohort.seats_remaining,
       } : undefined,
+      appointmentContext,
     });
 
     // Update the action with AI-generated content
@@ -466,6 +483,26 @@ async function processScheduledActions(): Promise<void> {
     }
 
     try {
+      // Step 0: Test action safety guard — block test actions targeting real domains
+      if (action.is_test_action) {
+        const testDomain = env.campaignTestEmailDomain;
+        const email = action.to_email || '';
+        const isTestDomain = email.endsWith(testDomain);
+
+        if (!isTestDomain) {
+          await action.update({
+            status: 'cancelled',
+            metadata: {
+              ...(action.metadata || {}),
+              blocked_reason: 'test_action_non_test_domain',
+              blocked_email: email,
+            },
+          } as any);
+          console.error(`[Scheduler] TEST EMAIL BLOCKED — action ${action.id} targeted non-test domain: ${email}`);
+          continue;
+        }
+      }
+
       // Step 1: AI content generation (for all channels)
       await generateAIContent(action);
 

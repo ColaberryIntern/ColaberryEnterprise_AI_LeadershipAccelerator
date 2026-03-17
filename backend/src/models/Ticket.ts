@@ -3,7 +3,8 @@ import { sequelize } from '../config/database';
 
 export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
-export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_action' | 'strategic';
+export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_action' | 'strategic'
+  | 'strategic_initiative' | 'ai_optimization' | 'agent_restructure' | 'agent_creation' | 'workflow_redesign' | 'system_automation';
 export type TicketActorType = 'human' | 'cory' | 'agent';
 
 interface TicketAttributes {
@@ -86,7 +87,7 @@ Ticket.init(
       defaultValue: 'medium',
     },
     type: {
-      type: DataTypes.STRING(30),
+      type: DataTypes.STRING(50),
       allowNull: false,
       defaultValue: 'task',
     },
