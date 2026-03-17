@@ -40,6 +40,7 @@ function AppointmentCard({ appointment, onUpdated, showLeadName }: AppointmentCa
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'America/Chicago',
     });
   };
 

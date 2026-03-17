@@ -30,7 +30,7 @@ import { runSuperAgentCycle } from '../services/agents/departments/superAgents/s
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const LAUNCH_HOUR_CST = 9; // 9:00 AM CST
-const CST_OFFSET_MS = 6 * 60 * 60 * 1000; // UTC-6
+const BUSINESS_TIMEZONE = 'America/Chicago';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -45,8 +45,10 @@ function fmt(n: number): string {
 }
 
 function nowCST(): Date {
-  const utc = new Date();
-  return new Date(utc.getTime() - CST_OFFSET_MS);
+  // Use Intl to get correct CST/CDT offset (handles daylight saving)
+  const now = new Date();
+  const cstStr = now.toLocaleString('en-US', { timeZone: BUSINESS_TIMEZONE });
+  return new Date(cstStr);
 }
 
 function sleep(ms: number): Promise<void> {
