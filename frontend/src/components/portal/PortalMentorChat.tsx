@@ -161,7 +161,7 @@ function PortalMentorChat() {
   }, [isFullscreen]);
 
   const lessonId = lessonContext.lessonId || undefined;
-  const isImplementationTask = lessonContext.currentSection === 'implementation_task' && !!lessonContext.implementationTaskData;
+  const isImplementationTask = !!lessonContext.implementationTaskData;
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

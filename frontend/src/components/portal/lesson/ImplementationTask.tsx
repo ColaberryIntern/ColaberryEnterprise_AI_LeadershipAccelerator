@@ -193,7 +193,7 @@ export default function ImplementationTask({ data, lessonId, onSubmit, onArtifac
       workstationPrompt: orchContext?.workstationPrompt || undefined,
       workstationTestMode: orchContext?.workstationTestMode || false,
     });
-    return () => updateLessonContext({ currentSection: '', implementationTaskData: undefined, workstationPrompt: undefined, workstationTestMode: undefined });
+    return () => updateLessonContext({ currentSection: '', workstationPrompt: undefined, workstationTestMode: undefined });
   }, [title, description, deliverable, requirements, artifacts, orchContext?.workstationPrompt, orchContext?.workstationTestMode, updateLessonContext]);
 
   const handleMentorResponse = useCallback(() => {

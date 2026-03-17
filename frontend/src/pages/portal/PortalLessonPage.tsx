@@ -71,6 +71,18 @@ function PortalLessonPage() {
       currentSection: 'section',
       conceptText: content.concept_snapshot?.executive_summary || content.concept_explanation?.substring(0, 300) || '',
       promptTemplate: content.prompt_template?.template || '',
+      implementationTaskData: content.implementation_task ? {
+        title: content.implementation_task.title || 'Implementation Task',
+        description: content.implementation_task.description || content.implementation_task.scenario || '',
+        deliverable: content.implementation_task.deliverable || '',
+        requirements: content.implementation_task.requirements || content.implementation_task.steps || [],
+        artifacts: (content.implementation_task.required_artifacts || []).map((a: any) => ({
+          name: a.name,
+          description: a.description,
+          file_types: a.file_types || [],
+          validation_criteria: a.validation_criteria || '',
+        })),
+      } : undefined,
     });
     return () => {
       updateLessonContext({ lessonId: null, lessonTitle: '', currentSection: '', conceptText: '', promptTemplate: '' });
