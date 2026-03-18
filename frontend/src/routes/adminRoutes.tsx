@@ -4,6 +4,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
 import AdminLoginPage from '../pages/admin/AdminLoginPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
+import WarRoomPage from '../pages/admin/WarRoomPage';
 import AdminCohortDetailPage from '../pages/admin/AdminCohortDetailPage';
 import AdminLeadsPage from '../pages/admin/AdminLeadsPage';
 import AdminLeadDetailPage from '../pages/admin/AdminLeadDetailPage';
@@ -35,6 +36,7 @@ const adminRoutes = (
     <Route element={<ProtectedRoute />}>
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        <Route path="/admin/war-room" element={<WarRoomPage />} />
         <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
         <Route path="/admin/pipeline" element={<AdminPipelinePage />} />
         <Route path="/admin/leads" element={<AdminLeadsPage />} />
