@@ -8,17 +8,35 @@ import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 import api from '../utils/api';
 import kitMarkdownUrl from '../docs/CorporateSponsorshipKit.md';
+import { Cohort } from '../models/Cohort';
 
 function SponsorshipPage() {
   const [showKitModal, setShowKitModal] = useState(false);
   const [submittedName, setSubmittedName] = useState('');
   const [kitContent, setKitContent] = useState('');
+  const [cohortName, setCohortName] = useState('Upcoming Cohort');
+  const [cohortDate, setCohortDate] = useState('Starting Soon');
 
   useEffect(() => {
     fetch(kitMarkdownUrl)
       .then((res) => res.text())
       .then(setKitContent)
       .catch(() => setKitContent('Failed to load kit content.'));
+
+    const today = new Date().toISOString().slice(0, 10);
+    api.get('/api/cohorts')
+      .then((res) => {
+        const open = (res.data.cohorts || [])
+          .filter((c: Cohort) => c.seats_taken < c.max_seats && c.start_date >= today)
+          .sort((a: Cohort, b: Cohort) => a.start_date.localeCompare(b.start_date));
+        if (open.length > 0) {
+          setCohortName(open[0].name);
+          setCohortDate(new Date(open[0].start_date + 'T00:00:00').toLocaleDateString('en-US', {
+            month: 'long', day: 'numeric', year: 'numeric',
+          }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleFormSuccess = (data?: { name: string; email: string; company: string; phone: string }) => {
@@ -289,7 +307,7 @@ function SponsorshipPage() {
               ),
             }}
           >
-            {kitContent}
+            {kitContent.replace(/\{\{COHORT_NAME\}\}/g, cohortName).replace(/\{\{COHORT_DATE\}\}/g, cohortDate)}
           </ReactMarkdown>
         </div>
       </Modal>
