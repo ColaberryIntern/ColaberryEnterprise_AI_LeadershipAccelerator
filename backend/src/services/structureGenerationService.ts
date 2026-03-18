@@ -4,6 +4,7 @@ import MiniSection from '../models/MiniSection';
 import VariableDefinition from '../models/VariableDefinition';
 import ArtifactDefinition from '../models/ArtifactDefinition';
 import SkillDefinition from '../models/SkillDefinition';
+import CurriculumLesson from '../models/CurriculumLesson';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 import { callLLMWithAudit } from './llmCallWrapper';
 
@@ -391,6 +392,22 @@ export async function applySectionBlueprint(
 
       result.created_mini_sections.push({ id: msId, type: spec.type, title: spec.title });
     }
+
+    // 5. Propagate skills and artifacts to section level
+    const allMiniSections = await MiniSection.findAll({ where: { lesson_id: lessonId }, transaction: t });
+    const allSkillIds = new Set<string>();
+    const allArtifactIds = new Set<string>();
+    for (const ms of allMiniSections) {
+      for (const sid of (ms.associated_skill_ids || [])) allSkillIds.add(sid);
+      for (const aid of (ms.creates_artifact_ids || [])) allArtifactIds.add(aid);
+    }
+    await CurriculumLesson.update(
+      {
+        section_skill_ids: [...allSkillIds],
+        section_artifact_ids: [...allArtifactIds],
+      } as any,
+      { where: { id: lessonId }, transaction: t },
+    );
   });
 
   return result;
