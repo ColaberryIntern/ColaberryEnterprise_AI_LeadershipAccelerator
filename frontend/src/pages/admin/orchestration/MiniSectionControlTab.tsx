@@ -13,6 +13,7 @@ import MiniSectionPipeline from './builder/MiniSectionPipeline';
 import SectionIntelligencePanel from './builder/SectionIntelligencePanel';
 import { useCurriculumGraph } from './builder/useCurriculumGraph';
 import { useVariableFlow } from './builder/useVariableFlow';
+import { useControlTower } from './builder/useControlTower';
 import PromptDebuggerPanel from './builder/PromptDebuggerPanel';
 import AISimulationWorkspace from './builder/AISimulationWorkspace';
 import { PROMPT_PAIRS } from './builder/types';
@@ -29,6 +30,7 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
   const { skillGraph, artifactFlow } = useCurriculumGraph(builder.selectedLessonId || undefined);
   const { sectionFlow, reconciliation, refreshReconciliation } = useVariableFlow(builder.selectedLessonId || undefined);
+  const ct = useControlTower(builder.selectedLessonId || undefined);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
@@ -387,6 +389,16 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                   onApplySuggestionFix={builder.applySuggestionFix}
                   onOpenDiagnostic={() => { builder.setShowDiagnosticModal(true); builder.runDiagnostic(); }}
                   onOpenRepair={() => builder.setShowRepairModal(true)}
+                  controlTower={{
+                    diagnostics: ct.diagnostics,
+                    variableTrace: ct.variableTrace,
+                    repairPlan: ct.repairPlan,
+                    loading: ct.loading,
+                  }}
+                  onRunDiagnostics={ct.runDiagnostics}
+                  onFetchVariableTrace={ct.fetchVariableTrace}
+                  onFetchRepairPlan={ct.fetchRepairPlan}
+                  onExecuteRepairPlan={ct.executeRepairPlan}
                 />
                 <PromptDebuggerPanel
                   lessonId={builder.selectedLessonId}

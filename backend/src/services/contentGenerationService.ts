@@ -85,6 +85,25 @@ export async function generateLessonContent(
     }
   }
 
+  // Execution safety pre-flight check (Control Tower)
+  if (enrollmentId && miniSections.length > 0) {
+    try {
+      const { validateSectionExecutionReadiness } = require('./variableFlowService');
+      const readiness = await validateSectionExecutionReadiness(lesson.id, enrollmentId);
+      if (readiness.blocking) {
+        console.warn(`[ContentGeneration] Execution blocked for lesson ${lesson.id}: ${readiness.missingVariables.length} missing variables`);
+        return {
+          _execution_blocked: true,
+          _missing_variables: readiness.missingVariables,
+          _timeline_violations: readiness.timelineViolations,
+          error: 'Execution blocked: missing required variables',
+        };
+      }
+    } catch {
+      // Non-critical — proceed without safety check
+    }
+  }
+
   let systemPrompt: string;
   let userPrompt: string;
 

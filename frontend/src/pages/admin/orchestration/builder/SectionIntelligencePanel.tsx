@@ -5,6 +5,7 @@ import QualityScoreSection from './QualityScoreSection';
 import SuggestionSection from './SuggestionSection';
 import type { SkillCrossRef, ArtifactFlowRef } from './useCurriculumGraph';
 import type { SectionVariableFlow, VariableReconciliation } from './useVariableFlow';
+import type { DiagnosticsResult, VariableTraceResult, RepairPlan } from './useControlTower';
 
 interface Props {
   sectionVariableKeys: string[];
@@ -36,6 +37,17 @@ interface Props {
   onApplySuggestionFix?: (s: Suggestion) => void;
   onOpenDiagnostic?: () => void;
   onOpenRepair?: () => void;
+  // Control Tower
+  controlTower?: {
+    diagnostics: DiagnosticsResult | null;
+    variableTrace: VariableTraceResult | null;
+    repairPlan: RepairPlan | null;
+    loading: { diagnostics: boolean; trace: boolean; repair: boolean };
+  };
+  onRunDiagnostics?: () => void;
+  onFetchVariableTrace?: () => void;
+  onFetchRepairPlan?: (preview?: boolean) => void;
+  onExecuteRepairPlan?: () => void;
 }
 
 function CollapsibleSection({ icon, title, count, color, children, warningCount }: {
@@ -76,6 +88,7 @@ export default function SectionIntelligencePanel({
   qualityBreakdown, qualityLoading, onRefreshQuality,
   suggestions, suggestionsLoading, applyingSuggestion, onRefreshSuggestions, onApplySuggestionFix,
   onOpenDiagnostic, onOpenRepair,
+  controlTower, onRunDiagnostics, onFetchVariableTrace, onFetchRepairPlan, onExecuteRepairPlan,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -352,6 +365,221 @@ export default function SectionIntelligencePanel({
               <i className="bi bi-arrow-repeat me-1"></i>Check variable reconciliation
             </button>
           )}
+
+          {/* ─── Control Tower Sections ──────────────────────────── */}
+
+          {/* System Health */}
+          <CollapsibleSection
+            icon="bi-shield-check"
+            title="System Health"
+            count={controlTower?.diagnostics ? 1 : 0}
+            color="#38a169"
+            warningCount={controlTower?.diagnostics?.issues?.filter(i => i.severity === 'critical').length}
+          >
+            {controlTower?.diagnostics ? (() => {
+              const d = controlTower.diagnostics!;
+              const scoreColor = d.system_health_score > 80 ? '#38a169' : d.system_health_score > 50 ? '#dd6b20' : '#dc3545';
+              return (
+                <div className="d-flex flex-column gap-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="fw-semibold" style={{ fontSize: 18, color: scoreColor }}>{d.system_health_score}</div>
+                    <div className="flex-grow-1">
+                      <div className="progress" style={{ height: 6 }}>
+                        <div className="progress-bar" style={{ width: `${d.system_health_score}%`, background: scoreColor }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="d-flex flex-wrap gap-1">
+                    {d.summary.missing_count > 0 && (
+                      <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                        {d.summary.missing_count} missing
+                      </span>
+                    )}
+                    {d.summary.timeline_violations > 0 && (
+                      <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                        {d.summary.timeline_violations} timeline
+                      </span>
+                    )}
+                    {d.summary.undefined_count > 0 && (
+                      <span className="badge" style={{ fontSize: 8, background: 'rgba(221,107,32,0.1)', color: '#dd6b20', border: '1px solid rgba(221,107,32,0.2)' }}>
+                        {d.summary.undefined_count} undefined
+                      </span>
+                    )}
+                    {d.summary.orphaned_count > 0 && (
+                      <span className="badge" style={{ fontSize: 8, background: 'rgba(108,117,125,0.1)', color: '#6c757d', border: '1px solid rgba(108,117,125,0.2)' }}>
+                        {d.summary.orphaned_count} orphaned
+                      </span>
+                    )}
+                    {d.issues.length === 0 && (
+                      <span className="text-muted" style={{ fontSize: 9 }}>All clear</span>
+                    )}
+                  </div>
+                  {d.issues.filter(i => i.severity === 'critical').length > 0 && (
+                    <div>
+                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dc3545' }}>Critical Issues</div>
+                      {d.issues.filter(i => i.severity === 'critical').map((issue, idx) => (
+                        <div key={idx} className="d-flex align-items-start gap-1 mb-1" style={{ fontSize: 9 }}>
+                          <i className="bi bi-exclamation-triangle" style={{ color: '#dc3545', fontSize: 9 }}></i>
+                          <span>{issue.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })() : (
+              <button
+                className="btn btn-sm btn-outline-secondary w-100 py-0"
+                style={{ fontSize: 9 }}
+                onClick={onRunDiagnostics}
+                disabled={controlTower?.loading?.diagnostics}
+              >
+                {controlTower?.loading?.diagnostics ? (
+                  <><span className="spinner-border spinner-border-sm me-1" role="status" style={{ width: 10, height: 10 }}></span>Scanning...</>
+                ) : (
+                  <><i className="bi bi-shield-check me-1"></i>Run Diagnostics</>
+                )}
+              </button>
+            )}
+          </CollapsibleSection>
+
+          {/* Variable Trace */}
+          <CollapsibleSection
+            icon="bi-list-check"
+            title="Variable Trace"
+            count={controlTower?.variableTrace?.trace?.length || 0}
+            color="#0d6efd"
+            warningCount={controlTower?.variableTrace?.missing_count}
+          >
+            {controlTower?.variableTrace ? (() => {
+              const t = controlTower.variableTrace!;
+              return (
+                <div className="d-flex flex-column gap-1">
+                  <div className="d-flex gap-1 mb-1" style={{ fontSize: 8 }}>
+                    <span className="badge" style={{ background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                      {t.resolved_count} resolved
+                    </span>
+                    {t.missing_count > 0 && (
+                      <span className="badge" style={{ background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                        {t.missing_count} missing
+                      </span>
+                    )}
+                  </div>
+                  {t.trace.map(v => {
+                    const statusColor = v.status === 'resolved' ? '#38a169' : v.status === 'missing' ? '#dc3545' : '#dd6b20';
+                    return (
+                      <div key={v.key} className="d-flex align-items-center gap-1" style={{ fontSize: 9 }}>
+                        <span className="badge" style={{ fontSize: 8, background: `${statusColor}15`, color: statusColor, border: `1px solid ${statusColor}30`, minWidth: 10 }}>
+                          {v.status === 'resolved' ? '\u2713' : v.status === 'missing' ? '\u2717' : '!'}
+                        </span>
+                        <span className="fw-medium">{v.key}</span>
+                        {v.value && <span className="text-muted text-truncate" style={{ maxWidth: 80 }}>= {v.value}</span>}
+                        <span className="text-muted ms-auto" style={{ fontSize: 7 }}>{v.source_detail}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })() : (
+              <button
+                className="btn btn-sm btn-outline-secondary w-100 py-0"
+                style={{ fontSize: 9 }}
+                onClick={onFetchVariableTrace}
+                disabled={controlTower?.loading?.trace || !lessonId}
+              >
+                {controlTower?.loading?.trace ? (
+                  <><span className="spinner-border spinner-border-sm me-1" role="status" style={{ width: 10, height: 10 }}></span>Loading...</>
+                ) : (
+                  <><i className="bi bi-list-check me-1"></i>Load Trace</>
+                )}
+              </button>
+            )}
+          </CollapsibleSection>
+
+          {/* Repair Plan */}
+          <CollapsibleSection
+            icon="bi-tools"
+            title="Repair Plan"
+            count={controlTower?.repairPlan?.impact_summary?.total_actions || 0}
+            color="#dd6b20"
+            warningCount={controlTower?.repairPlan?.impact_summary?.blocked_actions}
+          >
+            {controlTower?.repairPlan ? (() => {
+              const p = controlTower.repairPlan!;
+              const riskColor = p.overall_risk_level === 'low' ? '#38a169' : p.overall_risk_level === 'medium' ? '#dd6b20' : '#dc3545';
+              return (
+                <div className="d-flex flex-column gap-2">
+                  <div className="d-flex flex-wrap gap-1" style={{ fontSize: 8 }}>
+                    <span className="badge" style={{ background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                      {p.impact_summary.safe_actions} safe
+                    </span>
+                    {p.impact_summary.blocked_actions > 0 && (
+                      <span className="badge" style={{ background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                        {p.impact_summary.blocked_actions} blocked
+                      </span>
+                    )}
+                    <span className="badge" style={{ background: `${riskColor}15`, color: riskColor, border: `1px solid ${riskColor}30` }}>
+                      risk: {p.overall_risk_level}
+                    </span>
+                  </div>
+                  {p.actions.slice(0, 10).map((action, idx) => {
+                    const actRiskColor = action.risk_level === 'low' ? '#38a169' : action.risk_level === 'medium' ? '#dd6b20' : '#dc3545';
+                    return (
+                      <div
+                        key={idx}
+                        className="d-flex align-items-start gap-1"
+                        style={{ fontSize: 9, opacity: action.blocked ? 0.5 : 1 }}
+                      >
+                        {action.blocked ? (
+                          <i className="bi bi-lock" style={{ fontSize: 9, color: '#dc3545' }}></i>
+                        ) : (
+                          <i className="bi bi-wrench" style={{ fontSize: 9, color: actRiskColor }}></i>
+                        )}
+                        <span className={action.blocked ? 'text-decoration-line-through' : ''}>
+                          {action.description.slice(0, 80)}{action.description.length > 80 ? '...' : ''}
+                        </span>
+                        {action.downstream_sections.length > 0 && (
+                          <span className="text-muted ms-auto" style={{ fontSize: 7, whiteSpace: 'nowrap' }}>
+                            {action.downstream_sections.length} downstream
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {p.actions.length > 10 && (
+                    <span className="text-muted" style={{ fontSize: 8 }}>+{p.actions.length - 10} more actions</span>
+                  )}
+                  {p.impact_summary.safe_actions > 0 && (
+                    <button
+                      className="btn btn-sm btn-outline-warning w-100 py-0 mt-1"
+                      style={{ fontSize: 9 }}
+                      onClick={onExecuteRepairPlan}
+                      disabled={controlTower?.loading?.repair}
+                    >
+                      {controlTower?.loading?.repair ? (
+                        <><span className="spinner-border spinner-border-sm me-1" role="status" style={{ width: 10, height: 10 }}></span>Applying...</>
+                      ) : (
+                        <><i className="bi bi-play-circle me-1"></i>Apply Safe Repairs ({p.impact_summary.safe_actions})</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              );
+            })() : (
+              <button
+                className="btn btn-sm btn-outline-secondary w-100 py-0"
+                style={{ fontSize: 9 }}
+                onClick={() => onFetchRepairPlan?.(true)}
+                disabled={controlTower?.loading?.repair}
+              >
+                {controlTower?.loading?.repair ? (
+                  <><span className="spinner-border spinner-border-sm me-1" role="status" style={{ width: 10, height: 10 }}></span>Analyzing...</>
+                ) : (
+                  <><i className="bi bi-tools me-1"></i>Preview Repairs</>
+                )}
+              </button>
+            )}
+          </CollapsibleSection>
 
           {/* Diagnostic Tools — shown when a mini-section is selected */}
           {editing && (

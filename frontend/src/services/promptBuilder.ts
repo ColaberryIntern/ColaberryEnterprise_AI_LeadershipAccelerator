@@ -41,6 +41,7 @@ export interface PromptBuilderInput {
   };
   workstationPrompt?: string;
   workstationTestMode?: boolean;
+  variableTrace?: { key: string; value?: string | null; source: string; status: string }[];
 }
 
 const CLAUDE_CODE_CONSTRAINT = `
@@ -157,6 +158,14 @@ export function buildFinalPrompt(input: PromptBuilderInput): string {
       for (const v of input.variableContext.missing) lines.push(`- ${v.key}`);
     }
     if (lines.length > 1) parts.push(lines.join('\n'));
+  }
+
+  // 9.5. Variable trace (display-only — not sent to LLM at execution)
+  if (input.variableTrace && input.variableTrace.length > 0) {
+    const traceLines = input.variableTrace.map(v =>
+      `- ${v.key}: ${v.value ? `"${v.value}"` : '[NOT SET]'} [${v.status}, from: ${v.source}]`
+    );
+    parts.push(`VARIABLE TRACE:\n${traceLines.join('\n')}`);
   }
 
   // 10. Test mode

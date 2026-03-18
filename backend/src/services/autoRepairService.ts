@@ -1,21 +1,80 @@
 import MiniSection from '../models/MiniSection';
 import VariableDefinition from '../models/VariableDefinition';
+import {
+  getVariableFlowMap,
+  getVariableReconciliation,
+  VariableFlowEntry,
+} from './variableFlowService';
 const { v4: uuidv4 } = require('uuid');
 
-interface RepairFix {
+// ─── Debug Logging ──────────────────────────────────────────────────
+
+const DEBUG = process.env.DEBUG_CONTROL_TOWER === 'true';
+function debugLog(msg: string, data?: any) {
+  if (DEBUG) console.log(`[ControlTower:Repair] ${msg}`, data !== undefined ? JSON.stringify(data) : '');
+}
+
+// ─── Types ──────────────────────────────────────────────────────────
+
+export interface RepairFix {
   action: string;
   field: string;
   oldValue: any;
   newValue: any;
 }
 
-interface RepairResult {
+export interface RepairResult {
   miniSectionId: string;
   appliedFixes: RepairFix[];
   skippedFixes: { action: string; reason: string }[];
   previousScore: number;
   newQualityScore: number;
 }
+
+export interface RepairAction {
+  action_type: string;
+  variable_key?: string;
+  target_id?: string;
+  target_label: string;
+  description: string;
+  risk_level: 'low' | 'medium' | 'high';
+  downstream_sections: string[];
+  blocked: boolean;
+  block_reason?: string;
+}
+
+export interface RepairPlan {
+  generated_at: string;
+  overall_risk_level: 'low' | 'medium' | 'high';
+  impact_summary: {
+    total_actions: number;
+    safe_actions: number;
+    blocked_actions: number;
+    affected_sections: number;
+    affected_variables: number;
+  };
+  actions: RepairAction[];
+}
+
+// ─── Safe Repair Rules ──────────────────────────────────────────────
+
+const SAFE_REPAIR_RULES = {
+  allowed: [
+    'create_variable_definition',
+    'normalize_casing',
+    'add_placeholder_prompt',
+    'add_placeholder_learning_goal',
+    'set_default_kc_config',
+    'remove_orphan_refs',
+  ],
+  blocked: [
+    'fix_timeline_order',
+    'delete_variable',
+    'reorder_sections',
+    'change_variable_meaning',
+    'remove_variable_used_downstream',
+  ],
+};
 
 const DEFAULT_PROMPTS: Record<string, string> = {
   executive_reality_check: 'Analyze {{industry}} trends and their impact on {{company_name}}. Consider the current {{ai_maturity_level}} AI maturity level and identify key opportunities for {{role}} leadership.',
@@ -159,4 +218,160 @@ export async function autoRepairAll(dryRun = false): Promise<{ total: number; re
     results.push(result);
   }
   return { total: all.length, repaired, results };
+}
+
+// ─── Control Tower: Program-Level Repair Plan ───────────────────────
+
+function computeDownstreamSections(variableKey: string, flowMap: VariableFlowEntry[]): string[] {
+  const entry = flowMap.find(e => e.variable_key === variableKey);
+  if (!entry) return [];
+  return entry.consumed_in.map(c => c.lesson_title);
+}
+
+function computeRiskLevel(downstreamCount: number): 'low' | 'medium' | 'high' {
+  if (downstreamCount > 6) return 'high';
+  if (downstreamCount > 3) return 'medium';
+  return 'low';
+}
+
+function isBlocked(actionType: string): { blocked: boolean; reason?: string } {
+  if (SAFE_REPAIR_RULES.blocked.includes(actionType)) {
+    return { blocked: true, reason: `Action "${actionType}" is blocked by safe repair rules` };
+  }
+  return { blocked: false };
+}
+
+export async function generateRepairPlan(): Promise<RepairPlan> {
+  const actions: RepairAction[] = [];
+  const affectedSections = new Set<string>();
+  const affectedVariables = new Set<string>();
+
+  // 1. Get flow map for impact analysis
+  const flowMap = await getVariableFlowMap();
+
+  // 2. Get reconciliation for undefined + orphaned
+  const recon = await getVariableReconciliation();
+
+  // Undefined references → create_variable_definition
+  for (const ref of recon.undefined_refs) {
+    const downstream = computeDownstreamSections(ref.key, flowMap);
+    for (const s of ref.used_in_sections) affectedSections.add(s);
+    affectedVariables.add(ref.key);
+
+    actions.push({
+      action_type: 'create_variable_definition',
+      variable_key: ref.key,
+      target_label: ref.key,
+      description: `Create VariableDefinition for "${ref.key}" (referenced in ${ref.used_in_sections.join(', ')})`,
+      risk_level: computeRiskLevel(downstream.length),
+      downstream_sections: downstream,
+      blocked: false,
+    });
+  }
+
+  // Orphaned definitions → flag for review (not auto-delete)
+  for (const orphan of recon.orphaned_defs) {
+    const downstream = computeDownstreamSections(orphan.key, flowMap);
+    affectedVariables.add(orphan.key);
+
+    actions.push({
+      action_type: 'remove_orphaned_definition',
+      variable_key: orphan.key,
+      target_label: orphan.display_name,
+      description: `"${orphan.key}" (${orphan.display_name}) is defined but never referenced — review for removal`,
+      risk_level: 'low',
+      downstream_sections: downstream,
+      blocked: false,
+    });
+  }
+
+  // Timeline violations → structural fix needed (blocked)
+  for (const entry of flowMap) {
+    if (entry.timeline_violation) {
+      const consumed = entry.consumed_in.map(c => c.lesson_title);
+      for (const s of consumed) affectedSections.add(s);
+      affectedVariables.add(entry.variable_key);
+
+      const blockCheck = isBlocked('fix_timeline_order');
+      actions.push({
+        action_type: 'fix_timeline_order',
+        variable_key: entry.variable_key,
+        target_label: entry.variable_key,
+        description: `"${entry.variable_key}" consumed before produced — requires section reordering`,
+        risk_level: 'high',
+        downstream_sections: consumed,
+        blocked: blockCheck.blocked,
+        block_reason: blockCheck.reason,
+      });
+    }
+  }
+
+  // 3. Get mini-section-level dry run for additional actions
+  const dryRunResults = await autoRepairAll(true);
+  for (const result of dryRunResults.results) {
+    for (const fix of result.appliedFixes) {
+      const blockCheck = isBlocked(fix.action);
+      const downstream = fix.action === 'create_variable_definition' && fix.newValue
+        ? computeDownstreamSections(fix.newValue, flowMap)
+        : [];
+
+      if (fix.newValue) affectedVariables.add(typeof fix.newValue === 'string' ? fix.newValue : fix.field);
+
+      actions.push({
+        action_type: fix.action,
+        variable_key: typeof fix.newValue === 'string' ? fix.newValue : undefined,
+        target_id: result.miniSectionId,
+        target_label: `Mini-section ${result.miniSectionId.slice(0, 8)}`,
+        description: `${fix.action}: ${fix.field} → ${typeof fix.newValue === 'string' ? fix.newValue.slice(0, 60) : JSON.stringify(fix.newValue).slice(0, 60)}`,
+        risk_level: computeRiskLevel(downstream.length),
+        downstream_sections: downstream,
+        blocked: blockCheck.blocked,
+        block_reason: blockCheck.reason,
+      });
+    }
+  }
+
+  // Deduplicate create_variable_definition actions by variable_key
+  const seen = new Set<string>();
+  const dedupedActions: RepairAction[] = [];
+  for (const action of actions) {
+    const dedupeKey = `${action.action_type}:${action.variable_key || action.target_id || ''}`;
+    if (!seen.has(dedupeKey)) {
+      seen.add(dedupeKey);
+      dedupedActions.push(action);
+    }
+  }
+
+  // Compute overall risk level
+  const nonBlockedActions = dedupedActions.filter(a => !a.blocked);
+  let overallRisk: 'low' | 'medium' | 'high' = 'low';
+  if (nonBlockedActions.some(a => a.risk_level === 'high')) overallRisk = 'high';
+  else if (nonBlockedActions.some(a => a.risk_level === 'medium')) overallRisk = 'medium';
+
+  const plan: RepairPlan = {
+    generated_at: new Date().toISOString(),
+    overall_risk_level: overallRisk,
+    impact_summary: {
+      total_actions: dedupedActions.length,
+      safe_actions: dedupedActions.filter(a => !a.blocked).length,
+      blocked_actions: dedupedActions.filter(a => a.blocked).length,
+      affected_sections: affectedSections.size,
+      affected_variables: affectedVariables.size,
+    },
+    actions: dedupedActions,
+  };
+
+  debugLog('Repair plan generated', {
+    total: plan.impact_summary.total_actions,
+    safe: plan.impact_summary.safe_actions,
+    blocked: plan.impact_summary.blocked_actions,
+  });
+
+  return plan;
+}
+
+export async function previewRepairPlan(): Promise<{ plan: RepairPlan; dryRunResults: RepairResult[] }> {
+  const plan = await generateRepairPlan();
+  const dryRunResults = await autoRepairAll(true);
+  return { plan, dryRunResults: dryRunResults.results };
 }

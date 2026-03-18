@@ -498,6 +498,57 @@ router.get('/api/admin/orchestration/sections/:id/execution-readiness', requireA
   }
 });
 
+// ─── Control Tower Endpoints ────────────────────────────────────────
+
+router.get('/api/admin/orchestration/control-tower/diagnostics', requireAdmin, async (_req, res) => {
+  try {
+    const { runFullDiagnostics } = require('../../services/diagnosticsService');
+    const data = await runFullDiagnostics();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/control-tower/variable-trace/:lessonId', requireAdmin, async (req, res) => {
+  try {
+    const { getVariableTrace } = require('../../services/variableTraceService');
+    const enrollmentId = req.query.enrollmentId as string | undefined;
+    const data = await getVariableTrace(req.params.lessonId, enrollmentId);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/control-tower/repair-plan', requireAdmin, async (req, res) => {
+  try {
+    const preview = req.query.preview === 'true';
+    if (preview) {
+      const { previewRepairPlan } = require('../../services/autoRepairService');
+      const data = await previewRepairPlan();
+      res.json(data);
+    } else {
+      const { generateRepairPlan } = require('../../services/autoRepairService');
+      const data = await generateRepairPlan();
+      res.json(data);
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/control-tower/repair-plan/execute', requireAdmin, async (_req, res) => {
+  try {
+    const { autoRepairAll, generateRepairPlan } = require('../../services/autoRepairService');
+    const repairResults = await autoRepairAll(false);
+    const updatedPlan = await generateRepairPlan();
+    res.json({ repairResults, updatedPlan });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Prompt Validation & Preview
 router.get('/api/admin/orchestration/validate/prompt/:lessonId/:enrollmentId', requireAdmin, handleValidatePrompt);
 router.get('/api/admin/orchestration/preview/prompt/:lessonId/:enrollmentId', requireAdmin, handlePreviewPrompt);
