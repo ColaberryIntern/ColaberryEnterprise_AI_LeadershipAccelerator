@@ -345,6 +345,18 @@ router.get('/api/admin/orchestration/program/artifacts', requireAdmin, async (_r
 router.get('/api/admin/orchestration/enrollments/:enrollmentId/variables', requireAdmin, handleGetVariables);
 router.get('/api/admin/orchestration/enrollments/:enrollmentId/variables/graph', requireAdmin, handleGetVariableGraph);
 
+// Session Generation
+router.post('/api/admin/orchestration/cohorts/:cohortId/generate-sessions', requireAdmin, async (req, res) => {
+  try {
+    const { generateSessionsFromCohort } = await import('../../services/sessionGenerationService');
+    const result = await generateSessionsFromCohort(req.params.cohortId);
+    res.json(result);
+  } catch (err: any) {
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 // Session Flow & Dashboard
 router.get('/api/admin/orchestration/cohorts/:cohortId/flow', requireAdmin, handleGetSessionFlow);
 router.get('/api/admin/orchestration/cohorts/:cohortId/dashboard', requireAdmin, handleGetOrchDashboard);
@@ -544,6 +556,58 @@ router.post('/api/admin/orchestration/control-tower/repair-plan/execute', requir
     const repairResults = await autoRepairAll(false);
     const updatedPlan = await generateRepairPlan();
     res.json({ repairResults, updatedPlan });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Curriculum Generation Engine ─────────────────────────────────
+
+router.post('/api/admin/orchestration/curriculum/generate-preview', requireAdmin, async (req, res) => {
+  try {
+    const { generateCurriculumPreview } = require('../../services/curriculumGenerationService');
+    const preview = await generateCurriculumPreview(req.body);
+    res.json(preview);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/curriculum/generate-skeleton', requireAdmin, async (req, res) => {
+  try {
+    const { generateCurriculumSkeleton } = require('../../services/curriculumGenerationService');
+    const skeleton = await generateCurriculumSkeleton(req.body);
+    res.json(skeleton);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/curriculum/generate-blueprints', requireAdmin, async (req, res) => {
+  try {
+    const { generateCurriculumBlueprints } = require('../../services/curriculumGenerationService');
+    const blueprints = await generateCurriculumBlueprints(req.body.skeleton);
+    res.json({ blueprints });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/curriculum/analyze-governance', requireAdmin, async (req, res) => {
+  try {
+    const { analyzeGovernance } = require('../../services/curriculumGenerationService');
+    const report = analyzeGovernance(req.body.skeleton, req.body.blueprints);
+    res.json(report);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/curriculum/approve', requireAdmin, async (req, res) => {
+  try {
+    const { approveCurriculumPreview } = require('../../services/curriculumGenerationService');
+    const result = await approveCurriculumPreview(req.body);
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

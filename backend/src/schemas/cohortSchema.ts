@@ -12,6 +12,7 @@ export const updateCohortSchema = z.object({
   timezone: z.string().min(1).max(50).optional(),
   max_seats: z.number().int().positive().optional(),
   status: z.enum(['open', 'closed', 'completed']).optional(),
+  settings_json: z.record(z.any()).optional(),
 });
 
 export type UpdateCohortInput = z.infer<typeof updateCohortSchema>;

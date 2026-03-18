@@ -3,6 +3,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 interface Props { token: string; apiUrl: string; }
 
 const CHECKLIST_TYPES = ['tool_setup', 'account_creation', 'reading', 'prerequisite', 'custom'];
+
+function formatTimeLabel(time24: string): string {
+  const [h, m] = time24.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return m === 0 ? `${hour}:00 ${period}` : `${hour}:${String(m).padStart(2, '0')} ${period}`;
+}
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const TIMEZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Phoenix', 'UTC'];
 
@@ -28,7 +35,12 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
       const list = Array.isArray(data) ? data : data.cohorts || [];
       setCohorts(list);
       if (list.length > 0 && !selectedCohortId) {
-        setSelectedCohortId(list[0].id);
+        // Auto-select nearest upcoming cohort
+        const today = new Date().toISOString().split('T')[0];
+        const upcoming = list
+          .filter((c: any) => c.start_date >= today)
+          .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
+        setSelectedCohortId(upcoming.length > 0 ? upcoming[0].id : list[0].id);
       }
     } catch {}
   }, [token, apiUrl, selectedCohortId]);
@@ -37,8 +49,12 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
 
   const selectedCohort = cohorts.find((c: any) => c.id === selectedCohortId);
 
+  const [generating, setGenerating] = useState(false);
+  const [genMessage, setGenMessage] = useState('');
+
   const handleCohortEdit = () => {
     if (!selectedCohort) return;
+    const schedule = selectedCohort.settings_json?.schedule || {};
     setCohortForm({
       name: selectedCohort.name || '',
       start_date: selectedCohort.start_date || '',
@@ -48,8 +64,28 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
       timezone: selectedCohort.timezone || 'America/Chicago',
       max_seats: selectedCohort.max_seats || 20,
       status: selectedCohort.status || 'open',
+      // Schedule config
+      recurring_days: schedule.recurring_days || [selectedCohort.core_day || 'Thursday', selectedCohort.optional_lab_day].filter(Boolean),
+      start_time: schedule.start_time || '13:00',
+      end_time: schedule.end_time || '15:00',
+      total_sessions: schedule.total_sessions || 5,
+      core_days: schedule.core_days || [selectedCohort.core_day || 'Thursday'],
     });
     setCohortEditing(true);
+  };
+
+  const handleToggleDay = (day: string) => {
+    if (!cohortForm) return;
+    const days = cohortForm.recurring_days || [];
+    const updated = days.includes(day) ? days.filter((d: string) => d !== day) : [...days, day];
+    setCohortForm({ ...cohortForm, recurring_days: updated });
+  };
+
+  const handleToggleCoreDay = (day: string) => {
+    if (!cohortForm) return;
+    const days = cohortForm.core_days || [];
+    const updated = days.includes(day) ? days.filter((d: string) => d !== day) : [...days, day];
+    setCohortForm({ ...cohortForm, core_days: updated });
   };
 
   const handleCohortSave = async () => {
@@ -57,13 +93,28 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
     setCohortSaving(true);
     setError('');
     try {
+      const { recurring_days, start_time, end_time, total_sessions, core_days, ...cohortFields } = cohortForm;
+      // Derive core_day and optional_lab_day from recurring schedule config
+      const primaryCoreDay = core_days?.[0] || recurring_days?.[0] || cohortFields.core_day;
+      const labDays = (recurring_days || []).filter((d: string) => !(core_days || []).includes(d));
+      const labDay = labDays[0] || '';
+      const timeLabel = start_time && end_time
+        ? `${formatTimeLabel(start_time)}–${formatTimeLabel(end_time)}`
+        : cohortFields.core_time;
+
       const res = await fetch(`${apiUrl}/api/admin/cohorts/${selectedCohortId}`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...cohortForm,
-          optional_lab_day: cohortForm.optional_lab_day || null,
-          max_seats: parseInt(cohortForm.max_seats) || 20,
+          ...cohortFields,
+          core_day: primaryCoreDay,
+          core_time: timeLabel,
+          optional_lab_day: labDay || undefined,
+          max_seats: parseInt(cohortFields.max_seats) || 20,
+          settings_json: {
+            ...(selectedCohort?.settings_json || {}),
+            schedule: { recurring_days, start_time, end_time, total_sessions: parseInt(total_sessions) || 5, core_days },
+          },
         }),
       });
       if (!res.ok) throw new Error('Failed to save cohort');
@@ -77,6 +128,10 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [editingSession, setEditingSession] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Session schedule editing
+  const [editingSchedule, setEditingSchedule] = useState<any | null>(null);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+
   // Checklist state
   const [checklist, setChecklist] = useState<any[]>([]);
   const [checklistLoading, setChecklistLoading] = useState(false);
@@ -85,15 +140,16 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [checklistForm, setChecklistForm] = useState({ checklist_item: '', description: '', item_type: 'custom' });
 
   const fetchSessions = useCallback(async () => {
+    if (!selectedCohortId) return;
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl}/api/admin/orchestration/program/sessions`, {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/program/sessions?cohort_id=${selectedCohortId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       setSessions(Array.isArray(data) ? data : []);
     } catch {} finally { setLoading(false); }
-  }, [token, apiUrl]);
+  }, [token, apiUrl, selectedCohortId]);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
@@ -142,6 +198,48 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
       fetchSessions();
     } catch (err: any) { setError(err.message); }
     finally { setSaving(false); }
+  };
+
+  const handleEditSchedule = (s: any) => {
+    setEditingSchedule({
+      id: s.id,
+      title: s.title || '',
+      session_date: s.session_date || '',
+      start_time: s.start_time ? s.start_time.slice(0, 5) : '',
+      end_time: s.end_time ? s.end_time.slice(0, 5) : '',
+      session_type: s.session_type || 'core',
+      status: s.status || 'scheduled',
+      description: s.description || '',
+    });
+  };
+
+  const handleSaveSchedule = async () => {
+    if (!editingSchedule) return;
+    setScheduleSaving(true);
+    setError('');
+    try {
+      const payload: any = {};
+      if (editingSchedule.title) payload.title = editingSchedule.title;
+      if (editingSchedule.session_date) payload.session_date = editingSchedule.session_date;
+      if (editingSchedule.start_time) payload.start_time = editingSchedule.start_time;
+      if (editingSchedule.end_time) payload.end_time = editingSchedule.end_time;
+      if (editingSchedule.session_type) payload.session_type = editingSchedule.session_type;
+      if (editingSchedule.status) payload.status = editingSchedule.status;
+      payload.description = editingSchedule.description || '';
+
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/sessions/${editingSchedule.id}/fields`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.details ? err.details.map((d: any) => `${d.field}: ${d.message}`).join(', ') : 'Failed to save');
+      }
+      setEditingSchedule(null);
+      fetchSessions();
+    } catch (err: any) { setError(err.message); }
+    finally { setScheduleSaving(false); }
   };
 
   const handleCreateChecklist = () => {
@@ -244,27 +342,6 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                 </select>
               </div>
               <div className="col-md-3">
-                <label className="form-label small fw-medium">Core Session Day</label>
-                <select className="form-select form-select-sm" value={cohortForm.core_day}
-                  onChange={e => setCohortForm({ ...cohortForm, core_day: e.target.value })}>
-                  {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="col-md-3">
-                <label className="form-label small fw-medium">Core Session Time</label>
-                <input className="form-control form-control-sm" value={cohortForm.core_time}
-                  placeholder="e.g. 1:00–3:00 PM"
-                  onChange={e => setCohortForm({ ...cohortForm, core_time: e.target.value })} />
-              </div>
-              <div className="col-md-3">
-                <label className="form-label small fw-medium">Optional Lab Day</label>
-                <select className="form-select form-select-sm" value={cohortForm.optional_lab_day}
-                  onChange={e => setCohortForm({ ...cohortForm, optional_lab_day: e.target.value })}>
-                  <option value="">None</option>
-                  {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div className="col-md-3">
                 <label className="form-label small fw-medium">Timezone</label>
                 <select className="form-select form-select-sm" value={cohortForm.timezone}
                   onChange={e => setCohortForm({ ...cohortForm, timezone: e.target.value })}>
@@ -276,11 +353,100 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                 <input type="number" className="form-control form-control-sm" min={1} value={cohortForm.max_seats}
                   onChange={e => setCohortForm({ ...cohortForm, max_seats: e.target.value })} />
               </div>
+
+              {/* Recurring Schedule Builder */}
+              <div className="col-12 mt-3">
+                <div className="card bg-light border-0 p-3">
+                  <h6 className="fw-semibold mb-3" style={{ fontSize: 13 }}>Recurring Schedule</h6>
+                  <div className="row g-3">
+                    <div className="col-12">
+                      <label className="form-label small fw-medium">Session Days</label>
+                      <div className="d-flex flex-wrap gap-2">
+                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map(day => (
+                          <button
+                            key={day}
+                            type="button"
+                            className={`btn btn-sm ${(cohortForm.recurring_days || []).includes(day) ? 'btn-primary' : 'btn-outline-secondary'}`}
+                            onClick={() => handleToggleDay(day)}
+                            style={{ fontSize: 12 }}
+                          >
+                            {day.slice(0, 3)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small fw-medium">Core Days (others are Lab)</label>
+                      <div className="d-flex flex-wrap gap-2">
+                        {(cohortForm.recurring_days || []).map((day: string) => (
+                          <button
+                            key={day}
+                            type="button"
+                            className={`btn btn-sm ${(cohortForm.core_days || []).includes(day) ? 'bg-primary text-white' : 'btn-outline-success'}`}
+                            onClick={() => handleToggleCoreDay(day)}
+                            style={{ fontSize: 11 }}
+                          >
+                            {day} {(cohortForm.core_days || []).includes(day) ? '(Core)' : '(Lab)'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label small fw-medium">Start Time</label>
+                      <input type="time" className="form-control form-control-sm"
+                        value={cohortForm.start_time || '13:00'}
+                        onChange={e => setCohortForm({ ...cohortForm, start_time: e.target.value })} />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label small fw-medium">End Time</label>
+                      <input type="time" className="form-control form-control-sm"
+                        value={cohortForm.end_time || '15:00'}
+                        onChange={e => setCohortForm({ ...cohortForm, end_time: e.target.value })} />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label small fw-medium">Total Sessions</label>
+                      <input type="number" className="form-control form-control-sm" min={1} max={50}
+                        value={cohortForm.total_sessions || 5}
+                        onChange={e => setCohortForm({ ...cohortForm, total_sessions: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {genMessage && (
+                <div className="col-12">
+                  <div className="alert alert-success small mb-0" style={{ fontSize: 12 }}>{genMessage}</div>
+                </div>
+              )}
+
               <div className="col-12 d-flex gap-2 mt-2">
                 <button className="btn btn-sm btn-primary" onClick={handleCohortSave} disabled={cohortSaving}>
                   {cohortSaving ? 'Saving...' : 'Save Changes'}
                 </button>
-                <button className="btn btn-sm btn-outline-secondary" onClick={() => setCohortEditing(false)}>Cancel</button>
+                <button
+                  className="btn btn-sm btn-success"
+                  disabled={generating || !(cohortForm.recurring_days?.length > 0)}
+                  onClick={async () => {
+                    // Save first, then generate
+                    await handleCohortSave();
+                    setGenerating(true);
+                    setGenMessage('');
+                    try {
+                      const res = await fetch(`${apiUrl}/api/admin/orchestration/cohorts/${selectedCohortId}/generate-sessions`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error || 'Failed to generate');
+                      setGenMessage(data.message);
+                      fetchSessions();
+                    } catch (err: any) { setError(err.message); }
+                    finally { setGenerating(false); }
+                  }}
+                >
+                  {generating ? 'Generating...' : 'Save & Generate Sessions'}
+                </button>
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => { setCohortEditing(false); setGenMessage(''); }}>Cancel</button>
               </div>
             </div>
           ) : (
@@ -399,6 +565,74 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
         </div>
       )}
 
+      {/* Session Schedule Edit Modal */}
+      {editingSchedule && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h6 className="modal-title">Edit Session Details</h6>
+                <button className="btn-close" onClick={() => setEditingSchedule(null)} aria-label="Close" />
+              </div>
+              <div className="modal-body">
+                <div className="row g-3">
+                  <div className="col-12">
+                    <label className="form-label small fw-medium">Title *</label>
+                    <input className="form-control form-control-sm" value={editingSchedule.title}
+                      onChange={e => setEditingSchedule({ ...editingSchedule, title: e.target.value })} />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label small fw-medium">Session Date *</label>
+                    <input type="date" className="form-control form-control-sm" value={editingSchedule.session_date}
+                      onChange={e => setEditingSchedule({ ...editingSchedule, session_date: e.target.value })} />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label small fw-medium">Start Time</label>
+                    <input type="time" className="form-control form-control-sm" value={editingSchedule.start_time}
+                      onChange={e => setEditingSchedule({ ...editingSchedule, start_time: e.target.value })} />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label small fw-medium">End Time</label>
+                    <input type="time" className="form-control form-control-sm" value={editingSchedule.end_time}
+                      onChange={e => setEditingSchedule({ ...editingSchedule, end_time: e.target.value })} />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">Type</label>
+                    <select className="form-select form-select-sm" value={editingSchedule.session_type}
+                      onChange={e => setEditingSchedule({ ...editingSchedule, session_type: e.target.value })}>
+                      <option value="core">Core</option>
+                      <option value="lab">Lab</option>
+                    </select>
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label small fw-medium">Status</label>
+                    <select className="form-select form-select-sm" value={editingSchedule.status}
+                      onChange={e => setEditingSchedule({ ...editingSchedule, status: e.target.value })}>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="live">Live</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label small fw-medium">Description</label>
+                    <textarea className="form-control form-control-sm" rows={3} value={editingSchedule.description}
+                      onChange={e => setEditingSchedule({ ...editingSchedule, description: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setEditingSchedule(null)}>Cancel</button>
+                <button className="btn btn-sm btn-primary" onClick={handleSaveSchedule}
+                  disabled={scheduleSaving || !editingSchedule.title || !editingSchedule.session_date}>
+                  {scheduleSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
           <span>Live Session Configuration</span>
@@ -411,6 +645,7 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                 <th style={{ fontSize: 12 }}>#</th>
                 <th style={{ fontSize: 12 }}>Title</th>
                 <th style={{ fontSize: 12 }}>Date</th>
+                <th style={{ fontSize: 12 }}>Time</th>
                 <th style={{ fontSize: 12 }}>Type</th>
                 <th style={{ fontSize: 12 }}>Status</th>
                 <th style={{ fontSize: 12 }}>Min %</th>
@@ -426,6 +661,7 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                     <td>{s.session_number}</td>
                     <td className="fw-medium">{s.title}</td>
                     <td>{s.session_date ? new Date(s.session_date).toLocaleDateString() : '-'}</td>
+                    <td style={{ fontSize: 11 }}>{s.start_time && s.end_time ? `${s.start_time.slice(0, 5)} – ${s.end_time.slice(0, 5)}` : '-'}</td>
                     <td><span className={`badge ${s.session_type === 'lab' ? 'bg-success' : 'bg-primary'}`} style={{ fontSize: 10 }}>{s.session_type}</span></td>
                     <td><span className="badge bg-secondary" style={{ fontSize: 10 }}>{s.status}</span></td>
                     <td>{s.minimum_section_completion_pct ? `${s.minimum_section_completion_pct}%` : '-'}</td>
@@ -433,7 +669,8 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                     <td>-</td>
                     <td>
                       <div className="d-flex gap-1">
-                        <button className="btn btn-sm btn-outline-primary" onClick={() => handleEditSession(s)}>Thresholds</button>
+                        <button className="btn btn-sm btn-outline-primary" onClick={() => handleEditSchedule(s)}>Edit</button>
+                        <button className="btn btn-sm btn-outline-secondary" onClick={() => handleEditSession(s)}>Thresholds</button>
                         <button className="btn btn-sm btn-outline-secondary" onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
                           {expanded === s.id ? 'Hide' : 'Details'}
                         </button>
@@ -442,7 +679,7 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                   </tr>
                   {expanded === s.id && (
                     <tr>
-                      <td colSpan={9} className="bg-light">
+                      <td colSpan={10} className="bg-light">
                         <div className="p-2">
                           <p className="text-muted small mb-2">{s.description}</p>
                           <div className="row">
@@ -495,7 +732,7 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                 </React.Fragment>
               ))}
               {sessions.length === 0 && (
-                <tr><td colSpan={9} className="text-center text-muted py-4">No sessions found.</td></tr>
+                <tr><td colSpan={10} className="text-center text-muted py-4">No sessions found.</td></tr>
               )}
             </tbody>
           </table>
