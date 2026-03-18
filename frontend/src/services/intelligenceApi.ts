@@ -400,7 +400,7 @@ export const runDepartmentStrategy = (slug: string) =>
 
 export interface CampaignGraphNode {
   id: string;
-  type: 'entry_point' | 'campaign' | 'lead_pool' | 'conversion';
+  type: 'source' | 'entry' | 'campaign' | 'outcome';
   label: string;
   count: number;
   metrics: {
@@ -408,6 +408,7 @@ export interface CampaignGraphNode {
     messages_sent?: number;
     active_users?: number;
   };
+  source_breakdown?: Record<string, number>;
 }
 
 export interface CampaignGraphEdge {

@@ -1,26 +1,38 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
-import { getCampaignGraph, CampaignGraphData, CampaignGraphNode } from '../../../../services/intelligenceApi';
+import { getCampaignGraph, CampaignGraphData, CampaignGraphNode, CampaignGraphEdge } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
-// Color map by node type
-const NODE_COLORS: Record<string, { color: string; bg: string }> = {
-  entry_point: { color: '#319795', bg: '#e6fffa' },
-  campaign:    { color: '#2b6cb0', bg: '#ebf4ff' },
-  lead_pool:   { color: '#1a365d', bg: '#e2e8f0' },
-  conversion:  { color: '#38a169', bg: '#f0fff4' },
-};
+// ─── System Map 4-Layer Config ──────────────────────────────────────────────
 
-// Column index for left→right funnel layout
 const COLUMN_CONFIG: Record<string, number> = {
-  entry_point: 0,
-  lead_pool: 1,
-  campaign: 2,
-  conversion: 3,
+  source: 0, entry: 1, campaign: 2, outcome: 3,
+};
+const COLUMN_X_PCT = [0.10, 0.36, 0.62, 0.90];
+const COLUMN_LABELS = ['Sources', 'Entry Points', 'Campaigns', 'Outcomes'];
+
+const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
+  source:   { color: '#805ad5', bg: '#faf5ff' },
+  entry:    { color: '#319795', bg: '#e6fffa' },
+  campaign: { color: '#2b6cb0', bg: '#ebf4ff' },
+  outcome:  { color: '#38a169', bg: '#f0fff4' },
 };
 
-const COLUMN_X_PCT = [0.12, 0.38, 0.62, 0.88];
-const COLUMN_LABELS = ['Entry Points', 'Lead Pools', 'Campaigns', 'Conversions'];
+// Per-source-node colors for visual differentiation
+const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
+  src_marketing:  { color: '#d69e2e', bg: '#fefcbf' },
+  src_cold_email: { color: '#3182ce', bg: '#ebf4ff' },
+  src_alumni:     { color: '#38a169', bg: '#f0fff4' },
+  src_anonymous:  { color: '#a0aec0', bg: '#f7fafc' },
+};
+
+const SOURCE_FILTER_OPTIONS = [
+  { value: null, label: 'All Sources' },
+  { value: 'src_marketing', label: 'Marketing' },
+  { value: 'src_cold_email', label: 'Cold Email' },
+  { value: 'src_alumni', label: 'Alumni' },
+  { value: 'src_anonymous', label: 'Anonymous' },
+];
 
 interface GraphNode {
   id: string;
@@ -32,6 +44,7 @@ interface GraphNode {
   val: number;
   col: number;
   metrics: CampaignGraphNode['metrics'];
+  source_breakdown?: Record<string, number>;
   fx?: number;
   fy?: number;
   x?: number;
@@ -51,8 +64,11 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-function isBackLink(srcType: string, tgtType: string): boolean {
-  return (COLUMN_CONFIG[srcType] ?? 2) > (COLUMN_CONFIG[tgtType] ?? 2);
+function getNodeColors(node: CampaignGraphNode): { color: string; bg: string } {
+  if (node.type === 'source' && SOURCE_NODE_COLORS[node.id]) {
+    return SOURCE_NODE_COLORS[node.id];
+  }
+  return TYPE_COLORS[node.type] || TYPE_COLORS.entry;
 }
 
 interface CampaignGraphTabProps {
@@ -70,6 +86,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(true);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
 
   // Fetch graph data once
   useEffect(() => {
@@ -110,7 +127,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     const maxCount = Math.max(...data.nodes.map((n) => n.count), 1);
 
     const nodes: GraphNode[] = data.nodes.map((n) => {
-      const colors = NODE_COLORS[n.type] || NODE_COLORS.lead_pool;
+      const colors = getNodeColors(n);
       return {
         id: n.id,
         type: n.type,
@@ -121,6 +138,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         val: fullWidth ? (12 + (n.count / maxCount) * 30) : (8 + (n.count / maxCount) * 22),
         col: COLUMN_CONFIG[n.type] ?? 2,
         metrics: n.metrics,
+        source_breakdown: n.source_breakdown,
       };
     });
 
@@ -152,6 +170,18 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         volume: e.volume || 0,
       }));
 
+    // Dev mode edge validation
+    if (process.env.NODE_ENV === 'development') {
+      const nodeTypeMap = new Map(nodes.map(n => [n.id, n.type]));
+      links.forEach(link => {
+        const srcCol = COLUMN_CONFIG[nodeTypeMap.get(link.source) || ''] ?? -1;
+        const tgtCol = COLUMN_CONFIG[nodeTypeMap.get(link.target) || ''] ?? -1;
+        if (srcCol >= tgtCol) {
+          console.warn(`[SystemMap] Invalid edge: ${link.source} (col ${srcCol}) → ${link.target} (col ${tgtCol})`);
+        }
+      });
+    }
+
     return { nodes, links };
   }, [data, dimensions.width, dimensions.height, fullWidth]);
 
@@ -161,9 +191,10 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     [graphData.links]
   );
 
-  // Connected set for path highlighting
+  // Connected set for path highlighting (from selected node OR source filter)
+  const highlightNodeId = sourceFilter || (selectedNode ? selectedNode.id : null);
   const connectedSet = useMemo(() => {
-    if (!selectedNode) return new Set<string>();
+    if (!highlightNodeId) return new Set<string>();
     const set = new Set<string>();
     const adj = new Map<string, string[]>();
     graphData.links.forEach((l) => {
@@ -174,8 +205,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       adj.get(s)!.push(t);
       adj.get(t)!.push(s);
     });
-    const queue = [selectedNode.id];
-    set.add(selectedNode.id);
+    const queue = [highlightNodeId];
+    set.add(highlightNodeId);
     while (queue.length) {
       const cur = queue.shift()!;
       for (const nb of adj.get(cur) || []) {
@@ -183,7 +214,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       }
     }
     return set;
-  }, [selectedNode, graphData.links]);
+  }, [highlightNodeId, graphData.links]);
 
   // Zoom to fit — fast since layout is deterministic
   useEffect(() => {
@@ -206,8 +237,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       const fontSize = fullWidth ? Math.max(13 / globalScale, 4) : Math.max(11 / globalScale, 3);
       const isHighActivity = n.count > 50;
 
-      // Dim if not connected to selected node
-      const dimmed = selectedNode && !connectedSet.has(n.id);
+      // Dim if not connected to highlighted node
+      const dimmed = highlightNodeId && !connectedSet.has(n.id);
       if (dimmed) ctx.globalAlpha = 0.12;
 
       // High-activity glow
@@ -276,7 +307,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       // Restore alpha
       if (dimmed) ctx.globalAlpha = 1;
     },
-    [hoveredNode, selectedNode, connectedSet, fullWidth]
+    [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId]
   );
 
   // Declarative link helpers
@@ -285,8 +316,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     const tgt = link.target as GraphNode;
     const volume = (link as GraphLink).volume || 0;
 
-    // Dim if selection active and link not connected
-    if (selectedNode) {
+    // Dim if highlight active and link not connected
+    if (highlightNodeId) {
       const sId = typeof src === 'object' ? src.id : src;
       const tId = typeof tgt === 'object' ? tgt.id : tgt;
       if (!connectedSet.has(sId as string) || !connectedSet.has(tId as string)) {
@@ -294,43 +325,31 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       }
     }
 
-    if (typeof src === 'object' && typeof tgt === 'object' && isBackLink(src.type, tgt.type)) {
-      return 'rgba(160, 174, 192, 0.2)';
-    }
-
     const alpha = 0.3 + (volume / maxVolume) * 0.5;
     return `rgba(160, 174, 192, ${alpha})`;
-  }, [selectedNode, connectedSet, maxVolume]);
+  }, [highlightNodeId, connectedSet, maxVolume]);
 
   const getLinkWidth = useCallback((link: any) => {
     const volume = (link as GraphLink).volume || 0;
     return 0.8 + (volume / maxVolume) * 3;
   }, [maxVolume]);
 
-  const getLinkCurvature = useCallback((link: any) => {
-    const src = link.source as GraphNode;
-    const tgt = link.target as GraphNode;
-    if (typeof src === 'object' && typeof tgt === 'object') {
-      return isBackLink(src.type, tgt.type) ? 0.5 : 0;
-    }
-    return 0;
-  }, []);
-
-  const getLinkDash = useCallback((link: any) => {
-    const src = link.source as GraphNode;
-    const tgt = link.target as GraphNode;
-    if (typeof src === 'object' && typeof tgt === 'object' && isBackLink(src.type, tgt.type)) {
-      return [4, 4];
-    }
-    return null as any;
-  }, []);
-
   const getParticleCount = useCallback((link: any) => {
     if (!isVisible) return 0;
     const volume = (link as GraphLink).volume || 0;
     if (maxVolume === 0 || volume === 0) return 0;
+
+    // If filtering, only animate highlighted edges
+    if (highlightNodeId) {
+      const src = link.source as GraphNode;
+      const tgt = link.target as GraphNode;
+      const sId = typeof src === 'object' ? src.id : src;
+      const tId = typeof tgt === 'object' ? tgt.id : tgt;
+      if (!connectedSet.has(sId as string) || !connectedSet.has(tId as string)) return 0;
+    }
+
     return Math.max(1, Math.round((volume / maxVolume) * 4));
-  }, [maxVolume, isVisible]);
+  }, [maxVolume, isVisible, highlightNodeId, connectedSet]);
 
   const getParticleSpeed = useCallback((link: any) => {
     const volume = (link as GraphLink).volume || 0;
@@ -345,7 +364,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const getParticleColor = useCallback((link: any) => {
     const tgt = link.target as GraphNode;
     if (typeof tgt === 'object' && tgt.type) {
-      const colors = NODE_COLORS[tgt.type];
+      const colors = TYPE_COLORS[tgt.type];
       return colors ? colors.color + '99' : 'rgba(49, 151, 149, 0.6)';
     }
     return 'rgba(49, 151, 149, 0.6)';
@@ -374,7 +393,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         <div className="spinner-border spinner-border-sm me-2" role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
-        <small>Loading campaign graph...</small>
+        <small>Loading system map...</small>
       </div>
     );
   }
@@ -397,7 +416,10 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           label: selectedNode.label,
           count: selectedNode.count,
           metrics: selectedNode.metrics,
+          source_breakdown: selectedNode.source_breakdown,
         }}
+        edges={data?.edges || []}
+        allNodes={data?.nodes || []}
         onClose={() => setSelectedNode(null)}
       />
     );
@@ -409,7 +431,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         <div className="p-2 border-bottom">
           <div className="d-flex justify-content-between align-items-center">
             <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-              Campaign Intelligence
+              System Map
             </span>
             <span className="text-muted" style={{ fontSize: '0.65rem' }}>
               {graphData.nodes.length} nodes / {graphData.links.length} edges
@@ -424,7 +446,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         className={fullWidth && selectedNode ? 'flex-grow-1' : 'h-100'}
         style={{ position: 'relative', minHeight: 0 }}
         onMouseMove={handleMouseMove}
-        aria-label="Campaign intelligence funnel — interactive. Click nodes for details."
+        aria-label="Campaign system map — interactive. Click nodes for details."
       >
         {/* Column header labels */}
         {fullWidth && (
@@ -459,6 +481,24 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           </div>
         )}
 
+        {/* Source filter dropdown */}
+        {fullWidth && (
+          <div style={{ position: 'absolute', top: 6, right: 50, zIndex: 10 }}>
+            <select
+              className="form-select form-select-sm"
+              style={{ fontSize: '0.65rem', width: 130, padding: '2px 6px' }}
+              value={sourceFilter || ''}
+              onChange={(e) => setSourceFilter(e.target.value || null)}
+            >
+              {SOURCE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value || 'all'} value={opt.value || ''}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <ForceGraph2D
           ref={graphRef}
           width={dimensions.width}
@@ -475,8 +515,6 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           }}
           linkColor={getLinkColor}
           linkWidth={getLinkWidth}
-          linkCurvature={getLinkCurvature}
-          linkLineDash={getLinkDash}
           linkLabel={getLinkLabel}
           linkDirectionalArrowLength={6}
           linkDirectionalArrowRelPos={0.7}
@@ -535,10 +573,10 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           className="d-flex gap-2 flex-wrap align-items-center px-2 py-1"
           style={{ position: 'absolute', bottom: 8, left: 8, zIndex: 10, fontSize: '0.6rem', background: 'rgba(255,255,255,0.9)', borderRadius: 4 }}
         >
-          {Object.entries(NODE_COLORS).map(([type, c]) => (
+          {Object.entries(TYPE_COLORS).map(([type, c]) => (
             <span key={type} className="d-flex align-items-center gap-1">
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.color, display: 'inline-block' }} />
-              {type.replace('_', ' ')}
+              {type.charAt(0).toUpperCase() + type.slice(1)}
             </span>
           ))}
         </div>
@@ -590,7 +628,10 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
               label: selectedNode.label,
               count: selectedNode.count,
               metrics: selectedNode.metrics,
+              source_breakdown: selectedNode.source_breakdown,
             }}
+            edges={data?.edges || []}
+            allNodes={data?.nodes || []}
             onClose={() => setSelectedNode(null)}
           />
         </div>
