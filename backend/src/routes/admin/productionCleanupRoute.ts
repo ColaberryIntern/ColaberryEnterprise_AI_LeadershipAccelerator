@@ -85,7 +85,7 @@ async function safeCount(model: any, where: Record<string, any>): Promise<number
 
 // ─── Main Endpoint ──────────────────────────────────────────────────────────
 
-router.post('/production-cleanup', async (req: Request, res: Response) => {
+router.post('/api/admin/production-cleanup', async (req: Request, res: Response) => {
   const mode = (req.query.mode as string) || 'dry-run';
   const isExecute = mode === 'execute';
   const report: Record<string, any> = {
