@@ -318,7 +318,7 @@ function HomePage() {
               <span className="badge rounded-pill px-3 py-2 mb-3 d-inline-block" style={{ background: '#fff3cd', color: '#856404', fontSize: '0.85rem' }}>
                 Next Cohort Enrollment Open
               </span>
-              <h2 className="mb-3" style={{ fontSize: '2rem' }}>AI Deployment Blueprint</h2>
+              <h2 className="mb-3" style={{ fontSize: '2rem' }}>AI System Blueprint</h2>
               <p className="text-muted mb-0" style={{ maxWidth: '680px', margin: '0 auto', fontSize: '1.1rem' }}>
                 The deployment playbook for CTOs, CIOs, and Directors ready to ship their first AI system in 3 weeks.
               </p>
@@ -433,7 +433,7 @@ function HomePage() {
                 Organizations evaluating AI deployment within 90 days receive priority strategy sessions.
               </p>
               <button type="submit" className="btn btn-hero-primary btn-lg w-100" disabled={briefingSubmitting}>
-                {briefingSubmitting ? 'Submitting...' : 'Download Deployment Blueprint & Schedule Strategy Call →'}
+                {briefingSubmitting ? 'Submitting...' : 'Download System Blueprint & Schedule Strategy Call →'}
               </button>
             </form>
 
