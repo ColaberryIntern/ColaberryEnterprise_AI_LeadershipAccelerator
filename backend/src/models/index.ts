@@ -122,6 +122,8 @@ import StrategicInitiative from './StrategicInitiative';
 import RequirementsGenerationJob from './RequirementsGenerationJob';
 import MayaConversationOutcome from './MayaConversationOutcome';
 import MentorIntervention from './MentorIntervention';
+import SectionExecutionLog from './SectionExecutionLog';
+import HealingPlan from './HealingPlan';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -726,4 +728,6 @@ export {
   RequirementsGenerationJob,
   MayaConversationOutcome,
   MentorIntervention,
+  SectionExecutionLog,
+  HealingPlan,
 };

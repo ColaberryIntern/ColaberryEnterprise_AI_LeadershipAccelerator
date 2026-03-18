@@ -1,11 +1,15 @@
+import { Op } from 'sequelize';
 import CurriculumLesson from '../models/CurriculumLesson';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import { SectionConfig, PromptTemplate, ProgramBlueprint, MiniSection, ArtifactDefinition } from '../models';
 import SkillDefinition from '../models/SkillDefinition';
 import CurriculumModule from '../models/CurriculumModule';
+import VariableDefinition from '../models/VariableDefinition';
 import * as variableService from './variableService';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 import { callLLMWithAudit } from './llmCallWrapper';
+import { validateSectionExecutionReadiness } from './variableFlowService';
+import { captureExecution } from './postExecutionIntelligenceService';
 
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 
@@ -88,7 +92,6 @@ export async function generateLessonContent(
   // Execution safety pre-flight check (Control Tower)
   if (enrollmentId && miniSections.length > 0) {
     try {
-      const { validateSectionExecutionReadiness } = require('./variableFlowService');
       const readiness = await validateSectionExecutionReadiness(lesson.id, enrollmentId);
       if (readiness.blocking) {
         console.warn(`[ContentGeneration] Execution blocked for lesson ${lesson.id}: ${readiness.missingVariables.length} missing variables`);
@@ -118,6 +121,8 @@ export async function generateLessonContent(
     userPrompt = buildConceptV2Prompt(lesson, template, personalizationContext);
   }
 
+  const executionStartTime = Date.now();
+
   try {
     const llmResult = await callLLMWithAudit({
       lessonId: lesson.id,
@@ -137,7 +142,7 @@ export async function generateLessonContent(
       parsed = JSON.parse(llmResult.content);
     } catch (parseErr) {
       // Attempt JSON repair on truncated responses: close open braces/brackets
-      console.warn('[ContentGeneration] JSON parse failed, attempting repair...');
+      console.warn('[ContentGeneration] JSON parse failed, attempting naive brace-count repair (does not handle braces inside strings)');
       let repaired = llmResult.content.trim();
       let openBraces = 0, openBrackets = 0;
       for (const ch of repaired) {
@@ -190,14 +195,13 @@ export async function generateLessonContent(
                 { sectionId: sectionConfig!.id }
               );
               capturedKeys.push(varKey);
-              // Auto-classify source_type to llm_output if it was user_input
+              // Auto-classify source_type to llm_output only if not already user_input
               try {
-                const VariableDefinition = require('../models/VariableDefinition').default;
                 await VariableDefinition.update(
                   { source_type: 'llm_output' },
-                  { where: { variable_key: varKey, source_type: 'user_input' } },
+                  { where: { variable_key: varKey, source_type: { [Op.in]: [null, 'system'] } } },
                 );
-              } catch { /* non-critical */ }
+              } catch (e: any) { console.warn('[ContentGeneration] Variable source_type update failed:', e?.message); }
             }
           }
           if (capturedKeys.length > 0) {
@@ -209,8 +213,51 @@ export async function generateLessonContent(
       }
     }
 
+    // Post-execution intelligence capture (fire-and-forget)
+    if (enrollmentId) {
+      try {
+        const requiredKeys = miniSections.flatMap((ms: any) => [
+          ...(ms.associated_variable_keys || []),
+        ]);
+        const resolvedVars = await variableService.getAllVariables(enrollmentId);
+        // Truncate for analytics storage — full content returned to client
+        captureExecution({
+          enrollment_id: enrollmentId,
+          lesson_id: lesson.id,
+          resolved_prompt: userPrompt,
+          variables_required: requiredKeys,
+          variables_provided: resolvedVars,
+          output_text: llmResult.content.substring(0, 10000),
+          output_tokens: llmResult.usage?.completion_tokens || 0,
+          latency_ms: Date.now() - executionStartTime,
+          cache_hit: llmResult.cacheHit || false,
+          model_used: MODEL,
+          lesson_learning_goal: lesson.learning_goal || '',
+        }).catch((err: any) => { console.warn('[ContentGeneration] Post-execution capture failed:', err?.message); });
+      } catch (e: any) { console.warn('[ContentGeneration] Post-execution intelligence setup failed:', e?.message); }
+    }
+
     return parsed;
   } catch (err) {
+    // Capture failed execution (fire-and-forget)
+    if (enrollmentId) {
+      try {
+        captureExecution({
+          enrollment_id: enrollmentId,
+          lesson_id: lesson.id,
+          resolved_prompt: userPrompt || '',
+          variables_required: [],
+          variables_provided: {},
+          output_text: '',
+          output_tokens: 0,
+          latency_ms: Date.now() - executionStartTime,
+          cache_hit: false,
+          model_used: MODEL,
+          error_message: String(err),
+        }).catch((captureErr: any) => { console.warn('[ContentGeneration] Error-path capture failed:', captureErr?.message); });
+      } catch (e: any) { console.warn('[ContentGeneration] Error-path intelligence setup failed:', e?.message); }
+    }
+
     console.error('[ContentGeneration] Error:', err);
     return buildFallbackContent(lesson);
   }

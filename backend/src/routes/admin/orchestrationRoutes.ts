@@ -694,6 +694,71 @@ router.get('/api/admin/orchestration/runtime-intelligence/recommendations', requ
   }
 });
 
+// ─── Self-Healing Endpoints ──────────────────────────────────────────
+
+router.get('/api/admin/orchestration/self-healing/plan', requireAdmin, async (_req, res) => {
+  try {
+    const { generateHealingPlan } = require('../../services/selfHealingService');
+    const data = await generateHealingPlan();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/self-healing/plan/:id', requireAdmin, async (req, res) => {
+  try {
+    const { HealingPlan } = require('../../models');
+    const plan = await HealingPlan.findByPk(req.params.id);
+    if (!plan) return res.status(404).json({ error: 'Plan not found' });
+    res.json(plan.get({ plain: true }));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/self-healing/history', requireAdmin, async (_req, res) => {
+  try {
+    const { getHealingPlanHistory } = require('../../services/selfHealingService');
+    const data = await getHealingPlanHistory();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/self-healing/plan/:id/preview', requireAdmin, async (req, res) => {
+  try {
+    const { previewHealingPlan } = require('../../services/selfHealingService');
+    const data = await previewHealingPlan(req.params.id);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/self-healing/plan/:id/apply', requireAdmin, async (req, res) => {
+  try {
+    const { applyHealingPlan } = require('../../services/selfHealingService');
+    const actionIds = req.body.actionIds || [];
+    const data = await applyHealingPlan(req.params.id, actionIds);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/orchestration/self-healing/plan/:id/reject', requireAdmin, async (req, res) => {
+  try {
+    const { rejectHealingPlan } = require('../../services/selfHealingService');
+    const reason = req.body.reason || '';
+    const data = await rejectHealingPlan(req.params.id, reason);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Prompt Validation & Preview
 router.get('/api/admin/orchestration/validate/prompt/:lessonId/:enrollmentId', requireAdmin, handleValidatePrompt);
 router.get('/api/admin/orchestration/preview/prompt/:lessonId/:enrollmentId', requireAdmin, handlePreviewPrompt);

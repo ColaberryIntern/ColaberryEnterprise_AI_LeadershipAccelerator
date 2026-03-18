@@ -160,3 +160,45 @@ export async function runFullDiagnostics(): Promise<DiagnosticsResult> {
   debugLog('Diagnostics complete', { score, issueCount: issues.length });
   return result;
 }
+
+// ─── Runtime Intelligence Extension ─────────────────────────────────
+
+export interface RuntimeInsights {
+  runtime_failure_rate: number;
+  avg_quality_score: number | null;
+  recent_failures: number;
+  runtime_health_penalty: number;
+}
+
+/**
+ * Additive extension — does NOT modify runFullDiagnostics().
+ * Control Tower UI calls both in parallel and merges scores.
+ */
+export async function getRuntimeInsights(): Promise<RuntimeInsights> {
+  try {
+    const { getDashboardMetrics } = require('./postExecutionAnalyticsService');
+    const dashboard = await getDashboardMetrics();
+
+    let penalty = 0;
+    if (dashboard.overall.failure_rate > 10) {
+      penalty += Math.floor(dashboard.overall.failure_rate / 10) * 10;
+    }
+    if (dashboard.overall.avg_quality && dashboard.overall.avg_quality < 70) {
+      penalty += Math.floor((70 - dashboard.overall.avg_quality) / 10) * 5;
+    }
+
+    return {
+      runtime_failure_rate: dashboard.overall.failure_rate,
+      avg_quality_score: dashboard.overall.avg_quality,
+      recent_failures: dashboard.overall.failed_count,
+      runtime_health_penalty: Math.min(penalty, 40),
+    };
+  } catch {
+    return {
+      runtime_failure_rate: 0,
+      avg_quality_score: null,
+      recent_failures: 0,
+      runtime_health_penalty: 0,
+    };
+  }
+}

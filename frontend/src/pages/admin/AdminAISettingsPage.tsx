@@ -13,6 +13,9 @@ import GovernanceAutonomyTab from './ai-settings/GovernanceAutonomyTab';
 import WebsiteIntelligenceTab from './ai-settings/WebsiteIntelligenceTab';
 import AdminAdmissionsTab from './ai-settings/AdminAdmissionsTab';
 import CoryCOOTab from './ai-settings/CoryCOOTab';
+import CurriculumGenerationTab from './ai-settings/CurriculumGenerationTab';
+import RuntimeIntelligenceTab from './ai-settings/RuntimeIntelligenceTab';
+import SelfHealingTab from './ai-settings/SelfHealingTab';
 
 interface Agent {
   id: string;
@@ -112,6 +115,9 @@ const TABS = [
   { key: 'campaign-qa', label: 'Campaign QA' },
   { key: 'website', label: 'Website Intelligence' },
   { key: 'admissions', label: 'Admissions Intelligence' },
+  { key: 'curriculum-gen', label: 'Curriculum Engine' },
+  { key: 'runtime-intel', label: 'Runtime Intelligence' },
+  { key: 'self-healing', label: 'Self-Healing' },
 ];
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -494,6 +500,9 @@ function AdminAISettingsPage() {
       {activeTab === 'campaign-qa' && <CampaignQATab />}
       {activeTab === 'website' && <WebsiteIntelligenceTab />}
       {activeTab === 'admissions' && <AdminAdmissionsTab />}
+      {activeTab === 'curriculum-gen' && <CurriculumGenerationTab />}
+      {activeTab === 'runtime-intel' && <RuntimeIntelligenceTab />}
+      {activeTab === 'self-healing' && <SelfHealingTab />}
 
       {/* Drill-Down Modals */}
       {selectedActivityId && (

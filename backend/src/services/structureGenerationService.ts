@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Transaction } from 'sequelize';
 import { sequelize } from '../config/database';
 import MiniSection from '../models/MiniSection';
 import VariableDefinition from '../models/VariableDefinition';
@@ -252,6 +253,7 @@ export async function generateComprehensiveBlueprint(structurePrompt: string, le
 export async function applySectionBlueprint(
   lessonId: string,
   blueprint: GeneratedBlueprint,
+  externalTransaction?: Transaction,
 ): Promise<ApplyResult> {
   const result: ApplyResult = {
     created_mini_sections: [],
@@ -261,7 +263,7 @@ export async function applySectionBlueprint(
     created_skill: null,
   };
 
-  await sequelize.transaction(async (t) => {
+  const runInTransaction = async (t: Transaction) => {
     // 1. Delete existing mini-sections for this lesson
     await MiniSection.destroy({ where: { lesson_id: lessonId }, transaction: t });
 
@@ -412,7 +414,13 @@ export async function applySectionBlueprint(
       } as any,
       { where: { id: lessonId }, transaction: t },
     );
-  });
+  };
+
+  if (externalTransaction) {
+    await runInTransaction(externalTransaction);
+  } else {
+    await sequelize.transaction(runInTransaction);
+  }
 
   return result;
 }

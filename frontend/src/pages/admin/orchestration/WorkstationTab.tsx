@@ -17,6 +17,7 @@ export default function WorkstationTab({ token, apiUrl }: { token: string; apiUr
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -36,6 +37,7 @@ export default function WorkstationTab({ token, apiUrl }: { token: string; apiUr
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setError('');
     try {
       await api.patch('/api/admin/settings', {
         workstation_prompt: prompt,
@@ -44,7 +46,7 @@ export default function WorkstationTab({ token, apiUrl }: { token: string; apiUr
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch {
-      // silent
+      setError('Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -75,6 +77,7 @@ export default function WorkstationTab({ token, apiUrl }: { token: string; apiUr
           </div>
           <div className="d-flex align-items-center gap-2">
             {saved && <span className="text-success small"><i className="bi bi-check-circle me-1"></i>Saved</span>}
+            {error && <span className="text-danger small"><i className="bi bi-exclamation-circle me-1"></i>{error}</span>}
             <button
               className="btn btn-sm btn-primary"
               onClick={handleSave}
