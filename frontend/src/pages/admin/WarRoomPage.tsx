@@ -148,13 +148,13 @@ export default function WarRoomPage() {
             )}
 
             {/* Conversion rates */}
-            {revenue?.funnelConversions && (
+            {Array.isArray(revenue?.funnelConversions) && revenue.funnelConversions.length > 0 && (
               <div className="mt-3 pt-2 border-top">
                 <span className="text-muted" style={{ fontSize: 11 }}>Conversion Rates</span>
                 <div className="d-flex flex-wrap gap-2 mt-1">
-                  {Object.entries(revenue.funnelConversions).map(([key, val]) => (
-                    <span key={key} className="badge bg-light text-dark" style={{ fontSize: 10 }}>
-                      {key}: {typeof val === 'number' ? `${val.toFixed(1)}%` : String(val)}
+                  {revenue.funnelConversions.map((c: any, i: number) => (
+                    <span key={i} className="badge bg-light text-dark" style={{ fontSize: 10 }}>
+                      {STAGE_LABELS[c.from] || c.from} &rarr; {STAGE_LABELS[c.to] || c.to}: {c.rate?.toFixed(1)}%
                     </span>
                   ))}
                 </div>
@@ -170,12 +170,12 @@ export default function WarRoomPage() {
           </div>
           <div className="card-body py-2">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              <MetricCard label="Total Leads" value={stats?.totalEnrollments != null ? (pipelineCounts.new_lead || 0) + (pipelineCounts.contacted || 0) + (pipelineCounts.meeting_scheduled || 0) : '...'} color="#0d6efd" />
-              <MetricCard label="Paid Enrollments" value={stats?.paidEnrollments ?? '...'} color="#198754" />
-              <MetricCard label="Pending Invoice" value={stats?.pendingInvoice ?? '...'} color="#ffc107" />
-              <MetricCard label="Revenue" value={stats ? `$${((stats.paidEnrollments || 0) * 4500).toLocaleString()}` : '...'} color="#198754" />
-              <MetricCard label="Seats Remaining" value={stats?.seatsRemaining ?? '...'} color={stats?.seatsRemaining < 5 ? '#dc3545' : '#0d6efd'} />
-              <MetricCard label="Upcoming Cohorts" value={stats?.upcomingCohorts ?? '...'} color="#6610f2" />
+              <MetricCard label="Total Leads" value={Object.values(pipelineCounts).reduce((s: number, v) => s + (Number(v) || 0), 0) || '...'} color="#0d6efd" />
+              <MetricCard label="Paid Enrollments" value={stats?.paidEnrollments ?? 0} color="#198754" />
+              <MetricCard label="Pending Invoice" value={stats?.pendingInvoice ?? 0} color="#ffc107" />
+              <MetricCard label="Revenue" value={`$${(stats?.totalRevenue || 0).toLocaleString()}`} color="#198754" />
+              <MetricCard label="Seats Remaining" value={stats?.seatsRemaining ?? 0} color={(stats?.seatsRemaining ?? 99) < 5 ? '#dc3545' : '#0d6efd'} />
+              <MetricCard label="Upcoming Cohorts" value={stats?.upcomingCohorts ?? 0} color="#6610f2" />
               <MetricCard label="Pipeline Value" value={forecast.pipelineValue ? `$${forecast.pipelineValue.toLocaleString()}` : '...'} color="#fd7e14" />
               <MetricCard label="Projected Revenue" value={forecast.projectedRevenue ? `$${forecast.projectedRevenue.toLocaleString()}` : '...'} color="#198754" />
               <MetricCard label="Qualified Leads" value={forecast.qualifiedLeads ?? '...'} color="#0d6efd" />
