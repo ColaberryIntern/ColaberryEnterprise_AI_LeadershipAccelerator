@@ -349,7 +349,7 @@ router.get('/api/admin/orchestration/enrollments/:enrollmentId/variables/graph',
 router.post('/api/admin/orchestration/cohorts/:cohortId/generate-sessions', requireAdmin, async (req, res) => {
   try {
     const { generateSessionsFromCohort } = await import('../../services/sessionGenerationService');
-    const result = await generateSessionsFromCohort(req.params.cohortId);
+    const result = await generateSessionsFromCohort(req.params.cohortId as string);
     res.json(result);
   } catch (err: any) {
     const status = err.statusCode || 500;
