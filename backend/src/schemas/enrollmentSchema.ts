@@ -11,3 +11,6 @@ export const createInvoiceSchema = z.object({
 });
 
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
+
+export const createInvoiceRequestSchema = createInvoiceSchema;
+export type CreateInvoiceRequestInput = CreateInvoiceInput;

@@ -23,9 +23,11 @@ function EnrollPage() {
     company_size: '',
     cohort_id: '',
   });
+  const [paymentOption, setPaymentOption] = useState<'credit_card' | 'invoice'>('credit_card');
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [invoiceSubmitted, setInvoiceSubmitted] = useState(false);
 
   const [cohortError, setCohortError] = useState(false);
 
@@ -102,13 +104,20 @@ function EnrollPage() {
         form_type: 'enrollment',
       };
 
-      const res = await api.post('/api/create-invoice', {
-        ...formData,
-        ...trackingData,
-      });
-
-      // Redirect to PaySimple hosted payment page
-      window.location.href = res.data.payment_link;
+      if (paymentOption === 'credit_card') {
+        const res = await api.post('/api/create-invoice', {
+          ...formData,
+          ...trackingData,
+        });
+        // Redirect to PaySimple hosted payment page
+        window.location.href = res.data.payment_link;
+      } else {
+        await api.post('/api/create-invoice-request', {
+          ...formData,
+          ...trackingData,
+        });
+        setInvoiceSubmitted(true);
+      }
     } catch (err: any) {
       if (err.response?.status === 400 && err.response?.data?.details) {
         const fieldErrors: FormErrors = {};
@@ -141,7 +150,7 @@ function EnrollPage() {
     <>
       <SEOHead
         title="Enroll"
-        description="Enroll in the Enterprise AI Leadership Accelerator. Secure your seat with credit card or ACH payment."
+        description="Enroll in the Enterprise AI Leadership Accelerator. Pay by credit card, ACH, or request a corporate invoice."
       />
 
       {/* Hero */}
@@ -165,7 +174,7 @@ function EnrollPage() {
             Enroll in the Enterprise AI Leadership Accelerator
           </h1>
           <p className="lead">
-            {PROGRAM_SCHEDULE.price} per participant — secure your seat today
+            {PROGRAM_SCHEDULE.price} per participant — pay by credit card or request a corporate invoice
           </p>
           {cohorts.length > 0 && (
             <CohortUrgencyBadge
@@ -180,189 +189,273 @@ function EnrollPage() {
       {/* Enrollment Form */}
       <section className="section" aria-label="Enrollment Form">
         <div className="container content-narrow">
-          <form onSubmit={handleSubmit} noValidate>
-            {serverError && (
-              <div className="alert alert-danger" role="alert">
-                {serverError}
-              </div>
-            )}
+          {invoiceSubmitted ? (
+            <div className="text-center py-5" role="alert">
+              <h2 className="text-success mb-3">Your Seat is Reserved</h2>
+              <p className="fs-5 mb-4">
+                Our Enterprise AI team will send you an invoice within one business day
+                with payment details and next steps.
+              </p>
+              <p className="text-muted">
+                Questions?{' '}
+                <Link to="/contact">Schedule a call with our team</Link>.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} noValidate>
+              {serverError && (
+                <div className="alert alert-danger" role="alert">
+                  {serverError}
+                </div>
+              )}
 
-            <div className="row g-3">
-              {/* Cohort Selector */}
-              <div className="col-12">
-                <label htmlFor="cohort_id" className="form-label">
-                  Select Cohort <span className="text-danger">*</span>
-                </label>
-                {loadingCohorts ? (
-                  <div className="text-muted">Loading available cohorts...</div>
-                ) : cohortError ? (
-                  <div className="alert alert-warning">
-                    Unable to load cohort information. Please try again later or{' '}
-                    <Link to="/contact">contact us</Link> directly.
-                  </div>
-                ) : cohorts.length === 0 ? (
-                  <div className="alert alert-info">
-                    No upcoming cohorts are currently available. Please check back
-                    soon or{' '}
-                    <Link to="/contact">contact us</Link> for private cohort options.
-                  </div>
-                ) : (
-                  <select
-                    className={`form-select ${errors.cohort_id ? 'is-invalid' : ''}`}
-                    id="cohort_id"
-                    name="cohort_id"
-                    value={formData.cohort_id}
+              <div className="row g-3">
+                {/* Cohort Selector */}
+                <div className="col-12">
+                  <label htmlFor="cohort_id" className="form-label">
+                    Select Cohort <span className="text-danger">*</span>
+                  </label>
+                  {loadingCohorts ? (
+                    <div className="text-muted">Loading available cohorts...</div>
+                  ) : cohortError ? (
+                    <div className="alert alert-warning">
+                      Unable to load cohort information. Please try again later or{' '}
+                      <Link to="/contact">contact us</Link> directly.
+                    </div>
+                  ) : cohorts.length === 0 ? (
+                    <div className="alert alert-info">
+                      No upcoming cohorts are currently available. Please check back
+                      soon or{' '}
+                      <Link to="/contact">contact us</Link> for private cohort options.
+                    </div>
+                  ) : (
+                    <select
+                      className={`form-select ${errors.cohort_id ? 'is-invalid' : ''}`}
+                      id="cohort_id"
+                      name="cohort_id"
+                      value={formData.cohort_id}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">Choose a cohort...</option>
+                      {cohorts.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} — Starts {formatDate(c.start_date)} (
+                          {c.max_seats - c.seats_taken} seats remaining)
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {errors.cohort_id && (
+                    <div className="invalid-feedback">{errors.cohort_id}</div>
+                  )}
+                </div>
+
+                {/* Full Name */}
+                <div className="col-md-6">
+                  <label htmlFor="full_name" className="form-label">
+                    Full Name <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className={`form-control ${errors.full_name ? 'is-invalid' : ''}`}
+                    id="full_name"
+                    name="full_name"
+                    value={formData.full_name}
                     onChange={handleChange}
                     required
-                  >
-                    <option value="">Choose a cohort...</option>
-                    {cohorts.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} — Starts {formatDate(c.start_date)} (
-                        {c.max_seats - c.seats_taken} seats remaining)
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {errors.cohort_id && (
-                  <div className="invalid-feedback">{errors.cohort_id}</div>
-                )}
-              </div>
-
-              {/* Full Name */}
-              <div className="col-md-6">
-                <label htmlFor="full_name" className="form-label">
-                  Full Name <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={`form-control ${errors.full_name ? 'is-invalid' : ''}`}
-                  id="full_name"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleChange}
-                  required
-                />
-                {errors.full_name && (
-                  <div className="invalid-feedback">{errors.full_name}</div>
-                )}
-              </div>
-
-              {/* Email */}
-              <div className="col-md-6">
-                <label htmlFor="email" className="form-label">
-                  Email <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="email"
-                  className={`form-control ${errors.email ? 'is-invalid' : ''}`}
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-                {errors.email && (
-                  <div className="invalid-feedback">{errors.email}</div>
-                )}
-              </div>
-
-              {/* Company */}
-              <div className="col-md-6">
-                <label htmlFor="company" className="form-label">
-                  Company <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className={`form-control ${errors.company ? 'is-invalid' : ''}`}
-                  id="company"
-                  name="company"
-                  value={formData.company}
-                  onChange={handleChange}
-                  required
-                />
-                {errors.company && (
-                  <div className="invalid-feedback">{errors.company}</div>
-                )}
-              </div>
-
-              {/* Title */}
-              <div className="col-md-6">
-                <label htmlFor="title" className="form-label">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  id="title"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                />
-              </div>
-
-              {/* Phone */}
-              <div className="col-md-6">
-                <label htmlFor="phone" className="form-label">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  className="form-control"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                />
-              </div>
-
-              {/* Company Size */}
-              <div className="col-md-6">
-                <label htmlFor="company_size" className="form-label">
-                  Company Size
-                </label>
-                <select
-                  className="form-select"
-                  id="company_size"
-                  name="company_size"
-                  value={formData.company_size}
-                  onChange={handleChange}
-                >
-                  <option value="">Select...</option>
-                  <option value="1-49">1–49 employees</option>
-                  <option value="50-249">50–249 employees</option>
-                  <option value="250-999">250–999 employees</option>
-                  <option value="1000-4999">1,000–4,999 employees</option>
-                  <option value="5000+">5,000+ employees</option>
-                </select>
-              </div>
-
-              {/* Submit */}
-              <div className="col-12 mt-4">
-                <button
-                  type="submit"
-                  className="btn btn-primary btn-lg w-100"
-                  disabled={submitting || cohorts.length === 0}
-                >
-                  {submitting ? (
-                    <>
-                      <span
-                        className="spinner-border spinner-border-sm me-2"
-                        role="status"
-                        aria-hidden="true"
-                      />
-                      Setting up your enrollment...
-                    </>
-                  ) : (
-                    'Secure Your Seat'
+                  />
+                  {errors.full_name && (
+                    <div className="invalid-feedback">{errors.full_name}</div>
                   )}
-                </button>
-                <p className="text-center text-muted small mt-2 mb-0">
-                  Complete your enrollment using our secure payment system (credit card or ACH)
-                </p>
+                </div>
+
+                {/* Email */}
+                <div className="col-md-6">
+                  <label htmlFor="email" className="form-label">
+                    Email <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    className={`form-control ${errors.email ? 'is-invalid' : ''}`}
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                  />
+                  {errors.email && (
+                    <div className="invalid-feedback">{errors.email}</div>
+                  )}
+                </div>
+
+                {/* Company */}
+                <div className="col-md-6">
+                  <label htmlFor="company" className="form-label">
+                    Company <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className={`form-control ${errors.company ? 'is-invalid' : ''}`}
+                    id="company"
+                    name="company"
+                    value={formData.company}
+                    onChange={handleChange}
+                    required
+                  />
+                  {errors.company && (
+                    <div className="invalid-feedback">{errors.company}</div>
+                  )}
+                </div>
+
+                {/* Title */}
+                <div className="col-md-6">
+                  <label htmlFor="title" className="form-label">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="title"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="col-md-6">
+                  <label htmlFor="phone" className="form-label">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    id="phone"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                  />
+                </div>
+
+                {/* Company Size */}
+                <div className="col-md-6">
+                  <label htmlFor="company_size" className="form-label">
+                    Company Size
+                  </label>
+                  <select
+                    className="form-select"
+                    id="company_size"
+                    name="company_size"
+                    value={formData.company_size}
+                    onChange={handleChange}
+                  >
+                    <option value="">Select...</option>
+                    <option value="1-49">1–49 employees</option>
+                    <option value="50-249">50–249 employees</option>
+                    <option value="250-999">250–999 employees</option>
+                    <option value="1000-4999">1,000–4,999 employees</option>
+                    <option value="5000+">5,000+ employees</option>
+                  </select>
+                </div>
+
+                {/* Payment Option */}
+                <div className="col-12">
+                  <label className="form-label fw-bold">Payment Option</label>
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <div
+                        className={`card h-100 p-3 ${
+                          paymentOption === 'credit_card'
+                            ? 'border-primary border-2'
+                            : 'border'
+                        }`}
+                        onClick={() => setPaymentOption('credit_card')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="radio"
+                            name="paymentOption"
+                            id="payment_cc"
+                            checked={paymentOption === 'credit_card'}
+                            onChange={() => setPaymentOption('credit_card')}
+                          />
+                          <label
+                            className="form-check-label fw-bold"
+                            htmlFor="payment_cc"
+                          >
+                            Pay Now (Credit Card / ACH)
+                          </label>
+                          <p className="text-muted small mb-0 mt-1">
+                            Secure payment via PaySimple — {PROGRAM_SCHEDULE.price}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div
+                        className={`card h-100 p-3 ${
+                          paymentOption === 'invoice'
+                            ? 'border-primary border-2'
+                            : 'border'
+                        }`}
+                        onClick={() => setPaymentOption('invoice')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="radio"
+                            name="paymentOption"
+                            id="payment_invoice"
+                            checked={paymentOption === 'invoice'}
+                            onChange={() => setPaymentOption('invoice')}
+                          />
+                          <label
+                            className="form-check-label fw-bold"
+                            htmlFor="payment_invoice"
+                          >
+                            Request Corporate Invoice
+                          </label>
+                          <p className="text-muted small mb-0 mt-1">
+                            For procurement teams — invoice sent within 1 business day
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit */}
+                <div className="col-12 mt-4">
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-lg w-100"
+                    disabled={submitting || cohorts.length === 0}
+                  >
+                    {submitting ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                          aria-hidden="true"
+                        />
+                        {paymentOption === 'credit_card'
+                          ? 'Setting up payment...'
+                          : 'Reserving your seat...'}
+                      </>
+                    ) : paymentOption === 'credit_card' ? (
+                      'Proceed to Payment'
+                    ) : (
+                      'Request Invoice'
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          </form>
+            </form>
+          )}
         </div>
       </section>
 
@@ -372,23 +465,23 @@ function EnrollPage() {
           <div className="row g-4 text-center">
             <div className="col-md-4">
               <div className="fs-2 mb-2" aria-hidden="true">🔒</div>
-              <h3 className="h6">Secure Payment via PaySimple</h3>
+              <h3 className="h6">Secure Payment</h3>
               <p className="text-muted small mb-0">
-                Payments processed securely via our trusted payment partner
+                Payments processed securely via PaySimple
               </p>
             </div>
             <div className="col-md-4">
-              <div className="fs-2 mb-2" aria-hidden="true">✔</div>
-              <h3 className="h6">Credit Card & ACH Accepted</h3>
+              <div className="fs-2 mb-2" aria-hidden="true">🏢</div>
+              <h3 className="h6">Invoice Available</h3>
               <p className="text-muted small mb-0">
-                Pay with your preferred method — credit card or bank transfer
+                Corporate invoice option for procurement teams
               </p>
             </div>
             <div className="col-md-4">
               <div className="fs-2 mb-2" aria-hidden="true">✔</div>
               <h3 className="h6">Instant Confirmation</h3>
               <p className="text-muted small mb-0">
-                Enrollment confirmation and details sent immediately after payment
+                Enrollment confirmation sent immediately
               </p>
             </div>
           </div>

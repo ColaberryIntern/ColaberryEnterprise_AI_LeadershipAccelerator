@@ -13,7 +13,7 @@ export interface EnrollmentAttributes {
   paysimple_invoice_id?: string;
   paysimple_customer_id?: string;
   paysimple_external_id?: string;
-  payment_status: 'paid' | 'pending' | 'failed';
+  payment_status: 'paid' | 'pending' | 'pending_invoice' | 'failed';
   payment_method: 'credit_card' | 'ach' | 'invoice';
   payment_mode?: 'test' | 'live';
   status?: 'active' | 'completed' | 'withdrawn' | 'suspended';
@@ -43,7 +43,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare paysimple_invoice_id: string;
   declare paysimple_customer_id: string;
   declare paysimple_external_id: string;
-  declare payment_status: 'paid' | 'pending' | 'failed';
+  declare payment_status: 'paid' | 'pending' | 'pending_invoice' | 'failed';
   declare payment_method: 'credit_card' | 'ach' | 'invoice';
   declare payment_mode: 'test' | 'live';
   declare status: 'active' | 'completed' | 'withdrawn' | 'suspended';
@@ -110,7 +110,7 @@ Enrollment.init(
       allowNull: true,
     },
     payment_status: {
-      type: DataTypes.ENUM('paid', 'pending', 'failed'),
+      type: DataTypes.ENUM('paid', 'pending', 'pending_invoice', 'failed'),
       allowNull: false,
       defaultValue: 'pending',
     },

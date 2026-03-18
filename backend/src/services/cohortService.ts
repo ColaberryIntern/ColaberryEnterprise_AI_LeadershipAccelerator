@@ -39,7 +39,9 @@ export async function getDashboardStats() {
   const cohorts = await Cohort.findAll();
   const totalEnrollments = await Enrollment.count();
   const paidEnrollments = await Enrollment.count({ where: { payment_status: 'paid' } });
-  const pendingInvoice = await Enrollment.count({ where: { payment_status: 'pending' } });
+  const pendingInvoice = await Enrollment.count({
+    where: { payment_status: ['pending', 'pending_invoice'] as any },
+  });
 
   const openCohorts = cohorts.filter((c) => c.status === 'open');
   const totalSeatsRemaining = openCohorts.reduce(

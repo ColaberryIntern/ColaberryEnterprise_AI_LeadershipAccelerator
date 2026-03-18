@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { createInvoiceSchema } from '../schemas/enrollmentSchema';
+import { createInvoiceSchema, createInvoiceRequestSchema } from '../schemas/enrollmentSchema';
 import { createEnrollmentInvoice } from '../services/paysimpleService';
 import {
   validateCohortAvailability,
   createPendingEnrollment,
+  createInvoiceEnrollment,
   getEnrollmentByInvoiceId,
 } from '../services/enrollmentService';
 import { listOpenCohorts } from '../services/cohortService';
@@ -59,6 +60,38 @@ export async function handleCreateInvoice(
     res.json({
       invoice_id: result.externalId,
       payment_link: result.paymentLink,
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      res.status(400).json({
+        error: 'Validation failed',
+        details: error.issues.map((issue) => ({
+          field: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleCreateInvoiceRequest(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = createInvoiceRequestSchema.parse(req.body);
+    const enrollment = await createInvoiceEnrollment(data);
+
+    console.log(
+      `[Enrollment] Invoice request created for ${data.email} (cohort: ${data.cohort_id})`
+    );
+
+    res.status(201).json({
+      message: 'Your seat is reserved. Our team will send an invoice within 1 business day.',
+      enrollmentId: enrollment.id,
     });
   } catch (error) {
     if (error instanceof ZodError) {

@@ -1,6 +1,6 @@
 import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
-import { CreateInvoiceInput } from '../schemas/enrollmentSchema';
+import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
   const cohort = await Cohort.findByPk(cohortId);
@@ -43,6 +43,41 @@ export async function createPendingEnrollment(
   import('./projectService').then(ps =>
     ps.createProjectForEnrollment(enrollment.id)
   ).catch(err => console.error('[Project] Auto-create failed:', err.message));
+
+  // Auto-enroll in payment readiness campaign (non-blocking)
+  enrollInPaymentCampaignIfUnpaid(enrollment)
+    .catch(err => console.error('[Payment Campaign] Auto-enroll failed:', err.message));
+
+  return enrollment;
+}
+
+export async function createInvoiceEnrollment(
+  data: CreateInvoiceRequestInput
+): Promise<Enrollment> {
+  await validateCohortAvailability(data.cohort_id);
+
+  const enrollment = await Enrollment.create({
+    full_name: data.full_name,
+    email: data.email,
+    company: data.company,
+    title: data.title || undefined,
+    phone: data.phone || undefined,
+    company_size: data.company_size || undefined,
+    cohort_id: data.cohort_id,
+    payment_status: 'pending_invoice',
+    payment_method: 'invoice',
+  });
+
+  // Auto-create project (non-blocking)
+  import('./projectService').then(ps =>
+    ps.createProjectForEnrollment(enrollment.id)
+  ).catch(err => console.error('[Project] Auto-create failed:', err.message));
+
+  // Reserve seat immediately for invoice requests
+  await Cohort.increment('seats_taken', {
+    by: 1,
+    where: { id: data.cohort_id },
+  });
 
   // Auto-enroll in payment readiness campaign (non-blocking)
   enrollInPaymentCampaignIfUnpaid(enrollment)
