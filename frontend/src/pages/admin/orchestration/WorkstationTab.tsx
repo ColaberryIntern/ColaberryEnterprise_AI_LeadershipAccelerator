@@ -21,8 +21,9 @@ export default function WorkstationTab({ token, apiUrl }: { token: string; apiUr
   const fetchSettings = useCallback(async () => {
     try {
       const res = await api.get('/api/admin/settings');
-      setPrompt(res.data.workstation_prompt || '');
-      setTestMode(res.data.workstation_test_mode || false);
+      const s = res.data.settings || res.data;
+      setPrompt(s.workstation_prompt || '');
+      setTestMode(s.workstation_test_mode || false);
     } catch {
       // defaults already set
     } finally {

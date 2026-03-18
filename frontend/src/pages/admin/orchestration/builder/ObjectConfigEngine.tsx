@@ -243,8 +243,9 @@ export default function ObjectConfigEngine(props: Props) {
   const [workstationTestMode, setWorkstationTestMode] = useState(false);
   useEffect(() => {
     api.get('/api/admin/settings').then(res => {
-      setWorkstationPrompt(res.data.workstation_prompt || '');
-      setWorkstationTestMode(res.data.workstation_test_mode || false);
+      const s = res.data.settings || res.data;
+      setWorkstationPrompt(s.workstation_prompt || '');
+      setWorkstationTestMode(s.workstation_test_mode || false);
     }).catch(() => {});
   }, []);
 
