@@ -471,6 +471,16 @@ async function processScheduledActions(): Promise<void> {
       }
     }
 
+    // Guard: cancel payment_readiness actions if cohort has already started
+    if (cachedCampaign && cachedCampaign.type === 'payment_readiness' && action.metadata?.cohort_start_date) {
+      const cohortStart = new Date(action.metadata.cohort_start_date);
+      if (new Date() >= cohortStart) {
+        await action.update({ status: 'cancelled' } as any);
+        console.log(`[Scheduler] Cancelled payment reminder ${action.id} — cohort already started (${action.metadata.cohort_start_date})`);
+        continue;
+      }
+    }
+
     // Pacing: limit actions per campaign per cycle
     const maxPerCycle = campaignSettings.max_leads_per_cycle || 10;
     campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);

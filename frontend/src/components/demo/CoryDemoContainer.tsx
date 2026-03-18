@@ -132,11 +132,20 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
 
   const isDemoRunning = demoActive && !demoPaused;
 
+  // Dynamic department glow — the section border/glow reflects the active department
+  const activeDept = DEMO_DEPARTMENTS.find(d => d.id === selectedId);
+  const deptColor = activeDept?.color || 'transparent';
+
   return (
     <section
       className="section-alt py-5"
       aria-label="AI Intelligence System Demo"
       onClick={isDemoRunning ? stopDemo : undefined}
+      style={{
+        borderTop: `2px solid ${deptColor}`,
+        boxShadow: `0 -4px 20px ${deptColor}25, inset 0 2px 0 ${deptColor}`,
+        transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
+      }}
     >
       <div className="container">
         {/* Context Label + Heading */}

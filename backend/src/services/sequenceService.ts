@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { FollowUpSequence, ScheduledEmail, Lead, CampaignLead, StrategyCall } from '../models';
+import { FollowUpSequence, ScheduledEmail, Lead, CampaignLead, StrategyCall, Enrollment, Cohort } from '../models';
 import type { SequenceStep } from '../models/FollowUpSequence';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
@@ -48,6 +48,13 @@ export function validateSequenceSteps(steps: SequenceStep[]): StepValidationResu
   if (usesMinutesBefore) {
     // These campaigns use minutes_before_call for actual timing — skip spacing checks
     return { valid: errors.length === 0, warnings: ['Uses minutes_before_call timing — spacing rules skipped'], errors };
+  }
+
+  // Detect days_before_cohort_start campaigns (all steps at delay_days=0)
+  const usesDaysBeforeCohort = allZeroDelay && steps.some(s => s.days_before_cohort_start != null);
+  if (usesDaysBeforeCohort) {
+    // These campaigns use days_before_cohort_start for actual timing — skip spacing checks
+    return { valid: errors.length === 0, warnings: ['Uses days_before_cohort_start timing — spacing rules skipped'], errors };
   }
 
   // Check each step
@@ -162,6 +169,12 @@ export function normalizeSequenceTiming(steps: SequenceStep[]): SequenceStep[] {
   const allZeroDelay = steps.every(s => (s.delay_days || 0) === 0);
   const usesMinutesBefore = allZeroDelay && steps.some(s => s.minutes_before_call != null);
   if (usesMinutesBefore) {
+    return steps.map(s => ({ ...s }));
+  }
+
+  // Detect days_before_cohort_start campaigns — preserve their delay_days=0 pattern.
+  const usesDaysBeforeCohort = allZeroDelay && steps.some(s => s.days_before_cohort_start != null);
+  if (usesDaysBeforeCohort) {
     return steps.map(s => ({ ...s }));
   }
 
@@ -336,6 +349,26 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
     console.log(`[Sequence] T-minus campaign detected — scheduling relative to appointment at ${appointmentTime}`);
   }
 
+  // Detect cohort T-minus campaign (cohort_start_date-relative scheduling)
+  const isCohortTMinus = allZeroDelay && sequence.steps.some((s: SequenceStep) => s.days_before_cohort_start != null);
+
+  let cohortStartDate: Date | null = null;
+  if (isCohortTMinus) {
+    const enrollment = await Enrollment.findOne({
+      where: { email: lead.email, payment_status: { [Op.ne]: 'paid' } },
+      include: [{ model: Cohort, as: 'cohort' }],
+      order: [['created_at', 'DESC']],
+    });
+    if (!enrollment || !(enrollment as any).cohort?.start_date) {
+      console.warn(`[Sequence] Cohort T-minus: no unpaid enrollment with cohort found for lead ${leadId} (${lead.email})`);
+      // Fall through to delay_days=0 scheduling (all immediate) — degraded but non-breaking
+    } else {
+      const cohort = (enrollment as any).cohort;
+      cohortStartDate = new Date(cohort.start_date + 'T00:00:00');
+      console.log(`[Sequence] Cohort T-minus detected — scheduling relative to cohort start ${cohort.start_date} (${cohort.name})`);
+    }
+  }
+
   for (let i = 0; i < sequence.steps.length; i++) {
     const step = sequence.steps[i];
     const channel: CampaignChannel = step.channel || 'email';
@@ -345,6 +378,17 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
       scheduledFor = new Date(appointmentTime.getTime() - step.minutes_before_call * 60 * 1000);
       if (scheduledFor.getTime() < now.getTime()) {
         console.log(`[Sequence] Skipping step ${i + 1} — T-${step.minutes_before_call}min is already past`);
+        continue;
+      }
+    } else if (isCohortTMinus && cohortStartDate && step.days_before_cohort_start != null) {
+      // Cohort T-minus: schedule relative to cohort start date
+      if (now.getTime() >= cohortStartDate.getTime()) {
+        console.log(`[Sequence] Skipping step ${i + 1} — cohort already started (${cohortStartDate.toISOString()})`);
+        continue;
+      }
+      scheduledFor = new Date(cohortStartDate.getTime() - step.days_before_cohort_start * 24 * 60 * 60 * 1000);
+      if (scheduledFor.getTime() < now.getTime()) {
+        console.log(`[Sequence] Skipping step ${i + 1} — T-${step.days_before_cohort_start}d is already past`);
         continue;
       }
     } else {
@@ -390,6 +434,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
         ai_tone: step.ai_tone || null,
         ai_context_notes: step.ai_context_notes || null,
         voice_prompt: channel === 'voice' && step.voice_prompt ? step.voice_prompt : null,
+        ...(isCohortTMinus && cohortStartDate ? { cohort_start_date: cohortStartDate.toISOString() } : {}),
       },
     } as any);
 
