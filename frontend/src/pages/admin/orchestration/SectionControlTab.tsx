@@ -148,7 +148,7 @@ const SectionControlTab: React.FC<Props> = ({ token, apiUrl, onNavigateToMiniSec
 
                 <div className="text-muted mt-2" style={{ fontSize: 11 }}>
                   <i className="bi bi-info-circle me-1"></i>
-                  Variables, skills, and artifacts are managed in the Section Blueprint on the Mini-Sections tab.
+                  To manage variables, skills, and artifacts for this section, switch to the Mini-Sections tab.
                 </div>
               </div>
               <div className="modal-footer">

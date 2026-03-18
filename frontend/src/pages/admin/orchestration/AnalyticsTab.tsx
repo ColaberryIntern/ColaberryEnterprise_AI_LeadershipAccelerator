@@ -1,4 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import OrchCard from '../../../components/orchestration/OrchCard';
+import StatusBadge from '../../../components/orchestration/StatusBadge';
+import MetricTile from '../../../components/orchestration/MetricTile';
+import ContextBar from '../../../components/orchestration/ContextBar';
+import OrchSkeleton from '../../../components/orchestration/OrchSkeleton';
 
 interface Props { token: string; apiUrl: string; }
 
@@ -16,7 +21,6 @@ interface ArtifactTrackerData {
   students: { enrollment_id: string; name: string; email: string; submissions: Record<string, boolean> }[];
 }
 
-// Drill-down detail interfaces
 interface LessonDetail {
   lesson_id: string; lesson_title: string; module_name: string;
   status: string; started_at: string | null; completed_at: string | null;
@@ -40,11 +44,11 @@ interface SkillDetailData {
   students: { enrollment_id: string; name: string; proficiency_level: number; assessed_at: string | null }[];
 }
 
-const statusBadge: Record<string, string> = {
-  active: 'bg-success', completed: 'bg-primary', withdrawn: 'bg-danger', suspended: 'bg-warning text-dark',
+const statusMap: Record<string, 'healthy' | 'active' | 'critical' | 'pending' | 'error'> = {
+  active: 'healthy', completed: 'active', withdrawn: 'critical', suspended: 'pending',
 };
-const lessonStatusBadge: Record<string, string> = {
-  completed: 'bg-success', in_progress: 'bg-info', not_started: 'bg-secondary', locked: 'bg-dark',
+const lessonStatusMap: Record<string, 'healthy' | 'active' | 'idle' | 'inactive'> = {
+  completed: 'healthy', in_progress: 'active', not_started: 'idle', locked: 'inactive',
 };
 
 const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
@@ -56,7 +60,6 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Drill-down state
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [studentDetail, setStudentDetail] = useState<StudentDetailData | null>(null);
   const [studentDetailLoading, setStudentDetailLoading] = useState(false);
@@ -94,7 +97,6 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
     } catch (err: any) { setError(err.message); }
   }, [token, apiUrl]);
 
-  // Drill-down fetchers
   const fetchStudentDetail = useCallback(async (enrollmentId: string) => {
     setStudentDetailLoading(true);
     setStudentDetail(null);
@@ -149,21 +151,16 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
   const activeCount = summary?.byStatus?.active || 0;
   const avgPct = students.length > 0 ? Math.round(students.reduce((a, s) => a + s.pct, 0) / students.length) : 0;
 
-  if (loading) return (
-    <div className="text-center py-5">
-      <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
-    </div>
-  );
+  if (loading) return <OrchSkeleton variant="card" />;
 
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString() : '-';
 
-  // Proficiency level badge
-  const profBadge = (level: number) => {
-    if (level >= 4) return 'bg-success';
-    if (level >= 3) return 'bg-info';
-    if (level >= 2) return 'bg-warning text-dark';
-    if (level >= 1) return 'bg-secondary';
-    return 'bg-light text-muted border';
+  const profColor = (level: number): 'green' | 'blue' | 'yellow' | 'default' | 'red' => {
+    if (level >= 4) return 'green';
+    if (level >= 3) return 'blue';
+    if (level >= 2) return 'yellow';
+    if (level >= 1) return 'default';
+    return 'red';
   };
   const profLabel = (level: number) => {
     if (level >= 4) return 'Expert';
@@ -172,76 +169,89 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
     if (level >= 1) return 'Beginner';
     return 'Not assessed';
   };
+  const profStatus = (level: number): 'healthy' | 'active' | 'degraded' | 'idle' | 'inactive' => {
+    if (level >= 4) return 'healthy';
+    if (level >= 3) return 'active';
+    if (level >= 2) return 'degraded';
+    if (level >= 1) return 'idle';
+    return 'inactive';
+  };
 
   return (
     <div>
       {error && <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>}
 
-      {/* Summary Cards */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm text-center p-3">
-            <div className="fw-bold" style={{ fontSize: 28, color: 'var(--color-primary, #1a365d)' }}>
-              {summary?.total || 0}
-            </div>
-            <div className="text-muted small">Total Enrollments</div>
-            <div className="mt-1" style={{ fontSize: 10 }}>
-              {summary && Object.entries(summary.byStatus).map(([status, count]) => (
-                <span key={status} className={`badge ${statusBadge[status] || 'bg-secondary'} me-1`} style={{ fontSize: 9 }}>
-                  {count} {status}
-                </span>
-              ))}
-            </div>
-          </div>
+      {/* Context Bar */}
+      <ContextBar
+        title="Program Analytics"
+        description="Enrollment progress, skill mastery, and artifact tracking"
+        metrics={[
+          { label: 'Enrollments', value: summary?.total || 0, color: 'var(--orch-accent-blue)' },
+          { label: 'Active', value: activeCount, color: 'var(--orch-accent-green)' },
+          { label: 'Avg Completion', value: `${avgPct}%`, color: 'var(--orch-accent-blue)' },
+        ]}
+      />
+
+      {/* Summary Metrics */}
+      <div className="d-flex gap-3 mb-4 flex-wrap">
+        <div className="flex-fill">
+          <MetricTile
+            label="Total Enrollments"
+            value={summary?.total || 0}
+            color="blue"
+            icon="bi bi-people"
+            subtitle={summary ? Object.entries(summary.byStatus).map(([s, c]) => `${c} ${s}`).join(', ') : undefined}
+          />
         </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm text-center p-3">
-            <div className="fw-bold" style={{ fontSize: 28, color: 'var(--color-accent, #38a169)' }}>
-              {activeCount}
-            </div>
-            <div className="text-muted small">Active Students</div>
-          </div>
+        <div className="flex-fill">
+          <MetricTile
+            label="Active Students"
+            value={activeCount}
+            color="green"
+            icon="bi bi-person-check"
+          />
         </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm text-center p-3">
-            <div className="fw-bold" style={{ fontSize: 28, color: 'var(--color-primary-light, #2b6cb0)' }}>
-              {avgPct}%
-            </div>
-            <div className="text-muted small">Avg Completion</div>
-          </div>
+        <div className="flex-fill">
+          <MetricTile
+            label="Avg Completion"
+            value={`${avgPct}%`}
+            color="blue"
+            icon="bi bi-graph-up"
+          />
         </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm text-center p-3">
-            <div className="fw-bold" style={{ fontSize: 28, color: 'var(--color-secondary, #e53e3e)' }}>
-              {skills.length || '...'}
-            </div>
-            <div className="text-muted small">Skills Tracked</div>
-          </div>
+        <div className="flex-fill">
+          <MetricTile
+            label="Skills Tracked"
+            value={skills.length || '...'}
+            color="yellow"
+            icon="bi bi-lightning"
+          />
         </div>
       </div>
 
       {/* Sub-tabs */}
-      <ul className="nav nav-pills mb-3">
+      <div className="d-flex gap-1 mb-3">
         {(['students', 'skills', 'artifacts'] as const).map(tab => (
-          <li key={tab} className="nav-item">
-            <button className={`nav-link ${subTab === tab ? 'active' : ''}`}
-              onClick={() => setSubTab(tab)} style={{ fontSize: 13 }}>
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          </li>
+          <button
+            key={tab}
+            className={`orch-tab-btn ${subTab === tab ? 'orch-tab-btn-active' : ''}`}
+            onClick={() => setSubTab(tab)}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
         ))}
-      </ul>
+      </div>
 
       {/* ==================== STUDENTS SUB-TAB ==================== */}
       {subTab === 'students' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white fw-semibold d-flex justify-content-between" style={{ fontSize: 14 }}>
-            <span>Student Progress</span>
-            <span className="badge bg-info" style={{ fontSize: 11 }}>{students.length} students</span>
-          </div>
+        <OrchCard
+          title="Student Progress"
+          noPadding
+          headerRight={<StatusBadge status="active" label={`${students.length} students`} />}
+        >
           <div className="table-responsive">
             <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
-              <thead className="table-light">
+              <thead>
                 <tr>
                   <th style={{ fontSize: 12, width: 30 }}></th>
                   <th style={{ fontSize: 12 }}>Name</th>
@@ -258,7 +268,7 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                     <tr
                       onClick={() => toggleStudentExpand(s.enrollment_id)}
                       style={{ cursor: 'pointer' }}
-                      className={expandedStudentId === s.enrollment_id ? 'table-active' : ''}
+                      className={expandedStudentId === s.enrollment_id ? 'orch-row-active' : ''}
                     >
                       <td className="text-center" style={{ fontSize: 11 }}>
                         {expandedStudentId === s.enrollment_id ? '\u25BC' : '\u25B6'}
@@ -267,16 +277,22 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                       <td style={{ fontSize: 12 }}>{s.email}</td>
                       <td style={{ fontSize: 12 }}>{s.company || '-'}</td>
                       <td>
-                        <span className={`badge ${statusBadge[s.status] || 'bg-secondary'}`} style={{ fontSize: 10 }}>
-                          {s.status}
-                        </span>
+                        <StatusBadge status={statusMap[s.status] || 'idle'} label={s.status} size="sm" />
                       </td>
                       <td>
                         <div className="d-flex align-items-center gap-2">
                           <div className="progress flex-grow-1" style={{ height: 6 }}>
-                            <div className="progress-bar bg-success" style={{ width: `${s.pct}%` }} />
+                            <div
+                              className="progress-bar"
+                              style={{
+                                width: `${s.pct}%`,
+                                backgroundColor: s.pct >= 80 ? 'var(--orch-accent-green)' : s.pct >= 40 ? 'var(--orch-accent-blue)' : 'var(--orch-accent-yellow)',
+                              }}
+                            />
                           </div>
-                          <span style={{ fontSize: 11, minWidth: 50 }}>{s.lessonsCompleted}/{s.lessonsTotal}</span>
+                          <span style={{ fontSize: 11, minWidth: 50, color: 'var(--orch-text-muted)' }}>
+                            {s.lessonsCompleted}/{s.lessonsTotal}
+                          </span>
                         </div>
                       </td>
                       <td className="fw-medium">{s.pct}%</td>
@@ -286,31 +302,29 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                     {expandedStudentId === s.enrollment_id && (
                       <tr>
                         <td colSpan={7} className="p-0">
-                          <div style={{ backgroundColor: 'var(--color-bg-alt, #f7fafc)', borderTop: '2px solid var(--color-primary-light, #2b6cb0)' }}>
+                          <div className="orch-expanded-detail">
                             {studentDetailLoading ? (
                               <div className="text-center py-4">
-                                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                <div className="spinner-border spinner-border-sm" role="status">
                                   <span className="visually-hidden">Loading...</span>
                                 </div>
-                                <span className="ms-2 text-muted small">Loading student details...</span>
+                                <span className="ms-2" style={{ fontSize: 12, color: 'var(--orch-text-muted)' }}>Loading student details...</span>
                               </div>
                             ) : studentDetail ? (
                               <div className="p-3">
-                                {/* Three-column detail layout */}
                                 <div className="row g-3">
-
                                   {/* Lesson Progress Column */}
                                   <div className="col-md-5">
-                                    <div className="card border-0 shadow-sm h-100">
-                                      <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                                        <span className="fw-semibold" style={{ fontSize: 12 }}>Lesson Progress</span>
-                                        <span className="badge bg-info" style={{ fontSize: 9 }}>
-                                          {studentDetail.lessonProgress.filter(l => l.status === 'completed').length}/{studentDetail.lessonProgress.length}
-                                        </span>
-                                      </div>
-                                      <div className="card-body p-0" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                    <OrchCard
+                                      title="Lesson Progress"
+                                      noPadding
+                                      headerRight={
+                                        <StatusBadge status="active" label={`${studentDetail.lessonProgress.filter(l => l.status === 'completed').length}/${studentDetail.lessonProgress.length}`} size="sm" />
+                                      }
+                                    >
+                                      <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                                         <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
-                                          <thead className="table-light">
+                                          <thead>
                                             <tr>
                                               <th style={{ fontSize: 10 }}>Lesson</th>
                                               <th style={{ fontSize: 10 }}>Module</th>
@@ -322,36 +336,32 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                                             {studentDetail.lessonProgress.map(l => (
                                               <tr key={l.lesson_id}>
                                                 <td className="fw-medium">{l.lesson_title}</td>
-                                                <td className="text-muted">{l.module_name}</td>
+                                                <td style={{ color: 'var(--orch-text-muted)' }}>{l.module_name}</td>
                                                 <td>
-                                                  <span className={`badge ${lessonStatusBadge[l.status] || 'bg-secondary'}`} style={{ fontSize: 9 }}>
-                                                    {l.status}
-                                                  </span>
+                                                  <StatusBadge status={lessonStatusMap[l.status] || 'idle'} label={l.status} size="sm" />
                                                 </td>
-                                                <td className="text-muted">{formatDate(l.completed_at)}</td>
+                                                <td style={{ color: 'var(--orch-text-dim)' }}>{formatDate(l.completed_at)}</td>
                                               </tr>
                                             ))}
                                             {studentDetail.lessonProgress.length === 0 && (
-                                              <tr><td colSpan={4} className="text-center text-muted py-3">No lesson data</td></tr>
+                                              <tr><td colSpan={4} className="text-center py-3" style={{ color: 'var(--orch-text-muted)' }}>No lesson data</td></tr>
                                             )}
                                           </tbody>
                                         </table>
                                       </div>
-                                    </div>
+                                    </OrchCard>
                                   </div>
 
                                   {/* Skill Mastery Column */}
                                   <div className="col-md-3">
-                                    <div className="card border-0 shadow-sm h-100">
-                                      <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                                        <span className="fw-semibold" style={{ fontSize: 12 }}>Skills</span>
-                                        <span className="badge bg-info" style={{ fontSize: 9 }}>
-                                          {studentDetail.skillMastery.length}
-                                        </span>
-                                      </div>
-                                      <div className="card-body p-0" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                    <OrchCard
+                                      title="Skills"
+                                      noPadding
+                                      headerRight={<StatusBadge status="active" label={`${studentDetail.skillMastery.length}`} size="sm" />}
+                                    >
+                                      <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                                         <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
-                                          <thead className="table-light">
+                                          <thead>
                                             <tr>
                                               <th style={{ fontSize: 10 }}>Skill</th>
                                               <th style={{ fontSize: 10 }}>Level</th>
@@ -362,36 +372,42 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                                               <tr key={sk.skill_id}>
                                                 <td>
                                                   <div className="fw-medium">{sk.skill_name}</div>
-                                                  <div className="text-muted" style={{ fontSize: 9 }}>{sk.layer_id}</div>
+                                                  <div style={{ fontSize: 9, color: 'var(--orch-text-dim)' }}>{sk.layer_id}</div>
                                                 </td>
                                                 <td>
-                                                  <span className={`badge ${profBadge(sk.proficiency_level)}`} style={{ fontSize: 9 }}>
-                                                    {sk.proficiency_level} - {profLabel(sk.proficiency_level)}
-                                                  </span>
+                                                  <StatusBadge
+                                                    status={profStatus(sk.proficiency_level)}
+                                                    label={`${sk.proficiency_level} - ${profLabel(sk.proficiency_level)}`}
+                                                    size="sm"
+                                                  />
                                                 </td>
                                               </tr>
                                             ))}
                                             {studentDetail.skillMastery.length === 0 && (
-                                              <tr><td colSpan={2} className="text-center text-muted py-3">No skill data</td></tr>
+                                              <tr><td colSpan={2} className="text-center py-3" style={{ color: 'var(--orch-text-muted)' }}>No skill data</td></tr>
                                             )}
                                           </tbody>
                                         </table>
                                       </div>
-                                    </div>
+                                    </OrchCard>
                                   </div>
 
                                   {/* Artifact Submissions Column */}
                                   <div className="col-md-4">
-                                    <div className="card border-0 shadow-sm h-100">
-                                      <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                                        <span className="fw-semibold" style={{ fontSize: 12 }}>Artifacts</span>
-                                        <span className="badge bg-info" style={{ fontSize: 9 }}>
-                                          {studentDetail.artifactSubmissions.filter(a => a.submitted).length}/{studentDetail.artifactSubmissions.length}
-                                        </span>
-                                      </div>
-                                      <div className="card-body p-0" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                    <OrchCard
+                                      title="Artifacts"
+                                      noPadding
+                                      headerRight={
+                                        <StatusBadge
+                                          status="active"
+                                          label={`${studentDetail.artifactSubmissions.filter(a => a.submitted).length}/${studentDetail.artifactSubmissions.length}`}
+                                          size="sm"
+                                        />
+                                      }
+                                    >
+                                      <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                                         <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
-                                          <thead className="table-light">
+                                          <thead>
                                             <tr>
                                               <th style={{ fontSize: 10 }}>Artifact</th>
                                               <th style={{ fontSize: 10 }}>Type</th>
@@ -404,35 +420,34 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                                               <tr key={a.artifact_id}>
                                                 <td className="fw-medium">{a.artifact_name}</td>
                                                 <td>
-                                                  <span className="badge bg-light text-muted border" style={{ fontSize: 9 }}>
-                                                    {a.artifact_type}
-                                                  </span>
+                                                  <span className="orch-badge" style={{ fontSize: 9 }}>{a.artifact_type}</span>
                                                 </td>
                                                 <td>
                                                   {a.submitted ? (
-                                                    <span className={`badge ${a.status === 'reviewed' ? 'bg-success' : 'bg-info'}`} style={{ fontSize: 9 }}>
-                                                      {a.status || 'submitted'}
-                                                    </span>
+                                                    <StatusBadge
+                                                      status={a.status === 'reviewed' ? 'healthy' : 'active'}
+                                                      label={a.status || 'submitted'}
+                                                      size="sm"
+                                                    />
                                                   ) : (
-                                                    <span className="badge bg-light text-muted border" style={{ fontSize: 9 }}>pending</span>
+                                                    <StatusBadge status="idle" label="pending" size="sm" />
                                                   )}
                                                 </td>
-                                                <td className="text-muted">{formatDate(a.submitted_at)}</td>
+                                                <td style={{ color: 'var(--orch-text-dim)' }}>{formatDate(a.submitted_at)}</td>
                                               </tr>
                                             ))}
                                             {studentDetail.artifactSubmissions.length === 0 && (
-                                              <tr><td colSpan={4} className="text-center text-muted py-3">No artifact data</td></tr>
+                                              <tr><td colSpan={4} className="text-center py-3" style={{ color: 'var(--orch-text-muted)' }}>No artifact data</td></tr>
                                             )}
                                           </tbody>
                                         </table>
                                       </div>
-                                    </div>
+                                    </OrchCard>
                                   </div>
-
                                 </div>
                               </div>
                             ) : (
-                              <div className="text-center text-muted py-4" style={{ fontSize: 12 }}>
+                              <div className="text-center py-4" style={{ color: 'var(--orch-text-muted)', fontSize: 12 }}>
                                 Unable to load student details.
                               </div>
                             )}
@@ -443,31 +458,31 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                   </React.Fragment>
                 ))}
                 {students.length === 0 && (
-                  <tr><td colSpan={7} className="text-center text-muted py-4">No enrollments found.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-4" style={{ color: 'var(--orch-text-muted)' }}>No enrollments found.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-        </div>
+        </OrchCard>
       )}
 
       {/* ==================== SKILLS SUB-TAB ==================== */}
       {subTab === 'skills' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white fw-semibold d-flex justify-content-between" style={{ fontSize: 14 }}>
-            <span>Skill Mastery Overview</span>
-            <span className="badge bg-info" style={{ fontSize: 11 }}>{skills.length} skills</span>
-          </div>
+        <OrchCard
+          title="Skill Mastery Overview"
+          noPadding
+          headerRight={<StatusBadge status="active" label={`${skills.length} skills`} />}
+        >
           <div className="table-responsive">
             <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
-              <thead className="table-light">
+              <thead>
                 <tr>
                   <th style={{ fontSize: 12, width: 30 }}></th>
                   <th style={{ fontSize: 12 }}>Skill ID</th>
                   <th style={{ fontSize: 12 }}>Name</th>
                   <th style={{ fontSize: 12 }}>Layer</th>
                   <th style={{ fontSize: 12 }}>Domain</th>
-                  <th style={{ fontSize: 12 }}>Students Tracked</th>
+                  <th style={{ fontSize: 12 }}>Students</th>
                   <th style={{ fontSize: 12 }}>Avg Level</th>
                 </tr>
               </thead>
@@ -477,21 +492,30 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                     <tr
                       onClick={() => toggleSkillExpand(s.skill_id)}
                       style={{ cursor: 'pointer' }}
-                      className={expandedSkillId === s.skill_id ? 'table-active' : ''}
+                      className={expandedSkillId === s.skill_id ? 'orch-row-active' : ''}
                     >
                       <td className="text-center" style={{ fontSize: 11 }}>
                         {expandedSkillId === s.skill_id ? '\u25BC' : '\u25B6'}
                       </td>
                       <td className="font-monospace" style={{ fontSize: 11 }}>{s.skill_id}</td>
                       <td className="fw-medium">{s.name}</td>
-                      <td><span className="badge bg-secondary" style={{ fontSize: 10 }}>{s.layer_id}</span></td>
+                      <td>
+                        <span className="orch-badge" style={{ fontSize: 10 }}>
+                          <span style={{
+                            width: 4, height: 12, borderRadius: 2, display: 'inline-block',
+                            background: 'var(--orch-accent-purple)', marginRight: 4,
+                          }} />
+                          {s.layer_id}
+                        </span>
+                      </td>
                       <td style={{ fontSize: 12 }}>{s.domain_id}</td>
                       <td>{s.studentsTracked}</td>
                       <td>
-                        <span className={`badge ${s.avgLevel >= 3 ? 'bg-success' : s.avgLevel >= 1 ? 'bg-warning text-dark' : 'bg-secondary'}`}
-                          style={{ fontSize: 10 }}>
-                          {s.avgLevel}
-                        </span>
+                        <StatusBadge
+                          status={s.avgLevel >= 3 ? 'healthy' : s.avgLevel >= 1 ? 'degraded' : 'idle'}
+                          label={String(s.avgLevel)}
+                          size="sm"
+                        />
                       </td>
                     </tr>
 
@@ -499,29 +523,27 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                     {expandedSkillId === s.skill_id && (
                       <tr>
                         <td colSpan={7} className="p-0">
-                          <div style={{ backgroundColor: 'var(--color-bg-alt, #f7fafc)', borderTop: '2px solid var(--color-primary-light, #2b6cb0)' }}>
+                          <div className="orch-expanded-detail">
                             {skillDetailLoading ? (
                               <div className="text-center py-4">
-                                <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                <div className="spinner-border spinner-border-sm" role="status">
                                   <span className="visually-hidden">Loading...</span>
                                 </div>
-                                <span className="ms-2 text-muted small">Loading skill details...</span>
+                                <span className="ms-2" style={{ fontSize: 12, color: 'var(--orch-text-muted)' }}>Loading skill details...</span>
                               </div>
                             ) : skillDetail ? (
                               <div className="p-3">
                                 {skillDetail.info.description && (
-                                  <p className="text-muted mb-3" style={{ fontSize: 12 }}>{skillDetail.info.description}</p>
+                                  <p className="mb-3" style={{ fontSize: 12, color: 'var(--orch-text-muted)' }}>{skillDetail.info.description}</p>
                                 )}
-                                <div className="card border-0 shadow-sm">
-                                  <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-                                    <span className="fw-semibold" style={{ fontSize: 12 }}>Per-Student Mastery</span>
-                                    <span className="badge bg-info" style={{ fontSize: 9 }}>
-                                      {skillDetail.students.length} students
-                                    </span>
-                                  </div>
-                                  <div className="card-body p-0" style={{ maxHeight: 250, overflowY: 'auto' }}>
+                                <OrchCard
+                                  title="Per-Student Mastery"
+                                  noPadding
+                                  headerRight={<StatusBadge status="active" label={`${skillDetail.students.length} students`} size="sm" />}
+                                >
+                                  <div style={{ maxHeight: 250, overflowY: 'auto' }}>
                                     <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
-                                      <thead className="table-light">
+                                      <thead>
                                         <tr>
                                           <th style={{ fontSize: 10 }}>Student</th>
                                           <th style={{ fontSize: 10 }}>Proficiency Level</th>
@@ -536,28 +558,33 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                                               <div className="d-flex align-items-center gap-2">
                                                 <div className="progress flex-grow-1" style={{ height: 6, maxWidth: 80 }}>
                                                   <div
-                                                    className={`progress-bar ${profBadge(st.proficiency_level).replace('bg-', 'bg-')}`}
-                                                    style={{ width: `${(st.proficiency_level / 5) * 100}%` }}
+                                                    className="progress-bar"
+                                                    style={{
+                                                      width: `${(st.proficiency_level / 5) * 100}%`,
+                                                      backgroundColor: `var(--orch-accent-${profColor(st.proficiency_level)})`,
+                                                    }}
                                                   />
                                                 </div>
-                                                <span className={`badge ${profBadge(st.proficiency_level)}`} style={{ fontSize: 9 }}>
-                                                  {st.proficiency_level} - {profLabel(st.proficiency_level)}
-                                                </span>
+                                                <StatusBadge
+                                                  status={profStatus(st.proficiency_level)}
+                                                  label={`${st.proficiency_level} - ${profLabel(st.proficiency_level)}`}
+                                                  size="sm"
+                                                />
                                               </div>
                                             </td>
-                                            <td className="text-muted">{formatDate(st.assessed_at)}</td>
+                                            <td style={{ color: 'var(--orch-text-dim)' }}>{formatDate(st.assessed_at)}</td>
                                           </tr>
                                         ))}
                                         {skillDetail.students.length === 0 && (
-                                          <tr><td colSpan={3} className="text-center text-muted py-3">No students tracked for this skill yet.</td></tr>
+                                          <tr><td colSpan={3} className="text-center py-3" style={{ color: 'var(--orch-text-muted)' }}>No students tracked for this skill yet.</td></tr>
                                         )}
                                       </tbody>
                                     </table>
                                   </div>
-                                </div>
+                                </OrchCard>
                               </div>
                             ) : (
-                              <div className="text-center text-muted py-4" style={{ fontSize: 12 }}>
+                              <div className="text-center py-4" style={{ color: 'var(--orch-text-muted)', fontSize: 12 }}>
                                 Unable to load skill details.
                               </div>
                             )}
@@ -568,28 +595,26 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                   </React.Fragment>
                 ))}
                 {skills.length === 0 && (
-                  <tr><td colSpan={7} className="text-center text-muted py-4">No skill mastery data yet.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-4" style={{ color: 'var(--orch-text-muted)' }}>No skill mastery data yet.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-        </div>
+        </OrchCard>
       )}
 
       {/* ==================== ARTIFACTS SUB-TAB ==================== */}
       {subTab === 'artifacts' && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white fw-semibold d-flex justify-content-between" style={{ fontSize: 14 }}>
-            <span>Artifact Submissions</span>
-            <span className="badge bg-info" style={{ fontSize: 11 }}>
-              {artifactData?.artifacts.length || 0} artifacts
-            </span>
-          </div>
+        <OrchCard
+          title="Artifact Submissions"
+          noPadding
+          headerRight={<StatusBadge status="active" label={`${artifactData?.artifacts.length || 0} artifacts`} />}
+        >
           <div className="table-responsive">
             <table className="table table-hover mb-0" style={{ fontSize: 12 }}>
-              <thead className="table-light">
+              <thead>
                 <tr>
-                  <th style={{ fontSize: 11, position: 'sticky', left: 0, backgroundColor: '#f8f9fa', zIndex: 1 }}>Student</th>
+                  <th style={{ fontSize: 11, position: 'sticky', left: 0, background: 'var(--orch-bg-card)', zIndex: 1 }}>Student</th>
                   {artifactData?.artifacts.map(a => (
                     <th key={a.id} style={{ fontSize: 10, writingMode: 'vertical-rl', textOrientation: 'mixed', maxWidth: 30, whiteSpace: 'nowrap' }}>
                       {a.name}
@@ -608,29 +633,30 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
                       style={{ cursor: 'pointer' }}
                       title={`Click to see ${s.name}'s full detail`}
                     >
-                      <td className="fw-medium" style={{ position: 'sticky', left: 0, backgroundColor: '#fff', zIndex: 1, fontSize: 11 }}>
+                      <td className="fw-medium" style={{ position: 'sticky', left: 0, background: 'var(--orch-bg-card)', zIndex: 1, fontSize: 11 }}>
                         {s.name}
                       </td>
                       {artifactData.artifacts.map(a => (
                         <td key={a.id} className="text-center">
                           {s.submissions[a.id]
-                            ? <span className="text-success" style={{ fontSize: 14 }}>&#10003;</span>
-                            : <span className="text-muted" style={{ fontSize: 14 }}>&#8212;</span>
+                            ? <span style={{ color: 'var(--orch-accent-green)', fontSize: 14 }}>&#10003;</span>
+                            : <span style={{ color: 'var(--orch-text-dim)', fontSize: 14 }}>&#8212;</span>
                           }
                         </td>
                       ))}
                       <td className="fw-medium text-center">
-                        <span className={`badge ${submittedCount === artifactData.artifacts.length ? 'bg-success' : submittedCount > 0 ? 'bg-warning text-dark' : 'bg-secondary'}`}
-                          style={{ fontSize: 10 }}>
-                          {submittedCount}/{artifactData.artifacts.length}
-                        </span>
+                        <StatusBadge
+                          status={submittedCount === artifactData.artifacts.length ? 'healthy' : submittedCount > 0 ? 'degraded' : 'idle'}
+                          label={`${submittedCount}/${artifactData.artifacts.length}`}
+                          size="sm"
+                        />
                       </td>
                     </tr>
                   );
                 })}
                 {(!artifactData || artifactData.students.length === 0) && (
                   <tr>
-                    <td colSpan={(artifactData?.artifacts.length || 0) + 2} className="text-center text-muted py-4">
+                    <td colSpan={(artifactData?.artifacts.length || 0) + 2} className="text-center py-4" style={{ color: 'var(--orch-text-muted)' }}>
                       No artifact submission data yet.
                     </td>
                   </tr>
@@ -639,11 +665,11 @@ const AnalyticsTab: React.FC<Props> = ({ token, apiUrl }) => {
             </table>
           </div>
           {artifactData && artifactData.students.length > 0 && (
-            <div className="card-footer bg-white text-muted" style={{ fontSize: 10 }}>
+            <div className="p-2 text-center" style={{ fontSize: 10, color: 'var(--orch-text-dim)', borderTop: '1px solid var(--orch-border)' }}>
               Click any student row to see their full progress detail.
             </div>
           )}
-        </div>
+        </OrchCard>
       )}
     </div>
   );

@@ -24,6 +24,7 @@ const GatingControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
   const [variables, setVariables] = useState<any[]>([]);
   const [varsLoading, setVarsLoading] = useState(false);
+  const [expandedVarKey, setExpandedVarKey] = useState<string | null>(null);
 
   // Variable Definitions sub-tab state
   const [varDefs, setVarDefs] = useState<any[]>([]);
@@ -422,7 +423,26 @@ const GatingControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                     {variables.map((v: any) => (
                       <tr key={v.key || v.id}>
                         <td className="fw-medium">{v.key}</td>
-                        <td style={{ maxWidth: 400, fontSize: 12 }}>{typeof v.value === 'object' ? JSON.stringify(v.value).substring(0, 120) : String(v.value).substring(0, 120)}</td>
+                        <td style={{ maxWidth: 400, fontSize: 12 }}>
+                          {(() => {
+                            const raw = typeof v.value === 'object' ? JSON.stringify(v.value, null, 2) : String(v.value);
+                            const isLong = raw.length > 120;
+                            const isExpanded = expandedVarKey === (v.key || v.id);
+                            return (
+                              <>
+                                <span style={isExpanded ? { whiteSpace: 'pre-wrap', wordBreak: 'break-word' } : undefined}>
+                                  {isExpanded ? raw : raw.substring(0, 120)}{!isExpanded && isLong ? '...' : ''}
+                                </span>
+                                {isLong && (
+                                  <button className="btn btn-link btn-sm p-0 ms-1" style={{ fontSize: 10 }}
+                                    onClick={() => setExpandedVarKey(isExpanded ? null : (v.key || v.id))}>
+                                    {isExpanded ? 'collapse' : 'expand'}
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </td>
                         <td style={{ fontSize: 12 }}>{v.updated_at ? new Date(v.updated_at).toLocaleString() : '-'}</td>
                       </tr>
                     ))}

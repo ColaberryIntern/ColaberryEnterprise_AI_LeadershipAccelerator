@@ -17,6 +17,7 @@ import { useControlTower } from './builder/useControlTower';
 import PromptDebuggerPanel from './builder/PromptDebuggerPanel';
 import AISimulationWorkspace from './builder/AISimulationWorkspace';
 import { PROMPT_PAIRS } from './builder/types';
+import ContextBar from '../../../components/orchestration/ContextBar';
 
 interface GeneratedEvent {
   type: string;
@@ -101,8 +102,23 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
     builder.selectLesson(builder.selectedLessonId);
   };
 
+  const msCount = builder.miniSections.length;
+  const varCount = builder.sectionVariableKeys?.length || 0;
+  const skillCount = builder.sectionSkillIds?.length || 0;
+
   return (
     <div>
+      {/* Context Bar */}
+      <ContextBar
+        title={builder.selectedLesson?.title || 'Mini-Section Builder'}
+        description={builder.selectedLessonId ? 'Configure content pipeline, variables, skills, and artifacts' : 'Select a section to begin'}
+        metrics={builder.selectedLessonId ? [
+          { label: 'Mini-Sections', value: msCount, color: 'var(--orch-accent-blue)' },
+          { label: 'Variables', value: varCount, color: 'var(--orch-accent-purple)' },
+          { label: 'Skills', value: skillCount, color: 'var(--orch-accent-green)' },
+        ] : []}
+      />
+
       {/* Inline Creator Modals */}
       {builder.inlineCreator === 'variable' && (
         <InlineVariableCreator
@@ -186,11 +202,11 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
             />
           </div>
           <div className="col-lg-9">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body text-center py-5">
-                <i className="bi bi-cursor-fill" style={{ fontSize: 36, color: 'var(--color-text-light)' }}></i>
-                <h6 className="fw-bold mt-3">Select a Section</h6>
-                <p className="text-muted small">Choose a section from the navigator to configure its mini-sections, preview content, and run simulations.</p>
+            <div className="orch-card">
+              <div className="orch-card-body text-center py-5">
+                <i className="bi bi-cursor-fill" style={{ fontSize: 36, color: 'var(--orch-text-dim)' }}></i>
+                <h6 className="fw-bold mt-3" style={{ color: 'var(--orch-text)' }}>Select a Section</h6>
+                <p className="small" style={{ color: 'var(--orch-text-muted)' }}>Choose a section from the navigator to configure its mini-sections, preview content, and run simulations.</p>
               </div>
             </div>
           </div>
@@ -262,15 +278,15 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                 </div>
 
                 {/* Mini-Section Pipeline */}
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                <div className="orch-card">
+                  <div className="orch-card-header">
                     <span className="fw-semibold small">
-                      <i className="bi bi-signpost-split me-1" style={{ color: 'var(--color-primary, #1a365d)' }}></i>
+                      <i className="bi bi-signpost-split me-1" style={{ color: 'var(--orch-accent-blue)' }}></i>
                       Pipeline
                     </span>
-                    <span className="badge bg-info" style={{ fontSize: 9 }}>{builder.miniSections.length} steps</span>
+                    <span className="orch-badge" style={{ fontSize: 9 }}>{builder.miniSections.length} steps</span>
                   </div>
-                  <div className="card-body py-2">
+                  <div className="orch-card-body py-2">
                     <MiniSectionPipeline
                       miniSections={builder.miniSections}
                       selectedId={builder.selectedMiniSectionId}

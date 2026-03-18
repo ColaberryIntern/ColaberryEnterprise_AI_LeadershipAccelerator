@@ -9,6 +9,9 @@ import CurriculumLesson from '../models/CurriculumLesson';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 import { callLLMWithAudit } from './llmCallWrapper';
 
+// TODO: Read from ProgramBlueprint when multi-program support is added
+const DEFAULT_LAYER_ID = 'ai-leadership';
+
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 
 // ─── Basic Generation (existing) ─────────────────────────────────────────
@@ -283,8 +286,8 @@ export async function applySectionBlueprint(
         skill_id: skillDomain,
         name: skillName,
         description: `Auto-generated from section blueprint`,
-        layer_id: 'ai-leadership',
-        domain_id: skillDomain.split('_')[0] || 'general',
+        layer_id: DEFAULT_LAYER_ID,
+        domain_id: skillDomain,
         weights: {},
         mastery_threshold: 0.7,
         skill_type: 'core',

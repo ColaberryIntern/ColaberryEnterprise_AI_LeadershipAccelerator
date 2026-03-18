@@ -1,4 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import OrchCard from '../../../components/orchestration/OrchCard';
+import StatusBadge from '../../../components/orchestration/StatusBadge';
+import MetricTile from '../../../components/orchestration/MetricTile';
+import ContextBar from '../../../components/orchestration/ContextBar';
+import InsightPanel from '../../../components/orchestration/InsightPanel';
+import OrchSkeleton from '../../../components/orchestration/OrchSkeleton';
 
 interface MonitoringAgent {
   id: string;
@@ -33,24 +39,6 @@ interface HealthReport {
   backfillStatus: any;
 }
 
-const severityBadge: Record<string, string> = {
-  critical: 'bg-danger',
-  warning: 'bg-warning text-dark',
-  info: 'bg-info',
-};
-
-const statusColor: Record<string, string> = {
-  healthy: 'var(--color-accent, #38a169)',
-  degraded: '#d69e2e',
-  critical: 'var(--color-secondary, #e53e3e)',
-};
-
-const statusLabel: Record<string, string> = {
-  healthy: 'Healthy',
-  degraded: 'Degraded',
-  critical: 'Critical',
-};
-
 const countLabels: Record<string, string> = {
   modules: 'Curriculum Modules',
   lessons: 'Curriculum Lessons',
@@ -64,11 +52,11 @@ const countLabels: Record<string, string> = {
   sessionGates: 'Session Gates',
 };
 
-const agentStatusColor: Record<string, string> = {
-  idle: 'secondary',
-  running: 'primary',
-  paused: 'warning',
-  error: 'danger',
+const agentStatusMap: Record<string, 'running' | 'idle' | 'pending' | 'error' | 'inactive'> = {
+  idle: 'idle',
+  running: 'running',
+  paused: 'pending',
+  error: 'error',
 };
 
 function timeAgo(dateStr: string | null): string {
@@ -120,13 +108,7 @@ const HealthDashboardTab: React.FC<Props> = ({ token, apiUrl }) => {
 
   useEffect(() => { fetchReport(); fetchMonitoringData(); }, [fetchReport, fetchMonitoringData]);
 
-  if (loading && !report) return (
-    <div className="text-center py-5">
-      <div className="spinner-border text-primary" role="status">
-        <span className="visually-hidden">Loading...</span>
-      </div>
-    </div>
-  );
+  if (loading && !report) return <OrchSkeleton variant="card" />;
 
   if (error && !report) return (
     <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>
@@ -136,110 +118,121 @@ const HealthDashboardTab: React.FC<Props> = ({ token, apiUrl }) => {
 
   const criticalCount = report.findings.filter(f => f.severity === 'critical').length;
   const warningCount = report.findings.filter(f => f.severity === 'warning').length;
-  const infoCount = report.findings.filter(f => f.severity === 'info').length;
 
   return (
     <div>
-      {/* Automated Monitoring Status */}
-      {(monitorAgents.length > 0 || latestSnapshot) && (
-        <div className="card border-0 shadow-sm mb-3">
-          <div className="card-body py-2">
-            <div className="d-flex flex-wrap align-items-center gap-3">
-              {monitorAgents.map((a) => (
-                <div key={a.id} className="d-flex align-items-center gap-1" style={{ fontSize: 12 }}>
-                  <span className={`badge bg-${agentStatusColor[a.status] || 'secondary'}`} style={{ fontSize: 10 }}>
-                    {a.status}
-                  </span>
-                  <span className="fw-medium">{a.agent_name.replace('Agent', '')}</span>
-                  <span className="text-muted">{timeAgo(a.last_run_at)}</span>
-                  {a.error_count > 0 && (
-                    <span className="badge bg-danger" style={{ fontSize: 9 }}>{a.error_count} err</span>
-                  )}
-                </div>
-              ))}
-              {latestSnapshot && latestSnapshot.health_score != null && (
-                <div className="ms-auto d-flex align-items-center gap-2" style={{ fontSize: 12 }}>
-                  <span className="text-muted">Automated scan:</span>
-                  <span className={`badge bg-${latestSnapshot.status === 'healthy' ? 'success' : latestSnapshot.status === 'degraded' ? 'warning' : 'danger'}`}>
-                    {latestSnapshot.health_score}/100
-                  </span>
-                  <span className="text-muted">{timeAgo(latestSnapshot.scan_timestamp)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <span className="fw-semibold" style={{ fontSize: 14 }}>System Health</span>
-          <span
-            className="badge ms-2"
-            style={{ fontSize: 11, backgroundColor: statusColor[report.status], color: report.status === 'degraded' ? '#000' : '#fff' }}
+      {/* Context Bar */}
+      <ContextBar
+        title="System Health"
+        description="Real-time orchestration health monitoring"
+        metrics={[
+          { label: 'Mini-Sections', value: report.counts.miniSections, color: 'var(--orch-accent-blue)' },
+          { label: 'Enrollments', value: report.counts.enrollments, color: 'var(--orch-accent-green)' },
+          { label: 'Findings', value: report.findings.length, color: report.findings.length === 0 ? 'var(--orch-accent-green)' : 'var(--orch-accent-yellow)' },
+        ]}
+        actions={
+          <button
+            className="btn btn-sm btn-outline-primary"
+            onClick={() => { fetchReport(); fetchMonitoringData(); }}
+            disabled={loading}
           >
-            {statusLabel[report.status]}
-          </span>
-        </div>
-        <div className="d-flex gap-2 align-items-center">
-          <span className="text-muted" style={{ fontSize: 11 }}>
-            Last checked: {new Date(report.timestamp).toLocaleString()}
-          </span>
-          <button className="btn btn-sm btn-outline-primary" onClick={fetchReport} disabled={loading}>
+            <i className="bi bi-arrow-clockwise me-1" />
             {loading ? 'Checking...' : 'Refresh'}
           </button>
+        }
+      />
+
+      {/* Monitoring Agents */}
+      {(monitorAgents.length > 0 || latestSnapshot) && (
+        <OrchCard title="Monitoring Agents" className="mb-3"
+          headerRight={
+            latestSnapshot && latestSnapshot.health_score != null ? (
+              <div className="d-flex align-items-center gap-2">
+                <span style={{ fontSize: 11, color: 'var(--orch-text-muted)' }}>Automated scan:</span>
+                <StatusBadge
+                  status={latestSnapshot.status === 'healthy' ? 'healthy' : latestSnapshot.status === 'degraded' ? 'degraded' : 'critical'}
+                  label={`${latestSnapshot.health_score}/100`}
+                  glow
+                />
+                <span style={{ fontSize: 11, color: 'var(--orch-text-dim)' }}>{timeAgo(latestSnapshot.scan_timestamp)}</span>
+              </div>
+            ) : undefined
+          }
+        >
+          <div className="d-flex flex-wrap gap-3">
+            {monitorAgents.map((a) => (
+              <div key={a.id} className="d-flex align-items-center gap-2" style={{ fontSize: 12 }}>
+                <StatusBadge
+                  status={agentStatusMap[a.status] || 'idle'}
+                  label={a.agent_name.replace('Agent', '')}
+                  pulse={a.status === 'running'}
+                />
+                <span style={{ color: 'var(--orch-text-dim)', fontSize: 11 }}>{timeAgo(a.last_run_at)}</span>
+                {a.error_count > 0 && (
+                  <StatusBadge status="error" label={`${a.error_count} err`} size="sm" />
+                )}
+              </div>
+            ))}
+          </div>
+        </OrchCard>
+      )}
+
+      {/* Summary Metrics */}
+      <div className="d-flex gap-3 mb-4 flex-wrap">
+        <div className="flex-fill">
+          <MetricTile
+            label="Mini-Sections Configured"
+            value={report.counts.miniSections}
+            color="blue"
+            subtitle={`across ${report.counts.lessons} lessons in ${report.counts.modules} modules`}
+            icon="bi bi-layers"
+          />
+        </div>
+        <div className="flex-fill">
+          <MetricTile
+            label="Active Enrollments"
+            value={report.counts.enrollments}
+            color="green"
+            subtitle={`${report.counts.lessonInstances} lesson instances tracked`}
+            icon="bi bi-people"
+          />
+        </div>
+        <div className="flex-fill">
+          <MetricTile
+            label="Findings"
+            value={report.findings.length}
+            color={report.findings.length === 0 ? 'green' : criticalCount > 0 ? 'red' : 'yellow'}
+            subtitle={
+              report.findings.length === 0
+                ? 'All clear'
+                : `${criticalCount} critical, ${warningCount} warning`
+            }
+            icon="bi bi-shield-check"
+          />
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="row g-3 mb-4">
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm text-center p-3">
-            <div className="fw-bold" style={{ fontSize: 28, color: 'var(--color-primary, #1a365d)' }}>
-              {report.counts.miniSections}
-            </div>
-            <div className="text-muted small">Mini-Sections Configured</div>
-            <div className="mt-1" style={{ fontSize: 11 }}>
-              across {report.counts.lessons} lessons in {report.counts.modules} modules
-            </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm text-center p-3">
-            <div className="fw-bold" style={{ fontSize: 28, color: 'var(--color-accent, #38a169)' }}>
-              {report.counts.enrollments}
-            </div>
-            <div className="text-muted small">Active Enrollments</div>
-            <div className="mt-1" style={{ fontSize: 11 }}>
-              {report.counts.lessonInstances} lesson instances tracked
-            </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm text-center p-3">
-            <div className="fw-bold" style={{ fontSize: 28, color: report.findings.length === 0 ? 'var(--color-accent)' : statusColor[report.status] }}>
-              {report.findings.length}
-            </div>
-            <div className="text-muted small">Findings</div>
-            <div className="mt-1" style={{ fontSize: 11 }}>
-              {criticalCount > 0 && <span className="badge bg-danger me-1" style={{ fontSize: 10 }}>{criticalCount} critical</span>}
-              {warningCount > 0 && <span className="badge bg-warning text-dark me-1" style={{ fontSize: 10 }}>{warningCount} warning</span>}
-              {infoCount > 0 && <span className="badge bg-info me-1" style={{ fontSize: 10 }}>{infoCount} info</span>}
-              {report.findings.length === 0 && <span className="text-muted">All clear</span>}
-            </div>
-          </div>
-        </div>
+      {/* Findings Panel */}
+      <div className="mb-3">
+        <InsightPanel
+          title={`Findings (${report.findings.length})`}
+          items={report.findings.map(f => ({
+            severity: f.severity,
+            message: f.message,
+            category: f.category,
+          }))}
+          emptyMessage="All systems healthy — no issues detected"
+        />
       </div>
 
-      {/* Entity Counts */}
-      <div className="card border-0 shadow-sm mb-3">
-        <div className="card-header bg-white fw-semibold" style={{ fontSize: 14 }}>Entity Counts</div>
+      {/* Entity Inventory */}
+      <OrchCard title="Entity Inventory" noPadding className="mb-3">
         <div className="table-responsive">
           <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
-            <thead className="table-light">
+            <thead>
               <tr>
                 <th style={{ fontSize: 12 }}>Entity</th>
-                <th style={{ fontSize: 12, width: 100 }}>Count</th>
+                <th style={{ fontSize: 12, width: 120 }}>Count</th>
               </tr>
             </thead>
             <tbody>
@@ -247,59 +240,29 @@ const HealthDashboardTab: React.FC<Props> = ({ token, apiUrl }) => {
                 <tr key={key}>
                   <td>{countLabels[key] || key}</td>
                   <td>
-                    <span className={`badge ${value === 0 ? 'bg-danger' : 'bg-secondary'}`} style={{ fontSize: 11 }}>
-                      {value}
-                    </span>
+                    <StatusBadge
+                      status={value === 0 ? 'critical' : 'healthy'}
+                      label={String(value)}
+                      size="sm"
+                    />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Findings */}
-      {report.findings.length > 0 && (
-        <div className="card border-0 shadow-sm mb-3">
-          <div className="card-header bg-white fw-semibold" style={{ fontSize: 14 }}>
-            Findings ({report.findings.length})
-          </div>
-          <div className="table-responsive">
-            <table className="table table-hover mb-0" style={{ fontSize: 13 }}>
-              <thead className="table-light">
-                <tr>
-                  <th style={{ fontSize: 12, width: 90 }}>Severity</th>
-                  <th style={{ fontSize: 12, width: 120 }}>Category</th>
-                  <th style={{ fontSize: 12 }}>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.findings.map((f, idx) => (
-                  <tr key={idx}>
-                    <td><span className={`badge ${severityBadge[f.severity]}`} style={{ fontSize: 10 }}>{f.severity}</span></td>
-                    <td style={{ fontSize: 12 }}>{f.category}</td>
-                    <td>{f.message}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      </OrchCard>
 
       {/* Backfill Status */}
       {report.backfillStatus && (
-        <div className="card border-0 shadow-sm mb-3">
-          <div className="card-header bg-white fw-semibold" style={{ fontSize: 14 }}>Prompt Backfill Status</div>
-          <div className="card-body py-2">
-            <div className="d-flex gap-4" style={{ fontSize: 13 }}>
-              <div>Total: <strong>{report.backfillStatus.total ?? '-'}</strong></div>
-              <div>With Inline: <strong>{report.backfillStatus.withInline ?? '-'}</strong></div>
-              <div>FK Only: <strong>{report.backfillStatus.fkOnly ?? '-'}</strong></div>
-              <div>Neither: <strong>{report.backfillStatus.neither ?? '-'}</strong></div>
-            </div>
+        <OrchCard title="Prompt Backfill Status" className="mb-3">
+          <div className="d-flex gap-4 flex-wrap">
+            <MetricTile label="Total" value={report.backfillStatus.total ?? '-'} color="blue" />
+            <MetricTile label="With Inline" value={report.backfillStatus.withInline ?? '-'} color="green" />
+            <MetricTile label="FK Only" value={report.backfillStatus.fkOnly ?? '-'} color="yellow" />
+            <MetricTile label="Neither" value={report.backfillStatus.neither ?? '-'} color={report.backfillStatus.neither > 0 ? 'red' : 'default'} />
           </div>
-        </div>
+        </OrchCard>
       )}
     </div>
   );
