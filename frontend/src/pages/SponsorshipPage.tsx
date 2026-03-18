@@ -1,10 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import SEOHead from '../components/SEOHead';
 import LeadCaptureForm from '../components/LeadCaptureForm';
+import Modal from '../components/ui/Modal';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import ROIHighlightSection from '../components/ROIHighlightSection';
+import api from '../utils/api';
+import kitMarkdownUrl from '../docs/CorporateSponsorshipKit.md';
 
 function SponsorshipPage() {
+  const [showKitModal, setShowKitModal] = useState(false);
+  const [submittedName, setSubmittedName] = useState('');
+  const [kitContent, setKitContent] = useState('');
+
+  useEffect(() => {
+    fetch(kitMarkdownUrl)
+      .then((res) => res.text())
+      .then(setKitContent)
+      .catch(() => setKitContent('Failed to load kit content.'));
+  }, []);
+
+  const handleFormSuccess = (data?: { name: string; email: string; company: string; phone: string }) => {
+    if (data) {
+      setSubmittedName(data.name.split(' ')[0] || data.name);
+      // Fire-and-forget: trigger sponsorship kit email + scoring
+      api.post('/api/sponsorship-kit-request', { email: data.email }).catch((err) =>
+        console.warn('[SponsorshipPage] Kit email trigger failed (non-blocking):', err)
+      );
+    }
+    setShowKitModal(true);
+  };
+
   return (
     <>
       <SEOHead
@@ -193,11 +220,79 @@ function SponsorshipPage() {
               successMessage="✅ Your Sponsorship Kit has been sent to your email. Expect it within minutes."
               className="text-dark"
               captureUtm
+              onSuccess={handleFormSuccess}
             />
           </div>
           {/* TODO: Trigger automated email sequence via CRM (future) */}
         </div>
       </section>
+
+      {/* Sponsorship Kit Modal */}
+      <Modal
+        show={showKitModal}
+        onClose={() => setShowKitModal(false)}
+        title="Your Executive AI Investment Kit is Ready"
+        size="xl"
+        footer={
+          <div className="d-flex gap-2 flex-wrap">
+            <a
+              href="/strategy-call-prep"
+              className="btn btn-primary"
+            >
+              Schedule an Executive AI Strategy Call
+            </a>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => window.open('/assets/The_AI_Execution_Engine.pdf', '_blank')}
+            >
+              Download PDF
+            </button>
+          </div>
+        }
+      >
+        <p className="text-muted mb-3">
+          {submittedName ? `${submittedName}, we` : 'We'}'ve also sent a copy to your email.
+        </p>
+
+        {/* Quick Value */}
+        <div className="alert alert-light border mb-4">
+          <ul className="mb-0 list-unstyled">
+            <li className="mb-2"><strong>Build</strong> a production AI system in 3 weeks</li>
+            <li className="mb-2"><strong>Save</strong> months vs traditional consulting</li>
+            <li className="mb-0"><strong>Enable</strong> internal AI capability that scales permanently</li>
+          </ul>
+        </div>
+
+        {/* Kit Content */}
+        <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '0 0.5rem' }}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              table: ({ children, ...props }) => (
+                <div className="table-responsive">
+                  <table className="table table-hover table-sm" {...props}>{children}</table>
+                </div>
+              ),
+              thead: ({ children, ...props }) => (
+                <thead className="table-light" {...props}>{children}</thead>
+              ),
+              h1: ({ children, ...props }) => <h2 className="h4 mt-4 mb-3" style={{ color: 'var(--color-primary)' }} {...props}>{children}</h2>,
+              h2: ({ children, ...props }) => <h3 className="h5 mt-3 mb-2" style={{ color: 'var(--color-primary)' }} {...props}>{children}</h3>,
+              h3: ({ children, ...props }) => <h4 className="h6 mt-3 mb-2" {...props}>{children}</h4>,
+              hr: () => <hr className="my-4" />,
+              blockquote: ({ children, ...props }) => (
+                <blockquote className="border-start border-3 border-primary ps-3 my-3 fst-italic text-muted" {...props}>{children}</blockquote>
+              ),
+              a: ({ children, href, ...props }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="text-decoration-none" {...props}>{children}</a>
+              ),
+            }}
+          >
+            {kitContent}
+          </ReactMarkdown>
+        </div>
+      </Modal>
     </>
   );
 }

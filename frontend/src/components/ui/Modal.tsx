@@ -69,7 +69,7 @@ export default function Modal({ show, onClose, title, size = 'md', children, foo
   return (
     <div
       className="modal show d-block"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
