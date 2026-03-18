@@ -36,6 +36,7 @@ import agentGovernanceRoutes from './admin/agentGovernanceRoutes';
 import projectOverviewRoutes from './admin/projectOverviewRoutes';
 import testSetupRoutes from './admin/testSetupRoutes';
 import productionCleanupRoutes from './admin/productionCleanupRoute';
+import productionActivationRoutes from './admin/productionActivationRoute';
 
 const router = Router();
 
@@ -76,5 +77,6 @@ router.use(agentGovernanceRoutes);
 router.use(projectOverviewRoutes);
 router.use(testSetupRoutes);
 router.use(productionCleanupRoutes);
+router.use(productionActivationRoutes);
 
 export default router;
