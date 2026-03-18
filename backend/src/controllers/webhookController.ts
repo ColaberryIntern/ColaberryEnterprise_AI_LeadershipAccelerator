@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { verifyWebhookSignature } from '../services/paysimpleService';
-import { markEnrollmentPaid, markEnrollmentFailed } from '../services/enrollmentService';
+import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaign } from '../services/enrollmentService';
 import { Cohort } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
 
@@ -68,6 +68,10 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
               optional_lab_day: cohort.optional_lab_day || undefined,
             },
           }).catch((err) => console.error('[Webhook] Automation error:', err));
+
+          // Enroll in Class Readiness Campaign (T-minus onboarding sequence)
+          enrollInClassReadinessCampaign(enrollment)
+            .catch((err) => console.error('[Webhook] Class readiness enrollment error:', err));
         }
       } else {
         console.warn(`[Webhook] No enrollment found for external ID: ${externalId}`);

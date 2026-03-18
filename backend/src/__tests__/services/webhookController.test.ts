@@ -15,6 +15,7 @@ jest.mock('../../services/paysimpleService', () => ({
 jest.mock('../../services/enrollmentService', () => ({
   markEnrollmentPaid: jest.fn(),
   markEnrollmentFailed: jest.fn(),
+  enrollInClassReadinessCampaign: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../../models', () => ({

@@ -182,6 +182,41 @@ async function enrollInPaymentCampaignIfUnpaid(enrollment: Enrollment): Promise<
   console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
 }
 
+/* ------------------------------------------------------------------ */
+/*  Class Readiness Campaign                                           */
+/* ------------------------------------------------------------------ */
+
+const CLASS_READINESS_CAMPAIGN_NAME = 'Class Readiness Campaign';
+
+export async function enrollInClassReadinessCampaign(enrollment: Enrollment): Promise<void> {
+  if (enrollment.payment_status !== 'paid') return;
+
+  const campaign = await Campaign.findOne({
+    where: { name: CLASS_READINESS_CAMPAIGN_NAME, status: 'active' },
+  });
+  if (!campaign) {
+    console.log('[Class Readiness] No active campaign found — skipping');
+    return;
+  }
+
+  const [lead] = await Lead.findOrCreate({
+    where: { email: enrollment.email.toLowerCase().trim() },
+    defaults: {
+      name: enrollment.full_name,
+      email: enrollment.email.toLowerCase().trim(),
+      company: enrollment.company || '',
+      title: enrollment.title || '',
+      phone: enrollment.phone || '',
+      source: 'enrollment',
+      status: 'engaged',
+    } as any,
+  });
+
+  const { enrollLeadsInCampaign } = await import('./campaignService');
+  const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
+  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+}
+
 async function exitPaymentCampaign(email: string): Promise<void> {
   const campaign = await Campaign.findOne({
     where: { name: PAYMENT_READINESS_CAMPAIGN_NAME },

@@ -355,7 +355,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
   let cohortStartDate: Date | null = null;
   if (isCohortTMinus) {
     const enrollment = await Enrollment.findOne({
-      where: { email: lead.email, payment_status: { [Op.ne]: 'paid' } },
+      where: { email: lead.email },
       include: [{ model: Cohort, as: 'cohort' }],
       order: [['created_at', 'DESC']],
     });

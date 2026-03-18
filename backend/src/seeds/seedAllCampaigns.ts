@@ -1,6 +1,7 @@
 import { FollowUpSequence, Campaign, AdminUser } from '../models';
 import { seedAlumniCampaigns } from '../services/alumniCampaignService';
 import { seedAlumniReferralCampaign } from '../services/alumniReferralCampaignService';
+import { seedClassReadinessCampaign } from './seedClassReadinessCampaign';
 
 /**
  * Idempotent seed for all core campaigns.
@@ -131,6 +132,13 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     await seedAlumniReferralCampaign();
   } catch (err: any) {
     console.warn('[Seed] Alumni referrals campaign seed skipped:', err?.message);
+  }
+
+  // ─── 9. Class Readiness Campaign (post-payment onboarding) ──────────
+  try {
+    await seedClassReadinessCampaign();
+  } catch (err: any) {
+    console.warn('[Seed] Class readiness campaign seed skipped:', err?.message);
   }
 
   console.log('[Seed] All core campaigns seeded.');
