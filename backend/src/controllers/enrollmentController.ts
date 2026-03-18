@@ -1,16 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { createCheckoutSessionSchema, createInvoiceRequestSchema } from '../schemas/enrollmentSchema';
-import { createCheckoutSession, retrieveSession } from '../services/stripeService';
+import { createInvoiceSchema } from '../schemas/enrollmentSchema';
+import { createEnrollmentInvoice } from '../services/paysimpleService';
 import {
   validateCohortAvailability,
   createPendingEnrollment,
-  createInvoiceEnrollment,
-  getEnrollmentBySessionId,
+  getEnrollmentByInvoiceId,
 } from '../services/enrollmentService';
 import { listOpenCohorts } from '../services/cohortService';
-import { Cohort } from '../models';
-import { runEnrollmentAutomation } from '../services/automationService';
 
 export async function handleListOpenCohorts(
   _req: Request,
@@ -25,77 +22,43 @@ export async function handleListOpenCohorts(
   }
 }
 
-export async function handleCreateCheckoutSession(
+export async function handleCreateInvoice(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const data = createCheckoutSessionSchema.parse(req.body);
+    const data = createInvoiceSchema.parse(req.body);
 
     // Validate cohort availability
-    await validateCohortAvailability(data.cohort_id);
+    const cohort = await validateCohortAvailability(data.cohort_id);
 
-    // Create Stripe checkout session
-    const session = await createCheckoutSession({
-      cohortId: data.cohort_id,
+    // Create PaySimple invoice with customer + payment link
+    const result = await createEnrollmentInvoice({
       fullName: data.full_name,
       email: data.email,
       company: data.company,
-      title: data.title,
       phone: data.phone,
-      companySize: data.company_size,
-      couponCode: data.coupon_code,
+      cohortName: cohort.name,
     });
 
-    // Create enrollment record (pending until webhook confirms)
-    await createPendingEnrollment(data, session.id);
+    // Create enrollment record (pending until webhook confirms payment)
+    await createPendingEnrollment(
+      data,
+      result.paymentLinkId,
+      String(result.customerId),
+      result.externalId,
+      result.mode
+    );
 
-    res.json({ sessionId: session.id, url: session.url });
-  } catch (error) {
-    if (error instanceof ZodError) {
-      res.status(400).json({
-        error: 'Validation failed',
-        details: error.issues.map((issue) => ({
-          field: issue.path.join('.'),
-          message: issue.message,
-        })),
-      });
-      return;
-    }
-    next(error);
-  }
-}
+    console.log(
+      `[Enrollment] Payment link ${result.paymentLinkId} created for ${data.email}` +
+        ` (external: ${result.externalId}, $${result.amount}, mode: ${result.mode})`
+    );
 
-export async function handleCreateInvoiceRequest(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const data = createInvoiceRequestSchema.parse(req.body);
-    const enrollment = await createInvoiceEnrollment(data);
-    // Send confirmation email (fire-and-forget)
-    const cohort = await Cohort.findByPk(enrollment.cohort_id);
-    if (cohort) {
-      runEnrollmentAutomation({
-        id: enrollment.id,
-        email: enrollment.email,
-        full_name: enrollment.full_name,
-        phone: enrollment.phone || undefined,
-        cohort: {
-          name: cohort.name,
-          start_date: cohort.start_date,
-          core_day: cohort.core_day,
-          core_time: cohort.core_time,
-          optional_lab_day: cohort.optional_lab_day || undefined,
-        },
-      }).catch((err) => console.error('[Invoice] Automation error:', err));
-    }
-
-    res.status(201).json({
-      message: 'Invoice request received. Our team will contact you within 1 business day.',
-      enrollmentId: enrollment.id,
+    res.json({
+      invoice_id: result.externalId,
+      payment_link: result.paymentLink,
     });
   } catch (error) {
     if (error instanceof ZodError) {
@@ -118,14 +81,14 @@ export async function handleVerifyEnrollment(
   next: NextFunction
 ): Promise<void> {
   try {
-    const sessionId = req.query.session_id as string;
-    if (!sessionId) {
-      res.status(400).json({ error: 'session_id query parameter required' });
+    const invoiceId = req.query.invoice_id as string;
+    if (!invoiceId) {
+      res.status(400).json({ error: 'invoice_id query parameter required' });
       return;
     }
 
     // Check our enrollment record
-    const enrollment = await getEnrollmentBySessionId(sessionId);
+    const enrollment = await getEnrollmentByInvoiceId(invoiceId);
     if (!enrollment) {
       res.status(404).json({ error: 'Enrollment not found' });
       return;

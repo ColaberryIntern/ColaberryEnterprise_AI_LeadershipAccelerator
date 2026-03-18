@@ -1,6 +1,6 @@
 import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
-import { CreateCheckoutSessionInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
+import { CreateInvoiceInput } from '../schemas/enrollmentSchema';
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
   const cohort = await Cohort.findByPk(cohortId);
@@ -17,8 +17,11 @@ export async function validateCohortAvailability(cohortId: string): Promise<Coho
 }
 
 export async function createPendingEnrollment(
-  data: CreateCheckoutSessionInput,
-  stripeSessionId: string
+  data: CreateInvoiceInput,
+  invoiceId: string,
+  customerId: string,
+  externalId: string,
+  mode: 'test' | 'live'
 ): Promise<Enrollment> {
   const enrollment = await Enrollment.create({
     full_name: data.full_name,
@@ -28,9 +31,12 @@ export async function createPendingEnrollment(
     phone: data.phone || undefined,
     company_size: data.company_size || undefined,
     cohort_id: data.cohort_id,
-    stripe_session_id: stripeSessionId,
-    payment_status: 'failed', // Pending until webhook confirms — use 'failed' as default
+    paysimple_invoice_id: invoiceId,
+    paysimple_customer_id: customerId,
+    paysimple_external_id: externalId,
+    payment_status: 'pending',
     payment_method: 'credit_card',
+    payment_mode: mode,
   });
 
   // Auto-create project (non-blocking)
@@ -45,44 +51,10 @@ export async function createPendingEnrollment(
   return enrollment;
 }
 
-export async function createInvoiceEnrollment(
-  data: CreateInvoiceRequestInput
-): Promise<Enrollment> {
-  await validateCohortAvailability(data.cohort_id);
-
-  const enrollment = await Enrollment.create({
-    full_name: data.full_name,
-    email: data.email,
-    company: data.company,
-    title: data.title || undefined,
-    phone: data.phone || undefined,
-    company_size: data.company_size || undefined,
-    cohort_id: data.cohort_id,
-    payment_status: 'pending_invoice',
-    payment_method: 'invoice',
-  });
-
-  // Auto-create project (non-blocking)
-  import('./projectService').then(ps =>
-    ps.createProjectForEnrollment(enrollment.id)
-  ).catch(err => console.error('[Project] Auto-create failed:', err.message));
-
-  // Increment seats immediately for invoice requests
-  await Cohort.increment('seats_taken', {
-    by: 1,
-    where: { id: data.cohort_id },
-  });
-
-  // Auto-enroll in payment readiness campaign (non-blocking)
-  enrollInPaymentCampaignIfUnpaid(enrollment)
-    .catch(err => console.error('[Payment Campaign] Auto-enroll failed:', err.message));
-
-  return enrollment;
-}
-
-export async function markEnrollmentPaid(stripeSessionId: string): Promise<Enrollment | null> {
+export async function markEnrollmentPaid(externalId: string): Promise<Enrollment | null> {
+  // Look up by external ID (CB-{customerId}-{timestamp}) — this is what PaySimple sends in webhooks
   const enrollment = await Enrollment.findOne({
-    where: { stripe_session_id: stripeSessionId },
+    where: { paysimple_external_id: externalId },
   });
 
   if (!enrollment) return null;
@@ -106,9 +78,25 @@ export async function markEnrollmentPaid(stripeSessionId: string): Promise<Enrol
   return enrollment;
 }
 
-export async function getEnrollmentBySessionId(stripeSessionId: string) {
+export async function markEnrollmentFailed(externalId: string): Promise<Enrollment | null> {
+  const enrollment = await Enrollment.findOne({
+    where: { paysimple_external_id: externalId },
+  });
+  if (!enrollment) return null;
+  if (enrollment.payment_status === 'paid') return enrollment; // Don't override paid
+  enrollment.payment_status = 'failed';
+  await enrollment.save();
+  console.log(`[Enrollment] Marked ${enrollment.id} as failed (external: ${externalId})`);
+  return enrollment;
+}
+
+export async function getEnrollmentByInvoiceId(invoiceId: string) {
+  // Search by external ID first (webhook flow), then fall back to payment link ID
   return Enrollment.findOne({
-    where: { stripe_session_id: stripeSessionId },
+    where: { paysimple_external_id: invoiceId },
+    include: [{ model: Cohort, as: 'cohort' }],
+  }) || Enrollment.findOne({
+    where: { paysimple_invoice_id: invoiceId },
     include: [{ model: Cohort, as: 'cohort' }],
   });
 }

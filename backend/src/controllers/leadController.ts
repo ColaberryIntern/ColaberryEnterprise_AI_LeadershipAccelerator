@@ -1,52 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { leadSchema, createLead } from '../services/leadService';
-import { runLeadAutomation } from '../services/automationService';
-import { syncNewLeadToGhl } from '../services/ghlService';
-import { scoreExecutiveBriefing } from '../services/executiveScoringService';
-import { logExecutiveBriefingEvent } from '../services/governanceService';
-import { sendHighIntentAlert } from '../services/emailService';
 import { ZodError } from 'zod';
 
 export async function submitLead(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const data = leadSchema.parse(req.body);
-    const { lead, isDuplicate } = await createLead(data);
-
-    // Auto-sync new lead to GHL (fire-and-forget)
-    if (!isDuplicate) {
-      syncNewLeadToGhl(lead).catch((err) =>
-        console.error('[LeadController] GHL sync error:', err)
-      );
-    }
+    const { lead } = await createLead(data);
 
     res.status(201).json({
       message: 'Thank you for your interest',
       leadId: lead.id,
     });
-
-    // Executive briefing funnel post-processing (fire-and-forget)
-    if (data.form_type === 'executive_overview_download') {
-      (async () => {
-        try {
-          await lead.update({ executive_briefing_requested: true } as any);
-          const { score, tier, stage } = await scoreExecutiveBriefing(lead, data.timeline);
-          logExecutiveBriefingEvent(lead, score, tier, stage, lead.corporate_sponsorship_interest).catch(() => {});
-          if (score > 7) {
-            sendHighIntentAlert({
-              name: lead.name,
-              company: lead.company || '',
-              title: lead.title || '',
-              email: lead.email,
-              phone: lead.phone || '',
-              score: lead.lead_score || 0,
-              source: 'Executive Briefing Download',
-            }).catch((err) => console.error('[LeadController] High-intent alert error:', err));
-          }
-        } catch (err) {
-          console.error('[LeadController] Executive briefing post-processing error (non-blocking):', err);
-        }
-      })();
-    }
 
     // Resolve visitor identity if fingerprint provided
     if (req.body.visitor_fingerprint) {
@@ -62,20 +26,9 @@ export async function submitLead(req: Request, res: Response, next: NextFunction
       }
     }
 
-    // Always trigger automation — even for returning visitors, they expect the email.
-    // Use submitted form data (not lead record) so the correct email template is sent.
-    runLeadAutomation({
-      id: lead.id,
-      name: data.name,
-      email: data.email,
-      phone: data.phone || undefined,
-      title: data.title || undefined,
-      company: data.company || undefined,
-      company_size: data.company_size || undefined,
-      lead_score: lead.lead_score || undefined,
-      source: data.source || undefined,
-      form_type: data.form_type || undefined,
-    }).catch((err) => console.error('[LeadController] Automation error:', err));
+    // All automation (email, voice calls, CRM sync, campaigns) is deferred to
+    // post-payment via PaySimple webhook. No pre-payment communication.
+    console.log(`[LeadController] Lead ${lead.id} created (${data.email}). Automation deferred to payment.`);
   } catch (error) {
     if (error instanceof ZodError) {
       res.status(400).json({

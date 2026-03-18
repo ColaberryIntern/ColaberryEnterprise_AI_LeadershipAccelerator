@@ -535,7 +535,7 @@ export const MARKETING_BLUEPRINT: BlueprintRule[] = [
     severityWeight: 5,
     checkType: 'text_content',
     selector: 'body',
-    textPattern: '(credit card|invoice|payment|stripe|pay)',
+    textPattern: '(credit card|invoice|payment|paysimple|pay|ach)',
     appliesTo: ['/enroll'],
   },
 ];

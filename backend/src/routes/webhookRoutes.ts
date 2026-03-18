@@ -1,15 +1,14 @@
 import { Router } from 'express';
 import express from 'express';
-import { handleStripeWebhook } from '../controllers/webhookController';
+import { handlePaySimpleWebhook } from '../controllers/webhookController';
 import { handleMandrillWebhook, handleMandrillWebhookHead, handleMandrillInbound } from '../controllers/mandrillWebhookController';
 import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
 
 const router = Router();
 
-// Note: This route is mounted with express.raw() middleware in server.ts
-// It does NOT go through express.json()
-router.post('/api/webhook', handleStripeWebhook);
+// PaySimple payment webhook — JSON body
+router.post('/api/webhook/paysimple', express.json(), handlePaySimpleWebhook);
 
 // Mandrill webhook — uses URL-encoded body (mandrill_events=<JSON>)
 router.head('/api/webhook/mandrill', handleMandrillWebhookHead);

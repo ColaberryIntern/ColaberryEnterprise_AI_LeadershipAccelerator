@@ -10,9 +10,12 @@ export interface EnrollmentAttributes {
   phone?: string;
   company_size?: string;
   cohort_id: string;
-  stripe_session_id?: string;
-  payment_status: 'paid' | 'pending_invoice' | 'failed';
-  payment_method: 'credit_card' | 'invoice';
+  paysimple_invoice_id?: string;
+  paysimple_customer_id?: string;
+  paysimple_external_id?: string;
+  payment_status: 'paid' | 'pending' | 'failed';
+  payment_method: 'credit_card' | 'ach' | 'invoice';
+  payment_mode?: 'test' | 'live';
   status?: 'active' | 'completed' | 'withdrawn' | 'suspended';
   readiness_score?: number;
   prework_score?: number;
@@ -37,9 +40,12 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare phone: string;
   declare company_size: string;
   declare cohort_id: string;
-  declare stripe_session_id: string;
-  declare payment_status: 'paid' | 'pending_invoice' | 'failed';
-  declare payment_method: 'credit_card' | 'invoice';
+  declare paysimple_invoice_id: string;
+  declare paysimple_customer_id: string;
+  declare paysimple_external_id: string;
+  declare payment_status: 'paid' | 'pending' | 'failed';
+  declare payment_method: 'credit_card' | 'ach' | 'invoice';
+  declare payment_mode: 'test' | 'live';
   declare status: 'active' | 'completed' | 'withdrawn' | 'suspended';
   declare readiness_score: number;
   declare prework_score: number;
@@ -91,18 +97,31 @@ Enrollment.init(
       allowNull: false,
       references: { model: 'cohorts', key: 'id' },
     },
-    stripe_session_id: {
+    paysimple_invoice_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    paysimple_customer_id: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    paysimple_external_id: {
       type: DataTypes.STRING(255),
       allowNull: true,
     },
     payment_status: {
-      type: DataTypes.ENUM('paid', 'pending_invoice', 'failed'),
+      type: DataTypes.ENUM('paid', 'pending', 'failed'),
       allowNull: false,
-      defaultValue: 'pending_invoice',
+      defaultValue: 'pending',
     },
     payment_method: {
-      type: DataTypes.ENUM('credit_card', 'invoice'),
+      type: DataTypes.ENUM('credit_card', 'ach', 'invoice'),
       allowNull: false,
+      defaultValue: 'credit_card',
+    },
+    payment_mode: {
+      type: DataTypes.ENUM('test', 'live'),
+      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM('active', 'completed', 'withdrawn', 'suspended'),

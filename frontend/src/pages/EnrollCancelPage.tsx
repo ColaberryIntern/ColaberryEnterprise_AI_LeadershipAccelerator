@@ -6,14 +6,13 @@ function EnrollCancelPage() {
   return (
     <>
       <SEOHead
-        title="Enrollment Cancelled"
+        title="Payment Not Completed"
         description="Your enrollment payment was not completed. No charges were made."
       />
 
-      <section className="section" aria-label="Enrollment Cancelled">
+      <section className="section" aria-label="Payment Not Completed">
         <div className="container text-center" style={{ maxWidth: '600px' }}>
           <div className="py-5">
-            <div className="fs-1 mb-3" aria-hidden="true">⚠️</div>
             <h1 className="display-6 fw-bold mb-3" style={{ color: 'var(--color-primary)' }}>
               Payment Not Completed
             </h1>
@@ -21,7 +20,7 @@ function EnrollCancelPage() {
               No charges were made. Your enrollment was not finalized.
             </p>
             <p className="text-muted mb-4">
-              If you experienced an issue during checkout, please try again or
+              If you experienced an issue during payment, please try again or
               contact our team for assistance at{' '}
               <a href="mailto:info@colaberry.com">info@colaberry.com</a>.
             </p>

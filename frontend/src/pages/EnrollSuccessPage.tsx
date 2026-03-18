@@ -28,14 +28,14 @@ function EnrollSuccessPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const sessionId = searchParams.get('session_id');
-    if (!sessionId) {
+    const invoiceId = searchParams.get('invoice_id');
+    if (!invoiceId) {
       setLoading(false);
       return;
     }
 
     api
-      .get(`/api/enrollment/verify?session_id=${sessionId}`)
+      .get(`/api/enrollment/verify?invoice_id=${invoiceId}`)
       .then((res) => setData(res.data))
       .catch(() => setError('Unable to verify enrollment. Please check your email for confirmation details.'))
       .finally(() => setLoading(false));
@@ -109,7 +109,7 @@ function EnrollSuccessPage() {
                 <>
                   <div className="card border-0 shadow-sm p-4 mb-4 text-start">
                     <h2 className="h5 mb-3" style={{ color: 'var(--color-primary)' }}>
-                      📅 Your Cohort Details
+                      Your Cohort Details
                     </h2>
                     <ul className="list-unstyled fs-5 mb-0">
                       <li className="mb-2">
@@ -133,7 +133,7 @@ function EnrollSuccessPage() {
                   </div>
 
                   <div className="callout-box text-start mb-4">
-                    <h3 className="h6 mb-2">📘 Pre-Class Requirements</h3>
+                    <h3 className="h6 mb-2">Pre-Class Requirements</h3>
                     <ul className="text-muted mb-0">
                       <li className="mb-1">
                         <strong>Claude Code paid account</strong> (Max or Team plan)
@@ -154,7 +154,7 @@ function EnrollSuccessPage() {
                       className="btn btn-primary btn-lg"
                       onClick={handleDownloadCalendar}
                     >
-                      📅 Add to Calendar
+                      Add to Calendar
                     </button>
                     <Link to="/program" className="btn btn-outline-primary btn-lg">
                       View Program Details

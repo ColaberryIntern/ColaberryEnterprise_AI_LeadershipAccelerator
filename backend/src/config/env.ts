@@ -8,9 +8,12 @@ export const env = {
   port: parseInt(process.env.PORT || '3001', 10),
   databaseUrl: process.env.DATABASE_URL || 'postgres://accelerator:accelerator@localhost:5432/accelerator_dev',
 
-  // Stripe
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+  // PaySimple
+  paysimpleApiUser: process.env.PAYSIMPLE_API_USER || '',
+  paysimpleApiKey: process.env.PAYSIMPLE_API_KEY || '',
+  paysimpleEnv: (process.env.PAYSIMPLE_ENV || 'sandbox') as 'sandbox' | 'live',
+  paysimpleWebhookSecret: process.env.PAYSIMPLE_WEBHOOK_SECRET || '',
+  paymentMode: (process.env.PAYMENT_MODE || 'test') as 'test' | 'live',
 
   // JWT
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
