@@ -1,4 +1,4 @@
-import { ArtifactDefinition, AssignmentSubmission, VariableStore } from '../models';
+import { ArtifactDefinition, AssignmentSubmission, SkillDefinition, VariableStore } from '../models';
 import * as variableService from './variableService';
 
 export async function listArtifactDefinitions(sessionId?: string): Promise<ArtifactDefinition[]> {
@@ -12,6 +12,11 @@ export async function getArtifactDefinition(id: string): Promise<ArtifactDefinit
 }
 
 export async function createArtifactDefinition(data: Partial<ArtifactDefinition>): Promise<ArtifactDefinition> {
+  // Auto-create skill if no skill_mapping provided
+  if (!data.skill_mapping || (Array.isArray(data.skill_mapping) && data.skill_mapping.length === 0)) {
+    const autoSkill = await ensureAutoSkillForArtifact(data.name || 'Unnamed Artifact');
+    data.skill_mapping = [{ skill_id: autoSkill.skill_id, contribution: 0.5 }] as any;
+  }
   return ArtifactDefinition.create(data as any);
 }
 
@@ -23,6 +28,46 @@ export async function updateArtifactDefinition(
   if (!artifact) return null;
   await artifact.update(data);
   return artifact;
+}
+
+/**
+ * Find artifacts linked to a specific skill via their skill_mapping JSONB field.
+ */
+export async function getArtifactsForSkill(skillId: string): Promise<ArtifactDefinition[]> {
+  // Query JSONB array for entries containing the skill_id
+  const { Op } = require('sequelize');
+  return ArtifactDefinition.findAll({
+    where: {
+      skill_mapping: {
+        [Op.contains]: [{ skill_id: skillId }],
+      },
+    },
+    order: [['sort_order', 'ASC']],
+  });
+}
+
+/**
+ * Auto-create a SkillDefinition from an artifact name if no skill mapping exists.
+ */
+async function ensureAutoSkillForArtifact(artifactName: string): Promise<SkillDefinition> {
+  const skillId = 'auto_' + artifactName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+
+  const [skill] = await SkillDefinition.findOrCreate({
+    where: { skill_id: skillId },
+    defaults: {
+      skill_id: skillId,
+      name: artifactName,
+      description: `Auto-created from artifact: ${artifactName}`,
+      layer_id: 'build_discipline',
+      domain_id: 'artifacts',
+      skill_type: 'core',
+      mastery_threshold: 0.7,
+      is_active: true,
+    } as any,
+  });
+
+  console.log(`[Artifact] Auto-linked skill "${skillId}" for artifact "${artifactName}"`);
+  return skill;
 }
 
 export async function deleteArtifactDefinition(id: string): Promise<boolean> {

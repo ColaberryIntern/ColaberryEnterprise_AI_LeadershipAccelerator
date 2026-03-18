@@ -103,6 +103,15 @@ router.delete('/api/admin/orchestration/skills/:id', requireAdmin, async (req, r
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Skill → Artifact reverse lookup
+router.get('/api/admin/orchestration/skills/:skillId/artifacts', requireAdmin, async (req, res) => {
+  try {
+    const { getArtifactsForSkill } = await import('../../services/artifactService');
+    const artifacts = await getArtifactsForSkill(req.params.skillId as string);
+    res.json(artifacts);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // Recalculate skills from build prompt (LLM-powered)
 router.post('/api/admin/orchestration/mini-sections/:id/recalculate-skills', requireAdmin, async (req, res) => {
   try {
@@ -608,6 +617,58 @@ router.post('/api/admin/orchestration/curriculum/approve', requireAdmin, async (
     const { approveCurriculumPreview } = require('../../services/curriculumGenerationService');
     const result = await approveCurriculumPreview(req.body);
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Runtime Intelligence Routes ────────────────────────────────────
+
+router.get('/api/admin/orchestration/runtime-intelligence/dashboard', requireAdmin, async (_req, res) => {
+  try {
+    const { getDashboardMetrics } = require('../../services/postExecutionAnalyticsService');
+    const data = await getDashboardMetrics();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/runtime-intelligence/section-performance/:lessonId', requireAdmin, async (req, res) => {
+  try {
+    const { getSectionPerformance } = require('../../services/postExecutionAnalyticsService');
+    const data = await getSectionPerformance(req.params.lessonId);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/runtime-intelligence/variable-health', requireAdmin, async (_req, res) => {
+  try {
+    const { getVariableFailureRates } = require('../../services/postExecutionAnalyticsService');
+    const data = await getVariableFailureRates();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/runtime-intelligence/prompt-stability', requireAdmin, async (_req, res) => {
+  try {
+    const { getPromptStabilityReport } = require('../../services/postExecutionAnalyticsService');
+    const data = await getPromptStabilityReport();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/admin/orchestration/runtime-intelligence/recommendations', requireAdmin, async (_req, res) => {
+  try {
+    const { getRecommendations } = require('../../services/postExecutionRecommendationService');
+    const data = await getRecommendations();
+    res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

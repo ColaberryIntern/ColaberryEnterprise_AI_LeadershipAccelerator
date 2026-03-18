@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 interface Props { token: string; apiUrl: string; }
 
@@ -23,6 +23,9 @@ const SkillControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [grouped, setGrouped] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expandedSkillId, setExpandedSkillId] = useState<string | null>(null);
+  const [linkedArtifacts, setLinkedArtifacts] = useState<any[]>([]);
+  const [artifactsLoading, setArtifactsLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${apiUrl}/api/admin/orchestration/program/skills`, {
@@ -36,6 +39,31 @@ const SkillControlTab: React.FC<Props> = ({ token, apiUrl }) => {
       .catch((err) => setError(err.message || 'Failed to load skill ontology'))
       .finally(() => setLoading(false));
   }, [token, apiUrl]);
+
+  const fetchLinkedArtifacts = useCallback(async (skillId: string) => {
+    setArtifactsLoading(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/orchestration/skills/${skillId}/artifacts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setLinkedArtifacts(Array.isArray(data) ? data : []);
+    } catch {
+      setLinkedArtifacts([]);
+    } finally {
+      setArtifactsLoading(false);
+    }
+  }, [apiUrl, token]);
+
+  const handleToggleExpand = (skillId: string) => {
+    if (expandedSkillId === skillId) {
+      setExpandedSkillId(null);
+      setLinkedArtifacts([]);
+    } else {
+      setExpandedSkillId(skillId);
+      fetchLinkedArtifacts(skillId);
+    }
+  };
 
   if (loading) return (
     <div className="text-center py-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>
@@ -78,17 +106,67 @@ const SkillControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                             <th>Description</th>
                             <th style={{ width: 80 }}>Threshold</th>
                             <th style={{ width: 60 }}>Active</th>
+                            <th style={{ width: 80 }}>Artifacts</th>
                           </tr>
                         </thead>
                         <tbody>
                           {domainSkills.map((s: any) => (
-                            <tr key={s.skill_id}>
-                              <td className="text-muted">{s.skill_id}</td>
-                              <td className="fw-medium">{s.name}</td>
-                              <td>{s.description}</td>
-                              <td>{(s.mastery_threshold * 100).toFixed(0)}%</td>
-                              <td>{s.is_active ? <span className="badge bg-success" style={{ fontSize: 10 }}>Yes</span> : <span className="badge bg-danger" style={{ fontSize: 10 }}>No</span>}</td>
-                            </tr>
+                            <React.Fragment key={s.skill_id}>
+                              <tr>
+                                <td className="text-muted">{s.skill_id}</td>
+                                <td className="fw-medium">{s.name}</td>
+                                <td>{s.description}</td>
+                                <td>{(s.mastery_threshold * 100).toFixed(0)}%</td>
+                                <td>{s.is_active ? <span className="badge bg-success" style={{ fontSize: 10 }}>Yes</span> : <span className="badge bg-danger" style={{ fontSize: 10 }}>No</span>}</td>
+                                <td>
+                                  <button
+                                    className={`btn btn-sm ${expandedSkillId === s.skill_id ? 'btn-primary' : 'btn-outline-secondary'}`}
+                                    style={{ fontSize: 10, padding: '2px 6px' }}
+                                    onClick={() => handleToggleExpand(s.skill_id)}
+                                  >
+                                    {expandedSkillId === s.skill_id ? 'Hide' : 'View'}
+                                  </button>
+                                </td>
+                              </tr>
+                              {expandedSkillId === s.skill_id && (
+                                <tr>
+                                  <td colSpan={6} className="bg-light">
+                                    <div className="p-2">
+                                      <strong style={{ fontSize: 11 }}>Linked Artifacts</strong>
+                                      {artifactsLoading ? (
+                                        <div className="text-center py-1"><div className="spinner-border spinner-border-sm text-primary" /></div>
+                                      ) : linkedArtifacts.length === 0 ? (
+                                        <p className="text-muted small mb-0 mt-1">No artifacts linked to this skill.</p>
+                                      ) : (
+                                        <table className="table table-sm mt-1 mb-0" style={{ fontSize: 11 }}>
+                                          <thead>
+                                            <tr>
+                                              <th>Artifact</th>
+                                              <th>Type</th>
+                                              <th>Contribution</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {linkedArtifacts.map((a: any) => {
+                                              const mapping = Array.isArray(a.skill_mapping)
+                                                ? a.skill_mapping.find((m: any) => m.skill_id === s.skill_id)
+                                                : null;
+                                              return (
+                                                <tr key={a.id}>
+                                                  <td className="fw-medium">{a.name}</td>
+                                                  <td><span className="badge bg-secondary" style={{ fontSize: 9 }}>{a.artifact_type}</span></td>
+                                                  <td>{mapping ? `${(mapping.contribution * 100).toFixed(0)}%` : '-'}</td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           ))}
                         </tbody>
                       </table>

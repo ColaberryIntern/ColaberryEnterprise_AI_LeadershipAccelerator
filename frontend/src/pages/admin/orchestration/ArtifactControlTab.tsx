@@ -23,6 +23,19 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [artifacts, setArtifacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [allSkills, setAllSkills] = useState<any[]>([]);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [skillContributions, setSkillContributions] = useState<Record<string, number>>({});
+
+  // Fetch all skills for multi-select
+  useEffect(() => {
+    fetch(`${apiUrl}/api/admin/orchestration/program/skills`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => setAllSkills(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [apiUrl, token]);
   const [error, setError] = useState('');
   const [prompts, setPrompts] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
@@ -73,11 +86,18 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const handleCreate = () => {
     setEditingId(null);
     setForm({ ...emptyForm });
+    setSelectedSkillIds([]);
+    setSkillContributions({});
     setShowForm(true);
   };
 
   const handleEdit = (a: any) => {
     setEditingId(a.id);
+    const mapping = Array.isArray(a.skill_mapping) ? a.skill_mapping : [];
+    setSelectedSkillIds(mapping.map((m: any) => m.skill_id));
+    const contribs: Record<string, number> = {};
+    mapping.forEach((m: any) => { contribs[m.skill_id] = m.contribution || 0.5; });
+    setSkillContributions(contribs);
     setForm({
       name: a.name || '',
       artifact_type: a.artifact_type || 'document',
@@ -88,7 +108,7 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
       produces_variable_keys: (a.produces_variable_keys || []).join(', '),
       instruction_prompt_id: a.instruction_prompt_id || '',
       validation_rule: a.validation_rule ? JSON.stringify(a.validation_rule) : '',
-      skill_mapping: a.skill_mapping ? JSON.stringify(a.skill_mapping) : '',
+      skill_mapping: '',
       required_before: a.required_before || '',
       lesson_id: a.lesson_id || '',
     });
@@ -114,8 +134,12 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
       if (form.validation_rule) {
         try { body.validation_rule = JSON.parse(form.validation_rule); } catch { setError('Invalid JSON in validation rule — field ignored.'); }
       }
-      if (form.skill_mapping) {
-        try { body.skill_mapping = JSON.parse(form.skill_mapping); } catch { setError('Invalid JSON in skill mapping — field ignored.'); }
+      // Build skill_mapping from multi-select state
+      if (selectedSkillIds.length > 0) {
+        body.skill_mapping = selectedSkillIds.map(sid => ({
+          skill_id: sid,
+          contribution: skillContributions[sid] || 0.5,
+        }));
       }
 
       const url = editingId
@@ -264,11 +288,50 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
                       onChange={e => setForm({ ...form, validation_rule: e.target.value })}
                       placeholder='{"type":"regex","config":"..."}' />
                   </div>
-                  <div className="col-md-6">
-                    <label className="form-label small fw-medium">Skill Mapping (JSON)</label>
-                    <input className="form-control form-control-sm" value={form.skill_mapping}
-                      onChange={e => setForm({ ...form, skill_mapping: e.target.value })}
-                      placeholder='[{"skill_id":"...","contribution":0.5}]' />
+                  <div className="col-12">
+                    <label className="form-label small fw-medium">Linked Skills</label>
+                    <div className="d-flex flex-wrap gap-1 mb-1">
+                      {allSkills.map((s: any) => (
+                        <button
+                          key={s.skill_id}
+                          type="button"
+                          className={`btn btn-sm ${selectedSkillIds.includes(s.skill_id) ? 'btn-primary' : 'btn-outline-secondary'}`}
+                          style={{ fontSize: 11 }}
+                          onClick={() => {
+                            if (selectedSkillIds.includes(s.skill_id)) {
+                              setSelectedSkillIds(selectedSkillIds.filter(id => id !== s.skill_id));
+                            } else {
+                              setSelectedSkillIds([...selectedSkillIds, s.skill_id]);
+                              if (!skillContributions[s.skill_id]) {
+                                setSkillContributions({ ...skillContributions, [s.skill_id]: 0.5 });
+                              }
+                            }
+                          }}
+                        >
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedSkillIds.length > 0 && (
+                      <div className="mt-1" style={{ fontSize: 11 }}>
+                        {selectedSkillIds.map(sid => {
+                          const sk = allSkills.find((s: any) => s.skill_id === sid);
+                          return (
+                            <div key={sid} className="d-flex align-items-center gap-2 mb-1">
+                              <span className="text-muted" style={{ minWidth: 120 }}>{sk?.name || sid}</span>
+                              <input type="range" min={0.1} max={1} step={0.1}
+                                value={skillContributions[sid] || 0.5}
+                                onChange={e => setSkillContributions({ ...skillContributions, [sid]: parseFloat(e.target.value) })}
+                                style={{ width: 80 }} />
+                              <span>{(skillContributions[sid] || 0.5).toFixed(1)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {selectedSkillIds.length === 0 && (
+                      <small className="text-muted">No skills selected — a skill will be auto-created from the artifact name</small>
+                    )}
                   </div>
                 </div>
               </div>
