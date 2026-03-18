@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════════
-   Orchestration Engine — Light Theme Design System
+   Orchestration Engine — Apple-Level Light Design System
    Scoped under .orch-engine so it does NOT leak into the rest of the admin UI.
    ═══════════════════════════════════════════════════════════════════════════════ */
 
@@ -7,59 +7,48 @@
 
 .orch-engine {
   /* Backgrounds */
-  --orch-bg: #f8fafc;
+  --orch-bg: #f5f5f7;
   --orch-bg-card: #ffffff;
-  --orch-bg-card-hover: #f8fafc;
-  --orch-bg-elevated: #f1f5f9;
+  --orch-bg-card-hover: #fafafa;
+  --orch-bg-elevated: #f5f5f7;
   --orch-bg-input: #ffffff;
 
   /* Borders */
-  --orch-border: #e2e8f0;
-  --orch-border-active: rgba(37, 99, 235, 0.3);
-  --orch-border-glow: rgba(37, 99, 235, 0.12);
+  --orch-border: #e5e7eb;
+  --orch-border-active: rgba(37, 99, 235, 0.25);
 
-  /* Text — high contrast on white */
-  --orch-text: #0f172a;
-  --orch-text-muted: #475569;
-  --orch-text-dim: #94a3b8;
+  /* Text — Apple near-black hierarchy */
+  --orch-text: #1d1d1f;
+  --orch-text-muted: #6e6e73;
+  --orch-text-dim: #aeaeb2;
 
-  /* Accents — deeper/richer for light backgrounds */
+  /* Accents */
   --orch-accent-green: #16a34a;
   --orch-accent-yellow: #d97706;
   --orch-accent-red: #dc2626;
   --orch-accent-blue: #2563eb;
   --orch-accent-purple: #7c3aed;
 
-  /* Glow — disabled for light theme */
-  --orch-glow-green: none;
-  --orch-glow-red: none;
-  --orch-glow-blue: none;
-  --orch-glow-purple: none;
-
   /* Radii */
-  --orch-radius: 10px;
-  --orch-radius-sm: 6px;
-  --orch-radius-lg: 14px;
+  --orch-radius: 12px;
+  --orch-radius-sm: 8px;
+  --orch-radius-lg: 16px;
 
-  /* Shadows — soft elevation */
-  --orch-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --orch-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.08);
-
-  /* Glass → clean solid surfaces */
-  --orch-glass-bg: rgba(255, 255, 255, 0.9);
-  --orch-glass-border: rgba(0, 0, 0, 0.06);
+  /* Shadows — barely there */
+  --orch-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --orch-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.06);
 
   /* Page defaults */
   background: var(--orch-bg);
   color: var(--orch-text);
   min-height: 100vh;
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
 }
 
 /* ─── Keyframe Animations ───────────────────────────────────────────────────── */
 
 @keyframes orchFadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -92,9 +81,9 @@
 .orch-engine .orch-shimmer {
   background: linear-gradient(
     90deg,
-    #e2e8f0 25%,
-    #f8fafc 50%,
-    #e2e8f0 75%
+    #e5e7eb 25%,
+    #f5f5f7 50%,
+    #e5e7eb 75%
   );
   background-size: 200% 100%;
   animation: orchShimmer 1.5s ease-in-out infinite;
@@ -109,7 +98,7 @@
 
 .orch-engine .card {
   background: var(--orch-bg-card);
-  border: 1px solid var(--orch-border);
+  border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: var(--orch-radius);
   box-shadow: var(--orch-shadow-card);
   color: var(--orch-text);
@@ -117,25 +106,27 @@
 }
 
 .orch-engine .card:hover {
-  border-color: var(--orch-border-glow);
+  transform: translateY(-1px);
+  box-shadow: var(--orch-shadow-hover);
 }
 
 .orch-engine .card-header {
   background: transparent;
   border-bottom: 1px solid var(--orch-border);
   color: var(--orch-text);
-  padding: 0.75rem 1rem;
+  padding: 16px 20px;
 }
 
 .orch-engine .card-body {
   color: var(--orch-text);
+  padding: 20px;
 }
 
 /* ─── OrchCard Component Styles ─────────────────────────────────────────────── */
 
 .orch-card {
   background: var(--orch-bg-card);
-  border: 1px solid var(--orch-border);
+  border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: var(--orch-radius);
   box-shadow: var(--orch-shadow-card);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -143,7 +134,7 @@
 }
 
 .orch-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow: var(--orch-shadow-hover);
 }
 
@@ -151,12 +142,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--orch-border);
 }
 
 .orch-card-title {
-  font-size: 0.85rem;
+  font-size: 14px;
   font-weight: 600;
   color: var(--orch-text);
   display: flex;
@@ -165,13 +156,13 @@
 }
 
 .orch-card-subtitle {
-  font-size: 0.7rem;
+  font-size: 12px;
   color: var(--orch-text-muted);
-  margin-top: 0.15rem;
+  margin-top: 2px;
 }
 
 .orch-card-body {
-  padding: 1rem;
+  padding: 20px;
 }
 
 .orch-card-body--flush {
@@ -201,11 +192,9 @@
   align-items: center;
   gap: 0.35rem;
   padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
   background: var(--orch-bg-elevated);
   color: var(--orch-text-muted);
@@ -213,7 +202,7 @@
 
 .orch-badge--sm {
   padding: 0.15rem 0.4rem;
-  font-size: 0.6rem;
+  font-size: 10px;
 }
 
 .orch-badge--healthy { background: rgba(22, 163, 74, 0.1); color: #166534; }
@@ -231,9 +220,9 @@
 
 .orch-metric {
   background: var(--orch-bg-card);
-  border: 1px solid var(--orch-border);
+  border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: var(--orch-radius);
-  padding: 1.25rem 1rem;
+  padding: 20px;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -242,7 +231,7 @@
 }
 
 .orch-metric:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow: var(--orch-shadow-hover);
 }
 
@@ -255,8 +244,8 @@
 }
 
 .orch-metric-value {
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
 }
@@ -268,16 +257,14 @@
 .orch-metric-value--default { color: var(--orch-text); }
 
 .orch-metric-label {
-  font-size: 0.7rem;
+  font-size: 12px;
   color: var(--orch-text-muted);
   margin-top: 0.4rem;
   font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .orch-metric-subtitle {
-  font-size: 0.7rem;
+  font-size: 12px;
   color: var(--orch-text-dim);
   margin-top: 0.25rem;
 }
@@ -294,7 +281,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  font-size: 0.7rem;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -302,49 +289,34 @@
 .orch-metric-trend--down { color: var(--orch-accent-red); }
 .orch-metric-trend--stable { color: var(--orch-text-dim); }
 
-/* Subtle top accent line */
-.orch-metric::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: var(--orch-radius) var(--orch-radius) 0 0;
-}
-
-.orch-metric--green::before { background: var(--orch-accent-green); }
-.orch-metric--red::before { background: var(--orch-accent-red); }
-.orch-metric--blue::before { background: var(--orch-accent-blue); }
-.orch-metric--yellow::before { background: var(--orch-accent-yellow); }
-
 /* ─── ContextBar Component Styles ───────────────────────────────────────────── */
 
 .orch-context-bar {
-  background: var(--orch-bg-card);
-  border: 1px solid var(--orch-border);
-  border-radius: var(--orch-radius);
-  padding: 0.75rem 1.25rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--orch-border);
+  border-radius: 0;
+  padding: 16px 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
-  margin-bottom: 1.25rem;
-  box-shadow: var(--orch-shadow-card);
+  margin-bottom: 24px;
+  box-shadow: none;
 }
 
 .orch-context-bar-title,
 .orch-context-title {
-  font-size: 0.95rem;
+  font-size: 16px;
   font-weight: 600;
   color: var(--orch-text);
 }
 
 .orch-context-bar-desc,
 .orch-context-desc {
-  font-size: 0.7rem;
+  font-size: 13px;
   color: var(--orch-text-muted);
-  margin-top: 0.1rem;
+  margin-top: 2px;
 }
 
 .orch-context-bar-info {
@@ -372,10 +344,9 @@
 
 .orch-context-bar-metric-label,
 .orch-context-metric-label {
-  font-size: 0.6rem;
+  font-size: 11px;
   color: var(--orch-text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 500;
 }
 
 .orch-context-bar-actions {
@@ -394,9 +365,9 @@
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  padding: 0.65rem 1rem;
-  border-bottom: 1px solid var(--orch-border);
-  font-size: 0.8rem;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
   color: var(--orch-text);
   transition: background 0.15s ease;
 }
@@ -406,15 +377,15 @@
 }
 
 .orch-insight-item:hover {
-  background: var(--orch-bg-elevated);
+  background: #fafafa;
 }
 
 .orch-insight-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  margin-top: 4px;
+  margin-top: 5px;
 }
 
 .orch-insight-message {
@@ -429,7 +400,7 @@
   gap: 0.5rem;
   padding: 2rem;
   color: var(--orch-accent-green);
-  font-size: 0.8rem;
+  font-size: 13px;
 }
 
 /* ─── Skeleton Loader Styles ────────────────────────────────────────────────── */
@@ -438,9 +409,9 @@
   border-radius: var(--orch-radius-sm);
   background: linear-gradient(
     90deg,
-    #e2e8f0 25%,
-    #f8fafc 50%,
-    #e2e8f0 75%
+    #e5e7eb 25%,
+    #f5f5f7 50%,
+    #e5e7eb 75%
   );
   background-size: 200% 100%;
   animation: orchShimmer 1.5s ease-in-out infinite;
@@ -466,32 +437,30 @@
 
 .orch-engine .table {
   color: var(--orch-text);
-  font-size: 0.8rem;
+  font-size: 13px;
   --bs-table-bg: transparent;
   --bs-table-color: var(--orch-text);
-  --bs-table-hover-bg: #f8fafc;
+  --bs-table-hover-bg: #fafafa;
   --bs-table-hover-color: var(--orch-text);
-  --bs-table-striped-bg: #f8fafc;
-  border-color: var(--orch-border);
+  --bs-table-striped-bg: #fafafa;
+  border-color: #f0f0f0;
 }
 
 .orch-engine .table > thead {
-  background: #f1f5f9;
+  background: transparent;
 }
 
 .orch-engine .table > thead > tr > th {
-  color: var(--orch-text-muted);
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--orch-text-dim);
+  font-size: 12px;
+  font-weight: 500;
   border-bottom: 1px solid var(--orch-border);
   padding: 0.6rem 0.75rem;
 }
 
 .orch-engine .table > tbody > tr > td {
-  border-bottom: 1px solid var(--orch-border);
-  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 0.75rem;
   vertical-align: middle;
 }
 
@@ -499,13 +468,17 @@
   border-bottom: none;
 }
 
+.orch-engine .table > tbody > tr:hover > td {
+  background: #fafafa;
+}
+
 .orch-engine .table-light {
-  --bs-table-bg: #f1f5f9;
-  --bs-table-color: var(--orch-text-muted);
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--orch-text-dim);
 }
 
 .orch-engine .table-active {
-  --bs-table-bg: rgba(37, 99, 235, 0.06);
+  --bs-table-bg: rgba(37, 99, 235, 0.04);
 }
 
 /* ─── Bootstrap Nav Tabs Overrides ──────────────────────────────────────────── */
@@ -516,25 +489,25 @@
 }
 
 .orch-engine .nav-tabs .nav-link {
-  color: var(--orch-text-muted);
+  color: var(--orch-text-dim);
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 0.6rem 1rem;
-  font-size: 0.78rem;
+  padding: 10px 16px;
+  font-size: 13px;
   font-weight: 500;
   transition: color 0.15s ease, border-color 0.15s ease;
   background: transparent;
 }
 
 .orch-engine .nav-tabs .nav-link:hover {
-  color: var(--orch-text);
-  background: var(--orch-bg-elevated);
+  color: var(--orch-text-muted);
+  background: transparent;
   border-color: transparent;
 }
 
 .orch-engine .nav-tabs .nav-link.active {
-  color: var(--orch-accent-blue);
+  color: var(--orch-text);
   background: transparent;
   border-bottom: 2px solid var(--orch-accent-blue);
 }
@@ -547,20 +520,20 @@
   border: 1px solid var(--orch-border);
   border-radius: var(--orch-radius-sm);
   padding: 0.35rem 0.85rem;
-  font-size: 0.75rem;
+  font-size: 13px;
   font-weight: 500;
   transition: all 0.15s ease;
 }
 
 .orch-engine .nav-pills .nav-link:hover {
-  background: var(--orch-bg-elevated);
+  background: #fafafa;
   color: var(--orch-text);
 }
 
 .orch-engine .nav-pills .nav-link.active {
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(37, 99, 235, 0.06);
   color: var(--orch-accent-blue);
-  border-color: rgba(37, 99, 235, 0.25);
+  border-color: rgba(37, 99, 235, 0.2);
 }
 
 /* ─── Bootstrap Form Overrides ──────────────────────────────────────────────── */
@@ -579,7 +552,7 @@
   background: var(--orch-bg-input);
   border-color: var(--orch-accent-blue);
   color: var(--orch-text);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
 .orch-engine .form-control::placeholder {
@@ -588,10 +561,8 @@
 
 .orch-engine .form-label {
   color: var(--orch-text-muted);
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .orch-engine .form-check-input {
@@ -609,6 +580,10 @@
 }
 
 /* ─── Bootstrap Button Overrides ────────────────────────────────────────────── */
+
+.orch-engine .btn {
+  border-radius: var(--orch-radius-sm);
+}
 
 .orch-engine .btn-primary {
   background: var(--orch-accent-blue);
@@ -636,34 +611,14 @@
 
 .orch-engine .btn-outline-secondary {
   color: var(--orch-text-muted);
-  border-color: var(--orch-border);
+  border-color: #d1d5db;
   background: transparent;
 }
 
 .orch-engine .btn-outline-secondary:hover {
-  background: var(--orch-bg-elevated);
+  background: #fafafa;
   color: var(--orch-text);
-  border-color: #cbd5e1;
-}
-
-.orch-engine .btn-outline-danger {
-  color: var(--orch-accent-red);
-  border-color: rgba(220, 38, 38, 0.3);
-}
-
-.orch-engine .btn-outline-danger:hover {
-  background: rgba(220, 38, 38, 0.06);
-  border-color: var(--orch-accent-red);
-}
-
-.orch-engine .btn-outline-info {
-  color: var(--orch-accent-blue);
-  border-color: rgba(37, 99, 235, 0.3);
-}
-
-.orch-engine .btn-outline-info:hover {
-  background: rgba(37, 99, 235, 0.06);
-  border-color: var(--orch-accent-blue);
+  border-color: #aeaeb2;
 }
 
 .orch-engine .btn-success {
@@ -711,7 +666,7 @@
 /* ─── Bootstrap Progress Overrides ──────────────────────────────────────────── */
 
 .orch-engine .progress {
-  background: #e2e8f0;
+  background: #e5e7eb;
   border-radius: 999px;
   height: 6px;
 }
@@ -737,11 +692,6 @@
   color: var(--orch-text-muted) !important;
 }
 
-.orch-engine .fw-semibold,
-.orch-engine .fw-bold {
-  color: var(--orch-text);
-}
-
 .orch-engine .text-success { color: var(--orch-accent-green) !important; }
 .orch-engine .text-danger { color: var(--orch-accent-red) !important; }
 .orch-engine .text-warning { color: var(--orch-accent-yellow) !important; }
@@ -750,9 +700,10 @@
 
 .orch-engine .modal-content {
   background: var(--orch-bg-card);
-  border: 1px solid var(--orch-border);
+  border: 1px solid rgba(0, 0, 0, 0.04);
   color: var(--orch-text);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  border-radius: var(--orch-radius-lg);
 }
 
 .orch-engine .modal-header {
@@ -773,22 +724,21 @@
 }
 
 .orch-page-title {
-  font-size: 1.35rem;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 600;
   color: var(--orch-text);
-  letter-spacing: -0.01em;
 }
 
 .orch-page-subtitle {
-  font-size: 0.75rem;
-  color: var(--orch-text-dim);
-  margin-top: 0.1rem;
+  font-size: 13px;
+  color: var(--orch-text-muted);
+  margin-top: 2px;
 }
 
 /* ─── Expanded Row (drill-down) ─────────────────────────────────────────────── */
 
 .orch-engine .orch-expanded-row {
-  background: var(--orch-bg-elevated);
+  background: #fafafa;
   border-left: 3px solid var(--orch-accent-blue);
   padding: 1rem;
 }
@@ -801,10 +751,6 @@
 
 .orch-engine .shadow-sm {
   box-shadow: var(--orch-shadow-card) !important;
-}
-
-.orch-engine .border-0 {
-  border: 1px solid var(--orch-border) !important;
 }
 
 .orch-engine code {
@@ -831,36 +777,36 @@
 
 .orch-tab-nav {
   border-bottom: 1px solid var(--orch-border);
-  padding-bottom: 2px;
+  padding-bottom: 0;
 }
 
 .orch-tab-btn {
   background: transparent;
   border: none;
-  color: var(--orch-text-muted);
-  font-size: 12px;
+  color: var(--orch-text-dim);
+  font-size: 13px;
   font-weight: 500;
-  padding: 8px 14px;
-  border-radius: var(--orch-radius-sm) var(--orch-radius-sm) 0 0;
+  padding: 10px 16px;
+  border-radius: 0;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s;
   position: relative;
   white-space: nowrap;
 }
 
 .orch-tab-btn:hover {
-  color: var(--orch-text);
-  background: var(--orch-bg-elevated);
+  color: var(--orch-text-muted);
+  background: transparent;
 }
 
 .orch-tab-btn-active {
-  color: var(--orch-accent-blue);
-  background: var(--orch-bg-card);
+  color: var(--orch-text);
+  background: transparent;
   box-shadow: inset 0 -2px 0 var(--orch-accent-blue);
 }
 
 .orch-tab-btn-active:hover {
-  color: var(--orch-accent-blue);
+  color: var(--orch-text);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -873,14 +819,14 @@
 
 .orch-engine .orch-row-active,
 .orch-engine .orch-row-active td {
-  background: var(--orch-bg-elevated) !important;
+  background: #fafafa !important;
   border-color: var(--orch-border-active) !important;
 }
 
 /* ─── Expanded Detail Panel ───────────────────────────────────────────────── */
 
 .orch-expanded-detail {
-  background: var(--orch-bg-elevated);
-  border-top: 2px solid var(--orch-accent-blue);
+  background: #fafafa;
+  border-top: 1px solid var(--orch-border);
   animation: orchFadeIn 0.2s ease-out;
 }

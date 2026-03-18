@@ -19,19 +19,19 @@ import '../../styles/orchestration.css';
 const API = process.env.REACT_APP_API_URL || '';
 
 const TABS = [
-  { id: 'blueprint', label: 'Blueprint', icon: 'bi-diagram-3' },
-  { id: 'overview', label: 'Overview', icon: 'bi-grid-1x2' },
-  { id: 'sessions', label: 'Sessions', icon: 'bi-calendar-event' },
-  { id: 'sections', label: 'Sections', icon: 'bi-list-nested' },
-  { id: 'mini-sections', label: 'Mini-Sections', icon: 'bi-layers' },
-  { id: 'types', label: 'Types', icon: 'bi-tag' },
-  { id: 'artifacts', label: 'Artifacts', icon: 'bi-file-earmark-code' },
-  { id: 'skills', label: 'Skills', icon: 'bi-lightning' },
-  { id: 'gating', label: 'Gating', icon: 'bi-funnel' },
-  { id: 'analytics', label: 'Analytics', icon: 'bi-bar-chart-line' },
-  { id: 'workstation', label: 'Workstation', icon: 'bi-gear' },
-  { id: 'bulk', label: 'Bulk Config', icon: 'bi-stack' },
-  { id: 'health', label: 'Health', icon: 'bi-heart-pulse' },
+  { id: 'blueprint', label: 'Blueprint' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'sessions', label: 'Sessions' },
+  { id: 'sections', label: 'Sections' },
+  { id: 'mini-sections', label: 'Mini-Sections' },
+  { id: 'types', label: 'Types' },
+  { id: 'artifacts', label: 'Artifacts' },
+  { id: 'skills', label: 'Skills' },
+  { id: 'gating', label: 'Gating' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'workstation', label: 'Workstation' },
+  { id: 'bulk', label: 'Bulk Config' },
+  { id: 'health', label: 'Health' },
 ];
 
 export default function AdminOrchestrationPage() {
@@ -53,10 +53,9 @@ export default function AdminOrchestrationPage() {
         {/* Header */}
         <div className="d-flex align-items-center justify-content-between mb-4">
           <div>
-            <h4 className="fw-bold mb-1" style={{ color: 'var(--orch-text)', letterSpacing: '-0.02em' }}>
-              <i className="bi bi-cpu me-2" style={{ color: 'var(--orch-accent-blue)' }} />
+            <h5 className="fw-semibold mb-1" style={{ color: 'var(--orch-text)' }}>
               Orchestration Engine
-            </h4>
+            </h5>
             <p className="mb-0" style={{ color: 'var(--orch-text-muted)', fontSize: 13 }}>
               Program-wide AI curriculum configuration
             </p>
@@ -74,14 +73,13 @@ export default function AdminOrchestrationPage() {
 
         {/* Tab Navigation */}
         <div className="orch-tab-nav mb-4">
-          <div className="d-flex flex-wrap gap-1">
+          <div className="d-flex flex-wrap gap-0">
             {TABS.map(tab => (
               <button
                 key={tab.id}
                 className={`orch-tab-btn ${activeTab === tab.id ? 'orch-tab-btn-active' : ''}`}
                 onClick={() => setActiveTab(tab.id)}
               >
-                <i className={`bi ${tab.icon} me-1`} />
                 {tab.label}
               </button>
             ))}
