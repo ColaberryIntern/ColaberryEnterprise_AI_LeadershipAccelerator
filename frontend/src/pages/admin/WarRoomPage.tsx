@@ -154,7 +154,7 @@ export default function WarRoomPage() {
                 <div className="d-flex flex-wrap gap-2 mt-1">
                   {Object.entries(revenue.funnelConversions).map(([key, val]) => (
                     <span key={key} className="badge bg-light text-dark" style={{ fontSize: 10 }}>
-                      {key}: {typeof val === 'number' ? `${val.toFixed(1)}%` : val}
+                      {key}: {typeof val === 'number' ? `${val.toFixed(1)}%` : String(val)}
                     </span>
                   ))}
                 </div>
