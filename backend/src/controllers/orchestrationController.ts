@@ -134,7 +134,12 @@ export async function handleDeleteSection(req: Request, res: Response) {
 
 export async function handleListArtifacts(req: Request, res: Response) {
   try {
-    const artifacts = await artifactService.listArtifactDefinitions(req.params.sessionId as string);
+    const sectionId = req.query.section_id as string | undefined;
+    const sessionId = req.params.sessionId as string | undefined;
+    const artifacts = await artifactService.listArtifactDefinitions({
+      sectionId,
+      sessionId: sectionId ? undefined : sessionId,
+    });
     res.json(artifacts);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

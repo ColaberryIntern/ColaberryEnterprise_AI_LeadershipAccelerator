@@ -121,6 +121,26 @@ router.post('/api/admin/orchestration/mini-sections/:id/recalculate-skills', req
   } catch (err: any) { res.status(400).json({ error: err.message }); }
 });
 
+// Bulk skill recalculation for all mini-sections in a lesson/section
+router.post('/api/admin/orchestration/sections/:lessonId/recalculate-all-skills', requireAdmin, async (req, res) => {
+  try {
+    const { MiniSection } = require('../../models');
+    const { recalculateSkillsForMiniSection } = await import('../../services/skillRecalculationService');
+    const miniSections = await MiniSection.findAll({ where: { lesson_id: req.params.lessonId } });
+    const results = [];
+    for (const ms of miniSections) {
+      try {
+        const result = await recalculateSkillsForMiniSection(ms.id);
+        results.push({ id: ms.id, title: ms.title, status: 'ok', ...result });
+      } catch (err: any) {
+        results.push({ id: ms.id, title: ms.title, status: 'skipped', reason: err.message });
+      }
+    }
+    const totalSkills = results.reduce((sum, r) => sum + ((r as any).associated_skill_ids?.length || 0), 0);
+    res.json({ results, summary: `${results.length} mini-sections processed, ${totalSkills} skills assigned` });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // Bulk Curriculum Operations
 router.get('/api/admin/orchestration/bulk/curriculum-matrix', requireAdmin, async (_req, res) => {
   try {

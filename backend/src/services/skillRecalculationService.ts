@@ -29,13 +29,12 @@ interface RecalcResult {
 export async function recalculateSkillsForMiniSection(miniSectionId: string): Promise<RecalcResult> {
   const ms = await MiniSection.findByPk(miniSectionId);
   if (!ms) throw new Error('Mini-section not found');
-  if (ms.mini_section_type !== 'implementation_task') {
-    throw new Error('Skill recalculation is only supported for implementation_task type');
-  }
-
-  const buildPrompt = (ms as any).build_prompt_system as string;
+  // Use build_prompt_system for implementation tasks, section_prompt or description for others
+  const buildPrompt = (ms as any).build_prompt_system
+    || (ms as any).section_prompt
+    || ms.description;
   if (!buildPrompt) {
-    throw new Error('No Task Requirements Prompt configured. Add a prompt first, then recalculate.');
+    throw new Error('No prompt or description found. Add content first, then recalculate.');
   }
 
   // Load existing skills
