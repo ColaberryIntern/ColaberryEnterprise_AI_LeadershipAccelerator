@@ -284,6 +284,7 @@ export async function applySectionBlueprint(
         domain_id: skillDomain.split('_')[0] || 'general',
         weights: {},
         mastery_threshold: 0.7,
+        skill_type: 'core',
         is_active: true,
       } as any, { transaction: t });
       result.created_skill = { id: matchedSkill.id, skill_id: matchedSkill.skill_id, name: matchedSkill.name };
@@ -332,6 +333,7 @@ export async function applySectionBlueprint(
           name: spec.artifact.name,
           description: spec.artifact.description,
           artifact_type: 'document',
+          artifact_role: 'output',
           evaluation_criteria: spec.artifact.evaluation_criteria,
           file_types: ['.pdf', '.docx', '.xlsx', '.pptx'],
           sort_order: 0,

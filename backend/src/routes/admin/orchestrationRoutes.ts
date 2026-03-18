@@ -419,6 +419,44 @@ router.get('/api/admin/orchestration/program/flow', requireAdmin, handleGetProgr
 router.get('/api/admin/orchestration/program/skills', requireAdmin, handleGetProgramSkills);
 router.get('/api/admin/orchestration/program/gates', requireAdmin, handleGetProgramGates);
 
+// Curriculum Graph Intelligence
+router.get('/api/admin/orchestration/program/skill-graph', requireAdmin, async (_req, res) => {
+  try {
+    const { getSkillCrossMap } = require('../../services/curriculumGraphService');
+    const data = await getSkillCrossMap();
+    res.json({ skillGraph: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.get('/api/admin/orchestration/program/artifact-flow', requireAdmin, async (_req, res) => {
+  try {
+    const { getArtifactFlowMap } = require('../../services/curriculumGraphService');
+    const data = await getArtifactFlowMap();
+    res.json({ artifactFlow: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.get('/api/admin/orchestration/sections/:id/dependencies', requireAdmin, async (req, res) => {
+  try {
+    const { getSectionDependencies } = require('../../services/curriculumGraphService');
+    const data = await getSectionDependencies(req.params.id);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.get('/api/admin/orchestration/sections/:id/impact', requireAdmin, async (req, res) => {
+  try {
+    const { getDownstreamImpact } = require('../../services/curriculumGraphService');
+    const data = await getDownstreamImpact(req.params.id);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Prompt Validation & Preview
 router.get('/api/admin/orchestration/validate/prompt/:lessonId/:enrollmentId', requireAdmin, handleValidatePrompt);
 router.get('/api/admin/orchestration/preview/prompt/:lessonId/:enrollmentId', requireAdmin, handlePreviewPrompt);

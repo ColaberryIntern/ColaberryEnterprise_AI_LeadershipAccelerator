@@ -24,6 +24,7 @@ export interface ArtifactDefinitionAttributes {
   evaluation_criteria?: string;
   auto_generate_prompt_id?: string;
   versioning_enabled?: boolean;
+  artifact_role?: string;
   sort_order?: number;
   created_at?: Date;
 }
@@ -51,6 +52,7 @@ class ArtifactDefinition extends Model<ArtifactDefinitionAttributes> implements 
   declare evaluation_criteria: string;
   declare auto_generate_prompt_id: string;
   declare versioning_enabled: boolean;
+  declare artifact_role: string;
   declare sort_order: number;
   declare created_at: Date;
 }
@@ -159,6 +161,11 @@ ArtifactDefinition.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    artifact_role: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'output',
     },
     sort_order: {
       type: DataTypes.INTEGER,

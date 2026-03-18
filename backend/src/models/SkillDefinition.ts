@@ -10,6 +10,7 @@ class SkillDefinition extends Model {
   declare description: string;
   declare weights: Record<string, number> | null;
   declare mastery_threshold: number;
+  declare skill_type: string;
   declare is_active: boolean;
   declare created_at: Date;
   declare updated_at: Date;
@@ -25,6 +26,7 @@ SkillDefinition.init(
     description: { type: DataTypes.TEXT, allowNull: true },
     weights: { type: DataTypes.JSONB, allowNull: true, defaultValue: {} },
     mastery_threshold: { type: DataTypes.FLOAT, allowNull: false, defaultValue: 0.7 },
+    skill_type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'core' },
     is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },

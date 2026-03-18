@@ -26,6 +26,14 @@ export interface PromptBuilderInput {
   conceptSnapshot?: { title?: string; definition?: string };
   aiStrategy?: { description?: string; when_to_use_ai?: string[] };
   tools?: { name: string; is_free: boolean; purpose?: string }[];
+  skillContext?: {
+    developing: { name: string; type: string }[];
+    carried_forward: { name: string; from_section: string }[];
+  };
+  artifactContext?: {
+    inputs_from_prior: { name: string; from_section: string }[];
+    outputs_required: { name: string; description: string }[];
+  };
   workstationPrompt?: string;
   workstationTestMode?: boolean;
 }
@@ -105,12 +113,38 @@ export function buildFinalPrompt(input: PromptBuilderInput): string {
     parts.push(appendix);
   }
 
-  // 8. Test mode
+  // 8. Skill & Artifact intelligence
+  if (input.skillContext) {
+    const lines: string[] = ['SKILL CONTEXT:'];
+    if (input.skillContext.developing.length > 0) {
+      lines.push('Developing in this section:');
+      for (const s of input.skillContext.developing) lines.push(`- ${s.name} (${s.type})`);
+    }
+    if (input.skillContext.carried_forward.length > 0) {
+      lines.push('Carried forward from prior sections:');
+      for (const s of input.skillContext.carried_forward) lines.push(`- ${s.name} (from: ${s.from_section})`);
+    }
+    if (lines.length > 1) parts.push(lines.join('\n'));
+  }
+  if (input.artifactContext) {
+    const lines: string[] = ['ARTIFACT CONTEXT:'];
+    if (input.artifactContext.inputs_from_prior.length > 0) {
+      lines.push('Inputs available from prior work:');
+      for (const a of input.artifactContext.inputs_from_prior) lines.push(`- ${a.name} (from: ${a.from_section})`);
+    }
+    if (input.artifactContext.outputs_required.length > 0) {
+      lines.push('Outputs required from this section:');
+      for (const a of input.artifactContext.outputs_required) lines.push(`- ${a.name}: ${a.description}`);
+    }
+    if (lines.length > 1) parts.push(lines.join('\n'));
+  }
+
+  // 9. Test mode
   if (input.workstationTestMode) {
     parts.push(`TEST MODE INSTRUCTIONS:\nI am in test mode. Walk me through the experience exactly as a real student would see it, but when you ask me to do work or submit something, instead of waiting for my submission, you should generate a realistic example yourself and continue as if I had submitted it. Keep the flow moving automatically — show me the full student journey from start to finish.`);
   }
 
-  // 9. Claude Code environment constraint
+  // 10. Claude Code environment constraint
   parts.push(CLAUDE_CODE_CONSTRAINT);
 
   return parts.join('\n\n');

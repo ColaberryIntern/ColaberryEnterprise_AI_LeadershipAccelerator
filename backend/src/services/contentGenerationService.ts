@@ -1,6 +1,7 @@
 import CurriculumLesson from '../models/CurriculumLesson';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import { SectionConfig, PromptTemplate, ProgramBlueprint, MiniSection, ArtifactDefinition } from '../models';
+import SkillDefinition from '../models/SkillDefinition';
 import CurriculumModule from '../models/CurriculumModule';
 import * as variableService from './variableService';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
@@ -522,7 +523,18 @@ async function buildCompositePrompt(
         parts.push(`Questions: ${ms.knowledge_check_config.question_count}, pass score: ${ms.knowledge_check_config.pass_score}%`);
       }
       if (ms.associated_skill_ids?.length) {
-        parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+        try {
+          const skillDefs = await SkillDefinition.findAll({ where: { is_active: true } });
+          const skillMap = new Map(skillDefs.map(s => [s.id, s]));
+          const skillBySlug = new Map(skillDefs.map(s => [s.skill_id, s]));
+          const resolved = ms.associated_skill_ids.map(sid => {
+            const skill = skillMap.get(sid) || skillBySlug.get(sid);
+            return skill ? `${skill.name} (${(skill as any).skill_type || 'core'})` : sid;
+          });
+          parts.push(`Assess Skills: ${resolved.join(', ')}`);
+        } catch {
+          parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+        }
       }
     } catch {
       parts.push(`Output: Generate content for "${ms.mini_section_type}".`);
@@ -780,7 +792,18 @@ export async function buildCompositePromptForSimulation(
           parts.push(`Questions: ${ms.knowledge_check_config.question_count}, pass score: ${ms.knowledge_check_config.pass_score}%`);
         }
         if (ms.associated_skill_ids?.length) {
-          parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+          try {
+            const kcSkillDefs = await SkillDefinition.findAll({ where: { is_active: true } });
+            const kcSkillMap = new Map(kcSkillDefs.map(s => [s.id, s]));
+            const kcSkillBySlug = new Map(kcSkillDefs.map(s => [s.skill_id, s]));
+            const kcResolved = ms.associated_skill_ids.map(sid => {
+              const skill = kcSkillMap.get(sid) || kcSkillBySlug.get(sid);
+              return skill ? `${skill.name} (${(skill as any).skill_type || 'core'})` : sid;
+            });
+            parts.push(`Assess Skills: ${kcResolved.join(', ')}`);
+          } catch {
+            parts.push(`Assess Skills: ${ms.associated_skill_ids.join(', ')}`);
+          }
         }
         break;
       default:

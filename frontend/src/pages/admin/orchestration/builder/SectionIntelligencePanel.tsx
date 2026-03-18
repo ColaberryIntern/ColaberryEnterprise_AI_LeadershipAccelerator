@@ -3,6 +3,7 @@ import { MiniSection, TYPE_ICONS, DryRunResult, QualityBreakdown, Suggestion } f
 import ValidationSection from './ValidationSection';
 import QualityScoreSection from './QualityScoreSection';
 import SuggestionSection from './SuggestionSection';
+import type { SkillCrossRef, ArtifactFlowRef } from './useCurriculumGraph';
 
 interface Props {
   sectionVariableKeys: string[];
@@ -13,6 +14,9 @@ interface Props {
   artifactOptions: { value: string; label: string }[];
   skillOptions: { value: string; label: string }[];
   lessonTitle?: string;
+  lessonId?: string;
+  skillGraph?: SkillCrossRef[];
+  artifactFlow?: ArtifactFlowRef[];
   // Diagnostic props
   editing?: Partial<MiniSection> | null;
   dryRun?: DryRunResult | null;
@@ -58,6 +62,7 @@ function CollapsibleSection({ icon, title, count, color, children }: {
 export default function SectionIntelligencePanel({
   sectionVariableKeys, sectionArtifactIds, sectionSkillIds, miniSections,
   variableOptions, artifactOptions, skillOptions, lessonTitle,
+  lessonId, skillGraph, artifactFlow,
   editing, dryRun, validating, onRevalidate,
   qualityBreakdown, qualityLoading, onRefreshQuality,
   suggestions, suggestionsLoading, applyingSuggestion, onRefreshSuggestions, onApplySuggestionFix,
@@ -104,24 +109,80 @@ export default function SectionIntelligencePanel({
 
           {/* Skills Covered */}
           <CollapsibleSection icon="bi-award" title="Skills" count={sectionSkillIds.length} color="#38a169">
-            <div className="d-flex flex-wrap gap-1">
-              {sectionSkillIds.map(id => (
-                <span key={id} className="badge" style={{ fontSize: 8, background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
-                  {resolveLabel(id, skillOptions)}
-                </span>
-              ))}
+            <div className="d-flex flex-column gap-1">
+              {sectionSkillIds.map(id => {
+                const graphEntry = skillGraph?.find(s => s.skill_id === id || s.sections?.some(sec => sec.lesson_id === lessonId));
+                const matchedEntry = skillGraph?.find(s => {
+                  const matchById = s.skill_id === id;
+                  const matchBySection = s.sections?.some(sec => sec.lesson_id === lessonId);
+                  return matchById || matchBySection;
+                });
+                const sectionCount = matchedEntry?.sections?.length || 0;
+                const sectionRole = lessonId ? matchedEntry?.sections?.find(sec => sec.lesson_id === lessonId)?.role : undefined;
+                const skillType = matchedEntry?.skill_type || 'core';
+                const typeLabel = skillType === 'core' ? 'C' : skillType === 'supporting' ? 'S' : 'A';
+                const typeColor = skillType === 'core' ? '#38a169' : skillType === 'supporting' ? '#0d6efd' : '#7c3aed';
+
+                return (
+                  <div key={id} className="d-flex align-items-center gap-1">
+                    <span className="badge" style={{ fontSize: 7, background: `${typeColor}20`, color: typeColor, border: `1px solid ${typeColor}40`, minWidth: 14, textAlign: 'center' }}>
+                      {typeLabel}
+                    </span>
+                    <span className="badge" style={{ fontSize: 8, background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                      {resolveLabel(id, skillOptions)}
+                    </span>
+                    {sectionCount > 1 && (
+                      <span className="text-muted" style={{ fontSize: 7 }}>{sectionCount} sections</span>
+                    )}
+                    {sectionRole && (
+                      <span className="badge ms-auto" style={{
+                        fontSize: 7,
+                        background: sectionRole === 'introduced' ? 'rgba(56,161,105,0.15)' : sectionRole === 'reinforced' ? 'rgba(13,110,253,0.15)' : 'rgba(124,58,237,0.15)',
+                        color: sectionRole === 'introduced' ? '#38a169' : sectionRole === 'reinforced' ? '#0d6efd' : '#7c3aed',
+                        border: 'none',
+                      }}>
+                        {sectionRole === 'introduced' ? 'Introduced' : sectionRole === 'reinforced' ? 'Reinforced' : 'Mastered'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
               {sectionSkillIds.length === 0 && <span className="text-muted">None assigned</span>}
             </div>
           </CollapsibleSection>
 
-          {/* Artifacts Produced */}
+          {/* Artifacts */}
           <CollapsibleSection icon="bi-box" title="Artifacts" count={sectionArtifactIds.length} color="#dd6b20">
-            <div className="d-flex flex-wrap gap-1">
-              {sectionArtifactIds.map(id => (
-                <span key={id} className="badge" style={{ fontSize: 8, background: 'rgba(221,107,32,0.1)', color: '#dd6b20', border: '1px solid rgba(221,107,32,0.2)' }}>
-                  {resolveLabel(id, artifactOptions)}
-                </span>
-              ))}
+            <div className="d-flex flex-column gap-1">
+              {sectionArtifactIds.map(id => {
+                const flowEntry = artifactFlow?.find(a => a.artifact_id === id);
+                const isProducer = flowEntry?.produced_by?.lesson_id === lessonId;
+                const isConsumer = !isProducer && flowEntry?.produced_by != null;
+                const downstreamCount = flowEntry?.consumed_by?.length || 0;
+                const dirColor = isProducer ? '#dd6b20' : isConsumer ? '#0d6efd' : '#718096';
+                const dirLabel = isProducer ? 'Produces' : isConsumer ? 'Uses' : '';
+                const dirIcon = isProducer ? 'bi-arrow-up-right' : isConsumer ? 'bi-arrow-down-left' : '';
+
+                return (
+                  <div key={id} className="d-flex align-items-center gap-1">
+                    {dirIcon && (
+                      <i className={`bi ${dirIcon}`} style={{ fontSize: 8, color: dirColor }}></i>
+                    )}
+                    <span className="badge" style={{ fontSize: 8, background: `${dirColor}18`, color: dirColor, border: `1px solid ${dirColor}30` }}>
+                      {resolveLabel(id, artifactOptions)}
+                    </span>
+                    {dirLabel && (
+                      <span className="text-muted" style={{ fontSize: 7 }}>{dirLabel}</span>
+                    )}
+                    {isProducer && downstreamCount > 0 && (
+                      <span className="text-muted ms-auto" style={{ fontSize: 7 }}>{downstreamCount} downstream</span>
+                    )}
+                    {isConsumer && flowEntry?.produced_by && (
+                      <span className="text-muted ms-auto" style={{ fontSize: 7 }}>from: {flowEntry.produced_by.lesson_title.slice(0, 20)}</span>
+                    )}
+                  </div>
+                );
+              })}
               {sectionArtifactIds.length === 0 && <span className="text-muted">None assigned</span>}
             </div>
           </CollapsibleSection>

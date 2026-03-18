@@ -11,6 +11,7 @@ import AutoRepairModal from './builder/AutoRepairModal';
 import CurriculumMapNavigator from './builder/CurriculumMapNavigator';
 import MiniSectionPipeline from './builder/MiniSectionPipeline';
 import SectionIntelligencePanel from './builder/SectionIntelligencePanel';
+import { useCurriculumGraph } from './builder/useCurriculumGraph';
 import PromptDebuggerPanel from './builder/PromptDebuggerPanel';
 import AISimulationWorkspace from './builder/AISimulationWorkspace';
 import { PROMPT_PAIRS } from './builder/types';
@@ -25,6 +26,7 @@ interface GeneratedEvent {
 
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
+  const { skillGraph, artifactFlow } = useCurriculumGraph(builder.selectedLessonId || undefined);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
@@ -363,6 +365,9 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                   artifactOptions={builder.artifactOptions.map(a => ({ value: a.value, label: a.label }))}
                   skillOptions={builder.skillOptions.map(s => ({ value: s.value, label: s.label }))}
                   lessonTitle={builder.selectedLesson?.title}
+                  lessonId={builder.selectedLessonId || undefined}
+                  skillGraph={skillGraph}
+                  artifactFlow={artifactFlow}
                   editing={builder.editing}
                   dryRun={builder.dryRun}
                   validating={builder.validating}
