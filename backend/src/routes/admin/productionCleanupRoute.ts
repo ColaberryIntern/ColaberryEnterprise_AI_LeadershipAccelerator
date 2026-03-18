@@ -41,6 +41,14 @@ function isTestCohortName(name: string): boolean {
   return /^Cohort\s+\d+/i.test(name);
 }
 
+/** Check if a cohort needs renaming (any name that isn't already "Cohort — Month Year") */
+function needsRename(name: string): boolean {
+  // Already in target format: "Cohort — March 2026"
+  if (/^Cohort\s+\u2014\s+[A-Z][a-z]+\s+\d{4}$/.test(name)) return false;
+  // Everything else (e.g. "Colaberry 2026-03 Cohort", "Cohort 1 — March 2026") needs rename
+  return true;
+}
+
 /** Get IDs of protected campaigns */
 async function getProtectedCampaignIds(): Promise<string[]> {
   const campaigns = await Campaign.findAll({
@@ -293,11 +301,11 @@ router.post('/api/admin/production-cleanup', async (req: Request, res: Response)
           });
         }
 
-        // 6. Campaign simulation data (all — test infrastructure)
+        // 6. Campaign simulation data (all — test infrastructure, always cleaned)
         deletionResults.campaign_simulation_steps = await CampaignSimulationStep.destroy({ where: {}, ...txOpts });
         deletionResults.campaign_simulations = await CampaignSimulation.destroy({ where: {}, ...txOpts });
 
-        // 7. Campaign test runs (all — test infrastructure)
+        // 7. Campaign test runs (all — test infrastructure, always cleaned)
         deletionResults.campaign_test_steps = await CampaignTestStep.destroy({ where: {}, ...txOpts });
         deletionResults.campaign_test_runs = await CampaignTestRun.destroy({ where: {}, ...txOpts });
 
@@ -372,7 +380,7 @@ router.post('/api/admin/production-cleanup', async (req: Request, res: Response)
     const currentCohorts = await Cohort.findAll({ raw: true }) as any[];
 
     for (const cohort of currentCohorts) {
-      if (isTestCohortName(cohort.name)) {
+      if (needsRename(cohort.name)) {
         const startDate = new Date(cohort.start_date);
         const monthName = startDate.toLocaleString('en-US', { month: 'long' });
         const year = startDate.getFullYear();
@@ -402,7 +410,7 @@ router.post('/api/admin/production-cleanup', async (req: Request, res: Response)
     for (const cohort of freshCohorts) {
       const actual = await Enrollment.count({ where: { cohort_id: cohort.id } });
       cohortChecks.push({
-        name: isExecute && isTestCohortName(cohort.name) ? renameResults.find(r => r.old_name === cohort.name)?.new_name || cohort.name : cohort.name,
+        name: isExecute && needsRename(cohort.name) ? renameResults.find(r => r.old_name === cohort.name)?.new_name || cohort.name : cohort.name,
         seats_taken: cohort.seats_taken,
         actual,
         match: cohort.seats_taken === actual || (isExecute && actual === 0),
