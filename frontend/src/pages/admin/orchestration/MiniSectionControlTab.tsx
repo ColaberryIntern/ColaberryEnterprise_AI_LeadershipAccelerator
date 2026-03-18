@@ -12,6 +12,7 @@ import CurriculumMapNavigator from './builder/CurriculumMapNavigator';
 import MiniSectionPipeline from './builder/MiniSectionPipeline';
 import SectionIntelligencePanel from './builder/SectionIntelligencePanel';
 import { useCurriculumGraph } from './builder/useCurriculumGraph';
+import { useVariableFlow } from './builder/useVariableFlow';
 import PromptDebuggerPanel from './builder/PromptDebuggerPanel';
 import AISimulationWorkspace from './builder/AISimulationWorkspace';
 import { PROMPT_PAIRS } from './builder/types';
@@ -27,6 +28,7 @@ interface GeneratedEvent {
 export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }: { token: string; apiUrl: string; initialLessonId?: string | null }) {
   const builder = useMiniSectionBuilder({ token, apiUrl, initialLessonId });
   const { skillGraph, artifactFlow } = useCurriculumGraph(builder.selectedLessonId || undefined);
+  const { sectionFlow, reconciliation, refreshReconciliation } = useVariableFlow(builder.selectedLessonId || undefined);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
@@ -368,6 +370,9 @@ export default function MiniSectionControlTab({ token, apiUrl, initialLessonId }
                   lessonId={builder.selectedLessonId || undefined}
                   skillGraph={skillGraph}
                   artifactFlow={artifactFlow}
+                  variableFlow={sectionFlow}
+                  variableReconciliation={reconciliation}
+                  onRefreshReconciliation={refreshReconciliation}
                   editing={builder.editing}
                   dryRun={builder.dryRun}
                   validating={builder.validating}

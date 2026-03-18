@@ -34,6 +34,11 @@ export interface PromptBuilderInput {
     inputs_from_prior: { name: string; from_section: string }[];
     outputs_required: { name: string; description: string }[];
   };
+  variableContext?: {
+    available: { key: string; value?: string; source: string }[];
+    required: { key: string }[];
+    missing: { key: string }[];
+  };
   workstationPrompt?: string;
   workstationTestMode?: boolean;
 }
@@ -139,12 +144,27 @@ export function buildFinalPrompt(input: PromptBuilderInput): string {
     if (lines.length > 1) parts.push(lines.join('\n'));
   }
 
-  // 9. Test mode
+  // 9. Variable context
+  if (input.variableContext) {
+    const lines: string[] = ['VARIABLE CONTEXT:'];
+    const avail = input.variableContext.available.filter(v => v.value);
+    if (avail.length > 0) {
+      lines.push('Available variables (pre-filled from prior work):');
+      for (const v of avail) lines.push(`- ${v.key}: ${JSON.stringify(v.value)} (from: ${v.source})`);
+    }
+    if (input.variableContext.missing.length > 0) {
+      lines.push('Missing variables (student must provide):');
+      for (const v of input.variableContext.missing) lines.push(`- ${v.key}`);
+    }
+    if (lines.length > 1) parts.push(lines.join('\n'));
+  }
+
+  // 10. Test mode
   if (input.workstationTestMode) {
     parts.push(`TEST MODE INSTRUCTIONS:\nI am in test mode. Walk me through the experience exactly as a real student would see it, but when you ask me to do work or submit something, instead of waiting for my submission, you should generate a realistic example yourself and continue as if I had submitted it. Keep the flow moving automatically — show me the full student journey from start to finish.`);
   }
 
-  // 10. Claude Code environment constraint
+  // 11. Claude Code environment constraint
   parts.push(CLAUDE_CODE_CONSTRAINT);
 
   return parts.join('\n\n');

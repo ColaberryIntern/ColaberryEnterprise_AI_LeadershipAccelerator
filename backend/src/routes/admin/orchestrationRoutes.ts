@@ -457,6 +457,35 @@ router.get('/api/admin/orchestration/sections/:id/impact', requireAdmin, async (
   }
 });
 
+// Variable Flow Intelligence
+router.get('/api/admin/orchestration/program/variable-flow', requireAdmin, async (_req, res) => {
+  try {
+    const { getVariableFlowMap } = require('../../services/variableFlowService');
+    const data = await getVariableFlowMap();
+    res.json({ variableFlow: data });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.get('/api/admin/orchestration/sections/:id/variable-flow', requireAdmin, async (req, res) => {
+  try {
+    const { getSectionVariableFlow } = require('../../services/variableFlowService');
+    const data = await getSectionVariableFlow(req.params.id);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.get('/api/admin/orchestration/program/variable-reconciliation', requireAdmin, async (_req, res) => {
+  try {
+    const { getVariableReconciliation } = require('../../services/variableFlowService');
+    const data = await getVariableReconciliation();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Prompt Validation & Preview
 router.get('/api/admin/orchestration/validate/prompt/:lessonId/:enrollmentId', requireAdmin, handleValidatePrompt);
 router.get('/api/admin/orchestration/preview/prompt/:lessonId/:enrollmentId', requireAdmin, handlePreviewPrompt);

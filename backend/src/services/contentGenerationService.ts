@@ -159,6 +159,7 @@ export async function generateLessonContent(
         const sectionConfig = await SectionConfig.findOne({ where: { lesson_id: lesson.id } });
         const outputMap = sectionConfig?.variable_output_map as Record<string, string> | null;
         if (outputMap && typeof outputMap === 'object') {
+          const capturedKeys: string[] = [];
           for (const [jsonPath, varKey] of Object.entries(outputMap)) {
             const value = getNestedValue(parsed, jsonPath);
             if (value) {
@@ -169,7 +170,19 @@ export async function generateLessonContent(
                 'session',
                 { sectionId: sectionConfig!.id }
               );
+              capturedKeys.push(varKey);
+              // Auto-classify source_type to llm_output if it was user_input
+              try {
+                const VariableDefinition = require('../models/VariableDefinition').default;
+                await VariableDefinition.update(
+                  { source_type: 'llm_output' },
+                  { where: { variable_key: varKey, source_type: 'user_input' } },
+                );
+              } catch { /* non-critical */ }
             }
+          }
+          if (capturedKeys.length > 0) {
+            console.log(`[ContentGeneration] Captured ${capturedKeys.length} output variables: ${capturedKeys.join(', ')}`);
           }
         }
       } catch {

@@ -4,6 +4,7 @@ import ValidationSection from './ValidationSection';
 import QualityScoreSection from './QualityScoreSection';
 import SuggestionSection from './SuggestionSection';
 import type { SkillCrossRef, ArtifactFlowRef } from './useCurriculumGraph';
+import type { SectionVariableFlow, VariableReconciliation } from './useVariableFlow';
 
 interface Props {
   sectionVariableKeys: string[];
@@ -17,6 +18,9 @@ interface Props {
   lessonId?: string;
   skillGraph?: SkillCrossRef[];
   artifactFlow?: ArtifactFlowRef[];
+  variableFlow?: SectionVariableFlow | null;
+  variableReconciliation?: VariableReconciliation | null;
+  onRefreshReconciliation?: () => void;
   // Diagnostic props
   editing?: Partial<MiniSection> | null;
   dryRun?: DryRunResult | null;
@@ -34,10 +38,10 @@ interface Props {
   onOpenRepair?: () => void;
 }
 
-function CollapsibleSection({ icon, title, count, color, children }: {
-  icon: string; title: string; count: number; color: string; children: React.ReactNode;
+function CollapsibleSection({ icon, title, count, color, children, warningCount }: {
+  icon: string; title: string; count: number; color: string; children: React.ReactNode; warningCount?: number;
 }) {
-  const [open, setOpen] = useState(count > 0);
+  const [open, setOpen] = useState(count > 0 || (warningCount || 0) > 0);
   return (
     <div className="mb-2">
       <button
@@ -53,6 +57,11 @@ function CollapsibleSection({ icon, title, count, color, children }: {
             {count}
           </span>
         )}
+        {(warningCount || 0) > 0 && (
+          <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)', marginLeft: count > 0 ? 4 : 'auto' }}>
+            {warningCount}
+          </span>
+        )}
       </button>
       {open && <div className="ms-3 mt-1">{children}</div>}
     </div>
@@ -62,7 +71,7 @@ function CollapsibleSection({ icon, title, count, color, children }: {
 export default function SectionIntelligencePanel({
   sectionVariableKeys, sectionArtifactIds, sectionSkillIds, miniSections,
   variableOptions, artifactOptions, skillOptions, lessonTitle,
-  lessonId, skillGraph, artifactFlow,
+  lessonId, skillGraph, artifactFlow, variableFlow, variableReconciliation, onRefreshReconciliation,
   editing, dryRun, validating, onRevalidate,
   qualityBreakdown, qualityLoading, onRefreshQuality,
   suggestions, suggestionsLoading, applyingSuggestion, onRefreshSuggestions, onApplySuggestionFix,
@@ -72,6 +81,13 @@ export default function SectionIntelligencePanel({
 
   const resolveLabel = (id: string, options: { value: string; label: string }[]) =>
     options.find(o => o.value === id)?.label || id.slice(0, 12);
+
+  // Variable flow counts
+  const vfAvailable = variableFlow?.available?.length || 0;
+  const vfRequired = variableFlow?.required?.length || 0;
+  const vfProduced = variableFlow?.produced?.length || 0;
+  const vfMissing = variableFlow?.missing?.length || 0;
+  const totalVarCount = vfRequired + vfProduced;
 
   return (
     <div className="card border-0 shadow-sm mb-2">
@@ -95,23 +111,99 @@ export default function SectionIntelligencePanel({
             </div>
           )}
 
-          {/* Variables Used */}
-          <CollapsibleSection icon="bi-braces" title="Variables" count={sectionVariableKeys.length} color="#0d6efd">
-            <div className="d-flex flex-wrap gap-1">
-              {sectionVariableKeys.map(k => (
-                <span key={k} className="badge" style={{ fontSize: 8, background: 'rgba(13,110,253,0.1)', color: '#0d6efd', border: '1px solid rgba(13,110,253,0.2)' }}>
-                  {resolveLabel(k, variableOptions)}
-                </span>
-              ))}
-              {sectionVariableKeys.length === 0 && <span className="text-muted">None assigned</span>}
-            </div>
+          {/* Variables — Enhanced with Flow Categories */}
+          <CollapsibleSection icon="bi-braces" title="Variables" count={totalVarCount} color="#0d6efd" warningCount={vfMissing}>
+            {variableFlow ? (
+              <div className="d-flex flex-column gap-2">
+                {/* Missing Variables — Warning */}
+                {vfMissing > 0 && (
+                  <div className="p-1 rounded" style={{ background: 'rgba(220,53,69,0.08)', border: '1px solid rgba(220,53,69,0.15)' }}>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dc3545' }}>
+                      <i className="bi bi-exclamation-triangle me-1"></i>
+                      {vfMissing} missing variable{vfMissing > 1 ? 's' : ''}
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      {variableFlow.missing.map(v => (
+                        <span key={v.key} className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                          {v.key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Required — referenced in prompts */}
+                {vfRequired > 0 && (
+                  <div>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#0d6efd' }}>
+                      <i className="bi bi-arrow-down-left me-1"></i>Required ({vfRequired})
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      {variableFlow.required.map(v => (
+                        <span key={v.key} className="badge" title={`Used in: ${v.usedIn.join(', ')}`} style={{ fontSize: 8, background: 'rgba(13,110,253,0.1)', color: '#0d6efd', border: '1px solid rgba(13,110,253,0.2)' }}>
+                          {v.key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Produced — created by this section */}
+                {vfProduced > 0 && (
+                  <div>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dd6b20' }}>
+                      <i className="bi bi-arrow-up-right me-1"></i>Produced ({vfProduced})
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      {variableFlow.produced.map(v => (
+                        <span key={v.key} className="badge" title={`Produced by: ${v.producedBy}`} style={{ fontSize: 8, background: 'rgba(221,107,32,0.1)', color: '#dd6b20', border: '1px solid rgba(221,107,32,0.2)' }}>
+                          {v.key}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Available — from prior sections + system */}
+                {vfAvailable > 0 && (
+                  <div>
+                    <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#38a169' }}>
+                      <i className="bi bi-check-circle me-1"></i>Available ({vfAvailable})
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      {variableFlow.available.slice(0, 15).map(v => (
+                        <span key={v.key} className="badge" title={`From: ${v.source} (${v.scope})`} style={{ fontSize: 8, background: 'rgba(56,161,105,0.1)', color: '#38a169', border: '1px solid rgba(56,161,105,0.2)' }}>
+                          {v.key}
+                        </span>
+                      ))}
+                      {vfAvailable > 15 && (
+                        <span className="text-muted" style={{ fontSize: 8 }}>+{vfAvailable - 15} more</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {totalVarCount === 0 && vfMissing === 0 && (
+                  <span className="text-muted">No variables referenced</span>
+                )}
+              </div>
+            ) : (
+              /* Fallback: flat list when flow data not available */
+              <div className="d-flex flex-wrap gap-1">
+                {sectionVariableKeys.map(k => (
+                  <span key={k} className="badge" style={{ fontSize: 8, background: 'rgba(13,110,253,0.1)', color: '#0d6efd', border: '1px solid rgba(13,110,253,0.2)' }}>
+                    {resolveLabel(k, variableOptions)}
+                  </span>
+                ))}
+                {sectionVariableKeys.length === 0 && <span className="text-muted">None assigned</span>}
+              </div>
+            )}
           </CollapsibleSection>
 
           {/* Skills Covered */}
           <CollapsibleSection icon="bi-award" title="Skills" count={sectionSkillIds.length} color="#38a169">
             <div className="d-flex flex-column gap-1">
               {sectionSkillIds.map(id => {
-                const graphEntry = skillGraph?.find(s => s.skill_id === id || s.sections?.some(sec => sec.lesson_id === lessonId));
                 const matchedEntry = skillGraph?.find(s => {
                   const matchById = s.skill_id === id;
                   const matchBySection = s.sections?.some(sec => sec.lesson_id === lessonId);
@@ -206,6 +298,60 @@ export default function SectionIntelligencePanel({
               {miniSections.length === 0 && <span className="text-muted">No mini-sections</span>}
             </div>
           </CollapsibleSection>
+
+          {/* Variable Reconciliation */}
+          {variableReconciliation && (
+            (variableReconciliation.undefined_refs.length > 0 || variableReconciliation.orphaned_defs.length > 0) && (
+              <CollapsibleSection
+                icon="bi-arrow-repeat"
+                title="Reconciliation"
+                count={variableReconciliation.undefined_refs.length + variableReconciliation.orphaned_defs.length}
+                color="#6c757d"
+              >
+                <div className="d-flex flex-column gap-2">
+                  {variableReconciliation.undefined_refs.length > 0 && (
+                    <div>
+                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#dc3545' }}>
+                        Undefined variables ({variableReconciliation.undefined_refs.length})
+                      </div>
+                      {variableReconciliation.undefined_refs.map(r => (
+                        <div key={r.key} className="d-flex align-items-center gap-1 mb-1">
+                          <span className="badge" style={{ fontSize: 8, background: 'rgba(220,53,69,0.1)', color: '#dc3545', border: '1px solid rgba(220,53,69,0.2)' }}>
+                            {r.key}
+                          </span>
+                          <span className="text-muted" style={{ fontSize: 7 }}>{r.used_in_sections.join(', ')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {variableReconciliation.orphaned_defs.length > 0 && (
+                    <div>
+                      <div className="fw-medium mb-1" style={{ fontSize: 9, color: '#6c757d' }}>
+                        Unused definitions ({variableReconciliation.orphaned_defs.length})
+                      </div>
+                      {variableReconciliation.orphaned_defs.map(d => (
+                        <div key={d.key} className="d-flex align-items-center gap-1 mb-1">
+                          <span className="badge" style={{ fontSize: 8, background: 'rgba(108,117,125,0.1)', color: '#6c757d', border: '1px solid rgba(108,117,125,0.2)' }}>
+                            {d.key}
+                          </span>
+                          <span className="text-muted" style={{ fontSize: 7 }}>{d.display_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleSection>
+            )
+          )}
+          {onRefreshReconciliation && !variableReconciliation && (
+            <button
+              className="btn btn-sm btn-link p-0 text-muted"
+              style={{ fontSize: 9 }}
+              onClick={onRefreshReconciliation}
+            >
+              <i className="bi bi-arrow-repeat me-1"></i>Check variable reconciliation
+            </button>
+          )}
 
           {/* Diagnostic Tools — shown when a mini-section is selected */}
           {editing && (
