@@ -486,6 +486,18 @@ router.get('/api/admin/orchestration/program/variable-reconciliation', requireAd
   }
 });
 
+// Variable Flow — Execution Readiness
+router.get('/api/admin/orchestration/sections/:id/execution-readiness', requireAdmin, async (req, res) => {
+  try {
+    const { validateSectionExecutionReadiness } = require('../../services/variableFlowService');
+    const enrollmentId = req.query.enrollmentId as string | undefined;
+    const data = await validateSectionExecutionReadiness(req.params.id, enrollmentId);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Prompt Validation & Preview
 router.get('/api/admin/orchestration/validate/prompt/:lessonId/:enrollmentId', requireAdmin, handleValidatePrompt);
 router.get('/api/admin/orchestration/preview/prompt/:lessonId/:enrollmentId', requireAdmin, handlePreviewPrompt);

@@ -9,6 +9,7 @@ export interface VariableFlowEntry {
   first_set_in: { lesson_id: string; lesson_title: string } | null;
   produced_in: { lesson_id: string; lesson_title: string; mini_section_title: string }[];
   consumed_in: { lesson_id: string; lesson_title: string; mini_section_title: string }[];
+  timeline_violation: boolean;
 }
 
 export interface SectionVariableFlow {
