@@ -47,7 +47,7 @@ export default function AdminOrchestrationPage() {
   const tabProps = { token: token || '', apiUrl: API };
 
   return (
-    <div className="orch-dark" style={{ minHeight: '100vh' }}>
+    <div className="orch-engine">
       <div className="container-fluid py-4" style={{ maxWidth: activeTab === 'mini-sections' ? 1600 : 1200 }}>
 
         {/* Header */}
@@ -63,7 +63,7 @@ export default function AdminOrchestrationPage() {
           </div>
           <div className="d-flex align-items-center gap-2">
             <span className="orch-badge" style={{ fontSize: 11 }}>
-              <span className="orch-dot-pulse" style={{
+              <span style={{
                 width: 6, height: 6, borderRadius: '50%',
                 background: 'var(--orch-accent-green)', display: 'inline-block',
               }} />

@@ -1,59 +1,66 @@
 /* ═══════════════════════════════════════════════════════════════════════════════
-   Orchestration Engine — Dark Theme Design System
-   Scoped under .orch-dark so it does NOT leak into the rest of the admin UI.
+   Orchestration Engine — Light Theme Design System
+   Scoped under .orch-engine so it does NOT leak into the rest of the admin UI.
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 /* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 
-.orch-dark {
-  --orch-bg: #0f1117;
-  --orch-bg-card: #1a1d27;
-  --orch-bg-card-hover: #22263a;
-  --orch-bg-elevated: #252a3a;
-  --orch-bg-input: #151821;
-  --orch-border: rgba(255, 255, 255, 0.06);
-  --orch-border-active: rgba(99, 140, 255, 0.25);
-  --orch-border-glow: rgba(99, 140, 255, 0.15);
-  --orch-text: #e2e8f0;
-  --orch-text-muted: #8892a4;
-  --orch-text-dim: #5a6375;
-  --orch-accent-green: #34d399;
-  --orch-accent-yellow: #fbbf24;
-  --orch-accent-red: #f87171;
-  --orch-accent-blue: #60a5fa;
-  --orch-accent-purple: #a78bfa;
-  --orch-glow-green: 0 0 12px rgba(52, 211, 153, 0.3);
-  --orch-glow-red: 0 0 12px rgba(248, 113, 113, 0.3);
-  --orch-glow-blue: 0 0 12px rgba(96, 165, 250, 0.2);
-  --orch-glow-purple: 0 0 12px rgba(167, 139, 250, 0.2);
+.orch-engine {
+  /* Backgrounds */
+  --orch-bg: #f8fafc;
+  --orch-bg-card: #ffffff;
+  --orch-bg-card-hover: #f8fafc;
+  --orch-bg-elevated: #f1f5f9;
+  --orch-bg-input: #ffffff;
+
+  /* Borders */
+  --orch-border: #e2e8f0;
+  --orch-border-active: rgba(37, 99, 235, 0.3);
+  --orch-border-glow: rgba(37, 99, 235, 0.12);
+
+  /* Text — high contrast on white */
+  --orch-text: #0f172a;
+  --orch-text-muted: #475569;
+  --orch-text-dim: #94a3b8;
+
+  /* Accents — deeper/richer for light backgrounds */
+  --orch-accent-green: #16a34a;
+  --orch-accent-yellow: #d97706;
+  --orch-accent-red: #dc2626;
+  --orch-accent-blue: #2563eb;
+  --orch-accent-purple: #7c3aed;
+
+  /* Glow — disabled for light theme */
+  --orch-glow-green: none;
+  --orch-glow-red: none;
+  --orch-glow-blue: none;
+  --orch-glow-purple: none;
+
+  /* Radii */
   --orch-radius: 10px;
   --orch-radius-sm: 6px;
   --orch-radius-lg: 14px;
-  --orch-shadow-card: 0 2px 16px rgba(0, 0, 0, 0.3);
-  --orch-shadow-hover: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --orch-glass-bg: rgba(26, 29, 39, 0.7);
-  --orch-glass-border: rgba(255, 255, 255, 0.04);
 
+  /* Shadows — soft elevation */
+  --orch-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --orch-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* Glass → clean solid surfaces */
+  --orch-glass-bg: rgba(255, 255, 255, 0.9);
+  --orch-glass-border: rgba(0, 0, 0, 0.06);
+
+  /* Page defaults */
   background: var(--orch-bg);
   color: var(--orch-text);
+  min-height: 100vh;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 /* ─── Keyframe Animations ───────────────────────────────────────────────────── */
 
 @keyframes orchFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes orchPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes orchGlowPulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.2); }
-  50% { box-shadow: 0 0 18px rgba(52, 211, 153, 0.45); }
 }
 
 @keyframes orchShimmer {
@@ -61,16 +68,11 @@
   100% { background-position: 200% 0; }
 }
 
-@keyframes orchDotPulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.4); opacity: 0.6; }
-}
-
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .orch-dark *,
-  .orch-dark *::before,
-  .orch-dark *::after {
+  .orch-engine *,
+  .orch-engine *::before,
+  .orch-engine *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -79,56 +81,53 @@
 
 /* ─── Animation Utility Classes ─────────────────────────────────────────────── */
 
-.orch-dark .orch-fade-in {
-  animation: orchFadeIn 0.3s ease-out both;
+.orch-engine .orch-fade-in {
+  animation: orchFadeIn 0.2s ease-out both;
 }
 
-.orch-dark .orch-fade-in-delay-1 { animation-delay: 0.05s; }
-.orch-dark .orch-fade-in-delay-2 { animation-delay: 0.1s; }
-.orch-dark .orch-fade-in-delay-3 { animation-delay: 0.15s; }
+.orch-engine .orch-fade-in-delay-1 { animation-delay: 0.05s; }
+.orch-engine .orch-fade-in-delay-2 { animation-delay: 0.1s; }
+.orch-engine .orch-fade-in-delay-3 { animation-delay: 0.15s; }
 
-.orch-dark .orch-pulse {
-  animation: orchPulse 2s ease-in-out infinite;
-}
-
-.orch-dark .orch-glow-pulse {
-  animation: orchGlowPulse 2.5s ease-in-out infinite;
-}
-
-.orch-dark .orch-shimmer {
+.orch-engine .orch-shimmer {
   background: linear-gradient(
     90deg,
-    var(--orch-bg-card) 25%,
-    var(--orch-bg-elevated) 50%,
-    var(--orch-bg-card) 75%
+    #e2e8f0 25%,
+    #f8fafc 50%,
+    #e2e8f0 75%
   );
   background-size: 200% 100%;
   animation: orchShimmer 1.5s ease-in-out infinite;
 }
 
+/* Dot pulse — simplified to solid (no animation) */
+.orch-dot-pulse {
+  /* no animation in light theme */
+}
+
 /* ─── Bootstrap Card Overrides ──────────────────────────────────────────────── */
 
-.orch-dark .card {
+.orch-engine .card {
   background: var(--orch-bg-card);
   border: 1px solid var(--orch-border);
   border-radius: var(--orch-radius);
   box-shadow: var(--orch-shadow-card);
   color: var(--orch-text);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.orch-dark .card:hover {
+.orch-engine .card:hover {
   border-color: var(--orch-border-glow);
 }
 
-.orch-dark .card-header {
+.orch-engine .card-header {
   background: transparent;
   border-bottom: 1px solid var(--orch-border);
   color: var(--orch-text);
   padding: 0.75rem 1rem;
 }
 
-.orch-dark .card-body {
+.orch-engine .card-body {
   color: var(--orch-text);
 }
 
@@ -139,14 +138,13 @@
   border: 1px solid var(--orch-border);
   border-radius: var(--orch-radius);
   box-shadow: var(--orch-shadow-card);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
   overflow: hidden;
 }
 
 .orch-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--orch-shadow-hover);
-  border-color: var(--orch-border-glow);
 }
 
 .orch-card-header {
@@ -190,12 +188,11 @@
   flex-shrink: 0;
 }
 
-.orch-status-dot--healthy { background: var(--orch-accent-green); box-shadow: var(--orch-glow-green); }
-.orch-status-dot--active { background: var(--orch-accent-blue); box-shadow: var(--orch-glow-blue); }
+.orch-status-dot--healthy { background: var(--orch-accent-green); }
+.orch-status-dot--active { background: var(--orch-accent-blue); }
 .orch-status-dot--degraded { background: var(--orch-accent-yellow); }
-.orch-status-dot--critical { background: var(--orch-accent-red); box-shadow: var(--orch-glow-red); }
+.orch-status-dot--critical { background: var(--orch-accent-red); }
 .orch-status-dot--inactive { background: var(--orch-text-dim); }
-.orch-status-dot--pulse { animation: orchDotPulse 2s ease-in-out infinite; }
 
 /* ─── StatusBadge Component Styles ──────────────────────────────────────────── */
 
@@ -210,6 +207,8 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   white-space: nowrap;
+  background: var(--orch-bg-elevated);
+  color: var(--orch-text-muted);
 }
 
 .orch-badge--sm {
@@ -217,20 +216,16 @@
   font-size: 0.6rem;
 }
 
-.orch-badge--healthy { background: rgba(52, 211, 153, 0.15); color: var(--orch-accent-green); }
+.orch-badge--healthy { background: rgba(22, 163, 74, 0.1); color: #166534; }
 .orch-badge--active,
-.orch-badge--running { background: rgba(96, 165, 250, 0.15); color: var(--orch-accent-blue); }
+.orch-badge--running { background: rgba(37, 99, 235, 0.1); color: #1e40af; }
 .orch-badge--degraded,
-.orch-badge--pending { background: rgba(251, 191, 36, 0.15); color: var(--orch-accent-yellow); }
+.orch-badge--pending { background: rgba(217, 119, 6, 0.1); color: #92400e; }
 .orch-badge--critical,
-.orch-badge--error { background: rgba(248, 113, 113, 0.15); color: var(--orch-accent-red); }
+.orch-badge--error { background: rgba(220, 38, 38, 0.1); color: #991b1b; }
 .orch-badge--inactive,
-.orch-badge--idle { background: rgba(90, 99, 117, 0.2); color: var(--orch-text-dim); }
-.orch-badge--info { background: rgba(167, 139, 250, 0.15); color: var(--orch-accent-purple); }
-
-.orch-badge--glow-green { box-shadow: var(--orch-glow-green); }
-.orch-badge--glow-red { box-shadow: var(--orch-glow-red); }
-.orch-badge--glow-blue { box-shadow: var(--orch-glow-blue); }
+.orch-badge--idle { background: rgba(148, 163, 184, 0.15); color: var(--orch-text-dim); }
+.orch-badge--info { background: rgba(124, 58, 237, 0.1); color: #5b21b6; }
 
 /* ─── MetricTile Component Styles ───────────────────────────────────────────── */
 
@@ -242,12 +237,21 @@
   text-align: center;
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: var(--orch-shadow-card);
 }
 
 .orch-metric:hover {
   transform: translateY(-2px);
   box-shadow: var(--orch-shadow-hover);
+}
+
+.orch-metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 
 .orch-metric-value {
@@ -278,29 +282,35 @@
   margin-top: 0.25rem;
 }
 
+.orch-metric-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
 .orch-metric-trend {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
   font-size: 0.7rem;
   font-weight: 600;
-  margin-top: 0.35rem;
 }
 
 .orch-metric-trend--up { color: var(--orch-accent-green); }
 .orch-metric-trend--down { color: var(--orch-accent-red); }
 .orch-metric-trend--stable { color: var(--orch-text-dim); }
 
-/* Subtle top-edge gradient glow */
+/* Subtle top accent line */
 .orch-metric::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
+  height: 3px;
   border-radius: var(--orch-radius) var(--orch-radius) 0 0;
-  opacity: 0.6;
 }
 
 .orch-metric--green::before { background: var(--orch-accent-green); }
@@ -311,10 +321,8 @@
 /* ─── ContextBar Component Styles ───────────────────────────────────────────── */
 
 .orch-context-bar {
-  background: var(--orch-glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--orch-glass-border);
+  background: var(--orch-bg-card);
+  border: 1px solid var(--orch-border);
   border-radius: var(--orch-radius);
   padding: 0.75rem 1.25rem;
   display: flex;
@@ -322,41 +330,56 @@
   justify-content: space-between;
   gap: 1.5rem;
   margin-bottom: 1.25rem;
+  box-shadow: var(--orch-shadow-card);
 }
 
+.orch-context-bar-title,
 .orch-context-title {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--orch-text);
 }
 
+.orch-context-bar-desc,
 .orch-context-desc {
   font-size: 0.7rem;
   color: var(--orch-text-muted);
   margin-top: 0.1rem;
 }
 
+.orch-context-bar-info {
+  flex-shrink: 0;
+}
+
+.orch-context-bar-metrics,
 .orch-context-metrics {
   display: flex;
   gap: 1.5rem;
   align-items: center;
 }
 
+.orch-context-bar-metric,
 .orch-context-metric-item {
   text-align: center;
 }
 
+.orch-context-bar-metric-value,
 .orch-context-metric-value {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--orch-text);
 }
 
+.orch-context-bar-metric-label,
 .orch-context-metric-label {
   font-size: 0.6rem;
   color: var(--orch-text-dim);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.orch-context-bar-actions {
+  flex-shrink: 0;
 }
 
 /* ─── InsightPanel Component Styles ─────────────────────────────────────────── */
@@ -383,20 +406,20 @@
 }
 
 .orch-insight-item:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--orch-bg-elevated);
 }
 
-.orch-insight-item--critical {
-  border-left: 3px solid var(--orch-accent-red);
-  background: rgba(248, 113, 113, 0.03);
+.orch-insight-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
 }
 
-.orch-insight-item--warning {
-  border-left: 3px solid var(--orch-accent-yellow);
-}
-
-.orch-insight-item--info {
-  border-left: 3px solid var(--orch-accent-blue);
+.orch-insight-message {
+  flex: 1;
+  color: var(--orch-text);
 }
 
 .orch-insight-empty {
@@ -415,9 +438,9 @@
   border-radius: var(--orch-radius-sm);
   background: linear-gradient(
     90deg,
-    var(--orch-bg-card) 25%,
-    var(--orch-bg-elevated) 50%,
-    var(--orch-bg-card) 75%
+    #e2e8f0 25%,
+    #f8fafc 50%,
+    #e2e8f0 75%
   );
   background-size: 200% 100%;
   animation: orchShimmer 1.5s ease-in-out infinite;
@@ -441,22 +464,22 @@
 
 /* ─── Bootstrap Table Overrides ─────────────────────────────────────────────── */
 
-.orch-dark .table {
+.orch-engine .table {
   color: var(--orch-text);
   font-size: 0.8rem;
   --bs-table-bg: transparent;
   --bs-table-color: var(--orch-text);
-  --bs-table-hover-bg: rgba(255, 255, 255, 0.03);
+  --bs-table-hover-bg: #f8fafc;
   --bs-table-hover-color: var(--orch-text);
-  --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
+  --bs-table-striped-bg: #f8fafc;
   border-color: var(--orch-border);
 }
 
-.orch-dark .table > thead {
-  background: rgba(255, 255, 255, 0.03);
+.orch-engine .table > thead {
+  background: #f1f5f9;
 }
 
-.orch-dark .table > thead > tr > th {
+.orch-engine .table > thead > tr > th {
   color: var(--orch-text-muted);
   font-size: 0.7rem;
   font-weight: 600;
@@ -466,33 +489,33 @@
   padding: 0.6rem 0.75rem;
 }
 
-.orch-dark .table > tbody > tr > td {
+.orch-engine .table > tbody > tr > td {
   border-bottom: 1px solid var(--orch-border);
   padding: 0.55rem 0.75rem;
   vertical-align: middle;
 }
 
-.orch-dark .table > tbody > tr:last-child > td {
+.orch-engine .table > tbody > tr:last-child > td {
   border-bottom: none;
 }
 
-.orch-dark .table-light {
-  --bs-table-bg: rgba(255, 255, 255, 0.03);
+.orch-engine .table-light {
+  --bs-table-bg: #f1f5f9;
   --bs-table-color: var(--orch-text-muted);
 }
 
-.orch-dark .table-active {
-  --bs-table-bg: rgba(96, 165, 250, 0.08);
+.orch-engine .table-active {
+  --bs-table-bg: rgba(37, 99, 235, 0.06);
 }
 
 /* ─── Bootstrap Nav Tabs Overrides ──────────────────────────────────────────── */
 
-.orch-dark .nav-tabs {
+.orch-engine .nav-tabs {
   border-bottom: 1px solid var(--orch-border);
   gap: 0;
 }
 
-.orch-dark .nav-tabs .nav-link {
+.orch-engine .nav-tabs .nav-link {
   color: var(--orch-text-muted);
   border: none;
   border-bottom: 2px solid transparent;
@@ -500,26 +523,25 @@
   padding: 0.6rem 1rem;
   font-size: 0.78rem;
   font-weight: 500;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
   background: transparent;
 }
 
-.orch-dark .nav-tabs .nav-link:hover {
+.orch-engine .nav-tabs .nav-link:hover {
   color: var(--orch-text);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--orch-bg-elevated);
   border-color: transparent;
 }
 
-.orch-dark .nav-tabs .nav-link.active {
+.orch-engine .nav-tabs .nav-link.active {
   color: var(--orch-accent-blue);
   background: transparent;
   border-bottom: 2px solid var(--orch-accent-blue);
-  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.15);
 }
 
 /* ─── Sub-tab pills ─────────────────────────────────────────────────────────── */
 
-.orch-dark .nav-pills .nav-link {
+.orch-engine .nav-pills .nav-link {
   color: var(--orch-text-muted);
   background: transparent;
   border: 1px solid var(--orch-border);
@@ -527,44 +549,44 @@
   padding: 0.35rem 0.85rem;
   font-size: 0.75rem;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
-.orch-dark .nav-pills .nav-link:hover {
-  background: rgba(255, 255, 255, 0.04);
+.orch-engine .nav-pills .nav-link:hover {
+  background: var(--orch-bg-elevated);
   color: var(--orch-text);
 }
 
-.orch-dark .nav-pills .nav-link.active {
-  background: rgba(96, 165, 250, 0.12);
+.orch-engine .nav-pills .nav-link.active {
+  background: rgba(37, 99, 235, 0.08);
   color: var(--orch-accent-blue);
-  border-color: rgba(96, 165, 250, 0.3);
+  border-color: rgba(37, 99, 235, 0.25);
 }
 
 /* ─── Bootstrap Form Overrides ──────────────────────────────────────────────── */
 
-.orch-dark .form-control,
-.orch-dark .form-select {
+.orch-engine .form-control,
+.orch-engine .form-select {
   background: var(--orch-bg-input);
   border: 1px solid var(--orch-border);
   color: var(--orch-text);
   border-radius: var(--orch-radius-sm);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.orch-dark .form-control:focus,
-.orch-dark .form-select:focus {
+.orch-engine .form-control:focus,
+.orch-engine .form-select:focus {
   background: var(--orch-bg-input);
   border-color: var(--orch-accent-blue);
   color: var(--orch-text);
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
-.orch-dark .form-control::placeholder {
+.orch-engine .form-control::placeholder {
   color: var(--orch-text-dim);
 }
 
-.orch-dark .form-label {
+.orch-engine .form-label {
   color: var(--orch-text-muted);
   font-size: 0.7rem;
   font-weight: 600;
@@ -572,191 +594,173 @@
   letter-spacing: 0.04em;
 }
 
-.orch-dark .form-check-input {
+.orch-engine .form-check-input {
   background-color: var(--orch-bg-input);
   border-color: var(--orch-border);
 }
 
-.orch-dark .form-check-input:checked {
+.orch-engine .form-check-input:checked {
   background-color: var(--orch-accent-blue);
   border-color: var(--orch-accent-blue);
 }
 
-.orch-dark .form-check-label {
+.orch-engine .form-check-label {
   color: var(--orch-text);
 }
 
 /* ─── Bootstrap Button Overrides ────────────────────────────────────────────── */
 
-.orch-dark .btn-primary {
+.orch-engine .btn-primary {
   background: var(--orch-accent-blue);
   border-color: var(--orch-accent-blue);
-  color: #0f1117;
+  color: #ffffff;
   font-weight: 600;
 }
 
-.orch-dark .btn-primary:hover {
-  background: #4d94f8;
-  border-color: #4d94f8;
-  box-shadow: var(--orch-glow-blue);
+.orch-engine .btn-primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
-.orch-dark .btn-outline-primary {
+.orch-engine .btn-outline-primary {
   color: var(--orch-accent-blue);
-  border-color: rgba(96, 165, 250, 0.3);
+  border-color: rgba(37, 99, 235, 0.3);
   background: transparent;
 }
 
-.orch-dark .btn-outline-primary:hover {
-  background: rgba(96, 165, 250, 0.1);
+.orch-engine .btn-outline-primary:hover {
+  background: rgba(37, 99, 235, 0.06);
   color: var(--orch-accent-blue);
   border-color: var(--orch-accent-blue);
 }
 
-.orch-dark .btn-outline-secondary {
+.orch-engine .btn-outline-secondary {
   color: var(--orch-text-muted);
   border-color: var(--orch-border);
   background: transparent;
 }
 
-.orch-dark .btn-outline-secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
+.orch-engine .btn-outline-secondary:hover {
+  background: var(--orch-bg-elevated);
   color: var(--orch-text);
-  border-color: var(--orch-text-dim);
+  border-color: #cbd5e1;
 }
 
-.orch-dark .btn-outline-danger {
+.orch-engine .btn-outline-danger {
   color: var(--orch-accent-red);
-  border-color: rgba(248, 113, 113, 0.3);
+  border-color: rgba(220, 38, 38, 0.3);
 }
 
-.orch-dark .btn-outline-danger:hover {
-  background: rgba(248, 113, 113, 0.1);
+.orch-engine .btn-outline-danger:hover {
+  background: rgba(220, 38, 38, 0.06);
   border-color: var(--orch-accent-red);
 }
 
-.orch-dark .btn-success {
+.orch-engine .btn-outline-info {
+  color: var(--orch-accent-blue);
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+.orch-engine .btn-outline-info:hover {
+  background: rgba(37, 99, 235, 0.06);
+  border-color: var(--orch-accent-blue);
+}
+
+.orch-engine .btn-success {
   background: var(--orch-accent-green);
   border-color: var(--orch-accent-green);
-  color: #0f1117;
+  color: #ffffff;
 }
 
 /* ─── Bootstrap Badge Overrides ─────────────────────────────────────────────── */
 
-.orch-dark .badge.bg-success { background: rgba(52, 211, 153, 0.15) !important; color: var(--orch-accent-green); }
-.orch-dark .badge.bg-danger { background: rgba(248, 113, 113, 0.15) !important; color: var(--orch-accent-red); }
-.orch-dark .badge.bg-warning { background: rgba(251, 191, 36, 0.15) !important; color: var(--orch-accent-yellow); }
-.orch-dark .badge.bg-info { background: rgba(96, 165, 250, 0.15) !important; color: var(--orch-accent-blue); }
-.orch-dark .badge.bg-primary { background: rgba(96, 165, 250, 0.15) !important; color: var(--orch-accent-blue); }
-.orch-dark .badge.bg-secondary { background: rgba(90, 99, 117, 0.2) !important; color: var(--orch-text-muted); }
-.orch-dark .badge.bg-dark { background: rgba(255, 255, 255, 0.06) !important; color: var(--orch-text-dim); }
+.orch-engine .badge.bg-success { background: rgba(22, 163, 74, 0.1) !important; color: #166534; }
+.orch-engine .badge.bg-danger { background: rgba(220, 38, 38, 0.1) !important; color: #991b1b; }
+.orch-engine .badge.bg-warning { background: rgba(217, 119, 6, 0.1) !important; color: #92400e; }
+.orch-engine .badge.bg-info { background: rgba(37, 99, 235, 0.1) !important; color: #1e40af; }
+.orch-engine .badge.bg-primary { background: rgba(37, 99, 235, 0.1) !important; color: #1e40af; }
+.orch-engine .badge.bg-secondary { background: rgba(100, 116, 139, 0.12) !important; color: #475569; }
+.orch-engine .badge.bg-dark { background: rgba(15, 23, 42, 0.08) !important; color: #334155; }
 
 /* ─── Bootstrap Alert Overrides ─────────────────────────────────────────────── */
 
-.orch-dark .alert-danger {
-  background: rgba(248, 113, 113, 0.08);
-  border: 1px solid rgba(248, 113, 113, 0.2);
-  color: var(--orch-accent-red);
+.orch-engine .alert-danger {
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  color: #991b1b;
 }
 
-.orch-dark .alert-warning {
-  background: rgba(251, 191, 36, 0.08);
-  border: 1px solid rgba(251, 191, 36, 0.2);
-  color: var(--orch-accent-yellow);
+.orch-engine .alert-warning {
+  background: rgba(217, 119, 6, 0.06);
+  border: 1px solid rgba(217, 119, 6, 0.15);
+  color: #92400e;
 }
 
-.orch-dark .alert-info {
-  background: rgba(96, 165, 250, 0.08);
-  border: 1px solid rgba(96, 165, 250, 0.2);
-  color: var(--orch-accent-blue);
+.orch-engine .alert-info {
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  color: #1e40af;
 }
 
-.orch-dark .alert-success {
-  background: rgba(52, 211, 153, 0.08);
-  border: 1px solid rgba(52, 211, 153, 0.2);
-  color: var(--orch-accent-green);
+.orch-engine .alert-success {
+  background: rgba(22, 163, 74, 0.06);
+  border: 1px solid rgba(22, 163, 74, 0.15);
+  color: #166534;
 }
 
 /* ─── Bootstrap Progress Overrides ──────────────────────────────────────────── */
 
-.orch-dark .progress {
-  background: rgba(255, 255, 255, 0.06);
+.orch-engine .progress {
+  background: #e2e8f0;
   border-radius: 999px;
   height: 6px;
 }
 
-.orch-dark .progress-bar {
+.orch-engine .progress-bar {
   border-radius: 999px;
 }
 
-.orch-dark .progress-bar.bg-success { background: var(--orch-accent-green) !important; }
-.orch-dark .progress-bar.bg-info { background: var(--orch-accent-blue) !important; }
-.orch-dark .progress-bar.bg-warning { background: var(--orch-accent-yellow) !important; }
-.orch-dark .progress-bar.bg-danger { background: var(--orch-accent-red) !important; }
+.orch-engine .progress-bar.bg-success { background: var(--orch-accent-green) !important; }
+.orch-engine .progress-bar.bg-info { background: var(--orch-accent-blue) !important; }
+.orch-engine .progress-bar.bg-warning { background: var(--orch-accent-yellow) !important; }
+.orch-engine .progress-bar.bg-danger { background: var(--orch-accent-red) !important; }
 
 /* ─── Bootstrap Spinner Overrides ───────────────────────────────────────────── */
 
-.orch-dark .spinner-border {
+.orch-engine .spinner-border {
   color: var(--orch-accent-blue);
 }
 
 /* ─── Text Utility Overrides ────────────────────────────────────────────────── */
 
-.orch-dark .text-muted {
+.orch-engine .text-muted {
   color: var(--orch-text-muted) !important;
 }
 
-.orch-dark .fw-semibold,
-.orch-dark .fw-bold {
+.orch-engine .fw-semibold,
+.orch-engine .fw-bold {
   color: var(--orch-text);
 }
 
-.orch-dark .text-success { color: var(--orch-accent-green) !important; }
-.orch-dark .text-danger { color: var(--orch-accent-red) !important; }
-.orch-dark .text-warning { color: var(--orch-accent-yellow) !important; }
+.orch-engine .text-success { color: var(--orch-accent-green) !important; }
+.orch-engine .text-danger { color: var(--orch-accent-red) !important; }
+.orch-engine .text-warning { color: var(--orch-accent-yellow) !important; }
 
 /* ─── Modal Overrides ───────────────────────────────────────────────────────── */
 
-.orch-dark .modal-content {
-  background: var(--orch-bg-elevated);
+.orch-engine .modal-content {
+  background: var(--orch-bg-card);
   border: 1px solid var(--orch-border);
   color: var(--orch-text);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
 
-.orch-dark .modal-header {
+.orch-engine .modal-header {
   border-bottom: 1px solid var(--orch-border);
 }
 
-.orch-dark .modal-footer {
+.orch-engine .modal-footer {
   border-top: 1px solid var(--orch-border);
-}
-
-.orch-dark .modal-backdrop {
-  background: rgba(0, 0, 0, 0.7);
-}
-
-.orch-dark .btn-close {
-  filter: invert(1) grayscale(100%) brightness(200%);
-}
-
-/* ─── Scrollbar Styling ─────────────────────────────────────────────────────── */
-
-.orch-dark ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.orch-dark ::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.orch-dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.orch-dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ─── Page Header ───────────────────────────────────────────────────────────── */
@@ -783,7 +787,7 @@
 
 /* ─── Expanded Row (drill-down) ─────────────────────────────────────────────── */
 
-.orch-dark .orch-expanded-row {
+.orch-engine .orch-expanded-row {
   background: var(--orch-bg-elevated);
   border-left: 3px solid var(--orch-accent-blue);
   padding: 1rem;
@@ -791,36 +795,36 @@
 
 /* ─── Misc Utilities ────────────────────────────────────────────────────────── */
 
-.orch-dark .bg-white {
+.orch-engine .bg-white {
   background: var(--orch-bg-card) !important;
 }
 
-.orch-dark .shadow-sm {
+.orch-engine .shadow-sm {
   box-shadow: var(--orch-shadow-card) !important;
 }
 
-.orch-dark .border-0 {
+.orch-engine .border-0 {
   border: 1px solid var(--orch-border) !important;
 }
 
-.orch-dark code {
-  background: rgba(255, 255, 255, 0.06);
+.orch-engine code {
+  background: rgba(37, 99, 235, 0.06);
   color: var(--orch-accent-purple);
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
 }
 
-.orch-dark textarea.form-control {
+.orch-engine textarea.form-control {
   background: var(--orch-bg-input);
   color: var(--orch-text);
 }
 
-.orch-dark a {
+.orch-engine a {
   color: var(--orch-accent-blue);
 }
 
-.orch-dark a:hover {
-  color: #4d94f8;
+.orch-engine a:hover {
+  color: #1d4ed8;
 }
 
 /* ─── Tab Navigation ──────────────────────────────────────────────────────── */
@@ -839,20 +843,20 @@
   padding: 8px 14px;
   border-radius: var(--orch-radius-sm) var(--orch-radius-sm) 0 0;
   cursor: pointer;
-  transition: color 0.2s, background 0.2s, box-shadow 0.2s;
+  transition: color 0.15s, background 0.15s;
   position: relative;
   white-space: nowrap;
 }
 
 .orch-tab-btn:hover {
   color: var(--orch-text);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--orch-bg-elevated);
 }
 
 .orch-tab-btn-active {
   color: var(--orch-accent-blue);
   background: var(--orch-bg-card);
-  box-shadow: inset 0 -2px 0 var(--orch-accent-blue), var(--orch-glow-blue);
+  box-shadow: inset 0 -2px 0 var(--orch-accent-blue);
 }
 
 .orch-tab-btn-active:hover {
@@ -867,8 +871,8 @@
 
 /* ─── Table Row States ────────────────────────────────────────────────────── */
 
-.orch-dark .orch-row-active,
-.orch-dark .orch-row-active td {
+.orch-engine .orch-row-active,
+.orch-engine .orch-row-active td {
   background: var(--orch-bg-elevated) !important;
   border-color: var(--orch-border-active) !important;
 }
