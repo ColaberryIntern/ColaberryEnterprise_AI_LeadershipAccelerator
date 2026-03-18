@@ -286,7 +286,31 @@ export async function handleUpdateSessionFields(req: Request, res: Response) {
   try {
     const session = await LiveSession.findByPk(req.params.id as string);
     if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    // Validate scheduling fields if provided
+    const errors: { field: string; message: string }[] = [];
+    if (req.body.session_date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(req.body.session_date)) {
+      errors.push({ field: 'session_date', message: 'Must be YYYY-MM-DD format' });
+    }
+    if (req.body.start_time !== undefined && !/^\d{2}:\d{2}(:\d{2})?$/.test(req.body.start_time)) {
+      errors.push({ field: 'start_time', message: 'Must be HH:MM or HH:MM:SS format' });
+    }
+    if (req.body.end_time !== undefined && !/^\d{2}:\d{2}(:\d{2})?$/.test(req.body.end_time)) {
+      errors.push({ field: 'end_time', message: 'Must be HH:MM or HH:MM:SS format' });
+    }
+    if (req.body.session_type !== undefined && !['core', 'lab'].includes(req.body.session_type)) {
+      errors.push({ field: 'session_type', message: 'Must be "core" or "lab"' });
+    }
+    if (req.body.status !== undefined && !['scheduled', 'live', 'completed', 'cancelled'].includes(req.body.status)) {
+      errors.push({ field: 'status', message: 'Must be scheduled, live, completed, or cancelled' });
+    }
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Validation failed', details: errors });
+    }
+
     const allowedFields = [
+      'title', 'description', 'session_date', 'start_time', 'end_time',
+      'session_type', 'status',
       'minimum_section_completion_pct', 'required_variable_keys',
       'email_trigger_config', 'reminder_trigger_config',
     ];
@@ -323,7 +347,7 @@ export async function handleGetProgramModules(req: Request, res: Response) {
 
 export async function handleGetProgramSessions(req: Request, res: Response) {
   try {
-    const cohortId = await getFirstCohortId();
+    const cohortId = (req.query.cohort_id as string) || await getFirstCohortId();
     if (!cohortId) return res.json([]);
     const sessions = await LiveSession.findAll({
       where: { cohort_id: cohortId },

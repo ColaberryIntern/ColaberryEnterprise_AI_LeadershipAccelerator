@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { EntityNetwork, BusinessEntityNetwork } from '../../../../services/intelligenceApi';
 import BusinessMapTab from './BusinessMapTab';
+import CampaignGraphTab from './CampaignGraphTab';
 import EntityBrowserTab from './EntityBrowserTab';
 import SchemaExplorerTab from './SchemaExplorerTab';
 import DeptMapTab from './DeptMapTab';
@@ -12,10 +13,11 @@ interface Props {
   onRefresh: () => void;
 }
 
-type TabKey = 'map' | 'depts' | 'entities' | 'schema';
+type TabKey = 'map' | 'campaign' | 'depts' | 'entities' | 'schema';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'map', label: 'Map' },
+  { key: 'campaign', label: 'Campaign' },
   { key: 'depts', label: 'Depts' },
   { key: 'entities', label: 'Entities' },
   { key: 'schema', label: 'Schema' },
@@ -45,6 +47,9 @@ export default function EntityNavigationPanel({ network, businessHierarchy, hier
       <div className="flex-grow-1" style={{ minHeight: 0 }}>
         {activeTab === 'map' && (
           <BusinessMapTab hierarchy={businessHierarchy} loading={hierarchyLoading} />
+        )}
+        {activeTab === 'campaign' && (
+          <CampaignGraphTab />
         )}
         {activeTab === 'depts' && (
           <DeptMapTab />

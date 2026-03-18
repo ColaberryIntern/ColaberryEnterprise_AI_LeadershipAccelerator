@@ -7,6 +7,7 @@ import { scoreMessageEffectiveness } from '../../services/aiMessageService';
 import { calculateMultiTouchAttribution } from '../../services/revenueDashboardService';
 import { parseNaturalLanguageCampaign } from '../../services/campaignBuilderService';
 import { getPersonaArchetypes } from '../../services/testing/testLeadGenerator';
+import { getCampaignGraphData } from '../../services/reporting/campaignGraphService';
 
 const router = Router();
 
@@ -125,6 +126,17 @@ router.post('/api/admin/campaign-builder/parse', requireAdmin, async (req: Reque
 router.get('/api/admin/persona-archetypes', requireAdmin, async (_req: Request, res: Response) => {
   try {
     res.json(getPersonaArchetypes());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Campaign Intelligence Graph ─────────────────────────────────────────
+
+router.get('/api/admin/campaign-intelligence/graph', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const data = await getCampaignGraphData();
+    res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

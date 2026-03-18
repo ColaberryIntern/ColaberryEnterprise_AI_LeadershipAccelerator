@@ -396,4 +396,35 @@ export const getStrategyAgents = () =>
 export const runDepartmentStrategy = (slug: string) =>
   api.post<any>(`/departments/${slug}/run-strategy`);
 
+// ─── Campaign Intelligence Graph ────────────────────────────────────────
+
+export interface CampaignGraphNode {
+  id: string;
+  type: 'entry_point' | 'campaign' | 'lead_pool' | 'conversion';
+  label: string;
+  count: number;
+  metrics: {
+    conversion_rate?: number;
+    messages_sent?: number;
+    active_users?: number;
+  };
+}
+
+export interface CampaignGraphEdge {
+  from: string;
+  to: string;
+  label: string;
+  volume?: number;
+}
+
+export interface CampaignGraphData {
+  nodes: CampaignGraphNode[];
+  edges: CampaignGraphEdge[];
+}
+
+export const getCampaignGraph = () =>
+  axios.get<CampaignGraphData>('/api/admin/campaign-intelligence/graph', {
+    headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
+  });
+
 export default api;
