@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
-import { forceX, forceY } from 'd3-force';
 import { getCampaignGraph, CampaignGraphData, CampaignGraphNode } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
@@ -12,13 +11,16 @@ const NODE_COLORS: Record<string, { color: string; bg: string }> = {
   conversion:  { color: '#38a169', bg: '#f0fff4' },
 };
 
-// Hierarchy level for vertical positioning
-const TYPE_LEVEL: Record<string, number> = {
+// Column index for left→right funnel layout
+const COLUMN_CONFIG: Record<string, number> = {
   entry_point: 0,
   lead_pool: 1,
   campaign: 2,
   conversion: 3,
 };
+
+const COLUMN_X_PCT = [0.12, 0.38, 0.62, 0.88];
+const COLUMN_LABELS = ['Entry Points', 'Lead Pools', 'Campaigns', 'Conversions'];
 
 interface GraphNode {
   id: string;
@@ -28,8 +30,10 @@ interface GraphNode {
   color: string;
   bg: string;
   val: number;
-  level: number;
+  col: number;
   metrics: CampaignGraphNode['metrics'];
+  fx?: number;
+  fy?: number;
   x?: number;
   y?: number;
 }
@@ -47,6 +51,10 @@ function formatCount(n: number): string {
   return String(n);
 }
 
+function isBackLink(srcType: string, tgtType: string): boolean {
+  return (COLUMN_CONFIG[srcType] ?? 2) > (COLUMN_CONFIG[tgtType] ?? 2);
+}
+
 interface CampaignGraphTabProps {
   fullWidth?: boolean;
 }
@@ -54,13 +62,14 @@ interface CampaignGraphTabProps {
 export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTabProps) {
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: fullWidth ? 900 : 380, height: fullWidth ? 500 : 600 });
+  const [dimensions, setDimensions] = useState({ width: fullWidth ? 900 : 380, height: fullWidth ? 520 : 600 });
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [data, setData] = useState<CampaignGraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isVisible, setIsVisible] = useState(true);
 
   // Fetch graph data once
   useEffect(() => {
@@ -84,7 +93,18 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     return () => ro.disconnect();
   }, []);
 
-  // Build graph data
+  // Pause particles when not visible
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    io.observe(containerRef.current);
+    return () => io.disconnect();
+  }, []);
+
+  // Build graph data with fixed positions
   const graphData = useMemo(() => {
     if (!data) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
     const maxCount = Math.max(...data.nodes.map((n) => n.count), 1);
@@ -99,9 +119,27 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         color: colors.color,
         bg: colors.bg,
         val: fullWidth ? (12 + (n.count / maxCount) * 30) : (8 + (n.count / maxCount) * 22),
-        level: TYPE_LEVEL[n.type] ?? 2,
+        col: COLUMN_CONFIG[n.type] ?? 2,
         metrics: n.metrics,
       };
+    });
+
+    // Assign deterministic fx/fy positions by column
+    const columns = new Map<number, GraphNode[]>();
+    nodes.forEach((n) => {
+      if (!columns.has(n.col)) columns.set(n.col, []);
+      columns.get(n.col)!.push(n);
+    });
+
+    const paddingY = fullWidth ? 50 : 40;
+    columns.forEach((colNodes, colIdx) => {
+      const x = COLUMN_X_PCT[colIdx] * dimensions.width;
+      const usableHeight = dimensions.height - paddingY * 2;
+      const spacing = usableHeight / (colNodes.length + 1);
+      colNodes.forEach((n, i) => {
+        n.fx = x;
+        n.fy = paddingY + spacing * (i + 1);
+      });
     });
 
     const nodeIds = new Set(nodes.map((n) => n.id));
@@ -115,36 +153,46 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       }));
 
     return { nodes, links };
-  }, [data]);
+  }, [data, dimensions.width, dimensions.height, fullWidth]);
 
-  // Configure forces
+  // Max volume for scaling
+  const maxVolume = useMemo(
+    () => Math.max(...graphData.links.map((l) => l.volume), 1),
+    [graphData.links]
+  );
+
+  // Connected set for path highlighting
+  const connectedSet = useMemo(() => {
+    if (!selectedNode) return new Set<string>();
+    const set = new Set<string>();
+    const adj = new Map<string, string[]>();
+    graphData.links.forEach((l) => {
+      const s = typeof l.source === 'object' ? (l.source as any).id : l.source;
+      const t = typeof l.target === 'object' ? (l.target as any).id : l.target;
+      if (!adj.has(s)) adj.set(s, []);
+      if (!adj.has(t)) adj.set(t, []);
+      adj.get(s)!.push(t);
+      adj.get(t)!.push(s);
+    });
+    const queue = [selectedNode.id];
+    set.add(selectedNode.id);
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const nb of adj.get(cur) || []) {
+        if (!set.has(nb)) { set.add(nb); queue.push(nb); }
+      }
+    }
+    return set;
+  }, [selectedNode, graphData.links]);
+
+  // Zoom to fit — fast since layout is deterministic
   useEffect(() => {
-    const fg = graphRef.current;
-    if (!fg || !graphData.nodes.length) return;
-
-    fg.d3Force('charge')?.strength(fullWidth ? -500 : -250);
-    fg.d3Force('link')?.distance(fullWidth ? 150 : 70);
-
-    const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
-    fg.d3Force(
-      'y',
-      forceY((node: any) => {
-        const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
-        return -dimensions.height * 0.25 + normalizedLevel * dimensions.height * 0.55;
-      }).strength(fullWidth ? 0.35 : 0.5)
-    );
-    fg.d3Force('x', forceX(0).strength(fullWidth ? 0.05 : 0.1));
-    fg.d3ReheatSimulation();
-  }, [graphData, dimensions.height, fullWidth]);
-
-  // Zoom to fit
-  useEffect(() => {
-    const timer = setTimeout(() => { graphRef.current?.zoomToFit(400, 15); }, 1200);
+    const timer = setTimeout(() => { graphRef.current?.zoomToFit(400, 30); }, 200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [graphData]);
 
   useEffect(() => {
-    const timer = setTimeout(() => { graphRef.current?.zoomToFit(400, 20); }, 300);
+    const timer = setTimeout(() => { graphRef.current?.zoomToFit(400, 30); }, 100);
     return () => clearTimeout(timer);
   }, [dimensions]);
 
@@ -158,14 +206,18 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       const fontSize = fullWidth ? Math.max(13 / globalScale, 4) : Math.max(11 / globalScale, 3);
       const isHighActivity = n.count > 50;
 
+      // Dim if not connected to selected node
+      const dimmed = selectedNode && !connectedSet.has(n.id);
+      if (dimmed) ctx.globalAlpha = 0.12;
+
       // High-activity glow
-      if (isHighActivity && !isHovered) {
+      if (isHighActivity && !isHovered && !dimmed) {
         ctx.beginPath();
         ctx.arc(n.x!, n.y!, radius + 5, 0, 2 * Math.PI);
         ctx.fillStyle = n.bg;
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = dimmed ? 0.05 : 0.4;
         ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = dimmed ? 0.12 : 1;
       }
 
       // Selection ring
@@ -180,7 +232,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       }
 
       // Hover glow
-      if (isHovered) {
+      if (isHovered && !dimmed) {
         ctx.beginPath();
         ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
         ctx.fillStyle = n.bg;
@@ -220,58 +272,89 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       ctx.font = `bold ${Math.max(6 / globalScale, 2)}px sans-serif`;
       ctx.fillStyle = '#fff';
       ctx.fillText(formatCount(n.count), badgeX, badgeY + 0.5);
+
+      // Restore alpha
+      if (dimmed) ctx.globalAlpha = 1;
     },
-    [hoveredNode, selectedNode, fullWidth]
+    [hoveredNode, selectedNode, connectedSet, fullWidth]
   );
 
-  // Link rendering — thickness by volume, with arrow
-  const maxVolume = useMemo(() => Math.max(...graphData.links.map((l) => l.volume), 1), [graphData.links]);
+  // Declarative link helpers
+  const getLinkColor = useCallback((link: any) => {
+    const src = link.source as GraphNode;
+    const tgt = link.target as GraphNode;
+    const volume = (link as GraphLink).volume || 0;
 
-  const paintLink = useCallback(
-    (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-      const src = link.source as GraphNode;
-      const tgt = link.target as GraphNode;
-      if (!src.x || !tgt.x) return;
-
-      const volume = (link as GraphLink).volume || 0;
-      const thickness = 0.8 + (volume / maxVolume) * 3;
-
-      // Line
-      ctx.beginPath();
-      ctx.moveTo(src.x!, src.y!);
-      ctx.lineTo(tgt.x!, tgt.y!);
-      ctx.strokeStyle = `rgba(160, 174, 192, ${0.3 + (volume / maxVolume) * 0.5})`;
-      ctx.lineWidth = thickness / globalScale;
-      ctx.stroke();
-
-      // Arrow at 70% of the way
-      const arrowPos = 0.7;
-      const ax = src.x! + (tgt.x! - src.x!) * arrowPos;
-      const ay = src.y! + (tgt.y! - src.y!) * arrowPos;
-      const angle = Math.atan2(tgt.y! - src.y!, tgt.x! - src.x!);
-      const arrowLen = Math.max(5 / globalScale, 2);
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(ax - arrowLen * Math.cos(angle - 0.4), ay - arrowLen * Math.sin(angle - 0.4));
-      ctx.lineTo(ax - arrowLen * Math.cos(angle + 0.4), ay - arrowLen * Math.sin(angle + 0.4));
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(160, 174, 192, 0.7)';
-      ctx.fill();
-
-      // Volume label at midpoint
-      if (volume > 0) {
-        const midX = (src.x! + tgt.x!) / 2;
-        const midY = (src.y! + tgt.y!) / 2;
-        const labelSize = Math.max(7 / globalScale, 2);
-        ctx.font = `${labelSize}px -apple-system, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(113, 128, 150, 0.75)';
-        ctx.fillText((link as GraphLink).label, midX, midY - 3 / globalScale);
+    // Dim if selection active and link not connected
+    if (selectedNode) {
+      const sId = typeof src === 'object' ? src.id : src;
+      const tId = typeof tgt === 'object' ? tgt.id : tgt;
+      if (!connectedSet.has(sId as string) || !connectedSet.has(tId as string)) {
+        return 'rgba(160, 174, 192, 0.06)';
       }
-    },
-    [maxVolume]
-  );
+    }
+
+    if (typeof src === 'object' && typeof tgt === 'object' && isBackLink(src.type, tgt.type)) {
+      return 'rgba(160, 174, 192, 0.2)';
+    }
+
+    const alpha = 0.3 + (volume / maxVolume) * 0.5;
+    return `rgba(160, 174, 192, ${alpha})`;
+  }, [selectedNode, connectedSet, maxVolume]);
+
+  const getLinkWidth = useCallback((link: any) => {
+    const volume = (link as GraphLink).volume || 0;
+    return 0.8 + (volume / maxVolume) * 3;
+  }, [maxVolume]);
+
+  const getLinkCurvature = useCallback((link: any) => {
+    const src = link.source as GraphNode;
+    const tgt = link.target as GraphNode;
+    if (typeof src === 'object' && typeof tgt === 'object') {
+      return isBackLink(src.type, tgt.type) ? 0.5 : 0;
+    }
+    return 0;
+  }, []);
+
+  const getLinkDash = useCallback((link: any) => {
+    const src = link.source as GraphNode;
+    const tgt = link.target as GraphNode;
+    if (typeof src === 'object' && typeof tgt === 'object' && isBackLink(src.type, tgt.type)) {
+      return [4, 4];
+    }
+    return null as any;
+  }, []);
+
+  const getParticleCount = useCallback((link: any) => {
+    if (!isVisible) return 0;
+    const volume = (link as GraphLink).volume || 0;
+    if (maxVolume === 0 || volume === 0) return 0;
+    return Math.max(1, Math.round((volume / maxVolume) * 4));
+  }, [maxVolume, isVisible]);
+
+  const getParticleSpeed = useCallback((link: any) => {
+    const volume = (link as GraphLink).volume || 0;
+    return 0.004 + (volume / maxVolume) * 0.008;
+  }, [maxVolume]);
+
+  const getParticleWidth = useCallback((link: any) => {
+    const volume = (link as GraphLink).volume || 0;
+    return 1.5 + (volume / maxVolume) * 3;
+  }, [maxVolume]);
+
+  const getParticleColor = useCallback((link: any) => {
+    const tgt = link.target as GraphNode;
+    if (typeof tgt === 'object' && tgt.type) {
+      const colors = NODE_COLORS[tgt.type];
+      return colors ? colors.color + '99' : 'rgba(49, 151, 149, 0.6)';
+    }
+    return 'rgba(49, 151, 149, 0.6)';
+  }, []);
+
+  const getLinkLabel = useCallback((link: any) => {
+    const l = link as GraphLink;
+    return l.volume > 0 ? `${l.label}: ${l.volume} flow` : l.label;
+  }, []);
 
   const handleNodeHover = useCallback((node: any) => {
     setHoveredNode(node as GraphNode | null);
@@ -341,8 +424,41 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         className={fullWidth && selectedNode ? 'flex-grow-1' : 'h-100'}
         style={{ position: 'relative', minHeight: 0 }}
         onMouseMove={handleMouseMove}
-        aria-label="Campaign intelligence graph — interactive. Click nodes for details."
+        aria-label="Campaign intelligence funnel — interactive. Click nodes for details."
       >
+        {/* Column header labels */}
+        {fullWidth && (
+          <div
+            className="d-flex justify-content-between px-3"
+            style={{
+              position: 'absolute',
+              top: 6,
+              left: 0,
+              right: 0,
+              zIndex: 10,
+              pointerEvents: 'none',
+            }}
+          >
+            {COLUMN_LABELS.map((label, i) => (
+              <span
+                key={label}
+                style={{
+                  position: 'absolute',
+                  left: `${COLUMN_X_PCT[i] * 100}%`,
+                  transform: 'translateX(-50%)',
+                  fontSize: '0.6rem',
+                  color: 'var(--color-text-light)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  fontWeight: 600,
+                }}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+
         <ForceGraph2D
           ref={graphRef}
           width={dimensions.width}
@@ -357,12 +473,22 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             ctx.fillStyle = color;
             ctx.fill();
           }}
-          linkCanvasObject={paintLink}
+          linkColor={getLinkColor}
+          linkWidth={getLinkWidth}
+          linkCurvature={getLinkCurvature}
+          linkLineDash={getLinkDash}
+          linkLabel={getLinkLabel}
+          linkDirectionalArrowLength={6}
+          linkDirectionalArrowRelPos={0.7}
+          linkDirectionalArrowColor={() => 'rgba(160, 174, 192, 0.7)'}
+          linkDirectionalParticles={getParticleCount}
+          linkDirectionalParticleSpeed={getParticleSpeed}
+          linkDirectionalParticleWidth={getParticleWidth}
+          linkDirectionalParticleColor={getParticleColor}
           onNodeHover={handleNodeHover}
           onNodeClick={handleNodeClick}
-          cooldownTicks={150}
-          warmupTicks={30}
-          enableNodeDrag={true}
+          cooldownTicks={0}
+          enableNodeDrag={false}
           enableZoomInteraction={true}
           enablePanInteraction={true}
           backgroundColor="transparent"
@@ -396,7 +522,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           <button
             className="btn btn-sm btn-outline-secondary"
             style={{ width: 26, height: 26, padding: 0, fontSize: '0.6rem', background: 'rgba(255,255,255,0.9)' }}
-            onClick={() => graphRef.current?.zoomToFit(400, 10)}
+            onClick={() => graphRef.current?.zoomToFit(400, 30)}
             title="Reset view"
             aria-label="Reset view"
           >

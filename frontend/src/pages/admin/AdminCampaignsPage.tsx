@@ -166,7 +166,7 @@ function AdminCampaignsPage() {
           <span className="fw-semibold" style={{ color: 'var(--color-primary)' }}>Campaign Intelligence Graph</span>
           <span className="text-muted small">Click nodes for details</span>
         </div>
-        <div className="card-body p-0" style={{ height: 480 }}>
+        <div className="card-body p-0" style={{ height: 560 }}>
           <CampaignGraphTab fullWidth />
         </div>
       </div>
