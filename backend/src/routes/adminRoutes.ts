@@ -34,6 +34,8 @@ import deploymentRoutes from './admin/deploymentRoutes';
 import schedulerControlRoutes from './admin/schedulerControlRoutes';
 import agentGovernanceRoutes from './admin/agentGovernanceRoutes';
 import projectOverviewRoutes from './admin/projectOverviewRoutes';
+import testSetupRoutes from './admin/testSetupRoutes';
+import productionCleanupRoutes from './admin/productionCleanupRoute';
 
 const router = Router();
 
@@ -72,5 +74,7 @@ router.use(deploymentRoutes);
 router.use(schedulerControlRoutes);
 router.use(agentGovernanceRoutes);
 router.use(projectOverviewRoutes);
+router.use(testSetupRoutes);
+router.use(productionCleanupRoutes);
 
 export default router;

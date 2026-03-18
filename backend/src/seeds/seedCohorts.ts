@@ -8,7 +8,7 @@ async function seed() {
 
   const cohorts = [
     {
-      name: 'Cohort 1 — March 2026',
+      name: 'Cohort \u2014 March 2026',
       start_date: '2026-03-31',
       core_day: 'Thursday',
       core_time: '1:00–3:00 PM EST',
@@ -18,7 +18,7 @@ async function seed() {
       status: 'open' as const,
     },
     {
-      name: 'Cohort 2 — June 2026',
+      name: 'Cohort \u2014 June 2026',
       start_date: '2026-06-01',
       core_day: 'Thursday',
       core_time: '1:00–3:00 PM EST',
@@ -28,7 +28,7 @@ async function seed() {
       status: 'open' as const,
     },
     {
-      name: 'Cohort 3 — August 2026',
+      name: 'Cohort \u2014 August 2026',
       start_date: '2026-08-03',
       core_day: 'Thursday',
       core_time: '1:00–3:00 PM EST',
