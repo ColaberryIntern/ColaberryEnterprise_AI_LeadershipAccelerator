@@ -190,15 +190,71 @@ function EnrollPage() {
       <section className="section" aria-label="Enrollment Form">
         <div className="container content-narrow">
           {invoiceSubmitted ? (
-            <div className="text-center py-5" role="alert">
-              <h2 className="text-success mb-3">Your Seat is Reserved</h2>
-              <p className="fs-5 mb-4">
-                Our Enterprise AI team will send you an invoice within one business day
-                with payment details and next steps.
-              </p>
-              <p className="text-muted">
-                Questions?{' '}
-                <Link to="/contact">Schedule a call with our team</Link>.
+            <div className="py-4">
+              <div className="text-center mb-4">
+                <h2 className="mb-2" style={{ color: 'var(--color-primary)' }}>
+                  Your Seat is Reserved
+                </h2>
+                <span className="badge bg-warning text-dark fs-6 px-3 py-2">
+                  Pending Payment
+                </span>
+              </div>
+
+              <div className="card border-warning mb-4">
+                <div className="card-body">
+                  <p className="mb-3">
+                    A confirmation email with payment instructions has been sent to{' '}
+                    <strong>{formData.email}</strong>.
+                  </p>
+                  <p className="mb-3">
+                    Your seat is temporarily reserved. To fully confirm your spot,
+                    payment must be completed.
+                  </p>
+                  <p className="text-muted small mb-0">
+                    Seats are only guaranteed once payment is received. Due to limited
+                    capacity, we recommend completing payment as soon as possible.
+                    If you don't see the email, check your spam or promotions folder.
+                  </p>
+                </div>
+              </div>
+
+              <div className="card border-0 shadow-sm p-4 mb-4">
+                <h3 className="h5 mb-3" style={{ color: 'var(--color-primary)' }}>
+                  Next Steps
+                </h3>
+                <ol className="fs-5 mb-0" style={{ lineHeight: 2 }}>
+                  <li>Check your email for the confirmation and payment instructions</li>
+                  <li>Complete payment (credit card or ACH)</li>
+                  <li>Receive your enrollment confirmation and onboarding access</li>
+                </ol>
+              </div>
+
+              <div className="d-flex justify-content-center gap-3 flex-wrap mb-4">
+                <button
+                  className="btn btn-primary btn-lg"
+                  onClick={async () => {
+                    setSubmitting(true);
+                    try {
+                      const res = await api.post('/api/create-invoice', formData);
+                      window.location.href = res.data.payment_link;
+                    } catch {
+                      setServerError('Unable to create payment link. Please try again.');
+                      setInvoiceSubmitted(false);
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  disabled={submitting}
+                >
+                  {submitting ? 'Setting up payment...' : 'Complete Payment Now'}
+                </button>
+                <Link to="/contact" className="btn btn-outline-primary btn-lg">
+                  Schedule an AI Strategy Call
+                </Link>
+              </div>
+
+              <p className="text-center text-muted small">
+                Secure payment via PaySimple (credit card or ACH)
               </p>
             </div>
           ) : (

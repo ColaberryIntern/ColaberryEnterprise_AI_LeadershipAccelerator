@@ -9,6 +9,8 @@ import {
   getEnrollmentByInvoiceId,
 } from '../services/enrollmentService';
 import { listOpenCohorts } from '../services/cohortService';
+import { Cohort } from '../models';
+import { sendInvoiceRequestConfirmation } from '../services/emailService';
 
 export async function handleListOpenCohorts(
   _req: Request,
@@ -85,12 +87,26 @@ export async function handleCreateInvoiceRequest(
     const data = createInvoiceRequestSchema.parse(req.body);
     const enrollment = await createInvoiceEnrollment(data);
 
+    // Send immediate confirmation email with payment instructions (fire-and-forget)
+    const cohort = await Cohort.findByPk(data.cohort_id);
+    if (cohort) {
+      sendInvoiceRequestConfirmation({
+        to: data.email,
+        fullName: data.full_name,
+        cohortName: cohort.name,
+        startDate: cohort.start_date,
+        coreDay: cohort.core_day,
+        coreTime: cohort.core_time,
+        optionalLabDay: cohort.optional_lab_day || undefined,
+      }).catch((err) => console.error('[Enrollment] Invoice confirmation email error:', err));
+    }
+
     console.log(
       `[Enrollment] Invoice request created for ${data.email} (cohort: ${data.cohort_id})`
     );
 
     res.status(201).json({
-      message: 'Your seat is reserved. Our team will send an invoice within 1 business day.',
+      message: 'Your seat is reserved. A confirmation email with payment instructions has been sent.',
       enrollmentId: enrollment.id,
     });
   } catch (error) {

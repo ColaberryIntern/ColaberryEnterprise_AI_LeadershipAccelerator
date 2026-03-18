@@ -110,6 +110,84 @@ export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationDat
   console.log(`[Email] Enrollment confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
+interface InvoiceRequestConfirmationData {
+  to: string;
+  fullName: string;
+  cohortName: string;
+  startDate: string;
+  coreDay: string;
+  coreTime: string;
+  optionalLabDay?: string;
+}
+
+export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirmationData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping invoice confirmation to:', data.to);
+    return;
+  }
+
+  const r = await resolveEmailRecipient(data.to, 'Your Enrollment is Reserved — Complete Payment to Confirm');
+
+  const formattedDate = new Date(data.startDate + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  const html = `
+    <div style="max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#333;">
+      <div style="background:#1a1a2e;padding:24px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:22px;">Your Seat is Reserved</h1>
+        <p style="color:#fbbf24;margin:8px 0 0;font-size:14px;font-weight:bold;">Payment Required to Confirm</p>
+      </div>
+      <div style="padding:24px;">
+        <p>Hi ${data.fullName},</p>
+        <p>Thank you for enrolling in the <strong>Enterprise AI Leadership Accelerator</strong>. Your seat has been temporarily reserved in <strong>${data.cohortName}</strong>.</p>
+
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:16px;margin:20px 0;">
+          <p style="margin:0;font-weight:bold;color:#856404;">Payment is required to confirm your spot.</p>
+          <p style="margin:8px 0 0;color:#856404;">Due to limited capacity (max 15 per cohort), seats are only guaranteed once payment is received.</p>
+        </div>
+
+        <h3 style="color:#1a1a2e;margin-top:24px;">Your Cohort Details</h3>
+        <ul style="line-height:1.8;">
+          <li><strong>Cohort:</strong> ${data.cohortName}</li>
+          <li><strong>Starts:</strong> ${formattedDate}</li>
+          <li><strong>Core Sessions:</strong> ${data.coreDay} at ${data.coreTime}</li>
+          ${data.optionalLabDay ? `<li><strong>Optional Lab:</strong> ${data.optionalLabDay}</li>` : ''}
+        </ul>
+
+        <h3 style="color:#1a1a2e;">Next Steps</h3>
+        <ol style="line-height:2;">
+          <li>Reply to this email with your preferred payment method (credit card, ACH, or PO number)</li>
+          <li>Our team will process your payment or send a formal invoice</li>
+          <li>Receive your enrollment confirmation and onboarding access</li>
+        </ol>
+
+        <p>If you'd prefer to pay immediately by credit card or ACH, visit <a href="https://enterprise.colaberry.ai/enroll" style="color:#2563eb;">our enrollment page</a> and select "Pay Now."</p>
+
+        <p style="margin-top:24px;">Best regards,<br/><strong>Ali Merchant</strong><br/>Colaberry Enterprise AI Division</p>
+      </div>
+      <div style="background:#f8f9fa;padding:16px;text-align:center;font-size:12px;color:#6c757d;">
+        <p style="margin:0;">Colaberry Enterprise AI Division</p>
+      </div>
+    </div>
+  `;
+
+  const info = await transporter.sendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('invoice-request-confirmation'),
+  });
+
+  console.log(`[Email] Invoice request confirmation sent to: ${r.to} | msgId: ${info.messageId}`);
+}
+
 interface InterestEmailData {
   to: string;
   fullName: string;
