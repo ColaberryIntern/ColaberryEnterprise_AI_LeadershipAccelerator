@@ -18,6 +18,9 @@ interface Props {
 }
 
 const formatTiming = (step: any): string => {
+  if (step.days_before_cohort_start != null) {
+    return `T-${step.days_before_cohort_start}d`;
+  }
   if (step.minutes_before_call) {
     const mins = step.minutes_before_call;
     if (mins >= 1440) return `T-${mins / 1440}d`;
@@ -262,7 +265,10 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
 
   // ── Render ──────────────────────────────────────────────────────
 
-  const isCountdown = steps.length > 0 && steps.every((s: any) => s.minutes_before_call);
+  const isCountdown = steps.length > 0 && (
+    steps.every((s: any) => s.minutes_before_call) ||
+    steps.some((s: any) => s.days_before_cohort_start != null)
+  );
 
   return (
     <>
@@ -420,9 +426,12 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
 
       {/* ═══ Sequence Overview (read-only summary from stored delay_days) ═══ */}
       {steps.length > 0 && steps[0].channel && (() => {
-        // Sort: T-minus by minutes_before_call descending (earliest first), standard by delay_days ascending
+        // Sort: T-minus by offset descending (earliest first), standard by delay_days ascending
+        const isCohortCountdown = steps.some((s: any) => s.days_before_cohort_start != null);
         const sortedSteps = isCountdown
-          ? [...steps].sort((a, b) => (b.minutes_before_call || 0) - (a.minutes_before_call || 0))
+          ? isCohortCountdown
+            ? [...steps].sort((a, b) => (b.days_before_cohort_start || 0) - (a.days_before_cohort_start || 0))
+            : [...steps].sort((a, b) => (b.minutes_before_call || 0) - (a.minutes_before_call || 0))
           : [...steps].sort((a, b) => (a.delay_days || 0) - (b.delay_days || 0));
         const campaignDuration = isCountdown
           ? null

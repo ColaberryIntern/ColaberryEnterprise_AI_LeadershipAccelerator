@@ -142,9 +142,10 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
       aria-label="AI Intelligence System Demo"
       onClick={isDemoRunning ? stopDemo : undefined}
       style={{
-        borderTop: `2px solid ${deptColor}`,
-        boxShadow: `0 -4px 20px ${deptColor}25, inset 0 2px 0 ${deptColor}`,
-        transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
+        border: `2px solid ${deptColor}`,
+        borderRadius: '12px',
+        boxShadow: `0 0 24px ${deptColor}40, 0 0 48px ${deptColor}20`,
+        transition: 'border-color 0.3s ease, box-shadow 0.3s ease, border 0.3s ease',
       }}
     >
       <div className="container">

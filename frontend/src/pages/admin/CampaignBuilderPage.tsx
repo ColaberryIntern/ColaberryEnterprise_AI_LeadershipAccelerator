@@ -588,7 +588,9 @@ export default function CampaignBuilderPage() {
                             {s.channel || 'email'}
                           </span>
                           <span className="small fw-medium">
-                            {s.minutes_before_call
+                            {s.days_before_cohort_start != null
+                              ? `T-${s.days_before_cohort_start}d`
+                              : s.minutes_before_call
                               ? (s.minutes_before_call >= 1440 ? `T-${s.minutes_before_call / 1440}d`
                                  : s.minutes_before_call >= 60 ? `T-${s.minutes_before_call / 60}h`
                                  : `T-${s.minutes_before_call}min`)
