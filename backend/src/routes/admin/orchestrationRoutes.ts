@@ -362,10 +362,11 @@ router.put('/api/admin/orchestration/artifacts/:id', requireAdmin, handleUpdateA
 router.delete('/api/admin/orchestration/artifacts/:id', requireAdmin, handleDeleteArtifact);
 
 // All artifacts (no session filter)
-router.get('/api/admin/orchestration/program/artifacts', requireAdmin, async (_req, res) => {
+router.get('/api/admin/orchestration/program/artifacts', requireAdmin, async (req, res) => {
   try {
     const { listArtifactDefinitions } = require('../../services/artifactService');
-    const artifacts = await listArtifactDefinitions();
+    const sectionId = req.query.section_id as string | undefined;
+    const artifacts = await listArtifactDefinitions(sectionId ? { sectionId } : undefined);
     res.json(artifacts);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
