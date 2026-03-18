@@ -103,9 +103,8 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
 
       let action = 'no_action';
       if (c.status === 'active') action = 'already_active';
-      else if (c.status === 'draft' && (c.approval_status === 'approved' || c.approval_status === 'live')) action = 'will_activate';
-      else if (c.status === 'paused') action = 'will_reactivate';
-      else if (c.status === 'draft') action = 'needs_approval';
+      else if (c.status === 'draft' || c.status === 'paused') action = 'will_activate';
+      else if (c.status === 'completed') action = 'skip';
       else action = 'skip';
 
       if (hasTestMode) {
@@ -138,12 +137,8 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
 
     // Cold outbound specific check
     const coldOutbound = campaignSummary.find((c: any) => c.type === 'cold_outbound');
-    if (coldOutbound) {
-      if (coldOutbound.status === 'draft' && coldOutbound.leads === 0) {
-        report.warnings.push(`Cold Outbound campaign "${coldOutbound.name}" is draft with 0 leads — needs Apollo import`);
-      } else if (coldOutbound.status === 'draft' && coldOutbound.action === 'needs_approval') {
-        report.warnings.push(`Cold Outbound campaign "${coldOutbound.name}" needs approval before activation`);
-      }
+    if (coldOutbound && coldOutbound.status === 'draft' && coldOutbound.leads === 0) {
+      report.warnings.push(`Cold Outbound campaign "${coldOutbound.name}" is draft with 0 leads — needs Apollo import`);
     }
 
     report.phase_1_system_state = systemState;
@@ -190,7 +185,6 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
       const activationResults: Record<string, any> = {
         activated: 0,
         already_active: 0,
-        needs_approval: 0,
         skipped: 0,
         errors: [] as string[],
         details: [] as any[],
@@ -201,7 +195,7 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
           activationResults.already_active++;
           activationResults.details.push({ name: c.name, result: 'already_active' });
 
-        } else if (c.action === 'will_activate' || c.action === 'will_reactivate') {
+        } else if (c.action === 'will_activate') {
           try {
             await activateCampaign(c.id);
             activationResults.activated++;
@@ -211,10 +205,6 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
             activationResults.details.push({ name: c.name, result: `error: ${err.message}` });
             report.errors.push(`Failed to activate "${c.name}": ${err.message}`);
           }
-
-        } else if (c.action === 'needs_approval') {
-          activationResults.needs_approval++;
-          activationResults.details.push({ name: c.name, result: 'needs_approval' });
 
         } else {
           activationResults.skipped++;
@@ -236,9 +226,7 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
     } else {
       const preview: Record<string, number> = {
         will_activate: campaignSummary.filter((c: any) => c.action === 'will_activate').length,
-        will_reactivate: campaignSummary.filter((c: any) => c.action === 'will_reactivate').length,
         already_active: campaignSummary.filter((c: any) => c.action === 'already_active').length,
-        needs_approval: campaignSummary.filter((c: any) => c.action === 'needs_approval').length,
         skip: campaignSummary.filter((c: any) => c.action === 'skip').length,
       };
       report.phase_3_campaigns = { status: 'dry-run preview', plan: preview };
