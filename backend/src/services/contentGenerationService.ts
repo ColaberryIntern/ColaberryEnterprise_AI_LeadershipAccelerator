@@ -199,7 +199,7 @@ export async function generateLessonContent(
               try {
                 await VariableDefinition.update(
                   { source_type: 'llm_output' },
-                  { where: { variable_key: varKey, source_type: { [Op.in]: [null, 'system'] } } as any },
+                  { where: { variable_key: varKey, source_type: { [Op.in]: [null, 'system'] as any[] } } },
                 );
               } catch (e: any) { console.warn('[ContentGeneration] Variable source_type update failed:', e?.message); }
             }
