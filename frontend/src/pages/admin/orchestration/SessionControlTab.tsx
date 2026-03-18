@@ -3,12 +3,75 @@ import React, { useEffect, useState, useCallback } from 'react';
 interface Props { token: string; apiUrl: string; }
 
 const CHECKLIST_TYPES = ['tool_setup', 'account_creation', 'reading', 'prerequisite', 'custom'];
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const TIMEZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Phoenix', 'UTC'];
 
 const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState('');
+
+  // Cohort config state
+  const [cohorts, setCohorts] = useState<any[]>([]);
+  const [selectedCohortId, setSelectedCohortId] = useState('');
+  const [cohortEditing, setCohortEditing] = useState(false);
+  const [cohortForm, setCohortForm] = useState<any>(null);
+  const [cohortSaving, setCohortSaving] = useState(false);
+
+  const fetchCohorts = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/cohorts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : data.cohorts || [];
+      setCohorts(list);
+      if (list.length > 0 && !selectedCohortId) {
+        setSelectedCohortId(list[0].id);
+      }
+    } catch {}
+  }, [token, apiUrl, selectedCohortId]);
+
+  useEffect(() => { fetchCohorts(); }, [fetchCohorts]);
+
+  const selectedCohort = cohorts.find((c: any) => c.id === selectedCohortId);
+
+  const handleCohortEdit = () => {
+    if (!selectedCohort) return;
+    setCohortForm({
+      name: selectedCohort.name || '',
+      start_date: selectedCohort.start_date || '',
+      core_day: selectedCohort.core_day || 'Thursday',
+      core_time: selectedCohort.core_time || '',
+      optional_lab_day: selectedCohort.optional_lab_day || '',
+      timezone: selectedCohort.timezone || 'America/Chicago',
+      max_seats: selectedCohort.max_seats || 20,
+      status: selectedCohort.status || 'open',
+    });
+    setCohortEditing(true);
+  };
+
+  const handleCohortSave = async () => {
+    if (!selectedCohortId || !cohortForm) return;
+    setCohortSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/cohorts/${selectedCohortId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...cohortForm,
+          optional_lab_day: cohortForm.optional_lab_day || null,
+          max_seats: parseInt(cohortForm.max_seats) || 20,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save cohort');
+      setCohortEditing(false);
+      fetchCohorts();
+    } catch (err: any) { setError(err.message); }
+    finally { setCohortSaving(false); }
+  };
 
   // Session fields editing
   const [editingSession, setEditingSession] = useState<any | null>(null);
@@ -138,6 +201,125 @@ const SessionControlTab: React.FC<Props> = ({ token, apiUrl }) => {
   return (
     <div>
       {error && <div className="alert alert-danger" style={{ fontSize: 13 }}>{error}</div>}
+
+      {/* Cohort Configuration Panel */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+          <span>Cohort Configuration</span>
+          {cohorts.length > 1 && (
+            <select
+              className="form-select form-select-sm"
+              style={{ width: 'auto', fontSize: 12 }}
+              value={selectedCohortId}
+              onChange={e => { setSelectedCohortId(e.target.value); setCohortEditing(false); }}
+            >
+              {cohorts.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="card-body" style={{ fontSize: 13 }}>
+          {!selectedCohort ? (
+            <p className="text-muted mb-0">No cohorts found.</p>
+          ) : cohortEditing && cohortForm ? (
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label small fw-medium">Cohort Name</label>
+                <input className="form-control form-control-sm" value={cohortForm.name}
+                  onChange={e => setCohortForm({ ...cohortForm, name: e.target.value })} />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium">Start Date</label>
+                <input type="date" className="form-control form-control-sm" value={cohortForm.start_date}
+                  onChange={e => setCohortForm({ ...cohortForm, start_date: e.target.value })} />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium">Status</label>
+                <select className="form-select form-select-sm" value={cohortForm.status}
+                  onChange={e => setCohortForm({ ...cohortForm, status: e.target.value })}>
+                  <option value="open">Open</option>
+                  <option value="closed">Closed</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium">Core Session Day</label>
+                <select className="form-select form-select-sm" value={cohortForm.core_day}
+                  onChange={e => setCohortForm({ ...cohortForm, core_day: e.target.value })}>
+                  {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium">Core Session Time</label>
+                <input className="form-control form-control-sm" value={cohortForm.core_time}
+                  placeholder="e.g. 1:00–3:00 PM"
+                  onChange={e => setCohortForm({ ...cohortForm, core_time: e.target.value })} />
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium">Optional Lab Day</label>
+                <select className="form-select form-select-sm" value={cohortForm.optional_lab_day}
+                  onChange={e => setCohortForm({ ...cohortForm, optional_lab_day: e.target.value })}>
+                  <option value="">None</option>
+                  {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium">Timezone</label>
+                <select className="form-select form-select-sm" value={cohortForm.timezone}
+                  onChange={e => setCohortForm({ ...cohortForm, timezone: e.target.value })}>
+                  {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.replace('America/', '').replace('_', ' ')}</option>)}
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label className="form-label small fw-medium">Max Seats</label>
+                <input type="number" className="form-control form-control-sm" min={1} value={cohortForm.max_seats}
+                  onChange={e => setCohortForm({ ...cohortForm, max_seats: e.target.value })} />
+              </div>
+              <div className="col-12 d-flex gap-2 mt-2">
+                <button className="btn btn-sm btn-primary" onClick={handleCohortSave} disabled={cohortSaving}>
+                  {cohortSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setCohortEditing(false)}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div className="row">
+              <div className="col-md-8">
+                <div className="row g-2">
+                  <div className="col-6 col-md-4">
+                    <span className="text-muted small">Name</span>
+                    <div className="fw-medium">{selectedCohort.name}</div>
+                  </div>
+                  <div className="col-6 col-md-4">
+                    <span className="text-muted small">Start Date</span>
+                    <div className="fw-medium">{selectedCohort.start_date ? new Date(selectedCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '-'}</div>
+                  </div>
+                  <div className="col-6 col-md-4">
+                    <span className="text-muted small">Status</span>
+                    <div><span className={`badge ${selectedCohort.status === 'open' ? 'bg-success' : selectedCohort.status === 'closed' ? 'bg-warning' : 'bg-secondary'}`} style={{ fontSize: 10 }}>{selectedCohort.status || 'open'}</span></div>
+                  </div>
+                  <div className="col-6 col-md-4">
+                    <span className="text-muted small">Core Sessions</span>
+                    <div className="fw-medium">{selectedCohort.core_day} at {selectedCohort.core_time}</div>
+                  </div>
+                  <div className="col-6 col-md-4">
+                    <span className="text-muted small">Optional Lab</span>
+                    <div className="fw-medium">{selectedCohort.optional_lab_day || 'None'}</div>
+                  </div>
+                  <div className="col-6 col-md-4">
+                    <span className="text-muted small">Capacity</span>
+                    <div className="fw-medium">{selectedCohort.seats_taken || 0} / {selectedCohort.max_seats || 20}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-4 d-flex align-items-start justify-content-end">
+                <button className="btn btn-sm btn-outline-primary" onClick={handleCohortEdit}>Edit Configuration</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Session Fields Edit Modal */}
       {editingSession && (
