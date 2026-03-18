@@ -52,20 +52,23 @@ export default function WarRoomPage() {
   const [stats, setStats] = useState<any>(null);
   const [revenue, setRevenue] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [feed, setFeed] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [error, setError] = useState('');
   const activityRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statsRes, revenueRes, alertsRes] = await Promise.all([
+      const [statsRes, revenueRes, alertsRes, feedRes] = await Promise.all([
         api.get('/api/admin/stats'),
         api.get('/api/admin/revenue/dashboard'),
         api.get('/api/admin/alerts?status=new&limit=20').catch(() => ({ data: [] })),
+        api.get('/api/admin/war-room/feed').catch(() => ({ data: [] })),
       ]);
       setStats(statsRes.data);
       setRevenue(revenueRes.data);
       setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data?.alerts || []);
+      setFeed(Array.isArray(feedRes.data) ? feedRes.data : []);
       setLastUpdate(new Date());
       setError('');
     } catch (err: any) {
@@ -88,7 +91,7 @@ export default function WarRoomPage() {
 
   const pipelineCounts = revenue?.pipelineCounts || {};
   const maxPipeline = Math.max(...Object.values(pipelineCounts).map(v => Number(v) || 0), 1);
-  const activities = revenue?.recentActivities || [];
+  const activities = feed.length > 0 ? feed : (revenue?.recentActivities || []);
   const forecast = revenue?.revenueForecast || {};
 
   return (
@@ -195,25 +198,30 @@ export default function WarRoomPage() {
             ) : (
               <table className="table table-sm table-hover mb-0" style={{ fontSize: 12 }}>
                 <tbody>
-                  {activities.map((a: any, i: number) => (
-                    <tr key={i}>
-                      <td style={{ width: 70, color: '#6c757d', fontSize: 11 }}>
-                        {a.created_at ? formatTimeAgo(a.created_at) : '-'}
-                      </td>
-                      <td style={{ width: 90 }}>
-                        <span className={`badge ${
-                          a.type === 'email_sent' ? 'bg-primary' :
-                          a.type === 'call' ? 'bg-success' :
-                          a.type === 'score_change' ? 'bg-warning text-dark' :
-                          a.type === 'status_change' ? 'bg-info' :
-                          'bg-secondary'
-                        }`} style={{ fontSize: 9 }}>
-                          {a.type || 'event'}
-                        </span>
-                      </td>
-                      <td>{a.subject || a.description || '-'}</td>
-                    </tr>
-                  ))}
+                  {activities.map((a: any, i: number) => {
+                    const evtType = a.event_type || a.type || 'event';
+                    const detail = a.detail || a.subject || a.description || '-';
+                    const badgeClass =
+                      evtType.includes('email') || evtType.includes('sent') ? 'bg-primary' :
+                      evtType.includes('voice') || evtType.includes('call') || evtType.includes('sms') ? 'bg-success' :
+                      evtType.includes('enrollment') ? 'bg-warning text-dark' :
+                      evtType.includes('status') || evtType.includes('score') ? 'bg-info' :
+                      evtType.includes('failed') || evtType.includes('bounced') ? 'bg-danger' :
+                      'bg-secondary';
+                    return (
+                      <tr key={i}>
+                        <td style={{ width: 70, color: '#6c757d', fontSize: 11 }}>
+                          {a.created_at ? formatTimeAgo(a.created_at) : '-'}
+                        </td>
+                        <td style={{ width: 100 }}>
+                          <span className={`badge ${badgeClass}`} style={{ fontSize: 9 }}>
+                            {evtType.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td>{detail}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
