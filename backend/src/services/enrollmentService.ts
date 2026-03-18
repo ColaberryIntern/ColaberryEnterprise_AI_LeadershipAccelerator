@@ -1,4 +1,4 @@
-import { Cohort, Enrollment } from '../models';
+import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
 import { CreateCheckoutSessionInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 
@@ -38,6 +38,10 @@ export async function createPendingEnrollment(
     ps.createProjectForEnrollment(enrollment.id)
   ).catch(err => console.error('[Project] Auto-create failed:', err.message));
 
+  // Auto-enroll in payment readiness campaign (non-blocking)
+  enrollInPaymentCampaignIfUnpaid(enrollment)
+    .catch(err => console.error('[Payment Campaign] Auto-enroll failed:', err.message));
+
   return enrollment;
 }
 
@@ -69,6 +73,10 @@ export async function createInvoiceEnrollment(
     where: { id: data.cohort_id },
   });
 
+  // Auto-enroll in payment readiness campaign (non-blocking)
+  enrollInPaymentCampaignIfUnpaid(enrollment)
+    .catch(err => console.error('[Payment Campaign] Auto-enroll failed:', err.message));
+
   return enrollment;
 }
 
@@ -90,6 +98,10 @@ export async function markEnrollmentPaid(stripeSessionId: string): Promise<Enrol
     by: 1,
     where: { id: enrollment.cohort_id },
   });
+
+  // Auto-exit from payment readiness campaign (non-blocking)
+  exitPaymentCampaign(enrollment.email)
+    .catch(err => console.error('[Payment Campaign] Auto-exit failed:', err.message));
 
   return enrollment;
 }
@@ -144,4 +156,62 @@ export async function createAdminEnrollment(data: {
   ).catch(err => console.error('[Project] Auto-create failed:', err.message));
 
   return enrollment;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Payment Readiness Campaign Helpers                                 */
+/* ------------------------------------------------------------------ */
+
+const PAYMENT_READINESS_CAMPAIGN_NAME = 'Payment Readiness Campaign';
+
+async function enrollInPaymentCampaignIfUnpaid(enrollment: Enrollment): Promise<void> {
+  if (enrollment.payment_status === 'paid') return;
+
+  const campaign = await Campaign.findOne({
+    where: { name: PAYMENT_READINESS_CAMPAIGN_NAME, status: 'active' },
+  });
+  if (!campaign) {
+    console.log('[Payment Campaign] No active payment readiness campaign found — skipping');
+    return;
+  }
+
+  // Find or create a Lead record for this enrollee
+  const [lead] = await Lead.findOrCreate({
+    where: { email: enrollment.email.toLowerCase().trim() },
+    defaults: {
+      name: enrollment.full_name,
+      email: enrollment.email.toLowerCase().trim(),
+      company: enrollment.company || '',
+      title: enrollment.title || '',
+      phone: enrollment.phone || '',
+      source: 'enrollment',
+      status: 'engaged',
+    } as any,
+  });
+
+  const { enrollLeadsInCampaign } = await import('./campaignService');
+  const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
+  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+}
+
+async function exitPaymentCampaign(email: string): Promise<void> {
+  const campaign = await Campaign.findOne({
+    where: { name: PAYMENT_READINESS_CAMPAIGN_NAME },
+  });
+  if (!campaign) return;
+
+  const lead = await Lead.findOne({
+    where: { email: email.toLowerCase().trim() },
+  });
+  if (!lead) return;
+
+  try {
+    const { removeLeadFromCampaign } = await import('./campaignService');
+    await removeLeadFromCampaign(campaign.id, lead.id);
+    console.log(`[Payment Campaign] Exited lead ${lead.id} (${email}) — payment confirmed`);
+  } catch (err: any) {
+    // Lead may not be enrolled (e.g., admin-created enrollment that was always paid)
+    if (err.message?.includes('not enrolled')) return;
+    throw err;
+  }
 }

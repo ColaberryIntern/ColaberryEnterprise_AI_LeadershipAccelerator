@@ -185,14 +185,16 @@ function SponsorshipPage() {
             Includes: ROI templates, approval letter templates, executive briefing
             document, vendor comparison matrix.
           </p>
-          <LeadCaptureForm
-            formType="sponsorship_kit_download"
-            fields={['name', 'email', 'company', 'role']}
-            submitLabel="📥 Download Sponsorship Kit"
-            successMessage="✅ Your Sponsorship Kit has been sent to your email. Expect it within minutes."
-            className="text-dark"
-            captureUtm
-          />
+          <div className="bg-white rounded shadow p-4 text-start">
+            <LeadCaptureForm
+              formType="sponsorship_kit_download"
+              fields={['name', 'email', 'company', 'role']}
+              submitLabel="📥 Download Sponsorship Kit"
+              successMessage="✅ Your Sponsorship Kit has been sent to your email. Expect it within minutes."
+              className="text-dark"
+              captureUtm
+            />
+          </div>
           {/* TODO: Trigger automated email sequence via CRM (future) */}
         </div>
       </section>

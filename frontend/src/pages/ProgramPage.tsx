@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
-import { PROGRAM_SCHEDULE } from '../config/programSchedule';
+import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 
@@ -587,7 +587,7 @@ function ProgramPage() {
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
             <a href="/#download-overview" className="btn btn-accent btn-lg">
-              📥 Download Executive Overview
+              {STANDARD_CTAS.primary}
             </a>
             <Link to="/sponsorship" className="btn btn-outline-light btn-lg">
               🤝 Request Corporate Sponsorship Kit

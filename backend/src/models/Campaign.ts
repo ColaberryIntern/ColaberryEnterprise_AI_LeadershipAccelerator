@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'behavioral_trigger' | 'alumni' | 'alumni_re_engagement';
+export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'behavioral_trigger' | 'alumni' | 'alumni_re_engagement' | 'payment_readiness';
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
 export type CampaignMode = 'standard' | 'autonomous';
 export type CampaignChannel = 'email' | 'sms' | 'social' | 'paid_search' | 'paid_social' | 'direct_mail' | 'referral' | 'organic';

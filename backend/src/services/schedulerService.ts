@@ -459,6 +459,18 @@ async function processScheduledActions(): Promise<void> {
       continue;
     }
 
+    // Guard: skip payment_readiness actions if enrollment is already paid
+    if (cachedCampaign && cachedCampaign.type === 'payment_readiness' && action.to_email) {
+      const paidEnrollment = await Enrollment.findOne({
+        where: { email: action.to_email, payment_status: 'paid' },
+      });
+      if (paidEnrollment) {
+        await action.update({ status: 'cancelled' } as any);
+        console.log(`[Scheduler] Cancelled payment reminder ${action.id} — enrollment already paid (${action.to_email})`);
+        continue;
+      }
+    }
+
     // Pacing: limit actions per campaign per cycle
     const maxPerCycle = campaignSettings.max_leads_per_cycle || 10;
     campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);

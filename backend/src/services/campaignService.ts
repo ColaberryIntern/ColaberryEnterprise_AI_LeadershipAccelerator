@@ -6,7 +6,7 @@ import { enrollLeadInSequence } from './sequenceService';
 import { getSetting } from './settingsService';
 import { syncLeadToGhl, bulkSyncCampaignLeads } from './ghlService';
 
-export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'alumni' | 'alumni_re_engagement';
+export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'alumni' | 'alumni_re_engagement' | 'payment_readiness';
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
 
 interface CreateCampaignParams {

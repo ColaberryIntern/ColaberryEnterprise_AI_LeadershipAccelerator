@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
-import { PROGRAM_SCHEDULE } from '../config/programSchedule';
+import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ExecutiveTestimonial from '../components/ExecutiveTestimonial';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
@@ -66,7 +66,7 @@ function PricingPage() {
                   Enroll Now
                 </Link>
                 <a href="/#download-overview" className="btn btn-outline-primary btn-lg">
-                  📥 Download Executive Overview
+                  {STANDARD_CTAS.primary}
                 </a>
               </div>
             </div>

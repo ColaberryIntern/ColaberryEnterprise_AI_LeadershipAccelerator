@@ -8,6 +8,7 @@ import KpiOverviewRow from './KpiOverviewRow';
 import ExecutiveSummaryPanel from './ExecutiveSummaryPanel';
 import InsightCharts from './InsightCharts';
 import { useAdminUser } from '../../hooks/useAdminUser';
+import { STANDARD_CTAS } from '../../config/programSchedule';
 
 // Lazy-load the graph (heavy dependency: reactflow)
 const DepartmentGraphDemo = lazy(() => import('./DepartmentGraphDemo'));
@@ -258,14 +259,14 @@ export default function CoryDemoContainer({ onOpenBooking, onDepartmentChange }:
             href="#download-overview"
             className="btn btn-lg btn-hero-primary me-3 mb-2"
           >
-            Design Your AI Deployment Blueprint
+            {STANDARD_CTAS.primary}
           </a>
           <button
             type="button"
             className="btn btn-lg btn-outline-primary mb-2"
             onClick={onOpenBooking}
           >
-            Schedule a Deployment Scoping Call
+            {STANDARD_CTAS.secondary}
           </button>
         </div>
       </div>

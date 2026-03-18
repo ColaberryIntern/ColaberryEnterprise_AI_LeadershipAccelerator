@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ASK_CORY_RESPONSES, DEFAULT_CORY_RESPONSE } from './demoData';
+import { STANDARD_CTAS } from '../../config/programSchedule';
 
 interface AskCoryInputProps {
   onNavigate: () => void;
@@ -47,7 +48,7 @@ export default function AskCoryInput({ onNavigate }: AskCoryInputProps) {
             className="btn btn-sm btn-outline-primary"
             onClick={onNavigate}
           >
-            Design Your AI Deployment Blueprint
+            {STANDARD_CTAS.primary}
           </button>
         </div>
       )}
