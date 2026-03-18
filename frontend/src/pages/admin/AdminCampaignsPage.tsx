@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import Modal from '../../components/ui/Modal';
 import Breadcrumb from '../../components/ui/Breadcrumb';
+import CampaignGraphTab from '../../components/admin/intelligence/entityPanel/CampaignGraphTab';
 
 interface Campaign {
   id: string;
@@ -156,6 +157,17 @@ function AdminCampaignsPage() {
           <button className="btn btn-primary" onClick={() => setShowModal(true)}>
             + New Campaign
           </button>
+        </div>
+      </div>
+
+      {/* Campaign Intelligence Graph */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center">
+          <span className="fw-semibold" style={{ color: 'var(--color-primary)' }}>Campaign Intelligence Graph</span>
+          <span className="text-muted small">Click nodes for details</span>
+        </div>
+        <div className="card-body p-0" style={{ height: 480 }}>
+          <CampaignGraphTab fullWidth />
         </div>
       </div>
 

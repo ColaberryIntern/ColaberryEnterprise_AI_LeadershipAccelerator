@@ -47,10 +47,14 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-export default function CampaignGraphTab() {
+interface CampaignGraphTabProps {
+  fullWidth?: boolean;
+}
+
+export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTabProps) {
   const graphRef = useRef<ForceGraphMethods>();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 380, height: 600 });
+  const [dimensions, setDimensions] = useState({ width: fullWidth ? 900 : 380, height: fullWidth ? 500 : 600 });
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -94,7 +98,7 @@ export default function CampaignGraphTab() {
         count: n.count,
         color: colors.color,
         bg: colors.bg,
-        val: 8 + (n.count / maxCount) * 22,
+        val: fullWidth ? (12 + (n.count / maxCount) * 30) : (8 + (n.count / maxCount) * 22),
         level: TYPE_LEVEL[n.type] ?? 2,
         metrics: n.metrics,
       };
@@ -118,8 +122,8 @@ export default function CampaignGraphTab() {
     const fg = graphRef.current;
     if (!fg || !graphData.nodes.length) return;
 
-    fg.d3Force('charge')?.strength(-250);
-    fg.d3Force('link')?.distance(70);
+    fg.d3Force('charge')?.strength(fullWidth ? -500 : -250);
+    fg.d3Force('link')?.distance(fullWidth ? 150 : 70);
 
     const maxLevel = Math.max(...graphData.nodes.map((n) => n.level));
     fg.d3Force(
@@ -127,11 +131,11 @@ export default function CampaignGraphTab() {
       forceY((node: any) => {
         const normalizedLevel = (node.level ?? 0) / Math.max(maxLevel, 1);
         return -dimensions.height * 0.25 + normalizedLevel * dimensions.height * 0.55;
-      }).strength(0.5)
+      }).strength(fullWidth ? 0.35 : 0.5)
     );
-    fg.d3Force('x', forceX(0).strength(0.1));
+    fg.d3Force('x', forceX(0).strength(fullWidth ? 0.05 : 0.1));
     fg.d3ReheatSimulation();
-  }, [graphData, dimensions.height]);
+  }, [graphData, dimensions.height, fullWidth]);
 
   // Zoom to fit
   useEffect(() => {
@@ -148,10 +152,10 @@ export default function CampaignGraphTab() {
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const n = node as GraphNode;
-      const radius = 16 + n.val * 0.6;
+      const radius = fullWidth ? (22 + n.val * 0.8) : (16 + n.val * 0.6);
       const isHovered = hoveredNode?.id === n.id;
       const isSelected = selectedNode?.id === n.id;
-      const fontSize = Math.max(11 / globalScale, 3);
+      const fontSize = fullWidth ? Math.max(13 / globalScale, 4) : Math.max(11 / globalScale, 3);
       const isHighActivity = n.count > 50;
 
       // High-activity glow
@@ -217,7 +221,7 @@ export default function CampaignGraphTab() {
       ctx.fillStyle = '#fff';
       ctx.fillText(formatCount(n.count), badgeX, badgeY + 0.5);
     },
-    [hoveredNode, selectedNode]
+    [hoveredNode, selectedNode, fullWidth]
   );
 
   // Link rendering — thickness by volume, with arrow
@@ -300,8 +304,8 @@ export default function CampaignGraphTab() {
     );
   }
 
-  // If a node is selected, show drill-down panel
-  if (selectedNode) {
+  // If a node is selected in compact mode, show drill-down panel
+  if (selectedNode && !fullWidth) {
     return (
       <CampaignNodeDetailsPanel
         node={{
@@ -318,20 +322,23 @@ export default function CampaignGraphTab() {
 
   return (
     <div className="d-flex flex-column h-100">
-      <div className="p-2 border-bottom">
-        <div className="d-flex justify-content-between align-items-center">
-          <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-            Campaign Intelligence
-          </span>
-          <span className="text-muted" style={{ fontSize: '0.65rem' }}>
-            {graphData.nodes.length} nodes / {graphData.links.length} edges
-          </span>
+      {!fullWidth && (
+        <div className="p-2 border-bottom">
+          <div className="d-flex justify-content-between align-items-center">
+            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
+              Campaign Intelligence
+            </span>
+            <span className="text-muted" style={{ fontSize: '0.65rem' }}>
+              {graphData.nodes.length} nodes / {graphData.links.length} edges
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
+      <div className={`flex-grow-1 ${fullWidth && selectedNode ? 'd-flex' : ''}`} style={{ minHeight: 0 }}>
       <div
         ref={containerRef}
-        className="flex-grow-1"
+        className={fullWidth && selectedNode ? 'flex-grow-1' : 'h-100'}
         style={{ position: 'relative', minHeight: 0 }}
         onMouseMove={handleMouseMove}
         aria-label="Campaign intelligence graph — interactive. Click nodes for details."
@@ -344,7 +351,7 @@ export default function CampaignGraphTab() {
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={(node: any, color, ctx) => {
             const n = node as GraphNode;
-            const radius = 16 + n.val * 0.6;
+            const radius = fullWidth ? (22 + n.val * 0.8) : (16 + n.val * 0.6);
             ctx.beginPath();
             ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
             ctx.fillStyle = color;
@@ -445,6 +452,23 @@ export default function CampaignGraphTab() {
             <div className="text-muted mt-1" style={{ fontSize: '0.6rem' }}>Click for details</div>
           </div>
         )}
+      </div>
+
+      {/* Side panel for fullWidth mode */}
+      {fullWidth && selectedNode && (
+        <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--color-border)', overflow: 'auto' }}>
+          <CampaignNodeDetailsPanel
+            node={{
+              id: selectedNode.id,
+              type: selectedNode.type as CampaignGraphNode['type'],
+              label: selectedNode.label,
+              count: selectedNode.count,
+              metrics: selectedNode.metrics,
+            }}
+            onClose={() => setSelectedNode(null)}
+          />
+        </div>
+      )}
       </div>
     </div>
   );
