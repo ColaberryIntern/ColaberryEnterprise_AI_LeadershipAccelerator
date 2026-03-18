@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { STANDARD_CTAS } from '../config/programSchedule';
+import StrategyCallModal from '../components/StrategyCallModal';
 
 /* ── Calculation ─────────────────────────────────────────────────── */
 
@@ -144,6 +145,7 @@ function MetricCard({
 
 function ExecutiveROICalculatorPage() {
   const [searchParams] = useSearchParams();
+  const [showBooking, setShowBooking] = useState(false);
   const p = (key: string, fallback: number) => {
     const v = Number(searchParams.get(key));
     return v > 0 ? v : fallback;
@@ -322,12 +324,14 @@ function ExecutiveROICalculatorPage() {
             <Link to="/#download-overview" className="btn btn-primary btn-lg">
               {STANDARD_CTAS.primary}
             </Link>
-            <Link to="/contact" className="btn btn-outline-primary btn-lg">
+            <button className="btn btn-outline-primary btn-lg" onClick={() => setShowBooking(true)}>
               {STANDARD_CTAS.secondary}
-            </Link>
+            </button>
           </div>
         </div>
       </section>
+
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/executive-roi-calculator" />
     </>
   );
 }

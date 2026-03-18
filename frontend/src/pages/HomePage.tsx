@@ -422,10 +422,6 @@ function HomePage() {
                     <input type="checkbox" className="form-check-input" id="bp-evaluating" name="evaluating90Days" checked={briefingForm.evaluating90Days} onChange={handleBriefingChange} />
                     <label className="form-check-label small" htmlFor="bp-evaluating">Evaluating within 90 days</label>
                   </div>
-                  <div className="form-check">
-                    <input type="checkbox" className="form-check-input" id="bp-sponsorship" name="willSeekCorporateSponsorship" checked={briefingForm.willSeekCorporateSponsorship} onChange={handleBriefingChange} />
-                    <label className="form-check-label small" htmlFor="bp-sponsorship">Seeking corporate sponsorship</label>
-                  </div>
                 </div>
               </div>
 

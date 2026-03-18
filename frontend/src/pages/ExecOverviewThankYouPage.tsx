@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import ROIHighlightSection from '../components/ROIHighlightSection';
-import { STANDARD_CTAS } from '../config/programSchedule';
+import { STANDARD_CTAS, PROGRAM_SCHEDULE } from '../config/programSchedule';
 import api from '../utils/api';
 
 interface LocationState {
@@ -146,7 +146,7 @@ function ExecOverviewThankYouPage() {
               <div>
                 <h3 className="h6 fw-bold mb-1">Limited Cohort Seats Available</h3>
                 <p className="mb-0 small">
-                  Each cohort is capped at 15 participants to ensure personalized instruction
+                  Each cohort is capped at {PROGRAM_SCHEDULE.cohortSize} participants to ensure personalized instruction
                   and hands-on expert guidance. Seats are filling — don't wait to{' '}
                   <Link to="/enroll" className="fw-bold">secure your spot</Link>.
                 </p>

@@ -2,10 +2,11 @@
 // TODO: Migrate to CMS (Contentful or Sanity) when case study volume exceeds 10.
 // TODO: Add real attribution details when client consent is obtained — current entries are illustrative.
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { STANDARD_CTAS } from '../config/programSchedule';
+import StrategyCallModal from '../components/StrategyCallModal';
 
 interface CaseStudy {
   emoji: string;
@@ -22,6 +23,7 @@ interface CaseStudy {
 }
 
 function CaseStudiesPage() {
+  const [showBooking, setShowBooking] = useState(false);
   const caseStudies: CaseStudy[] = [
     {
       emoji: '🏦',
@@ -184,12 +186,14 @@ function CaseStudiesPage() {
             <Link to="/program" className="btn btn-accent btn-lg">
               View the Accelerator
             </Link>
-            <Link to="/contact" className="btn btn-outline-light btn-lg">
+            <button className="btn btn-outline-light btn-lg" onClick={() => setShowBooking(true)}>
               {STANDARD_CTAS.secondary}
-            </Link>
+            </button>
           </div>
         </div>
       </section>
+
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/case-studies" />
     </>
   );
 }

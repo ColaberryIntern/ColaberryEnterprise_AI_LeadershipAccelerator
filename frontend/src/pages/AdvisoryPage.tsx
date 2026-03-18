@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { STANDARD_CTAS } from '../config/programSchedule';
+import StrategyCallModal from '../components/StrategyCallModal';
 
 function AdvisoryPage() {
+  const [showBooking, setShowBooking] = useState(false);
   const services = [
     {
       icon: '🗺️',
@@ -219,15 +221,17 @@ function AdvisoryPage() {
             Most engagements begin with a 30-minute strategy call.
           </p>
           <div className="d-flex justify-content-center gap-3 flex-wrap">
-            <Link to="/contact" className="btn btn-accent btn-lg">
+            <button className="btn btn-accent btn-lg" onClick={() => setShowBooking(true)}>
               {STANDARD_CTAS.secondary}
-            </Link>
+            </button>
             <Link to="/program" className="btn btn-outline-light btn-lg">
               View the Accelerator
             </Link>
           </div>
         </div>
       </section>
+
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/advisory" />
     </>
   );
 }

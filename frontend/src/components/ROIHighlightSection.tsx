@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
 interface ROIHighlightSectionProps {
   headline: string;
@@ -42,9 +41,9 @@ function ROIHighlightSection({
         <p className="mb-4" style={{ color: 'var(--color-text-light)' }}>
           {subtext}
         </p>
-        <Link to={href} className="btn btn-primary btn-lg d-block d-sm-inline-block">
+        <a href={href} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-lg d-block d-sm-inline-block">
           {buttonText} &rarr;
-        </Link>
+        </a>
       </div>
     </section>
   );

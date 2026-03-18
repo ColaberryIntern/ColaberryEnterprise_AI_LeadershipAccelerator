@@ -6,6 +6,7 @@ import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import { getUTMPayloadFields } from '../services/utmService';
 import { Cohort } from '../models/Cohort';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
+import StrategyCallModal from '../components/StrategyCallModal';
 
 interface FormErrors {
   [key: string]: string;
@@ -30,6 +31,7 @@ function EnrollPage() {
   const [invoiceSubmitted, setInvoiceSubmitted] = useState(false);
 
   const [cohortError, setCohortError] = useState(false);
+  const [showBooking, setShowBooking] = useState(false);
 
   useEffect(() => {
     api
@@ -248,9 +250,9 @@ function EnrollPage() {
                 >
                   {submitting ? 'Setting up payment...' : 'Complete Payment Now'}
                 </button>
-                <Link to="/contact" className="btn btn-outline-primary btn-lg">
+                <button className="btn btn-outline-primary btn-lg" onClick={() => setShowBooking(true)}>
                   Schedule an AI Strategy Call
-                </Link>
+                </button>
               </div>
 
               <p className="text-center text-muted small">
@@ -543,6 +545,8 @@ function EnrollPage() {
           </div>
         </div>
       </section>
+
+      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/enroll" />
     </>
   );
 }

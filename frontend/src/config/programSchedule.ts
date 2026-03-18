@@ -22,6 +22,7 @@ export const PROGRAM_SCHEDULE = {
   sponsorshipTimeline: '5 sessions, 3 weeks',
   heroTagline: 'A 5-Session AI Deployment Accelerator',
   price: '$4,500',
+  cohortSize: 15,
 };
 
 export const STANDARD_CTAS = {
