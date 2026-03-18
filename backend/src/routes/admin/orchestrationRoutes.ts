@@ -365,8 +365,11 @@ router.delete('/api/admin/orchestration/artifacts/:id', requireAdmin, handleDele
 router.get('/api/admin/orchestration/program/artifacts', requireAdmin, async (req, res) => {
   try {
     const { listArtifactDefinitions } = require('../../services/artifactService');
+    const lessonId = req.query.lesson_id as string | undefined;
     const sectionId = req.query.section_id as string | undefined;
-    const artifacts = await listArtifactDefinitions(sectionId ? { sectionId } : undefined);
+    const artifacts = await listArtifactDefinitions(
+      lessonId ? { lessonId } : sectionId ? { sectionId } : undefined
+    );
     res.json(artifacts);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

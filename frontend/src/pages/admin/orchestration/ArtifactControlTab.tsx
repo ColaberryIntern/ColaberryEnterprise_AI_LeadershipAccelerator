@@ -65,26 +65,13 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
     }).catch((err) => setError(err.message || 'Failed to load initial data'));
   }, [token, apiUrl]);
 
-  // Fetch ALL sections across all sessions
+  // Use lessons (already loaded from modules) as the section filter
+  // Artifacts are linked via lesson_id, not section_id or session_id
   useEffect(() => {
-    if (sessions.length === 0) return;
-    Promise.all(
-      sessions.map((s: any) =>
-        fetch(`${apiUrl}/api/admin/orchestration/sessions/${s.id}/sections`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).then(r => r.json()).then(data =>
-          (Array.isArray(data) ? data : []).map((sec: any) => ({
-            ...sec,
-            sessionLabel: `S${s.session_number}`,
-          }))
-        ).catch(() => [])
-      )
-    ).then(results => {
-      const all = results.flat();
-      setSections(all);
-      if (all.length > 0 && !selectedSectionId) setSelectedSectionId(all[0].id);
-    });
-  }, [sessions, apiUrl, token]); // eslint-disable-line
+    if (lessons.length > 0 && !selectedSectionId) {
+      setSelectedSectionId(lessons[0].id);
+    }
+  }, [lessons]); // eslint-disable-line
 
   const fetchArtifacts = useCallback(async () => {
     if (!viewAll && !selectedSectionId) return;
@@ -93,7 +80,7 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
     try {
       const url = viewAll
         ? `${apiUrl}/api/admin/orchestration/program/artifacts`
-        : `${apiUrl}/api/admin/orchestration/program/artifacts?section_id=${selectedSectionId}`;
+        : `${apiUrl}/api/admin/orchestration/program/artifacts?lesson_id=${selectedSectionId}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -201,11 +188,15 @@ const ArtifactControlTab: React.FC<Props> = ({ token, apiUrl }) => {
     <div>
       <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
         <label className="form-label small fw-medium mb-0">Section:</label>
-        <select className="form-select form-select-sm" style={{ width: 350 }} value={selectedSectionId}
-          onChange={e => { setSelectedSectionId(e.target.value); setViewAll(false); }} disabled={viewAll || sections.length === 0}>
-          {sections.length === 0
+        <select className="form-select form-select-sm" style={{ width: 400 }} value={selectedSectionId}
+          onChange={e => { setSelectedSectionId(e.target.value); setViewAll(false); }} disabled={viewAll || lessons.length === 0}>
+          {lessons.length === 0
             ? <option value="">Loading sections...</option>
-            : sections.map((s: any) => <option key={s.id} value={s.id}>{s.sessionLabel}: {s.title}</option>)
+            : lessons.map((l: any) => (
+                <option key={l.id} value={l.id}>
+                  M{l.moduleNumber}.{l.lesson_number || l.sort_order || ''}: {l.title}
+                </option>
+              ))
           }
         </select>
         <button className={`btn btn-sm ${viewAll ? 'btn-primary' : 'btn-outline-secondary'}`}

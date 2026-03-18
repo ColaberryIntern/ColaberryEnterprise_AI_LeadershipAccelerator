@@ -1,9 +1,11 @@
 import { ArtifactDefinition, AssignmentSubmission, SkillDefinition, VariableStore } from '../models';
 import * as variableService from './variableService';
 
-export async function listArtifactDefinitions(opts?: { sessionId?: string; sectionId?: string }): Promise<ArtifactDefinition[]> {
+export async function listArtifactDefinitions(opts?: { sessionId?: string; sectionId?: string; lessonId?: string }): Promise<ArtifactDefinition[]> {
   const where: any = {};
-  if (opts?.sectionId) {
+  if (opts?.lessonId) {
+    where.lesson_id = opts.lessonId;
+  } else if (opts?.sectionId) {
     where.section_id = opts.sectionId;
   } else if (opts?.sessionId) {
     where.session_id = opts.sessionId;
