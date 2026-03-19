@@ -78,9 +78,17 @@ function AIArchitectLandingPage() {
               </span>
               {' '}in 3 Weeks
             </h1>
-            <p style={{ fontSize: 'clamp(16px, 2.5vw, 20px)', color: '#94a3b8', maxWidth: 620, margin: '0 auto 36px', lineHeight: 1.6 }}>
-              Turn your ideas into real AI systems inside your company — no theory, real implementation.
-            </p>
+            <div style={{ maxWidth: 640, margin: '0 auto 36px' }}>
+              <p style={{ fontSize: 'clamp(15px, 2.2vw, 18px)', color: '#cbd5e1', lineHeight: 1.7, marginBottom: 14 }}>
+                AI is no longer a tool — it's becoming <strong style={{ color: '#fff' }}>how work gets done</strong>.
+              </p>
+              <p style={{ fontSize: 'clamp(15px, 2.2vw, 18px)', color: '#94a3b8', lineHeight: 1.7, marginBottom: 14 }}>
+                The professionals who understand how to <strong style={{ color: '#cbd5e1' }}>build systems</strong> — not just use tools — are the ones pulling ahead fast.
+              </p>
+              <p style={{ fontSize: 'clamp(15px, 2.2vw, 18px)', color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>
+                In 3 weeks, you'll go from ideas {'\u2192'} a <strong style={{ color: ACCENT }}>real AI system</strong> inside your company.
+              </p>
+            </div>
             <button onClick={openBooking} style={{ ...btnStyle, padding: '18px 48px', fontSize: 20 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
@@ -105,8 +113,17 @@ function AIArchitectLandingPage() {
               <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
                 This is the transition happening right now: <strong style={{ color: ACCENT }}>From specialized roles {'\u2192'} AI Systems Architect</strong>
               </p>
-              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, margin: 0 }}>
+              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
                 You don't need to learn everything. You need to understand how the pieces work together. That's exactly what we show you how to do.
+              </p>
+              <p style={{ color: TEXT2, fontSize: 16, lineHeight: 1.7, marginBottom: 12, fontStyle: 'italic' }}>
+                You're not learning something new — you're stepping into the role your experience has already been preparing you for.
+              </p>
+              <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 8 }}>
+                This is why roles across BI, Data, Engineering, and Leadership are converging into one:
+              </p>
+              <p style={{ fontSize: 22, fontWeight: 800, color: ACCENT, margin: 0 }}>
+                AI Systems Architect
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 14 }}>
@@ -132,9 +149,14 @@ function AIArchitectLandingPage() {
                 </div>
               ))}
             </div>
-            <p style={{ textAlign: 'center', marginTop: 28, fontSize: 15, fontWeight: 600, color: ACCENT2, lineHeight: 1.6 }}>
-              This is why many roles are evolving into AI Systems Architects — the people who understand how everything connects.
-            </p>
+            <div style={{ textAlign: 'center', marginTop: 28 }}>
+              <p style={{ fontSize: 15, color: TEXT2, lineHeight: 1.6, marginBottom: 6 }}>
+                Most professionals already operate in 2–3 of these areas.
+              </p>
+              <p style={{ fontSize: 15, fontWeight: 600, color: ACCENT2, lineHeight: 1.6, margin: 0 }}>
+                AI Architects are the ones who understand how all 7 connect.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -217,31 +239,62 @@ function AIArchitectLandingPage() {
                 <h2 style={{ fontSize: 'clamp(22px, 3vw, 32px)', fontWeight: 700, marginBottom: 16, color: TEXT }}>
                   Next Cohort Starting Soon
                 </h2>
-                <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 20 }}>
-                  This is a cohort-based program where we guide you through building a real AI system step-by-step.
-                  Spots are limited to ensure hands-on support and real implementation.
-                </p>
-                <div style={{ background: 'rgba(59,130,246,0.06)', borderRadius: 8, padding: '14px 20px', marginBottom: 20, border: `1px solid rgba(59,130,246,0.15)` }}>
-                  <div style={{ fontSize: 13, color: MUTED, marginBottom: 4 }}>Next Cohort Start Date</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: ACCENT }}>
+                <div style={{ background: 'rgba(59,130,246,0.06)', borderRadius: 8, padding: '16px 20px', marginBottom: 20, border: `1px solid rgba(59,130,246,0.15)` }}>
+                  <div style={{ fontSize: 13, color: MUTED, marginBottom: 4 }}>Next Cohort Starting</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: ACCENT }}>
                     {new Date(nextCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </div>
                   <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
                     {nextCohort.seats_remaining} seats remaining
                   </div>
                 </div>
-                <p style={{ color: '#dc2626', fontSize: 14, fontWeight: 600, marginBottom: 24 }}>
-                  Limited seats available — once full, enrollment closes.
-                </p>
+                <div style={{ textAlign: 'left', marginBottom: 24 }}>
+                  <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 12 }}>
+                    This is a guided, hands-on build experience — not a passive course.
+                  </p>
+                  <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 12 }}>
+                    Because of the level of support, we limit how many people can join each cohort.
+                  </p>
+                  <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 12 }}>
+                    Once this cohort fills, enrollment closes and the next start date moves out.
+                  </p>
+                  <p style={{ color: TEXT, fontSize: 15, lineHeight: 1.7, fontWeight: 600, margin: 0 }}>
+                    If you're serious about building a real AI system, this is your window.
+                  </p>
+                </div>
                 <button onClick={openBooking} style={{ ...btnStyle }}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  SECURE YOUR SPOT
+                  APPLY FOR THIS COHORT
                 </button>
               </div>
             </div>
           </section>
         )}
+
+        {/* WHO THIS IS FOR */}
+        <section style={{ background: BG_ALT, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 640, margin: '0 auto' }}>
+            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 32px)', fontWeight: 700, marginBottom: 28, textAlign: 'center', color: TEXT }}>
+              Who This Is For
+            </h2>
+            <div style={{ background: WHITE, borderRadius: 10, padding: '28px 28px', border: `1px solid ${BORDER}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 20 }}>
+                This is for you if:
+              </p>
+              {[
+                "You're already working with data, systems, or technology",
+                'You see AI changing how work gets done',
+                'You want to move beyond tools \u2192 into building systems',
+                'You want to lead AI initiatives, not follow them',
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12, fontSize: 15, lineHeight: 1.6, color: TEXT2 }}>
+                  <span style={{ color: GREEN, marginTop: 2 }}>{'\u2713'}</span> {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         {/* CTA SECTION */}
         <section style={{ background: HERO_BG, padding: '70px 20px' }}>
@@ -249,24 +302,27 @@ function AIArchitectLandingPage() {
             <h2 style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 700, marginBottom: 12, color: '#fff' }}>
               Let's Map Your AI System
             </h2>
-            <p style={{ color: '#94a3b8', fontSize: 15, marginBottom: 8 }}>
-              This is a working session — not a sales call.
+            <p style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+              This is not a sales call.
             </p>
-            <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
-              We'll identify your use case, map the architecture, and plan a 3-week path to a working system.
+            <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.7, marginBottom: 24 }}>
+              This is where we map your AI system. We'll walk through:
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 460, margin: '0 auto 36px', textAlign: 'left' }}>
+            <div style={{ maxWidth: 420, margin: '0 auto 32px', textAlign: 'left' }}>
               {[
-                'Identify your use case',
-                'Map your system architecture',
-                'Show where AI creates impact',
-                'Define next steps for deployment',
+                'What you should build',
+                'How the system should work',
+                'Where AI creates the biggest impact',
+                'What it would take to deploy it in 3 weeks',
               ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#cbd5e1' }}>
-                  <span style={{ color: GREEN }}>{'\u2713'}</span> {item}
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 15, color: '#cbd5e1', marginBottom: 10, lineHeight: 1.5 }}>
+                  <span style={{ color: GREEN, marginTop: 2 }}>{'\u2022'}</span> {item}
                 </div>
               ))}
             </div>
+            <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 32 }}>
+              If it makes sense, we'll show you exactly how to move forward.
+            </p>
             <button onClick={openBooking} style={{ ...btnStyle, padding: '20px 56px', fontSize: 22 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
