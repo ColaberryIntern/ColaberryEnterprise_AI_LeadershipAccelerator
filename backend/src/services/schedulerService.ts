@@ -334,24 +334,25 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
 }
 
 /** Check if a voice call is within the campaign's call schedule */
-function isWithinCallSchedule(settings: Record<string, any>): boolean {
-  const tz = settings.call_timezone || 'America/Chicago';
-  const startTime = settings.call_time_start || '09:00';
-  const endTime = settings.call_time_end || '17:00';
-  const activeDays: number[] = settings.call_active_days || [1, 2, 3, 4, 5];
-
+/**
+ * Check if current time is within a schedule window (timezone-aware).
+ * Used for voice calls, email, and SMS send windows.
+ */
+function isWithinScheduleWindow(
+  tz: string,
+  startTime: string,
+  endTime: string,
+  activeDays: number[],
+): boolean {
   try {
-    // Get current time in the campaign's timezone
     const nowStr = new Date().toLocaleString('en-US', { timeZone: tz });
     const nowInTz = new Date(nowStr);
     const day = nowInTz.getDay(); // 0=Sun, 1=Mon...
     const hours = nowInTz.getHours();
     const minutes = nowInTz.getMinutes();
 
-    // Check active day
     if (!activeDays.includes(day)) return false;
 
-    // Check time window
     const [startH, startM] = startTime.split(':').map(Number);
     const [endH, endM] = endTime.split(':').map(Number);
     const currentMinutes = hours * 60 + minutes;
@@ -360,8 +361,31 @@ function isWithinCallSchedule(settings: Record<string, any>): boolean {
 
     return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
   } catch {
-    return true; // On error, allow the call
+    return true; // On error, allow the send
   }
+}
+
+function isWithinCallSchedule(settings: Record<string, any>): boolean {
+  return isWithinScheduleWindow(
+    settings.call_timezone || 'America/Chicago',
+    settings.call_time_start || '09:00',
+    settings.call_time_end || '17:00',
+    settings.call_active_days || [1, 2, 3, 4, 5],
+  );
+}
+
+/**
+ * Check if current time is within the email/SMS send window.
+ * Uses send_time_start/end if configured, otherwise defaults to 08:00-21:00 CT.
+ * Active days default to Mon-Sat (1-6) for email/SMS.
+ */
+function isWithinSendWindow(settings: Record<string, any>): boolean {
+  return isWithinScheduleWindow(
+    settings.send_timezone || settings.call_timezone || 'America/Chicago',
+    settings.send_time_start || '08:00',
+    settings.send_time_end || '21:00',
+    settings.send_active_days || settings.call_active_days || [1, 2, 3, 4, 5, 6],
+  );
 }
 
 /** Get campaign settings (with defaults) from a campaign record */
@@ -488,9 +512,20 @@ async function processScheduledActions(): Promise<void> {
       continue; // Skip — will be picked up next cycle
     }
 
+    // Send window: skip email/SMS actions outside business hours (default 8 AM - 9 PM CT)
+    if ((channel === 'email' || channel === 'sms') && action.campaign_id && Object.keys(campaignSettings).length > 0) {
+      if (!isWithinSendWindow(campaignSettings)) {
+        // Reset to pending so it's retried during business hours
+        await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
+        console.log(`[Scheduler] ${channel} action ${action.id} outside send window, deferred to business hours`);
+        continue;
+      }
+    }
+
     // Call schedule: skip voice actions outside call window
     if (channel === 'voice' && action.campaign_id && Object.keys(campaignSettings).length > 0) {
       if (!isWithinCallSchedule(campaignSettings)) {
+        await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
         console.log(`[Scheduler] Voice action ${action.id} outside call window, deferring`);
         continue;
       }
