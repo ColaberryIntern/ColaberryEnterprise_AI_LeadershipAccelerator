@@ -16,9 +16,10 @@ function fadeStyle(visible: boolean, delay: number): React.CSSProperties {
 
 interface Props {
   onOpenBooking: () => void;
+  ctaLabel?: string;
 }
 
-export default function IntelligenceDemoSection({ onOpenBooking }: Props) {
+export default function IntelligenceDemoSection({ onOpenBooking, ctaLabel }: Props) {
   const sectionRef = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -85,17 +86,23 @@ export default function IntelligenceDemoSection({ onOpenBooking }: Props) {
           <p className="text-muted mb-4">
             Turn invisible customer behavior into actionable intelligence.
           </p>
-          <div className="d-flex flex-column flex-sm-row justify-content-center gap-3">
-            <a href="#download-overview" className="btn btn-lg btn-hero-primary">
-              Build Your AI System
-            </a>
-            <button
-              className="btn btn-lg btn-outline-primary"
-              onClick={onOpenBooking}
-            >
-              See It For Your Business
+          {ctaLabel ? (
+            <button className="btn btn-lg btn-hero-primary" onClick={onOpenBooking}>
+              {ctaLabel}
             </button>
-          </div>
+          ) : (
+            <div className="d-flex flex-column flex-sm-row justify-content-center gap-3">
+              <a href="#download-overview" className="btn btn-lg btn-hero-primary">
+                Build Your AI System
+              </a>
+              <button
+                className="btn btn-lg btn-outline-primary"
+                onClick={onOpenBooking}
+              >
+                See It For Your Business
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </section>
