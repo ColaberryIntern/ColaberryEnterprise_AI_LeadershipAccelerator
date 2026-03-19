@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useEffect, useState, useRef, useCallback } from 'react'; // eslint-disable-line
+import { useAuth } from '../../contexts/AuthContext'; // eslint-disable-line
 import api from '../../utils/api';
 
 const POLL_INTERVAL = 10000;
@@ -55,6 +55,7 @@ export default function WarRoomPage() {
   const [feed, setFeed] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [error, setError] = useState('');
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const activityRef = useRef<HTMLDivElement>(null);
 
   const fetchAll = useCallback(async () => {
@@ -196,7 +197,7 @@ export default function WarRoomPage() {
             {activities.length === 0 ? (
               <p className="text-muted text-center py-4" style={{ fontSize: 13 }}>No recent activity</p>
             ) : (
-              <table className="table table-sm table-hover mb-0" style={{ fontSize: 12 }}>
+              <table className="table table-sm mb-0" style={{ fontSize: 12 }}>
                 <tbody>
                   {activities.map((a: any, i: number) => {
                     const evtType = a.event_type || a.type || 'event';
@@ -208,18 +209,85 @@ export default function WarRoomPage() {
                       evtType.includes('status') || evtType.includes('score') ? 'bg-info' :
                       evtType.includes('failed') || evtType.includes('bounced') ? 'bg-danger' :
                       'bg-secondary';
+                    const srcType = a.lead_source_type || '';
+                    const srcBadge =
+                      srcType === 'warm' ? { label: 'Marketing', cls: 'bg-primary' } :
+                      srcType === 'cold' ? { label: 'Cold', cls: 'bg-warning text-dark' } :
+                      srcType === 'alumni' ? { label: 'Alumni', cls: 'bg-success' } :
+                      null;
+                    const isExpanded = expandedIdx === i;
                     return (
-                      <tr key={i}>
-                        <td style={{ width: 70, color: '#6c757d', fontSize: 11 }}>
-                          {a.created_at ? formatTimeAgo(a.created_at) : '-'}
-                        </td>
-                        <td style={{ width: 100 }}>
-                          <span className={`badge ${badgeClass}`} style={{ fontSize: 9 }}>
-                            {evtType.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td>{detail}</td>
-                      </tr>
+                      <React.Fragment key={i}>
+                        <tr
+                          onClick={() => setExpandedIdx(isExpanded ? null : i)}
+                          style={{ cursor: 'pointer', background: isExpanded ? '#f0f4ff' : undefined }}
+                        >
+                          <td style={{ width: 60, color: '#6c757d', fontSize: 11 }}>
+                            {a.created_at ? formatTimeAgo(a.created_at) : '-'}
+                          </td>
+                          <td style={{ width: 90 }}>
+                            <span className={`badge ${badgeClass}`} style={{ fontSize: 9 }}>
+                              {evtType.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td>
+                            {a.lead_name && <span className="fw-medium me-1">{a.lead_name}</span>}
+                            <span className="text-muted">{detail.length > 60 ? detail.slice(0, 60) + '...' : detail}</span>
+                          </td>
+                          <td style={{ width: 80 }}>
+                            {srcBadge && <span className={`badge ${srcBadge.cls}`} style={{ fontSize: 8 }}>{srcBadge.label}</span>}
+                          </td>
+                          <td style={{ width: 20, color: '#adb5bd', fontSize: 11 }}>
+                            {isExpanded ? '\u25B2' : '\u25BC'}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={5} style={{ background: '#f8f9fa', padding: '10px 16px' }}>
+                              <div className="row g-3" style={{ fontSize: 12 }}>
+                                <div className="col-md-4">
+                                  <div className="text-muted" style={{ fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Lead</div>
+                                  <div className="fw-medium">{a.lead_name || 'Unknown'}</div>
+                                  <div className="text-muted">{a.lead_email || '-'}</div>
+                                  {a.lead_pipeline_stage && (
+                                    <span className="badge bg-secondary mt-1" style={{ fontSize: 9 }}>
+                                      {STAGE_LABELS[a.lead_pipeline_stage] || a.lead_pipeline_stage}
+                                    </span>
+                                  )}
+                                  {a.lead_score != null && (
+                                    <span className="badge bg-info ms-1 mt-1" style={{ fontSize: 9 }}>
+                                      Score: {a.lead_score}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="col-md-4">
+                                  <div className="text-muted" style={{ fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Campaign</div>
+                                  {a.campaign_name ? (
+                                    <>
+                                      <div className="fw-medium">{a.campaign_name}</div>
+                                      <span className="badge bg-light text-dark" style={{ fontSize: 9 }}>{a.campaign_type || '-'}</span>
+                                    </>
+                                  ) : (
+                                    <div className="text-muted">No campaign</div>
+                                  )}
+                                </div>
+                                <div className="col-md-4">
+                                  <div className="text-muted" style={{ fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Event</div>
+                                  <div>{detail}</div>
+                                  <div className="text-muted mt-1" style={{ fontSize: 11 }}>
+                                    {a.created_at ? new Date(a.created_at).toLocaleString() : '-'}
+                                  </div>
+                                  {a.lead_id && (
+                                    <a href={`/admin/leads/${a.lead_id}`} className="btn btn-sm btn-outline-primary mt-2" style={{ fontSize: 10 }}>
+                                      View Lead
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
