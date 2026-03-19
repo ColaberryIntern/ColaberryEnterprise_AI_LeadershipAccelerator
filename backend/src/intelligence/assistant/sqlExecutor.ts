@@ -104,7 +104,7 @@ function buildCampaignQueries(tables: string[]): TemplateQuery[] {
   }
   if (tables.includes('campaign_errors')) {
     queries.push({
-      sql: `SELECT COALESCE(error_type, 'unknown') AS error_type, COUNT(*) AS error_count, MAX(created_at) AS last_occurred FROM campaign_errors WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY error_type ORDER BY error_count DESC LIMIT 10`,
+      sql: `SELECT COALESCE(component, 'unknown') AS component, COALESCE(severity, 'unknown') AS severity, COUNT(*) AS error_count, MAX(created_at) AS last_occurred FROM campaign_errors WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY component, severity ORDER BY error_count DESC LIMIT 10`,
       description: 'Campaign errors in the last 7 days',
       tables: ['campaign_errors'],
     });
@@ -182,22 +182,22 @@ function buildAgentQueries(tables: string[]): TemplateQuery[] {
   }
   if (tables.includes('ai_agent_activity_logs')) {
     queries.push({
-      sql: `SELECT COALESCE(agent_name, 'unknown') AS agent_name, COALESCE(status, 'unknown') AS status, COUNT(*) AS executions, AVG(duration_ms) AS avg_duration_ms, MAX(created_at) AS last_execution FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY agent_name, status ORDER BY executions DESC LIMIT 20`,
+      sql: `SELECT a.agent_name, l.result, COUNT(*) AS executions, AVG(l.duration_ms) AS avg_duration_ms, MAX(l.created_at) AS last_execution FROM ai_agent_activity_logs l JOIN ai_agents a ON a.id = l.agent_id WHERE l.created_at >= NOW() - INTERVAL '24 hours' GROUP BY a.agent_name, l.result ORDER BY executions DESC LIMIT 20`,
       description: 'Agent execution summary (last 24 hours)',
-      tables: ['ai_agent_activity_logs'],
+      tables: ['ai_agent_activity_logs', 'ai_agents'],
     });
     // Most active agents by total execution volume (7-day window)
     queries.push({
-      sql: `SELECT agent_name, COUNT(*) AS executions, COUNT(*) FILTER (WHERE status = 'success') AS successes, COUNT(*) FILTER (WHERE status = 'error') AS errors, MIN(created_at) AS first_run, MAX(created_at) AS last_run FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY agent_name ORDER BY executions DESC LIMIT 20`,
+      sql: `SELECT a.agent_name, COUNT(*) AS executions, COUNT(*) FILTER (WHERE l.result = 'success') AS successes, COUNT(*) FILTER (WHERE l.result = 'failed') AS errors, MIN(l.created_at) AS first_run, MAX(l.created_at) AS last_run FROM ai_agent_activity_logs l JOIN ai_agents a ON a.id = l.agent_id WHERE l.created_at >= NOW() - INTERVAL '7 days' GROUP BY a.agent_name ORDER BY executions DESC LIMIT 20`,
       description: 'Most active agents by execution count (last 7 days)',
-      tables: ['ai_agent_activity_logs'],
+      tables: ['ai_agent_activity_logs', 'ai_agents'],
     });
   }
   if (tables.includes('orchestration_health')) {
     queries.push({
-      sql: `SELECT COALESCE(component, 'unknown') AS component, COALESCE(status, 'unknown') AS health_status, last_check_at, error_message FROM orchestration_health ORDER BY last_check_at DESC NULLS LAST LIMIT 10`,
+      sql: `SELECT o.status, o.health_score, o.scan_timestamp, a.agent_name, o.duration_ms FROM orchestration_health o LEFT JOIN ai_agents a ON a.id = o.agent_id ORDER BY o.scan_timestamp DESC NULLS LAST LIMIT 10`,
       description: 'Orchestration health status',
-      tables: ['orchestration_health'],
+      tables: ['orchestration_health', 'ai_agents'],
     });
   }
   return queries;
@@ -207,14 +207,14 @@ function buildAnomalyQueries(tables: string[]): TemplateQuery[] {
   const queries: TemplateQuery[] = [];
   if (tables.includes('campaign_errors')) {
     queries.push({
-      sql: `SELECT DATE_TRUNC('hour', created_at) AS hour, COUNT(*) AS error_count, COALESCE(error_type, 'unknown') AS error_type FROM campaign_errors WHERE created_at >= NOW() - INTERVAL '48 hours' GROUP BY hour, error_type ORDER BY hour DESC LIMIT 50`,
+      sql: `SELECT DATE_TRUNC('hour', created_at) AS hour, COUNT(*) AS error_count, COALESCE(component, 'unknown') AS component, COALESCE(severity, 'unknown') AS severity FROM campaign_errors WHERE created_at >= NOW() - INTERVAL '48 hours' GROUP BY hour, component, severity ORDER BY hour DESC LIMIT 50`,
       description: 'Campaign error frequency (last 48 hours)',
       tables: ['campaign_errors'],
     });
   }
   if (tables.includes('ai_agent_activity_logs')) {
     queries.push({
-      sql: `SELECT COALESCE(agent_name, 'unknown') AS agent_name, COUNT(*) FILTER (WHERE status = 'error') AS errors, COUNT(*) AS total, ROUND(COUNT(*) FILTER (WHERE status = 'error')::numeric / NULLIF(COUNT(*), 0) * 100, 1) AS error_rate_pct FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY agent_name HAVING COUNT(*) FILTER (WHERE status = 'error') > 0 ORDER BY error_rate_pct DESC LIMIT 10`,
+      sql: `SELECT a.agent_name, COUNT(*) FILTER (WHERE l.result = 'failed') AS errors, COUNT(*) AS total, ROUND(COUNT(*) FILTER (WHERE l.result = 'failed')::numeric / NULLIF(COUNT(*), 0) * 100, 1) AS error_rate_pct FROM ai_agent_activity_logs l JOIN ai_agents a ON a.id = l.agent_id WHERE l.created_at >= NOW() - INTERVAL '24 hours' GROUP BY a.agent_name HAVING COUNT(*) FILTER (WHERE l.result = 'failed') > 0 ORDER BY error_rate_pct DESC LIMIT 10`,
       description: 'Agent error rates (last 24 hours)',
       tables: ['ai_agent_activity_logs'],
     });

@@ -259,8 +259,8 @@ async function loadEntityContextData(entityType: string, entityName: string): Pr
       },
       agents: {
         table: 'ai_agents',
-        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'idle') as idle, COUNT(*) FILTER (WHERE status = 'error') as errored, COUNT(*) FILTER (WHERE status = 'running') as running, COUNT(*) FILTER (WHERE enabled = true) as enabled FROM ai_agents`,
-        statsQuery: `SELECT a.agent_name, a.status, a.error_count, a.last_run_at, a.enabled, COALESCE(l.executions, 0) as recent_executions, COALESCE(l.errors, 0) as recent_errors FROM ai_agents a LEFT JOIN (SELECT agent_name, COUNT(*) as executions, COUNT(*) FILTER (WHERE status = 'error') as errors FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY agent_name) l ON a.agent_name = l.agent_name WHERE a.enabled = true ORDER BY recent_executions DESC NULLS LAST LIMIT 15`,
+        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'idle') as idle, COUNT(*) FILTER (WHERE status = 'error') as errored, COUNT(*) FILTER (WHERE status = 'active') as active, COUNT(*) FILTER (WHERE enabled = true) as enabled FROM ai_agents`,
+        statsQuery: `SELECT a.agent_name, a.status, a.error_count, a.last_run_at, a.enabled, COALESCE(l.executions, 0) as recent_executions, COALESCE(l.errors, 0) as recent_errors FROM ai_agents a LEFT JOIN (SELECT agent_id, COUNT(*) as executions, COUNT(*) FILTER (WHERE result = 'failed') as errors FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY agent_id) l ON a.id = l.agent_id WHERE a.enabled = true ORDER BY recent_executions DESC NULLS LAST LIMIT 15`,
       },
     };
 
