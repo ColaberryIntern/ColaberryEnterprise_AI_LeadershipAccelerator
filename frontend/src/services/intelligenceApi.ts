@@ -398,6 +398,27 @@ export const runDepartmentStrategy = (slug: string) =>
 
 // ─── Campaign Intelligence Graph ────────────────────────────────────────
 
+export interface EdgeVelocityMetrics {
+  median_hours: number;
+  velocity: number;
+  throughput_per_day: number;
+  bottleneck_score: number;
+}
+
+export interface NodeVelocityMetrics {
+  incoming_velocity: number;
+  outgoing_velocity: number;
+  dwell_hours: number;
+  pulse_intensity: number;
+}
+
+export interface TimelineBucket {
+  bucket_start: string;
+  bucket_end: string;
+  edge_volumes: Record<string, number>;
+  node_counts: Record<string, number>;
+}
+
 export interface CampaignGraphNode {
   id: string;
   type: 'source' | 'outreach' | 'engagement' | 'visitor' | 'entry' | 'campaign' | 'outcome';
@@ -421,6 +442,7 @@ export interface CampaignGraphNode {
     attribution_linear?: number;
     attribution_first?: number;
     attribution_last?: number;
+    velocity?: NodeVelocityMetrics;
   };
   source_breakdown?: Record<string, number>;
 }
@@ -430,6 +452,7 @@ export interface CampaignGraphEdge {
   to: string;
   label: string;
   volume?: number;
+  velocity?: EdgeVelocityMetrics;
 }
 
 export interface CampaignGraphValidation {
@@ -452,6 +475,8 @@ export interface CampaignGraphData {
   nodes: CampaignGraphNode[];
   edges: CampaignGraphEdge[];
   validation?: CampaignGraphValidation;
+  time_window?: string;
+  timeline_buckets?: TimelineBucket[];
 }
 
 export interface GraphUserRecord {
@@ -477,8 +502,14 @@ const adminHeaders = () => ({
   headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
 });
 
-export const getCampaignGraph = () =>
-  axios.get<CampaignGraphData>('/api/admin/campaign-intelligence/graph', adminHeaders());
+export const getCampaignGraph = (timeWindow?: string, timeline?: boolean) =>
+  axios.get<CampaignGraphData>('/api/admin/campaign-intelligence/graph', {
+    ...adminHeaders(),
+    params: {
+      ...(timeWindow && timeWindow !== 'all' ? { timeWindow } : {}),
+      ...(timeline ? { timeline: 'true' } : {}),
+    },
+  });
 
 export const getGraphNodeUsers = (nodeId: string, page = 1, limit = 50) =>
   axios.get<GraphUserListResponse>('/api/admin/campaign-intelligence/graph/node-users', {

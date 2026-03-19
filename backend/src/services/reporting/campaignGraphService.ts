@@ -33,8 +33,30 @@ export interface CampaignGraphNode {
     email_count?: number;
     sms_count?: number;
     voice_count?: number;
+    velocity?: NodeVelocityMetrics;
   };
   source_breakdown?: Record<string, number>;
+}
+
+export interface EdgeVelocityMetrics {
+  median_hours: number;
+  velocity: number;            // Normalized 0-1 (higher = faster)
+  throughput_per_day: number;
+  bottleneck_score: number;    // 0-1 (higher = more bottlenecked)
+}
+
+export interface NodeVelocityMetrics {
+  incoming_velocity: number;
+  outgoing_velocity: number;
+  dwell_hours: number;
+  pulse_intensity: number;     // 0-1, drives frontend pulse animation
+}
+
+export interface TimelineBucket {
+  bucket_start: string;
+  bucket_end: string;
+  edge_volumes: Record<string, number>;
+  node_counts: Record<string, number>;
 }
 
 export interface CampaignGraphEdge {
@@ -42,6 +64,7 @@ export interface CampaignGraphEdge {
   to: string;
   label: string;
   volume?: number;
+  velocity?: EdgeVelocityMetrics;
 }
 
 export interface CampaignGraphValidation {
@@ -64,6 +87,8 @@ export interface CampaignGraphData {
   nodes: CampaignGraphNode[];
   edges: CampaignGraphEdge[];
   validation: CampaignGraphValidation;
+  time_window?: string;
+  timeline_buckets?: TimelineBucket[];
 }
 
 export interface LeadPathRecord {
@@ -117,13 +142,65 @@ export interface GraphUserRecord {
 
 const LAYER_ORDER: Record<string, number> = { source: 0, outreach: 1, engagement: 2, visitor: 3, entry: 4, campaign: 5, outcome: 6 };
 
+// ─── Velocity Helpers ────────────────────────────────────────────────────────
+
+function getNodeTimestamp(lead: LeadPathRecord, nodeId: string): Date | null {
+  if (nodeId.startsWith('src_')) return lead.created_at;
+  if (nodeId === 'outreach_email') return lead.outreach.email.earliest;
+  if (nodeId === 'outreach_sms') return lead.outreach.sms.earliest;
+  if (nodeId === 'outreach_voice') return lead.outreach.voice.earliest;
+  if (nodeId.startsWith('engagement_')) {
+    const times = [lead.outreach.email.earliest, lead.outreach.sms.earliest, lead.outreach.voice.earliest]
+      .filter(Boolean) as Date[];
+    return times.length > 0 ? new Date(Math.min(...times.map(t => t.getTime()))) : null;
+  }
+  if (nodeId === 'visitor_site') return lead.visitor_stats?.first_seen_at || null;
+  if (nodeId === 'visitor_never') return lead.created_at;
+  if (nodeId.startsWith('entry_')) return lead.first_touch.timestamp;
+  if (nodeId.startsWith('campaign_')) {
+    const cid = nodeId.replace('campaign_', '');
+    const enrollment = lead.campaign_enrollments.find(e => e.campaign_id === cid);
+    return enrollment?.enrolled_at || null;
+  }
+  if (nodeId.startsWith('outcome_')) {
+    const dates = lead.campaign_enrollments.map(e => e.enrolled_at.getTime());
+    return dates.length > 0 ? new Date(Math.max(...dates)) : null;
+  }
+  return null;
+}
+
+function sortedPercentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const idx = p * (sorted.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+function getTimeWindowCutoff(window: string): Date | null {
+  const now = new Date();
+  switch (window) {
+    case '24h': return new Date(now.getTime() - 24 * 3600_000);
+    case '3d':  return new Date(now.getTime() - 3 * 24 * 3600_000);
+    case '7d':  return new Date(now.getTime() - 7 * 24 * 3600_000);
+    case '30d': return new Date(now.getTime() - 30 * 24 * 3600_000);
+    default: return null;
+  }
+}
+
 // ─── Cache ──────────────────────────────────────────────────────────────────
 
-let graphCache: { data: CampaignGraphData; leadPaths: LeadPathRecord[]; ts: number } | null = null;
+let graphCache: { data: CampaignGraphData; leadPaths: LeadPathRecord[]; ts: number; cacheKey: string } | null = null;
 const CACHE_TTL = 60_000;
 
 export function clearGraphCache(): void {
   graphCache = null;
+}
+
+export function getCachedLeadPaths(): LeadPathRecord[] | null {
+  return graphCache?.leadPaths || null;
 }
 
 // ─── Source categorization (verified correct against production DB) ──────────
@@ -880,6 +957,94 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     edges.push({ from, to, label: 'converts', volume: leadSet.size });
   }
 
+  // ── Velocity computation ──────────────────────────────────────────────
+  const leadById = new Map(leadPaths.map(lp => [lp.lead_id, lp]));
+  const allEdgeMaps: Map<string, Set<number>>[] = [
+    srcToOutreach, outreachToEngagement, engagementToVisitor, engagementToNever,
+    engagementToEntry, srcToVisitor, visitorToEntry, srcToNever, srcToEntry,
+    entryToCampaign, campaignToOutcome,
+  ];
+  const edgeLeadSets = new Map<string, Set<number>>();
+  for (const edgeMap of allEdgeMaps) {
+    for (const [key, leadSet] of edgeMap) {
+      edgeLeadSets.set(key, leadSet);
+    }
+  }
+
+  const allMedianHours: number[] = [];
+  for (const edge of edges) {
+    const key = `${edge.from}|${edge.to}`;
+    const leadSet = edgeLeadSets.get(key);
+    if (!leadSet || leadSet.size === 0) continue;
+
+    const deltas: number[] = [];
+    for (const leadId of leadSet) {
+      const lead = leadById.get(leadId);
+      if (!lead) continue;
+      const fromTs = getNodeTimestamp(lead, edge.from);
+      const toTs = getNodeTimestamp(lead, edge.to);
+      if (fromTs && toTs) {
+        const hours = (toTs.getTime() - fromTs.getTime()) / 3_600_000;
+        if (hours >= 0) deltas.push(hours);
+      }
+    }
+
+    if (deltas.length < 2) continue;
+    deltas.sort((a, b) => a - b);
+    const median = sortedPercentile(deltas, 0.5);
+    allMedianHours.push(median);
+
+    edge.velocity = {
+      median_hours: Math.round(median * 100) / 100,
+      velocity: 0,
+      throughput_per_day: 0,
+      bottleneck_score: 0,
+    };
+  }
+
+  // Normalize: log scale, invert (low time = high velocity)
+  if (allMedianHours.length > 0) {
+    const logMedians = allMedianHours.map(m => Math.log1p(m));
+    const maxLog = Math.max(...logMedians);
+    const minLog = Math.min(...logMedians);
+    const range = maxLog - minLog || 1;
+    for (const edge of edges) {
+      if (!edge.velocity) continue;
+      const logM = Math.log1p(edge.velocity.median_hours);
+      edge.velocity.velocity = Math.round((1 - (logM - minLog) / range) * 100) / 100;
+    }
+  }
+
+  // Bottleneck: edge significantly slower than its downstream edges
+  for (const edge of edges) {
+    if (!edge.velocity) continue;
+    const downstream = edges.filter(e => e.from === edge.to && e.velocity);
+    if (downstream.length === 0) continue;
+    const avgDownVel = downstream.reduce((s, e) => s + e.velocity!.velocity, 0) / downstream.length;
+    edge.velocity.bottleneck_score = Math.round(Math.max(0, avgDownVel - edge.velocity.velocity) * 100) / 100;
+  }
+
+  // Node velocity: derived from connected edges
+  const maxNodeCount = Math.max(...nodes.map(n => n.count), 1);
+  for (const node of nodes) {
+    const incoming = edges.filter(e => e.to === node.id && e.velocity);
+    const outgoing = edges.filter(e => e.from === node.id && e.velocity);
+    const inVel = incoming.length > 0
+      ? incoming.reduce((s, e) => s + e.velocity!.velocity, 0) / incoming.length : 0;
+    const outVel = outgoing.length > 0
+      ? outgoing.reduce((s, e) => s + e.velocity!.velocity, 0) / outgoing.length : 0;
+    const inTime = incoming.length > 0
+      ? incoming.reduce((s, e) => s + e.velocity!.median_hours, 0) / incoming.length : 0;
+    const pulse = Math.min(1, (node.count / maxNodeCount) * 0.4 + inVel * 0.6);
+
+    node.metrics.velocity = {
+      incoming_velocity: Math.round(inVel * 100) / 100,
+      outgoing_velocity: Math.round(outVel * 100) / 100,
+      dwell_hours: Math.round(inTime * 100) / 100,
+      pulse_intensity: Math.round(pulse * 100) / 100,
+    };
+  }
+
   // ── Validate edges (L→R only) ─────────────────────────────────────────
   const nodeTypeMap = new Map(nodes.map(n => [n.id, n.type]));
   const validEdges = edges.filter(e => {
@@ -1025,17 +1190,66 @@ function leadMatchesNode(lead: LeadPathRecord, nodeId: string): boolean {
   return false;
 }
 
+// ─── Timeline Buckets (for time-lapse playback) ─────────────────────────────
+
+export function buildTimelineBuckets(leadPaths: LeadPathRecord[], bucketCount = 20): TimelineBucket[] {
+  if (leadPaths.length === 0) return [];
+  const timestamps = leadPaths.map(lp => lp.created_at.getTime());
+  const minTs = Math.min(...timestamps);
+  const maxTs = Math.max(...timestamps);
+  const bucketSize = (maxTs - minTs) / bucketCount || 1;
+
+  const buckets: TimelineBucket[] = [];
+  for (let i = 0; i < bucketCount; i++) {
+    const start = minTs + i * bucketSize;
+    const end = start + bucketSize;
+    const cumulative = leadPaths.filter(lp => lp.created_at.getTime() < end);
+
+    const nodeCountsMap: Record<string, number> = {};
+    for (const lead of cumulative) {
+      const src = `src_${lead.source_category}`;
+      nodeCountsMap[src] = (nodeCountsMap[src] || 0) + 1;
+      if (lead.was_contacted && lead.engagement_level) {
+        nodeCountsMap[`engagement_${lead.engagement_level}`] = (nodeCountsMap[`engagement_${lead.engagement_level}`] || 0) + 1;
+      }
+      if (lead.has_visitor_record) nodeCountsMap['visitor_site'] = (nodeCountsMap['visitor_site'] || 0) + 1;
+      if (lead.first_touch.type) {
+        const entryId = `entry_${lead.first_touch.type}`;
+        nodeCountsMap[entryId] = (nodeCountsMap[entryId] || 0) + 1;
+      }
+      if (lead.outcome.enrolled) nodeCountsMap['outcome_enrolled'] = (nodeCountsMap['outcome_enrolled'] || 0) + 1;
+      if (lead.outcome.paid) nodeCountsMap['outcome_paid'] = (nodeCountsMap['outcome_paid'] || 0) + 1;
+    }
+
+    buckets.push({
+      bucket_start: new Date(start).toISOString(),
+      bucket_end: new Date(end).toISOString(),
+      edge_volumes: {},
+      node_counts: nodeCountsMap,
+    });
+  }
+  return buckets;
+}
+
 // ─── Main entry point ───────────────────────────────────────────────────────
 
-export async function getCampaignGraphData(): Promise<CampaignGraphData> {
-  if (graphCache && Date.now() - graphCache.ts < CACHE_TTL) {
+export async function getCampaignGraphData(timeWindow?: string): Promise<CampaignGraphData> {
+  const cacheKey = timeWindow || 'all';
+  if (graphCache && graphCache.cacheKey === cacheKey && Date.now() - graphCache.ts < CACHE_TTL) {
     return graphCache.data;
   }
 
-  const leadPaths = await buildLeadPaths();
-  const data = await buildGraphFromPaths(leadPaths);
+  let leadPaths = await buildLeadPaths();
 
-  graphCache = { data, leadPaths, ts: Date.now() };
+  if (timeWindow && timeWindow !== 'all') {
+    const cutoff = getTimeWindowCutoff(timeWindow);
+    if (cutoff) leadPaths = leadPaths.filter(lp => lp.created_at >= cutoff);
+  }
+
+  const data = await buildGraphFromPaths(leadPaths);
+  data.time_window = cacheKey;
+
+  graphCache = { data, leadPaths, ts: Date.now(), cacheKey };
   return data;
 }
 

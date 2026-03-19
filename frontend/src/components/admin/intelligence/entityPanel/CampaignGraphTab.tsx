@@ -9,6 +9,8 @@ import {
   GraphUserRecord,
   getGraphEdgeUsers,
   SliceContext,
+  EdgeVelocityMetrics,
+  TimelineBucket,
 } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
@@ -100,6 +102,7 @@ interface GraphLink {
   target: string;
   label: string;
   volume: number;
+  velocity?: EdgeVelocityMetrics;
 }
 
 function formatCount(n: number): string {
@@ -383,6 +386,16 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const [sliceLoading, setSliceLoading] = useState(false);
   const [globalData, setGlobalData] = useState<CampaignGraphData | null>(null);
 
+  // Time intelligence + velocity animation
+  const [timeWindow, setTimeWindow] = useState<string>('all');
+  const [animationsEnabled, setAnimationsEnabled] = useState(true);
+  const [timelapsePlaying, setTimelapsePlaying] = useState(false);
+  const [timelapseFrame, setTimelapseFrame] = useState(0);
+  const [timelineBuckets, setTimelineBuckets] = useState<TimelineBucket[] | null>(null);
+  const animPhase = useRef(0);
+  const animFrameId = useRef<number>(0);
+  const prefersReducedMotion = useRef(false);
+
   // Position persistence refs
   const savedPositions = useRef<Record<string, { fx: number; fy: number }>>(
     (() => { try { return JSON.parse(localStorage.getItem(POSITIONS_KEY) || '{}'); } catch { return {}; } })()
@@ -390,16 +403,42 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const isDragging = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  // Fetch graph data once
+  // Reduced motion detection
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    prefersReducedMotion.current = mq.matches;
+    const handler = (e: MediaQueryListEvent) => { prefersReducedMotion.current = e.matches; };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // Pulse animation loop (runs outside React render cycle)
+  useEffect(() => {
+    if (!animationsEnabled || prefersReducedMotion.current) return;
+    let running = true;
+    const tick = () => {
+      if (!running) return;
+      animPhase.current = (animPhase.current + 0.02) % (2 * Math.PI);
+      animFrameId.current = requestAnimationFrame(tick);
+    };
+    animFrameId.current = requestAnimationFrame(tick);
+    return () => { running = false; cancelAnimationFrame(animFrameId.current); };
+  }, [animationsEnabled]);
+
+  // Fetch graph data (re-fetches when timeWindow changes)
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    getCampaignGraph()
-      .then((res) => { if (!cancelled) { setData(res.data); setGlobalData(res.data); } })
+    getCampaignGraph(timeWindow)
+      .then((res) => {
+        if (cancelled) return;
+        setData(res.data);
+        if (timeWindow === 'all') setGlobalData(res.data);
+      })
       .catch((err) => { if (!cancelled) setError(err.message || 'Failed to load'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [timeWindow]);
 
   // Measure container
   useEffect(() => {
@@ -422,6 +461,18 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     io.observe(containerRef.current);
     return () => io.disconnect();
   }, []);
+
+  // Time-lapse playback
+  useEffect(() => {
+    if (!timelapsePlaying || !timelineBuckets) return;
+    const interval = setInterval(() => {
+      setTimelapseFrame(prev => {
+        if (prev >= timelineBuckets.length - 1) { setTimelapsePlaying(false); return prev; }
+        return prev + 1;
+      });
+    }, 500);
+    return () => clearInterval(interval);
+  }, [timelapsePlaying, timelineBuckets]);
 
   // Build graph data with sqrt-scaled sizes and position persistence
   const graphData = useMemo(() => {
@@ -485,6 +536,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         target: e.to,
         label: e.label,
         volume: e.volume || 0,
+        velocity: e.velocity,
       }));
 
     // Data validation
@@ -588,6 +640,21 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         ctx.globalAlpha = dimmed ? 0.12 : 1;
       }
 
+      // Velocity pulse ring
+      const pulseIntensity = n.metrics?.velocity?.pulse_intensity ?? 0;
+      if (pulseIntensity > 0.15 && animationsEnabled && !dimmed && !sliceDimmed && !prefersReducedMotion.current) {
+        const phase = animPhase.current;
+        const pulseR = radius + 3 + Math.sin(phase * (0.5 + pulseIntensity)) * 4 * pulseIntensity;
+        const pulseA = 0.12 + Math.sin(phase) * 0.1 * pulseIntensity;
+        ctx.beginPath();
+        ctx.arc(n.x!, n.y!, pulseR, 0, 2 * Math.PI);
+        ctx.strokeStyle = n.color;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = pulseA;
+        ctx.stroke();
+        ctx.globalAlpha = dimmed ? 0.12 : sliceDimmed ? 0.08 : 1;
+      }
+
       // Slice origin highlight ring
       const isSliceOrigin = !!sliceContext && sliceContext.nodeId === n.id;
       if (isSliceOrigin && !dimmed) {
@@ -660,7 +727,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       // Restore alpha
       if (dimmed || isZeroCount || sliceDimmed) ctx.globalAlpha = 1;
     },
-    [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId, sliceContext]
+    [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId, sliceContext, animationsEnabled]
   );
 
   // Declarative link helpers
@@ -678,6 +745,13 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       }
     }
 
+    // Bottleneck: red tint for slow edges
+    const bottleneck = (link as GraphLink).velocity?.bottleneck_score ?? 0;
+    if (bottleneck > 0.4) {
+      const bAlpha = 0.35 + bottleneck * 0.4;
+      return `rgba(229, 62, 62, ${bAlpha})`;
+    }
+
     const alpha = 0.3 + (Math.sqrt(volume) / Math.sqrt(maxVolume)) * 0.5;
     return `rgba(160, 174, 192, ${alpha})`;
   }, [highlightNodeId, connectedSet, maxVolume]);
@@ -688,7 +762,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   }, [maxVolume]);
 
   const getParticleCount = useCallback((link: any) => {
-    if (!isVisible || isDragging.current) return 0;
+    if (!isVisible || isDragging.current || !animationsEnabled || prefersReducedMotion.current) return 0;
     const volume = (link as GraphLink).volume || 0;
     if (maxVolume === 0 || volume === 0) return 0;
 
@@ -702,12 +776,14 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     }
 
     return Math.max(1, Math.round((volume / maxVolume) * 4));
-  }, [maxVolume, isVisible, highlightNodeId, connectedSet]);
+  }, [maxVolume, isVisible, animationsEnabled, highlightNodeId, connectedSet]);
 
   const getParticleSpeed = useCallback((link: any) => {
-    const volume = (link as GraphLink).volume || 0;
-    return 0.004 + (volume / maxVolume) * 0.008;
-  }, [maxVolume]);
+    if (!animationsEnabled || prefersReducedMotion.current) return 0;
+    const vel = (link as GraphLink).velocity?.velocity ?? 0;
+    // Fast edges (vel~1): 0.015, Slow edges (vel~0): 0.003
+    return 0.003 + vel * 0.012;
+  }, [animationsEnabled]);
 
   const getParticleWidth = useCallback((link: any) => {
     const volume = (link as GraphLink).volume || 0;
@@ -729,7 +805,14 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     const src = link.source as GraphNode;
     const srcCount = typeof src === 'object' ? src.count : 0;
     const pct = srcCount > 0 ? ((l.volume / srcCount) * 100).toFixed(1) : '—';
-    return `${l.label}: ${l.volume.toLocaleString()} (${pct}%)`;
+    let text = `${l.label}: ${l.volume.toLocaleString()} (${pct}%)`;
+    if (l.velocity) {
+      const h = l.velocity.median_hours;
+      const dur = h < 1 ? `${Math.round(h * 60)}m` : h < 24 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`;
+      text += ` · ${dur} median`;
+      if (l.velocity.bottleneck_score > 0.3) text += ' \u26A0 slow';
+    }
+    return text;
   }, []);
 
   const handleNodeHover = useCallback((node: any) => {
@@ -925,9 +1008,21 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           </div>
         )}
 
-        {/* Filter dropdowns */}
+        {/* Filter dropdowns + velocity controls */}
         {fullWidth && !sliceContext && (
-          <div className="d-flex gap-2" style={{ position: 'absolute', top: 6, right: 50, zIndex: 10 }}>
+          <div className="d-flex gap-2 align-items-center" style={{ position: 'absolute', top: 6, right: 50, zIndex: 10 }}>
+            <select
+              className="form-select form-select-sm"
+              style={{ fontSize: '0.65rem', width: 85, padding: '2px 6px' }}
+              value={timeWindow}
+              onChange={(e) => setTimeWindow(e.target.value)}
+            >
+              <option value="all">All Time</option>
+              <option value="24h">24 Hours</option>
+              <option value="3d">3 Days</option>
+              <option value="7d">7 Days</option>
+              <option value="30d">30 Days</option>
+            </select>
             <select
               className="form-select form-select-sm"
               style={{ fontSize: '0.65rem', width: 120, padding: '2px 6px' }}
@@ -951,6 +1046,33 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
                 </option>
               ))}
             </select>
+            <button
+              className={`btn btn-sm ${animationsEnabled ? 'btn-outline-primary' : 'btn-outline-secondary'}`}
+              style={{ width: 28, height: 28, padding: 0, fontSize: 10, background: 'rgba(255,255,255,0.9)' }}
+              onClick={() => setAnimationsEnabled(prev => !prev)}
+              title={animationsEnabled ? 'Pause animations' : 'Resume animations'}
+              aria-label={animationsEnabled ? 'Pause animations' : 'Resume animations'}
+            >
+              {animationsEnabled ? '\u25B6' : '\u25A0'}
+            </button>
+            <button
+              className={`btn btn-sm ${timelapsePlaying ? 'btn-danger' : 'btn-outline-secondary'}`}
+              style={{ fontSize: '0.6rem', padding: '2px 8px', background: timelapsePlaying ? undefined : 'rgba(255,255,255,0.9)' }}
+              onClick={async () => {
+                if (timelapsePlaying) { setTimelapsePlaying(false); return; }
+                try {
+                  const res = await getCampaignGraph(timeWindow, true);
+                  if (res.data.timeline_buckets) {
+                    setTimelineBuckets(res.data.timeline_buckets);
+                    setTimelapseFrame(0);
+                    setTimelapsePlaying(true);
+                  }
+                } catch (err) { console.error('Timeline fetch failed:', err); }
+              }}
+              title={timelapsePlaying ? 'Stop time-lapse' : 'Play time-lapse'}
+            >
+              {timelapsePlaying ? 'Stop' : 'Time-Lapse'}
+            </button>
           </div>
         )}
 
@@ -989,6 +1111,25 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             >
               ↺ Reset View
             </button>
+          </div>
+        )}
+
+        {/* Time-lapse progress bar */}
+        {timelapsePlaying && timelineBuckets && (
+          <div style={{ position: 'absolute', bottom: 8, left: 16, right: 16, zIndex: 15 }}>
+            <div className="d-flex align-items-center gap-2" style={{ fontSize: '0.65rem' }}>
+              <span className="badge bg-danger">Live Replay</span>
+              <div className="flex-grow-1" style={{ height: 4, background: '#e2e8f0', borderRadius: 2 }}>
+                <div style={{
+                  width: `${((timelapseFrame + 1) / timelineBuckets.length) * 100}%`,
+                  height: '100%', background: '#e53e3e', borderRadius: 2, transition: 'width 0.4s',
+                }} />
+              </div>
+              <span className="text-muted">{timelapseFrame + 1}/{timelineBuckets.length}</span>
+              <span className="text-muted" style={{ fontSize: '0.55rem' }}>
+                {new Date(timelineBuckets[timelapseFrame].bucket_start).toLocaleDateString()}
+              </span>
+            </div>
           </div>
         )}
 
