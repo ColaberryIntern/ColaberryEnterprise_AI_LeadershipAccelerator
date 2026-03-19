@@ -503,9 +503,6 @@ export default function ObjectConfigEngine(props: Props) {
                       editing={editing}
                       variables={props.variables}
                       systemVariables={props.systemVariables}
-                      variableMap={props.variableMap}
-                      promptBodies={props.promptBodies}
-                      artifacts={props.artifacts}
                       onUpdate={props.onUpdate}
                       onCreateVariable={props.onCreateVariable}
                     />
