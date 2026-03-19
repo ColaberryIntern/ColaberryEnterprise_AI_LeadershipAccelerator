@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LinkedIn Featured Image</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #e5e7eb; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Inter', 'Segoe UI', -apple-system, sans-serif; }
+
+  .card {
+    width: 1200px;
+    height: 627px;
+    background: #FAFBFC;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 48px 64px 40px;
+  }
+
+  /* Subtle gradient accent bar at top */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+  }
+
+  /* Subtle grid pattern */
+  .card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+    background-size: 32px 32px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .top-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748B;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+  }
+
+  .main-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+  }
+
+  .headline {
+    font-size: 52px;
+    font-weight: 800;
+    color: #0F172A;
+    line-height: 1.15;
+    margin-bottom: 12px;
+  }
+
+  .headline .gradient {
+    background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subheadline {
+    font-size: 22px;
+    color: #64748B;
+    font-weight: 500;
+    margin-bottom: 36px;
+  }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .flow-item {
+    background: #fff;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1E293B;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .flow-item.highlight {
+    border-color: #3B82F6;
+    color: #3B82F6;
+    background: rgba(59,130,246,0.04);
+  }
+
+  .flow-arrow {
+    color: #94A3B8;
+    font-size: 16px;
+    font-weight: 400;
+  }
+
+  .bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cta-btn {
+    display: inline-block;
+    background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px 36px;
+    border-radius: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .footer-text {
+    font-size: 14px;
+    color: #94A3B8;
+    font-weight: 500;
+  }
+
+  .logo-text {
+    font-size: 13px;
+    color: #94A3B8;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="top-label">AI Leadership Accelerator</div>
+
+  <div class="main-content">
+    <div class="headline">
+      Build Your <span class="gradient">AI System</span> in 3 Weeks
+    </div>
+    <div class="subheadline">From Idea &rarr; Real Deployment</div>
+
+    <div class="flow">
+      <div class="flow-item">Product</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">UX</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item highlight">AI Systems</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Data</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Integrations</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Automation</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Deployment</div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="footer-text">Real AI Systems. Not Theory.</div>
+    <div class="cta-btn">Book Your Strategy Call</div>
+    <div class="logo-text">COLABERRY</div>
+  </div>
+</div>
+
+</body>
+</html>
