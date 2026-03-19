@@ -37,31 +37,31 @@ const INTENT_PLAN_MAP: Record<Intent, PlanTemplate> = {
   campaign_analysis: {
     sql: true,
     ml: ['risk_scorer'],
-    vector: [],
+    vector: ['semantic_entity_search'],
     tables: ['campaigns', 'campaign_health', 'campaign_errors', 'leads', 'follow_up_sequences', 'scheduled_emails', 'communication_logs'],
   },
   lead_analysis: {
     sql: true,
     ml: ['risk_scorer'],
-    vector: [],
+    vector: ['semantic_entity_search'],
     tables: ['leads', 'activities', 'opportunity_scores', 'lead_temperature_history', 'strategy_calls'],
   },
   student_analysis: {
     sql: true,
     ml: [],
-    vector: [],
+    vector: ['semantic_entity_search'],
     tables: ['enrollments', 'cohorts', 'attendance_records', 'lesson_instances', 'skill_mastery'],
   },
   agent_analysis: {
     sql: true,
     ml: ['anomaly_detector'],
-    vector: [],
+    vector: ['semantic_entity_search'],
     tables: ['ai_agents', 'ai_agent_activity_logs', 'orchestration_health', 'ai_system_events'],
   },
   anomaly_detection: {
     sql: true,
     ml: ['anomaly_detector'],
-    vector: [],
+    vector: ['similar_entities'],
     tables: ['system_processes', 'campaign_errors', 'ai_agent_activity_logs', 'orchestration_health'],
   },
   forecast_request: {
@@ -73,13 +73,13 @@ const INTENT_PLAN_MAP: Record<Intent, PlanTemplate> = {
   comparison: {
     sql: true,
     ml: [],
-    vector: [],
+    vector: ['semantic_entity_search'],
     tables: ['leads', 'campaigns', 'enrollments', 'ai_agents'],
   },
   root_cause_analysis: {
     sql: true,
     ml: ['root_cause_explainer'],
-    vector: ['similar_entities'],
+    vector: ['similar_entities', 'semantic_entity_search'],
     tables: ['leads', 'campaigns', 'enrollments', 'ai_agents', 'system_processes'],
   },
   text_search: {
@@ -91,7 +91,7 @@ const INTENT_PLAN_MAP: Record<Intent, PlanTemplate> = {
   general_insight: {
     sql: true,
     ml: [],
-    vector: [],
+    vector: ['semantic_entity_search'],
     tables: ['leads', 'campaigns', 'enrollments', 'ai_agents', 'system_processes'],
   },
 };

@@ -32,8 +32,9 @@ class EmbeddingPipeline:
 
         summaries_count = self._embed_entity_summaries(dictionary)
         qa_count = self._embed_qa_history()
+        memory_count = self._embed_intelligence_memory()
 
-        return {"summaries_embedded": summaries_count, "qa_embedded": qa_count}
+        return {"summaries_embedded": summaries_count, "qa_embedded": qa_count, "memory_embedded": memory_count}
 
     def _embed_entity_summaries(self, dictionary: dict[str, Any]) -> int:
         """Generate and embed entity summaries."""
@@ -98,6 +99,40 @@ class EmbeddingPipeline:
 
                 conn.commit()
                 logger.info("Embedded %d QA questions", len(rows))
+                return len(rows)
+        finally:
+            conn.close()
+
+    def _embed_intelligence_memory(self) -> int:
+        """Embed intelligence_memory content."""
+        conn = psycopg2.connect(self.database_url)
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, content
+                    FROM intelligence_memory
+                    WHERE embedding IS NULL
+                      AND content IS NOT NULL
+                      AND LENGTH(content) > 10
+                    LIMIT 500;
+                """)
+                rows = cur.fetchall()
+
+                if not rows:
+                    return 0
+
+                texts = [r["content"] for r in rows]
+                embeddings = self.embedder.embed_texts(texts)
+
+                for row, embedding in zip(rows, embeddings):
+                    if embedding:
+                        cur.execute(
+                            "UPDATE intelligence_memory SET embedding = %s WHERE id = %s",
+                            (str(embedding), row["id"]),
+                        )
+
+                conn.commit()
+                logger.info("Embedded %d intelligence memories", len(rows))
                 return len(rows)
         finally:
             conn.close()

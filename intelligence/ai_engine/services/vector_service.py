@@ -63,11 +63,33 @@ class VectorService:
         finally:
             conn.close()
 
+    def similar_memories(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Find similar intelligence memories."""
+        embedding = self.embedder.embed_single(query)
+        if not embedding:
+            return []
+
+        conn = self._connect()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, category, content, metadata, created_at,
+                           1 - (embedding <=> %s::vector) AS similarity
+                    FROM intelligence_memory
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s;
+                """, (str(embedding), str(embedding), limit))
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
     def semantic_search(self, query: str, limit: int = 10) -> dict[str, list]:
-        """Combined search across entities and questions."""
+        """Combined search across entities, questions, and memories."""
         entities = self.similar_entities(query, limit)
         questions = self.similar_questions(query, min(limit, 5))
-        return {"entities": entities, "past_questions": questions}
+        memories = self.similar_memories(query, min(limit, 5))
+        return {"entities": entities, "past_questions": questions, "memories": memories}
 
     def entity_similarity_network(self, entity_ids: list[str], threshold: float = 0.7) -> list[dict]:
         """Build a similarity network between entities."""

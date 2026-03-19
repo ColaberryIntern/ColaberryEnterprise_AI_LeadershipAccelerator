@@ -55,6 +55,10 @@ class IntelligenceProxyService {
     return this.client.post('/vectors/embed-pipeline');
   }
 
+  async embedText(text: string): Promise<AxiosResponse> {
+    return this.client.post('/vectors/embed-text', { text });
+  }
+
   async semanticSearch(query: string, limit?: number): Promise<AxiosResponse> {
     return this.client.post('/vectors/search', { query, limit: limit || 10 });
   }

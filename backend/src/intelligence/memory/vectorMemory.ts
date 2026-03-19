@@ -108,9 +108,7 @@ export class VectorMemory {
    */
   private async getEmbedding(text: string): Promise<number[] | undefined> {
     try {
-      const response = await intelligenceProxy.embedPipeline();
-      // The embed pipeline returns embeddings for provided text.
-      // If the endpoint expects a different payload, adapt here.
+      const response = await intelligenceProxy.embedText(text);
       const data = response?.data;
       if (Array.isArray(data?.embedding)) {
         return data.embedding;

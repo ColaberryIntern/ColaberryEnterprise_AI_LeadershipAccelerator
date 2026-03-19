@@ -25,6 +25,23 @@ def run_embed_pipeline():
     return jsonify({"status": "completed", **result})
 
 
+@vector_bp.route("/embed-text", methods=["POST"])
+def embed_text():
+    """Embed a single text and return the vector."""
+    data = request.get_json() or {}
+    text = data.get("text", "")
+
+    if not text:
+        return jsonify({"error": "text is required"}), 400
+
+    embedder, _, _ = _get_services()
+    embedding = embedder.embed_single(text)
+    if not embedding:
+        return jsonify({"error": "embedding failed"}), 500
+
+    return jsonify({"embedding": embedding})
+
+
 @vector_bp.route("/search", methods=["POST"])
 def semantic_search():
     """Semantic search across entities and Q&A history."""
