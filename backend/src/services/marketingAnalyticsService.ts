@@ -34,22 +34,24 @@ export async function getCampaignMetrics(filters?: {
   const query = `
     SELECT
       v.campaign_id,
+      COALESCE(c.name, v.campaign_id) AS campaign_name,
       COUNT(DISTINCT v.id)::int AS visitors_count,
       COUNT(DISTINCT CASE WHEN i.intent_level IN ('high', 'very_high') THEN v.id END)::int AS high_intent_count,
       COUNT(DISTINCT l.id)::int AS leads_count,
       COUNT(DISTINCT CASE WHEN l.form_type = 'strategy_call' THEN l.id END)::int AS strategy_calls,
       COUNT(DISTINCT e.id)::int AS enrollments_count,
-      MAX(v.campaign_type) AS campaign_type,
+      COALESCE(MAX(v.campaign_type), c.type) AS campaign_type,
       MAX(v.platform) AS platform,
       MAX(v.creative) AS creative
     FROM visitors v
+    LEFT JOIN campaigns c ON c.id::text = v.campaign_id
     LEFT JOIN intent_scores i ON i.visitor_id = v.id
     LEFT JOIN leads l ON l.id = v.lead_id
     LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email)
     WHERE v.campaign_id IS NOT NULL
       AND v.campaign_id != ''
       ${dateFilter.clause}
-    GROUP BY v.campaign_id
+    GROUP BY v.campaign_id, c.name, c.type
     ORDER BY visitors_count DESC
   `;
 
@@ -68,6 +70,7 @@ export async function getCampaignMetrics(filters?: {
 
     return {
       campaign_id: row.campaign_id,
+      campaign_name: row.campaign_name || row.campaign_id,
       visitors_count: visitors,
       high_intent_count: highIntent,
       leads_count: leads,

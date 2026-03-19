@@ -8,6 +8,7 @@ import api from '../../../utils/api';
 
 interface CampaignMetric {
   campaign_id: string;
+  campaign_name?: string;
   visitors_count: number;
   high_intent_count: number;
   leads_count: number;
@@ -1036,7 +1037,7 @@ function RevenueIntelligenceTab() {
                   {sorted.map((c) => (
                     <tr key={c.campaign_id}>
                       <td className="fw-medium">
-                        <code className="small">{c.campaign_id}</code>
+                        <span className="fw-medium">{c.campaign_name || c.campaign_id}</span>
                       </td>
                       {hasMetadata && <td className="text-muted">{c.campaign_type || '\u2014'}</td>}
                       {hasMetadata && <td className="text-muted">{c.platform || '\u2014'}</td>}
