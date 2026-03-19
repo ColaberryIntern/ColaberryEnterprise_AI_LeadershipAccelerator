@@ -1,5 +1,10 @@
-import React from 'react';
-import { CampaignGraphNode, CampaignGraphEdge } from '../../../services/intelligenceApi';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  CampaignGraphNode,
+  CampaignGraphEdge,
+  GraphUserRecord,
+  getGraphNodeUsers,
+} from '../../../services/intelligenceApi';
 
 interface Props {
   node: CampaignGraphNode;
@@ -16,10 +21,10 @@ const NODE_COLORS: Record<string, { color: string; bg: string }> = {
 };
 
 const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
-  src_marketing:  { color: '#d69e2e', bg: '#fefcbf' },
-  src_cold_email: { color: '#3182ce', bg: '#ebf4ff' },
-  src_alumni:     { color: '#38a169', bg: '#f0fff4' },
-  src_anonymous:  { color: '#a0aec0', bg: '#f7fafc' },
+  src_marketing:      { color: '#d69e2e', bg: '#fefcbf' },
+  src_cold_outbound:  { color: '#3182ce', bg: '#ebf4ff' },
+  src_alumni:         { color: '#38a169', bg: '#f0fff4' },
+  src_anonymous:      { color: '#a0aec0', bg: '#f7fafc' },
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,12 +34,21 @@ const TYPE_LABELS: Record<string, string> = {
   outcome: 'Outcome',
 };
 
+const TOUCH_LABELS: Record<string, string> = {
+  cory_chat: 'Cory Chat',
+  blueprint: 'Blueprint',
+  sponsorship: 'Sponsorship',
+  strategy_call: 'Strategy Call',
+};
+
 function getColors(node: CampaignGraphNode) {
   if (node.type === 'source' && SOURCE_NODE_COLORS[node.id]) {
     return SOURCE_NODE_COLORS[node.id];
   }
   return NODE_COLORS[node.type] || NODE_COLORS.entry;
 }
+
+// ─── Shared sub-components ──────────────────────────────────────────────────
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
   return (
@@ -69,6 +83,120 @@ function FlowList({ title, items }: { title: string; items: Array<{ label: strin
   );
 }
 
+// ─── User list section (shared across all node types) ───────────────────────
+
+function UserListSection({ nodeId }: { nodeId: string }) {
+  const [users, setUsers] = useState<GraphUserRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const limit = 20;
+
+  const loadUsers = useCallback(async (p: number) => {
+    setLoading(true);
+    try {
+      const { data } = await getGraphNodeUsers(nodeId, p, limit);
+      if (p === 1) {
+        setUsers(data.users);
+      } else {
+        setUsers(prev => [...prev, ...data.users]);
+      }
+      setTotal(data.total);
+      setPage(p);
+    } catch {
+      // silently handle
+    } finally {
+      setLoading(false);
+    }
+  }, [nodeId]);
+
+  useEffect(() => {
+    if (expanded && users.length === 0 && !loading) {
+      loadUsers(1);
+    }
+  }, [expanded, users.length, loading, loadUsers]);
+
+  const hasMore = users.length < total;
+
+  return (
+    <div className="mt-3">
+      <button
+        className="btn btn-sm btn-outline-secondary w-100"
+        style={{ fontSize: '0.7rem' }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        {expanded ? 'Hide' : 'Show'} Users ({total || '...'})
+      </button>
+
+      {expanded && (
+        <div className="mt-2" style={{ fontSize: '0.68rem' }}>
+          {users.length === 0 && loading && (
+            <div className="text-center py-2 text-muted">
+              <span className="spinner-border spinner-border-sm me-1" role="status" />
+              Loading...
+            </div>
+          )}
+
+          {users.length > 0 && (
+            <div className="border rounded" style={{ maxHeight: 300, overflowY: 'auto' }}>
+              <table className="table table-sm table-hover mb-0" style={{ fontSize: '0.68rem' }}>
+                <thead className="table-light" style={{ position: 'sticky', top: 0 }}>
+                  <tr>
+                    <th style={{ padding: '4px 6px' }}>Name</th>
+                    <th style={{ padding: '4px 6px' }}>Source</th>
+                    <th style={{ padding: '4px 6px' }}>First Touch</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id}>
+                      <td style={{ padding: '3px 6px' }}>
+                        <div className="fw-medium" style={{ lineHeight: 1.2 }}>{u.name || '—'}</div>
+                        <div className="text-muted" style={{ fontSize: '0.6rem' }}>{u.email}</div>
+                      </td>
+                      <td style={{ padding: '3px 6px' }}>
+                        <span className="badge bg-light text-dark" style={{ fontSize: '0.6rem' }}>
+                          {u.source_category?.replace('_', ' ') || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '3px 6px' }}>
+                        {u.first_touch ? (
+                          <span className="badge bg-info text-white" style={{ fontSize: '0.6rem' }}>
+                            {TOUCH_LABELS[u.first_touch] || u.first_touch}
+                          </span>
+                        ) : (
+                          <span className="text-muted">None</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {hasMore && !loading && (
+            <button
+              className="btn btn-sm btn-link w-100 mt-1"
+              style={{ fontSize: '0.65rem' }}
+              onClick={() => loadUsers(page + 1)}
+            >
+              Load more ({users.length} of {total})
+            </button>
+          )}
+
+          {loading && users.length > 0 && (
+            <div className="text-center py-1 text-muted" style={{ fontSize: '0.65rem' }}>
+              <span className="spinner-border spinner-border-sm me-1" role="status" />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Type-specific detail components ────────────────────────────────────────
 
 function SourceDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }) {
@@ -81,17 +209,19 @@ function SourceDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edg
     })
     .sort((a, b) => b.volume - a.volume);
 
+  const engaged = node.metrics.engaged_count ?? 0;
+  const unengaged = node.metrics.unengaged_count ?? 0;
+
   return (
     <>
       <StatRow label="Total Leads" value={node.count} />
+      {engaged > 0 && <StatRow label="Engaged" value={engaged} />}
+      {unengaged > 0 && <StatRow label="Unengaged" value={unengaged} />}
+      {node.count > 0 && (
+        <StatRow label="Engagement Rate" value={`${Math.round((engaged / node.count) * 100)}%`} />
+      )}
       <FlowList title="Feeds Into" items={downstream} />
-      <div className="mt-3" style={{ fontSize: '0.7rem' }}>
-        <div className="text-muted mb-1 fw-medium">About</div>
-        <p className="text-muted mb-0" style={{ lineHeight: 1.5 }}>
-          This source represents how leads discover your pipeline.
-          The count reflects total leads attributed to this channel.
-        </p>
-      </div>
+      <UserListSection nodeId={node.id} />
     </>
   );
 }
@@ -99,7 +229,6 @@ function SourceDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edg
 function EntryDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }) {
   const nodeMap = new Map(allNodes.map(n => [n.id, n]));
 
-  // Upstream sources
   const upstream = edges
     .filter(e => e.to === node.id)
     .map(e => {
@@ -109,7 +238,6 @@ function EntryDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edge
     })
     .sort((a, b) => b.volume - a.volume);
 
-  // Downstream campaigns
   const downstream = edges
     .filter(e => e.from === node.id)
     .map(e => {
@@ -118,7 +246,6 @@ function EntryDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edge
     })
     .sort((a, b) => b.volume - a.volume);
 
-  // Source breakdown bar
   const breakdown = node.source_breakdown;
   const breakdownItems = breakdown
     ? Object.entries(breakdown)
@@ -133,20 +260,14 @@ function EntryDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edge
 
   return (
     <>
-      <StatRow label="Total Interactions" value={node.count} />
+      <StatRow label="Total Users" value={node.count} />
       {node.metrics.conversion_rate !== undefined && (
-        <StatRow label="Conversion Rate" value={`${node.metrics.conversion_rate}%`} />
+        <StatRow label="% of All Leads" value={`${node.metrics.conversion_rate}%`} />
       )}
       {breakdownItems.length > 0 && <FlowList title="Source Breakdown" items={breakdownItems} />}
       {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
       {downstream.length > 0 && <FlowList title="Feeds Into" items={downstream} />}
-      <div className="mt-3" style={{ fontSize: '0.7rem' }}>
-        <div className="text-muted mb-1 fw-medium">About</div>
-        <p className="text-muted mb-0" style={{ lineHeight: 1.5 }}>
-          This entry point is where leads first interact with your system.
-          The count reflects total engagements through this channel.
-        </p>
-      </div>
+      <UserListSection nodeId={node.id} />
     </>
   );
 }
@@ -171,6 +292,18 @@ function CampaignDetails({ node, edges, allNodes }: { node: CampaignGraphNode; e
     })
     .sort((a, b) => b.volume - a.volume);
 
+  const breakdown = node.source_breakdown;
+  const breakdownItems = breakdown
+    ? Object.entries(breakdown)
+        .filter(([, v]) => v > 0)
+        .map(([key, v]) => ({
+          label: key.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          volume: v,
+          color: SOURCE_NODE_COLORS[`src_${key}`]?.color || '#a0aec0',
+        }))
+        .sort((a, b) => b.volume - a.volume)
+    : [];
+
   const lowConversion = node.metrics.conversion_rate !== undefined && node.metrics.conversion_rate < 5;
 
   return (
@@ -190,15 +323,10 @@ function CampaignDetails({ node, edges, allNodes }: { node: CampaignGraphNode; e
           Low conversion rate detected. Consider reviewing campaign messaging or targeting.
         </div>
       )}
+      {breakdownItems.length > 0 && <FlowList title="Source Breakdown" items={breakdownItems} />}
       {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
       {downstream.length > 0 && <FlowList title="Converts To" items={downstream} />}
-      <div className="mt-3" style={{ fontSize: '0.7rem' }}>
-        <div className="text-muted mb-1 fw-medium">About</div>
-        <p className="text-muted mb-0" style={{ lineHeight: 1.5 }}>
-          This campaign nurtures leads toward conversion. The enrolled count
-          shows leads currently in this campaign funnel.
-        </p>
-      </div>
+      <UserListSection nodeId={node.id} />
     </>
   );
 }
@@ -221,13 +349,7 @@ function OutcomeDetails({ node, edges, allNodes }: { node: CampaignGraphNode; ed
         <StatRow label="Conversion Rate" value={`${node.metrics.conversion_rate}%`} />
       )}
       {upstream.length > 0 && <FlowList title="Fed By" items={upstream} />}
-      <div className="mt-3" style={{ fontSize: '0.7rem' }}>
-        <div className="text-muted mb-1 fw-medium">About</div>
-        <p className="text-muted mb-0" style={{ lineHeight: 1.5 }}>
-          This outcome tracks successful results — leads that completed
-          the desired action (enrollment, payment, etc.).
-        </p>
-      </div>
+      <UserListSection nodeId={node.id} />
     </>
   );
 }

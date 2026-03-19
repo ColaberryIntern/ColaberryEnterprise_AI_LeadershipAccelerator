@@ -7,7 +7,7 @@ import { scoreMessageEffectiveness } from '../../services/aiMessageService';
 import { calculateMultiTouchAttribution } from '../../services/revenueDashboardService';
 import { parseNaturalLanguageCampaign } from '../../services/campaignBuilderService';
 import { getPersonaArchetypes } from '../../services/testing/testLeadGenerator';
-import { getCampaignGraphData } from '../../services/reporting/campaignGraphService';
+import { getCampaignGraphData, getNodeUsers, getEdgeUsers } from '../../services/reporting/campaignGraphService';
 
 const router = Router();
 
@@ -137,6 +137,37 @@ router.get('/api/admin/campaign-intelligence/graph', requireAdmin, async (_req: 
   try {
     const data = await getCampaignGraphData();
     res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Graph Drilldown: Users for a specific node ──────────────────────────
+
+router.get('/api/admin/campaign-intelligence/graph/node-users', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const nodeId = req.query.nodeId as string;
+    if (!nodeId) return res.status(400).json({ error: 'nodeId is required' });
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+    const result = await getNodeUsers(nodeId, page, limit);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Graph Drilldown: Users for a specific edge ──────────────────────────
+
+router.get('/api/admin/campaign-intelligence/graph/edge-users', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const from = req.query.from as string;
+    const to = req.query.to as string;
+    if (!from || !to) return res.status(400).json({ error: 'from and to are required' });
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+    const result = await getEdgeUsers(from, to, page, limit);
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

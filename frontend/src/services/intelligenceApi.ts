@@ -407,6 +407,8 @@ export interface CampaignGraphNode {
     conversion_rate?: number;
     messages_sent?: number;
     active_users?: number;
+    engaged_count?: number;
+    unengaged_count?: number;
   };
   source_breakdown?: Record<string, number>;
 }
@@ -418,14 +420,58 @@ export interface CampaignGraphEdge {
   volume?: number;
 }
 
+export interface CampaignGraphValidation {
+  total_leads: number;
+  leads_with_first_touch: number;
+  leads_unengaged: number;
+  leads_in_campaigns: number;
+  leads_enrolled: number;
+  leads_paid: number;
+  warnings: string[];
+}
+
 export interface CampaignGraphData {
   nodes: CampaignGraphNode[];
   edges: CampaignGraphEdge[];
+  validation?: CampaignGraphValidation;
 }
 
+export interface GraphUserRecord {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  source: string | null;
+  source_category: string;
+  first_touch: string | null;
+  pipeline_stage: string | null;
+  created_at: string;
+}
+
+export interface GraphUserListResponse {
+  users: GraphUserRecord[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+const adminHeaders = () => ({
+  headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
+});
+
 export const getCampaignGraph = () =>
-  axios.get<CampaignGraphData>('/api/admin/campaign-intelligence/graph', {
-    headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
+  axios.get<CampaignGraphData>('/api/admin/campaign-intelligence/graph', adminHeaders());
+
+export const getGraphNodeUsers = (nodeId: string, page = 1, limit = 50) =>
+  axios.get<GraphUserListResponse>('/api/admin/campaign-intelligence/graph/node-users', {
+    ...adminHeaders(),
+    params: { nodeId, page, limit },
+  });
+
+export const getGraphEdgeUsers = (from: string, to: string, page = 1, limit = 50) =>
+  axios.get<GraphUserListResponse>('/api/admin/campaign-intelligence/graph/edge-users', {
+    ...adminHeaders(),
+    params: { from, to, page, limit },
   });
 
 export default api;

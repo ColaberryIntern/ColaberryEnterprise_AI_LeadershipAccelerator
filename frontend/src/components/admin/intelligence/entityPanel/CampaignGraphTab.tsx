@@ -1,6 +1,13 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
-import { getCampaignGraph, CampaignGraphData, CampaignGraphNode, CampaignGraphEdge } from '../../../../services/intelligenceApi';
+import {
+  getCampaignGraph,
+  CampaignGraphData,
+  CampaignGraphNode,
+  CampaignGraphValidation,
+  GraphUserRecord,
+  getGraphEdgeUsers,
+} from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
 // ─── System Map 4-Layer Config ──────────────────────────────────────────────
@@ -81,6 +88,209 @@ function getNodeColors(node: CampaignGraphNode): { color: string; bg: string } {
   return TYPE_COLORS[node.type] || TYPE_COLORS.entry;
 }
 
+// ─── Edge Details Panel (for edge click drilldown) ──────────────────────────
+
+interface SelectedEdge {
+  from: string;
+  to: string;
+  fromLabel: string;
+  toLabel: string;
+  volume: number;
+  label: string;
+}
+
+const TOUCH_LABELS: Record<string, string> = {
+  cory_chat: 'Cory Chat',
+  blueprint: 'Blueprint',
+  sponsorship: 'Sponsorship',
+  strategy_call: 'Strategy Call',
+};
+
+function EdgeDetailsPanel({ edge, onClose }: { edge: SelectedEdge; onClose: () => void }) {
+  const [users, setUsers] = useState<GraphUserRecord[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const limit = 20;
+
+  useEffect(() => {
+    setLoading(true);
+    setUsers([]);
+    setPage(1);
+    getGraphEdgeUsers(edge.from, edge.to, 1, limit)
+      .then(({ data }) => { setUsers(data.users); setTotal(data.total); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [edge.from, edge.to]);
+
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setLoading(true);
+    getGraphEdgeUsers(edge.from, edge.to, nextPage, limit)
+      .then(({ data }) => { setUsers(prev => [...prev, ...data.users]); setPage(nextPage); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <div className="d-flex flex-column h-100">
+      <div className="p-2 border-bottom d-flex align-items-center justify-content-between" style={{ background: '#f7fafc' }}>
+        <div>
+          <div className="fw-semibold small" style={{ lineHeight: 1.2 }}>
+            {edge.fromLabel} → {edge.toLabel}
+          </div>
+          <div className="text-muted" style={{ fontSize: '0.6rem' }}>Edge: {edge.label}</div>
+        </div>
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          style={{ width: 24, height: 24, padding: 0, fontSize: '0.7rem', lineHeight: 1 }}
+          onClick={onClose}
+          aria-label="Close edge details"
+        >×</button>
+      </div>
+
+      <div className="flex-grow-1 overflow-auto p-3">
+        <div className="text-center mb-3">
+          <div className="fw-bold" style={{ fontSize: '1.6rem', color: '#2b6cb0', lineHeight: 1 }}>
+            {edge.volume.toLocaleString()}
+          </div>
+          <div className="text-muted" style={{ fontSize: '0.65rem' }}>users on this path</div>
+        </div>
+
+        {loading && users.length === 0 && (
+          <div className="text-center py-3 text-muted">
+            <span className="spinner-border spinner-border-sm me-1" role="status" />
+            Loading users...
+          </div>
+        )}
+
+        {users.length > 0 && (
+          <div className="border rounded" style={{ maxHeight: 350, overflowY: 'auto' }}>
+            <table className="table table-sm table-hover mb-0" style={{ fontSize: '0.68rem' }}>
+              <thead className="table-light" style={{ position: 'sticky', top: 0 }}>
+                <tr>
+                  <th style={{ padding: '4px 6px' }}>Name</th>
+                  <th style={{ padding: '4px 6px' }}>Source</th>
+                  <th style={{ padding: '4px 6px' }}>First Touch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id}>
+                    <td style={{ padding: '3px 6px' }}>
+                      <div className="fw-medium" style={{ lineHeight: 1.2 }}>{u.name || '—'}</div>
+                      <div className="text-muted" style={{ fontSize: '0.6rem' }}>{u.email}</div>
+                    </td>
+                    <td style={{ padding: '3px 6px' }}>
+                      <span className="badge bg-light text-dark" style={{ fontSize: '0.6rem' }}>
+                        {u.source_category?.replace('_', ' ') || '—'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '3px 6px' }}>
+                      {u.first_touch ? (
+                        <span className="badge bg-info text-white" style={{ fontSize: '0.6rem' }}>
+                          {TOUCH_LABELS[u.first_touch] || u.first_touch}
+                        </span>
+                      ) : (
+                        <span className="text-muted">None</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {users.length < total && !loading && (
+          <button className="btn btn-sm btn-link w-100 mt-1" style={{ fontSize: '0.65rem' }} onClick={loadMore}>
+            Load more ({users.length} of {total})
+          </button>
+        )}
+
+        {loading && users.length > 0 && (
+          <div className="text-center py-1 text-muted" style={{ fontSize: '0.65rem' }}>
+            <span className="spinner-border spinner-border-sm me-1" role="status" />
+          </div>
+        )}
+
+        {!loading && users.length === 0 && (
+          <div className="text-center text-muted py-3" style={{ fontSize: '0.7rem' }}>No users found on this path</div>
+        )}
+      </div>
+
+      <div className="p-2 border-top">
+        <button className="btn btn-sm btn-outline-secondary w-100" onClick={onClose} style={{ fontSize: '0.7rem' }}>
+          ← Back to Graph
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Validation summary bar ─────────────────────────────────────────────────
+
+function ValidationBar({ validation, warnings }: { validation?: CampaignGraphValidation; warnings: string[] }) {
+  const [showDetails, setShowDetails] = useState(false);
+  const allWarnings = [...(validation?.warnings || []), ...warnings];
+  const isClean = allWarnings.length === 0;
+
+  return (
+    <div style={{ position: 'absolute', top: 6, left: 8, zIndex: 12 }}>
+      <button
+        className={`btn btn-sm ${isClean ? 'btn-outline-success' : 'btn-outline-warning'} d-flex align-items-center gap-1`}
+        style={{ fontSize: '0.6rem', padding: '2px 8px', background: 'rgba(255,255,255,0.95)' }}
+        onClick={() => setShowDetails(!showDetails)}
+        title={isClean ? 'All checks pass' : `${allWarnings.length} warning(s)`}
+      >
+        {isClean ? '✓' : '⚠'} {validation?.total_leads?.toLocaleString() || '—'} leads
+      </button>
+      {showDetails && validation && (
+        <div style={{
+          position: 'absolute', top: 28, left: 0, width: 260,
+          background: 'white', border: '1px solid #e2e8f0', borderRadius: 6,
+          padding: '8px 10px', boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+          fontSize: '0.65rem', zIndex: 20,
+        }}>
+          <div className="fw-semibold mb-1">Data Integrity</div>
+          <div className="d-flex justify-content-between py-1 border-bottom">
+            <span className="text-muted">Total Leads</span>
+            <span className="fw-semibold">{validation.total_leads.toLocaleString()}</span>
+          </div>
+          <div className="d-flex justify-content-between py-1 border-bottom">
+            <span className="text-muted">Engaged</span>
+            <span className="fw-semibold">{validation.leads_with_first_touch.toLocaleString()}</span>
+          </div>
+          <div className="d-flex justify-content-between py-1 border-bottom">
+            <span className="text-muted">Unengaged</span>
+            <span className="fw-semibold">{validation.leads_unengaged.toLocaleString()}</span>
+          </div>
+          <div className="d-flex justify-content-between py-1 border-bottom">
+            <span className="text-muted">In Campaigns</span>
+            <span className="fw-semibold">{validation.leads_in_campaigns.toLocaleString()}</span>
+          </div>
+          <div className="d-flex justify-content-between py-1 border-bottom">
+            <span className="text-muted">Enrolled</span>
+            <span className="fw-semibold">{validation.leads_enrolled.toLocaleString()}</span>
+          </div>
+          <div className="d-flex justify-content-between py-1">
+            <span className="text-muted">Paid</span>
+            <span className="fw-semibold">{validation.leads_paid.toLocaleString()}</span>
+          </div>
+          {allWarnings.length > 0 && (
+            <div className="mt-2 pt-2 border-top">
+              <div className="fw-semibold text-warning mb-1">Warnings</div>
+              {allWarnings.map((w, i) => (
+                <div key={i} className="text-muted mb-1">• {w}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface CampaignGraphTabProps {
   fullWidth?: boolean;
 }
@@ -97,8 +307,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<SelectedEdge | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
-  const [showWarnings, setShowWarnings] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
 
   // Position persistence refs
@@ -242,8 +452,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     [graphData.links]
   );
 
-  // Connected set for path highlighting (from selected node OR source filter)
-  const highlightNodeId = sourceFilter || (selectedNode ? selectedNode.id : null);
+  // Connected set for path highlighting (from selected node, edge, OR source filter)
+  const highlightNodeId = sourceFilter || (selectedNode ? selectedNode.id : null) || (selectedEdge ? selectedEdge.from : null);
   const connectedSet = useMemo(() => {
     if (!highlightNodeId) return new Set<string>();
     const set = new Set<string>();
@@ -439,7 +649,26 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   }, []);
 
   const handleNodeClick = useCallback((node: any) => {
+    setSelectedEdge(null);
     setSelectedNode(node as GraphNode);
+  }, []);
+
+  const handleLinkClick = useCallback((link: any) => {
+    const src = link.source as GraphNode;
+    const tgt = link.target as GraphNode;
+    const srcId = typeof src === 'object' ? src.id : String(src);
+    const tgtId = typeof tgt === 'object' ? tgt.id : String(tgt);
+    const srcLabel = typeof src === 'object' ? src.label : srcId;
+    const tgtLabel = typeof tgt === 'object' ? tgt.label : tgtId;
+    setSelectedNode(null);
+    setSelectedEdge({
+      from: srcId,
+      to: tgtId,
+      fromLabel: srcLabel,
+      toLabel: tgtLabel,
+      volume: (link as GraphLink).volume || 0,
+      label: (link as GraphLink).label || '',
+    });
   }, []);
 
   // Drag handlers with zone constraints
@@ -510,6 +739,11 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         onClose={() => setSelectedNode(null)}
       />
     );
+  }
+
+  // If an edge is selected in compact mode, show edge drill-down
+  if (selectedEdge && !fullWidth) {
+    return <EdgeDetailsPanel edge={selectedEdge} onClose={() => setSelectedEdge(null)} />;
   }
 
   return (
@@ -612,6 +846,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           linkDirectionalParticleColor={getParticleColor}
           onNodeHover={handleNodeHover}
           onNodeClick={handleNodeClick}
+          onLinkClick={handleLinkClick}
           onNodeDrag={handleNodeDrag}
           onNodeDragEnd={handleNodeDragEnd}
           cooldownTicks={0}
@@ -639,34 +874,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           }}
         />
 
-        {/* Validation warnings badge */}
-        {validationWarnings.length > 0 && (
-          <div style={{ position: 'absolute', top: fullWidth ? 28 : 8, right: 8, zIndex: 12 }}>
-            <button
-              className="btn btn-sm btn-outline-warning position-relative"
-              style={{ width: 26, height: 26, padding: 0, fontSize: '0.7rem', background: 'rgba(255,255,255,0.95)' }}
-              onClick={() => setShowWarnings(!showWarnings)}
-              title={`${validationWarnings.length} data warning(s)`}
-            >
-              !
-            </button>
-            {showWarnings && (
-              <div
-                style={{
-                  position: 'absolute', top: 30, right: 0, width: 280,
-                  background: 'white', border: '1px solid #e2e8f0', borderRadius: 6,
-                  padding: '8px 10px', boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                  fontSize: '0.65rem', zIndex: 20,
-                }}
-              >
-                <div className="fw-semibold text-warning mb-1">Data Warnings</div>
-                {validationWarnings.map((w, i) => (
-                  <div key={i} className="text-muted mb-1">{w}</div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Validation bar */}
+        {fullWidth && <ValidationBar validation={data?.validation} warnings={validationWarnings} />}
 
         {/* Zoom controls */}
         <div
@@ -761,7 +970,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         )}
       </div>
 
-      {/* Side panel for fullWidth mode */}
+      {/* Side panel for fullWidth mode — node or edge details */}
       {fullWidth && selectedNode && (
         <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--color-border)', overflow: 'auto' }}>
           <CampaignNodeDetailsPanel
@@ -777,6 +986,11 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             allNodes={data?.nodes || []}
             onClose={() => setSelectedNode(null)}
           />
+        </div>
+      )}
+      {fullWidth && !selectedNode && selectedEdge && (
+        <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--color-border)', overflow: 'auto' }}>
+          <EdgeDetailsPanel edge={selectedEdge} onClose={() => setSelectedEdge(null)} />
         </div>
       )}
       </div>
