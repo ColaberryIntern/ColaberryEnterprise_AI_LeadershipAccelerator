@@ -28,7 +28,7 @@ const ZONE_RANGES: Record<string, [number, number]> = {
   outcome:  [0.84, 1.0],
 };
 
-const POSITIONS_KEY = 'campaign-graph-positions-v3';
+const POSITIONS_KEY = 'campaign-graph-positions-v4';
 
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
   source:   { color: '#805ad5', bg: '#faf5ff' },
@@ -45,6 +45,11 @@ const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
   src_cold_outbound: { color: '#3182ce', bg: '#ebf4ff' },
   src_alumni:        { color: '#38a169', bg: '#f0fff4' },
   src_anonymous:     { color: '#a0aec0', bg: '#f7fafc' },
+};
+
+// Per-visitor-node colors
+const VISITOR_NODE_COLORS: Record<string, { color: string; bg: string }> = {
+  visitor_never: { color: '#a0aec0', bg: '#f7fafc' },  // Muted gray — represents absence
 };
 
 // Per-outreach-node colors for visual differentiation
@@ -98,6 +103,9 @@ function getNodeColors(node: CampaignGraphNode): { color: string; bg: string } {
   }
   if (node.type === 'outreach' && OUTREACH_NODE_COLORS[node.id]) {
     return OUTREACH_NODE_COLORS[node.id];
+  }
+  if (node.type === 'visitor' && VISITOR_NODE_COLORS[node.id]) {
+    return VISITOR_NODE_COLORS[node.id];
   }
   return TYPE_COLORS[node.type] || TYPE_COLORS.entry;
 }
