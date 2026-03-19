@@ -1,6 +1,7 @@
 // Lightweight client-side visitor tracking — zero external dependencies
 const API = process.env.REACT_APP_API_URL || '';
 const FP_KEY = 'cb_visitor_fp';
+const LEAD_KEY = 'cb_lead_id';
 let initialized = false;
 let buffer: Record<string, unknown>[] = [];
 let visibleStart = Date.now();
@@ -85,10 +86,15 @@ function flush(useBeacon = false) {
   // Attach campaign_id and email as top-level fields for visitor attribution
   let campaign_id: string | undefined;
   let email: string | undefined;
+  let lead_id: string | undefined;
   try {
     const sp = new URLSearchParams(location.search);
     const e = sp.get('email');
     if (e && e.includes('@')) email = e;
+  } catch { /* silent */ }
+  try {
+    const storedLead = localStorage.getItem(LEAD_KEY);
+    if (storedLead) lead_id = storedLead;
   } catch { /* silent */ }
   try {
     const raw = localStorage.getItem('cb_campaign_id');
@@ -102,15 +108,15 @@ function flush(useBeacon = false) {
   } catch { /* silent */ }
 
   if (useBeacon) {
-    const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, email, events });
+    const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, email, lead_id, events });
     try { navigator.sendBeacon(`${API}/api/t/batch`, payload); } catch { /* silent */ }
     return;
   }
 
   const url = events.length === 1 ? `${API}/api/t/event` : `${API}/api/t/batch`;
   const body = events.length === 1
-    ? { fingerprint: fp, ...info, campaign_id, email, ...events[0] }
-    : { fingerprint: fp, ...info, campaign_id, email, events };
+    ? { fingerprint: fp, ...info, campaign_id, email, lead_id, ...events[0] }
+    : { fingerprint: fp, ...info, campaign_id, email, lead_id, events };
 
   fetch(url, {
     method: 'POST',

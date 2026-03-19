@@ -289,10 +289,17 @@ router.get('/api/admin/campaigns/:id/roi/details', requireAdmin, async (req: Req
       SELECT v.id AS visitor_id, v.first_seen_at, v.last_seen_at, v.total_sessions,
              v.utm_source, v.utm_medium, v.device_type, v.country,
              l.id AS lead_id, l.name AS lead_name, l.email AS lead_email,
-             l.pipeline_stage, l.lead_score
+             l.pipeline_stage, l.lead_score,
+             COALESCE(MAX(vs.duration_seconds), 0)::int AS time_on_page,
+             COALESCE(MAX(vs.event_count), 0)::int AS event_count,
+             CASE WHEN MAX(vs.duration_seconds) > 30 OR MAX(vs.event_count) > 3 THEN true ELSE false END AS engaged
       FROM visitors v
       LEFT JOIN leads l ON l.id = v.lead_id
+      LEFT JOIN visitor_sessions vs ON vs.visitor_id = v.id
       WHERE v.campaign_id = :campaignId
+      GROUP BY v.id, v.first_seen_at, v.last_seen_at, v.total_sessions,
+               v.utm_source, v.utm_medium, v.device_type, v.country,
+               l.id, l.name, l.email, l.pipeline_stage, l.lead_score
       ORDER BY v.last_seen_at DESC
       LIMIT 100
     `, { replacements: { campaignId: req.params.id }, type: QueryTypes.SELECT });

@@ -1000,6 +1000,31 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   return { nodes, edges: validEdges, validation };
 }
 
+// ─── Node membership test (shared by drilldown + slice) ─────────────────────
+
+function leadMatchesNode(lead: LeadPathRecord, nodeId: string): boolean {
+  if (nodeId.startsWith('src_')) return `src_${lead.source_category}` === nodeId;
+  if (nodeId === 'visitor_site') return lead.has_visitor_record;
+  if (nodeId === 'visitor_never') return lead.first_touch.type === null && !lead.has_visitor_record;
+  if (nodeId === 'outreach_email') return lead.outreach.email.count > 0;
+  if (nodeId === 'outreach_sms') return lead.outreach.sms.count > 0;
+  if (nodeId === 'outreach_voice') return lead.outreach.voice.count > 0;
+  if (nodeId === 'engagement_engaged') return lead.engagement_level === 'engaged';
+  if (nodeId === 'engagement_opened') return lead.engagement_level === 'opened';
+  if (nodeId === 'engagement_ignored') return lead.engagement_level === 'ignored';
+  if (nodeId === 'entry_unengaged') return lead.first_touch.type === null;
+  if (nodeId === 'entry_unengaged_visited') return lead.first_touch.type === null && lead.has_visitor_record;
+  if (nodeId === 'entry_unengaged_never') return lead.first_touch.type === null && !lead.has_visitor_record;
+  if (nodeId.startsWith('entry_')) return lead.first_touch.type === nodeId.replace('entry_', '');
+  if (nodeId.startsWith('campaign_')) {
+    const cid = nodeId.replace('campaign_', '');
+    return lead.campaign_enrollments.some(e => e.campaign_id === cid);
+  }
+  if (nodeId === 'outcome_enrolled') return lead.outcome.enrolled;
+  if (nodeId === 'outcome_paid') return lead.outcome.paid;
+  return false;
+}
+
 // ─── Main entry point ───────────────────────────────────────────────────────
 
 export async function getCampaignGraphData(): Promise<CampaignGraphData> {
@@ -1012,6 +1037,54 @@ export async function getCampaignGraphData(): Promise<CampaignGraphData> {
 
   graphCache = { data, leadPaths, ts: Date.now() };
   return data;
+}
+
+// ─── Slice: cohort-filtered graph for a node (or progressive drill chain) ───
+
+export interface SliceContext {
+  nodeId: string;
+  nodeLabel: string;
+  cohortSize: number;
+  totalLeads: number;
+  drillStack: string[];
+}
+
+export async function getSlicedGraphData(
+  nodeIds: string[],
+): Promise<CampaignGraphData & { sliceContext: SliceContext }> {
+  // Ensure cache is warm
+  if (!graphCache || Date.now() - graphCache.ts >= CACHE_TTL) {
+    await getCampaignGraphData();
+  }
+  const allPaths = graphCache!.leadPaths;
+
+  // Progressive filter: apply each node filter sequentially
+  let cohortPaths = allPaths;
+  for (const nid of nodeIds) {
+    cohortPaths = cohortPaths.filter(lead => leadMatchesNode(lead, nid));
+  }
+
+  if (cohortPaths.length === 0) {
+    throw new Error(`No leads found for node chain: ${nodeIds.join(' → ')}`);
+  }
+
+  // Find label from cached graph
+  const lastNodeId = nodeIds[nodeIds.length - 1];
+  const nodeLabel = graphCache!.data.nodes.find(n => n.id === lastNodeId)?.label || lastNodeId;
+
+  // Rebuild the entire graph from the cohort subset
+  const data = await buildGraphFromPaths(cohortPaths);
+
+  return {
+    ...data,
+    sliceContext: {
+      nodeId: lastNodeId,
+      nodeLabel,
+      cohortSize: cohortPaths.length,
+      totalLeads: allPaths.length,
+      drillStack: nodeIds,
+    },
+  };
 }
 
 // ─── Drilldown: users for a node ────────────────────────────────────────────
@@ -1027,51 +1100,8 @@ export async function getNodeUsers(
   }
   const leadPaths = graphCache!.leadPaths;
 
-  // Filter leads that belong to this node
-  const matching = leadPaths.filter(lead => {
-    if (nodeId.startsWith('src_')) {
-      return `src_${lead.source_category}` === nodeId;
-    }
-    if (nodeId === 'visitor_site') {
-      return lead.has_visitor_record;
-    }
-    if (nodeId === 'visitor_never') {
-      return lead.first_touch.type === null && !lead.has_visitor_record;
-    }
-    // Outreach nodes
-    if (nodeId === 'outreach_email') return lead.outreach.email.count > 0;
-    if (nodeId === 'outreach_sms') return lead.outreach.sms.count > 0;
-    if (nodeId === 'outreach_voice') return lead.outreach.voice.count > 0;
-    // Engagement nodes
-    if (nodeId === 'engagement_engaged') return lead.engagement_level === 'engaged';
-    if (nodeId === 'engagement_opened') return lead.engagement_level === 'opened';
-    if (nodeId === 'engagement_ignored') return lead.engagement_level === 'ignored';
-    // Backward compat: old 'entry_unengaged' matches both unengaged types
-    if (nodeId === 'entry_unengaged') {
-      return lead.first_touch.type === null;
-    }
-    if (nodeId === 'entry_unengaged_visited') {
-      return lead.first_touch.type === null && lead.has_visitor_record;
-    }
-    if (nodeId === 'entry_unengaged_never') {
-      return lead.first_touch.type === null && !lead.has_visitor_record;
-    }
-    if (nodeId.startsWith('entry_')) {
-      const touchType = nodeId.replace('entry_', '');
-      return lead.first_touch.type === touchType;
-    }
-    if (nodeId.startsWith('campaign_')) {
-      const campaignId = nodeId.replace('campaign_', '');
-      return lead.campaign_enrollments.some(e => e.campaign_id === campaignId);
-    }
-    if (nodeId === 'outcome_enrolled') {
-      return lead.outcome.enrolled;
-    }
-    if (nodeId === 'outcome_paid') {
-      return lead.outcome.paid;
-    }
-    return false;
-  });
+  // Filter leads that belong to this node (uses shared helper)
+  const matching = leadPaths.filter(lead => leadMatchesNode(lead, nodeId));
 
   const total = matching.length;
   const offset = (page - 1) * limit;

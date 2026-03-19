@@ -2,11 +2,13 @@ import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import ForceGraph2D, { ForceGraphMethods } from 'react-force-graph-2d';
 import {
   getCampaignGraph,
+  getCampaignGraphSlice,
   CampaignGraphData,
   CampaignGraphNode,
   CampaignGraphValidation,
   GraphUserRecord,
   getGraphEdgeUsers,
+  SliceContext,
 } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
@@ -375,6 +377,12 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [layoutVersion, setLayoutVersion] = useState(0);
 
+  // Slice mode (cohort view)
+  const [sliceStack, setSliceStack] = useState<string[]>([]);
+  const [sliceContext, setSliceContext] = useState<SliceContext | null>(null);
+  const [sliceLoading, setSliceLoading] = useState(false);
+  const [globalData, setGlobalData] = useState<CampaignGraphData | null>(null);
+
   // Position persistence refs
   const savedPositions = useRef<Record<string, { fx: number; fy: number }>>(
     (() => { try { return JSON.parse(localStorage.getItem(POSITIONS_KEY) || '{}'); } catch { return {}; } })()
@@ -387,7 +395,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     let cancelled = false;
     setLoading(true);
     getCampaignGraph()
-      .then((res) => { if (!cancelled) setData(res.data); })
+      .then((res) => { if (!cancelled) { setData(res.data); setGlobalData(res.data); } })
       .catch((err) => { if (!cancelled) setError(err.message || 'Failed to load'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -566,6 +574,10 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       const dimmed = highlightNodeId && !connectedSet.has(n.id);
       if (dimmed) ctx.globalAlpha = 0.12;
 
+      // Slice mode: heavily dim zero-count nodes
+      const sliceDimmed = !dimmed && !!sliceContext && n.count === 0;
+      if (sliceDimmed) ctx.globalAlpha = 0.08;
+
       // High-activity glow
       if (isHighActivity && !isHovered && !dimmed) {
         ctx.beginPath();
@@ -574,6 +586,16 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         ctx.globalAlpha = dimmed ? 0.05 : 0.4;
         ctx.fill();
         ctx.globalAlpha = dimmed ? 0.12 : 1;
+      }
+
+      // Slice origin highlight ring
+      const isSliceOrigin = !!sliceContext && sliceContext.nodeId === n.id;
+      if (isSliceOrigin && !dimmed) {
+        ctx.beginPath();
+        ctx.arc(n.x!, n.y!, radius + 7, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#2b6cb0';
+        ctx.lineWidth = 3;
+        ctx.stroke();
       }
 
       // Selection ring
@@ -636,9 +658,9 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       ctx.fillText(formatCount(n.count), badgeX, badgeY + 0.5);
 
       // Restore alpha
-      if (dimmed || isZeroCount) ctx.globalAlpha = 1;
+      if (dimmed || isZeroCount || sliceDimmed) ctx.globalAlpha = 1;
     },
-    [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId]
+    [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId, sliceContext]
   );
 
   // Declarative link helpers
@@ -773,6 +795,35 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     setLayoutVersion(v => v + 1);
   }, []);
 
+  // Slice mode handlers
+  const handleSliceClick = useCallback(async (nodeId: string) => {
+    if (sliceLoading) return;
+    setSliceLoading(true);
+    try {
+      const newStack = [...sliceStack, nodeId];
+      const res = await getCampaignGraphSlice(newStack);
+      setSliceStack(newStack);
+      setSliceContext(res.data.sliceContext);
+      setData(res.data);
+      setSelectedNode(null);
+      setSelectedEdge(null);
+      setSourceFilter(null);
+      setOutreachFilter(null);
+    } catch (err: any) {
+      console.error('Slice failed:', err);
+    } finally {
+      setSliceLoading(false);
+    }
+  }, [sliceStack, sliceLoading]);
+
+  const handleSliceReset = useCallback(() => {
+    setSliceStack([]);
+    setSliceContext(null);
+    setData(globalData);
+    setSelectedNode(null);
+    setSelectedEdge(null);
+  }, [globalData]);
+
   if (loading) {
     return (
       <div className="d-flex align-items-center justify-content-center h-100 text-muted">
@@ -807,6 +858,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         edges={data?.edges || []}
         allNodes={data?.nodes || []}
         onClose={() => setSelectedNode(null)}
+        onSlice={handleSliceClick}
+        sliceContext={sliceContext}
       />
     );
   }
@@ -873,7 +926,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         )}
 
         {/* Filter dropdowns */}
-        {fullWidth && (
+        {fullWidth && !sliceContext && (
           <div className="d-flex gap-2" style={{ position: 'absolute', top: 6, right: 50, zIndex: 10 }}>
             <select
               className="form-select form-select-sm"
@@ -898,6 +951,44 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {/* Cohort slice banner */}
+        {sliceContext && (
+          <div
+            className="d-flex align-items-center justify-content-between px-3 py-2"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 15,
+              background: 'linear-gradient(90deg, #ebf4ff 0%, #e6fffa 100%)',
+              borderBottom: '2px solid var(--color-primary-light, #2b6cb0)',
+              fontSize: '0.75rem',
+            }}
+          >
+            <div className="d-flex align-items-center gap-2">
+              <span className="badge bg-primary">Cohort View</span>
+              <span className="fw-semibold" style={{ color: 'var(--color-primary, #1a365d)' }}>
+                {sliceContext.nodeLabel}
+              </span>
+              <span className="text-muted">
+                {sliceContext.cohortSize} of {sliceContext.totalLeads} leads
+                ({Math.round((sliceContext.cohortSize / sliceContext.totalLeads) * 100)}%)
+              </span>
+              {sliceStack.length > 1 && (
+                <span className="badge bg-info">{sliceStack.length} levels deep</span>
+              )}
+            </div>
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              onClick={handleSliceReset}
+              disabled={sliceLoading}
+            >
+              ↺ Reset View
+            </button>
           </div>
         )}
 
@@ -1081,6 +1172,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             edges={data?.edges || []}
             allNodes={data?.nodes || []}
             onClose={() => setSelectedNode(null)}
+            onSlice={handleSliceClick}
+            sliceContext={sliceContext}
           />
         </div>
       )}

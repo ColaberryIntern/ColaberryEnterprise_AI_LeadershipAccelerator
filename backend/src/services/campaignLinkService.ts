@@ -18,6 +18,7 @@ export interface CampaignROIReport {
   channel: string | null;
   visitors: number;
   leads: number;
+  engaged: number;
   enrollments: number;
   revenue: number;
   budget_spent: number;
@@ -114,10 +115,12 @@ export async function getCampaignROI(campaignId: string): Promise<CampaignROIRep
     SELECT
       COUNT(DISTINCT v.id)::int AS visitors,
       COUNT(DISTINCT l.id)::int AS leads,
-      COUNT(DISTINCT e.id)::int AS enrollments
+      COUNT(DISTINCT e.id)::int AS enrollments,
+      COUNT(DISTINCT CASE WHEN vs.duration_seconds > 30 OR vs.event_count > 3 THEN v.id END)::int AS engaged
     FROM visitors v
     LEFT JOIN leads l ON l.id = v.lead_id
     LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email)
+    LEFT JOIN visitor_sessions vs ON vs.visitor_id = v.id
     WHERE v.campaign_id = :campaignId
   `;
 
@@ -129,6 +132,7 @@ export async function getCampaignROI(campaignId: string): Promise<CampaignROIRep
   const visitors = Number(row?.visitors) || 0;
   const leads = Number(row?.leads) || 0;
   const enrollments = Number(row?.enrollments) || 0;
+  const engaged = Number(row?.engaged) || 0;
   const revenue = enrollments * PRICE_PER_ENROLLMENT;
   const budgetSpent = Number(campaign.budget_spent) || 0;
   const roi = budgetSpent > 0 ? Math.round(((revenue - budgetSpent) / budgetSpent) * 100) / 100 : 0;
@@ -139,6 +143,7 @@ export async function getCampaignROI(campaignId: string): Promise<CampaignROIRep
     channel: campaign.channel || null,
     visitors,
     leads,
+    engaged,
     enrollments,
     revenue,
     budget_spent: budgetSpent,

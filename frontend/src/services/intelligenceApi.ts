@@ -492,4 +492,24 @@ export const getGraphEdgeUsers = (from: string, to: string, page = 1, limit = 50
     params: { from, to, page, limit },
   });
 
+// ─── Graph Slice (Cohort View) ──────────────────────────────────────────
+
+export interface SliceContext {
+  nodeId: string;
+  nodeLabel: string;
+  cohortSize: number;
+  totalLeads: number;
+  drillStack: string[];
+}
+
+export interface SlicedCampaignGraphData extends CampaignGraphData {
+  sliceContext: SliceContext;
+}
+
+export const getCampaignGraphSlice = (nodeIds: string[]) =>
+  axios.get<SlicedCampaignGraphData>('/api/admin/campaign-intelligence/graph/slice', {
+    ...adminHeaders(),
+    params: { nodeIds: nodeIds.join(',') },
+  });
+
 export default api;

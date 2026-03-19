@@ -7,7 +7,7 @@ import { scoreMessageEffectiveness } from '../../services/aiMessageService';
 import { calculateMultiTouchAttribution } from '../../services/revenueDashboardService';
 import { parseNaturalLanguageCampaign } from '../../services/campaignBuilderService';
 import { getPersonaArchetypes } from '../../services/testing/testLeadGenerator';
-import { getCampaignGraphData, getNodeUsers, getEdgeUsers } from '../../services/reporting/campaignGraphService';
+import { getCampaignGraphData, getNodeUsers, getEdgeUsers, getSlicedGraphData } from '../../services/reporting/campaignGraphService';
 
 const router = Router();
 
@@ -152,6 +152,21 @@ router.get('/api/admin/campaign-intelligence/graph/node-users', requireAdmin, as
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
     const result = await getNodeUsers(nodeId, page, limit);
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Graph Slice: Cohort-filtered graph for a node ───────────────────────
+
+router.get('/api/admin/campaign-intelligence/graph/slice', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const raw = req.query.nodeIds as string;
+    if (!raw) return res.status(400).json({ error: 'nodeIds is required' });
+    const nodeIds = raw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!nodeIds.length) return res.status(400).json({ error: 'at least one nodeId required' });
+    const data = await getSlicedGraphData(nodeIds);
+    res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

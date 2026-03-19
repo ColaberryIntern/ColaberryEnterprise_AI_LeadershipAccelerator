@@ -359,12 +359,16 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
   const [roiLoading, setRoiLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [visitors, setVisitors] = useState<any[]>([]);
 
   useEffect(() => {
     api.get(`/api/admin/campaigns/${c.id}/roi`)
       .then(res => setRoi(res.data))
       .catch(() => setRoi(null))
       .finally(() => setRoiLoading(false));
+    api.get(`/api/admin/campaigns/${c.id}/roi/details`)
+      .then(res => setVisitors(res.data?.visitors || []))
+      .catch(() => {});
   }, [c.id]);
 
   const handleAction = async (action: string) => {
@@ -494,6 +498,39 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                   <DetailRow label="Expected ROI" value={c.expected_roi != null ? `${c.expected_roi}x` : '\u2014'} />
                 </div>
               </div>
+
+              {/* Visitor Drill-Down with Engagement */}
+              {visitors.length > 0 && (
+                <>
+                  <h6 className="fw-semibold mt-4 mb-3" style={{ color: 'var(--color-primary)' }}>Visitors ({visitors.length})</h6>
+                  <div className="table-responsive" style={{ maxHeight: 220, overflow: 'auto' }}>
+                    <table className="table table-sm table-hover mb-0" style={{ fontSize: '0.78rem' }}>
+                      <thead className="table-light" style={{ position: 'sticky', top: 0 }}>
+                        <tr>
+                          <th>Last Seen</th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Time</th>
+                          <th>Engaged</th>
+                          <th>Source</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visitors.map((v: any, i: number) => (
+                          <tr key={i}>
+                            <td className="text-muted">{v.last_seen_at ? new Date(v.last_seen_at).toLocaleDateString() : '-'}</td>
+                            <td className="fw-medium">{v.lead_name || <span className="text-muted">Anonymous</span>}</td>
+                            <td>{v.lead_email || '-'}</td>
+                            <td>{v.time_on_page ? `${v.time_on_page}s` : '-'}</td>
+                            <td>{v.engaged ? <span className="badge bg-success" style={{ fontSize: 9 }}>Yes</span> : <span className="badge bg-secondary" style={{ fontSize: 9 }}>No</span>}</td>
+                            <td><span className="badge bg-secondary" style={{ fontSize: 9 }}>{v.utm_source || 'direct'}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
             <div className="modal-footer d-flex justify-content-between">
               <div className="d-flex gap-2">
@@ -534,7 +571,7 @@ function CampaignLinkRegistryTab() {
   const [editingCampaign, setEditingCampaign] = useState<RegisteredCampaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<RegisteredCampaign | null>(null);
   const [copied, setCopied] = useState('');
-  const [campaignKPIs, setCampaignKPIs] = useState<Record<string, { visitors: number; leads: number; enrollments: number }>>({});
+  const [campaignKPIs, setCampaignKPIs] = useState<Record<string, { visitors: number; leads: number; engaged: number; enrollments: number }>>({});
   const [drillDown, setDrillDown] = useState<{ campaignId: string; campaignName: string; visitors: any[] } | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
 
@@ -556,8 +593,8 @@ function CampaignLinkRegistryTab() {
       await Promise.all(live.map(async (c: any) => {
         try {
           const res = await api.get(`/api/admin/campaigns/${c.id}/roi`);
-          kpis[c.id] = { visitors: res.data?.visitors || 0, leads: res.data?.leads || 0, enrollments: res.data?.enrollments || 0 };
-        } catch { kpis[c.id] = { visitors: 0, leads: 0, enrollments: 0 }; }
+          kpis[c.id] = { visitors: res.data?.visitors || 0, leads: res.data?.leads || 0, engaged: res.data?.engaged || 0, enrollments: res.data?.enrollments || 0 };
+        } catch { kpis[c.id] = { visitors: 0, leads: 0, engaged: 0, enrollments: 0 }; }
       }));
       setCampaignKPIs(kpis);
     } catch {
@@ -672,6 +709,7 @@ function CampaignLinkRegistryTab() {
                     <th>Status</th>
                     <th>Landing Page</th>
                     <th className="text-end">Visitors</th>
+                    <th className="text-end">Engaged</th>
                     <th className="text-end">Identified</th>
                     <th className="text-end">Enrolled</th>
                     <th style={{ minWidth: 140 }}>Tracking Link</th>
@@ -698,6 +736,9 @@ function CampaignLinkRegistryTab() {
                         <td className="small">{c.destination_path || '\u2014'}</td>
                         <td className="text-end fw-medium" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}>
                           {campaignKPIs[c.id]?.visitors || 0}
+                        </td>
+                        <td className="text-end fw-medium" style={{ color: (campaignKPIs[c.id]?.engaged || 0) > 0 ? '#8b5cf6' : undefined }}>
+                          {campaignKPIs[c.id]?.engaged || 0}
                         </td>
                         <td className="text-end fw-medium" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}>
                           {campaignKPIs[c.id]?.leads || 0}
@@ -792,6 +833,15 @@ function RevenueIntelligenceTab() {
   const [sortAsc, setSortAsc] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedCampaign, setSelectedCampaign] = useState<RegisteredCampaign | null>(null);
+
+  const openCampaignDetail = async (campaignId: string) => {
+    try {
+      const res = await api.get(`/api/admin/campaigns/${campaignId}`);
+      const camp = res.data?.campaign || res.data;
+      if (camp) setSelectedCampaign(camp);
+    } catch {}
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -1035,9 +1085,9 @@ function RevenueIntelligenceTab() {
                 </thead>
                 <tbody>
                   {sorted.map((c) => (
-                    <tr key={c.campaign_id}>
-                      <td className="fw-medium">
-                        <span className="fw-medium">{c.campaign_name || c.campaign_id}</span>
+                    <tr key={c.campaign_id} style={{ cursor: 'pointer' }} onClick={() => openCampaignDetail(c.campaign_id)}>
+                      <td className="fw-medium" style={{ color: 'var(--color-primary-light)' }}>
+                        {c.campaign_name || c.campaign_id}
                       </td>
                       {hasMetadata && <td className="text-muted">{c.campaign_type || '\u2014'}</td>}
                       {hasMetadata && <td className="text-muted">{c.platform || '\u2014'}</td>}
@@ -1072,6 +1122,14 @@ function RevenueIntelligenceTab() {
           )}
         </div>
       </div>
+      {selectedCampaign && (
+        <CampaignDetailModal
+          campaign={selectedCampaign}
+          onClose={() => setSelectedCampaign(null)}
+          onEdit={() => setSelectedCampaign(null)}
+          onRefresh={() => { setSelectedCampaign(null); fetchData(); }}
+        />
+      )}
     </div>
   );
 }

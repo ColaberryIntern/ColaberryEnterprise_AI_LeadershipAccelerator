@@ -4,6 +4,7 @@ import {
   CampaignGraphEdge,
   GraphUserRecord,
   getGraphNodeUsers,
+  SliceContext,
 } from '../../../services/intelligenceApi';
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
   edges: CampaignGraphEdge[];
   allNodes: CampaignGraphNode[];
   onClose: () => void;
+  onSlice?: (nodeId: string) => void;
+  sliceContext?: SliceContext | null;
 }
 
 const NODE_COLORS: Record<string, { color: string; bg: string }> = {
@@ -567,7 +570,7 @@ const DETAIL_COMPONENTS: Record<string, React.FC<{ node: CampaignGraphNode; edge
   outcome: OutcomeDetails,
 };
 
-export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClose }: Props) {
+export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClose, onSlice, sliceContext }: Props) {
   const colors = getColors(node);
   const typeLabel = TYPE_LABELS[node.type] || node.type;
   const DetailComponent = DETAIL_COMPONENTS[node.type] || EntryDetails;
@@ -621,6 +624,27 @@ export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClos
             total {typeLabel.toLowerCase()}s
           </div>
         </div>
+
+        {/* Slice by cohort button */}
+        {onSlice && node.count > 0 && (
+          <button
+            className="btn btn-sm btn-primary w-100 mb-3"
+            style={{ fontSize: '0.72rem' }}
+            onClick={() => onSlice(node.id)}
+          >
+            Slice graph by this cohort ({node.count.toLocaleString()} leads)
+          </button>
+        )}
+
+        {/* Cohort context badge */}
+        {sliceContext && (
+          <div className="text-center mb-2">
+            <span className="badge bg-light text-muted" style={{ fontSize: '0.6rem' }}>
+              {Math.round((node.count / sliceContext.cohortSize) * 100)}% of cohort
+              ({sliceContext.cohortSize.toLocaleString()} leads)
+            </span>
+          </div>
+        )}
 
         {/* Zero-count empty state */}
         {node.count === 0 && (
