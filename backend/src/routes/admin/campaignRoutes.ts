@@ -280,6 +280,28 @@ router.get('/api/admin/campaigns/:id/tracking-link', requireAdmin, async (req: R
   }
 });
 
+// Campaign visitor drill-down — shows individual visitors with lead info
+router.get('/api/admin/campaigns/:id/roi/details', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { sequelize } = require('../../config/database');
+    const { QueryTypes } = require('sequelize');
+    const details = await sequelize.query(`
+      SELECT v.id AS visitor_id, v.first_seen_at, v.last_seen_at, v.total_sessions,
+             v.utm_source, v.utm_medium, v.device_type, v.country,
+             l.id AS lead_id, l.name AS lead_name, l.email AS lead_email,
+             l.pipeline_stage, l.lead_score
+      FROM visitors v
+      LEFT JOIN leads l ON l.id = v.lead_id
+      WHERE v.campaign_id = :campaignId
+      ORDER BY v.last_seen_at DESC
+      LIMIT 100
+    `, { replacements: { campaignId: req.params.id }, type: QueryTypes.SELECT });
+    res.json({ visitors: details });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/api/admin/campaigns/:id/generate-link', requireAdmin, async (req: Request, res: Response) => {
   try {
     const link = await generateTrackedLink(req.params.id as string);

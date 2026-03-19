@@ -82,8 +82,14 @@ function flush(useBeacon = false) {
   const info = browserInfo();
   const events = buffer.splice(0);
 
-  // Attach campaign_id as top-level field for visitor attribution
+  // Attach campaign_id and email as top-level fields for visitor attribution
   let campaign_id: string | undefined;
+  let email: string | undefined;
+  try {
+    const sp = new URLSearchParams(location.search);
+    const e = sp.get('email');
+    if (e && e.includes('@')) email = e;
+  } catch { /* silent */ }
   try {
     const raw = localStorage.getItem('cb_campaign_id');
     if (raw) {
@@ -96,15 +102,15 @@ function flush(useBeacon = false) {
   } catch { /* silent */ }
 
   if (useBeacon) {
-    const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, events });
+    const payload = JSON.stringify({ fingerprint: fp, ...info, campaign_id, email, events });
     try { navigator.sendBeacon(`${API}/api/t/batch`, payload); } catch { /* silent */ }
     return;
   }
 
   const url = events.length === 1 ? `${API}/api/t/event` : `${API}/api/t/batch`;
   const body = events.length === 1
-    ? { fingerprint: fp, ...info, campaign_id, ...events[0] }
-    : { fingerprint: fp, ...info, campaign_id, events };
+    ? { fingerprint: fp, ...info, campaign_id, email, ...events[0] }
+    : { fingerprint: fp, ...info, campaign_id, email, events };
 
   fetch(url, {
     method: 'POST',

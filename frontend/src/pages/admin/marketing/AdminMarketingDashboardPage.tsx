@@ -534,6 +534,8 @@ function CampaignLinkRegistryTab() {
   const [detailCampaign, setDetailCampaign] = useState<RegisteredCampaign | null>(null);
   const [copied, setCopied] = useState('');
   const [campaignKPIs, setCampaignKPIs] = useState<Record<string, { visitors: number; leads: number; enrollments: number }>>({});
+  const [drillDown, setDrillDown] = useState<{ campaignId: string; campaignName: string; visitors: any[] } | null>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);
@@ -565,6 +567,15 @@ function CampaignLinkRegistryTab() {
   }, []);
 
   useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
+
+  const openDrillDown = async (c: RegisteredCampaign) => {
+    setDrillLoading(true);
+    try {
+      const res = await api.get(`/api/admin/campaigns/${c.id}/roi/details`);
+      setDrillDown({ campaignId: c.id, campaignName: c.name, visitors: res.data?.visitors || [] });
+    } catch { setDrillDown({ campaignId: c.id, campaignName: c.name, visitors: [] }); }
+    finally { setDrillLoading(false); }
+  };
 
   const copyLink = (link: string, id: string) => {
     navigator.clipboard.writeText(link).then(() => {
@@ -684,8 +695,12 @@ function CampaignLinkRegistryTab() {
                           </span>
                         </td>
                         <td className="small">{c.destination_path || '\u2014'}</td>
-                        <td className="text-end fw-medium">{campaignKPIs[c.id]?.visitors || 0}</td>
-                        <td className="text-end fw-medium">{campaignKPIs[c.id]?.leads || 0}</td>
+                        <td className="text-end fw-medium" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}>
+                          {campaignKPIs[c.id]?.visitors || 0}
+                        </td>
+                        <td className="text-end fw-medium" onClick={e => { e.stopPropagation(); openDrillDown(c); }} style={{ cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline' }}>
+                          {campaignKPIs[c.id]?.leads || 0}
+                        </td>
                         <td className="text-end fw-medium" style={{ color: (campaignKPIs[c.id]?.enrollments || 0) > 0 ? '#198754' : undefined }}>
                           {campaignKPIs[c.id]?.enrollments || 0}
                         </td>
@@ -712,6 +727,56 @@ function CampaignLinkRegistryTab() {
           )}
         </div>
       </div>
+
+      {/* Drill-down modal */}
+      {drillDown && (
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setDrillDown(null)}>
+          <div className="modal-dialog modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h6 className="modal-title">Visitors — {drillDown.campaignName}</h6>
+                <button className="btn-close" onClick={() => setDrillDown(null)} />
+              </div>
+              <div className="modal-body p-0">
+                {drillLoading ? (
+                  <div className="text-center py-4"><div className="spinner-border spinner-border-sm text-primary" /></div>
+                ) : drillDown.visitors.length === 0 ? (
+                  <p className="text-muted text-center py-4">No visitors yet for this campaign.</p>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-sm table-hover mb-0" style={{ fontSize: 12 }}>
+                      <thead className="table-light">
+                        <tr>
+                          <th>Last Seen</th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Source</th>
+                          <th>Device</th>
+                          <th>Sessions</th>
+                          <th>Stage</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drillDown.visitors.map((v: any, i: number) => (
+                          <tr key={i}>
+                            <td className="text-muted">{v.last_seen_at ? new Date(v.last_seen_at).toLocaleDateString() : '-'}</td>
+                            <td className="fw-medium">{v.lead_name || <span className="text-muted">Anonymous</span>}</td>
+                            <td>{v.lead_email || '-'}</td>
+                            <td><span className="badge bg-secondary" style={{ fontSize: 9 }}>{v.utm_source || 'direct'}</span></td>
+                            <td className="text-muted">{v.device_type || '-'}</td>
+                            <td>{v.total_sessions || 1}</td>
+                            <td>{v.pipeline_stage ? <span className="badge bg-info" style={{ fontSize: 9 }}>{v.pipeline_stage}</span> : '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

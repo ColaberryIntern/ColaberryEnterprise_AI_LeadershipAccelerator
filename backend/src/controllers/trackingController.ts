@@ -5,6 +5,7 @@ import {
   recordPageEvent,
   categorizePagePath,
   updateHeartbeat,
+  resolveIdentity,
 } from '../services/visitorTrackingService';
 import { detectSessionSignals } from '../services/behavioralSignalService';
 import { computeIntentScore } from '../services/intentScoringService';
@@ -88,6 +89,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       utm_campaign,
       utm_medium,
       campaign_id,
+      email,
       timestamp,
     } = req.body;
 
@@ -111,6 +113,23 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       referrer_domain,
       campaign_id,
     });
+
+    // Email-based identity resolution: link visitor to existing lead
+    if (email && typeof email === 'string') {
+      try {
+        const { Visitor, Lead } = require('../models');
+        const visitor = await Visitor.findByPk(visitorId);
+        if (visitor && !visitor.lead_id) {
+          const lead = await Lead.findOne({ where: { email: email.toLowerCase().trim() } });
+          if (lead) {
+            await resolveIdentity(visitorId, lead.id);
+            console.log(`[Tracking] Identity resolved: visitor ${visitorId} → lead ${lead.id} (${email})`);
+          }
+        }
+      } catch (err: any) {
+        console.warn('[Tracking] Identity resolution failed (non-blocking):', err.message);
+      }
+    }
 
     const sessionId = await getOrCreateSession(visitorId, {
       page_url,
