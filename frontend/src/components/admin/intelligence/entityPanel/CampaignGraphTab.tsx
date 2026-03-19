@@ -10,26 +10,30 @@ import {
 } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
-// ─── System Map 4-Layer Config ──────────────────────────────────────────────
+// ─── Full Funnel 6-Layer Config ─────────────────────────────────────────────
 
 const COLUMN_CONFIG: Record<string, number> = {
-  source: 0, entry: 1, campaign: 2, outcome: 3,
+  source: 0, outreach: 1, visitor: 2, entry: 3, campaign: 4, outcome: 5,
 };
-const COLUMN_X_PCT = [0.10, 0.36, 0.62, 0.90];
-const COLUMN_LABELS = ['Sources', 'Entry Points', 'Campaigns', 'Outcomes'];
+const COLUMN_X_PCT = [0.06, 0.22, 0.38, 0.55, 0.74, 0.94];
+const COLUMN_LABELS = ['Sources', 'Outreach', 'Visitors', 'First Touch', 'Campaigns', 'Outcomes'];
 
 // Zone boundaries for column-constrained dragging (percentage of width)
 const ZONE_RANGES: Record<string, [number, number]> = {
-  source:   [0, 0.23],
-  entry:    [0.23, 0.49],
-  campaign: [0.49, 0.76],
-  outcome:  [0.76, 1.0],
+  source:   [0, 0.14],
+  outreach: [0.14, 0.30],
+  visitor:  [0.30, 0.46],
+  entry:    [0.46, 0.64],
+  campaign: [0.64, 0.84],
+  outcome:  [0.84, 1.0],
 };
 
-const POSITIONS_KEY = 'campaign-graph-positions';
+const POSITIONS_KEY = 'campaign-graph-positions-v3';
 
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
   source:   { color: '#805ad5', bg: '#faf5ff' },
+  outreach: { color: '#e53e3e', bg: '#fff5f5' },
+  visitor:  { color: '#dd6b20', bg: '#fffaf0' },
   entry:    { color: '#319795', bg: '#e6fffa' },
   campaign: { color: '#2b6cb0', bg: '#ebf4ff' },
   outcome:  { color: '#38a169', bg: '#f0fff4' },
@@ -41,6 +45,13 @@ const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
   src_cold_outbound: { color: '#3182ce', bg: '#ebf4ff' },
   src_alumni:        { color: '#38a169', bg: '#f0fff4' },
   src_anonymous:     { color: '#a0aec0', bg: '#f7fafc' },
+};
+
+// Per-outreach-node colors for visual differentiation
+const OUTREACH_NODE_COLORS: Record<string, { color: string; bg: string }> = {
+  outreach_email: { color: '#e53e3e', bg: '#fff5f5' },
+  outreach_sms:   { color: '#d69e2e', bg: '#fffff0' },
+  outreach_voice: { color: '#9f7aea', bg: '#faf5ff' },
 };
 
 const SOURCE_FILTER_OPTIONS = [
@@ -84,6 +95,9 @@ function formatCount(n: number): string {
 function getNodeColors(node: CampaignGraphNode): { color: string; bg: string } {
   if (node.type === 'source' && SOURCE_NODE_COLORS[node.id]) {
     return SOURCE_NODE_COLORS[node.id];
+  }
+  if (node.type === 'outreach' && OUTREACH_NODE_COLORS[node.id]) {
+    return OUTREACH_NODE_COLORS[node.id];
   }
   return TYPE_COLORS[node.type] || TYPE_COLORS.entry;
 }
@@ -275,10 +289,22 @@ function ValidationBar({ validation, warnings }: { validation?: CampaignGraphVal
             <span className="text-muted">Enrolled</span>
             <span className="fw-semibold">{validation.leads_enrolled.toLocaleString()}</span>
           </div>
-          <div className="d-flex justify-content-between py-1">
+          <div className="d-flex justify-content-between py-1 border-bottom">
             <span className="text-muted">Paid</span>
             <span className="fw-semibold">{validation.leads_paid.toLocaleString()}</span>
           </div>
+          {validation.leads_contacted !== undefined && (
+            <div className="d-flex justify-content-between py-1 border-bottom">
+              <span className="text-muted">Contacted</span>
+              <span className="fw-semibold">{validation.leads_contacted.toLocaleString()}</span>
+            </div>
+          )}
+          {validation.leads_with_visitor !== undefined && (
+            <div className="d-flex justify-content-between py-1">
+              <span className="text-muted">Visitors</span>
+              <span className="fw-semibold">{validation.leads_with_visitor.toLocaleString()}</span>
+            </div>
+          )}
           {allWarnings.length > 0 && (
             <div className="mt-2 pt-2 border-top">
               <div className="fw-semibold text-warning mb-1">Warnings</div>
@@ -309,6 +335,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [outreachFilter, setOutreachFilter] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<SelectedEdge | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [layoutVersion, setLayoutVersion] = useState(0);
@@ -455,7 +482,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   );
 
   // Connected set for path highlighting (from selected node, edge, OR source filter)
-  const highlightNodeId = sourceFilter || (selectedNode ? selectedNode.id : null) || (selectedEdge ? selectedEdge.from : null);
+  const highlightNodeId = sourceFilter || outreachFilter || (selectedNode ? selectedNode.id : null) || (selectedEdge ? selectedEdge.from : null);
   const connectedSet = useMemo(() => {
     if (!highlightNodeId) return new Set<string>();
     const set = new Set<string>();
@@ -533,6 +560,10 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         ctx.fill();
       }
 
+      // Zero-count nodes: reduced opacity + dashed border
+      const isZeroCount = n.count === 0;
+      if (isZeroCount && !dimmed) ctx.globalAlpha = 0.4;
+
       // Main circle
       ctx.beginPath();
       ctx.arc(n.x!, n.y!, radius, 0, 2 * Math.PI);
@@ -540,7 +571,9 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       ctx.fill();
       ctx.strokeStyle = n.color;
       ctx.lineWidth = isSelected ? 3 : 1.5;
+      if (isZeroCount) ctx.setLineDash([4, 3]);
       ctx.stroke();
+      if (isZeroCount) ctx.setLineDash([]);
 
       // Label
       ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
@@ -568,7 +601,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       ctx.fillText(formatCount(n.count), badgeX, badgeY + 0.5);
 
       // Restore alpha
-      if (dimmed) ctx.globalAlpha = 1;
+      if (dimmed || isZeroCount) ctx.globalAlpha = 1;
     },
     [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId]
   );
@@ -804,14 +837,25 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           </div>
         )}
 
-        {/* Source filter dropdown */}
+        {/* Filter dropdowns */}
         {fullWidth && (
-          <div style={{ position: 'absolute', top: 6, right: 50, zIndex: 10 }}>
+          <div className="d-flex gap-2" style={{ position: 'absolute', top: 6, right: 50, zIndex: 10 }}>
+            <select
+              className="form-select form-select-sm"
+              style={{ fontSize: '0.65rem', width: 120, padding: '2px 6px' }}
+              value={outreachFilter || ''}
+              onChange={(e) => { setOutreachFilter(e.target.value || null); if (e.target.value) setSourceFilter(null); }}
+            >
+              <option value="">All Outreach</option>
+              <option value="outreach_email">Email</option>
+              <option value="outreach_sms">SMS</option>
+              <option value="outreach_voice">Voice</option>
+            </select>
             <select
               className="form-select form-select-sm"
               style={{ fontSize: '0.65rem', width: 130, padding: '2px 6px' }}
               value={sourceFilter || ''}
-              onChange={(e) => setSourceFilter(e.target.value || null)}
+              onChange={(e) => { setSourceFilter(e.target.value || null); if (e.target.value) setOutreachFilter(null); }}
             >
               {SOURCE_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value || 'all'} value={opt.value || ''}>
@@ -864,7 +908,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             ctx.setLineDash([4, 6]);
             ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
             ctx.lineWidth = 1 / globalScale;
-            [0.23, 0.49, 0.76].forEach(pct => {
+            [0.14, 0.30, 0.46, 0.64, 0.84].forEach(pct => {
               const x = pct * dimensions.width;
               ctx.beginPath();
               ctx.moveTo(x, 0);
@@ -966,6 +1010,15 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             )}
             {hoveredNode.metrics.active_users !== undefined && (
               <div className="text-muted">Active: {hoveredNode.metrics.active_users.toLocaleString()}</div>
+            )}
+            {hoveredNode.metrics.contacted !== undefined && (
+              <div className="text-muted">Contacted: {hoveredNode.metrics.contacted.toLocaleString()}</div>
+            )}
+            {hoveredNode.metrics.visits_generated !== undefined && (
+              <div className="text-muted">Visits Generated: {hoveredNode.metrics.visits_generated.toLocaleString()}</div>
+            )}
+            {hoveredNode.metrics.attribution_linear !== undefined && (
+              <div className="text-muted">Attribution (Linear): {hoveredNode.metrics.attribution_linear}</div>
             )}
             <div className="text-muted mt-1" style={{ fontSize: '0.6rem' }}>Click for details</div>
           </div>

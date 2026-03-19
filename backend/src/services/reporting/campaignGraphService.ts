@@ -1,16 +1,17 @@
-// ─── Campaign Intelligence: User Path Truth Engine ──────────────────────────
-// Builds a 4-layer system map: SOURCE → ENTRY → CAMPAIGN → OUTCOME
+// ─── Full Funnel Intelligence Engine ────────────────────────────────────────
+// Builds a 6-layer system map: SOURCE → OUTREACH → VISITOR → FIRST TOUCH → CAMPAIGN → OUTCOME
 // ALL edges and counts are derived from real per-lead path tracing.
 // NO proportional estimates. NO inferred paths. NO assumptions.
 
-import { Lead, Campaign, CampaignLead, CommunicationLog, Enrollment, StrategyCall, ChatConversation } from '../../models';
+import { Lead, Campaign, CampaignLead, CommunicationLog, Enrollment, StrategyCall, ChatConversation, CallContactLog } from '../../models';
+import Visitor from '../../models/Visitor';
 import { Op, fn, col } from 'sequelize';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface CampaignGraphNode {
   id: string;
-  type: 'source' | 'entry' | 'campaign' | 'outcome';
+  type: 'source' | 'outreach' | 'visitor' | 'entry' | 'campaign' | 'outcome';
   label: string;
   count: number;
   metrics: {
@@ -19,6 +20,13 @@ export interface CampaignGraphNode {
     active_users?: number;
     engaged_count?: number;
     unengaged_count?: number;
+    contacted?: number;
+    delivered?: number;
+    opened?: number;
+    visits_generated?: number;
+    attribution_linear?: number;
+    attribution_first?: number;
+    attribution_last?: number;
   };
   source_breakdown?: Record<string, number>;
 }
@@ -37,6 +45,9 @@ export interface CampaignGraphValidation {
   leads_in_campaigns: number;
   leads_enrolled: number;
   leads_paid: number;
+  leads_with_visitor: number;
+  leads_contacted: number;
+  leads_contacted_no_visit: number;
   warnings: string[];
 }
 
@@ -64,6 +75,19 @@ export interface LeadPathRecord {
     enrolled_at: Date;
   }>;
   outcome: { enrolled: boolean; paid: boolean };
+  outreach: {
+    email: { count: number; earliest: Date | null; latest_status: string | null };
+    sms:   { count: number; earliest: Date | null; latest_status: string | null };
+    voice: { count: number; earliest: Date | null; latest_status: string | null };
+  };
+  was_contacted: boolean;
+  has_visitor_record: boolean;
+  visitor_stats: {
+    total_sessions: number;
+    total_pageviews: number;
+    first_seen_at: Date | null;
+    last_seen_at: Date | null;
+  } | null;
   created_at: Date;
 }
 
@@ -81,7 +105,7 @@ export interface GraphUserRecord {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const LAYER_ORDER: Record<string, number> = { source: 0, entry: 1, campaign: 2, outcome: 3 };
+const LAYER_ORDER: Record<string, number> = { source: 0, outreach: 1, visitor: 2, entry: 3, campaign: 4, outcome: 5 };
 
 // ─── Cache ──────────────────────────────────────────────────────────────────
 
@@ -107,8 +131,8 @@ function categorizeSource(source: string | null): 'marketing' | 'cold_outbound' 
 // ─── Phase 1: Build per-lead journey records ────────────────────────────────
 
 async function buildLeadPaths(): Promise<LeadPathRecord[]> {
-  // 6 parallel queries
-  const [allLeads, chatsByLead, strategyCalls, campaignEnrollments, enrollments, chatsByVisitor] = await Promise.all([
+  // 9 parallel queries
+  const [allLeads, chatsByLead, strategyCalls, campaignEnrollments, enrollments, chatsByVisitor, visitorsByLead, outreachByChannel, voiceCallsByVisitor] = await Promise.all([
     // 1a: All leads
     Lead.findAll({
       attributes: ['id', 'email', 'name', 'company', 'source', 'form_type', 'sponsorship_kit_requested', 'pipeline_stage', 'visitor_id', 'created_at'],
@@ -167,6 +191,53 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
       group: ['visitor_id'],
       raw: true,
     }).catch(() => []) as Promise<Array<{ visitor_id: string; earliest: Date }>>,
+
+    // 1g: Visitor records linked to leads
+    Visitor.findAll({
+      attributes: ['lead_id', 'total_sessions', 'total_pageviews', 'first_seen_at', 'last_seen_at'],
+      where: { lead_id: { [Op.ne]: null as any } },
+      raw: true,
+    }).catch(() => []) as Promise<Array<{
+      lead_id: number; total_sessions: number; total_pageviews: number;
+      first_seen_at: Date; last_seen_at: Date;
+    }>>,
+
+    // 1h: Outreach per lead per channel (CommunicationLog)
+    CommunicationLog.findAll({
+      attributes: [
+        'lead_id', 'channel',
+        [fn('COUNT', col('id')), 'cnt'],
+        [fn('MIN', col('created_at')), 'earliest'],
+      ],
+      where: {
+        direction: 'outbound',
+        status: { [Op.in]: ['sent', 'delivered', 'opened', 'clicked'] },
+        lead_id: { [Op.ne]: null },
+      },
+      group: ['lead_id', 'channel'],
+      raw: true,
+    }).catch(() => []) as Promise<Array<{
+      lead_id: number; channel: string; cnt: string; earliest: Date;
+    }>>,
+
+    // 1i: Voice calls via CallContactLog → Visitor → lead_id
+    CallContactLog.findAll({
+      attributes: [
+        [fn('COUNT', col('CallContactLog.id')), 'cnt'],
+        [fn('MIN', col('call_timestamp')), 'earliest'],
+      ],
+      include: [{
+        model: Visitor,
+        as: 'visitor',
+        attributes: ['lead_id'],
+        where: { lead_id: { [Op.ne]: null as any } },
+        required: true,
+      }],
+      group: ['visitor.lead_id'],
+      raw: true,
+    }).catch(() => []) as Promise<Array<{
+      cnt: string; earliest: Date; 'visitor.lead_id': number;
+    }>>,
   ]);
 
   // Build lookup maps
@@ -184,6 +255,53 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
   const visitorChatMap = new Map<string, Date>();
   for (const vc of chatsByVisitor) {
     if (vc.visitor_id) visitorChatMap.set(vc.visitor_id, new Date(vc.earliest));
+  }
+
+  // Visitor data lookup map
+  const visitorMap = new Map<number, { total_sessions: number; total_pageviews: number; first_seen_at: Date | null; last_seen_at: Date | null }>();
+  for (const v of visitorsByLead) {
+    if (v.lead_id) {
+      visitorMap.set(v.lead_id, {
+        total_sessions: v.total_sessions || 0,
+        total_pageviews: v.total_pageviews || 0,
+        first_seen_at: v.first_seen_at ? new Date(v.first_seen_at) : null,
+        last_seen_at: v.last_seen_at ? new Date(v.last_seen_at) : null,
+      });
+    }
+  }
+
+  // Outreach data lookup map: lead_id → { email, sms, voice }
+  const emptyChannel = { count: 0, earliest: null as Date | null, latest_status: null as string | null };
+  const outreachMap = new Map<number, LeadPathRecord['outreach']>();
+  for (const o of outreachByChannel) {
+    if (!o.lead_id) continue;
+    const existing = outreachMap.get(o.lead_id) || {
+      email: { ...emptyChannel }, sms: { ...emptyChannel }, voice: { ...emptyChannel },
+    };
+    const ch = o.channel?.toLowerCase() as 'email' | 'sms' | 'voice';
+    if (ch === 'email' || ch === 'sms' || ch === 'voice') {
+      existing[ch] = {
+        count: parseInt(o.cnt, 10) || 0,
+        earliest: o.earliest ? new Date(o.earliest) : null,
+        latest_status: null, // aggregated query doesn't track per-status
+      };
+    }
+    outreachMap.set(o.lead_id, existing);
+  }
+  // Merge voice calls from CallContactLog into outreach map
+  for (const vc of voiceCallsByVisitor) {
+    const leadId = vc['visitor.lead_id'];
+    if (!leadId) continue;
+    const existing = outreachMap.get(leadId) || {
+      email: { ...emptyChannel }, sms: { ...emptyChannel }, voice: { ...emptyChannel },
+    };
+    existing.voice = {
+      count: existing.voice.count + (parseInt(vc.cnt, 10) || 0),
+      earliest: vc.earliest && (!existing.voice.earliest || new Date(vc.earliest) < existing.voice.earliest)
+        ? new Date(vc.earliest) : existing.voice.earliest,
+      latest_status: null,
+    };
+    outreachMap.set(leadId, existing);
   }
 
   // Campaign enrollments grouped by lead
@@ -261,6 +379,17 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
       ? { type: candidates[0].type, timestamp: candidates[0].ts }
       : { type: null as any, timestamp: null };
 
+    // Visitor data
+    const visitorData = visitorMap.get(lead.id);
+
+    // Outreach data
+    const outreachData = outreachMap.get(lead.id) || {
+      email: { count: 0, earliest: null, latest_status: null },
+      sms: { count: 0, earliest: null, latest_status: null },
+      voice: { count: 0, earliest: null, latest_status: null },
+    };
+    const wasContacted = outreachData.email.count > 0 || outreachData.sms.count > 0 || outreachData.voice.count > 0;
+
     leadPaths.push({
       lead_id: lead.id,
       email: lead.email,
@@ -275,6 +404,10 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
         enrolled: enrolledEmails.has(emailLower),
         paid: paidEmails.has(emailLower),
       },
+      outreach: outreachData,
+      was_contacted: wasContacted,
+      has_visitor_record: !!visitorData,
+      visitor_stats: visitorData || null,
       created_at: new Date(lead.created_at),
     });
   }
@@ -301,20 +434,25 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const sourceEngaged: Record<string, number> = { marketing: 0, cold_outbound: 0, alumni: 0, anonymous: 0 };
 
   // ── Edge aggregation maps: key → Set<lead_id> ─────────────────────────
-  const srcToEntry = new Map<string, Set<number>>();
+  const srcToOutreach = new Map<string, Set<number>>();    // source → outreach channel
+  const outreachToVisitor = new Map<string, Set<number>>(); // outreach → visitor (contacted + visited)
+  const outreachToEntry = new Map<string, Set<number>>();  // outreach → entry (contacted, no visitor)
+  const srcToVisitor = new Map<string, Set<number>>();     // source → visitor (not contacted)
+  const visitorToEntry = new Map<string, Set<number>>();
+  const srcToEntry = new Map<string, Set<number>>();       // direct (no visitor, no outreach)
   const entryToCampaign = new Map<string, Set<number>>();
   const campaignToOutcome = new Map<string, Set<number>>();
 
   // ── Entry point counts (real first_touch counts) ───────────────────────
   const entryTouchCounts: Record<string, number> = {
     cory_chat: 0, blueprint: 0, sponsorship: 0, strategy_call: 0,
-    executive_overview: 0, referral: 0, unengaged: 0,
+    executive_overview: 0, referral: 0, unengaged_visited: 0, unengaged_never: 0,
   };
 
   // ── Source breakdown per entry node ────────────────────────────────────
   const entrySourceBreakdown: Record<string, Record<string, number>> = {
     cory_chat: {}, blueprint: {}, sponsorship: {}, strategy_call: {},
-    executive_overview: {}, referral: {}, unengaged: {},
+    executive_overview: {}, referral: {}, unengaged_visited: {}, unengaged_never: {},
   };
 
   // ── Campaign data accumulation ─────────────────────────────────────────
@@ -322,25 +460,88 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const campaignNames = new Map<string, string>();
   const campaignSourceBreakdown = new Map<string, Record<string, number>>();
 
+  // ── Visitor & outreach tracking ──────────────────────────────────────
+  let visitorLeadCount = 0;
+  let contactedLeadCount = 0;
+  let contactedNoVisitCount = 0;
+  const outreachChannelLeads: Record<string, Set<number>> = { email: new Set(), sms: new Set(), voice: new Set() };
+  const outreachChannelVisited: Record<string, number> = { email: 0, sms: 0, voice: 0 };
+
   // ── Single pass over all leads ─────────────────────────────────────────
   for (const lead of leadPaths) {
     const src = lead.source_category;
     sourceCounts[src]++;
 
-    const touchType = lead.first_touch.type || 'unengaged';
-    if (lead.first_touch.type) sourceEngaged[src]++;
-    entryTouchCounts[touchType]++;
+    const hasVisitor = lead.has_visitor_record;
+    const hasFirstTouch = lead.first_touch.type !== null;
+    const wasContacted = lead.was_contacted;
 
-    // Source breakdown for this entry
+    if (hasVisitor) visitorLeadCount++;
+    if (hasFirstTouch) sourceEngaged[src]++;
+    if (wasContacted) {
+      contactedLeadCount++;
+      if (!hasVisitor) contactedNoVisitCount++;
+    }
+
+    // Track per-channel outreach
+    for (const ch of ['email', 'sms', 'voice'] as const) {
+      if (lead.outreach[ch].count > 0) {
+        outreachChannelLeads[ch].add(lead.lead_id);
+        if (hasVisitor) outreachChannelVisited[ch]++;
+      }
+    }
+
+    // Determine touch type for entry layer
+    let touchType: string;
+    if (hasFirstTouch) {
+      touchType = lead.first_touch.type!;
+    } else if (hasVisitor) {
+      touchType = 'unengaged_visited';
+    } else {
+      touchType = 'unengaged_never';
+    }
+
+    entryTouchCounts[touchType]++;
     entrySourceBreakdown[touchType][src] = (entrySourceBreakdown[touchType][src] || 0) + 1;
 
-    // Source → Entry edge
-    const srcEntryKey = `src_${src}|entry_${touchType}`;
-    if (!srcToEntry.has(srcEntryKey)) srcToEntry.set(srcEntryKey, new Set());
-    srcToEntry.get(srcEntryKey)!.add(lead.lead_id);
+    // ── Edge routing ──────────────────────────────────────────────────
+    // Helper to add to an edge map
+    const addEdge = (map: Map<string, Set<number>>, key: string) => {
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(lead.lead_id);
+    };
+
+    if (wasContacted) {
+      // Contacted leads route through outreach layer
+      // Pick the earliest channel for the canonical downstream path
+      const channels = (['email', 'sms', 'voice'] as const).filter(ch => lead.outreach[ch].count > 0);
+      for (const ch of channels) {
+        addEdge(srcToOutreach, `src_${src}|outreach_${ch}`);
+      }
+      // Use earliest channel for downstream edge (avoid double-counting)
+      const earliest = channels.sort((a, b) => {
+        const aTs = lead.outreach[a].earliest?.getTime() ?? Infinity;
+        const bTs = lead.outreach[b].earliest?.getTime() ?? Infinity;
+        return aTs - bTs;
+      })[0];
+      if (hasVisitor) {
+        addEdge(outreachToVisitor, `outreach_${earliest}|visitor_site`);
+        addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
+      } else {
+        addEdge(outreachToEntry, `outreach_${earliest}|entry_${touchType}`);
+      }
+    } else {
+      // Non-contacted leads bypass outreach entirely (existing logic)
+      if (hasVisitor) {
+        addEdge(srcToVisitor, `src_${src}|visitor_site`);
+        addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
+      } else {
+        addEdge(srcToEntry, `src_${src}|entry_${touchType}`);
+      }
+    }
 
     // Entry → Campaign edges (only for engaged leads with campaign enrollments)
-    if (lead.first_touch.type) {
+    if (hasFirstTouch) {
       for (const enrollment of lead.campaign_enrollments) {
         const etcKey = `entry_${touchType}|campaign_${enrollment.campaign_id}`;
         if (!entryToCampaign.has(etcKey)) entryToCampaign.set(etcKey, new Set());
@@ -416,7 +617,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   // ── Build Nodes ────────────────────────────────────────────────────────
   const nodes: CampaignGraphNode[] = [];
 
-  // Source nodes
+  // Source nodes (always all 4)
   for (const [key, label] of [['marketing', 'Marketing'], ['cold_outbound', 'Cold Outbound'], ['alumni', 'Alumni Network'], ['anonymous', 'Anonymous / Direct']] as const) {
     nodes.push({
       id: `src_${key}`,
@@ -430,7 +631,38 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     });
   }
 
-  // Entry nodes (from real first_touch data)
+  // Outreach nodes (always all 3, even with count=0)
+  for (const [ch, label] of [['email', 'Email Outreach'], ['sms', 'SMS Outreach'], ['voice', 'Voice Outreach']] as const) {
+    const contacted = outreachChannelLeads[ch].size;
+    nodes.push({
+      id: `outreach_${ch}`,
+      type: 'outreach',
+      label,
+      count: contacted,
+      metrics: {
+        contacted,
+        visits_generated: outreachChannelVisited[ch],
+        conversion_rate: contacted > 0 ? Math.round((outreachChannelVisited[ch] / contacted) * 100) : 0,
+      },
+    });
+  }
+
+  // Visitor node (single aggregate)
+  const visitorEngagedCount = leadPaths.filter(l => l.has_visitor_record && l.first_touch.type !== null).length;
+  nodes.push({
+    id: 'visitor_site',
+    type: 'visitor',
+    label: 'Site Visitors',
+    count: visitorLeadCount,
+    metrics: {
+      active_users: visitorLeadCount,
+      engaged_count: visitorEngagedCount,
+      unengaged_count: visitorLeadCount - visitorEngagedCount,
+      conversion_rate: totalLeads > 0 ? Math.round((visitorLeadCount / totalLeads) * 100) : 0,
+    },
+  });
+
+  // Entry nodes — ALL always rendered (even with count=0)
   const entryNodeDefs: Array<{ key: string; label: string }> = [
     { key: 'cory_chat', label: 'Cory Chat' },
     { key: 'blueprint', label: 'Blueprint Signup' },
@@ -438,23 +670,22 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     { key: 'sponsorship', label: 'Sponsorship Form' },
     { key: 'strategy_call', label: 'Strategy Call' },
     { key: 'referral', label: 'Referral' },
-    { key: 'unengaged', label: 'Unengaged' },
+    { key: 'unengaged_visited', label: 'Visited Only' },
+    { key: 'unengaged_never', label: 'Never Visited' },
   ];
 
   for (const { key, label } of entryNodeDefs) {
-    const count = entryTouchCounts[key];
-    if (count > 0) {
-      nodes.push({
-        id: `entry_${key}`,
-        type: 'entry',
-        label,
-        count,
-        metrics: {
-          conversion_rate: totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0,
-        },
-        source_breakdown: entrySourceBreakdown[key],
-      });
-    }
+    const count = entryTouchCounts[key] || 0;
+    nodes.push({
+      id: `entry_${key}`,
+      type: 'entry',
+      label,
+      count,
+      metrics: {
+        conversion_rate: totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0,
+      },
+      source_breakdown: entrySourceBreakdown[key],
+    });
   }
 
   // Campaign nodes
@@ -490,6 +721,31 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
 
   // ── Build Edges (only where real users traversed) ──────────────────────
   const edges: CampaignGraphEdge[] = [];
+
+  for (const [key, leadSet] of srcToOutreach) {
+    const [from, to] = key.split('|');
+    edges.push({ from, to, label: 'contacts', volume: leadSet.size });
+  }
+
+  for (const [key, leadSet] of outreachToVisitor) {
+    const [from, to] = key.split('|');
+    edges.push({ from, to, label: 'drives visit', volume: leadSet.size });
+  }
+
+  for (const [key, leadSet] of outreachToEntry) {
+    const [from, to] = key.split('|');
+    edges.push({ from, to, label: 'converts', volume: leadSet.size });
+  }
+
+  for (const [key, leadSet] of srcToVisitor) {
+    const [from, to] = key.split('|');
+    edges.push({ from, to, label: 'visits', volume: leadSet.size });
+  }
+
+  for (const [key, leadSet] of visitorToEntry) {
+    const [from, to] = key.split('|');
+    edges.push({ from, to, label: 'engages', volume: leadSet.size });
+  }
 
   for (const [key, leadSet] of srcToEntry) {
     const [from, to] = key.split('|');
@@ -530,6 +786,10 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     warnings.push(`Entry total (${entryTotalCheck}) !== lead count (${totalLeads})`);
   }
 
+  if (visitorLeadCount === 0) {
+    warnings.push('No visitor records found. Visitor layer will be empty.');
+  }
+
   const leadsInCampaigns = new Set<number>();
   for (const lead of leadPaths) {
     if (lead.campaign_enrollments.length > 0) leadsInCampaigns.add(lead.lead_id);
@@ -538,12 +798,78 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const validation: CampaignGraphValidation = {
     total_leads: totalLeads,
     leads_with_first_touch: leadPaths.filter(l => l.first_touch.type !== null).length,
-    leads_unengaged: entryTouchCounts.unengaged,
+    leads_unengaged: (entryTouchCounts.unengaged_visited || 0) + (entryTouchCounts.unengaged_never || 0),
     leads_in_campaigns: leadsInCampaigns.size,
     leads_enrolled: enrolledCount,
     leads_paid: paidCount,
+    leads_with_visitor: visitorLeadCount,
+    leads_contacted: contactedLeadCount,
+    leads_contacted_no_visit: contactedNoVisitCount,
     warnings,
   };
+
+  // ── Attribution scoring ─────────────────────────────────────────────
+  // Only for converted leads (enrolled). Each touchpoint gets credit summing to 1.0 per lead.
+  const attributionByNode = new Map<string, { linear: number; first_touch: number; last_touch: number }>();
+  let attributionWarnings = 0;
+
+  for (const lead of leadPaths) {
+    if (!lead.outcome.enrolled) continue;
+
+    // Collect touchpoints chronologically: outreach events, first touch, campaign enrollments
+    const touchpoints: Array<{ nodeId: string; ts: number }> = [];
+
+    // Outreach touchpoints (earliest per channel)
+    for (const ch of ['email', 'sms', 'voice'] as const) {
+      if (lead.outreach[ch].count > 0 && lead.outreach[ch].earliest) {
+        touchpoints.push({ nodeId: `outreach_${ch}`, ts: lead.outreach[ch].earliest!.getTime() });
+      }
+    }
+
+    // First touch
+    if (lead.first_touch.type && lead.first_touch.timestamp) {
+      touchpoints.push({ nodeId: `entry_${lead.first_touch.type}`, ts: lead.first_touch.timestamp.getTime() });
+    }
+
+    // Campaign enrollments
+    for (const enrollment of lead.campaign_enrollments) {
+      touchpoints.push({ nodeId: `campaign_${enrollment.campaign_id}`, ts: enrollment.enrolled_at.getTime() });
+    }
+
+    if (touchpoints.length === 0) continue;
+
+    // Sort by timestamp
+    touchpoints.sort((a, b) => a.ts - b.ts);
+    const n = touchpoints.length;
+    const linearCredit = 1 / n;
+
+    for (let i = 0; i < n; i++) {
+      const tp = touchpoints[i];
+      const existing = attributionByNode.get(tp.nodeId) || { linear: 0, first_touch: 0, last_touch: 0 };
+      existing.linear += linearCredit;
+      if (i === 0) existing.first_touch += 1;
+      if (i === n - 1) existing.last_touch += 1;
+      attributionByNode.set(tp.nodeId, existing);
+    }
+
+    // Validation: check sum ≈ 1.0 per model
+    const sum = touchpoints.length * linearCredit;
+    if (Math.abs(sum - 1.0) > 0.01) attributionWarnings++;
+  }
+
+  if (attributionWarnings > 0) {
+    warnings.push(`Attribution sum mismatch for ${attributionWarnings} leads`);
+  }
+
+  // Apply attribution scores to nodes
+  for (const node of nodes) {
+    const attr = attributionByNode.get(node.id);
+    if (attr) {
+      node.metrics.attribution_linear = Math.round(attr.linear * 100) / 100;
+      node.metrics.attribution_first = Math.round(attr.first_touch * 100) / 100;
+      node.metrics.attribution_last = Math.round(attr.last_touch * 100) / 100;
+    }
+  }
 
   return { nodes, edges: validEdges, validation };
 }
@@ -580,8 +906,22 @@ export async function getNodeUsers(
     if (nodeId.startsWith('src_')) {
       return `src_${lead.source_category}` === nodeId;
     }
+    if (nodeId === 'visitor_site') {
+      return lead.has_visitor_record;
+    }
+    // Outreach nodes
+    if (nodeId === 'outreach_email') return lead.outreach.email.count > 0;
+    if (nodeId === 'outreach_sms') return lead.outreach.sms.count > 0;
+    if (nodeId === 'outreach_voice') return lead.outreach.voice.count > 0;
+    // Backward compat: old 'entry_unengaged' matches both unengaged types
     if (nodeId === 'entry_unengaged') {
       return lead.first_touch.type === null;
+    }
+    if (nodeId === 'entry_unengaged_visited') {
+      return lead.first_touch.type === null && lead.has_visitor_record;
+    }
+    if (nodeId === 'entry_unengaged_never') {
+      return lead.first_touch.type === null && !lead.has_visitor_record;
     }
     if (nodeId.startsWith('entry_')) {
       const touchType = nodeId.replace('entry_', '');
@@ -638,12 +978,49 @@ export async function getEdgeUsers(
   // Determine which leads traversed this edge
   const matching = leadPaths.filter(lead => {
     const srcMatch = fromId.startsWith('src_') && `src_${lead.source_category}` === fromId;
-    const touchType = lead.first_touch.type || 'unengaged';
+
+    const hasFirstTouch = lead.first_touch.type !== null;
+    let touchType: string;
+    if (hasFirstTouch) {
+      touchType = lead.first_touch.type!;
+    } else if (lead.has_visitor_record) {
+      touchType = 'unengaged_visited';
+    } else {
+      touchType = 'unengaged_never';
+    }
     const entryId = `entry_${touchType}`;
 
-    // Source → Entry
+    // Source → Outreach
+    if (fromId.startsWith('src_') && toId.startsWith('outreach_')) {
+      const ch = toId.replace('outreach_', '') as 'email' | 'sms' | 'voice';
+      return srcMatch && lead.outreach[ch]?.count > 0;
+    }
+
+    // Outreach → Visitor (contacted + has visitor)
+    if (fromId.startsWith('outreach_') && toId === 'visitor_site') {
+      const ch = fromId.replace('outreach_', '') as 'email' | 'sms' | 'voice';
+      return lead.outreach[ch]?.count > 0 && lead.has_visitor_record;
+    }
+
+    // Outreach → Entry (contacted, no visitor)
+    if (fromId.startsWith('outreach_') && toId.startsWith('entry_')) {
+      const ch = fromId.replace('outreach_', '') as 'email' | 'sms' | 'voice';
+      return lead.outreach[ch]?.count > 0 && !lead.has_visitor_record && entryId === toId;
+    }
+
+    // Source → Visitor (non-contacted path)
+    if (fromId.startsWith('src_') && toId === 'visitor_site') {
+      return srcMatch && !lead.was_contacted && lead.has_visitor_record;
+    }
+
+    // Visitor → Entry
+    if (fromId === 'visitor_site' && toId.startsWith('entry_')) {
+      return lead.has_visitor_record && entryId === toId;
+    }
+
+    // Source → Entry (direct, no visitor, no outreach)
     if (fromId.startsWith('src_') && toId.startsWith('entry_')) {
-      return srcMatch && entryId === toId;
+      return srcMatch && !lead.was_contacted && !lead.has_visitor_record && entryId === toId;
     }
 
     // Entry → Campaign

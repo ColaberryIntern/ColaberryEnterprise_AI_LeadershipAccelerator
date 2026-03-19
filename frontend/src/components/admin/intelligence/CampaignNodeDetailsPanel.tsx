@@ -15,6 +15,8 @@ interface Props {
 
 const NODE_COLORS: Record<string, { color: string; bg: string }> = {
   source:   { color: '#805ad5', bg: '#faf5ff' },
+  outreach: { color: '#e53e3e', bg: '#fff5f5' },
+  visitor:  { color: '#dd6b20', bg: '#fffaf0' },
   entry:    { color: '#319795', bg: '#e6fffa' },
   campaign: { color: '#2b6cb0', bg: '#ebf4ff' },
   outcome:  { color: '#38a169', bg: '#f0fff4' },
@@ -27,9 +29,17 @@ const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
   src_anonymous:      { color: '#a0aec0', bg: '#f7fafc' },
 };
 
+const OUTREACH_NODE_COLORS: Record<string, { color: string; bg: string }> = {
+  outreach_email: { color: '#e53e3e', bg: '#fff5f5' },
+  outreach_sms:   { color: '#d69e2e', bg: '#fffff0' },
+  outreach_voice: { color: '#9f7aea', bg: '#faf5ff' },
+};
+
 const TYPE_LABELS: Record<string, string> = {
   source: 'Source',
-  entry: 'Entry Point',
+  outreach: 'Outreach Channel',
+  visitor: 'Site Visitor',
+  entry: 'First Touch',
   campaign: 'Campaign',
   outcome: 'Outcome',
 };
@@ -46,6 +56,9 @@ const TOUCH_LABELS: Record<string, string> = {
 function getColors(node: CampaignGraphNode) {
   if (node.type === 'source' && SOURCE_NODE_COLORS[node.id]) {
     return SOURCE_NODE_COLORS[node.id];
+  }
+  if (node.type === 'outreach' && OUTREACH_NODE_COLORS[node.id]) {
+    return OUTREACH_NODE_COLORS[node.id];
   }
   return NODE_COLORS[node.type] || NODE_COLORS.entry;
 }
@@ -274,6 +287,7 @@ function EntryDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edge
         <StatRow label="% of All Leads" value={`${node.metrics.conversion_rate}%`} />
       )}
       {breakdownItems.length > 0 && <FlowList title="Source Breakdown" items={breakdownItems} />}
+      <AttributionSection node={node} />
       {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
       {downstream.length > 0 && <FlowList title="Feeds Into" items={downstream} />}
       <UserListSection nodeId={node.id} />
@@ -333,6 +347,7 @@ function CampaignDetails({ node, edges, allNodes }: { node: CampaignGraphNode; e
         </div>
       )}
       {breakdownItems.length > 0 && <FlowList title="Source Breakdown" items={breakdownItems} />}
+      <AttributionSection node={node} />
       {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
       {downstream.length > 0 && <FlowList title="Converts To" items={downstream} />}
       <UserListSection nodeId={node.id} />
@@ -363,8 +378,129 @@ function OutcomeDetails({ node, edges, allNodes }: { node: CampaignGraphNode; ed
   );
 }
 
+function VisitorDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }) {
+  const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+
+  const upstream = edges
+    .filter(e => e.to === node.id)
+    .map(e => {
+      const source = nodeMap.get(e.from);
+      const colors = source ? getColors(source) : NODE_COLORS.source;
+      return { label: source?.label || e.from, volume: e.volume || 0, color: colors.color };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const downstream = edges
+    .filter(e => e.from === node.id)
+    .map(e => {
+      const target = nodeMap.get(e.to);
+      return { label: target?.label || e.to, volume: e.volume || 0, color: NODE_COLORS[target?.type || 'entry']?.color || '#319795' };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const engaged = node.metrics.engaged_count ?? 0;
+  const engagementRate = node.count > 0 ? Math.round((engaged / node.count) * 100) : 0;
+
+  return (
+    <>
+      <StatRow label="Total Visitors" value={node.count} />
+      <StatRow label="Engaged" value={engaged} />
+      <StatRow label="Engagement Rate" value={`${engagementRate}%`} />
+      {node.metrics.conversion_rate !== undefined && (
+        <StatRow label="% of All Leads" value={`${node.metrics.conversion_rate}%`} />
+      )}
+      {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
+      {downstream.length > 0 && <FlowList title="Leads To" items={downstream} />}
+      <UserListSection nodeId={node.id} />
+    </>
+  );
+}
+
+// ─── Attribution section (shared across node types) ──────────────────────────
+
+function AttributionSection({ node }: { node: CampaignGraphNode }) {
+  const [model, setModel] = useState<'linear' | 'first' | 'last'>('linear');
+  const hasAttribution = node.metrics.attribution_linear !== undefined;
+  if (!hasAttribution) return null;
+
+  const value = model === 'linear' ? node.metrics.attribution_linear
+    : model === 'first' ? node.metrics.attribution_first
+    : node.metrics.attribution_last;
+
+  return (
+    <div className="mt-3">
+      <div className="d-flex align-items-center justify-content-between mb-1">
+        <span className="text-muted fw-medium" style={{ fontSize: '0.7rem' }}>Attribution Score</span>
+        <div className="btn-group" role="group" aria-label="Attribution model">
+          {(['linear', 'first', 'last'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              className={`btn btn-sm ${model === m ? 'btn-primary' : 'btn-outline-secondary'}`}
+              style={{ fontSize: '0.55rem', padding: '1px 6px' }}
+              onClick={() => setModel(m)}
+            >
+              {m === 'linear' ? 'Linear' : m === 'first' ? '1st Touch' : 'Last Touch'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="d-flex align-items-baseline gap-1">
+        <span className="fw-bold" style={{ fontSize: '1.1rem', color: 'var(--color-primary)' }}>
+          {value?.toFixed(2) ?? '—'}
+        </span>
+        <span className="text-muted" style={{ fontSize: '0.6rem' }}>weighted conversions</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Outreach details ────────────────────────────────────────────────────────
+
+function OutreachDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }) {
+  const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+
+  const upstream = edges
+    .filter(e => e.to === node.id)
+    .map(e => {
+      const source = nodeMap.get(e.from);
+      const colors = source ? getColors(source) : NODE_COLORS.source;
+      return { label: source?.label || e.from, volume: e.volume || 0, color: colors.color };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const downstream = edges
+    .filter(e => e.from === node.id)
+    .map(e => {
+      const target = nodeMap.get(e.to);
+      return { label: target?.label || e.to, volume: e.volume || 0, color: NODE_COLORS[target?.type || 'visitor']?.color || '#dd6b20' };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const contacted = node.metrics.contacted ?? node.count;
+  const visitsGenerated = node.metrics.visits_generated ?? 0;
+  const visitRate = contacted > 0 ? Math.round((visitsGenerated / contacted) * 100) : 0;
+
+  return (
+    <>
+      <StatRow label="Contacted" value={contacted} />
+      <StatRow label="Visits Generated" value={visitsGenerated} />
+      <StatRow label="Visit Rate" value={`${visitRate}%`} />
+      {node.metrics.conversion_rate !== undefined && (
+        <StatRow label="Conversion Rate" value={`${node.metrics.conversion_rate}%`} />
+      )}
+      <AttributionSection node={node} />
+      {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
+      {downstream.length > 0 && <FlowList title="Leads To" items={downstream} />}
+      <UserListSection nodeId={node.id} />
+    </>
+  );
+}
+
 const DETAIL_COMPONENTS: Record<string, React.FC<{ node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }>> = {
   source: SourceDetails,
+  outreach: OutreachDetails,
+  visitor: VisitorDetails,
   entry: EntryDetails,
   campaign: CampaignDetails,
   outcome: OutcomeDetails,
@@ -424,6 +560,13 @@ export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClos
             total {typeLabel.toLowerCase()}s
           </div>
         </div>
+
+        {/* Zero-count empty state */}
+        {node.count === 0 && (
+          <div className="text-center text-muted py-2 mb-2" style={{ fontSize: '0.72rem' }}>
+            No users have reached this stage yet.
+          </div>
+        )}
 
         {/* Type-specific details */}
         <DetailComponent node={node} edges={edges} allNodes={allNodes} />
