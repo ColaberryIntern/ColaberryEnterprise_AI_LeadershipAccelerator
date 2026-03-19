@@ -1,17 +1,16 @@
 // ─── Campaign Intelligence: User Path Truth Engine ──────────────────────────
-// Builds a 5-layer system map: SOURCE → VISITOR → FIRST TOUCH → CAMPAIGN → OUTCOME
+// Builds a 4-layer system map: SOURCE → ENTRY → CAMPAIGN → OUTCOME
 // ALL edges and counts are derived from real per-lead path tracing.
 // NO proportional estimates. NO inferred paths. NO assumptions.
 
 import { Lead, Campaign, CampaignLead, CommunicationLog, Enrollment, StrategyCall, ChatConversation } from '../../models';
-import Visitor from '../../models/Visitor';
 import { Op, fn, col } from 'sequelize';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface CampaignGraphNode {
   id: string;
-  type: 'source' | 'visitor' | 'entry' | 'campaign' | 'outcome';
+  type: 'source' | 'entry' | 'campaign' | 'outcome';
   label: string;
   count: number;
   metrics: {
@@ -38,7 +37,6 @@ export interface CampaignGraphValidation {
   leads_in_campaigns: number;
   leads_enrolled: number;
   leads_paid: number;
-  leads_with_visitor: number;
   warnings: string[];
 }
 
@@ -66,13 +64,6 @@ export interface LeadPathRecord {
     enrolled_at: Date;
   }>;
   outcome: { enrolled: boolean; paid: boolean };
-  has_visitor_record: boolean;
-  visitor_stats: {
-    total_sessions: number;
-    total_pageviews: number;
-    first_seen_at: Date | null;
-    last_seen_at: Date | null;
-  } | null;
   created_at: Date;
 }
 
@@ -90,7 +81,7 @@ export interface GraphUserRecord {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const LAYER_ORDER: Record<string, number> = { source: 0, visitor: 1, entry: 2, campaign: 3, outcome: 4 };
+const LAYER_ORDER: Record<string, number> = { source: 0, entry: 1, campaign: 2, outcome: 3 };
 
 // ─── Cache ──────────────────────────────────────────────────────────────────
 
@@ -116,8 +107,8 @@ function categorizeSource(source: string | null): 'marketing' | 'cold_outbound' 
 // ─── Phase 1: Build per-lead journey records ────────────────────────────────
 
 async function buildLeadPaths(): Promise<LeadPathRecord[]> {
-  // 7 parallel queries
-  const [allLeads, chatsByLead, strategyCalls, campaignEnrollments, enrollments, chatsByVisitor, visitorsByLead] = await Promise.all([
+  // 6 parallel queries
+  const [allLeads, chatsByLead, strategyCalls, campaignEnrollments, enrollments, chatsByVisitor] = await Promise.all([
     // 1a: All leads
     Lead.findAll({
       attributes: ['id', 'email', 'name', 'company', 'source', 'form_type', 'sponsorship_kit_requested', 'pipeline_stage', 'visitor_id', 'created_at'],
@@ -176,16 +167,6 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
       group: ['visitor_id'],
       raw: true,
     }).catch(() => []) as Promise<Array<{ visitor_id: string; earliest: Date }>>,
-
-    // 1g: Visitor records linked to leads
-    Visitor.findAll({
-      attributes: ['lead_id', 'total_sessions', 'total_pageviews', 'first_seen_at', 'last_seen_at'],
-      where: { lead_id: { [Op.ne]: null as any } },
-      raw: true,
-    }).catch(() => []) as Promise<Array<{
-      lead_id: number; total_sessions: number; total_pageviews: number;
-      first_seen_at: Date; last_seen_at: Date;
-    }>>,
   ]);
 
   // Build lookup maps
@@ -203,19 +184,6 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
   const visitorChatMap = new Map<string, Date>();
   for (const vc of chatsByVisitor) {
     if (vc.visitor_id) visitorChatMap.set(vc.visitor_id, new Date(vc.earliest));
-  }
-
-  // Visitor data lookup map
-  const visitorMap = new Map<number, { total_sessions: number; total_pageviews: number; first_seen_at: Date | null; last_seen_at: Date | null }>();
-  for (const v of visitorsByLead) {
-    if (v.lead_id) {
-      visitorMap.set(v.lead_id, {
-        total_sessions: v.total_sessions || 0,
-        total_pageviews: v.total_pageviews || 0,
-        first_seen_at: v.first_seen_at ? new Date(v.first_seen_at) : null,
-        last_seen_at: v.last_seen_at ? new Date(v.last_seen_at) : null,
-      });
-    }
   }
 
   // Campaign enrollments grouped by lead
@@ -293,9 +261,6 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
       ? { type: candidates[0].type, timestamp: candidates[0].ts }
       : { type: null as any, timestamp: null };
 
-    // Visitor data
-    const visitorData = visitorMap.get(lead.id);
-
     leadPaths.push({
       lead_id: lead.id,
       email: lead.email,
@@ -310,8 +275,6 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
         enrolled: enrolledEmails.has(emailLower),
         paid: paidEmails.has(emailLower),
       },
-      has_visitor_record: !!visitorData,
-      visitor_stats: visitorData || null,
       created_at: new Date(lead.created_at),
     });
   }
@@ -338,22 +301,20 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const sourceEngaged: Record<string, number> = { marketing: 0, cold_outbound: 0, alumni: 0, anonymous: 0 };
 
   // ── Edge aggregation maps: key → Set<lead_id> ─────────────────────────
-  const srcToVisitor = new Map<string, Set<number>>();
-  const visitorToEntry = new Map<string, Set<number>>();
-  const srcToEntry = new Map<string, Set<number>>();       // direct (no visitor record)
+  const srcToEntry = new Map<string, Set<number>>();
   const entryToCampaign = new Map<string, Set<number>>();
   const campaignToOutcome = new Map<string, Set<number>>();
 
   // ── Entry point counts (real first_touch counts) ───────────────────────
   const entryTouchCounts: Record<string, number> = {
     cory_chat: 0, blueprint: 0, sponsorship: 0, strategy_call: 0,
-    executive_overview: 0, referral: 0, unengaged_visited: 0, unengaged_never: 0,
+    executive_overview: 0, referral: 0, unengaged: 0,
   };
 
   // ── Source breakdown per entry node ────────────────────────────────────
   const entrySourceBreakdown: Record<string, Record<string, number>> = {
     cory_chat: {}, blueprint: {}, sponsorship: {}, strategy_call: {},
-    executive_overview: {}, referral: {}, unengaged_visited: {}, unengaged_never: {},
+    executive_overview: {}, referral: {}, unengaged: {},
   };
 
   // ── Campaign data accumulation ─────────────────────────────────────────
@@ -361,52 +322,25 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const campaignNames = new Map<string, string>();
   const campaignSourceBreakdown = new Map<string, Record<string, number>>();
 
-  // ── Visitor tracking ──────────────────────────────────────────────────
-  let visitorLeadCount = 0;
-
   // ── Single pass over all leads ─────────────────────────────────────────
   for (const lead of leadPaths) {
     const src = lead.source_category;
     sourceCounts[src]++;
 
-    const hasVisitor = lead.has_visitor_record;
-    const hasFirstTouch = lead.first_touch.type !== null;
-
-    if (hasVisitor) visitorLeadCount++;
-    if (hasFirstTouch) sourceEngaged[src]++;
-
-    // Determine touch type for entry layer
-    let touchType: string;
-    if (hasFirstTouch) {
-      touchType = lead.first_touch.type!;
-    } else if (hasVisitor) {
-      touchType = 'unengaged_visited';
-    } else {
-      touchType = 'unengaged_never';
-    }
-
+    const touchType = lead.first_touch.type || 'unengaged';
+    if (lead.first_touch.type) sourceEngaged[src]++;
     entryTouchCounts[touchType]++;
+
+    // Source breakdown for this entry
     entrySourceBreakdown[touchType][src] = (entrySourceBreakdown[touchType][src] || 0) + 1;
 
-    // ── Edge routing ──────────────────────────────────────────────────
-    if (hasVisitor) {
-      // Path: src → visitor → entry
-      const svKey = `src_${src}|visitor_site`;
-      if (!srcToVisitor.has(svKey)) srcToVisitor.set(svKey, new Set());
-      srcToVisitor.get(svKey)!.add(lead.lead_id);
-
-      const veKey = `visitor_site|entry_${touchType}`;
-      if (!visitorToEntry.has(veKey)) visitorToEntry.set(veKey, new Set());
-      visitorToEntry.get(veKey)!.add(lead.lead_id);
-    } else {
-      // Path: src → entry (direct, bypass visitor)
-      const seKey = `src_${src}|entry_${touchType}`;
-      if (!srcToEntry.has(seKey)) srcToEntry.set(seKey, new Set());
-      srcToEntry.get(seKey)!.add(lead.lead_id);
-    }
+    // Source → Entry edge
+    const srcEntryKey = `src_${src}|entry_${touchType}`;
+    if (!srcToEntry.has(srcEntryKey)) srcToEntry.set(srcEntryKey, new Set());
+    srcToEntry.get(srcEntryKey)!.add(lead.lead_id);
 
     // Entry → Campaign edges (only for engaged leads with campaign enrollments)
-    if (hasFirstTouch) {
+    if (lead.first_touch.type) {
       for (const enrollment of lead.campaign_enrollments) {
         const etcKey = `entry_${touchType}|campaign_${enrollment.campaign_id}`;
         if (!entryToCampaign.has(etcKey)) entryToCampaign.set(etcKey, new Set());
@@ -482,7 +416,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   // ── Build Nodes ────────────────────────────────────────────────────────
   const nodes: CampaignGraphNode[] = [];
 
-  // Source nodes (always all 4)
+  // Source nodes
   for (const [key, label] of [['marketing', 'Marketing'], ['cold_outbound', 'Cold Outbound'], ['alumni', 'Alumni Network'], ['anonymous', 'Anonymous / Direct']] as const) {
     nodes.push({
       id: `src_${key}`,
@@ -496,22 +430,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     });
   }
 
-  // Visitor node (single aggregate)
-  const visitorEngagedCount = leadPaths.filter(l => l.has_visitor_record && l.first_touch.type !== null).length;
-  nodes.push({
-    id: 'visitor_site',
-    type: 'visitor',
-    label: 'Site Visitors',
-    count: visitorLeadCount,
-    metrics: {
-      active_users: visitorLeadCount,
-      engaged_count: visitorEngagedCount,
-      unengaged_count: visitorLeadCount - visitorEngagedCount,
-      conversion_rate: totalLeads > 0 ? Math.round((visitorLeadCount / totalLeads) * 100) : 0,
-    },
-  });
-
-  // Entry nodes — ALL always rendered (even with count=0)
+  // Entry nodes (from real first_touch data)
   const entryNodeDefs: Array<{ key: string; label: string }> = [
     { key: 'cory_chat', label: 'Cory Chat' },
     { key: 'blueprint', label: 'Blueprint Signup' },
@@ -519,22 +438,23 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     { key: 'sponsorship', label: 'Sponsorship Form' },
     { key: 'strategy_call', label: 'Strategy Call' },
     { key: 'referral', label: 'Referral' },
-    { key: 'unengaged_visited', label: 'Visited Only' },
-    { key: 'unengaged_never', label: 'Never Visited' },
+    { key: 'unengaged', label: 'Unengaged' },
   ];
 
   for (const { key, label } of entryNodeDefs) {
-    const count = entryTouchCounts[key] || 0;
-    nodes.push({
-      id: `entry_${key}`,
-      type: 'entry',
-      label,
-      count,
-      metrics: {
-        conversion_rate: totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0,
-      },
-      source_breakdown: entrySourceBreakdown[key],
-    });
+    const count = entryTouchCounts[key];
+    if (count > 0) {
+      nodes.push({
+        id: `entry_${key}`,
+        type: 'entry',
+        label,
+        count,
+        metrics: {
+          conversion_rate: totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0,
+        },
+        source_breakdown: entrySourceBreakdown[key],
+      });
+    }
   }
 
   // Campaign nodes
@@ -570,16 +490,6 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
 
   // ── Build Edges (only where real users traversed) ──────────────────────
   const edges: CampaignGraphEdge[] = [];
-
-  for (const [key, leadSet] of srcToVisitor) {
-    const [from, to] = key.split('|');
-    edges.push({ from, to, label: 'visits', volume: leadSet.size });
-  }
-
-  for (const [key, leadSet] of visitorToEntry) {
-    const [from, to] = key.split('|');
-    edges.push({ from, to, label: 'engages', volume: leadSet.size });
-  }
 
   for (const [key, leadSet] of srcToEntry) {
     const [from, to] = key.split('|');
@@ -620,10 +530,6 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     warnings.push(`Entry total (${entryTotalCheck}) !== lead count (${totalLeads})`);
   }
 
-  if (visitorLeadCount === 0) {
-    warnings.push('No visitor records found. Visitor layer will be empty.');
-  }
-
   const leadsInCampaigns = new Set<number>();
   for (const lead of leadPaths) {
     if (lead.campaign_enrollments.length > 0) leadsInCampaigns.add(lead.lead_id);
@@ -632,11 +538,10 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const validation: CampaignGraphValidation = {
     total_leads: totalLeads,
     leads_with_first_touch: leadPaths.filter(l => l.first_touch.type !== null).length,
-    leads_unengaged: (entryTouchCounts.unengaged_visited || 0) + (entryTouchCounts.unengaged_never || 0),
+    leads_unengaged: entryTouchCounts.unengaged,
     leads_in_campaigns: leadsInCampaigns.size,
     leads_enrolled: enrolledCount,
     leads_paid: paidCount,
-    leads_with_visitor: visitorLeadCount,
     warnings,
   };
 
@@ -675,18 +580,8 @@ export async function getNodeUsers(
     if (nodeId.startsWith('src_')) {
       return `src_${lead.source_category}` === nodeId;
     }
-    if (nodeId === 'visitor_site') {
-      return lead.has_visitor_record;
-    }
-    // Backward compat: old 'entry_unengaged' matches both unengaged types
     if (nodeId === 'entry_unengaged') {
       return lead.first_touch.type === null;
-    }
-    if (nodeId === 'entry_unengaged_visited') {
-      return lead.first_touch.type === null && lead.has_visitor_record;
-    }
-    if (nodeId === 'entry_unengaged_never') {
-      return lead.first_touch.type === null && !lead.has_visitor_record;
     }
     if (nodeId.startsWith('entry_')) {
       const touchType = nodeId.replace('entry_', '');
@@ -743,31 +638,12 @@ export async function getEdgeUsers(
   // Determine which leads traversed this edge
   const matching = leadPaths.filter(lead => {
     const srcMatch = fromId.startsWith('src_') && `src_${lead.source_category}` === fromId;
-
-    const hasFirstTouch = lead.first_touch.type !== null;
-    let touchType: string;
-    if (hasFirstTouch) {
-      touchType = lead.first_touch.type!;
-    } else if (lead.has_visitor_record) {
-      touchType = 'unengaged_visited';
-    } else {
-      touchType = 'unengaged_never';
-    }
+    const touchType = lead.first_touch.type || 'unengaged';
     const entryId = `entry_${touchType}`;
 
-    // Source → Visitor
-    if (fromId.startsWith('src_') && toId === 'visitor_site') {
-      return srcMatch && lead.has_visitor_record;
-    }
-
-    // Visitor → Entry
-    if (fromId === 'visitor_site' && toId.startsWith('entry_')) {
-      return lead.has_visitor_record && entryId === toId;
-    }
-
-    // Source → Entry (direct, no visitor)
+    // Source → Entry
     if (fromId.startsWith('src_') && toId.startsWith('entry_')) {
-      return srcMatch && !lead.has_visitor_record && entryId === toId;
+      return srcMatch && entryId === toId;
     }
 
     // Entry → Campaign

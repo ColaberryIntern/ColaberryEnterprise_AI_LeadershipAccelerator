@@ -68,11 +68,14 @@ export async function gatherStrategicIntelligence(): Promise<StrategicOverview> 
         const dailyRate = recent;
 
         // Simple trend: compare recent to expected daily average
+        // Requires 30+ rows AND 1+/day average for meaningful trend detection
         let trend: 'growing' | 'stable' | 'declining' = 'stable';
-        if (total > 7) {
+        if (total > 30) {
           const expectedDaily = total / 30; // rough monthly average
-          if (dailyRate > expectedDaily * 1.2) trend = 'growing';
-          else if (dailyRate < expectedDaily * 0.5) trend = 'declining';
+          if (expectedDaily >= 1) {
+            if (dailyRate > expectedDaily * 1.2) trend = 'growing';
+            else if (dailyRate < expectedDaily * 0.5) trend = 'declining';
+          }
         }
 
         entityKpis[entity] = { entity, total_rows: total, recent_activity: recent, trend };

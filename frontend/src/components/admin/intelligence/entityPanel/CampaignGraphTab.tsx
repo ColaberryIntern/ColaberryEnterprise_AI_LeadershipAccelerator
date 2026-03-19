@@ -10,28 +10,26 @@ import {
 } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
-// ─── System Map 5-Layer Config ──────────────────────────────────────────────
+// ─── System Map 4-Layer Config ──────────────────────────────────────────────
 
 const COLUMN_CONFIG: Record<string, number> = {
-  source: 0, visitor: 1, entry: 2, campaign: 3, outcome: 4,
+  source: 0, entry: 1, campaign: 2, outcome: 3,
 };
-const COLUMN_X_PCT = [0.08, 0.28, 0.48, 0.70, 0.92];
-const COLUMN_LABELS = ['Sources', 'Visitors', 'First Touch', 'Campaigns', 'Outcomes'];
+const COLUMN_X_PCT = [0.10, 0.36, 0.62, 0.90];
+const COLUMN_LABELS = ['Sources', 'Entry Points', 'Campaigns', 'Outcomes'];
 
 // Zone boundaries for column-constrained dragging (percentage of width)
 const ZONE_RANGES: Record<string, [number, number]> = {
-  source:   [0, 0.18],
-  visitor:  [0.18, 0.38],
-  entry:    [0.38, 0.58],
-  campaign: [0.58, 0.80],
-  outcome:  [0.80, 1.0],
+  source:   [0, 0.23],
+  entry:    [0.23, 0.49],
+  campaign: [0.49, 0.76],
+  outcome:  [0.76, 1.0],
 };
 
-const POSITIONS_KEY = 'campaign-graph-positions-v2';
+const POSITIONS_KEY = 'campaign-graph-positions';
 
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
   source:   { color: '#805ad5', bg: '#faf5ff' },
-  visitor:  { color: '#dd6b20', bg: '#fffaf0' },
   entry:    { color: '#319795', bg: '#e6fffa' },
   campaign: { color: '#2b6cb0', bg: '#ebf4ff' },
   outcome:  { color: '#38a169', bg: '#f0fff4' },
@@ -535,10 +533,6 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         ctx.fill();
       }
 
-      // Zero-count nodes: reduced opacity + dashed border
-      const isZeroCount = n.count === 0;
-      if (isZeroCount && !dimmed) ctx.globalAlpha = 0.4;
-
       // Main circle
       ctx.beginPath();
       ctx.arc(n.x!, n.y!, radius, 0, 2 * Math.PI);
@@ -546,9 +540,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       ctx.fill();
       ctx.strokeStyle = n.color;
       ctx.lineWidth = isSelected ? 3 : 1.5;
-      if (isZeroCount) ctx.setLineDash([4, 3]);
       ctx.stroke();
-      if (isZeroCount) ctx.setLineDash([]);
 
       // Label
       ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
@@ -576,7 +568,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       ctx.fillText(formatCount(n.count), badgeX, badgeY + 0.5);
 
       // Restore alpha
-      if (dimmed || isZeroCount) ctx.globalAlpha = 1;
+      if (dimmed) ctx.globalAlpha = 1;
     },
     [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId]
   );
@@ -872,7 +864,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             ctx.setLineDash([4, 6]);
             ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
             ctx.lineWidth = 1 / globalScale;
-            [0.18, 0.38, 0.58, 0.80].forEach(pct => {
+            [0.23, 0.49, 0.76].forEach(pct => {
               const x = pct * dimensions.width;
               ctx.beginPath();
               ctx.moveTo(x, 0);

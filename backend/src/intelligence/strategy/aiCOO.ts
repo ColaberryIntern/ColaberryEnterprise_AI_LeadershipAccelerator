@@ -13,6 +13,7 @@ import IntelligenceDecision from '../../models/IntelligenceDecision';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { logAiEvent } from '../../services/aiEventService';
+import { resolveGlobalConfig } from '../../services/governanceResolutionService';
 
 // ─── Insight Dedup Window ────────────────────────────────────────────────────
 // Before inserting a new insight, check if an identical problem_detected exists
@@ -22,7 +23,8 @@ import { logAiEvent } from '../../services/aiEventService';
 const DEDUP_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
 
 async function upsertInsight(attrs: Record<string, any>): Promise<boolean> {
-  const existing = await IntelligenceDecision.findOne({
+  // Check 1: exact match within time window (prevents rapid duplicates)
+  const recentMatch = await IntelligenceDecision.findOne({
     where: {
       problem_detected: attrs.problem_detected,
       timestamp: { [Op.gte]: new Date(Date.now() - DEDUP_WINDOW_MS) },
@@ -30,9 +32,27 @@ async function upsertInsight(attrs: Record<string, any>): Promise<boolean> {
     order: [['timestamp', 'DESC']],
   });
 
-  if (existing) {
-    await existing.update({
-      observation_count: (existing.observation_count || 1) + 1,
+  if (recentMatch) {
+    await recentMatch.update({
+      observation_count: (recentMatch.observation_count || 1) + 1,
+      last_seen_at: new Date(),
+    });
+    return false; // not a new row
+  }
+
+  // Check 2: same problem still pending (no time limit) — prevents re-proposing
+  // issues that haven't been reviewed yet, even if the dedup window has passed
+  const pendingMatch = await IntelligenceDecision.findOne({
+    where: {
+      problem_detected: attrs.problem_detected,
+      execution_status: 'proposed',
+    },
+    order: [['timestamp', 'DESC']],
+  });
+
+  if (pendingMatch) {
+    await pendingMatch.update({
+      observation_count: (pendingMatch.observation_count || 1) + 1,
       last_seen_at: new Date(),
     });
     return false; // not a new row
@@ -154,7 +174,20 @@ export async function runStrategicCycle(): Promise<StrategicReport> {
   const traceId = uuidv4();
   let persistedCount = 0;
 
+  // Creation-side guardrail: skip if pending queue is already at capacity
+  let skipPersist = false;
   try {
+    const govConfig = await resolveGlobalConfig();
+    const pendingCount = await IntelligenceDecision.count({
+      where: { execution_status: 'proposed' },
+    });
+    if (pendingCount >= govConfig.max_proposed_pending) {
+      console.log(`[AI COO] Skipping insight persistence: ${pendingCount} pending (limit: ${govConfig.max_proposed_pending})`);
+      skipPersist = true;
+    }
+  } catch { /* non-critical */ }
+
+  if (!skipPersist) try {
     const sharedContext = {
       overview: { risk_areas: overview.risk_areas, opportunity_areas: overview.opportunity_areas, fleet: overview.agent_fleet_health },
       revenue: { bottleneck: revenue.bottleneck, at_risk: revenue.estimated_revenue_at_risk },
@@ -194,22 +227,11 @@ export async function runStrategicCycle(): Promise<StrategicReport> {
       if (isNew) persistedCount++;
     }
 
-    // Persist experiment proposals (deduped)
-    for (const experiment of experiments) {
-      const isNew = await upsertInsight({
-        trace_id: traceId,
-        problem_detected: `Experiment proposed: ${experiment.hypothesis || 'Growth experiment'}`,
-        analysis_summary: `${experiment.hypothesis} — ${experiment.metric} over ${experiment.duration_hours}h (${experiment.control} vs ${experiment.variant})`,
-        recommended_action: 'launch_ab_test',
-        risk_score: 20,
-        confidence_score: 60,
-        risk_tier: 'safe',
-        execution_status: 'proposed',
-        reasoning: `Growth experiment agent proposed this experiment during strategic cycle.`,
-        action_details: experiment,
-      });
-      if (isNew) persistedCount++;
-    }
+    // NOTE: Experiment proposals are NOT persisted as IntelligenceDecision rows.
+    // They are transient suggestions available in the StrategicReport and vector memory.
+    // Persisting them created a feedback loop: GrowthExperimentAgent reads proposed
+    // decisions with confidence 40-70, and experiment proposals (confidence 60) fed
+    // back into its input, causing unbounded proposal growth.
 
     // Persist governance violations (deduped)
     for (const violation of governance.violations) {
