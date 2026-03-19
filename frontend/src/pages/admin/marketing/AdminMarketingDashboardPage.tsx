@@ -671,8 +671,8 @@ function CampaignLinkRegistryTab() {
                     <th>Status</th>
                     <th>Landing Page</th>
                     <th className="text-end">Visitors</th>
-                    <th className="text-end">Leads</th>
-                    <th className="text-end">Conversions</th>
+                    <th className="text-end">Identified</th>
+                    <th className="text-end">Enrolled</th>
                     <th style={{ minWidth: 140 }}>Tracking Link</th>
                   </tr>
                 </thead>
