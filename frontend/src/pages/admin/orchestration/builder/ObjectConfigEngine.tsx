@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import api from '../../../../utils/api';
-import { MiniSection, MiniSectionType, TYPE_OPTIONS, TYPE_ICONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions, PROMPT_PAIRS } from './types';
+import { MiniSection, MiniSectionType, TYPE_OPTIONS, TYPE_ICONS, PromptBody, DryRunResult, VariableOption, VariableMapData, QualityBreakdown, Suggestion, DiagnosticReport, RepairResult, TypeDefinition, buildTypeOptions, PROMPT_PAIRS, extractPlaceholders, computeAvailableVars } from './types';
 import HighlightedPromptEditor from './HighlightedPromptEditor';
 import VariableSection from './VariableSection';
 import SkillSection from './SkillSection';
 import ArtifactSection from './ArtifactSection';
 import KnowledgeCheckSection from './KnowledgeCheckSection';
+import ValidationSection from './ValidationSection';
+import QualityScoreSection from './QualityScoreSection';
+import SuggestionSection from './SuggestionSection';
 import ConceptV2 from '../../../../components/portal/lesson/ConceptV2';
 import { AdminPreviewMentorProvider, useMentorContext } from '../../../../contexts/MentorContext';
 import PreviewMentorChat from './PreviewMentorChat';
 import { generateMockV2Content, MockV2Content } from './mockDataGenerator';
 import { PromptOption } from './types';
-import { composePrompt, decomposePrompt } from './promptComposer';
-import TestSimulationPanel from './TestSimulationPanel';
 
 /* Mentor face SVG — matches the FAB in PortalMentorChat for admin preview */
 const PreviewMentorFace = ({ size = 40 }: { size?: number }) => (
@@ -75,10 +76,6 @@ interface Props {
   onOpenRepair: () => void;
   onSelectMiniSection?: (id: string | null) => void;
   typeDefinitions?: TypeDefinition[];
-  // Section-level data
-  sectionVariableKeys?: string[];
-  sectionArtifactIds?: string[];
-  sectionSkillIds?: string[];
   // Preview props
   lessonTitle?: string;
   lessonId?: string;
@@ -92,44 +89,14 @@ interface AccordionState {
   suggestions: boolean;
 }
 
-/** Collapsible prompt editor — shows summary when collapsed */
-function PromptAccordion({ label, tooltip, isEmpty, isDefault, charCount, children }: {
-  label: string; tooltip: string; isEmpty: boolean; isDefault: boolean; charCount: number; children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(!isEmpty);
-  const summary = isEmpty ? 'Empty — using type defaults' : isDefault ? 'Using default prompt' : `Custom prompt (${charCount} chars)`;
-  return (
-    <div className="mb-2">
-      <button
-        className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 w-100"
-        onClick={() => setOpen(!open)}
-        style={{ fontSize: 10, color: 'var(--color-text, #2d3748)' }}
-        title={tooltip}
-      >
-        <i className={`bi bi-chevron-${open ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
-        <span className="fw-medium">{label}</span>
-        {tooltip && <i className="bi bi-info-circle text-muted" style={{ fontSize: 8 }}></i>}
-        <span className="ms-auto text-muted" style={{ fontSize: 9 }}>
-          {isEmpty && <i className="bi bi-dash-circle me-1" style={{ fontSize: 8 }}></i>}
-          {!isEmpty && isDefault && <i className="bi bi-check-circle text-success me-1" style={{ fontSize: 8 }}></i>}
-          {!isEmpty && !isDefault && <i className="bi bi-pencil me-1" style={{ fontSize: 8 }}></i>}
-          {summary}
-        </span>
-      </button>
-      {open && <div className="ms-2 mt-1">{children}</div>}
-    </div>
-  );
-}
-
 /** Child component inside AdminPreviewMentorProvider — reads mentor context state */
-function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, workstationPrompt, workstationTestMode }: {
+function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, workstationPrompt }: {
   mockContent: MockV2Content;
   lessonId: string;
   lessonTitle: string;
   token: string;
   apiUrl: string;
   workstationPrompt?: string;
-  workstationTestMode?: boolean;
 }) {
   const { isMentorOpen, closeMentorPanel, openMentorPanel } = useMentorContext();
 
@@ -157,7 +124,6 @@ function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, wor
             lessonTitle={lessonTitle}
             implementationTask={mockContent.implementation_task}
             workstationPrompt={workstationPrompt}
-            workstationTestMode={workstationTestMode}
             onClose={closeMentorPanel}
           />
         </div>
@@ -193,15 +159,10 @@ export default function ObjectConfigEngine(props: Props) {
   const [expanded, setExpanded] = useState<AccordionState>({
     validation: false, quality: false, suggestions: false,
   });
-  const [activeTab, setActiveTab] = useState<'configure' | 'structure' | 'preview' | 'test'>('configure');
+  const [showPreview, setShowPreview] = useState(false);
   const [reversePrompt, setReversePrompt] = useState('');
   const [reverseLoading, setReverseLoading] = useState(false);
   const [showReverseModal, setShowReverseModal] = useState(false);
-  // Structure tab state
-  const [structurePrompts, setStructurePrompts] = useState<Record<string, { system: string; user: string }>>({});
-  const [structureSaving, setStructureSaving] = useState(false);
-  const [structurePropagating, setStructurePropagating] = useState(false);
-  const [structureMessage, setStructureMessage] = useState('');
 
   // Build artifact ID -> name map for mock content generation
   const artifactMap = useMemo(() => {
@@ -221,6 +182,17 @@ export default function ObjectConfigEngine(props: Props) {
     PROMPT_PAIRS.filter(p => !editType || p.applicableTypes.includes(editType)),
     [editType]
   );
+  const currentOrder = editing?.mini_section_order ?? 999;
+  const systemVarKeys = useMemo(() => props.systemVariables.map(v => v.variable_key), [props.systemVariables]);
+  const coreAvailableVars = useMemo(() =>
+    computeAvailableVars(miniSections, currentOrder, systemVarKeys),
+    [miniSections, currentOrder, systemVarKeys]
+  );
+  const coreAllDefinedVars = useMemo(() =>
+    new Set(props.variables.map(v => v.variable_key)),
+    [props.variables]
+  );
+
   const handleReverseEngineer = useCallback(async () => {
     if (!editing?.id) return;
     setReverseLoading(true);
@@ -238,28 +210,21 @@ export default function ObjectConfigEngine(props: Props) {
 
   const effectiveTypeOptions = props.typeDefinitions?.length ? buildTypeOptions(props.typeDefinitions) : TYPE_OPTIONS;
 
-  // Fetch global workstation prompt from system settings
-  const [workstationPrompt, setWorkstationPrompt] = useState('');
-  const [workstationTestMode, setWorkstationTestMode] = useState(false);
-  useEffect(() => {
-    api.get('/api/admin/settings').then(res => {
-      const s = res.data.settings || res.data;
-      setWorkstationPrompt(s.workstation_prompt || '');
-      setWorkstationTestMode(s.workstation_test_mode || false);
-    }).catch(() => {});
-  }, []);
+  // Extract workstation prompt from the implementation_task mini-section
+  const implMiniSection = miniSections.find(m => m.mini_section_type === 'implementation_task');
+  const workstationPrompt = implMiniSection?.reflection_prompt_system || '';
 
   if (!editing) {
     // Show collapsed type sections as clickable entry points
     if (miniSections.length > 0) {
-      if (activeTab === 'preview') {
+      if (showPreview) {
         return (
           <div className="card border-0 shadow-sm">
             <div className="card-header bg-white py-2 d-flex justify-content-between align-items-center">
               <div className="d-flex align-items-center gap-2">
                 <button
                   className="btn btn-sm btn-outline-primary"
-                  onClick={() => setActiveTab('configure')}
+                  onClick={() => setShowPreview(false)}
                   style={{ fontSize: 11 }}
                 >
                   <i className="bi bi-arrow-left me-1"></i>Back
@@ -275,7 +240,6 @@ export default function ObjectConfigEngine(props: Props) {
                 token={props.token || ''}
                 apiUrl={props.apiUrl || ''}
                 workstationPrompt={workstationPrompt}
-                workstationTestMode={workstationTestMode}
               />
             </AdminPreviewMentorProvider>
           </div>
@@ -289,7 +253,7 @@ export default function ObjectConfigEngine(props: Props) {
             </span>
             <button
               className="btn btn-sm btn-outline-primary"
-              onClick={() => setActiveTab('preview')}
+              onClick={() => setShowPreview(true)}
               style={{ fontSize: 11 }}
             >
               <i className="bi bi-eye me-1"></i>Preview
@@ -363,42 +327,22 @@ export default function ObjectConfigEngine(props: Props) {
         <div className="d-flex align-items-center gap-2">
           <div className="btn-group btn-group-sm">
             <button
-              className={`btn ${activeTab === 'configure' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setActiveTab('configure')}
+              className={`btn ${!showPreview ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setShowPreview(false)}
               style={{ fontSize: 11 }}
             >
               <i className="bi bi-gear me-1"></i>{isNew ? 'New' : 'Configure'}
             </button>
             <button
-              className={`btn ${activeTab === 'structure' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => {
-                // Load current type definition's default_prompts into structure state
-                const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
-                setStructurePrompts(typeDef?.default_prompts ? JSON.parse(JSON.stringify(typeDef.default_prompts)) : {});
-                setStructureMessage('');
-                setActiveTab('structure');
-              }}
-              style={{ fontSize: 11 }}
-            >
-              <i className="bi bi-diagram-3 me-1"></i>Structure
-            </button>
-            <button
-              className={`btn ${activeTab === 'preview' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setActiveTab('preview')}
+              className={`btn ${showPreview ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setShowPreview(true)}
               style={{ fontSize: 11 }}
             >
               <i className="bi bi-eye me-1"></i>Preview
             </button>
-            <button
-              className={`btn ${activeTab === 'test' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setActiveTab('test')}
-              style={{ fontSize: 11 }}
-            >
-              <i className="bi bi-flask me-1"></i>Test
-            </button>
           </div>
           {isDirty && <span className="badge bg-warning-subtle text-warning border" style={{ fontSize: 8 }}>unsaved changes</span>}
-          {activeTab === 'configure' && editing.quality_score != null && (
+          {!showPreview && editing.quality_score != null && (
             <span className={`badge ${editing.quality_score >= 90 ? 'bg-info' : editing.quality_score >= 70 ? 'bg-success' : editing.quality_score >= 40 ? 'bg-warning text-dark' : 'bg-danger'}`} style={{ fontSize: 9 }}>
               Score: {Math.round(editing.quality_score)}
             </span>
@@ -408,7 +352,7 @@ export default function ObjectConfigEngine(props: Props) {
           <span className={`badge ${selectedTypeInfo.badge}`} style={{ fontSize: 9 }}>{selectedTypeInfo.studentLabel}</span>
         )}
       </div>
-      {activeTab === 'preview' ? (
+      {showPreview ? (
         <AdminPreviewMentorProvider>
           <PreviewContent
             mockContent={mockContent}
@@ -417,154 +361,8 @@ export default function ObjectConfigEngine(props: Props) {
             token={props.token || ''}
             apiUrl={props.apiUrl || ''}
             workstationPrompt={workstationPrompt}
-            workstationTestMode={workstationTestMode}
           />
         </AdminPreviewMentorProvider>
-      ) : activeTab === 'structure' ? (
-      <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
-        {/* Structure Tab — type-level structural prompts */}
-        {(() => {
-          const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
-          const typeLabel = selectedTypeInfo?.studentLabel || editType || 'Unknown';
-          const typeCount = miniSections.filter(m => m.mini_section_type === editType).length;
-          const applicablePairs = PROMPT_PAIRS.filter(p => editType && p.applicableTypes.includes(editType))
-            .filter(p => !(p.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')));
-
-          const handleSaveStructure = async () => {
-            if (!typeDef?.id) return;
-            setStructureSaving(true);
-            setStructureMessage('');
-            try {
-              await api.put(`/api/admin/orchestration/curriculum-types/${typeDef.id}`, { default_prompts: structurePrompts });
-              setStructureMessage('Structure saved to type definition.');
-            } catch (err: any) {
-              setStructureMessage(`Error: ${err.response?.data?.error || err.message}`);
-            } finally {
-              setStructureSaving(false);
-            }
-          };
-
-          const handlePropagate = async () => {
-            if (!typeDef?.id) return;
-            setStructurePropagating(true);
-            setStructureMessage('');
-            try {
-              const res = await api.put(`/api/admin/orchestration/curriculum-types/${typeDef.id}/propagate-prompts`, { default_prompts: structurePrompts });
-              setStructureMessage(`Structure saved and propagated to ${res.data.updated} mini-section(s).`);
-            } catch (err: any) {
-              setStructureMessage(`Error: ${err.response?.data?.error || err.message}`);
-            } finally {
-              setStructurePropagating(false);
-            }
-          };
-
-          return (
-            <>
-              {/* Warning banner */}
-              <div className="alert alert-info small py-2 mb-3 d-flex align-items-start gap-2" style={{ fontSize: 10 }}>
-                <i className="bi bi-info-circle-fill mt-1" style={{ fontSize: 12 }}></i>
-                <div>
-                  <strong>Global structural prompts for "{typeLabel}".</strong><br />
-                  These define output format and pedagogical approach shared across all mini-sections of this type.
-                  Changes affect {typeCount > 1 ? `all ${typeCount} mini-sections` : `${typeCount} mini-section`} when propagated.
-                </div>
-              </div>
-
-              {/* Structure variables — these are injected into section prompts as {{structure_*}} */}
-              <div className="mb-3 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 9 }}>
-                <span className="text-muted fw-medium me-1">Injected as variables:</span>
-                {applicablePairs.map(p => (
-                  <span key={p.key} className="badge border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default', background: 'rgba(13,110,253,0.08)', color: '#0d6efd' }} title={`Available in section prompts as {{structure_${p.key}}}`}>
-                    {`{{structure_${p.key}}}`}
-                  </span>
-                ))}
-              </div>
-
-              {applicablePairs.length === 0 && (
-                <div className="text-center text-muted py-4" style={{ fontSize: 11 }}>
-                  <i className="bi bi-slash-circle" style={{ fontSize: 24 }}></i>
-                  <div className="mt-2">No applicable prompt pairs for this type.</div>
-                </div>
-              )}
-
-              {applicablePairs.map(pair => {
-                const dp = structurePrompts[pair.key] || { system: '', user: '' };
-                const merged = dp.system && dp.user ? dp.system + '\n\n' + dp.user : dp.system || dp.user || '';
-                return (
-                  <PromptAccordion
-                    key={pair.key}
-                    label={`${pair.label} — Structural`}
-                    tooltip="Type-level structural prompt shared across all mini-sections of this type"
-                    isEmpty={!merged}
-                    isDefault={false}
-                    charCount={merged.length}
-                  >
-                    <HighlightedPromptEditor
-                      value={merged}
-                      onChange={val => {
-                        setStructurePrompts(prev => ({
-                          ...prev,
-                          [pair.key]: { system: val, user: '' },
-                        }));
-                      }}
-                      label="STRUCTURAL PROMPT"
-                      rows={6}
-                      placeholder="Define the output structure, format, and pedagogical approach for all mini-sections of this type..."
-                    />
-                  </PromptAccordion>
-                );
-              })}
-
-              {structureMessage && (
-                <div className={`alert ${structureMessage.startsWith('Error') ? 'alert-danger' : 'alert-success'} small py-1 mt-2`} style={{ fontSize: 10 }}>
-                  {structureMessage}
-                </div>
-              )}
-
-              <div className="d-flex gap-2 mt-3">
-                <button
-                  className="btn btn-sm btn-outline-primary flex-grow-1"
-                  onClick={handleSaveStructure}
-                  disabled={structureSaving || !typeDef?.id}
-                  style={{ fontSize: 10 }}
-                >
-                  {structureSaving ? <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Saving...</> : <><i className="bi bi-floppy me-1"></i>Save Structure</>}
-                </button>
-                <button
-                  className="btn btn-sm btn-primary flex-grow-1"
-                  onClick={handlePropagate}
-                  disabled={structurePropagating || !typeDef?.id}
-                  style={{ fontSize: 10 }}
-                  title="Save structure and update all existing mini-sections of this type"
-                >
-                  {structurePropagating ? <><span className="spinner-border spinner-border-sm me-1" role="status"></span>Propagating...</> : <><i className="bi bi-broadcast me-1"></i>Propagate to All ({typeCount})</>}
-                </button>
-              </div>
-            </>
-          );
-        })()}
-      </div>
-      ) : activeTab === 'test' ? (
-      <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
-        <TestSimulationPanel
-          miniSections={miniSections.map(ms => ({
-            id: ms.id,
-            mini_section_type: ms.mini_section_type,
-            title: ms.title,
-            description: ms.description || '',
-            mini_section_order: ms.mini_section_order,
-            associated_skill_ids: ms.associated_skill_ids,
-            associated_variable_keys: ms.associated_variable_keys,
-            creates_variable_keys: ms.creates_variable_keys,
-            creates_artifact_ids: ms.creates_artifact_ids,
-            knowledge_check_config: ms.knowledge_check_config,
-          }))}
-          lessonTitle={props.lessonTitle || ''}
-          lessonId={props.lessonId || ''}
-          token={props.token || ''}
-          apiUrl={props.apiUrl || ''}
-        />
-      </div>
       ) : (
       <div className="card-body py-2" style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
         {error && <div className="alert alert-danger small py-1 mb-2">{error}</div>}
@@ -582,19 +380,6 @@ export default function ObjectConfigEngine(props: Props) {
                 if (newType !== 'prompt_template') updates.creates_variable_keys = [];
                 if (newType !== 'implementation_task') updates.creates_artifact_ids = [];
                 if (newType !== 'knowledge_check') updates.knowledge_check_config = { enabled: false, question_count: 3, pass_score: 70 };
-                // Auto-populate default prompts for new items
-                if (isNew && props.typeDefinitions?.length) {
-                  const td = props.typeDefinitions.find(t => t.slug === newType);
-                  if (td?.default_prompts) {
-                    for (const pair of PROMPT_PAIRS) {
-                      const dp = td.default_prompts[pair.key];
-                      if (dp) {
-                        const merged = dp.system && dp.user ? dp.system + '\n\n' + dp.user : dp.system || dp.user || '';
-                        if (merged) (updates as any)[pair.systemField] = merged;
-                      }
-                    }
-                  }
-                }
                 props.onUpdate(updates);
               }}
             >
@@ -647,109 +432,103 @@ export default function ObjectConfigEngine(props: Props) {
               {/* Section content — only shown for active type */}
               {isActive && editing && (
                 <div className="px-3 py-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
-                  {/* Title & Description */}
+                  {/* Title & Details */}
                   <div className="row g-2 mb-3">
-                    <div className="col-12">
+                    <div className="col-md-8">
                       <label className="form-label small fw-medium mb-0">Title <span className="text-danger">*</span></label>
                       <input className="form-control form-control-sm" value={editing.title || ''} onChange={e => props.onUpdate({ title: e.target.value })} />
                     </div>
+                    <div className="col-md-4">
+                      <label className="form-label small fw-medium mb-0">Weight</label>
+                      <input className="form-control form-control-sm" type="number" step="0.1" value={editing.completion_weight ?? 1} onChange={e => props.onUpdate({ completion_weight: parseFloat(e.target.value) })} />
+                    </div>
                     <div className="col-12">
-                      <label className="form-label small fw-medium mb-0">Description & Learning Goal</label>
-                      <textarea className="form-control form-control-sm" rows={2} value={editing.description || ''} onChange={e => props.onUpdate({ description: e.target.value })} placeholder="Describe this section's purpose, context, and what students should learn" />
+                      <label className="form-label small fw-medium mb-0">Description</label>
+                      <textarea className="form-control form-control-sm" rows={2} value={editing.description || ''} onChange={e => props.onUpdate({ description: e.target.value })} />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label small fw-medium mb-0">Learning Goal</label>
+                      <textarea className="form-control form-control-sm" rows={2} value={editing.settings_json?.learning_goal || ''} onChange={e => props.onUpdate({ settings_json: { ...(editing.settings_json || {}), learning_goal: e.target.value } })} placeholder="What should the student learn from this section?" />
                     </div>
                   </div>
 
-                  {/* Section Prompt — single unified prompt for this mini-section */}
-                  {(() => {
-                    const sysVal = (editing.concept_prompt_system as string) || '';
-                    const { structural, sectionSpecific } = decomposePrompt(sysVal);
-                    const hasStructural = !!structural;
-                    const isEmpty = !sectionSpecific;
-                    const typeDef = props.typeDefinitions?.find(td => td.slug === editType);
-                    const structureVarKeys = (typeDef?.applicable_prompt_pairs || []).map((p: string) => `structure_${p}`);
-                    return (
-                      <div className="mb-3 border-top pt-2">
-                        <div className="d-flex align-items-center gap-2 mb-2">
-                          <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
-                          <span className="fw-semibold small">Section Prompt</span>
-                          <span className="text-muted" style={{ fontSize: 10 }}>Guidance for generating this mini-section's content</span>
-                        </div>
-                        {/* Available variables — context + structure */}
-                        <div className="mb-2 d-flex flex-wrap gap-1 align-items-center" style={{ fontSize: 9 }}>
-                          <span className="text-muted fw-medium me-1">Context:</span>
-                          {['section_title', 'section_description', 'section_learning_goal', 'mini_section_title', 'mini_section_description', 'mini_section_type'].map(v => (
-                            <span key={v} className="badge bg-light text-dark border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default' }} title={`Resolved at runtime from ${v.startsWith('section_') ? 'section' : 'mini-section'} fields`}>
-                              {`{{${v}}}`}
-                            </span>
-                          ))}
-                          {structureVarKeys.length > 0 && (
-                            <>
-                              <span className="text-muted fw-medium ms-2 me-1">Structure:</span>
-                              {structureVarKeys.map((v: string) => (
-                                <span key={v} className="badge border" style={{ fontSize: 9, fontFamily: 'monospace', cursor: 'default', background: 'rgba(13,110,253,0.08)', color: '#0d6efd' }} title={`Resolved from type definition Structure tab`}>
-                                  {`{{${v}}}`}
-                                </span>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                        {hasStructural && (
-                          <div className="mb-2 px-2 py-1 rounded d-flex align-items-center gap-1" style={{ background: 'rgba(13,110,253,0.06)', border: '1px solid rgba(13,110,253,0.15)', fontSize: 9 }}>
-                            <i className="bi bi-diagram-3" style={{ color: '#0d6efd' }}></i>
-                            <span className="text-muted">Structural prompt from type definition ({structural.length} chars)</span>
-                            <button className="btn btn-link p-0 ms-auto text-primary" style={{ fontSize: 9 }} onClick={() => setActiveTab('structure')}>
-                              View in Structure tab
-                            </button>
-                          </div>
-                        )}
-                        <PromptAccordion label="Section Prompt" tooltip="Single prompt that drives content generation for this mini-section" isEmpty={isEmpty} isDefault={false} charCount={sectionSpecific.length}>
-                          <HighlightedPromptEditor
-                            value={sectionSpecific}
-                            onChange={val => {
-                              const composed = composePrompt(structural, val);
-                              props.onUpdate({ concept_prompt_system: composed, concept_prompt_user: '' } as any);
-                            }}
-                            label="SECTION PROMPT"
-                            rows={5}
-                            placeholder="Write guidance for this mini-section. Use {{structure_concept}}, {{structure_build}} etc. to include output format specs from the type definition."
-                          />
-                        </PromptAccordion>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Variables — only show for prompt_template (creates vars) */}
-                  {editType === 'prompt_template' && (
+                  {/* Prompts */}
+                  {typePromptPairs.length > 0 && (
                     <div className="mb-3 border-top pt-2">
-                      <div className="d-flex align-items-center gap-2 mb-1">
-                        <i className="bi bi-braces" style={{ fontSize: 12 }}></i>
-                        <span className="fw-semibold small">Variables</span>
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <i className="bi bi-chat-left-text" style={{ fontSize: 12, color: 'var(--color-primary-light)' }}></i>
+                        <span className="fw-semibold small">Prompts</span>
+                        <span className="text-muted" style={{ fontSize: 10 }}>Use <code style={{ fontSize: 10 }}>{'{{variable_key}}'}</code> for dynamic values</span>
                       </div>
-                      <VariableSection
-                        editing={editing}
-                        variables={props.variables}
-                        systemVariables={props.systemVariables}
-                        sectionVariableKeys={props.sectionVariableKeys}
-                        onUpdate={props.onUpdate}
-                        onCreateVariable={props.onCreateVariable}
-                      />
+                      {typePromptPairs
+                        .filter(pair => !(pair.key === 'mentor' && (editType === 'executive_reality_check' || editType === 'ai_strategy')))
+                        .map(pair => {
+                          const sysVal = (editing[pair.systemField] as string) || '';
+                          const usrVal = (editing[pair.userField] as string) || '';
+                          const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
+                          const implLabels: Record<string, { label: string; tooltip: string }> = {
+                            build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
+                            mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
+                            reflection: { label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
+                          };
+                          const displayLabel = editType === 'implementation_task' && implLabels[pair.key]
+                            ? implLabels[pair.key].label : pair.label;
+                          const tooltip = editType === 'implementation_task' && implLabels[pair.key]
+                            ? implLabels[pair.key].tooltip : '';
+                          return (
+                            <div key={pair.key} className="mb-2">
+                              <span className="text-muted fw-medium" style={{ fontSize: 10 }} title={tooltip}>{displayLabel} {tooltip && <i className="bi bi-info-circle" style={{ fontSize: 9 }}></i>}</span>
+                              <HighlightedPromptEditor
+                                value={combinedValue}
+                                onChange={val => props.onUpdate({ [pair.systemField]: val, [pair.userField]: '' } as any)}
+                                availableVars={coreAvailableVars}
+                                allDefinedVars={coreAllDefinedVars}
+                                label="PROMPT"
+                                rows={5}
+                                placeholder="Instructions for the AI model with {{variable}} placeholders..."
+                              />
+                            </div>
+                          );
+                        })}
                     </div>
                   )}
 
-                  {/* Skills — only show for knowledge_check (maps to skills) */}
-                  {editType === 'knowledge_check' && (
-                    <div className="mb-3 border-top pt-2">
-                      <div className="d-flex align-items-center gap-2 mb-1">
-                        <i className="bi bi-stars" style={{ fontSize: 12 }}></i>
-                        <span className="fw-semibold small">Skills</span>
-                      </div>
-                      <SkillSection
-                        editing={editing}
-                        skillOptions={props.skillOptions}
-                        sectionSkillIds={props.sectionSkillIds}
-                      />
+                  {/* Variables */}
+                  <div className="mb-3 border-top pt-2">
+                    <div className="d-flex align-items-center gap-2 mb-1">
+                      <i className="bi bi-braces" style={{ fontSize: 12 }}></i>
+                      <span className="fw-semibold small">Variables</span>
                     </div>
-                  )}
+                    <VariableSection
+                      editing={editing}
+                      miniSections={miniSections}
+                      variables={props.variables}
+                      systemVariables={props.systemVariables}
+                      variableMap={props.variableMap}
+                      promptBodies={props.promptBodies}
+                      artifacts={props.artifacts}
+                      onUpdate={props.onUpdate}
+                      onCreateVariable={props.onCreateVariable}
+                    />
+                  </div>
+
+                  {/* Skills */}
+                  <div className="mb-3 border-top pt-2">
+                    <div className="d-flex align-items-center gap-2 mb-1">
+                      <i className="bi bi-stars" style={{ fontSize: 12 }}></i>
+                      <span className="fw-semibold small">Skills</span>
+                    </div>
+                    <SkillSection
+                      editing={editing}
+                      editType={editType}
+                      miniSectionId={editing.id}
+                      skillOptions={props.skillOptions}
+                      onUpdate={props.onUpdate}
+                      onCreateSkill={props.onCreateSkill}
+                      token={props.token}
+                      apiUrl={props.apiUrl}
+                    />
+                  </div>
 
                   {/* Artifacts (implementation_task only) */}
                   {editType === 'implementation_task' && (
@@ -760,8 +539,10 @@ export default function ObjectConfigEngine(props: Props) {
                       </div>
                       <ArtifactSection
                         editing={editing}
+                        artifactOptions={props.artifactOptions}
                         artifacts={props.artifacts}
-                        sectionArtifactIds={props.sectionArtifactIds}
+                        onUpdate={props.onUpdate}
+                        onCreateArtifact={props.onCreateArtifact}
                       />
                     </div>
                   )}
@@ -790,28 +571,52 @@ export default function ObjectConfigEngine(props: Props) {
                       </div>
                     </div>
                   )}
-
-                  {/* Advanced Settings (Weight) — collapsed by default */}
-                  <details className="mb-2 border-top pt-2">
-                    <summary className="d-flex align-items-center gap-1" style={{ fontSize: 10, cursor: 'pointer', color: 'var(--color-text-light, #718096)' }}>
-                      <i className="bi bi-gear" style={{ fontSize: 10 }}></i>
-                      <span className="fw-medium">Advanced Settings</span>
-                      {(editing.completion_weight ?? 1) !== 1 && (
-                        <span className="badge bg-warning text-dark ms-1" style={{ fontSize: 7 }}>Weight: {editing.completion_weight}</span>
-                      )}
-                    </summary>
-                    <div className="mt-2 ms-3">
-                      <label className="form-label small fw-medium mb-0">Completion Weight</label>
-                      <input className="form-control form-control-sm" type="number" step="0.1" style={{ maxWidth: 120 }} value={editing.completion_weight ?? 1} onChange={e => props.onUpdate({ completion_weight: parseFloat(e.target.value) })} />
-                      <span className="text-muted" style={{ fontSize: 9 }}>Default is 1.0. Adjust to change this section's contribution to overall completion.</span>
-                    </div>
-                  </details>
                 </div>
               )}
             </div>
           );
         })}
 
+        {/* Diagnostic tools for active mini-section */}
+        {renderAccordion('validation', 'Validation', 'bi-check-circle', (
+          <ValidationSection
+            editing={editing}
+            dryRun={props.dryRun}
+            validating={props.validating}
+            onRevalidate={props.onRevalidate}
+          />
+        ))}
+
+        {renderAccordion('quality', 'Quality Score', 'bi-graph-up', (
+          <QualityScoreSection
+            miniSectionId={editing.id}
+            qualityBreakdown={props.qualityBreakdown}
+            loading={props.qualityLoading}
+            onRefresh={props.onRefreshQuality}
+          />
+        ), !!editing.id)}
+
+        {renderAccordion('suggestions', 'Improve to 100', 'bi-lightbulb', (
+          <SuggestionSection
+            miniSectionId={editing.id}
+            suggestions={props.suggestions}
+            loading={props.suggestionsLoading}
+            applying={props.applyingSuggestion}
+            onRefresh={props.onRefreshSuggestions}
+            onApplyFix={props.onApplySuggestionFix}
+          />
+        ), !!editing.id)}
+
+        {editing.id && (
+          <div className="d-flex gap-2 mt-2 mb-1">
+            <button className="btn btn-sm btn-outline-primary flex-grow-1" onClick={props.onOpenDiagnostic}>
+              <i className="bi bi-clipboard2-pulse me-1"></i>Full Diagnostic
+            </button>
+            <button className="btn btn-sm btn-outline-warning flex-grow-1" onClick={props.onOpenRepair}>
+              <i className="bi bi-wrench-adjustable me-1"></i>Auto-Repair
+            </button>
+          </div>
+        )}
       </div>
       )}
 
