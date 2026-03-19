@@ -86,3 +86,8 @@ class Config:
 
 
 config = Config()
+
+
+def get_config() -> Config:
+    """Return the global config singleton."""
+    return config
