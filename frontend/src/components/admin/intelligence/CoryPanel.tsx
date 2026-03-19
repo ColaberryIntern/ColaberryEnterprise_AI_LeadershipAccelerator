@@ -429,11 +429,11 @@ export default function CoryPanel({
       ];
     }
     return [
-      'Give me a status briefing',
-      'What are our biggest growth opportunities?',
-      'Show me department health',
-      'What experiments are running?',
-      'Which agents need attention?',
+      'Give me a business status briefing',
+      'How is our lead pipeline performing?',
+      'What are our enrollment and revenue trends?',
+      'How are our campaigns converting?',
+      'What needs my attention right now?',
     ];
   }, [scope]);
 
@@ -553,38 +553,26 @@ export default function CoryPanel({
 
   return (
     <div className="d-flex flex-column h-100">
-      {/* Header */}
-      <div className="px-3 py-2 border-bottom d-flex justify-content-between align-items-center" style={{ flexShrink: 0 }}>
-        <div className="d-flex align-items-center gap-2">
-          <img
-            src="/cory-avatar.jpg"
-            alt="Cory"
-            style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--color-primary)' }}
-          />
-          <div>
-            <span className="fw-semibold" style={{ color: 'var(--color-primary)', fontSize: '0.82rem' }}>
-              Cory
-            </span>
-            {scope.level === 'entity' && scope.entity_name && (
-              <span className="badge ms-1" style={{ fontSize: '0.52rem', background: 'var(--color-primary-light)', color: '#fff', verticalAlign: 'middle' }}>
-                {scope.entity_name}
-              </span>
-            )}
-          </div>
-          <span
-            className="d-inline-block rounded-circle"
-            style={{
-              width: 7,
-              height: 7,
-              background: coryStatus === 'thinking' ? '#d69e2e' : 'var(--color-accent)',
-              animation: coryStatus === 'thinking' ? 'pulse 1s ease infinite' : 'none',
-            }}
-            title={coryStatus}
-          />
-          {queryCount > 0 && (
-            <span className="badge bg-light text-muted border" style={{ fontSize: '0.5rem' }}>{queryCount}</span>
-          )}
-        </div>
+      {/* Status bar — scope badge + status indicator (compact, no avatar since CoryOverlay has the header) */}
+      <div className="px-3 py-1 border-bottom d-flex align-items-center gap-2" style={{ flexShrink: 0 }}>
+        {scope.level === 'entity' && scope.entity_name && (
+          <span className="badge" style={{ fontSize: '0.52rem', background: 'var(--color-primary-light)', color: '#fff' }}>
+            {scope.entity_name}
+          </span>
+        )}
+        <span
+          className="d-inline-block rounded-circle"
+          style={{
+            width: 7,
+            height: 7,
+            background: coryStatus === 'thinking' ? '#d69e2e' : 'var(--color-accent)',
+            animation: coryStatus === 'thinking' ? 'pulse 1s ease infinite' : 'none',
+          }}
+          title={coryStatus}
+        />
+        {queryCount > 0 && (
+          <span className="badge bg-light text-muted border" style={{ fontSize: '0.5rem' }}>{queryCount} queries</span>
+        )}
       </div>
 
       {/* Messages */}
@@ -603,9 +591,9 @@ export default function CoryPanel({
             </h6>
             <p className="text-muted mb-3" style={{ fontSize: '0.74rem', lineHeight: 1.5 }}>
               {scope.level === 'entity' && scope.entity_name ? (
-                <>Focused on <strong>{scope.entity_name}</strong>. I&apos;ll analyze KPIs, initiatives, risks, team capacity, and recommend actions.</>
+                <>Focused on <strong>{scope.entity_name}</strong>. I&apos;ll analyze KPIs, growth metrics, risks, and recommend actions.</>
               ) : (
-                <>I coordinate 40+ AI agents across 8 departments. Ask me for briefings, analysis, or to take action.</>
+                <>I track your business metrics — pipeline, enrollments, campaigns, and revenue. Ask me anything about how the business is performing.</>
               )}
             </p>
             <div className="d-flex flex-column gap-2">

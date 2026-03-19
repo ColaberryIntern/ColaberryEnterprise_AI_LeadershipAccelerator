@@ -7,8 +7,8 @@ interface CoryOverlayProps {
 }
 
 /**
- * Cory panel — supports side-panel (400px inline) and full-screen (ChatGPT-like) modes.
- * Full-screen gives a wide, spacious layout for reading long analyses.
+ * Cory panel — supports side-panel (400px inline) and full-screen modes.
+ * Uses a single DOM tree so children (CoryPanel) never unmount — chat history is preserved.
  */
 export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -39,122 +39,40 @@ export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayPr
     if (!isOpen) setIsFullscreen(false);
   }, [isOpen]);
 
-  // ── Full-screen mode ──
-  if (isFullscreen && isOpen) {
-    return (
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 1080,
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(4px)',
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setIsFullscreen(false);
-        }}
-      >
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-label="Cory AI COO — Full Screen"
-          aria-modal="true"
-          tabIndex={-1}
-          style={{
-            position: 'absolute',
-            top: 16,
-            left: 16,
-            right: 16,
-            bottom: 16,
-            background: '#fff',
-            borderRadius: 12,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
-          }}
-        >
-          {/* Fullscreen Header */}
-          <div
-            className="d-flex align-items-center justify-content-between px-4 py-3"
-            style={{ flexShrink: 0, background: 'var(--color-primary)', color: '#fff' }}
-          >
-            <div className="d-flex align-items-center gap-3">
-              <img
-                src="/cory-avatar.jpg"
-                alt="Cory"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: '2px solid rgba(255,255,255,0.4)',
-                }}
-              />
-              <div>
-                <div className="fw-semibold" style={{ fontSize: '1rem' }}>
-                  Cory &mdash; AI Chief Operating Officer
-                </div>
-                <div style={{ fontSize: '0.7rem', opacity: 0.75 }}>
-                  Full analysis mode &middot; Ask anything
-                </div>
-              </div>
-            </div>
-            <div className="d-flex align-items-center gap-2">
-              <button
-                className="btn btn-sm"
-                onClick={() => setIsFullscreen(false)}
-                title="Exit full screen"
-                style={{
-                  color: 'rgba(255,255,255,0.85)',
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  background: 'rgba(255,255,255,0.1)',
-                  fontSize: '0.75rem',
-                  padding: '4px 12px',
-                }}
-              >
-                Minimize
-              </button>
-              <button
-                className="btn btn-sm"
-                onClick={onClose}
-                title="Close Cory"
-                style={{
-                  color: 'rgba(255,255,255,0.85)',
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  background: 'rgba(255,255,255,0.1)',
-                  fontSize: '0.75rem',
-                  padding: '4px 12px',
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-
-          {/* Fullscreen Content — centered with max-width for readability */}
-          <div className="flex-grow-1 d-flex justify-content-center" style={{ minHeight: 0, overflow: 'hidden' }}>
-            <div style={{ width: '100%', maxWidth: 820, height: '100%' }}>
-              {children}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Side-panel mode ──
-  return (
+  // ── Backdrop (fullscreen only) ──
+  const backdrop = isFullscreen && isOpen ? (
     <div
-      ref={panelRef}
-      role="complementary"
-      aria-label="Cory AI COO Assistant"
-      tabIndex={-1}
-      className="intel-panel-slide"
       style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1079,
+        background: 'rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(4px)',
+      }}
+      onClick={() => setIsFullscreen(false)}
+    />
+  ) : null;
+
+  // ── Single panel — CSS changes for fullscreen, DOM stays the same ──
+  const panelStyle: React.CSSProperties = isFullscreen
+    ? {
+        position: 'fixed',
+        top: 16,
+        left: 16,
+        right: 16,
+        bottom: 16,
+        zIndex: 1080,
+        background: '#fff',
+        borderRadius: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
+      }
+    : {
         width: isOpen ? 400 : 0,
         minWidth: isOpen ? 400 : 0,
         overflow: 'hidden',
@@ -164,35 +82,58 @@ export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayPr
         flexDirection: 'column',
         height: '100%',
         background: '#fff',
-      }}
-    >
-      <div style={{ width: 400, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      };
+
+  return (
+    <>
+      {backdrop}
+      <div
+        ref={panelRef}
+        role={isFullscreen ? 'dialog' : 'complementary'}
+        aria-label={isFullscreen ? 'Cory AI COO — Full Screen' : 'Cory AI COO Assistant'}
+        aria-modal={isFullscreen ? true : undefined}
+        tabIndex={-1}
+        className={isFullscreen ? '' : 'intel-panel-slide'}
+        style={panelStyle}
+      >
         {/* Header */}
         <div
           className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom"
-          style={{ flexShrink: 0, background: 'var(--color-primary)', color: '#fff' }}
+          style={{
+            flexShrink: 0,
+            background: 'var(--color-primary)',
+            color: '#fff',
+            ...(isFullscreen ? { padding: '12px 20px' } : {}),
+          }}
         >
           <div className="d-flex align-items-center gap-2">
             <img
               src="/cory-avatar.jpg"
               alt="Cory"
               style={{
-                width: 28,
-                height: 28,
+                width: isFullscreen ? 36 : 28,
+                height: isFullscreen ? 36 : 28,
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: '2px solid rgba(255,255,255,0.3)',
+                border: `2px solid rgba(255,255,255,${isFullscreen ? 0.4 : 0.3})`,
               }}
             />
-            <span className="fw-semibold" style={{ fontSize: '0.85rem' }}>
-              Cory — AI COO
-            </span>
+            <div>
+              <span className="fw-semibold" style={{ fontSize: isFullscreen ? '1rem' : '0.85rem' }}>
+                Cory &mdash; AI COO
+              </span>
+              {isFullscreen && (
+                <div style={{ fontSize: '0.7rem', opacity: 0.75 }}>
+                  Full analysis mode
+                </div>
+              )}
+            </div>
           </div>
           <div className="d-flex align-items-center gap-1">
             <button
               className="btn btn-sm"
-              onClick={() => setIsFullscreen(true)}
-              title="Expand to full screen"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? 'Exit full screen' : 'Expand to full screen'}
               style={{
                 color: 'rgba(255,255,255,0.85)',
                 border: '1px solid rgba(255,255,255,0.25)',
@@ -202,7 +143,7 @@ export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayPr
                 lineHeight: 1,
               }}
             >
-              &#x26F6;
+              {isFullscreen ? 'Minimize' : '\u26F6'}
             </button>
             <button
               className="btn btn-sm"
@@ -221,11 +162,16 @@ export default function CoryOverlay({ isOpen, onClose, children }: CoryOverlayPr
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-grow-1" style={{ minHeight: 0, overflow: 'hidden' }}>
-          {children}
+        {/* Content — same children always, never unmounted */}
+        <div
+          className={isFullscreen ? 'flex-grow-1 d-flex justify-content-center' : 'flex-grow-1'}
+          style={{ minHeight: 0, overflow: 'hidden' }}
+        >
+          <div style={isFullscreen ? { width: '100%', maxWidth: 820, height: '100%' } : { width: isOpen ? 400 : 0, height: '100%' }}>
+            {children}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

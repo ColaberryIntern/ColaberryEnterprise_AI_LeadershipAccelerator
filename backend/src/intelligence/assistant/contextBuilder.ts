@@ -298,33 +298,31 @@ function extractStudentInsights(sql: SqlResult[], _ml: MlResult[], insights: Ins
 
 function extractAgentInsights(sql: SqlResult[], _ml: MlResult[], insights: Insight[], narrative: string[], recs: string[]): void {
   for (const { rows, tables, description } of sql) {
-    // Use the dedicated totals query (description: 'Agent totals by status')
+    // Use the dedicated totals query — frame as business automation capacity
     if (tables.includes('ai_agents') && description?.includes('totals') && rows.length > 0) {
       const r = rows[0];
       const total = Number(r.total_agents || 0);
       const active = Number(r.active_agents || 0);
-      const idle = Number(r.idle_agents || 0);
-      const paused = Number(r.paused_agents || 0);
       const withErrors = Number(r.agents_with_errors || 0);
-      narrative.push(`${total} agents total (${active} active, ${idle} idle, ${paused} paused, ${withErrors} with errors).`);
+      narrative.push(`${total} automation processes running the business (${active} actively executing, ${withErrors} need attention).`);
       if (withErrors > 0) {
         insights.push({
-          type: 'Agents With Errors',
+          type: 'Automation Issues',
           severity: withErrors > 5 ? 'critical' : 'warning',
-          message: `${withErrors} agents have accumulated errors.`,
+          message: `${withErrors} automated business processes have errors — may impact outreach, monitoring, or reporting.`,
           value: withErrors,
         });
-        recs.push(`Review ${withErrors} agents with errors.`);
+        recs.push(`Review ${withErrors} automation processes with errors to prevent business disruption.`);
       }
     }
-    // Detail rows — extract per-agent error info
+    // Detail rows — flag high-error processes in business terms
     if (tables.includes('ai_agents') && description?.includes('error counts') && rows.length > 0) {
       for (const agent of rows) {
         if (Number(agent.error_count) > 5) {
           insights.push({
-            type: `${agent.agent_name} Errors`,
+            type: 'Process Reliability',
             severity: Number(agent.error_count) > 20 ? 'critical' : 'warning',
-            message: `${agent.agent_name}: ${agent.error_count} errors.`,
+            message: `Automation "${agent.agent_name}" has ${agent.error_count} errors — may be degrading business operations.`,
             value: Number(agent.error_count),
           });
         }
@@ -334,15 +332,15 @@ function extractAgentInsights(sql: SqlResult[], _ml: MlResult[], insights: Insig
       const totalExecs = rows.reduce((s, r) => s + Number(r.executions || 0), 0);
       const errorExecs = rows.filter((r) => r.result?.toLowerCase() === 'failed').reduce((s, r) => s + Number(r.executions || 0), 0);
       const errorRate = totalExecs > 0 ? (errorExecs / totalExecs) * 100 : 0;
-      narrative.push(`${totalExecs} agent executions in the last 24 hours (${errorRate.toFixed(1)}% error rate).`);
+      narrative.push(`${totalExecs} automated tasks completed in the last 24 hours (${errorRate.toFixed(1)}% failure rate).`);
       if (errorRate > 10) {
         insights.push({
-          type: 'High Agent Error Rate',
+          type: 'Automation Reliability',
           severity: errorRate > 25 ? 'critical' : 'warning',
-          message: `${errorRate.toFixed(1)}% of executions failed.`,
+          message: `${errorRate.toFixed(1)}% of automated tasks failed — business processes may be delayed.`,
           value: Math.round(errorRate),
         });
-        recs.push('Investigate agent failures in orchestration logs.');
+        recs.push('Investigate automation failures to restore full business operations.');
       }
     }
   }
@@ -416,8 +414,8 @@ function extractGeneralInsights(sql: SqlResult[], _ml: MlResult[], _insights: In
   for (const { rows, description } of sql) {
     if (rows.length > 0 && description.includes('entity counts') && rows[0]) {
       const r = rows[0];
-      narrative.push(`System: ${r.total_leads || 0} leads, ${r.total_campaigns || 0} campaigns, ${r.total_enrollments || 0} enrollments, ${r.total_agents || 0} agents.`);
+      narrative.push(`Business overview: ${r.total_leads || 0} leads in pipeline, ${r.total_campaigns || 0} campaigns running, ${r.total_enrollments || 0} program enrollments, ${r.total_agents || 0} automation processes.`);
     }
   }
-  if (recs.length === 0) recs.push('Ask about campaigns, leads, students, or agents for deeper analysis.');
+  if (recs.length === 0) recs.push('Ask about revenue, enrollments, lead pipeline, campaign performance, or student outcomes for deeper analysis.');
 }
