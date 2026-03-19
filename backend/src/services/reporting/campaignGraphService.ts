@@ -5,6 +5,7 @@
 
 import { Lead, Campaign, CampaignLead, CommunicationLog, Enrollment, StrategyCall, ChatConversation, CallContactLog } from '../../models';
 import Visitor from '../../models/Visitor';
+import AlumniReferralProfile from '../../models/AlumniReferralProfile';
 import { Op, fn, col, literal } from 'sequelize';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ export interface LeadPathRecord {
   raw_source: string | null;
   pipeline_stage: string | null;
   first_touch: {
-    type: 'cory_chat' | 'blueprint' | 'sponsorship' | 'strategy_call' | 'executive_overview' | 'referral' | null;
+    type: 'cory_chat' | 'blueprint' | 'sponsorship' | 'strategy_call' | 'activated_referral' | null;
     timestamp: Date | null;
   };
   campaign_enrollments: Array<{
@@ -140,8 +141,8 @@ function categorizeSource(source: string | null): 'marketing' | 'cold_outbound' 
 // ─── Phase 1: Build per-lead journey records ────────────────────────────────
 
 async function buildLeadPaths(): Promise<LeadPathRecord[]> {
-  // 9 parallel queries
-  const [allLeads, chatsByLead, strategyCalls, campaignEnrollments, enrollments, chatsByVisitor, visitorsByLead, outreachByChannel, voiceCallsByVisitor] = await Promise.all([
+  // 10 parallel queries
+  const [allLeads, chatsByLead, strategyCalls, campaignEnrollments, enrollments, chatsByVisitor, visitorsByLead, outreachByChannel, voiceCallsByVisitor, referralProfiles] = await Promise.all([
     // 1a: All leads
     Lead.findAll({
       attributes: ['id', 'email', 'name', 'company', 'source', 'form_type', 'sponsorship_kit_requested', 'pipeline_stage', 'visitor_id', 'created_at'],
@@ -250,9 +251,21 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
     }).catch(() => []) as Promise<Array<{
       cnt: string; earliest: Date; 'visitor.lead_id': number;
     }>>,
+
+    // 1j: Alumni who activated referral accounts (match by email)
+    AlumniReferralProfile.findAll({
+      attributes: ['alumni_email', 'created_at'],
+      where: { status: 'active' },
+      raw: true,
+    }).catch(() => []) as Promise<Array<{ alumni_email: string; created_at: Date }>>,
   ]);
 
   // Build lookup maps
+  const referralProfileEmails = new Map<string, Date>();
+  for (const rp of referralProfiles) {
+    referralProfileEmails.set(rp.alumni_email.toLowerCase(), new Date(rp.created_at));
+  }
+
   const chatMap = new Map<number, Date>();
   for (const c of chatsByLead) {
     chatMap.set(c.lead_id, new Date(c.earliest));
@@ -368,21 +381,18 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
 
     // Form-based first touches — only for NON bulk imports
     if (!isBulkImport) {
-      if (lead.form_type === 'contact') {
+      if (lead.form_type === 'contact' || lead.form_type === 'executive_overview_download') {
         candidates.push({ type: 'blueprint', ts: new Date(lead.created_at) });
-      }
-      if (lead.form_type === 'executive_overview_download') {
-        candidates.push({ type: 'executive_overview', ts: new Date(lead.created_at) });
       }
       if (lead.form_type === 'sponsorship_kit_download' || lead.sponsorship_kit_requested) {
         candidates.push({ type: 'sponsorship', ts: new Date(lead.created_at) });
       }
     }
 
-    // Referral first touch (alumni_referral sources — these ARE real interactions)
-    const rawSrc = (lead.source || '').toLowerCase();
-    if (rawSrc.startsWith('alumni_referral')) {
-      candidates.push({ type: 'referral', ts: new Date(lead.created_at) });
+    // Alumni Activated Referral Account (matched by email to alumni_referral_profiles)
+    const referralTs = referralProfileEmails.get(emailLower);
+    if (referralTs) {
+      candidates.push({ type: 'activated_referral', ts: referralTs });
     }
 
     // Visitor-based chat fallback — check if lead has a visitor_id with a chat
@@ -492,13 +502,13 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   // ── Entry point counts (real first_touch counts) ───────────────────────
   const entryTouchCounts: Record<string, number> = {
     cory_chat: 0, blueprint: 0, sponsorship: 0, strategy_call: 0,
-    executive_overview: 0, referral: 0, unengaged_visited: 0,
+    activated_referral: 0,
   };
 
   // ── Source breakdown per entry node ────────────────────────────────────
   const entrySourceBreakdown: Record<string, Record<string, number>> = {
     cory_chat: {}, blueprint: {}, sponsorship: {}, strategy_call: {},
-    executive_overview: {}, referral: {}, unengaged_visited: {},
+    activated_referral: {},
   };
 
   // ── Campaign data accumulation ─────────────────────────────────────────
@@ -540,18 +550,15 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     }
 
     // Determine touch type for entry layer
-    // "Never Visited" goes to visitor layer, not entry layer
-    const isNeverVisited = !hasFirstTouch && !hasVisitor;
+    // Leads without a first touch don't appear in the entry layer
     let touchType: string;
     if (hasFirstTouch) {
       touchType = lead.first_touch.type!;
-    } else if (hasVisitor) {
-      touchType = 'unengaged_visited';
     } else {
-      touchType = 'unengaged_never'; // tracked separately for visitor_never node
+      touchType = 'no_entry'; // no first touch — tracked in visitor layer only
     }
 
-    if (isNeverVisited) {
+    if (!hasFirstTouch) {
       neverVisitedCount++;
       neverVisitedSourceBreakdown[src] = (neverVisitedSourceBreakdown[src] || 0) + 1;
     } else {
@@ -585,7 +592,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
         engagementChannelBreakdown[engLevel][ch]++;
       }
 
-      if (isNeverVisited) {
+      if (!hasFirstTouch) {
         addEdge(engagementToNever, `engagement_${engLevel}|visitor_never`);
       } else if (hasVisitor) {
         engagementVisitCounts[engLevel]++;
@@ -595,7 +602,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
         // Contacted + has first touch but no visitor record → skip visitor
         addEdge(engagementToEntry, `engagement_${engLevel}|entry_${touchType}`);
       }
-    } else if (isNeverVisited) {
+    } else if (!hasFirstTouch) {
       // Non-contacted, never visited
       addEdge(srcToNever, `src_${src}|visitor_never`);
     } else {
@@ -765,11 +772,9 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const entryNodeDefs: Array<{ key: string; label: string }> = [
     { key: 'cory_chat', label: 'Cory Chat' },
     { key: 'blueprint', label: 'Blueprint Signup' },
-    { key: 'executive_overview', label: 'Executive Overview' },
     { key: 'sponsorship', label: 'Sponsorship Form' },
     { key: 'strategy_call', label: 'Strategy Call' },
-    { key: 'referral', label: 'Referral' },
-    { key: 'unengaged_visited', label: 'Visited Only' },
+    { key: 'activated_referral', label: 'Activated Referral' },
   ];
 
   for (const { key, label } of entryNodeDefs) {
@@ -916,7 +921,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const validation: CampaignGraphValidation = {
     total_leads: totalLeads,
     leads_with_first_touch: leadPaths.filter(l => l.first_touch.type !== null).length,
-    leads_unengaged: (entryTouchCounts.unengaged_visited || 0) + neverVisitedCount,
+    leads_unengaged: neverVisitedCount,
     leads_in_campaigns: leadsInCampaigns.size,
     leads_enrolled: enrolledCount,
     leads_paid: paidCount,
@@ -1108,14 +1113,7 @@ export async function getEdgeUsers(
     const srcMatch = fromId.startsWith('src_') && `src_${lead.source_category}` === fromId;
 
     const hasFirstTouch = lead.first_touch.type !== null;
-    let touchType: string;
-    if (hasFirstTouch) {
-      touchType = lead.first_touch.type!;
-    } else if (lead.has_visitor_record) {
-      touchType = 'unengaged_visited';
-    } else {
-      touchType = 'unengaged_never';
-    }
+    const touchType = hasFirstTouch ? lead.first_touch.type! : 'no_entry';
     const entryId = `entry_${touchType}`;
 
     // Source → Outreach

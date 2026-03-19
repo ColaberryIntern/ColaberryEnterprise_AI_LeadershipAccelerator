@@ -211,6 +211,24 @@ export async function recordWebhookOutcome(
       ai_generated: action.ai_generated || false,
     },
   });
+
+  // Update CommunicationLog status so the engagement layer picks up opens/clicks
+  if (outcome === 'opened' || outcome === 'clicked') {
+    try {
+      const { CommunicationLog } = require('../models');
+      // Only upgrade status (sent→opened→clicked), never downgrade
+      const statusRank: Record<string, number> = { sent: 0, delivered: 1, opened: 2, clicked: 3 };
+      const log = await CommunicationLog.findOne({
+        where: { lead_id: action.lead_id, channel: action.channel || 'email', direction: 'outbound', delivery_mode: 'live' },
+        order: [['created_at', 'DESC']],
+      });
+      if (log && (statusRank[outcome] || 0) > (statusRank[log.status] || 0)) {
+        await log.update({ status: outcome });
+      }
+    } catch (err: any) {
+      console.warn(`[InteractionService] CommunicationLog status update failed:`, err.message);
+    }
+  }
 }
 
 /** Get outcome counts for a lead */

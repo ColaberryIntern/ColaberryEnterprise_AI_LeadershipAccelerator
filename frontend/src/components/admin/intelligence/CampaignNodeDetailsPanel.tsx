@@ -54,11 +54,10 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TOUCH_LABELS: Record<string, string> = {
   cory_chat: 'Cory Chat',
-  blueprint: 'Blueprint',
+  blueprint: 'Blueprint Signup',
   sponsorship: 'Sponsorship',
   strategy_call: 'Strategy Call',
-  executive_overview: 'Exec Overview',
-  referral: 'Referral',
+  activated_referral: 'Activated Referral',
 };
 
 function getColors(node: CampaignGraphNode) {
