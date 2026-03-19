@@ -3,6 +3,8 @@ import { useIntelligenceContext } from '../../../contexts/IntelligenceContext';
 import { useIntelligenceQuery } from '../../../hooks/useIntelligenceQuery';
 import { sendCoryCommand, type CoryResponse, type ExecutiveBriefing } from '../../../services/coryApi';
 import { simulateAutonomyCycle, runAutonomyCycle, type VisualizationSpec } from '../../../services/intelligenceApi';
+import { formatConfidence, confidenceBadgeColor, smartTranslate } from '../../../utils/businessTranslator';
+import { getAgentDisplayName } from '../../../utils/agentDisplayNames';
 import FeedbackButtons from './FeedbackButtons';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -38,6 +40,7 @@ interface CoryPanelProps {
   onVisualizationsUpdate: (viz: VisualizationSpec[]) => void;
   onSummaryUpdate: (data: Record<string, any>) => void;
   onInsightsUpdate: (insights: any[]) => void;
+  onNarrativeUpdate?: (narrative: { narrative: string; narrative_sections?: any; sources?: string[]; follow_ups?: string[] }) => void;
   externalQuery: string | null;
 }
 
@@ -192,7 +195,7 @@ function BriefingCard({ briefing, onDrillDown }: { briefing: ExecutiveBriefing; 
                   }}
                 />
               </div>
-              <span style={{ fontSize: '0.58rem', color: 'var(--color-text-light)' }}>{briefing.confidence}% conf.</span>
+              <span style={{ fontSize: '0.58rem', color: 'var(--color-text-light)' }}>{formatConfidence(briefing.confidence / 100)}</span>
             </div>
             <div className="d-flex align-items-center gap-1">
               <FeedbackButtons
@@ -405,6 +408,7 @@ export default function CoryPanel({
   onVisualizationsUpdate,
   onSummaryUpdate,
   onInsightsUpdate,
+  onNarrativeUpdate,
   externalQuery,
 }: CoryPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -516,6 +520,15 @@ export default function CoryPanel({
           setMessages((prev) => [...prev, msg]);
           if (ar.visualizations?.length) onVisualizationsUpdate(ar.visualizations);
           if (ar.data) onSummaryUpdate(ar.data);
+          if (ar.insights?.length) onInsightsUpdate(ar.insights);
+          if (onNarrativeUpdate && ar.narrative) {
+            onNarrativeUpdate({
+              narrative: ar.narrative,
+              narrative_sections: ar.narrative_sections || ar.narrativeSections,
+              sources: ar.sources,
+              follow_ups: ar.recommendations,
+            });
+          }
         } else {
           const msg: ChatMessage = {
             role: 'assistant',
@@ -539,7 +552,7 @@ export default function CoryPanel({
         setCoryStatus('active');
       }
     },
-    [input, loading, queryLoading, scope, messages, onVisualizationsUpdate, onSummaryUpdate],
+    [input, loading, queryLoading, scope, messages, onVisualizationsUpdate, onSummaryUpdate, onInsightsUpdate, onNarrativeUpdate],
   );
 
   // Handle external queries
@@ -656,7 +669,7 @@ export default function CoryPanel({
                           border: '1px solid rgba(26, 54, 93, 0.12)',
                         }}
                       >
-                        {a}
+                        {getAgentDisplayName(a)}
                       </span>
                     ))}
                   </div>

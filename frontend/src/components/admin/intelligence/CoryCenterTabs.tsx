@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAgentDisplayName } from '../../../utils/agentDisplayNames';
 import {
   getCoryAgents,
   getCoryTimeline,
@@ -194,7 +195,7 @@ function OrchestrationGraph({ onAgentClick, entityFilter, layerFilter }: { onAge
                           }}
                         />
                         <span className="text-truncate flex-grow-1" title={agent.agent_name}>
-                          {agent.agent_name}
+                          {getAgentDisplayName(agent.agent_name)}
                         </span>
                         {agent.error_count > 0 && (
                           <span className="badge bg-danger" style={{ fontSize: '0.5rem' }}>{agent.error_count}</span>

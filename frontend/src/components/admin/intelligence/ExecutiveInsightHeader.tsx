@@ -261,6 +261,37 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType, onCo
           <DeltaBadge delta={process_activity.delta} />
         </KPICard>
       )}
+
+      {/* Dynamic KPI cards from Cory's analysis */}
+      {(kpis as any)?.cory_kpis?.map((ckpi: any, idx: number) => (
+        <KPICard
+          key={`cory-${idx}`}
+          label={ckpi.name || 'Metric'}
+          accent="var(--color-primary-light)"
+          onCoryClick={onCoryClick ? () => onCoryClick(`Tell me more about ${ckpi.name}: current value is ${ckpi.value}`) : undefined}
+        >
+          <div className="fw-bold mt-1" style={{ fontSize: '1.25rem', color: 'var(--color-primary)' }}>
+            {typeof ckpi.value === 'number' ? ckpi.value.toLocaleString() : ckpi.value}
+            {ckpi.unit && <small className="fw-normal text-muted"> {ckpi.unit}</small>}
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <span
+              className="badge"
+              style={{
+                fontSize: '0.5rem',
+                background: 'rgba(43, 108, 176, 0.08)',
+                color: 'var(--color-primary-light)',
+                border: '1px solid rgba(43, 108, 176, 0.15)',
+              }}
+            >
+              from Cory
+            </span>
+            {ckpi.trend && ckpi.trend !== 'stable' && (
+              <DeltaBadge delta={ckpi.trend === 'up' ? 1 : -1} />
+            )}
+          </div>
+        </KPICard>
+      ))}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 // evaluate risk → execute (if safe) → monitor → log. Runs every 10 minutes.
 
 import crypto from 'crypto';
+import { Op } from 'sequelize';
 import IntelligenceDecision from '../../models/IntelligenceDecision';
 import { discoverProblems, type DetectedProblem } from '../agents/ProblemDiscoveryAgent';
 import { investigateProblem, type RootCauseResult } from '../agents/RootCauseAgent';
@@ -91,7 +92,26 @@ export async function runAutonomousCycle(): Promise<CycleResult> {
       // Step 5: Evaluate risk
       const risk = await evaluateRisk(recommendation, impact, rootCause);
 
-      // Step 6: Create decision record
+      // Step 6: Dedup — check for existing decision with same problem in last 60min
+      const existingDecision = await IntelligenceDecision.findOne({
+        where: {
+          problem_detected: problem.description,
+          timestamp: { [Op.gte]: new Date(Date.now() - 60 * 60 * 1000) },
+        },
+        order: [['timestamp', 'DESC']],
+      });
+
+      if (existingDecision) {
+        // Increment observation count instead of creating duplicate
+        await existingDecision.update({
+          observation_count: (existingDecision.observation_count || 1) + 1,
+          last_seen_at: new Date(),
+        });
+        console.log(`[AutonomousEngine] Dedup: merged into existing decision ${existingDecision.decision_id} (obs: ${existingDecision.observation_count + 1})`);
+        continue;
+      }
+
+      // Create new decision record
       const decision = await IntelligenceDecision.create({
         trace_id: traceId,
         problem_detected: problem.description,

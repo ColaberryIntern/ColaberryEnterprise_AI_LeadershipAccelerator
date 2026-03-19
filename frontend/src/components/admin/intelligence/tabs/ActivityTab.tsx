@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../../../utils/api';
+import { getAgentDisplayName } from '../../../../utils/agentDisplayNames';
 import ActivityDetailModal from '../../../../pages/admin/ai-settings/ActivityDetailModal';
 import ExecutionTraceModal from '../../../../pages/admin/ai-settings/ExecutionTraceModal';
 
@@ -157,7 +158,7 @@ export default function ActivityTab({ entityFilter }: ActivityTabProps) {
                           title={entityFilter.name}
                         />
                       )}
-                      {a.agent?.agent_name || 'Unknown'}
+                      {getAgentDisplayName(a.agent?.agent_name || 'Unknown')}
                     </td>
                     <td>
                       {a.action === 'scan_completed_no_issues' ? (

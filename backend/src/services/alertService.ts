@@ -39,11 +39,12 @@ export interface ResolutionInput {
 // ─── Emit Alert ─────────────────────────────────────────────────────────────
 
 export async function emitAlert(data: AlertInput): Promise<Alert> {
-  // Dedup: skip if same title + source_agent_id + type exists in last hour
+  // Dedup: skip if same title + type exists in last hour (cross-pipeline)
+  // Intentionally omits source_agent_id so that multiple pipelines detecting
+  // the same problem don't create duplicate alerts for the CEO.
   const recentDuplicate = await Alert.findOne({
     where: {
       title: data.title,
-      source_agent_id: data.sourceAgentId || null,
       type: data.type,
       created_at: { [Op.gte]: new Date(Date.now() - 60 * 60 * 1000) },
       status: { [Op.notIn]: ['resolved', 'dismissed'] },

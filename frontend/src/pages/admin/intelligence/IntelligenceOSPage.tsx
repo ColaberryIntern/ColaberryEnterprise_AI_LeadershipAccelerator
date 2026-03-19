@@ -584,6 +584,7 @@ function DynamicCanvas({
   autoInsights: any[];
   onFollowUpClick: (question: string) => void;
   onCoryClick: (context: string) => void;
+  onAskCory?: (question: string) => void;
   kpis: any;
   anomalies: any[];
   forecasts: any;
@@ -600,6 +601,7 @@ function DynamicCanvas({
   const [narrativeExpanded, setNarrativeExpanded] = useState(false);
   const [deptDetail, setDeptDetail] = useState<any>(null);
   const [deptLoading, setDeptLoading] = useState(false);
+  const [coryInput, setCoryInput] = useState('');
 
   // Fetch department detail when a department is selected
   useEffect(() => {
@@ -712,6 +714,47 @@ function DynamicCanvas({
         <DepartmentKPIHeader detail={deptDetail} loading={deptLoading} onCoryClick={onCoryClick} />
       ) : (
         <ExecutiveInsightHeader kpis={kpis} loading={summaryLoading || analyticsLoading} entityType={entityType} onCoryClick={onCoryClick} />
+      )}
+
+      {/* Inline Cory Input */}
+      {onAskCory && (
+        <div className="mt-3 mb-2">
+          <div className="input-group input-group-sm">
+            <span className="input-group-text bg-white border-end-0" style={{ fontSize: '0.75rem', color: 'var(--color-primary-light)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
+                <line x1="10" y1="22" x2="14" y2="22" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              className="form-control border-start-0"
+              placeholder="Ask Cory to update this dashboard..."
+              value={coryInput}
+              onChange={(e) => setCoryInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && coryInput.trim()) {
+                  onAskCory(coryInput.trim());
+                  setCoryInput('');
+                }
+              }}
+              style={{ fontSize: '0.78rem' }}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={!coryInput.trim()}
+              onClick={() => {
+                if (coryInput.trim()) {
+                  onAskCory(coryInput.trim());
+                  setCoryInput('');
+                }
+              }}
+              style={{ fontSize: '0.75rem' }}
+            >
+              Ask
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Section 2: Narrative Summary (global level only) */}
@@ -1708,7 +1751,37 @@ function IntelligenceOSContent() {
   }, []);
 
   const handleInsightsUpdate = useCallback((ins: any[]) => {
-    setAutoInsights(ins);
+    // Map Cory insights into AutoInsightsGrid format
+    setAutoInsights(ins.map((i: any) => ({
+      title: i.message || i.title || '',
+      severity: i.severity,
+      metric_value: i.value,
+      description: i.message || '',
+      trend: i.severity === 'warning' ? 'down' : i.severity === 'critical' ? 'down' : 'stable',
+    })));
+    // Extract metric insights as dynamic KPI cards
+    const kpiInsights = ins.filter((i: any) => i.metric && i.value != null);
+    if (kpiInsights.length > 0) {
+      setKpis((prev: any) => ({
+        ...prev,
+        cory_kpis: kpiInsights.map((i: any) => ({
+          name: (i.metric || '').replace(/_/g, ' '),
+          value: i.value,
+          unit: '',
+          trend: i.severity === 'warning' ? 'down' : 'stable',
+        })),
+      }));
+    }
+  }, []);
+
+  const handleNarrativeUpdate = useCallback((data: any) => {
+    setInsights((prev: any) => ({
+      ...(prev || {}),
+      narrative: data.narrative,
+      narrative_sections: data.narrative_sections,
+      sources: data.sources,
+      follow_ups: data.follow_ups,
+    }));
   }, []);
 
   const handleFollowUpClick = useCallback((question: string) => {
@@ -1754,6 +1827,7 @@ function IntelligenceOSContent() {
               autoInsights={autoInsights}
               onFollowUpClick={handleFollowUpClick}
               onCoryClick={handleCoryClick}
+              onAskCory={handleCoryClick}
               kpis={kpis}
               anomalies={anomalies}
               forecasts={forecasts}
@@ -1772,6 +1846,7 @@ function IntelligenceOSContent() {
               onVisualizationsUpdate={handleVisualizationsUpdate}
               onSummaryUpdate={handleSummaryUpdate}
               onInsightsUpdate={handleInsightsUpdate}
+              onNarrativeUpdate={handleNarrativeUpdate}
               externalQuery={externalQuery}
             />
           )}
@@ -1789,6 +1864,7 @@ function IntelligenceOSContent() {
                 onVisualizationsUpdate={handleVisualizationsUpdate}
                 onSummaryUpdate={handleSummaryUpdate}
                 onInsightsUpdate={handleInsightsUpdate}
+                onNarrativeUpdate={handleNarrativeUpdate}
                 externalQuery={externalQuery}
               />
             </CoryOverlay>
@@ -1878,6 +1954,7 @@ function IntelligenceOSContent() {
             onVisualizationsUpdate={handleVisualizationsUpdate}
             onSummaryUpdate={handleSummaryUpdate}
             onInsightsUpdate={handleInsightsUpdate}
+            onNarrativeUpdate={handleNarrativeUpdate}
             externalQuery={externalQuery}
           />
         </CoryOverlay>
