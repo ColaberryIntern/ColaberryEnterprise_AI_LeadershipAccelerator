@@ -501,7 +501,6 @@ export default function ObjectConfigEngine(props: Props) {
                     </div>
                     <VariableSection
                       editing={editing}
-                      miniSections={miniSections}
                       variables={props.variables}
                       systemVariables={props.systemVariables}
                       variableMap={props.variableMap}

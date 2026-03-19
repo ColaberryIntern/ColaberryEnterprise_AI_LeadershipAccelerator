@@ -14,6 +14,7 @@ import HomeLearningMediaSection from '../components/HomeLearningMediaSection';
 import api from '../utils/api';
 
 const CoryDemoContainer = React.lazy(() => import('../components/demo/CoryDemoContainer'));
+const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
 
 function HomePage() {
   const navigate = useNavigate();
@@ -172,6 +173,26 @@ function HomePage() {
 
       {/* Learning Media — Video + Podcast */}
       <HomeLearningMediaSection podcastUrl="/assets/Build_Working_AI_Without_Writing_Code.m4a" />
+
+      {/* Intelligence Demo — Interactive Funnel */}
+      <Suspense
+        fallback={
+          <section className="section py-5" aria-label="Loading intelligence demo">
+            <div className="container">
+              <div className="placeholder-glow text-center">
+                <span className="placeholder col-6 mb-3" style={{ height: 24 }}></span>
+                <span className="placeholder col-8 mb-4" style={{ height: 16 }}></span>
+                <div className="row g-4">
+                  <div className="col-lg-7"><span className="placeholder col-12" style={{ height: 400 }}></span></div>
+                  <div className="col-lg-5"><span className="placeholder col-12" style={{ height: 400 }}></span></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+      >
+        <IntelligenceDemoSection onOpenBooking={() => setShowBooking(true)} />
+      </Suspense>
 
       {/* Executive Problem Section */}
       <section className="section-alt" aria-label="The Challenge">
