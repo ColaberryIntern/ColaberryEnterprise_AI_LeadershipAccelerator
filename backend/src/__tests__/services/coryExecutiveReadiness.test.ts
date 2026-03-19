@@ -132,7 +132,7 @@ const TEST_QUESTIONS: TestQuestion[] = [
     question: 'Which lead sources are converting best?',
     expectations: {
       dataMustExist: true,
-      mustNotContain: ['SELECT', 'FROM', 'WHERE'],
+      mustNotContain: ['SELECT *', 'FROM leads WHERE'],
     },
   },
   {

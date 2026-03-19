@@ -212,6 +212,13 @@ function buildLeadQueries(tables: string[]): TemplateQuery[] {
       tables: ['strategy_calls'],
     });
   }
+  if (tables.includes('icp_profiles')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_icp_profiles FROM icp_profiles`,
+      description: 'ICP profile totals',
+      tables: ['icp_profiles'],
+    });
+  }
   // Cross-entity: enrollment totals for conversion rate context
   if (tables.includes('enrollments')) {
     queries.push({

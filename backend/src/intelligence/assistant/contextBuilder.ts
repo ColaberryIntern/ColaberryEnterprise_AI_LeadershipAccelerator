@@ -55,21 +55,28 @@ export function buildContext(
   const recommendations: string[] = [];
   const narrativeParts: string[] = [];
 
-  // ── SQL Results ──
+  // ── SQL Results — totals first for LLM accuracy ──
+  // Phase 1: Output totals/counts queries first (single-row aggregates)
+  sections.push('=== VERIFIED TOTALS (use these exact numbers) ===');
   for (const sr of sqlResults) {
     sr.tables.forEach((t) => allSources.add(t));
     if (sr.rows.length === 0) continue;
-
-    // Format totals queries as key-value pairs for clarity
-    if (sr.description.includes('totals') && sr.rows.length === 1) {
-      sections.push(`[SQL] ${sr.description}:`);
-      const row = sr.rows[0];
-      for (const [key, val] of Object.entries(row)) {
-        sections.push(`  ${key}: ${formatValue(key, val)}`);
-      }
-      sections.push('');
-      continue;
+    if (!(sr.description.includes('totals') || sr.description.includes('entity counts') || sr.description.includes('outreach totals') || sr.description.includes('touchpoint totals')) || sr.rows.length !== 1) continue;
+    sections.push(`[${sr.description}]`);
+    const row = sr.rows[0];
+    for (const [key, val] of Object.entries(row)) {
+      sections.push(`  ${key}: ${formatValue(key, val)}`);
     }
+    sections.push('');
+  }
+  sections.push('=== END VERIFIED TOTALS ===');
+  sections.push('');
+
+  // Phase 2: Output detail/breakdown queries
+  for (const sr of sqlResults) {
+    if (sr.rows.length === 0) continue;
+    // Skip totals already output above
+    if ((sr.description.includes('totals') || sr.description.includes('entity counts') || sr.description.includes('outreach totals') || sr.description.includes('touchpoint totals')) && sr.rows.length === 1) continue;
 
     sections.push(`[SQL] ${sr.description}:`);
     const keys = Object.keys(sr.rows[0]);

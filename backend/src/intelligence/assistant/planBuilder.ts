@@ -44,7 +44,7 @@ const INTENT_PLAN_MAP: Record<Intent, PlanTemplate> = {
     sql: true,
     ml: ['risk_scorer'],
     vector: ['semantic_entity_search'],
-    tables: ['leads', 'activities', 'opportunity_scores', 'lead_temperature_history', 'strategy_calls', 'enrollments'],
+    tables: ['leads', 'activities', 'opportunity_scores', 'lead_temperature_history', 'strategy_calls', 'enrollments', 'icp_profiles'],
   },
   student_analysis: {
     sql: true,

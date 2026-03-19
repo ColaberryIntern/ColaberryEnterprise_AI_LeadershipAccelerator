@@ -61,8 +61,10 @@ const INTENT_RULES: IntentRule[] = [
     intent: 'agent_analysis',
     keywords: [
       'agent', 'agents', 'ai agent', 'automation',
+      'automated', 'automated process', 'business process',
       'orchestration', 'execution', 'bot', 'repair',
       'agent error', 'agent run', 'agent status',
+      'system health', 'process health', 'operational health',
     ],
     weight: 1,
   },
