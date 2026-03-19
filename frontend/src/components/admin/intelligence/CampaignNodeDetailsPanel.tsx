@@ -113,6 +113,13 @@ function UserListSection({ nodeId }: { nodeId: string }) {
     }
   }, [nodeId]);
 
+  // Reset when node changes
+  useEffect(() => {
+    setUsers([]);
+    setTotal(0);
+    setPage(1);
+  }, [nodeId]);
+
   useEffect(() => {
     if (expanded && users.length === 0 && !loading) {
       loadUsers(1);
