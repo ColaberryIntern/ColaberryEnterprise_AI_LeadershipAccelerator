@@ -229,7 +229,7 @@ function AIArchitectLandingPage() {
             </div>
           </section>
         }>
-          <IntelligenceDemoSection onOpenBooking={openBooking} />
+          <IntelligenceDemoSection onOpenBooking={openBooking} ctaLabel="BOOK YOUR CALL NOW" />
         </Suspense>
 
         {/* SOCIAL PROOF */}
