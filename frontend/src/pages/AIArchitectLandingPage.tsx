@@ -1,22 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // eslint-disable-line
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { captureUTMFromURL } from '../services/utmService';
 
-const DARK = '#0f0f1a';
-const DARK2 = '#161625';
+const BG = '#F8FAFC';
+const BG_ALT = '#F1F5F9';
+const WHITE = '#FFFFFF';
+const TEXT = '#0F172A';
+const TEXT2 = '#1E293B';
+const MUTED = '#64748B';
+const BORDER = '#E2E8F0';
 const ACCENT = '#3b82f6';
 const ACCENT2 = '#8b5cf6';
 const GREEN = '#10b981';
-const TEXT = '#e2e8f0';
-const MUTED = '#94a3b8';
+const HERO_BG = '#0f172a';
+
+const btnStyle: React.CSSProperties = {
+  background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`,
+  color: '#fff',
+  border: 'none',
+  borderRadius: 8,
+  padding: '16px 44px',
+  fontSize: 18,
+  fontWeight: 700,
+  cursor: 'pointer',
+  letterSpacing: 0.5,
+  transition: 'transform 0.2s, box-shadow 0.2s',
+};
 
 function AIArchitectLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
 
-  useEffect(() => {
-    captureUTMFromURL();
-  }, []);
+  useEffect(() => { captureUTMFromURL(); }, []);
 
   const openBooking = () => setShowBooking(true);
 
@@ -27,109 +42,110 @@ function AIArchitectLandingPage() {
         description="For Data Professionals and Leaders ready to 10X their productivity with AI. Book a strategy call."
       />
 
-      <div style={{ background: DARK, color: TEXT, fontFamily: "'Inter', -apple-system, sans-serif", minHeight: '100vh' }}>
+      <div style={{ background: BG, color: TEXT, fontFamily: "'Inter', -apple-system, sans-serif", minHeight: '100vh' }}>
 
-        {/* HERO */}
-        <section style={{ padding: '80px 20px 60px', textAlign: 'center', maxWidth: 900, margin: '0 auto' }}>
-          <div style={{ display: 'inline-block', background: 'rgba(59,130,246,0.15)', borderRadius: 20, padding: '6px 16px', fontSize: 13, color: ACCENT, marginBottom: 24, fontWeight: 500 }}>
-            For Data Professionals & Leaders
+        {/* HERO — dark section */}
+        <section style={{ background: HERO_BG, padding: '80px 20px 70px', textAlign: 'center' }}>
+          <div style={{ maxWidth: 900, margin: '0 auto' }}>
+            <div style={{ display: 'inline-block', background: 'rgba(59,130,246,0.15)', borderRadius: 20, padding: '6px 18px', fontSize: 13, color: ACCENT, marginBottom: 24, fontWeight: 500 }}>
+              For Data Professionals & Leaders
+            </div>
+            <h1 style={{ fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 800, lineHeight: 1.1, marginBottom: 20, color: '#fff' }}>
+              Build & Deploy Real{' '}
+              <span style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                AI Systems
+              </span>
+              {' '}in 3 Weeks
+            </h1>
+            <p style={{ fontSize: 'clamp(16px, 2.5vw, 20px)', color: '#94a3b8', maxWidth: 620, margin: '0 auto 36px', lineHeight: 1.6 }}>
+              Turn your ideas into real AI systems inside your company — no theory, real implementation.
+            </p>
+            <button onClick={openBooking} style={{ ...btnStyle, padding: '18px 48px', fontSize: 20 }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
+              BOOK YOUR STRATEGY CALL
+            </button>
           </div>
-          <h1 style={{ fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 800, lineHeight: 1.1, marginBottom: 20, background: `linear-gradient(135deg, ${TEXT}, ${ACCENT})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Build & Deploy Real AI Systems in 3 Weeks
-          </h1>
-          <p style={{ fontSize: 'clamp(16px, 2.5vw, 20px)', color: MUTED, maxWidth: 600, margin: '0 auto 32px', lineHeight: 1.6 }}>
-            Turn your ideas into real AI systems inside your company — no theory, real implementation.
-          </p>
-          <button onClick={openBooking} style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, color: '#fff', border: 'none', borderRadius: 8, padding: '16px 40px', fontSize: 18, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 }}>
-            BOOK YOUR STRATEGY CALL
-          </button>
+        </section>
 
-          {/* Flow Diagram */}
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 48, flexWrap: 'wrap' }}>
-            {['Ideate', 'Plan', 'Build', 'Deploy'].map((step, i) => (
-              <React.Fragment key={step}>
-                <div style={{ background: DARK2, border: `1px solid ${i === 2 ? ACCENT : '#334155'}`, borderRadius: 8, padding: '12px 24px', fontSize: 14, fontWeight: 600, color: i === 2 ? ACCENT : TEXT }}>
-                  {step}
+        {/* SYSTEM FRAMEWORK */}
+        <section style={{ background: WHITE, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 960, margin: '0 auto' }}>
+            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, textAlign: 'center', color: TEXT }}>
+              The Full-Stack AI System
+            </h2>
+            <p style={{ color: MUTED, textAlign: 'center', marginBottom: 40, fontSize: 16, lineHeight: 1.6 }}>
+              Real AI deployment requires understanding across seven critical disciplines.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 14 }}>
+              {[
+                { title: 'Product', desc: 'What to build', icon: '\u{1F4CB}' },
+                { title: 'UX', desc: 'How it works for users', icon: '\u{1F3A8}' },
+                { title: 'AI Systems', desc: 'How intelligence operates', icon: '\u{1F9E0}' },
+                { title: 'Data', desc: 'What powers the system', icon: '\u{1F4CA}' },
+                { title: 'Integrations', desc: 'How systems connect', icon: '\u{1F517}' },
+                { title: 'Automation', desc: 'How work gets done', icon: '\u26A1' },
+                { title: 'Deployment', desc: 'How it runs in production', icon: '\u{1F680}' },
+              ].map((d, i) => (
+                <div key={i} style={{
+                  background: WHITE, borderRadius: 10, padding: '22px 14px', textAlign: 'center',
+                  border: `1px solid ${BORDER}`, transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'default',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>{d.icon}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: TEXT2, marginBottom: 4 }}>{d.title}</div>
+                  <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.4 }}>{d.desc}</div>
                 </div>
-                {i < 3 && <span style={{ color: '#475569', fontSize: 20 }}>&rarr;</span>}
-              </React.Fragment>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 
         {/* PROBLEM */}
-        <section style={{ background: DARK2, padding: '60px 20px' }}>
+        <section style={{ background: BG_ALT, padding: '70px 20px' }}>
           <div style={{ maxWidth: 700, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32, textAlign: 'center' }}>
-              Most People Are Using AI <span style={{ color: '#ef4444' }}>Completely Wrong</span>
+            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32, textAlign: 'center', color: TEXT }}>
+              Most People Are Using AI <span style={{ color: '#dc2626' }}>the Wrong Way</span>
             </h2>
-            <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ display: 'grid', gap: 14 }}>
               {[
                 'Using tools instead of building systems',
                 'No clear path to deploy AI inside their company',
                 "Can't debug when AI workflows break",
                 'Stuck at the prompt level, not the system level',
               ].map((point, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 18px', background: 'rgba(239,68,68,0.06)', borderRadius: 8, borderLeft: '3px solid #ef4444' }}>
-                  <span style={{ color: '#ef4444', fontSize: 18, lineHeight: 1 }}>&#x2717;</span>
-                  <span style={{ fontSize: 15, lineHeight: 1.5 }}>{point}</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '16px 20px', background: WHITE, borderRadius: 8, borderLeft: '3px solid #dc2626', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <span style={{ color: '#dc2626', fontSize: 16, lineHeight: 1.4 }}>{'\u2717'}</span>
+                  <span style={{ fontSize: 15, lineHeight: 1.6, color: TEXT2 }}>{point}</span>
                 </div>
               ))}
             </div>
-          </div>
-        </section>
-
-        {/* SOLUTION */}
-        <section style={{ padding: '60px 20px' }}>
-          <div style={{ maxWidth: 700, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, textAlign: 'center' }}>
-              This Is Where <span style={{ color: ACCENT }}>AI Architects</span> Separate From Everyone Else
-            </h2>
-            <p style={{ color: MUTED, textAlign: 'center', marginBottom: 32, fontSize: 15 }}>
-              AI is not about tools — it's about systems. You need ~20% understanding across five critical disciplines.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-              {[
-                { label: 'Web Dev', icon: '&#x2699;' },
-                { label: 'Databases', icon: '&#x1F4BE;' },
-                { label: 'QA & Testing', icon: '&#x2714;' },
-                { label: 'Automation', icon: '&#x26A1;' },
-                { label: 'System Design', icon: '&#x1F3D7;' },
-              ].map((d, i) => (
-                <div key={i} style={{ background: DARK2, borderRadius: 8, padding: '20px 16px', textAlign: 'center', border: '1px solid #1e293b' }}>
-                  <div style={{ fontSize: 28, marginBottom: 8 }} dangerouslySetInnerHTML={{ __html: d.icon }} />
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{d.label}</div>
-                  <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>~20%</div>
-                </div>
-              ))}
-            </div>
-            <p style={{ color: MUTED, textAlign: 'center', marginTop: 24, fontSize: 14, lineHeight: 1.6 }}>
-              This combination lets you diagnose failures, build real workflows, and lead AI initiatives at your company.
-            </p>
           </div>
         </section>
 
         {/* OUTCOMES */}
-        <section style={{ background: DARK2, padding: '60px 20px' }}>
+        <section style={{ background: WHITE, padding: '70px 20px' }}>
           <div style={{ maxWidth: 700, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32, textAlign: 'center' }}>
+            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32, textAlign: 'center', color: TEXT }}>
               What You Walk Away With
             </h2>
-            <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ display: 'grid', gap: 14 }}>
               {[
                 'A real AI system scoped to YOUR company',
                 'A working deployment — not just concepts',
                 'A structured AI architecture you can replicate',
                 'The ability to expand and lead AI initiatives internally',
               ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 18px', background: `rgba(16,185,129,0.06)`, borderRadius: 8, borderLeft: `3px solid ${GREEN}` }}>
-                  <span style={{ color: GREEN, fontSize: 18, lineHeight: 1 }}>&#x2713;</span>
-                  <span style={{ fontSize: 15, lineHeight: 1.5 }}>{item}</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '16px 20px', background: BG, borderRadius: 8, borderLeft: `3px solid ${GREEN}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <span style={{ color: GREEN, fontSize: 16, lineHeight: 1.4 }}>{'\u2713'}</span>
+                  <span style={{ fontSize: 15, lineHeight: 1.6, color: TEXT2 }}>{item}</span>
                 </div>
               ))}
             </div>
-            <div style={{ textAlign: 'center', marginTop: 32, padding: '16px 24px', background: 'rgba(139,92,246,0.1)', borderRadius: 8, border: `1px solid ${ACCENT2}` }}>
-              <span style={{ fontSize: 15, fontWeight: 600, color: ACCENT2 }}>
+            <div style={{ textAlign: 'center', marginTop: 32, padding: '16px 24px', background: 'rgba(139,92,246,0.06)', borderRadius: 8, border: `1px solid rgba(139,92,246,0.2)` }}>
+              <span style={{ fontSize: 16, fontWeight: 600, color: ACCENT2 }}>
                 This is not a course — this is a build experience.
               </span>
             </div>
@@ -137,20 +153,20 @@ function AIArchitectLandingPage() {
         </section>
 
         {/* SOCIAL PROOF */}
-        <section style={{ padding: '60px 20px' }}>
-          <div style={{ maxWidth: 700, margin: '0 auto', textAlign: 'center' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32 }}>
+        <section style={{ background: BG_ALT, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
+            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 36, color: TEXT }}>
               Trusted Track Record
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
               {[
                 { stat: '10,000+', label: 'Data professionals trained' },
                 { stat: '$100M+', label: 'In wage impact generated' },
                 { stat: '3 Weeks', label: 'From idea to deployed system' },
                 { stat: 'Multi-Agent', label: 'AI systems built & running' },
               ].map((s, i) => (
-                <div key={i} style={{ background: DARK2, borderRadius: 8, padding: '24px 16px', border: '1px solid #1e293b' }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: ACCENT, marginBottom: 4 }}>{s.stat}</div>
+                <div key={i} style={{ background: WHITE, borderRadius: 10, padding: '28px 16px', border: `1px solid ${BORDER}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: ACCENT, marginBottom: 6 }}>{s.stat}</div>
                   <div style={{ fontSize: 13, color: MUTED }}>{s.label}</div>
                 </div>
               ))}
@@ -159,39 +175,43 @@ function AIArchitectLandingPage() {
         </section>
 
         {/* CTA SECTION */}
-        <section style={{ background: `linear-gradient(135deg, ${DARK2}, #1a1a3e)`, padding: '60px 20px' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 16 }}>
+        <section style={{ background: HERO_BG, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 620, margin: '0 auto', textAlign: 'center' }}>
+            <h2 style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 700, marginBottom: 12, color: '#fff' }}>
               Let's Map Your AI System
             </h2>
-            <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
-              On this call, we will identify your use case, show where AI creates the biggest impact,
-              map your system architecture, and determine how to build it in 3 weeks.
+            <p style={{ color: '#94a3b8', fontSize: 15, marginBottom: 8 }}>
+              This is a working session — not a sales call.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 440, margin: '0 auto 32px', textAlign: 'left' }}>
+            <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
+              We'll identify your use case, map the architecture, and plan a 3-week path to a working system.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 460, margin: '0 auto 36px', textAlign: 'left' }}>
               {[
                 'Identify your use case',
-                'Map your AI system',
+                'Map your system architecture',
                 'Show where AI creates impact',
-                'Plan a 3-week build path',
+                'Define next steps for deployment',
               ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-                  <span style={{ color: GREEN }}>&#x2713;</span> {item}
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#cbd5e1' }}>
+                  <span style={{ color: GREEN }}>{'\u2713'}</span> {item}
                 </div>
               ))}
             </div>
-            <button onClick={openBooking} style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT2})`, color: '#fff', border: 'none', borderRadius: 8, padding: '18px 48px', fontSize: 20, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5 }}>
+            <button onClick={openBooking} style={{ ...btnStyle, padding: '20px 56px', fontSize: 22 }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
               BOOK YOUR CALL NOW
             </button>
-            <p style={{ color: '#475569', fontSize: 12, marginTop: 12 }}>
+            <p style={{ color: '#475569', fontSize: 13, marginTop: 14 }}>
               Free 30-minute strategy session. No obligations.
             </p>
           </div>
         </section>
 
         {/* FOOTER */}
-        <footer style={{ padding: '24px 20px', textAlign: 'center', borderTop: '1px solid #1e293b' }}>
-          <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>
+        <footer style={{ padding: '24px 20px', textAlign: 'center', background: BG, borderTop: `1px solid ${BORDER}` }}>
+          <p style={{ color: MUTED, fontSize: 12, margin: 0 }}>
             Colaberry Enterprise AI Division
           </p>
         </footer>
