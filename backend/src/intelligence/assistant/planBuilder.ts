@@ -38,7 +38,7 @@ const INTENT_PLAN_MAP: Record<Intent, PlanTemplate> = {
     sql: true,
     ml: ['risk_scorer'],
     vector: [],
-    tables: ['campaigns', 'campaign_health', 'campaign_errors', 'leads', 'follow_up_sequences'],
+    tables: ['campaigns', 'campaign_health', 'campaign_errors', 'leads', 'follow_up_sequences', 'scheduled_emails', 'communication_logs'],
   },
   lead_analysis: {
     sql: true,
@@ -101,6 +101,7 @@ const ENTITY_TABLE_FILTER: Record<string, string[]> = {
   campaigns: [
     'campaigns', 'campaign_health', 'campaign_errors', 'leads',
     'follow_up_sequences', 'campaign_test_runs', 'icp_profiles',
+    'scheduled_emails', 'communication_logs',
   ],
   leads: [
     'leads', 'activities', 'appointments', 'opportunity_scores',

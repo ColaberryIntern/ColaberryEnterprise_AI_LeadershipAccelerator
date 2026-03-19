@@ -97,7 +97,7 @@ function buildCampaignQueries(tables: string[]): TemplateQuery[] {
   const queries: TemplateQuery[] = [];
   if (tables.includes('campaigns')) {
     queries.push({
-      sql: `SELECT COALESCE(status, 'unknown') AS status, COUNT(*) AS count, COALESCE(campaign_type, 'unknown') AS campaign_type FROM campaigns GROUP BY status, campaign_type ORDER BY count DESC LIMIT 20`,
+      sql: `SELECT COALESCE(status, 'unknown') AS status, COUNT(*) AS count, COALESCE(type, 'unknown') AS campaign_type FROM campaigns GROUP BY status, type ORDER BY count DESC LIMIT 20`,
       description: 'Campaign distribution by status and type',
       tables: ['campaigns'],
     });
@@ -111,9 +111,28 @@ function buildCampaignQueries(tables: string[]): TemplateQuery[] {
   }
   if (tables.includes('campaign_health')) {
     queries.push({
-      sql: `SELECT COALESCE(health_status, 'unknown') AS health_status, COUNT(*) AS count FROM campaign_health GROUP BY health_status ORDER BY count DESC`,
+      sql: `SELECT COALESCE(status, 'unknown') AS health_status, COUNT(*) AS count, AVG(health_score) AS avg_health_score FROM campaign_health GROUP BY status ORDER BY count DESC`,
       description: 'Campaign health status distribution',
       tables: ['campaign_health'],
+    });
+  }
+  if (tables.includes('scheduled_emails')) {
+    queries.push({
+      sql: `SELECT se.status, COUNT(*) AS count, c.name AS campaign_name FROM scheduled_emails se LEFT JOIN campaigns c ON c.id = se.campaign_id GROUP BY se.status, c.name ORDER BY count DESC LIMIT 20`,
+      description: 'Scheduled emails by status and campaign',
+      tables: ['scheduled_emails', 'campaigns'],
+    });
+    queries.push({
+      sql: `SELECT DATE(COALESCE(se.sent_at, se.created_at)) AS day, COUNT(*) AS emails_sent, c.name AS campaign_name FROM scheduled_emails se LEFT JOIN campaigns c ON c.id = se.campaign_id WHERE se.status = 'sent' AND COALESCE(se.sent_at, se.created_at) >= NOW() - INTERVAL '7 days' GROUP BY day, c.name ORDER BY day DESC LIMIT 30`,
+      description: 'Emails sent per day by campaign (last 7 days)',
+      tables: ['scheduled_emails', 'campaigns'],
+    });
+  }
+  if (tables.includes('communication_logs')) {
+    queries.push({
+      sql: `SELECT channel, status, COUNT(*) AS count, DATE(created_at) AS day FROM communication_logs WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY channel, status, DATE(created_at) ORDER BY day DESC, count DESC LIMIT 30`,
+      description: 'Communication logs by channel and day (last 7 days)',
+      tables: ['communication_logs'],
     });
   }
   return queries;

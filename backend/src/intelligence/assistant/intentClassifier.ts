@@ -34,6 +34,7 @@ const INTENT_RULES: IntentRule[] = [
       'campaign', 'campaigns', 'email campaign', 'outreach',
       'follow-up', 'follow up', 'sequence', 'drip',
       'open rate', 'click rate', 'bounce', 'unsubscribe',
+      'email', 'emails', 'sent email', 'emails sent', 'scheduled email',
     ],
     weight: 1,
   },
