@@ -447,46 +447,44 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                   Loading performance data...
                 </div>
               ) : roi ? (
-                <div className="row g-3 mb-3">
-                  {[
-                    { label: 'Visitors', value: (roi.visitors || 0).toLocaleString(), tooltip: 'Total unique visitors from this campaign' },
-                    { label: 'Identified', value: (roi.leads || 0).toLocaleString(), tooltip: 'Visitors matched to a known lead' },
-                    { label: 'Engaged', value: (roi.engaged || 0).toLocaleString(), tooltip: 'Visitors with 30s+ on page or 3+ interactions' },
-                    { label: 'Enrolled', value: (roi.enrollments || 0).toLocaleString(), tooltip: 'Visitors who completed enrollment' },
-                    { label: 'Revenue', value: fmt$(roi.revenue || 0), tooltip: 'Total revenue from enrolled visitors' },
-                    { label: 'ROI', value: roi.roi != null ? `${(roi.roi * 100).toFixed(0)}%` : '\u2014', tooltip: 'Return on investment: (revenue - spend) / spend' },
-                    { label: 'Cost/Lead', value: roi.cost_per_lead ? fmt$(roi.cost_per_lead) : '\u2014', tooltip: 'Budget spent divided by number of identified leads' },
-                    { label: 'Cost/Enroll', value: roi.cost_per_enrollment ? fmt$(roi.cost_per_enrollment) : '\u2014', tooltip: 'Budget spent divided by number of enrollments' },
-                  ].map(kpi => (
-                    <div className="col-4 col-md-3" key={kpi.label}>
-                      <div className="card border-0 bg-light" title={kpi.tooltip}>
-                        <div className="card-body text-center p-2">
-                          <div className="small text-muted">{kpi.label}</div>
-                          <div className="fw-bold" style={{ fontSize: '1rem' }}>{kpi.value}</div>
+                <>
+                  <div className="row g-3 mb-3">
+                    {[
+                      { label: 'Visitors', value: (roi.visitors || 0).toLocaleString(), tooltip: 'Total unique visitors from this campaign' },
+                      { label: 'Identified', value: (roi.leads || 0).toLocaleString(), tooltip: 'Visitors matched to a known lead' },
+                      { label: 'Engaged', value: (roi.engaged || 0).toLocaleString(), tooltip: 'Visitors with 30s+ on page or 3+ interactions' },
+                      { label: 'Enrolled', value: (roi.enrollments || 0).toLocaleString(), tooltip: 'Visitors who completed enrollment' },
+                      { label: 'Revenue', value: fmt$(roi.revenue || 0), tooltip: 'Total revenue from enrolled visitors' },
+                      { label: 'ROI', value: roi.roi != null ? `${(roi.roi * 100).toFixed(0)}%` : '\u2014', tooltip: 'Return on investment: (revenue - spend) / spend' },
+                      { label: 'Cost/Lead', value: roi.cost_per_lead ? fmt$(roi.cost_per_lead) : '\u2014', tooltip: 'Budget spent divided by number of identified leads' },
+                      { label: 'Cost/Enroll', value: roi.cost_per_enrollment ? fmt$(roi.cost_per_enrollment) : '\u2014', tooltip: 'Budget spent divided by number of enrollments' },
+                    ].map(kpi => (
+                      <div className="col-4 col-md-3" key={kpi.label}>
+                        <div className="card border-0 bg-light" title={kpi.tooltip}>
+                          <div className="card-body text-center p-2">
+                            <div className="small text-muted">{kpi.label}</div>
+                            <div className="fw-bold" style={{ fontSize: '1rem' }}>{kpi.value}</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-                {/* Conversion Funnel Rates */}
-                {(() => {
-                  const v = roi.visitors || 0;
-                  const l = roi.leads || 0;
-                  const eng = roi.engaged || 0;
-                  const en = roi.enrollments || 0;
-                  const vtl = v > 0 ? ((l / v) * 100).toFixed(1) : '0';
-                  const lte = l > 0 ? ((en / l) * 100).toFixed(1) : '0';
-                  const vte = v > 0 ? ((en / v) * 100).toFixed(1) : '0';
-                  const engRate = v > 0 ? ((eng / v) * 100).toFixed(1) : '0';
-                  return (
-                    <div className="d-flex gap-3 mb-4 flex-wrap" style={{ fontSize: '0.8rem' }}>
-                      <span className="text-muted" title="Percentage of visitors who became identified leads">Visitor{'\u2192'}Lead: <strong>{vtl}%</strong></span>
-                      <span className="text-muted" title="Percentage of leads who enrolled">Lead{'\u2192'}Enroll: <strong>{lte}%</strong></span>
-                      <span className="text-muted" title="Percentage of visitors who are actively engaged">Engagement Rate: <strong>{engRate}%</strong></span>
-                      <span className="text-muted" title="Overall conversion from visitor to enrollment">Overall Conv: <strong>{vte}%</strong></span>
-                    </div>
-                  );
-                })()}
+                    ))}
+                  </div>
+                  {/* Conversion Funnel Rates */}
+                  <div className="d-flex gap-3 mb-4 flex-wrap" style={{ fontSize: '0.8rem' }}>
+                    <span className="text-muted" title="Percentage of visitors who became identified leads">
+                      Visitor{'\u2192'}Lead: <strong>{roi.visitors > 0 ? ((roi.leads / roi.visitors) * 100).toFixed(1) : '0'}%</strong>
+                    </span>
+                    <span className="text-muted" title="Percentage of leads who enrolled">
+                      Lead{'\u2192'}Enroll: <strong>{roi.leads > 0 ? ((roi.enrollments / roi.leads) * 100).toFixed(1) : '0'}%</strong>
+                    </span>
+                    <span className="text-muted" title="Percentage of visitors who are actively engaged">
+                      Engagement Rate: <strong>{roi.visitors > 0 ? (((roi.engaged || 0) / roi.visitors) * 100).toFixed(1) : '0'}%</strong>
+                    </span>
+                    <span className="text-muted" title="Overall conversion from visitor to enrollment">
+                      Overall Conv: <strong>{roi.visitors > 0 ? ((roi.enrollments / roi.visitors) * 100).toFixed(1) : '0'}%</strong>
+                    </span>
+                  </div>
+                </>
               ) : (
                 <div className="text-muted small mb-4">No performance data available yet.</div>
               )}
