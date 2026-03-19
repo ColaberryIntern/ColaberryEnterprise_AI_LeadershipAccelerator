@@ -60,6 +60,7 @@ export default function IntelligenceDemoSection({ onOpenBooking }: Props) {
           </h2>
           <p className="fs-5 text-muted mb-0" style={{ maxWidth: 680, margin: '0 auto' }}>
             See how AI reveals exactly how customers move, engage, and convert — in real time.
+            Watch the flow: faster movement means stronger channels. Click any stage to explore.
           </p>
         </div>
 

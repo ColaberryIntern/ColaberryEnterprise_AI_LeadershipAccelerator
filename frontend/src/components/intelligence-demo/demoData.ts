@@ -43,7 +43,7 @@ export interface StageInsight {
 
 export const FUNNEL_NODES: FunnelNode[] = [
   // Sources (column 0)
-  { id: 'src_alumni',    label: 'Alumni Network',  category: 'source',     icon: '🎓', color: '#38a169', x: 70,  y: 70,  count: 608 },
+  { id: 'src_referral',  label: 'Referral Network',  category: 'source',     icon: '🤝', color: '#38a169', x: 70,  y: 70,  count: 608 },
   { id: 'src_cold',      label: 'Cold Outbound',   category: 'source',     icon: '📞', color: '#3182ce', x: 70,  y: 200, count: 240 },
   { id: 'src_marketing', label: 'Marketing',       category: 'source',     icon: '📣', color: '#d69e2e', x: 70,  y: 330, count: 156 },
 
@@ -68,8 +68,8 @@ export const FUNNEL_NODES: FunnelNode[] = [
 
 export const FUNNEL_EDGES: FunnelEdge[] = [
   // Source → Outreach
-  { from: 'src_alumni',    to: 'out_email',     volume: 248 },
-  { from: 'src_alumni',    to: 'out_sms',       volume: 96 },
+  { from: 'src_referral',    to: 'out_email',     volume: 248 },
+  { from: 'src_referral',    to: 'out_sms',       volume: 96 },
   { from: 'src_cold',      to: 'out_email',     volume: 116 },
   { from: 'src_cold',      to: 'out_voice',     volume: 47 },
   { from: 'src_marketing', to: 'out_sms',       volume: 32 },
@@ -101,9 +101,9 @@ export const COLUMN_X = [70, 220, 380, 530, 680];
 
 export const INSIGHTS: Record<string, StageInsight> = {
   // ── Sources ────────────────────────────────────────────────────────────────
-  src_alumni: {
-    title: 'Alumni Network',
-    subtitle: 'Highest volume source with strong brand loyalty',
+  src_referral: {
+    title: 'Referral Network',
+    subtitle: 'Highest volume source with strong trust signals',
     metrics: [
       { label: 'Total Leads', value: '608', sublabel: '60.5% of pipeline' },
       { label: 'Reached', value: '344', sublabel: '56.6% contact rate' },
@@ -114,7 +114,7 @@ export const INSIGHTS: Record<string, StageInsight> = {
       { label: 'Email Reached', pct: 72, color: '#e53e3e' },
       { label: 'SMS Reached', pct: 28, color: '#d69e2e' },
     ],
-    narrative: 'Alumni network drives the most volume and highest trust. Email outreach converts 2.4× better than SMS for this segment.',
+    narrative: 'Referral network drives the most volume and highest trust. Email outreach converts 2.4× better than SMS for this segment.',
   },
 
   src_cold: {
@@ -159,7 +159,7 @@ export const INSIGHTS: Record<string, StageInsight> = {
       { label: 'Drove Visits', value: '187', sublabel: '51.4% visit rate' },
     ],
     breakdown: [
-      { label: 'Alumni Source', pct: 68, color: '#38a169' },
+      { label: 'Referral Source', pct: 68, color: '#38a169' },
       { label: 'Cold Source', pct: 32, color: '#3182ce' },
     ],
     narrative: 'Email is the highest-performing channel with 51.4% visit rate. Personalized subject lines drove 2.1× higher open rates.',
@@ -175,7 +175,7 @@ export const INSIGHTS: Record<string, StageInsight> = {
       { label: 'Drove Visits', value: '68', sublabel: '53.1% visit rate' },
     ],
     breakdown: [
-      { label: 'Alumni Source', pct: 75, color: '#38a169' },
+      { label: 'Referral Source', pct: 75, color: '#38a169' },
       { label: 'Marketing Source', pct: 25, color: '#d69e2e' },
     ],
     narrative: 'SMS achieves the highest click-through rate of any channel. Best when used as a follow-up 48 hours after email.',
@@ -276,11 +276,11 @@ export const INSIGHTS: Record<string, StageInsight> = {
       { label: 'Cost per Acq.', value: '$142', sublabel: 'blended CAC' },
     ],
     breakdown: [
-      { label: 'Alumni Source', pct: 57, color: '#38a169' },
+      { label: 'Referral Network', pct: 57, color: '#38a169' },
       { label: 'Cold Outbound', pct: 29, color: '#3182ce' },
       { label: 'Marketing', pct: 14, color: '#d69e2e' },
     ],
-    narrative: 'Alumni deliver the highest volume but cold outbound has the best unit economics. Every $1 in outreach generates $21 in revenue.',
+    narrative: 'Referrals deliver the highest volume but cold outbound has the best unit economics. Every $1 in outreach generates $21 in revenue.',
   },
 };
 

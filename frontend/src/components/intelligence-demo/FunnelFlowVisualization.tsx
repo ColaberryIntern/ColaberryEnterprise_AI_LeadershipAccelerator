@@ -211,23 +211,29 @@ export default function FunnelFlowVisualization({ selectedId, onNodeClick }: Pro
             />
           ))}
 
-          {/* Animated flowing dots */}
-          {edgePaths.map(ep =>
-            [0, 1, 2].map(dotIdx => (
+          {/* Animated flowing dots — speed proportional to volume */}
+          {edgePaths.map(ep => {
+            // High volume = fast (short duration), low volume = slow (long duration)
+            const volumeRatio = ep.volume / maxVolume; // 0..1
+            const duration = 4.5 - volumeRatio * 2.8; // range: 1.7s (max) → 4.5s (min)
+            // More dots for high-volume edges, fewer for low
+            const dotCount = volumeRatio > 0.5 ? 4 : volumeRatio > 0.2 ? 3 : 2;
+            const stagger = duration / dotCount;
+            return Array.from({ length: dotCount }, (_, dotIdx) => (
               <circle
                 key={`dot-${ep.idx}-${dotIdx}`}
                 className="id-flow-dot"
-                r={2.5}
+                r={2 + volumeRatio * 1.5}
                 fill={nodeMap.get(ep.from)!.color}
                 aria-hidden="true"
                 style={{
                   offsetPath: `path("${ep.path}")`,
-                  animation: `idFlowDot ${2.2 + ep.idx * 0.1}s linear infinite`,
-                  animationDelay: `${dotIdx * 0.73}s`,
+                  animation: `idFlowDot ${duration.toFixed(1)}s linear infinite`,
+                  animationDelay: `${(dotIdx * stagger).toFixed(2)}s`,
                 } as React.CSSProperties}
               />
-            ))
-          )}
+            ));
+          })}
 
           {/* Nodes */}
           {FUNNEL_NODES.map(node => {
