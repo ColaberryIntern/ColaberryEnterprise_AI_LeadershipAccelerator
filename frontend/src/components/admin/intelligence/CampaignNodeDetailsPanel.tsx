@@ -15,6 +15,7 @@ interface Props {
 
 const NODE_COLORS: Record<string, { color: string; bg: string }> = {
   source:   { color: '#805ad5', bg: '#faf5ff' },
+  visitor:  { color: '#dd6b20', bg: '#fffaf0' },
   entry:    { color: '#319795', bg: '#e6fffa' },
   campaign: { color: '#2b6cb0', bg: '#ebf4ff' },
   outcome:  { color: '#38a169', bg: '#f0fff4' },
@@ -29,7 +30,8 @@ const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
 
 const TYPE_LABELS: Record<string, string> = {
   source: 'Source',
-  entry: 'Entry Point',
+  visitor: 'Site Visitor',
+  entry: 'First Touch',
   campaign: 'Campaign',
   outcome: 'Outcome',
 };
@@ -363,8 +365,47 @@ function OutcomeDetails({ node, edges, allNodes }: { node: CampaignGraphNode; ed
   );
 }
 
+function VisitorDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }) {
+  const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+
+  const upstream = edges
+    .filter(e => e.to === node.id)
+    .map(e => {
+      const source = nodeMap.get(e.from);
+      const colors = source ? getColors(source) : NODE_COLORS.source;
+      return { label: source?.label || e.from, volume: e.volume || 0, color: colors.color };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const downstream = edges
+    .filter(e => e.from === node.id)
+    .map(e => {
+      const target = nodeMap.get(e.to);
+      return { label: target?.label || e.to, volume: e.volume || 0, color: NODE_COLORS[target?.type || 'entry']?.color || '#319795' };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const engaged = node.metrics.engaged_count ?? 0;
+  const engagementRate = node.count > 0 ? Math.round((engaged / node.count) * 100) : 0;
+
+  return (
+    <>
+      <StatRow label="Total Visitors" value={node.count} />
+      <StatRow label="Engaged" value={engaged} />
+      <StatRow label="Engagement Rate" value={`${engagementRate}%`} />
+      {node.metrics.conversion_rate !== undefined && (
+        <StatRow label="% of All Leads" value={`${node.metrics.conversion_rate}%`} />
+      )}
+      {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
+      {downstream.length > 0 && <FlowList title="Leads To" items={downstream} />}
+      <UserListSection nodeId={node.id} />
+    </>
+  );
+}
+
 const DETAIL_COMPONENTS: Record<string, React.FC<{ node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }>> = {
   source: SourceDetails,
+  visitor: VisitorDetails,
   entry: EntryDetails,
   campaign: CampaignDetails,
   outcome: OutcomeDetails,
@@ -424,6 +465,13 @@ export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClos
             total {typeLabel.toLowerCase()}s
           </div>
         </div>
+
+        {/* Zero-count empty state */}
+        {node.count === 0 && (
+          <div className="text-center text-muted py-2 mb-2" style={{ fontSize: '0.72rem' }}>
+            No users have reached this stage yet.
+          </div>
+        )}
 
         {/* Type-specific details */}
         <DetailComponent node={node} edges={edges} allNodes={allNodes} />
