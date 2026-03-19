@@ -61,7 +61,8 @@ export function buildContext(
   for (const sr of sqlResults) {
     sr.tables.forEach((t) => allSources.add(t));
     if (sr.rows.length === 0) continue;
-    if (!(sr.description.includes('totals') || sr.description.includes('entity counts') || sr.description.includes('outreach totals') || sr.description.includes('touchpoint totals')) || sr.rows.length !== 1) continue;
+    const isTotals = sr.description.includes('totals') || sr.description.includes('entity counts');
+    if (!isTotals || sr.rows.length !== 1) continue;
     sections.push(`[${sr.description}]`);
     const row = sr.rows[0];
     for (const [key, val] of Object.entries(row)) {
@@ -76,7 +77,8 @@ export function buildContext(
   for (const sr of sqlResults) {
     if (sr.rows.length === 0) continue;
     // Skip totals already output above
-    if ((sr.description.includes('totals') || sr.description.includes('entity counts') || sr.description.includes('outreach totals') || sr.description.includes('touchpoint totals')) && sr.rows.length === 1) continue;
+    const isTotals = sr.description.includes('totals') || sr.description.includes('entity counts');
+    if (isTotals && sr.rows.length === 1) continue;
 
     sections.push(`[SQL] ${sr.description}:`);
     const keys = Object.keys(sr.rows[0]);

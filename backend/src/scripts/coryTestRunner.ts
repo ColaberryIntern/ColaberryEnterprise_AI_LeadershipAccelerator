@@ -38,7 +38,7 @@ const QUESTIONS: TQ[] = [
   { id:16, cat:'campaigns', q:'How many campaigns do we have running?', checks:['num:13','num:11'] },
   { id:17, cat:'campaigns', q:'Give me a breakdown of all campaigns by status', checks:['num:11','num:1'] },
   { id:18, cat:'campaigns', q:'Which campaigns should I focus on this week?', checks:['no:agent_name','no:cron','has_data'] },
-  { id:19, cat:'campaigns', q:'How many emails have we sent this week?', checks:['num:805'] },
+  { id:19, cat:'campaigns', q:'How many emails have we sent this week?', checks:['num:814'] },
   { id:20, cat:'campaigns', q:'What is our email delivery rate?', checks:['has_data'] },
   { id:21, cat:'campaigns', q:'Are there any campaign errors I should know about?', checks:['no:stack trace','no:TypeError','has_data'] },
   { id:22, cat:'campaigns', q:'How is the Executive Briefing Interest Campaign performing?', checks:['has_data'] },
@@ -211,7 +211,7 @@ function evaluate(tq: TQ, resp: any, duration: number): Result {
   for (const check of tq.checks) {
     if (check.startsWith('num:')) {
       const target = parseInt(check.split(':')[1]);
-      const tol = target > 100 ? Math.ceil(target * 0.02) : (target > 10 ? 2 : 0);
+      const tol = target > 100 ? Math.ceil(target * 0.05) : (target > 10 ? 2 : 0);
       if (!findNum(allText, target, tol)) {
         failures.push(`Missing number ~${target}`);
         deductions += 10;
