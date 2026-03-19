@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
-import { captureUTMParams } from '../services/utmService';
+import { captureUTMFromURL } from '../services/utmService';
 
 const DARK = '#0f0f1a';
 const DARK2 = '#161625';
@@ -15,7 +15,7 @@ function AIArchitectLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
 
   useEffect(() => {
-    captureUTMParams();
+    captureUTMFromURL();
   }, []);
 
   const openBooking = () => setShowBooking(true);
