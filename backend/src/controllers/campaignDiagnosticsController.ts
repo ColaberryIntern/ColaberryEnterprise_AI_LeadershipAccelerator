@@ -45,7 +45,7 @@ export async function handleGlobalAudit(_req: Request, res: Response): Promise<v
 
 export async function handleCampaignAudit(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const result = await runFullAudit(id);
     res.json(result);
   } catch (err: any) {
@@ -58,7 +58,7 @@ export async function handleCampaignAudit(req: Request, res: Response): Promise<
 
 export async function handleRampReset(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { resetToPhase, force } = req.body || {};
 
     const result = await resetRampState(id, { resetToPhase, force });
@@ -73,7 +73,7 @@ export async function handleRampReset(req: Request, res: Response): Promise<void
 
 export async function handleQueueRebuild(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { dryRun } = req.body || {};
 
     const result = await rebuildCampaignQueue(id, { dryRun: dryRun === true });
@@ -118,7 +118,7 @@ export async function handleSafeActivate(req: Request, res: Response): Promise<v
 
 export async function handleFullRecovery(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { dryRun, resetRamp } = req.body || {};
 
     const result = await runFullRecovery(id, {
@@ -137,7 +137,7 @@ export async function handleFullRecovery(req: Request, res: Response): Promise<v
 
 export async function handleLiveTest(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
 
     // Check ScheduledEmail for recent sends
