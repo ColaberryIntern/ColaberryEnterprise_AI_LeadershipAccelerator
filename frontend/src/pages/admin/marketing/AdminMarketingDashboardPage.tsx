@@ -533,6 +533,7 @@ function CampaignLinkRegistryTab() {
   const [editingCampaign, setEditingCampaign] = useState<RegisteredCampaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<RegisteredCampaign | null>(null);
   const [copied, setCopied] = useState('');
+  const [campaignKPIs, setCampaignKPIs] = useState<Record<string, { visitors: number; leads: number; enrollments: number }>>({});
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);
@@ -543,8 +544,19 @@ function CampaignLinkRegistryTab() {
       ]);
       const all = campRes.data?.campaigns || campRes.data || [];
       // Only show marketing campaigns (approval_status = 'live') — not internal automation campaigns
-      setCampaigns(all.filter((c: any) => c.approval_status === 'live'));
+      const live = all.filter((c: any) => c.approval_status === 'live');
+      setCampaigns(live);
       setChannelROI(roiRes.data?.channels || []);
+
+      // Fetch KPIs for each live campaign
+      const kpis: Record<string, { visitors: number; leads: number; enrollments: number }> = {};
+      await Promise.all(live.map(async (c: any) => {
+        try {
+          const res = await api.get(`/api/admin/campaigns/${c.id}/roi`);
+          kpis[c.id] = { visitors: res.data?.visitors || 0, leads: res.data?.leads || 0, enrollments: res.data?.enrollments || 0 };
+        } catch { kpis[c.id] = { visitors: 0, leads: 0, enrollments: 0 }; }
+      }));
+      setCampaignKPIs(kpis);
     } catch {
       setCampaigns([]);
     } finally {
@@ -647,8 +659,10 @@ function CampaignLinkRegistryTab() {
                     <th>Channel</th>
                     <th>Status</th>
                     <th>Landing Page</th>
+                    <th className="text-end">Visitors</th>
+                    <th className="text-end">Leads</th>
+                    <th className="text-end">Conversions</th>
                     <th style={{ minWidth: 140 }}>Tracking Link</th>
-                    <th className="text-end">Budget</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -670,6 +684,11 @@ function CampaignLinkRegistryTab() {
                           </span>
                         </td>
                         <td className="small">{c.destination_path || '\u2014'}</td>
+                        <td className="text-end fw-medium">{campaignKPIs[c.id]?.visitors || 0}</td>
+                        <td className="text-end fw-medium">{campaignKPIs[c.id]?.leads || 0}</td>
+                        <td className="text-end fw-medium" style={{ color: (campaignKPIs[c.id]?.enrollments || 0) > 0 ? '#198754' : undefined }}>
+                          {campaignKPIs[c.id]?.enrollments || 0}
+                        </td>
                         <td onClick={e => e.stopPropagation()}>
                           {c.tracking_link ? (
                             <button
@@ -683,11 +702,6 @@ function CampaignLinkRegistryTab() {
                           ) : (
                             <span className="text-muted small">Not generated</span>
                           )}
-                        </td>
-                        <td className="text-end small">
-                          {c.budget_cap != null
-                            ? <>{fmt$(Number(c.budget_spent || 0))} / {fmt$(Number(c.budget_cap))}</>
-                            : <span className="text-muted">{'\u2014'}</span>}
                         </td>
                       </tr>
                     );
