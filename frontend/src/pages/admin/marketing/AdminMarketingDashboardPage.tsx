@@ -541,7 +541,9 @@ function CampaignLinkRegistryTab() {
         api.get('/api/admin/campaigns'),
         api.get('/api/admin/marketing/channel-roi').catch(() => ({ data: { channels: [] } })),
       ]);
-      setCampaigns(campRes.data?.campaigns || campRes.data || []);
+      const all = campRes.data?.campaigns || campRes.data || [];
+      // Only show marketing campaigns (approval_status = 'live') — not internal automation campaigns
+      setCampaigns(all.filter((c: any) => c.approval_status === 'live'));
       setChannelROI(roiRes.data?.channels || []);
     } catch {
       setCampaigns([]);
