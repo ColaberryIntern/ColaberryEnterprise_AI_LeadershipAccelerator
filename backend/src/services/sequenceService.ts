@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { FollowUpSequence, ScheduledEmail, Lead, CampaignLead, StrategyCall, Enrollment, Cohort } from '../models';
+import { FollowUpSequence, ScheduledEmail, Lead, Campaign, CampaignLead, StrategyCall, Enrollment, Cohort } from '../models';
 import type { SequenceStep } from '../models/FollowUpSequence';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 
@@ -278,6 +278,18 @@ export async function deleteSequence(id: string) {
   return true;
 }
 
+// ── Campaign cache for ramp gate (avoids per-lead DB lookups in batch enrollment) ──
+const campaignCache = new Map<string, { data: any; ts: number }>();
+const CAMPAIGN_CACHE_TTL = 10_000; // 10 seconds
+
+async function getCachedCampaign(campaignId: string) {
+  const cached = campaignCache.get(campaignId);
+  if (cached && Date.now() - cached.ts < CAMPAIGN_CACHE_TTL) return cached.data;
+  const campaign = await Campaign.findByPk(campaignId);
+  if (campaign) campaignCache.set(campaignId, { data: campaign, ts: Date.now() });
+  return campaign;
+}
+
 export async function enrollLeadInSequence(leadId: number, sequenceId: string, campaignId?: string, force?: boolean) {
   const lead = await Lead.findByPk(leadId);
   if (!lead) throw new Error('Lead not found');
@@ -319,6 +331,42 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
         } catch { /* non-blocking */ }
       }
       return [];
+    }
+  }
+
+  // ── Ramp gate: autonomous campaigns must respect phase enrollment limits ──
+  // This is the centralized guard — all enrollment pathways flow through here.
+  // force=true bypasses (used by queue rebuild which pre-filters to active leads).
+  if (campaignId && !force) {
+    const campaign = await getCachedCampaign(campaignId);
+    if (campaign) {
+      const mode = (campaign as any).campaign_mode;
+      const ramp = (campaign as any).ramp_state;
+      if (mode === 'autonomous' && ramp && ramp.status !== 'complete') {
+        const phase = ramp.current_phase || 1;
+        const phaseSize = ramp.phase_sizes?.[phase - 1] ?? -1;
+        if (phaseSize !== -1) {
+          const activeCount = await CampaignLead.count({
+            where: { campaign_id: campaignId, status: 'active' },
+          });
+          if (activeCount >= phaseSize) {
+            // Phase is full — queue lead as 'enrolled' for a future phase
+            try {
+              await CampaignLead.findOrCreate({
+                where: { campaign_id: campaignId, lead_id: leadId },
+                defaults: {
+                  campaign_id: campaignId,
+                  lead_id: leadId,
+                  status: 'enrolled',
+                  total_steps: sequence.steps.length,
+                } as any,
+              });
+            } catch { /* non-blocking */ }
+            console.log(`[Sequence] Ramp gate: phase ${phase} full (${activeCount}/${phaseSize}), holding lead ${leadId} as enrolled`);
+            return [];
+          }
+        }
+      }
     }
   }
 
