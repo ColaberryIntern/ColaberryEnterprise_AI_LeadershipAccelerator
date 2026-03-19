@@ -10,33 +10,35 @@ import {
 } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
-// ─── Full Funnel 6-Layer Config ─────────────────────────────────────────────
+// ─── Full Funnel 7-Layer Config ─────────────────────────────────────────────
 
 const COLUMN_CONFIG: Record<string, number> = {
-  source: 0, outreach: 1, visitor: 2, entry: 3, campaign: 4, outcome: 5,
+  source: 0, outreach: 1, engagement: 2, visitor: 3, entry: 4, campaign: 5, outcome: 6,
 };
-const COLUMN_X_PCT = [0.06, 0.22, 0.38, 0.55, 0.74, 0.94];
-const COLUMN_LABELS = ['Sources', 'Outreach', 'Visitors', 'First Touch', 'Campaigns', 'Outcomes'];
+const COLUMN_X_PCT = [0.05, 0.17, 0.30, 0.42, 0.56, 0.75, 0.94];
+const COLUMN_LABELS = ['Sources', 'Outreach', 'Engagement', 'Visitors', 'First Touch', 'Campaigns', 'Outcomes'];
 
 // Zone boundaries for column-constrained dragging (percentage of width)
 const ZONE_RANGES: Record<string, [number, number]> = {
-  source:   [0, 0.14],
-  outreach: [0.14, 0.30],
-  visitor:  [0.30, 0.46],
-  entry:    [0.46, 0.64],
-  campaign: [0.64, 0.84],
-  outcome:  [0.84, 1.0],
+  source:     [0, 0.11],
+  outreach:   [0.11, 0.23],
+  engagement: [0.23, 0.36],
+  visitor:    [0.36, 0.49],
+  entry:      [0.49, 0.65],
+  campaign:   [0.65, 0.85],
+  outcome:    [0.85, 1.0],
 };
 
-const POSITIONS_KEY = 'campaign-graph-positions-v4';
+const POSITIONS_KEY = 'campaign-graph-positions-v5';
 
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
-  source:   { color: '#805ad5', bg: '#faf5ff' },
-  outreach: { color: '#e53e3e', bg: '#fff5f5' },
-  visitor:  { color: '#dd6b20', bg: '#fffaf0' },
-  entry:    { color: '#319795', bg: '#e6fffa' },
-  campaign: { color: '#2b6cb0', bg: '#ebf4ff' },
-  outcome:  { color: '#38a169', bg: '#f0fff4' },
+  source:     { color: '#805ad5', bg: '#faf5ff' },
+  outreach:   { color: '#e53e3e', bg: '#fff5f5' },
+  engagement: { color: '#4299e1', bg: '#ebf8ff' },
+  visitor:    { color: '#dd6b20', bg: '#fffaf0' },
+  entry:      { color: '#319795', bg: '#e6fffa' },
+  campaign:   { color: '#2b6cb0', bg: '#ebf4ff' },
+  outcome:    { color: '#38a169', bg: '#f0fff4' },
 };
 
 // Per-source-node colors for visual differentiation
@@ -57,6 +59,13 @@ const OUTREACH_NODE_COLORS: Record<string, { color: string; bg: string }> = {
   outreach_email: { color: '#e53e3e', bg: '#fff5f5' },
   outreach_sms:   { color: '#d69e2e', bg: '#fffff0' },
   outreach_voice: { color: '#9f7aea', bg: '#faf5ff' },
+};
+
+// Per-engagement-node colors for visual differentiation
+const ENGAGEMENT_NODE_COLORS: Record<string, { color: string; bg: string }> = {
+  engagement_engaged: { color: '#38a169', bg: '#f0fff4' },  // strong green — they acted
+  engagement_opened:  { color: '#4299e1', bg: '#ebf8ff' },  // soft blue — they noticed
+  engagement_ignored: { color: '#a0aec0', bg: '#f7fafc' },  // faded gray — no response
 };
 
 const SOURCE_FILTER_OPTIONS = [
@@ -103,6 +112,9 @@ function getNodeColors(node: CampaignGraphNode): { color: string; bg: string } {
   }
   if (node.type === 'outreach' && OUTREACH_NODE_COLORS[node.id]) {
     return OUTREACH_NODE_COLORS[node.id];
+  }
+  if (node.type === 'engagement' && ENGAGEMENT_NODE_COLORS[node.id]) {
+    return ENGAGEMENT_NODE_COLORS[node.id];
   }
   if (node.type === 'visitor' && VISITOR_NODE_COLORS[node.id]) {
     return VISITOR_NODE_COLORS[node.id];
@@ -306,6 +318,22 @@ function ValidationBar({ validation, warnings }: { validation?: CampaignGraphVal
               <span className="text-muted">Contacted</span>
               <span className="fw-semibold">{validation.leads_contacted.toLocaleString()}</span>
             </div>
+          )}
+          {validation.leads_engaged !== undefined && (
+            <>
+              <div className="d-flex justify-content-between py-1 border-bottom" style={{ paddingLeft: 8 }}>
+                <span style={{ color: '#38a169' }}>Engaged</span>
+                <span className="fw-semibold">{validation.leads_engaged.toLocaleString()}</span>
+              </div>
+              <div className="d-flex justify-content-between py-1 border-bottom" style={{ paddingLeft: 8 }}>
+                <span style={{ color: '#4299e1' }}>Opened</span>
+                <span className="fw-semibold">{(validation.leads_opened || 0).toLocaleString()}</span>
+              </div>
+              <div className="d-flex justify-content-between py-1 border-bottom" style={{ paddingLeft: 8 }}>
+                <span style={{ color: '#a0aec0' }}>Ignored</span>
+                <span className="fw-semibold">{(validation.leads_ignored || 0).toLocaleString()}</span>
+              </div>
+            </>
           )}
           {validation.leads_with_visitor !== undefined && (
             <div className="d-flex justify-content-between py-1">
@@ -1024,6 +1052,12 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             )}
             {hoveredNode.metrics.visits_generated !== undefined && (
               <div className="text-muted">Visits Generated: {hoveredNode.metrics.visits_generated.toLocaleString()}</div>
+            )}
+            {hoveredNode.metrics.pct_of_outreach !== undefined && (
+              <div className="text-muted">% of Outreach: {hoveredNode.metrics.pct_of_outreach}%</div>
+            )}
+            {hoveredNode.metrics.conversion_to_visit !== undefined && (
+              <div className="text-muted">Visit Rate: {hoveredNode.metrics.conversion_to_visit}%</div>
             )}
             {hoveredNode.metrics.attribution_linear !== undefined && (
               <div className="text-muted">Attribution (Linear): {hoveredNode.metrics.attribution_linear}</div>

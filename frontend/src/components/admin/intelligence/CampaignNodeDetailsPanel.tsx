@@ -14,12 +14,19 @@ interface Props {
 }
 
 const NODE_COLORS: Record<string, { color: string; bg: string }> = {
-  source:   { color: '#805ad5', bg: '#faf5ff' },
-  outreach: { color: '#e53e3e', bg: '#fff5f5' },
-  visitor:  { color: '#dd6b20', bg: '#fffaf0' },
-  entry:    { color: '#319795', bg: '#e6fffa' },
-  campaign: { color: '#2b6cb0', bg: '#ebf4ff' },
-  outcome:  { color: '#38a169', bg: '#f0fff4' },
+  source:     { color: '#805ad5', bg: '#faf5ff' },
+  outreach:   { color: '#e53e3e', bg: '#fff5f5' },
+  engagement: { color: '#4299e1', bg: '#ebf8ff' },
+  visitor:    { color: '#dd6b20', bg: '#fffaf0' },
+  entry:      { color: '#319795', bg: '#e6fffa' },
+  campaign:   { color: '#2b6cb0', bg: '#ebf4ff' },
+  outcome:    { color: '#38a169', bg: '#f0fff4' },
+};
+
+const ENGAGEMENT_NODE_COLORS: Record<string, { color: string; bg: string }> = {
+  engagement_engaged: { color: '#38a169', bg: '#f0fff4' },
+  engagement_opened:  { color: '#4299e1', bg: '#ebf8ff' },
+  engagement_ignored: { color: '#a0aec0', bg: '#f7fafc' },
 };
 
 const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
@@ -38,6 +45,7 @@ const OUTREACH_NODE_COLORS: Record<string, { color: string; bg: string }> = {
 const TYPE_LABELS: Record<string, string> = {
   source: 'Source',
   outreach: 'Outreach Channel',
+  engagement: 'Engagement Level',
   visitor: 'Site Visitor',
   entry: 'First Touch',
   campaign: 'Campaign',
@@ -59,6 +67,9 @@ function getColors(node: CampaignGraphNode) {
   }
   if (node.type === 'outreach' && OUTREACH_NODE_COLORS[node.id]) {
     return OUTREACH_NODE_COLORS[node.id];
+  }
+  if (node.type === 'engagement' && ENGAGEMENT_NODE_COLORS[node.id]) {
+    return ENGAGEMENT_NODE_COLORS[node.id];
   }
   return NODE_COLORS[node.type] || NODE_COLORS.entry;
 }
@@ -497,9 +508,60 @@ function OutreachDetails({ node, edges, allNodes }: { node: CampaignGraphNode; e
   );
 }
 
+function EngagementDetails({ node, edges, allNodes }: { node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }) {
+  const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+
+  const upstream = edges
+    .filter(e => e.to === node.id)
+    .map(e => {
+      const source = nodeMap.get(e.from);
+      const colors = source ? getColors(source) : NODE_COLORS.outreach;
+      return { label: source?.label || e.from, volume: e.volume || 0, color: colors.color };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  const downstream = edges
+    .filter(e => e.from === node.id)
+    .map(e => {
+      const target = nodeMap.get(e.to);
+      return { label: target?.label || e.to, volume: e.volume || 0, color: NODE_COLORS[target?.type || 'visitor']?.color || '#dd6b20' };
+    })
+    .sort((a, b) => b.volume - a.volume);
+
+  return (
+    <>
+      <StatRow label="Total Leads" value={node.count} />
+      {node.metrics.pct_of_outreach !== undefined && (
+        <StatRow label="% of Contacted" value={`${node.metrics.pct_of_outreach}%`} />
+      )}
+      {node.metrics.conversion_to_visit !== undefined && (
+        <StatRow label="Visit Conversion" value={`${node.metrics.conversion_to_visit}%`} />
+      )}
+      {(node.metrics.email_count !== undefined || node.metrics.sms_count !== undefined || node.metrics.voice_count !== undefined) && (
+        <div className="mt-2 mb-1">
+          <div className="text-muted fw-medium mb-1" style={{ fontSize: '0.7rem' }}>Channel Breakdown</div>
+          {node.metrics.email_count !== undefined && node.metrics.email_count > 0 && (
+            <StatRow label="Email" value={node.metrics.email_count} />
+          )}
+          {node.metrics.sms_count !== undefined && node.metrics.sms_count > 0 && (
+            <StatRow label="SMS" value={node.metrics.sms_count} />
+          )}
+          {node.metrics.voice_count !== undefined && node.metrics.voice_count > 0 && (
+            <StatRow label="Voice" value={node.metrics.voice_count} />
+          )}
+        </div>
+      )}
+      {upstream.length > 0 && <FlowList title="Incoming From" items={upstream} />}
+      {downstream.length > 0 && <FlowList title="Leads To" items={downstream} />}
+      <UserListSection nodeId={node.id} />
+    </>
+  );
+}
+
 const DETAIL_COMPONENTS: Record<string, React.FC<{ node: CampaignGraphNode; edges: CampaignGraphEdge[]; allNodes: CampaignGraphNode[] }>> = {
   source: SourceDetails,
   outreach: OutreachDetails,
+  engagement: EngagementDetails,
   visitor: VisitorDetails,
   entry: EntryDetails,
   campaign: CampaignDetails,

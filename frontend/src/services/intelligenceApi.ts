@@ -400,7 +400,7 @@ export const runDepartmentStrategy = (slug: string) =>
 
 export interface CampaignGraphNode {
   id: string;
-  type: 'source' | 'outreach' | 'visitor' | 'entry' | 'campaign' | 'outcome';
+  type: 'source' | 'outreach' | 'engagement' | 'visitor' | 'entry' | 'campaign' | 'outcome';
   label: string;
   count: number;
   metrics: {
@@ -413,6 +413,11 @@ export interface CampaignGraphNode {
     delivered?: number;
     opened?: number;
     visits_generated?: number;
+    pct_of_outreach?: number;
+    conversion_to_visit?: number;
+    email_count?: number;
+    sms_count?: number;
+    voice_count?: number;
     attribution_linear?: number;
     attribution_first?: number;
     attribution_last?: number;
@@ -437,6 +442,9 @@ export interface CampaignGraphValidation {
   leads_with_visitor: number;
   leads_contacted: number;
   leads_contacted_no_visit: number;
+  leads_engaged: number;
+  leads_opened: number;
+  leads_ignored: number;
   warnings: string[];
 }
 
