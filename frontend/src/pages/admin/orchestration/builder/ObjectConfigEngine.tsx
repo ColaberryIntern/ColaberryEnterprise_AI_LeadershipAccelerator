@@ -76,6 +76,10 @@ interface Props {
   onOpenRepair: () => void;
   onSelectMiniSection?: (id: string | null) => void;
   typeDefinitions?: TypeDefinition[];
+  // Section-level inherited IDs
+  sectionVariableKeys?: string[];
+  sectionArtifactIds?: string[];
+  sectionSkillIds?: string[];
   // Preview props
   lessonTitle?: string;
   lessonId?: string;
@@ -503,6 +507,7 @@ export default function ObjectConfigEngine(props: Props) {
                       editing={editing}
                       variables={props.variables}
                       systemVariables={props.systemVariables}
+                      sectionVariableKeys={props.sectionVariableKeys}
                       onUpdate={props.onUpdate}
                       onCreateVariable={props.onCreateVariable}
                     />
@@ -517,6 +522,7 @@ export default function ObjectConfigEngine(props: Props) {
                     <SkillSection
                       editing={editing}
                       skillOptions={props.skillOptions}
+                      sectionSkillIds={props.sectionSkillIds}
                     />
                   </div>
 
@@ -530,6 +536,7 @@ export default function ObjectConfigEngine(props: Props) {
                       <ArtifactSection
                         editing={editing}
                         artifacts={props.artifacts}
+                        sectionArtifactIds={props.sectionArtifactIds}
                       />
                     </div>
                   )}
