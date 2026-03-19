@@ -38,6 +38,7 @@ export interface QueueRebuildResult {
   dryRun: boolean;
   leadsAudited: number;
   leadsSkippedUnsendable: number;
+  leadsSkippedRampWaiting: number;
   leadsAlreadyQueued: number;
   leadsRequeued: number;
   actionsCreated: number;
@@ -189,6 +190,8 @@ export async function resetRampState(
  * Rebuild the ScheduledEmail queue for a campaign.
  * Re-enrolls orphaned leads (active but no pending actions) into the sequence.
  * Duplicate-safe: skips leads that already have pending/processing actions.
+ * Ramp-aware: for autonomous campaigns, only rebuilds leads already in the active
+ * ramp cohort (status='active'), not leads waiting for future phases (status='enrolled').
  */
 export async function rebuildCampaignQueue(
   campaignId: string,
@@ -199,14 +202,31 @@ export async function rebuildCampaignQueue(
   if (!campaign) throw new Error('Campaign not found');
   if (!campaign.sequence_id) throw new Error('Campaign has no sequence assigned');
 
+  // For autonomous campaigns with an active ramp, only rebuild leads already
+  // promoted to 'active' by the ramp engine — never enroll 'enrolled' leads
+  // that are waiting for a future ramp phase.
+  const campaignMode = (campaign as any).campaign_mode;
+  const rampState = (campaign as any).ramp_state;
+  const isRamping = campaignMode === 'autonomous' && rampState?.status === 'ramping';
+  const eligibleStatuses = isRamping ? ['active'] : ['enrolled', 'active'];
+
   const campaignLeads = await CampaignLead.findAll({
     where: {
       campaign_id: campaignId,
-      status: { [Op.in]: ['enrolled', 'active'] },
+      status: { [Op.in]: eligibleStatuses },
     },
     attributes: ['lead_id', 'status'],
     raw: true,
   }) as any[];
+
+  // Count leads excluded by ramp filter (for reporting)
+  let leadsSkippedRampWaiting = 0;
+  if (isRamping) {
+    const totalWithEnrolled = await CampaignLead.count({
+      where: { campaign_id: campaignId, status: { [Op.in]: ['enrolled', 'active'] } },
+    });
+    leadsSkippedRampWaiting = totalWithEnrolled - campaignLeads.length;
+  }
 
   let leadsSkippedUnsendable = 0;
   let leadsAlreadyQueued = 0;
@@ -268,6 +288,7 @@ export async function rebuildCampaignQueue(
       leads_requeued: leadsRequeued,
       actions_created: actionsCreated,
       leads_skipped_unsendable: leadsSkippedUnsendable,
+      leads_skipped_ramp_waiting: leadsSkippedRampWaiting,
       leads_already_queued: leadsAlreadyQueued,
       errors: errors.length,
     });
@@ -278,6 +299,7 @@ export async function rebuildCampaignQueue(
     dryRun,
     leadsAudited: campaignLeads.length,
     leadsSkippedUnsendable,
+    leadsSkippedRampWaiting,
     leadsAlreadyQueued,
     leadsRequeued,
     actionsCreated,
