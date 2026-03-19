@@ -30,8 +30,29 @@ const btnStyle: React.CSSProperties = {
 
 function AIArchitectLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
+  const [nextCohort, setNextCohort] = useState<{ name: string; start_date: string; seats_remaining: number } | null>(null);
 
-  useEffect(() => { captureUTMFromURL(); }, []);
+  useEffect(() => {
+    captureUTMFromURL();
+    // Fetch next upcoming cohort for urgency section
+    fetch((process.env.REACT_APP_API_URL || '') + '/api/cohorts')
+      .then(r => r.json())
+      .then(data => {
+        const cohorts = data.cohorts || [];
+        const today = new Date().toISOString().split('T')[0];
+        const upcoming = cohorts
+          .filter((c: any) => c.start_date >= today && c.seats_taken < c.max_seats)
+          .sort((a: any, b: any) => a.start_date.localeCompare(b.start_date));
+        if (upcoming.length > 0) {
+          setNextCohort({
+            name: upcoming[0].name,
+            start_date: upcoming[0].start_date,
+            seats_remaining: upcoming[0].max_seats - upcoming[0].seats_taken,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const openBooking = () => setShowBooking(true);
 
@@ -74,9 +95,20 @@ function AIArchitectLandingPage() {
             <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, textAlign: 'center', color: TEXT }}>
               The Full-Stack AI System
             </h2>
-            <p style={{ color: MUTED, textAlign: 'center', marginBottom: 40, fontSize: 16, lineHeight: 1.6 }}>
-              Real AI deployment requires understanding across seven critical disciplines.
-            </p>
+            <div style={{ maxWidth: 700, margin: '0 auto 40px', textAlign: 'center' }}>
+              <p style={{ color: TEXT2, fontSize: 16, lineHeight: 1.7, marginBottom: 16 }}>
+                Most executives, tech leaders, developers, and data professionals already have experience in several of these areas.
+              </p>
+              <p style={{ color: TEXT2, fontSize: 16, lineHeight: 1.7, marginBottom: 16 }}>
+                The shift isn't starting from scratch — it's learning how to <strong>connect what you already know</strong> into a complete AI system.
+              </p>
+              <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
+                This is the transition happening right now: <strong style={{ color: ACCENT }}>From specialized roles {'\u2192'} AI Systems Architect</strong>
+              </p>
+              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, margin: 0 }}>
+                You don't need to learn everything. You need to understand how the pieces work together. That's exactly what we show you how to do.
+              </p>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 14 }}>
               {[
                 { title: 'Product', desc: 'What to build', icon: '\u{1F4CB}' },
@@ -100,6 +132,9 @@ function AIArchitectLandingPage() {
                 </div>
               ))}
             </div>
+            <p style={{ textAlign: 'center', marginTop: 28, fontSize: 15, fontWeight: 600, color: ACCENT2, lineHeight: 1.6 }}>
+              This is why many roles are evolving into AI Systems Architects — the people who understand how everything connects.
+            </p>
           </div>
         </section>
 
@@ -173,6 +208,40 @@ function AIArchitectLandingPage() {
             </div>
           </div>
         </section>
+
+        {/* COHORT URGENCY */}
+        {nextCohort && (
+          <section style={{ background: WHITE, padding: '70px 20px' }}>
+            <div style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center' }}>
+              <div style={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: 12, padding: '36px 32px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <h2 style={{ fontSize: 'clamp(22px, 3vw, 32px)', fontWeight: 700, marginBottom: 16, color: TEXT }}>
+                  Next Cohort Starting Soon
+                </h2>
+                <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 20 }}>
+                  This is a cohort-based program where we guide you through building a real AI system step-by-step.
+                  Spots are limited to ensure hands-on support and real implementation.
+                </p>
+                <div style={{ background: 'rgba(59,130,246,0.06)', borderRadius: 8, padding: '14px 20px', marginBottom: 20, border: `1px solid rgba(59,130,246,0.15)` }}>
+                  <div style={{ fontSize: 13, color: MUTED, marginBottom: 4 }}>Next Cohort Start Date</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: ACCENT }}>
+                    {new Date(nextCohort.start_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </div>
+                  <div style={{ fontSize: 13, color: MUTED, marginTop: 4 }}>
+                    {nextCohort.seats_remaining} seats remaining
+                  </div>
+                </div>
+                <p style={{ color: '#dc2626', fontSize: 14, fontWeight: 600, marginBottom: 24 }}>
+                  Limited seats available — once full, enrollment closes.
+                </p>
+                <button onClick={openBooking} style={{ ...btnStyle }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  SECURE YOUR SPOT
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* CTA SECTION */}
         <section style={{ background: HERO_BG, padding: '70px 20px' }}>
