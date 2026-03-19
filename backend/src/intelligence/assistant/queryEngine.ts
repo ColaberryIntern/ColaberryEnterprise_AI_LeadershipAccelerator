@@ -281,9 +281,11 @@ Perspective rules:
 
 Data accuracy rules:
 - CRITICAL: Every number you cite MUST appear verbatim in the data context below. Do NOT estimate, round differently, or invent numbers.
+- NEVER add numbers together, compute sums, or derive totals from row-level data. Only use numbers explicitly labeled as totals (e.g. "total_leads: 849", "emails_sent_7d: 805").
 - If a total count is provided (e.g. "total_leads: 849"), use that exact number — do not count rows to derive a different total.
 - When the data distinguishes between "total" and "active" counts, ALWAYS report both — never say "X active" when you mean "X total." Example: "13 campaigns total (11 active, 1 completed, 1 draft)" not "13 active campaigns."
 - If the data does not contain a specific metric, say "data not available" instead of guessing.
+- NEVER fabricate a number. If you are unsure of a number, omit it. Wrong numbers destroy executive trust.
 - Explain causes and trends only when directly visible in the data.
 
 Respond as JSON with this exact structure:

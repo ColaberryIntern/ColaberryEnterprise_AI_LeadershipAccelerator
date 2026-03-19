@@ -131,6 +131,12 @@ function buildCampaignQueries(tables: string[]): TemplateQuery[] {
     });
   }
   if (tables.includes('scheduled_emails')) {
+    // Email totals
+    queries.push({
+      sql: `SELECT COUNT(*) FILTER (WHERE status = 'sent' AND sent_at >= NOW() - INTERVAL '7 days') AS emails_sent_7d, COUNT(*) FILTER (WHERE status = 'sent' AND sent_at >= NOW() - INTERVAL '24 hours') AS emails_sent_today, COUNT(*) FILTER (WHERE status = 'pending') AS emails_pending, COUNT(*) FILTER (WHERE status = 'sent') AS emails_sent_total FROM scheduled_emails`,
+      description: 'Email outreach totals',
+      tables: ['scheduled_emails'],
+    });
     queries.push({
       sql: `SELECT se.status, COUNT(*) AS count, c.name AS campaign_name FROM scheduled_emails se LEFT JOIN campaigns c ON c.id = se.campaign_id GROUP BY se.status, c.name ORDER BY count DESC LIMIT 20`,
       description: 'Scheduled emails by status and campaign',
@@ -143,6 +149,11 @@ function buildCampaignQueries(tables: string[]): TemplateQuery[] {
     });
   }
   if (tables.includes('communication_logs')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_touchpoints, COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS touchpoints_7d FROM communication_logs`,
+      description: 'Communication touchpoint totals',
+      tables: ['communication_logs'],
+    });
     queries.push({
       sql: `SELECT channel, status, COUNT(*) AS count, DATE(created_at) AS day FROM communication_logs WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY channel, status, DATE(created_at) ORDER BY day DESC, count DESC LIMIT 30`,
       description: 'Communication logs by channel and day (last 7 days)',
@@ -167,7 +178,20 @@ function buildLeadQueries(tables: string[]): TemplateQuery[] {
       tables: ['leads'],
     });
   }
+  if (tables.includes('leads')) {
+    // Lead source breakdown
+    queries.push({
+      sql: `SELECT COALESCE(source, 'unknown') AS source, COUNT(*) AS lead_count FROM leads GROUP BY source ORDER BY lead_count DESC`,
+      description: 'Lead source breakdown',
+      tables: ['leads'],
+    });
+  }
   if (tables.includes('opportunity_scores')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_opportunity_scores, AVG(score) AS avg_score, MIN(score) AS min_score, MAX(score) AS max_score FROM opportunity_scores`,
+      description: 'Opportunity score totals',
+      tables: ['opportunity_scores'],
+    });
     queries.push({
       sql: `SELECT l.pipeline_stage AS stage, AVG(o.score) AS avg_score, COUNT(*) AS scored_leads FROM opportunity_scores o JOIN leads l ON l.id = o.lead_id GROUP BY l.pipeline_stage ORDER BY avg_score DESC LIMIT 10`,
       description: 'Average opportunity score by pipeline stage',
@@ -181,6 +205,21 @@ function buildLeadQueries(tables: string[]): TemplateQuery[] {
       tables: ['activities'],
     });
   }
+  if (tables.includes('strategy_calls')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_strategy_calls, COUNT(*) FILTER (WHERE status = 'completed') AS completed_calls, COUNT(*) FILTER (WHERE status = 'scheduled') AS scheduled_calls, COUNT(*) FILTER (WHERE status = 'no_show') AS no_show_calls FROM strategy_calls`,
+      description: 'Strategy call totals by status',
+      tables: ['strategy_calls'],
+    });
+  }
+  // Cross-entity: enrollment totals for conversion rate context
+  if (tables.includes('enrollments')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_enrollments, COUNT(*) FILTER (WHERE status = 'active') AS active_enrollments FROM enrollments`,
+      description: 'Enrollment totals',
+      tables: ['enrollments'],
+    });
+  }
   return queries;
 }
 
@@ -188,9 +227,21 @@ function buildStudentQueries(tables: string[]): TemplateQuery[] {
   const queries: TemplateQuery[] = [];
   if (tables.includes('enrollments')) {
     queries.push({
+      sql: `SELECT COUNT(*) AS total_enrollments, COUNT(*) FILTER (WHERE status = 'active') AS active_enrollments FROM enrollments`,
+      description: 'Enrollment totals',
+      tables: ['enrollments'],
+    });
+    queries.push({
       sql: `SELECT COALESCE(status, 'unknown') AS status, COUNT(*) AS count FROM enrollments GROUP BY status ORDER BY count DESC`,
       description: 'Enrollment distribution by status',
       tables: ['enrollments'],
+    });
+  }
+  if (tables.includes('cohorts')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_cohorts FROM cohorts`,
+      description: 'Cohort totals',
+      tables: ['cohorts'],
     });
   }
   if (tables.includes('attendance_records')) {
@@ -331,6 +382,22 @@ function buildGeneralQueries(tables: string[]): TemplateQuery[] {
       sql: `SELECT COALESCE(source_module, 'unknown') AS module, COUNT(*) AS event_count FROM system_processes WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY source_module ORDER BY event_count DESC LIMIT 10`,
       description: 'System activity by module (last 24 hours)',
       tables: ['system_processes'],
+    });
+  }
+  // Communication log totals
+  if (tables.includes('communication_logs')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_touchpoints, COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS touchpoints_7d, COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') AS touchpoints_today FROM communication_logs`,
+      description: 'Communication touchpoint totals',
+      tables: ['communication_logs'],
+    });
+  }
+  // Strategy call totals for business briefings
+  if (tables.includes('strategy_calls')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_strategy_calls, COUNT(*) FILTER (WHERE status = 'completed') AS completed_calls, COUNT(*) FILTER (WHERE status = 'scheduled') AS scheduled_calls, COUNT(*) FILTER (WHERE status = 'no_show') AS no_show_calls FROM strategy_calls`,
+      description: 'Strategy call totals',
+      tables: ['strategy_calls'],
     });
   }
   // Email outreach volume for business briefings
