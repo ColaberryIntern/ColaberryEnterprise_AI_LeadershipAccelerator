@@ -41,6 +41,7 @@ export const env = {
 
   // Mandrill
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
+  mandrillWebhookUrl: process.env.MANDRILL_WEBHOOK_URL || '',
   mandrillApiKey: process.env.MANDRILL_API_KEY || '',
 
   // Google Calendar

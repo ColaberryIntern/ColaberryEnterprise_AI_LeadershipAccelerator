@@ -80,10 +80,12 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
     const webhookKey = env.mandrillWebhookKey || '';
     if (webhookKey) {
       const signature = req.headers['x-mandrill-signature'] as string || '';
-      const webhookUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      // Use the exact registered webhook URL — behind reverse proxy/Cloudflare,
+      // req.protocol and req.get('host') may not match what Mandrill signed against.
+      const webhookUrl = env.mandrillWebhookUrl || `${req.protocol}://${req.get('host')}${req.originalUrl}`;
       const isValid = verifyMandrillSignature(webhookKey, webhookUrl, req.body, signature);
       if (!isValid) {
-        console.warn('[MandrillWebhook] Invalid signature');
+        console.warn(`[MandrillWebhook] Invalid signature (url used: ${webhookUrl})`);
         res.status(403).json({ error: 'Invalid signature' });
         return;
       }
