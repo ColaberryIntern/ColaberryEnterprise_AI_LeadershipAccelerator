@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'; // eslint-disable-line
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { captureUTMFromURL } from '../services/utmService';
+import { trackEvent } from '../utils/tracker';
 
 const BG = '#F8FAFC';
 const BG_ALT = '#F1F5F9';
@@ -54,7 +55,10 @@ function AIArchitectLandingPage() {
       .catch(() => {});
   }, []);
 
-  const openBooking = () => setShowBooking(true);
+  const openBooking = () => {
+    trackEvent('cta_click', { cta_name: 'book_strategy_call', page: '/ai-architect' });
+    setShowBooking(true);
+  };
 
   return (
     <>
