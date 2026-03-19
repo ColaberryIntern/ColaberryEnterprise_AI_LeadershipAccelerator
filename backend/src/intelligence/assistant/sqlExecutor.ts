@@ -314,26 +314,57 @@ function buildGeneralQueries(tables: string[]): TemplateQuery[] {
 
 async function generateAndExecuteLLMSQL(
   question: string,
-  tables: string[],
+  planTables: string[],
   entityType?: string
 ): Promise<SqlResult | null> {
-  // Load schemas from DatasetRegistry
-  let schemaContext = '';
+  // Load ALL schemas from DatasetRegistry — Cory needs full database visibility
+  let primarySchema = '';
+  let fullIndex = '';
+  let relationshipContext = '';
   try {
     const registries = await DatasetRegistry.findAll({
       where: { status: 'active' },
     });
-    const relevantTables = registries.filter((r: any) => tables.includes(r.table_name));
-    schemaContext = relevantTables.map((r: any) => {
+
+    // Tier 1: Full column detail for plan-relevant tables
+    const primaryTables = registries.filter((r: any) => planTables.includes(r.table_name));
+    primarySchema = primaryTables.map((r: any) => {
       const cols = Object.keys(r.semantic_types || {}).join(', ');
       return `Table "${r.table_name}" (${r.row_count} rows): ${cols}`;
     }).join('\n');
+
+    // Tier 2: Compact index of ALL other tables (name + row count + key columns)
+    const otherTables = registries.filter((r: any) => !planTables.includes(r.table_name));
+    if (otherTables.length > 0) {
+      fullIndex = otherTables.map((r: any) => {
+        const cols = Object.keys(r.semantic_types || {});
+        // Show up to 8 most important columns to keep context manageable
+        const keyCols = cols.filter((c: string) =>
+          c === 'id' || c.endsWith('_id') || c === 'status' || c === 'name' ||
+          c === 'email' || c === 'created_at' || c === 'type' || c === 'channel'
+        );
+        const preview = keyCols.length > 0 ? keyCols.join(', ') : cols.slice(0, 6).join(', ');
+        return `"${r.table_name}" (${r.row_count} rows): ${preview}`;
+      }).join('\n');
+    }
+
+    // Tier 3: Key relationships from primary tables
+    const relLines: string[] = [];
+    for (const r of primaryTables as any[]) {
+      const rels = r.relationships || [];
+      for (const rel of rels) {
+        relLines.push(`${rel.source_table}.${rel.source_column} → ${rel.target_table}.${rel.target_column}`);
+      }
+    }
+    if (relLines.length > 0) {
+      relationshipContext = [...new Set(relLines)].slice(0, 30).join('\n');
+    }
   } catch {
     // Can't load schemas — skip LLM SQL
     return null;
   }
 
-  if (!schemaContext) return null;
+  if (!primarySchema && !fullIndex) return null;
 
   const system = `You are a PostgreSQL query generator for a business intelligence system.
 Generate a single read-only SELECT query to answer the user's question.
@@ -341,12 +372,22 @@ Rules:
 - Only SELECT statements (no INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE)
 - Use COALESCE for nullable columns
 - Use LIMIT to cap results
+- You have access to ALL tables in the database — use any table needed to answer the question
+- Use JOINs when data spans multiple tables; refer to the relationships section for foreign keys
 - Return only the SQL, no explanation
 - Do not use semicolons`;
 
-  const user = `Tables:\n${schemaContext}\n${entityType ? `\nEntity scope: ${entityType}` : ''}\n\nQuestion: ${question}`;
+  let userPrompt = '';
+  if (primarySchema) userPrompt += `PRIMARY TABLES (full schema):\n${primarySchema}\n\n`;
+  if (relationshipContext) userPrompt += `RELATIONSHIPS:\n${relationshipContext}\n\n`;
+  if (fullIndex) userPrompt += `ALL OTHER TABLES (available for queries):\n${fullIndex}\n\n`;
+  if (entityType) userPrompt += `Entity scope: ${entityType}\n\n`;
+  userPrompt += `Question: ${question}`;
 
-  const sql = await chatCompletion(system, user, { maxTokens: 500, temperature: 0.1 });
+  // Cap context to avoid excessive token usage
+  const user = userPrompt.slice(0, 12000);
+
+  const sql = await chatCompletion(system, user, { maxTokens: 800, temperature: 0.1 });
   if (!sql) return null;
 
   // Validate the generated SQL
@@ -367,7 +408,7 @@ Rules:
       rows: rows as Record<string, any>[],
       query: cleaned,
       description: `AI-generated query for: ${question.slice(0, 100)}`,
-      tables,
+      tables: planTables,
       method: 'llm',
     };
   } catch (err: any) {
