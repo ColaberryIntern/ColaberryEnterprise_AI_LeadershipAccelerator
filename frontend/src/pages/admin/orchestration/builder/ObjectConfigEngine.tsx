@@ -529,10 +529,7 @@ export default function ObjectConfigEngine(props: Props) {
                       </div>
                       <ArtifactSection
                         editing={editing}
-                        artifactOptions={props.artifactOptions}
                         artifacts={props.artifacts}
-                        onUpdate={props.onUpdate}
-                        onCreateArtifact={props.onCreateArtifact}
                       />
                     </div>
                   )}
