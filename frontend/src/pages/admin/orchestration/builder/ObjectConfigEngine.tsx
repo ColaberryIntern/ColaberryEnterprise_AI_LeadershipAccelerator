@@ -516,13 +516,7 @@ export default function ObjectConfigEngine(props: Props) {
                     </div>
                     <SkillSection
                       editing={editing}
-                      editType={editType}
-                      miniSectionId={editing.id}
                       skillOptions={props.skillOptions}
-                      onUpdate={props.onUpdate}
-                      onCreateSkill={props.onCreateSkill}
-                      token={props.token}
-                      apiUrl={props.apiUrl}
                     />
                   </div>
 
