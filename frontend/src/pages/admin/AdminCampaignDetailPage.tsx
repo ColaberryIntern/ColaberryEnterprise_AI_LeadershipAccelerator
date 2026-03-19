@@ -144,7 +144,7 @@ function AdminCampaignDetailPage() {
       const [campRes, statsRes, leadsRes] = await Promise.all([
         fetch(`/api/admin/campaigns/${id}`, { headers }),
         fetch(`/api/admin/campaigns/${id}/stats`, { headers }),
-        fetch(`/api/admin/campaigns/${id}/leads`, { headers }),
+        fetch(`/api/admin/campaigns/${id}/leads?limit=1000`, { headers }),
       ]);
       const campData = await campRes.json();
       const statsData = await statsRes.json();
