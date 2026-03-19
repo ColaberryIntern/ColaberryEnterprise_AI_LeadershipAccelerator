@@ -575,6 +575,7 @@ function DynamicCanvas({
   onCloseInvestigation,
   entityType,
   onCoryClick,
+  onAskCory,
   selectedEntity,
 }: {
   visualizations: VisualizationSpec[];
