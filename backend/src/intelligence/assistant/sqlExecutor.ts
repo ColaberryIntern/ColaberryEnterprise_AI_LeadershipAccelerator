@@ -96,6 +96,12 @@ const QUERY_BUILDERS: Record<Intent, QueryBuilderFn> = {
 function buildCampaignQueries(tables: string[]): TemplateQuery[] {
   const queries: TemplateQuery[] = [];
   if (tables.includes('campaigns')) {
+    // Total counts first — contextBuilder uses these for accurate totals
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_campaigns, COUNT(*) FILTER (WHERE status = 'active') AS active_campaigns, COUNT(*) FILTER (WHERE status = 'paused') AS paused_campaigns, COUNT(*) FILTER (WHERE status = 'completed') AS completed_campaigns FROM campaigns`,
+      description: 'Campaign totals by status',
+      tables: ['campaigns'],
+    });
     queries.push({
       sql: `SELECT COALESCE(status, 'unknown') AS status, COUNT(*) AS count, COALESCE(type, 'unknown') AS campaign_type FROM campaigns GROUP BY status, type ORDER BY count DESC LIMIT 20`,
       description: 'Campaign distribution by status and type',
@@ -141,6 +147,12 @@ function buildCampaignQueries(tables: string[]): TemplateQuery[] {
 function buildLeadQueries(tables: string[]): TemplateQuery[] {
   const queries: TemplateQuery[] = [];
   if (tables.includes('leads')) {
+    // Total counts first — contextBuilder uses these for accurate totals
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_leads, COUNT(*) FILTER (WHERE temperature = 'hot') AS hot_leads, COUNT(*) FILTER (WHERE temperature = 'warm') AS warm_leads, COUNT(*) FILTER (WHERE temperature = 'cold') AS cold_leads FROM leads`,
+      description: 'Lead totals by temperature',
+      tables: ['leads'],
+    });
     queries.push({
       sql: `SELECT COALESCE(pipeline_stage, 'unknown') AS stage, COUNT(*) AS count, COALESCE(temperature, 'unknown') AS temperature FROM leads GROUP BY pipeline_stage, temperature ORDER BY count DESC LIMIT 30`,
       description: 'Lead distribution by pipeline stage and temperature',
@@ -193,6 +205,12 @@ function buildStudentQueries(tables: string[]): TemplateQuery[] {
 function buildAgentQueries(tables: string[]): TemplateQuery[] {
   const queries: TemplateQuery[] = [];
   if (tables.includes('ai_agents')) {
+    // Total counts first — contextBuilder uses these for accurate totals
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_agents, COUNT(*) FILTER (WHERE status = 'active') AS active_agents, COUNT(*) FILTER (WHERE status = 'idle') AS idle_agents, COUNT(*) FILTER (WHERE status = 'paused') AS paused_agents, COUNT(*) FILTER (WHERE error_count > 0) AS agents_with_errors, COUNT(*) FILTER (WHERE enabled = true) AS enabled_agents FROM ai_agents`,
+      description: 'Agent totals by status',
+      tables: ['ai_agents'],
+    });
     queries.push({
       sql: `SELECT agent_name, COALESCE(status, 'unknown') AS status, COALESCE(agent_type, 'unknown') AS agent_type, last_run_at, error_count, enabled, EXTRACT(EPOCH FROM (NOW() - last_run_at))/3600 AS hours_since_last_run FROM ai_agents ORDER BY error_count DESC NULLS LAST LIMIT 20`,
       description: 'AI agents with error counts and idle time',

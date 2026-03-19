@@ -272,10 +272,11 @@ async function generateNarrative(
 Generate a structured analysis from the data provided.
 Rules:
 - FIRST: Directly answer the user's specific question using the data. Do not give a generic overview.
-- Be specific with numbers — reference actual metrics from the data
-- Explain causes and trends when visible
-- If the data doesn't fully answer the question, say what additional data would be needed
-- Never fabricate data points
+- CRITICAL: Every number you cite MUST appear verbatim in the data context below. Do NOT estimate, round differently, or invent numbers.
+- If a total count is provided (e.g. "total_agents: 172"), use that exact number — do not count rows to derive a different total.
+- If the data does not contain a specific metric, say "data not available" instead of guessing.
+- Explain causes and trends only when directly visible in the data.
+- If the data doesn't fully answer the question, say what additional data would be needed.
 - Respond as JSON with this exact structure:
 {
   "executive_summary": "2-3 sentence overview of the key finding",

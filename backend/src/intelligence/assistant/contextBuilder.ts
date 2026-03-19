@@ -60,6 +60,17 @@ export function buildContext(
     sr.tables.forEach((t) => allSources.add(t));
     if (sr.rows.length === 0) continue;
 
+    // Format totals queries as key-value pairs for clarity
+    if (sr.description.includes('totals') && sr.rows.length === 1) {
+      sections.push(`[SQL] ${sr.description}:`);
+      const row = sr.rows[0];
+      for (const [key, val] of Object.entries(row)) {
+        sections.push(`  ${key}: ${formatValue(key, val)}`);
+      }
+      sections.push('');
+      continue;
+    }
+
     sections.push(`[SQL] ${sr.description}:`);
     const keys = Object.keys(sr.rows[0]);
     // Format as compact table (top 10 rows)
@@ -186,13 +197,16 @@ const INSIGHT_ANALYZERS: Record<string, InsightExtractor> = {
 
 function extractCampaignInsights(sql: SqlResult[], _ml: MlResult[], insights: Insight[], narrative: string[], recs: string[]): void {
   for (const { rows, description } of sql) {
-    if (description.includes('distribution') && rows.length > 0) {
-      const total = rows.reduce((s, r) => s + Number(r.count || 0), 0);
-      narrative.push(`${total} campaigns across ${rows.length} status/type combinations.`);
-      const paused = rows.filter((r) => r.status?.toLowerCase() === 'paused');
-      const pausedCount = paused.reduce((s, r) => s + Number(r.count || 0), 0);
-      if (pausedCount > 5) {
-        insights.push({ type: 'Paused Campaigns', severity: 'warning', message: `${pausedCount} campaigns are paused.`, value: pausedCount });
+    // Use the dedicated totals query (description: 'Campaign totals by status')
+    if (description.includes('totals') && rows.length > 0) {
+      const r = rows[0];
+      const total = Number(r.total_campaigns || 0);
+      const active = Number(r.active_campaigns || 0);
+      const paused = Number(r.paused_campaigns || 0);
+      const completed = Number(r.completed_campaigns || 0);
+      narrative.push(`${total} campaigns total (${active} active, ${paused} paused, ${completed} completed).`);
+      if (paused > 5) {
+        insights.push({ type: 'Paused Campaigns', severity: 'warning', message: `${paused} campaigns are paused.`, value: paused });
         recs.push('Review paused campaigns to reactivate or archive.');
       }
     }
@@ -203,10 +217,10 @@ function extractCampaignInsights(sql: SqlResult[], _ml: MlResult[], insights: In
         insights.push({
           type: 'High Error Volume',
           severity: totalErrors > 50 ? 'critical' : 'warning',
-          message: `${totalErrors} errors across ${rows.length} types.`,
+          message: `${totalErrors} errors across ${rows.length} components.`,
           value: totalErrors,
         });
-        recs.push(`Investigate top error: "${rows[0]?.error_type}" (${rows[0]?.error_count} occurrences).`);
+        recs.push(`Investigate top error component: "${rows[0]?.component}" (${rows[0]?.error_count} occurrences).`);
       }
     }
   }
@@ -214,16 +228,21 @@ function extractCampaignInsights(sql: SqlResult[], _ml: MlResult[], insights: In
 
 function extractLeadInsights(sql: SqlResult[], _ml: MlResult[], insights: Insight[], narrative: string[], recs: string[]): void {
   for (const { rows, description } of sql) {
+    // Use the dedicated totals query (description: 'Lead totals by temperature')
+    if (description.includes('totals') && rows.length > 0) {
+      const r = rows[0];
+      const total = Number(r.total_leads || 0);
+      const hot = Number(r.hot_leads || 0);
+      const warm = Number(r.warm_leads || 0);
+      const cold = Number(r.cold_leads || 0);
+      narrative.push(`${total} leads total (${hot} hot, ${warm} warm, ${cold} cold).`);
+      if (hot > 0) {
+        insights.push({ type: 'Hot Leads', severity: 'info', message: `${hot} hot leads ready for outreach.`, value: hot });
+        recs.push(`Prioritize ${hot} hot leads for immediate follow-up.`);
+      }
+    }
     if (description.includes('distribution') && rows.length > 0) {
       const total = rows.reduce((s, r) => s + Number(r.count || 0), 0);
-      const stages = [...new Set(rows.map((r) => r.stage))];
-      narrative.push(`${total} leads across ${stages.length} pipeline stages.`);
-
-      const hotCount = rows.filter((r) => r.temperature?.toLowerCase() === 'hot').reduce((s, r) => s + Number(r.count || 0), 0);
-      if (hotCount > 0) {
-        insights.push({ type: 'Hot Leads', severity: 'info', message: `${hotCount} hot leads ready for outreach.`, value: hotCount });
-        recs.push(`Prioritize ${hotCount} hot leads for immediate follow-up.`);
-      }
 
       // Bottleneck detection
       const stageMap: Record<string, number> = {};
@@ -279,11 +298,28 @@ function extractStudentInsights(sql: SqlResult[], _ml: MlResult[], insights: Ins
 
 function extractAgentInsights(sql: SqlResult[], _ml: MlResult[], insights: Insight[], narrative: string[], recs: string[]): void {
   for (const { rows, tables, description } of sql) {
-    if (tables.includes('ai_agents') && rows.length > 0) {
-      const errored = rows.filter((r) => Number(r.error_count || 0) > 0);
-      const running = rows.filter((r) => r.status?.toLowerCase() === 'running');
-      narrative.push(`${rows.length} agents (${running.length} running, ${errored.length} with errors).`);
-      for (const agent of errored) {
+    // Use the dedicated totals query (description: 'Agent totals by status')
+    if (tables.includes('ai_agents') && description?.includes('totals') && rows.length > 0) {
+      const r = rows[0];
+      const total = Number(r.total_agents || 0);
+      const active = Number(r.active_agents || 0);
+      const idle = Number(r.idle_agents || 0);
+      const paused = Number(r.paused_agents || 0);
+      const withErrors = Number(r.agents_with_errors || 0);
+      narrative.push(`${total} agents total (${active} active, ${idle} idle, ${paused} paused, ${withErrors} with errors).`);
+      if (withErrors > 0) {
+        insights.push({
+          type: 'Agents With Errors',
+          severity: withErrors > 5 ? 'critical' : 'warning',
+          message: `${withErrors} agents have accumulated errors.`,
+          value: withErrors,
+        });
+        recs.push(`Review ${withErrors} agents with errors.`);
+      }
+    }
+    // Detail rows — extract per-agent error info
+    if (tables.includes('ai_agents') && description?.includes('error counts') && rows.length > 0) {
+      for (const agent of rows) {
         if (Number(agent.error_count) > 5) {
           insights.push({
             type: `${agent.agent_name} Errors`,
@@ -293,13 +329,12 @@ function extractAgentInsights(sql: SqlResult[], _ml: MlResult[], insights: Insig
           });
         }
       }
-      if (errored.length > 0) recs.push(`Review ${errored.length} agents with errors.`);
     }
     if (description?.includes('execution summary') && rows.length > 0) {
       const totalExecs = rows.reduce((s, r) => s + Number(r.executions || 0), 0);
-      const errorExecs = rows.filter((r) => r.status?.toLowerCase() === 'error').reduce((s, r) => s + Number(r.executions || 0), 0);
+      const errorExecs = rows.filter((r) => r.result?.toLowerCase() === 'failed').reduce((s, r) => s + Number(r.executions || 0), 0);
       const errorRate = totalExecs > 0 ? (errorExecs / totalExecs) * 100 : 0;
-      narrative.push(`${totalExecs} executions (${errorRate.toFixed(1)}% error rate).`);
+      narrative.push(`${totalExecs} agent executions in the last 24 hours (${errorRate.toFixed(1)}% error rate).`);
       if (errorRate > 10) {
         insights.push({
           type: 'High Agent Error Rate',
