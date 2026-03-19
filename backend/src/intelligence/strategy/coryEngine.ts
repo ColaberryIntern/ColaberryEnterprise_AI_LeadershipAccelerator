@@ -257,6 +257,11 @@ async function loadEntityContextData(entityType: string, entityName: string): Pr
         table: 'cohorts',
         countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active FROM cohorts`,
       },
+      agents: {
+        table: 'ai_agents',
+        countQuery: `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'idle') as idle, COUNT(*) FILTER (WHERE status = 'error') as errored, COUNT(*) FILTER (WHERE status = 'running') as running, COUNT(*) FILTER (WHERE enabled = true) as enabled FROM ai_agents`,
+        statsQuery: `SELECT a.agent_name, a.status, a.error_count, a.last_run_at, a.enabled, COALESCE(l.executions, 0) as recent_executions, COALESCE(l.errors, 0) as recent_errors FROM ai_agents a LEFT JOIN (SELECT agent_name, COUNT(*) as executions, COUNT(*) FILTER (WHERE status = 'error') as errors FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY agent_name) l ON a.agent_name = l.agent_name WHERE a.enabled = true ORDER BY recent_executions DESC NULLS LAST LIMIT 15`,
+      },
     };
 
     // Normalize entity type (handle pluralization, casing)
@@ -791,7 +796,7 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
   // Step 4: Monitor results (already awaited above)
 
   // Step 5: Report to user in Cory's voice (scope-aware)
-  const message = await formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse, cmd.context);
+  const message = await formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse, cmd.context, cmd.command);
 
   // Generate 2 contextual follow-up questions
   const suggested_questions = await generateSuggestedQuestions(cmd.command, intent, actionsPerformed, briefings);
@@ -817,6 +822,7 @@ async function formatCoryResponse(
   briefings: ExecutiveBriefing[],
   assistantResponse?: AssistantResponse,
   context?: Record<string, any>,
+  userCommand?: string,
 ): Promise<string> {
   // If we have a full assistant response, use its narrative
   if (assistantResponse?.narrative) {
@@ -851,7 +857,9 @@ async function formatCoryResponse(
   } else if (isEntityScope) {
     prompt = `You are scoped to "${context!.entity_name}" (${context!.entity_type}). Using the data provided in your context, give a focused executive briefing about this specific entity. Cover: (1) current status and key metrics, (2) performance trends and anomalies, (3) risks or issues, (4) actionable recommendations. Be specific with numbers. NEVER give a generic department overview — stay focused on ${context!.entity_name} (${context!.entity_type}).\n\nConversation context:\n${briefingContext}`;
   } else {
-    prompt = `Summarize this in 2-4 sentences as a direct executive briefing:\n${briefingContext}`;
+    prompt = userCommand
+      ? `The user asked: "${userCommand}"\n\nUsing the data below, directly answer their question in 2-4 sentences as an executive briefing. Lead with the specific answer, then provide supporting context.\n\nData:\n${briefingContext}`
+      : `Summarize this in 2-4 sentences as a direct executive briefing:\n${briefingContext}`;
   }
 
   const llmResponse = await chatCompletion(

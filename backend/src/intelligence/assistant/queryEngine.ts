@@ -271,8 +271,10 @@ async function generateNarrative(
   const system = `You are a senior data analyst for Colaberry, an enterprise education technology company.
 Generate a structured analysis from the data provided.
 Rules:
+- FIRST: Directly answer the user's specific question using the data. Do not give a generic overview.
 - Be specific with numbers — reference actual metrics from the data
 - Explain causes and trends when visible
+- If the data doesn't fully answer the question, say what additional data would be needed
 - Never fabricate data points
 - Respond as JSON with this exact structure:
 {

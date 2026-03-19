@@ -38,28 +38,30 @@ export async function executeSQLQueries(
 ): Promise<SqlResult[]> {
   if (!plan.sql) return [];
 
-  // Phase 1: Try predefined templates
-  const templateResults = buildTemplateQueries(intent, plan.tables, question);
+  const results: SqlResult[] = [];
 
-  if (templateResults.length > 0) {
-    const results: SqlResult[] = [];
-    for (const tq of templateResults) {
-      const rows = await executeSQL(tq.sql);
-      results.push({ rows, query: tq.sql, description: tq.description, tables: tq.tables, method: 'template' });
-    }
-    // If we got data from templates, return them
-    const hasData = results.some((r) => r.rows.length > 0);
-    if (hasData) return results;
+  // Phase 1: Run predefined templates (baseline context)
+  const templateResults = buildTemplateQueries(intent, plan.tables, question);
+  for (const tq of templateResults) {
+    const rows = await executeSQL(tq.sql);
+    results.push({ rows, query: tq.sql, description: tq.description, tables: tq.tables, method: 'template' });
   }
 
-  // Phase 2: LLM-generated SQL fallback
+  // Phase 2: ALWAYS try LLM-generated SQL for question-specific data
+  // Templates provide generic context; LLM SQL targets the user's actual question
   const llmResult = await generateAndExecuteLLMSQL(question, plan.tables, entityType);
-  if (llmResult) return [llmResult];
+  if (llmResult && llmResult.rows.length > 0) {
+    results.push(llmResult);
+  }
 
-  // Phase 3: Fallback — simple count
-  const table = plan.tables[0] || 'leads';
-  const rows = await executeSQL(`SELECT COUNT(*) AS total FROM "${table}"`);
-  return [{ rows, query: `SELECT COUNT(*) FROM "${table}"`, description: `Total records in ${table}`, tables: [table], method: 'fallback' }];
+  // Phase 3: Fallback only if NO results at all
+  if (results.every((r) => r.rows.length === 0)) {
+    const table = plan.tables[0] || 'leads';
+    const rows = await executeSQL(`SELECT COUNT(*) AS total FROM "${table}"`);
+    results.push({ rows, query: `SELECT COUNT(*) FROM "${table}"`, description: `Total records in ${table}`, tables: [table], method: 'fallback' });
+  }
+
+  return results;
 }
 
 // ─── Template Queries (carried over from queryBuilder.ts) ────────────────────
@@ -173,8 +175,8 @@ function buildAgentQueries(tables: string[]): TemplateQuery[] {
   const queries: TemplateQuery[] = [];
   if (tables.includes('ai_agents')) {
     queries.push({
-      sql: `SELECT agent_name, COALESCE(status, 'unknown') AS status, COALESCE(agent_type, 'unknown') AS agent_type, last_run_at, error_count FROM ai_agents ORDER BY error_count DESC NULLS LAST LIMIT 20`,
-      description: 'AI agents ranked by error count',
+      sql: `SELECT agent_name, COALESCE(status, 'unknown') AS status, COALESCE(agent_type, 'unknown') AS agent_type, last_run_at, error_count, enabled, EXTRACT(EPOCH FROM (NOW() - last_run_at))/3600 AS hours_since_last_run FROM ai_agents ORDER BY error_count DESC NULLS LAST LIMIT 20`,
+      description: 'AI agents with error counts and idle time',
       tables: ['ai_agents'],
     });
   }
@@ -182,6 +184,12 @@ function buildAgentQueries(tables: string[]): TemplateQuery[] {
     queries.push({
       sql: `SELECT COALESCE(agent_name, 'unknown') AS agent_name, COALESCE(status, 'unknown') AS status, COUNT(*) AS executions, AVG(duration_ms) AS avg_duration_ms, MAX(created_at) AS last_execution FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY agent_name, status ORDER BY executions DESC LIMIT 20`,
       description: 'Agent execution summary (last 24 hours)',
+      tables: ['ai_agent_activity_logs'],
+    });
+    // Most active agents by total execution volume (7-day window)
+    queries.push({
+      sql: `SELECT agent_name, COUNT(*) AS executions, COUNT(*) FILTER (WHERE status = 'success') AS successes, COUNT(*) FILTER (WHERE status = 'error') AS errors, MIN(created_at) AS first_run, MAX(created_at) AS last_run FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY agent_name ORDER BY executions DESC LIMIT 20`,
+      description: 'Most active agents by execution count (last 7 days)',
       tables: ['ai_agent_activity_logs'],
     });
   }
