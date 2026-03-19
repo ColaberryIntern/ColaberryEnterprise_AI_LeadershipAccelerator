@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react'; // eslint-disable-line
+import React, { useState, useEffect, Suspense } from 'react'; // eslint-disable-line
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
+
+const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
 import { captureUTMFromURL } from '../services/utmService';
 import { trackEvent } from '../utils/tracker';
 
@@ -218,6 +220,17 @@ function AIArchitectLandingPage() {
             </div>
           </div>
         </section>
+
+        {/* INTELLIGENCE DEMO */}
+        <Suspense fallback={
+          <section style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f7fafc 100%)', padding: '60px 20px' }}>
+            <div style={{ maxWidth: 960, margin: '0 auto', textAlign: 'center' }}>
+              <div style={{ height: 400, background: BG_ALT, borderRadius: 12 }} />
+            </div>
+          </section>
+        }>
+          <IntelligenceDemoSection onOpenBooking={openBooking} />
+        </Suspense>
 
         {/* SOCIAL PROOF */}
         <section style={{ background: BG_ALT, padding: '70px 20px' }}>
