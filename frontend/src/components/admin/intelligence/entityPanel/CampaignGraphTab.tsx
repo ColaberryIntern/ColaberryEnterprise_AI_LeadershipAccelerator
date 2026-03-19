@@ -30,16 +30,16 @@ const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
 
 // Per-source-node colors for visual differentiation
 const SOURCE_NODE_COLORS: Record<string, { color: string; bg: string }> = {
-  src_marketing:  { color: '#d69e2e', bg: '#fefcbf' },
-  src_cold_email: { color: '#3182ce', bg: '#ebf4ff' },
-  src_alumni:     { color: '#38a169', bg: '#f0fff4' },
-  src_anonymous:  { color: '#a0aec0', bg: '#f7fafc' },
+  src_marketing:     { color: '#d69e2e', bg: '#fefcbf' },
+  src_cold_outbound: { color: '#3182ce', bg: '#ebf4ff' },
+  src_alumni:        { color: '#38a169', bg: '#f0fff4' },
+  src_anonymous:     { color: '#a0aec0', bg: '#f7fafc' },
 };
 
 const SOURCE_FILTER_OPTIONS = [
   { value: null, label: 'All Sources' },
   { value: 'src_marketing', label: 'Marketing' },
-  { value: 'src_cold_email', label: 'Cold Email' },
+  { value: 'src_cold_outbound', label: 'Cold Outbound' },
   { value: 'src_alumni', label: 'Alumni' },
   { value: 'src_anonymous', label: 'Anonymous' },
 ];

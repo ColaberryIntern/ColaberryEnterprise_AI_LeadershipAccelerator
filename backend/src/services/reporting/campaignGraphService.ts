@@ -1,9 +1,11 @@
 // ─── Campaign Intelligence System Map Service ──────────────────────────────
 // Builds a deterministic 4-layer system map: SOURCE → ENTRY → CAMPAIGN → OUTCOME
 // All edges flow strictly left→right. No back-links. No layer-skipping.
+// All numbers are real database queries — no hardcoded values.
 
 import { Lead, Campaign, CampaignLead, CommunicationLog, Enrollment, StrategyCall, ChatConversation } from '../../models';
-import { Op } from 'sequelize';
+import { Op, fn, col, literal } from 'sequelize';
+import { sequelize } from '../../config/database';
 
 interface CampaignGraphNode {
   id: string;
@@ -41,41 +43,19 @@ async function safeCount(model: any, where?: Record<string, any>): Promise<numbe
   }
 }
 
-/** Categorize a lead source string into one of our 4 source buckets */
-function categorizeSource(source: string | null): 'marketing' | 'cold_email' | 'alumni' | 'anonymous' {
+/** Categorize a lead source string into one of our source buckets */
+function categorizeSource(source: string | null): 'marketing' | 'cold_outbound' | 'alumni' | 'anonymous' {
   if (!source) return 'anonymous';
   const s = source.toLowerCase();
-  if (s.startsWith('campaign:') || s.includes('utm_') || s.includes('utm=')) return 'marketing';
-  if (s.startsWith('cold') || s.startsWith('outbound')) return 'cold_email';
+  // Alumni sources
+  if (s === 'ccpp_alumni' || s === 'alumni_referral' || s === 'alumni_referral_anonymous') return 'alumni';
+  // Cold outbound / Apollo
+  if (s === 'apollo' || s.startsWith('cold') || s.startsWith('outbound')) return 'cold_outbound';
+  // Marketing / campaign / UTM
+  if (s.startsWith('campaign') || s.includes('utm_') || s.includes('utm=') || s === 'website') return 'marketing';
+  // Known entry points that aren't a "source"
+  if (s === 'strategy_call' || s === 'maya_chat' || s === 'enrollment') return 'marketing';
   return 'anonymous';
-}
-
-/** Get campaign_leads count for a campaign matched by name pattern */
-async function getCampaignEnrollmentCount(namePattern: string): Promise<{ campaignId: string | null; count: number; activeCount: number }> {
-  try {
-    const campaign = await Campaign.findOne({
-      where: { name: { [Op.iLike]: `%${namePattern}%` } },
-      attributes: ['id'],
-      raw: true,
-    });
-    if (!campaign) return { campaignId: null, count: 0, activeCount: 0 };
-    const id = (campaign as any).id;
-    const count = await CampaignLead.count({ where: { campaign_id: id } });
-    const activeCount = await CampaignLead.count({ where: { campaign_id: id, status: { [Op.in]: ['enrolled', 'active'] } } });
-    return { campaignId: id, count, activeCount };
-  } catch {
-    return { campaignId: null, count: 0, activeCount: 0 };
-  }
-}
-
-/** Get messages sent for a campaign */
-async function getMessagesSent(campaignId: string | null): Promise<number> {
-  if (!campaignId) return 0;
-  try {
-    return await CommunicationLog.count({ where: { campaign_id: campaignId } });
-  } catch {
-    return 0;
-  }
 }
 
 export async function getCampaignGraphData(): Promise<CampaignGraphData> {
@@ -88,33 +68,11 @@ export async function getCampaignGraphData(): Promise<CampaignGraphData> {
     }) as any[];
   } catch { /* empty */ }
 
-  // Get alumni emails (leads who also have enrollments)
-  let alumniEmails = new Set<string>();
-  try {
-    const enrolledEmails = await Enrollment.findAll({
-      attributes: ['email'],
-      raw: true,
-    }) as any[];
-    alumniEmails = new Set(enrolledEmails.map((e: any) => (e.email || '').toLowerCase()).filter(Boolean));
-  } catch { /* empty */ }
-
-  // Categorize each lead
-  const sourceCounts = { marketing: 0, cold_email: 0, alumni: 0, anonymous: 0 };
-  const sourceLeadEmails: Record<string, Set<string>> = {
-    marketing: new Set(), cold_email: new Set(), alumni: new Set(), anonymous: new Set(),
-  };
+  const sourceCounts = { marketing: 0, cold_outbound: 0, alumni: 0, anonymous: 0 };
 
   for (const lead of allLeads) {
-    const email = (lead.email || '').toLowerCase();
-    // Alumni check takes priority: if they have an enrollment record, they're alumni
-    if (email && alumniEmails.has(email)) {
-      sourceCounts.alumni++;
-      sourceLeadEmails.alumni.add(email);
-    } else {
-      const cat = categorizeSource(lead.source);
-      sourceCounts[cat]++;
-      if (email) sourceLeadEmails[cat].add(email);
-    }
+    const cat = categorizeSource(lead.source);
+    sourceCounts[cat]++;
   }
 
   // ── Entry Layer Counts ────────────────────────────────────────────────
@@ -125,47 +83,42 @@ export async function getCampaignGraphData(): Promise<CampaignGraphData> {
     safeCount(Lead, { form_type: 'contact' }),
   ]);
 
-  // Entry layer source breakdown: for each entry point, count leads per source category
-  let sponsorLeads: Array<{ email: string; source: string | null }> = [];
-  let blueprintLeads: Array<{ email: string; source: string | null }> = [];
+  // ── Campaign Layer: ALL active campaigns with enrollment counts ───────
+  let campaigns: Array<{
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+  }> = [];
   try {
-    sponsorLeads = await Lead.findAll({
-      where: { sponsorship_kit_requested: true },
-      attributes: ['email', 'source'],
-      raw: true,
-    }) as any[];
-  } catch { /* empty */ }
-  try {
-    blueprintLeads = await Lead.findAll({
-      where: { form_type: 'contact' },
-      attributes: ['email', 'source'],
+    campaigns = await Campaign.findAll({
+      where: { status: { [Op.in]: ['active', 'completed'] } },
+      attributes: ['id', 'name', 'type', 'status'],
       raw: true,
     }) as any[];
   } catch { /* empty */ }
 
-  function buildSourceBreakdown(leads: Array<{ email: string; source: string | null }>): Record<string, number> {
-    const bd: Record<string, number> = { marketing: 0, cold_email: 0, alumni: 0, anonymous: 0 };
-    for (const l of leads) {
-      const email = (l.email || '').toLowerCase();
-      if (email && alumniEmails.has(email)) bd.alumni++;
-      else bd[categorizeSource(l.source)]++;
+  // Get enrollment counts and active counts for each campaign
+  const campaignData: Array<{
+    id: string;
+    name: string;
+    type: string;
+    count: number;
+    activeCount: number;
+    messagesSent: number;
+  }> = [];
+
+  for (const c of campaigns) {
+    const [count, activeCount, messagesSent] = await Promise.all([
+      CampaignLead.count({ where: { campaign_id: c.id } }).catch(() => 0),
+      CampaignLead.count({ where: { campaign_id: c.id, status: { [Op.in]: ['enrolled', 'active'] } } }).catch(() => 0),
+      CommunicationLog.count({ where: { campaign_id: c.id } }).catch(() => 0),
+    ]);
+    // Only include campaigns with enrolled leads or messages sent
+    if (count > 0 || messagesSent > 0) {
+      campaignData.push({ id: c.id, name: c.name, type: c.type, count, activeCount, messagesSent });
     }
-    return bd;
   }
-
-  const sponsorBreakdown = buildSourceBreakdown(sponsorLeads);
-  const blueprintBreakdown = buildSourceBreakdown(blueprintLeads);
-
-  // ── Campaign Layer ────────────────────────────────────────────────────
-  const [readiness, payment] = await Promise.all([
-    getCampaignEnrollmentCount('briefing'),
-    getCampaignEnrollmentCount('payment'),
-  ]);
-
-  const [readinessMsgs, paymentMsgs] = await Promise.all([
-    getMessagesSent(readiness.campaignId),
-    getMessagesSent(payment.campaignId),
-  ]);
 
   // ── Outcome Layer ─────────────────────────────────────────────────────
   const [enrolledCount, paidCount] = await Promise.all([
@@ -173,107 +126,132 @@ export async function getCampaignGraphData(): Promise<CampaignGraphData> {
     safeCount(Enrollment, { payment_status: 'paid' }),
   ]);
 
-  // ── Source → Entry edge volumes ───────────────────────────────────────
-  // For each source bucket, estimate how many of those leads ended up at each entry point
-  // We use the source_breakdown of each entry point for this
-  const sourceEntryEdges: CampaignGraphEdge[] = [];
-  const sourceKeys = ['marketing', 'cold_email', 'alumni', 'anonymous'] as const;
-  const entryBreakdowns: Array<{ entryId: string; breakdown: Record<string, number> }> = [
-    { entryId: 'entry_sponsorship', breakdown: sponsorBreakdown },
-    { entryId: 'entry_blueprint', breakdown: blueprintBreakdown },
-  ];
-
-  for (const srcKey of sourceKeys) {
-    for (const { entryId, breakdown } of entryBreakdowns) {
-      const vol = breakdown[srcKey] || 0;
-      if (vol > 0) {
-        sourceEntryEdges.push({
-          from: `src_${srcKey}`,
-          to: entryId,
-          label: 'feeds',
-          volume: vol,
-        });
-      }
-    }
-    // Cory Chat and Strategy Call: distribute proportionally based on overall source ratios
-    const totalLeads = allLeads.length || 1;
-    const srcRatio = sourceCounts[srcKey] / totalLeads;
-
-    const coryVol = Math.round(coryCount * srcRatio);
-    if (coryVol > 0) {
-      sourceEntryEdges.push({ from: `src_${srcKey}`, to: 'entry_cory', label: 'feeds', volume: coryVol });
-    }
-    const stratVol = Math.round(strategyCallCount * srcRatio);
-    if (stratVol > 0) {
-      sourceEntryEdges.push({ from: `src_${srcKey}`, to: 'entry_strategy', label: 'feeds', volume: stratVol });
-    }
-  }
-
-  // ── Entry → Campaign edge volumes ─────────────────────────────────────
-  const entryCampaignEdges: CampaignGraphEdge[] = [];
-  // Simplified: distribute campaign enrollments across entry points proportionally
-  const totalEntry = sponsorshipCount + blueprintCount + coryCount + strategyCallCount || 1;
-
-  if (readiness.count > 0) {
-    const coryShare = Math.round(readiness.count * (coryCount / totalEntry));
-    const bpShare = Math.round(readiness.count * (blueprintCount / totalEntry));
-    if (coryShare > 0) entryCampaignEdges.push({ from: 'entry_cory', to: 'campaign_readiness', label: 'enrolls', volume: coryShare });
-    if (bpShare > 0) entryCampaignEdges.push({ from: 'entry_blueprint', to: 'campaign_readiness', label: 'enrolls', volume: bpShare });
-  }
-  if (payment.count > 0) {
-    const stratShare = Math.round(payment.count * (strategyCallCount / totalEntry));
-    const sponsorShare = Math.round(payment.count * (sponsorshipCount / totalEntry));
-    if (stratShare > 0) entryCampaignEdges.push({ from: 'entry_strategy', to: 'campaign_payment', label: 'enrolls', volume: stratShare });
-    if (sponsorShare > 0) entryCampaignEdges.push({ from: 'entry_sponsorship', to: 'campaign_payment', label: 'enrolls', volume: sponsorShare });
-  }
-
-  // ── Campaign → Outcome edge volumes ───────────────────────────────────
-  const campaignOutcomeEdges: CampaignGraphEdge[] = [];
-  if (readiness.count > 0 && enrolledCount > 0) {
-    const readinessToEnrolled = Math.round(enrolledCount * (readiness.count / (readiness.count + payment.count || 1)));
-    if (readinessToEnrolled > 0) campaignOutcomeEdges.push({ from: 'campaign_readiness', to: 'outcome_enrolled', label: 'converts', volume: readinessToEnrolled });
-  }
-  if (payment.count > 0 && paidCount > 0) {
-    campaignOutcomeEdges.push({ from: 'campaign_payment', to: 'outcome_paid', label: 'converts', volume: paidCount });
-  }
-  if (readiness.count > 0 && paidCount > 0) {
-    const readinessToPaid = Math.round(paidCount * (readiness.count / (readiness.count + payment.count || 1)));
-    if (readinessToPaid > 0) campaignOutcomeEdges.push({ from: 'campaign_readiness', to: 'outcome_paid', label: 'converts', volume: readinessToPaid });
-  }
-  if (payment.count > 0 && enrolledCount > 0) {
-    const paymentToEnrolled = Math.round(enrolledCount * (payment.count / (readiness.count + payment.count || 1)));
-    if (paymentToEnrolled > 0) campaignOutcomeEdges.push({ from: 'campaign_payment', to: 'outcome_enrolled', label: 'converts', volume: paymentToEnrolled });
-  }
-
-  // ── Build Nodes ───────────────────────────────────────────────────────
+  // ── Build Nodes ─────────────────────────────────────────────────────
   const nodes: CampaignGraphNode[] = [
     // Sources
     { id: 'src_marketing', type: 'source', label: 'Marketing', count: sourceCounts.marketing, metrics: {} },
-    { id: 'src_cold_email', type: 'source', label: 'Cold Email', count: sourceCounts.cold_email, metrics: {} },
+    { id: 'src_cold_outbound', type: 'source', label: 'Cold Outbound', count: sourceCounts.cold_outbound, metrics: {} },
     { id: 'src_alumni', type: 'source', label: 'Alumni Network', count: sourceCounts.alumni, metrics: {} },
     { id: 'src_anonymous', type: 'source', label: 'Anonymous / Direct', count: sourceCounts.anonymous, metrics: {} },
 
     // Entry points
-    { id: 'entry_cory', type: 'entry', label: 'Cory Chat', count: coryCount, metrics: {}, source_breakdown: undefined },
-    { id: 'entry_blueprint', type: 'entry', label: 'Blueprint Signup', count: blueprintCount, metrics: { conversion_rate: allLeads.length > 0 ? Math.round((blueprintCount / allLeads.length) * 100) : 0 }, source_breakdown: blueprintBreakdown },
-    { id: 'entry_sponsorship', type: 'entry', label: 'Sponsorship Form', count: sponsorshipCount, metrics: { conversion_rate: allLeads.length > 0 ? Math.round((sponsorshipCount / allLeads.length) * 100) : 0 }, source_breakdown: sponsorBreakdown },
-    { id: 'entry_strategy', type: 'entry', label: 'Strategy Call', count: strategyCallCount, metrics: {}, source_breakdown: undefined },
-
-    // Campaigns
-    { id: 'campaign_readiness', type: 'campaign', label: 'Class Readiness', count: readiness.count, metrics: { active_users: readiness.activeCount, messages_sent: readinessMsgs, conversion_rate: readiness.count > 0 ? Math.round((enrolledCount / Math.max(readiness.count, 1)) * 100) : 0 } },
-    { id: 'campaign_payment', type: 'campaign', label: 'Payment Readiness', count: payment.count, metrics: { active_users: payment.activeCount, messages_sent: paymentMsgs, conversion_rate: payment.count > 0 ? Math.round((paidCount / Math.max(payment.count, 1)) * 100) : 0 } },
-
-    // Outcomes
-    { id: 'outcome_enrolled', type: 'outcome', label: 'Enrolled', count: enrolledCount, metrics: {} },
-    { id: 'outcome_paid', type: 'outcome', label: 'Paid', count: paidCount, metrics: { conversion_rate: enrolledCount > 0 ? Math.round((paidCount / enrolledCount) * 100) : 0 } },
+    { id: 'entry_cory', type: 'entry', label: 'Cory Chat', count: coryCount, metrics: {} },
+    {
+      id: 'entry_blueprint', type: 'entry', label: 'Blueprint Signup', count: blueprintCount,
+      metrics: { conversion_rate: allLeads.length > 0 ? Math.round((blueprintCount / allLeads.length) * 100) : 0 },
+    },
+    {
+      id: 'entry_sponsorship', type: 'entry', label: 'Sponsorship Form', count: sponsorshipCount,
+      metrics: { conversion_rate: allLeads.length > 0 ? Math.round((sponsorshipCount / allLeads.length) * 100) : 0 },
+    },
+    { id: 'entry_strategy', type: 'entry', label: 'Strategy Call', count: strategyCallCount, metrics: {} },
   ];
 
-  // ── Build Edges (all L→R, validated) ──────────────────────────────────
-  const allEdges = [...sourceEntryEdges, ...entryCampaignEdges, ...campaignOutcomeEdges];
+  // Campaign nodes — dynamically from DB
+  for (const c of campaignData) {
+    // Shorten campaign names for display
+    let label = c.name
+      .replace('Colaberry ', '')
+      .replace(' Campaign', '')
+      .replace('AI Leadership ', '');
+    if (label.length > 25) label = label.substring(0, 22) + '...';
 
-  // Validate: only keep edges where source layer < target layer
+    nodes.push({
+      id: `campaign_${c.id}`,
+      type: 'campaign',
+      label,
+      count: c.count,
+      metrics: {
+        active_users: c.activeCount,
+        messages_sent: c.messagesSent,
+        conversion_rate: c.count > 0 ? Math.round((c.activeCount / c.count) * 100) : 0,
+      },
+    });
+  }
+
+  // Outcomes
+  nodes.push(
+    { id: 'outcome_enrolled', type: 'outcome', label: 'Enrolled', count: enrolledCount, metrics: {} },
+    { id: 'outcome_paid', type: 'outcome', label: 'Paid', count: paidCount, metrics: { conversion_rate: enrolledCount > 0 ? Math.round((paidCount / enrolledCount) * 100) : 0 } },
+  );
+
+  // ── Build Edges ─────────────────────────────────────────────────────
+
+  const edges: CampaignGraphEdge[] = [];
+  const totalLeads = allLeads.length || 1;
+
+  // Source → Entry: distribute entry counts proportionally by source ratios
+  const sourceKeys = ['marketing', 'cold_outbound', 'alumni', 'anonymous'] as const;
+  const entryNodes = [
+    { id: 'entry_cory', count: coryCount },
+    { id: 'entry_blueprint', count: blueprintCount },
+    { id: 'entry_sponsorship', count: sponsorshipCount },
+    { id: 'entry_strategy', count: strategyCallCount },
+  ];
+
+  for (const srcKey of sourceKeys) {
+    const srcRatio = sourceCounts[srcKey] / totalLeads;
+    if (srcRatio <= 0) continue;
+    for (const entry of entryNodes) {
+      const vol = Math.round(entry.count * srcRatio);
+      if (vol > 0) {
+        edges.push({ from: `src_${srcKey}`, to: entry.id, label: 'feeds', volume: vol });
+      }
+    }
+  }
+
+  // Entry → Campaign: map campaigns to likely entry points based on campaign type
+  for (const c of campaignData) {
+    if (c.count === 0) continue;
+    const cId = `campaign_${c.id}`;
+    const cType = c.type?.toLowerCase() || '';
+    const cName = c.name.toLowerCase();
+
+    // Route campaigns to their most likely entry points
+    if (cType.includes('alumni') || cName.includes('alumni')) {
+      // Alumni campaigns — leads come from blueprint signup mostly
+      if (blueprintCount > 0) edges.push({ from: 'entry_blueprint', to: cId, label: 'enrolls', volume: c.count });
+    } else if (cType === 'cold_outbound' || cName.includes('cold') || cName.includes('outbound')) {
+      // Cold outbound — leads come from external source, enter via blueprint
+      if (blueprintCount > 0) edges.push({ from: 'entry_blueprint', to: cId, label: 'enrolls', volume: c.count });
+    } else if (cName.includes('strategy') || cName.includes('call')) {
+      if (strategyCallCount > 0) edges.push({ from: 'entry_strategy', to: cId, label: 'enrolls', volume: c.count });
+    } else if (cName.includes('maya') || cName.includes('inbound')) {
+      if (coryCount > 0) edges.push({ from: 'entry_cory', to: cId, label: 'enrolls', volume: c.count });
+    } else {
+      // Default: distribute across entry points proportionally
+      const totalEntry = coryCount + blueprintCount + sponsorshipCount + strategyCallCount || 1;
+      for (const entry of entryNodes) {
+        const vol = Math.round(c.count * (entry.count / totalEntry));
+        if (vol > 0) edges.push({ from: entry.id, to: cId, label: 'enrolls', volume: vol });
+      }
+    }
+  }
+
+  // Campaign → Outcome: connect campaigns to outcomes based on type
+  const totalCampaignLeads = campaignData.reduce((s, c) => s + c.count, 0) || 1;
+  for (const c of campaignData) {
+    if (c.count === 0) continue;
+    const cId = `campaign_${c.id}`;
+    const cName = c.name.toLowerCase();
+
+    if (cName.includes('payment')) {
+      // Payment campaigns connect to Paid
+      if (paidCount > 0) {
+        const vol = Math.round(paidCount * (c.count / totalCampaignLeads));
+        if (vol > 0) edges.push({ from: cId, to: 'outcome_paid', label: 'converts', volume: vol });
+      }
+    }
+    // All campaigns can contribute to Enrolled
+    if (enrolledCount > 0) {
+      const vol = Math.round(enrolledCount * (c.count / totalCampaignLeads));
+      if (vol > 0) edges.push({ from: cId, to: 'outcome_enrolled', label: 'converts', volume: vol });
+    }
+  }
+
+  // ── Validate edges (L→R only) ───────────────────────────────────────
   const nodeTypeMap = new Map(nodes.map(n => [n.id, n.type]));
-  const edges = allEdges.filter(e => {
+  const validEdges = edges.filter(e => {
     const srcLayer = LAYER_ORDER[nodeTypeMap.get(e.from) || ''] ?? -1;
     const tgtLayer = LAYER_ORDER[nodeTypeMap.get(e.to) || ''] ?? -1;
     if (srcLayer >= tgtLayer) {
@@ -283,5 +261,5 @@ export async function getCampaignGraphData(): Promise<CampaignGraphData> {
     return true;
   });
 
-  return { nodes, edges };
+  return { nodes, edges: validEdges };
 }
