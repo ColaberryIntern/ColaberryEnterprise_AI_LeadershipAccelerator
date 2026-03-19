@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LinkedIn Video Thumbnail</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #d1d5db; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Inter', 'Segoe UI', -apple-system, sans-serif; }
+
+  .thumb {
+    width: 1280px;
+    height: 720px;
+    background: #FAFBFC;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 60px 80px;
+  }
+
+  /* Top gradient bar */
+  .thumb::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+  }
+
+  /* Subtle grid */
+  .thumb::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+    background-size: 36px 36px;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  .content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .headline {
+    font-size: 72px;
+    font-weight: 800;
+    color: #0F172A;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .headline .gradient {
+    background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .headline .vs {
+    color: #94A3B8;
+    font-weight: 400;
+    font-size: 56px;
+  }
+
+  .subheadline {
+    font-size: 28px;
+    color: #64748B;
+    font-weight: 500;
+    margin-bottom: 48px;
+  }
+
+  /* Flow */
+  .flow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .flow-item {
+    background: #fff;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1E293B;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .flow-item.highlight {
+    border-color: #3B82F6;
+    color: #3B82F6;
+    background: rgba(59,130,246,0.04);
+  }
+
+  .flow-arrow {
+    color: #94A3B8;
+    font-size: 18px;
+  }
+
+  /* Bottom strip */
+  .bottom-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+    padding: 14px 0;
+    text-align: center;
+    z-index: 2;
+  }
+
+  .bottom-strip span {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="thumb">
+  <div class="content">
+    <div class="headline">
+      <span class="gradient">AI Systems</span> <span class="vs">&gt;</span> AI Tools
+    </div>
+    <div class="subheadline">What Most People Get Wrong</div>
+
+    <div class="flow">
+      <div class="flow-item">Problem</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Data</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item highlight">AI</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Integrations</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Automation</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-item">Deployment</div>
+    </div>
+  </div>
+
+  <div class="bottom-strip">
+    <span>HOW AI SYSTEMS ACTUALLY WORK</span>
+  </div>
+</div>
+
+</body>
+</html>
