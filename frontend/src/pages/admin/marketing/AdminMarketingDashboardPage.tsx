@@ -589,7 +589,7 @@ function CampaignLinkRegistryTab() {
       setChannelROI(roiRes.data?.channels || []);
 
       // Fetch KPIs for each live campaign
-      const kpis: Record<string, { visitors: number; leads: number; enrollments: number }> = {};
+      const kpis: Record<string, { visitors: number; leads: number; engaged: number; enrollments: number }> = {};
       await Promise.all(live.map(async (c: any) => {
         try {
           const res = await api.get(`/api/admin/campaigns/${c.id}/roi`);
