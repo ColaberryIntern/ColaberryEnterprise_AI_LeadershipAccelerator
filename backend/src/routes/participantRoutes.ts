@@ -59,6 +59,18 @@ router.get('/api/portal/curriculum/skill-genome', requireParticipant, handleGetS
 router.get('/api/portal/curriculum/skill-gaps', requireParticipant, handleGetSkillGaps);
 router.get('/api/portal/curriculum/lessons/:lessonId/orchestration-context', requireParticipant, handleGetOrchestrationContext);
 
+// Context state — returns learner's context mode for UX adaptation
+router.get('/api/portal/context-state', requireParticipant, async (req, res) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { detectContextMode } = require('../services/userContextService');
+    const state = await detectContextMode(enrollmentId);
+    res.json(state);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to detect context state' });
+  }
+});
+
 // NotebookLM upload endpoint
 router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requireParticipant, strategyPrepUpload.single('file'), async (req, res) => {
   try {

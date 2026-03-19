@@ -46,6 +46,7 @@ function PortalLessonPage() {
   const [canComplete, setCanComplete] = useState(true);
   const [conceptQuizScore, setConceptQuizScore] = useState<number | null>(null);
   const [stepStatuses, setStepStatuses] = useState<StepInfo[]>([]);
+  const [contextMode, setContextMode] = useState<string | null>(null);
   const { updateLessonContext } = useMentorContext();
 
   const startLesson = useCallback(async () => {
@@ -60,6 +61,13 @@ function PortalLessonPage() {
   }, [lessonId]);
 
   useEffect(() => { startLesson(); }, [startLesson]);
+
+  // Fetch context mode (cold vs warm user)
+  useEffect(() => {
+    portalApi.get('/api/portal/context-state')
+      .then(res => setContextMode(res.data.mode))
+      .catch(() => {}); // non-critical
+  }, []);
 
   // Push lesson context to MentorContext for the global AI Mentor panel
   useEffect(() => {
@@ -164,6 +172,18 @@ function PortalLessonPage() {
           <li className="breadcrumb-item active" aria-current="page">Section {lesson.lesson_number}</li>
         </ol>
       </nav>
+
+      {/* Context Mode Banner */}
+      {contextMode === 'GUIDED_DISCOVERY' && (
+        <div className="alert alert-info py-2 small mb-3">
+          <strong>Discovery Mode</strong> — We'll help you explore and define your AI strategy as you learn.
+        </div>
+      )}
+      {contextMode === 'FAST_TRACK' && (
+        <div className="alert alert-success py-2 small mb-3">
+          <strong>Personalized Track</strong> — Content is tailored to your strategy session data.
+        </div>
+      )}
 
       {/* Lesson Header Card */}
       <div

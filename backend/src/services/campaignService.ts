@@ -249,6 +249,28 @@ export async function activateCampaign(id: string) {
     } catch (err: any) {
       console.error(`[Campaign] Failed to initialize ramp for ${campaign.id}:`, err.message);
     }
+  } else if (campaign.sequence_id) {
+    // Non-autonomous: enroll any pre-existing 'enrolled' leads into the sequence
+    const pendingLeads = await CampaignLead.findAll({
+      where: { campaign_id: id, status: 'enrolled' },
+      attributes: ['lead_id'],
+      raw: true,
+    }) as any[];
+
+    if (pendingLeads.length > 0) {
+      for (const pl of pendingLeads) {
+        try {
+          await enrollLeadInSequence(pl.lead_id, campaign.sequence_id, id);
+        } catch (err: any) {
+          console.error(`[Campaign] Failed to enroll lead ${pl.lead_id} in sequence:`, err.message);
+        }
+      }
+      await CampaignLead.update(
+        { status: 'active' } as any,
+        { where: { campaign_id: id, status: 'enrolled' } }
+      );
+      console.log(`[Campaign] Activated ${pendingLeads.length} pre-enrolled leads for ${campaign.name}`);
+    }
   }
 
   return campaign;

@@ -406,4 +406,36 @@ router.post('/api/admin/production-activate', async (req: Request, res: Response
   }
 });
 
+// ─── Reinitialize Ramp for a Specific Campaign ─────────────────────────────
+// POST /api/admin/campaign/:id/reinitialize-ramp
+// Resets ramp state and enrolls phase-1 batch (including pre-enrolled leads)
+
+router.post('/api/admin/campaign/:id/reinitialize-ramp', async (req: Request, res: Response) => {
+  try {
+    const campaignId = req.params.id as string;
+    const campaign = await Campaign.findByPk(campaignId) as any;
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    if (campaign.status !== 'active') return res.status(400).json({ error: `Campaign status is '${campaign.status}', must be active` });
+    if (campaign.campaign_mode !== 'autonomous') return res.status(400).json({ error: 'Only autonomous campaigns have ramp state' });
+
+    const { initializeRamp } = require('../../services/autonomousRampService');
+    const rampState = await initializeRamp(campaign.id);
+
+    const leadCount = await CampaignLead.count({ where: { campaign_id: campaign.id } });
+    const activeCount = await CampaignLead.count({ where: { campaign_id: campaign.id, status: 'active' } });
+
+    res.json({
+      success: true,
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      ramp_state: rampState,
+      total_leads: leadCount,
+      active_leads: activeCount,
+    });
+  } catch (err: any) {
+    console.error('[ReinitializeRamp] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

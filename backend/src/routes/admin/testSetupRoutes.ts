@@ -46,4 +46,20 @@ router.get('/api/admin/test-setup/context-state/:enrollmentId', async (req: Requ
   }
 });
 
+// ─── Reset Section State for an Enrollment ─────────────────────────
+
+router.post('/api/admin/test-setup/reset-section', async (req: Request, res: Response) => {
+  try {
+    const { lessonId, userEmail } = req.body;
+    if (!lessonId || !userEmail) {
+      return res.status(400).json({ error: 'lessonId and userEmail are required' });
+    }
+    const { resetSectionForEnrollment } = require('../../services/sectionResetService');
+    const result = await resetSectionForEnrollment(lessonId, userEmail);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

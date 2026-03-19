@@ -666,6 +666,14 @@ async function buildCompositePrompt(
   const learnerDataBlock = await variableService.buildLearnerDataBlock(enrollmentId);
   if (learnerDataBlock) parts.push(learnerDataBlock);
 
+  // Layer 4a: Context Mode (GUIDED_DISCOVERY vs FAST_TRACK)
+  try {
+    const { detectContextMode, buildContextModeBlock } = require('./userContextService');
+    const contextState = await detectContextMode(enrollmentId);
+    const contextBlock = buildContextModeBlock(contextState);
+    if (contextBlock) parts.push(contextBlock);
+  } catch { /* non-critical — defaults to no context mode block */ }
+
   // Layer 4b: Project Context (from Project model — additive, non-breaking)
   try {
     const { buildProjectContextBlock } = await import('./projectVariableService');

@@ -442,47 +442,82 @@ async function enrollPhaseBatch(
   }
 
   const phaseSize = rampState.phase_sizes[phase - 1];
+  const batchLimit = phaseSize === -1 ? Infinity : phaseSize;
+  let totalEnrolled = 0;
 
-  // Get already-enrolled lead IDs
-  const enrolled = await CampaignLead.findAll({
-    where: { campaign_id: campaignId },
+  // Priority 1: Activate existing CampaignLead records with status 'enrolled'
+  // (leads added to campaign before activation — need sequence enrollment)
+  const pendingLeads = await CampaignLead.findAll({
+    where: { campaign_id: campaignId, status: 'enrolled' },
     attributes: ['lead_id'],
     raw: true,
   }) as any[];
-  const enrolledIds = new Set(enrolled.map((cl: any) => cl.lead_id));
 
-  // Find matching leads not yet enrolled
-  const tc = campaign.targeting_criteria || {};
-  const leadWhere: Record<string, any> = {};
-  if (tc.lead_source_type) leadWhere.lead_source_type = tc.lead_source_type;
-  if (tc.lead_source_types?.length) {
-    leadWhere.lead_source_type = { [Op.in]: tc.lead_source_types };
+  if (pendingLeads.length > 0 && campaign.sequence_id) {
+    const { enrollLeadInSequence } = require('./sequenceService');
+    const toActivate = pendingLeads.slice(0, batchLimit);
+    for (const pl of toActivate) {
+      try {
+        await CampaignLead.update(
+          { status: 'active' } as any,
+          { where: { campaign_id: campaignId, lead_id: pl.lead_id, status: 'enrolled' } }
+        );
+        await enrollLeadInSequence(pl.lead_id, campaign.sequence_id, campaignId);
+        totalEnrolled++;
+      } catch (err: any) {
+        console.error(`[Ramp] Failed to activate pending lead ${pl.lead_id}:`, err.message);
+      }
+    }
+    console.log(`[Ramp] Activated ${totalEnrolled} pre-enrolled leads for campaign ${campaignId}`);
   }
 
-  const availableLeads = await Lead.findAll({
-    where: leadWhere,
-    attributes: ['id'],
-    raw: true,
-  }) as any[];
+  // Priority 2: If batch not full, find new leads from Lead table
+  if (totalEnrolled < batchLimit) {
+    const remaining = phaseSize === -1 ? -1 : phaseSize - totalEnrolled;
 
-  const unenrolledIds = availableLeads
-    .map((l: any) => l.id)
-    .filter((id: number) => !enrolledIds.has(id));
+    // Get all lead IDs already in CampaignLead
+    const enrolled = await CampaignLead.findAll({
+      where: { campaign_id: campaignId },
+      attributes: ['lead_id'],
+      raw: true,
+    }) as any[];
+    const enrolledIds = new Set(enrolled.map((cl: any) => cl.lead_id));
 
-  if (unenrolledIds.length === 0) return 0;
+    // Find matching leads not yet in campaign
+    const tc = campaign.targeting_criteria || {};
+    const leadWhere: Record<string, any> = {};
+    if (tc.lead_source_type) leadWhere.lead_source_type = tc.lead_source_type;
+    if (tc.lead_source_types?.length) {
+      leadWhere.lead_source_type = { [Op.in]: tc.lead_source_types };
+    }
 
-  // Shuffle for random selection
-  for (let i = unenrolledIds.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [unenrolledIds[i], unenrolledIds[j]] = [unenrolledIds[j], unenrolledIds[i]];
+    const availableLeads = await Lead.findAll({
+      where: leadWhere,
+      attributes: ['id'],
+      raw: true,
+    }) as any[];
+
+    const unenrolledIds = availableLeads
+      .map((l: any) => l.id)
+      .filter((id: number) => !enrolledIds.has(id));
+
+    if (unenrolledIds.length > 0) {
+      // Shuffle for random selection
+      for (let i = unenrolledIds.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [unenrolledIds[i], unenrolledIds[j]] = [unenrolledIds[j], unenrolledIds[i]];
+      }
+
+      const newBatchSize = remaining === -1 ? unenrolledIds.length : Math.min(remaining, unenrolledIds.length);
+      const batchIds = unenrolledIds.slice(0, newBatchSize);
+
+      if (batchIds.length > 0) {
+        const results = await enrollLeadsInCampaign(campaignId, batchIds);
+        const newEnrolled = results.filter((r: any) => r.status === 'enrolled' || r.status === 'already_enrolled').length;
+        totalEnrolled += newEnrolled;
+      }
+    }
   }
 
-  // Select batch size (-1 means all remaining)
-  const batchSize = phaseSize === -1 ? unenrolledIds.length : Math.min(phaseSize, unenrolledIds.length);
-  const batchIds = unenrolledIds.slice(0, batchSize);
-
-  if (batchIds.length === 0) return 0;
-
-  const results = await enrollLeadsInCampaign(campaignId, batchIds);
-  return results.filter((r: any) => r.status === 'enrolled' || r.status === 'already_enrolled').length;
+  return totalEnrolled;
 }
