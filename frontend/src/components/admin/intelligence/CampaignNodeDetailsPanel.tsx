@@ -39,6 +39,8 @@ const TOUCH_LABELS: Record<string, string> = {
   blueprint: 'Blueprint',
   sponsorship: 'Sponsorship',
   strategy_call: 'Strategy Call',
+  executive_overview: 'Exec Overview',
+  referral: 'Referral',
 };
 
 function getColors(node: CampaignGraphNode) {

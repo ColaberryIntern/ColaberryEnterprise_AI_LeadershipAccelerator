@@ -55,7 +55,7 @@ export interface LeadPathRecord {
   raw_source: string | null;
   pipeline_stage: string | null;
   first_touch: {
-    type: 'cory_chat' | 'blueprint' | 'sponsorship' | 'strategy_call' | null;
+    type: 'cory_chat' | 'blueprint' | 'sponsorship' | 'strategy_call' | 'executive_overview' | 'referral' | null;
     timestamp: Date | null;
   };
   campaign_enrollments: Array<{
@@ -216,8 +216,11 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
     const sourceCategory = categorizeSource(lead.source);
     const emailLower = lead.email?.toLowerCase() || '';
 
-    // Determine first touch — find earliest among available touchpoints
+    // Determine first touch — find earliest among REAL touchpoints
+    // CRITICAL: Bulk imports (ccpp_alumni, apollo) with form_type='contact' are NOT form fills.
+    // Only count as blueprint signup if the lead actually filled out a form.
     const candidates: Array<{ type: LeadPathRecord['first_touch']['type']; ts: Date }> = [];
+    const isBulkImport = sourceCategory === 'alumni' || sourceCategory === 'cold_outbound';
 
     // Chat conversation (direct lead_id match)
     const chatTs = chatMap.get(lead.id);
@@ -227,14 +230,23 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
     const stratTs = strategyMap.get(lead.id);
     if (stratTs) candidates.push({ type: 'strategy_call', ts: stratTs });
 
-    // Blueprint signup (form_type = 'contact')
-    if (lead.form_type === 'contact') {
-      candidates.push({ type: 'blueprint', ts: new Date(lead.created_at) });
+    // Form-based first touches — only for NON bulk imports
+    if (!isBulkImport) {
+      if (lead.form_type === 'contact') {
+        candidates.push({ type: 'blueprint', ts: new Date(lead.created_at) });
+      }
+      if (lead.form_type === 'executive_overview_download') {
+        candidates.push({ type: 'executive_overview', ts: new Date(lead.created_at) });
+      }
+      if (lead.form_type === 'sponsorship_kit_download' || lead.sponsorship_kit_requested) {
+        candidates.push({ type: 'sponsorship', ts: new Date(lead.created_at) });
+      }
     }
 
-    // Sponsorship form
-    if (lead.sponsorship_kit_requested) {
-      candidates.push({ type: 'sponsorship', ts: new Date(lead.created_at) });
+    // Referral first touch (alumni_referral sources — these ARE real interactions)
+    const rawSrc = (lead.source || '').toLowerCase();
+    if (rawSrc.startsWith('alumni_referral')) {
+      candidates.push({ type: 'referral', ts: new Date(lead.created_at) });
     }
 
     // Visitor-based chat fallback — check if lead has a visitor_id with a chat
@@ -295,12 +307,14 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
 
   // ── Entry point counts (real first_touch counts) ───────────────────────
   const entryTouchCounts: Record<string, number> = {
-    cory_chat: 0, blueprint: 0, sponsorship: 0, strategy_call: 0, unengaged: 0,
+    cory_chat: 0, blueprint: 0, sponsorship: 0, strategy_call: 0,
+    executive_overview: 0, referral: 0, unengaged: 0,
   };
 
   // ── Source breakdown per entry node ────────────────────────────────────
   const entrySourceBreakdown: Record<string, Record<string, number>> = {
-    cory_chat: {}, blueprint: {}, sponsorship: {}, strategy_call: {}, unengaged: {},
+    cory_chat: {}, blueprint: {}, sponsorship: {}, strategy_call: {},
+    executive_overview: {}, referral: {}, unengaged: {},
   };
 
   // ── Campaign data accumulation ─────────────────────────────────────────
@@ -420,14 +434,16 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
   const entryNodeDefs: Array<{ key: string; label: string }> = [
     { key: 'cory_chat', label: 'Cory Chat' },
     { key: 'blueprint', label: 'Blueprint Signup' },
+    { key: 'executive_overview', label: 'Executive Overview' },
     { key: 'sponsorship', label: 'Sponsorship Form' },
     { key: 'strategy_call', label: 'Strategy Call' },
+    { key: 'referral', label: 'Referral' },
     { key: 'unengaged', label: 'Unengaged' },
   ];
 
   for (const { key, label } of entryNodeDefs) {
     const count = entryTouchCounts[key];
-    if (count > 0 || key !== 'unengaged') {
+    if (count > 0) {
       nodes.push({
         id: `entry_${key}`,
         type: 'entry',
