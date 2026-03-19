@@ -316,7 +316,25 @@ export async function enrollLeadsInCampaign(campaignId: string, leadIds: number[
   if (!campaign) throw new Error('Campaign not found');
   if (!campaign.sequence_id) throw new Error('Campaign has no sequence assigned');
 
+  // ── Ramp guard: autonomous campaigns must respect phase limits ────────
+  const isAutonomous = (campaign as any).campaign_mode === 'autonomous';
+  const rampState = (campaign as any).ramp_state;
+  let rampBudget = Infinity; // how many MORE leads may be activated this phase
+
+  if (isAutonomous && rampState && rampState.status !== 'complete') {
+    const phase = rampState.current_phase || 1;
+    const phaseSize = rampState.phase_sizes?.[phase - 1] ?? -1;
+    if (phaseSize !== -1) {
+      const alreadyEnrolled = rampState.leads_enrolled_per_phase?.[String(phase)] ?? 0;
+      rampBudget = Math.max(0, phaseSize - alreadyEnrolled);
+      if (rampBudget === 0) {
+        console.log(`[Campaign] Ramp guard: phase ${phase} full (${phaseSize} leads) for campaign ${campaignId} — skipping sequence enrollment`);
+      }
+    }
+  }
+
   const results: { leadId: number; status: string; error?: string }[] = [];
+  let activatedCount = 0;
 
   for (const leadId of leadIds) {
     try {
@@ -329,16 +347,21 @@ export async function enrollLeadsInCampaign(campaignId: string, leadIds: number[
         continue;
       }
 
+      // For autonomous campaigns at ramp capacity, enroll as 'enrolled' (queued)
+      // instead of 'active' — the ramp system will activate them in later phases
+      const shouldActivate = campaign.status === 'active' && (!isAutonomous || activatedCount < rampBudget);
+
       // Create campaign-lead record
       await CampaignLead.create({
         campaign_id: campaignId,
         lead_id: leadId,
-        status: campaign.status === 'active' ? 'active' : 'enrolled',
+        status: shouldActivate ? 'active' : 'enrolled',
       } as any);
 
-      // If campaign is active, enroll in the sequence
-      if (campaign.status === 'active') {
+      // Only enroll in sequence (create ScheduledEmails) if within ramp budget
+      if (shouldActivate) {
         await enrollLeadInSequence(leadId, campaign.sequence_id, campaignId);
+        activatedCount++;
       }
 
       // Sync lead to GHL if enabled

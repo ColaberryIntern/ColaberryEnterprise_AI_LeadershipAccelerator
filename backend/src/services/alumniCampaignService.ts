@@ -294,11 +294,13 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
     importResult.errors.push(`MSSQL import skipped: ${err.message}`);
   }
 
-  // 7. Activate both campaigns
-  await (championCampaign as any).update({ status: 'active', started_at: new Date() });
-  await (reengageCampaign as any).update({ status: 'active', started_at: new Date() });
+  // 7. Set autonomous mode BEFORE activation so ramp controls enrollment
+  await (championCampaign as any).update({ campaign_mode: 'autonomous' });
+  await (reengageCampaign as any).update({ campaign_mode: 'autonomous' });
 
-  // 8. Enroll all alumni leads in champion campaign
+  // 8. Pre-enroll all alumni leads with status 'enrolled' (NOT 'active').
+  //    This registers them in CampaignLead but does NOT create ScheduledEmail
+  //    records. The ramp system will activate them in phase-sized batches.
   const alumniLeads = await Lead.findAll({
     where: { lead_source_type: 'alumni' } as any,
     attributes: ['id'],
@@ -309,8 +311,23 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
   let enrolledCount = 0;
 
   if (leadIds.length > 0) {
-    const results = await enrollLeadsInCampaign(championCampaign.id, leadIds);
-    enrolledCount = results.filter((r: any) => r.status === 'enrolled' || r.status === 'already_enrolled').length;
+    // Bulk-create CampaignLead records with 'enrolled' status (not active)
+    for (const leadId of leadIds) {
+      try {
+        const existing = await CampaignLead.findOne({
+          where: { campaign_id: championCampaign.id, lead_id: leadId },
+        });
+        if (existing) { enrolledCount++; continue; }
+        await CampaignLead.create({
+          campaign_id: championCampaign.id,
+          lead_id: leadId,
+          status: 'enrolled',
+        } as any);
+        enrolledCount++;
+      } catch (err: any) {
+        console.error(`[AlumniCampaign] Failed to pre-enroll lead ${leadId}:`, err.message);
+      }
+    }
 
     // Set lifecycle fields on enrolled CampaignLeads
     await CampaignLead.update(
@@ -325,14 +342,14 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
     );
   }
 
-  // 9. Set autonomous mode on both campaigns
-  await (championCampaign as any).update({ campaign_mode: 'autonomous' });
-  await (reengageCampaign as any).update({ campaign_mode: 'autonomous' });
+  // 9. Activate campaigns — then initialize ramp which enrolls only phase 1 batch
+  await (championCampaign as any).update({ status: 'active', started_at: new Date() });
+  await (reengageCampaign as any).update({ status: 'active', started_at: new Date() });
 
   // 10. Initialize ramp for champion campaign only.
-  // Re-engagement campaign must NOT have leads enrolled at seed time —
-  // leads are moved into it by the lifecycle service (detectInactiveLeads)
-  // after 30 days of inactivity in the champion campaign.
+  // This will activate phase 1 leads (e.g. 15 for alumni) from the 'enrolled' pool
+  // and create ScheduledEmail records only for that batch.
+  // Re-engagement campaign receives leads via lifecycle transitions only.
   await initializeRamp(championCampaign.id);
 
   // Set ramp_state metadata on re-engagement so the ramp infrastructure
