@@ -416,6 +416,13 @@ function extractGeneralInsights(sql: SqlResult[], _ml: MlResult[], _insights: In
       const r = rows[0];
       narrative.push(`Business overview: ${r.total_leads || 0} leads in pipeline, ${r.total_campaigns || 0} campaigns running, ${r.total_enrollments || 0} program enrollments, ${r.total_agents || 0} automation processes.`);
     }
+    if (rows.length > 0 && description.includes('Email outreach totals') && rows[0]) {
+      const r = rows[0];
+      const sent7d = Number(r.emails_sent_7d) || 0;
+      const sentToday = Number(r.emails_sent_today) || 0;
+      const pending = Number(r.emails_pending) || 0;
+      narrative.push(`Email outreach: ${sent7d} emails sent this week, ${sentToday} today, ${pending} pending delivery.`);
+    }
   }
   if (recs.length === 0) recs.push('Ask about revenue, enrollments, lead pipeline, campaign performance, or student outcomes for deeper analysis.');
 }

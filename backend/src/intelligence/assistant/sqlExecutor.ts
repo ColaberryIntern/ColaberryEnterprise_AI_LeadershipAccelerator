@@ -108,6 +108,14 @@ function buildCampaignQueries(tables: string[]): TemplateQuery[] {
       tables: ['campaigns'],
     });
   }
+  // Include lead totals when leads table is in the plan (cross-entity visibility)
+  if (tables.includes('leads')) {
+    queries.push({
+      sql: `SELECT COUNT(*) AS total_leads, COUNT(*) FILTER (WHERE lead_temperature = 'hot') AS hot_leads, COUNT(*) FILTER (WHERE lead_temperature = 'warm') AS warm_leads, COUNT(*) FILTER (WHERE lead_temperature = 'cold') AS cold_leads FROM leads`,
+      description: 'Lead totals by temperature',
+      tables: ['leads'],
+    });
+  }
   if (tables.includes('campaign_errors')) {
     queries.push({
       sql: `SELECT COALESCE(component, 'unknown') AS component, COALESCE(severity, 'unknown') AS severity, COUNT(*) AS error_count, MAX(created_at) AS last_occurred FROM campaign_errors WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY component, severity ORDER BY error_count DESC LIMIT 10`,
@@ -323,6 +331,14 @@ function buildGeneralQueries(tables: string[]): TemplateQuery[] {
       sql: `SELECT COALESCE(source_module, 'unknown') AS module, COUNT(*) AS event_count FROM system_processes WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY source_module ORDER BY event_count DESC LIMIT 10`,
       description: 'System activity by module (last 24 hours)',
       tables: ['system_processes'],
+    });
+  }
+  // Email outreach volume for business briefings
+  if (tables.includes('scheduled_emails')) {
+    queries.push({
+      sql: `SELECT COUNT(*) FILTER (WHERE status = 'sent' AND sent_at >= NOW() - INTERVAL '7 days') AS emails_sent_7d, COUNT(*) FILTER (WHERE status = 'sent' AND sent_at >= NOW() - INTERVAL '24 hours') AS emails_sent_today, COUNT(*) FILTER (WHERE status = 'pending') AS emails_pending FROM scheduled_emails`,
+      description: 'Email outreach totals (last 7 days)',
+      tables: ['scheduled_emails'],
     });
   }
   return queries;

@@ -282,6 +282,7 @@ Perspective rules:
 Data accuracy rules:
 - CRITICAL: Every number you cite MUST appear verbatim in the data context below. Do NOT estimate, round differently, or invent numbers.
 - If a total count is provided (e.g. "total_leads: 849"), use that exact number — do not count rows to derive a different total.
+- When the data distinguishes between "total" and "active" counts, ALWAYS report both — never say "X active" when you mean "X total." Example: "13 campaigns total (11 active, 1 completed, 1 draft)" not "13 active campaigns."
 - If the data does not contain a specific metric, say "data not available" instead of guessing.
 - Explain causes and trends only when directly visible in the data.
 

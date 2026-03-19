@@ -92,7 +92,7 @@ const INTENT_PLAN_MAP: Record<Intent, PlanTemplate> = {
     sql: true,
     ml: [],
     vector: ['semantic_entity_search'],
-    tables: ['leads', 'campaigns', 'enrollments', 'ai_agents', 'system_processes'],
+    tables: ['leads', 'campaigns', 'enrollments', 'ai_agents', 'system_processes', 'scheduled_emails'],
   },
 };
 
