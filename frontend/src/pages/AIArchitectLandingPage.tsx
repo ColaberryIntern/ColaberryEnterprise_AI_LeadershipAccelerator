@@ -110,8 +110,14 @@ function AIArchitectLandingPage() {
               <p style={{ color: TEXT2, fontSize: 16, lineHeight: 1.7, marginBottom: 16 }}>
                 The shift isn't starting from scratch — it's learning how to <strong>connect what you already know</strong> into a complete AI system.
               </p>
-              <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
-                This is the transition happening right now: <strong style={{ color: ACCENT }}>From specialized roles {'\u2192'} AI Systems Architect</strong>
+              <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, marginBottom: 8 }}>
+                This is the shift happening across the industry:
+              </p>
+              <p style={{ fontSize: 17, fontWeight: 700, color: ACCENT, lineHeight: 1.6, marginBottom: 12 }}>
+                From specialized roles {'\u2192'} AI Systems Architect
+              </p>
+              <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
+                The people who understand how these systems connect are the ones leading AI inside their organizations.
               </p>
               <p style={{ color: TEXT2, fontSize: 15, lineHeight: 1.7, marginBottom: 16 }}>
                 You don't need to learn everything. You need to understand how the pieces work together. That's exactly what we show you how to do.
@@ -154,7 +160,7 @@ function AIArchitectLandingPage() {
                 Most professionals already operate in 2–3 of these areas.
               </p>
               <p style={{ fontSize: 15, fontWeight: 600, color: ACCENT2, lineHeight: 1.6, margin: 0 }}>
-                AI Architects are the ones who understand how all 7 connect.
+                The advantage comes from understanding how all 7 connect into a working system.
               </p>
             </div>
           </div>
@@ -322,6 +328,9 @@ function AIArchitectLandingPage() {
             </div>
             <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 32 }}>
               If it makes sense, we'll show you exactly how to move forward.
+            </p>
+            <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 16 }}>
+              No technical background in AI systems required — we guide you step-by-step.
             </p>
             <button onClick={openBooking} style={{ ...btnStyle, padding: '20px 56px', fontSize: 22 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
