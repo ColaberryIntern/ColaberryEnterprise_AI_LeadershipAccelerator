@@ -11,6 +11,16 @@ const COLUMN_CONFIG: Record<string, number> = {
 const COLUMN_X_PCT = [0.10, 0.36, 0.62, 0.90];
 const COLUMN_LABELS = ['Sources', 'Entry Points', 'Campaigns', 'Outcomes'];
 
+// Zone boundaries for column-constrained dragging (percentage of width)
+const ZONE_RANGES: Record<string, [number, number]> = {
+  source:   [0, 0.23],
+  entry:    [0.23, 0.49],
+  campaign: [0.49, 0.76],
+  outcome:  [0.76, 1.0],
+};
+
+const POSITIONS_KEY = 'campaign-graph-positions';
+
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
   source:   { color: '#805ad5', bg: '#faf5ff' },
   entry:    { color: '#319795', bg: '#e6fffa' },
@@ -87,6 +97,16 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+  const [showWarnings, setShowWarnings] = useState(false);
+  const [layoutVersion, setLayoutVersion] = useState(0);
+
+  // Position persistence refs
+  const savedPositions = useRef<Record<string, { fx: number; fy: number }>>(
+    (() => { try { return JSON.parse(localStorage.getItem(POSITIONS_KEY) || '{}'); } catch { return {}; } })()
+  );
+  const isDragging = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // Fetch graph data once
   useEffect(() => {
@@ -121,13 +141,16 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     return () => io.disconnect();
   }, []);
 
-  // Build graph data with fixed positions
+  // Build graph data with sqrt-scaled sizes and position persistence
   const graphData = useMemo(() => {
     if (!data) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
     const maxCount = Math.max(...data.nodes.map((n) => n.count), 1);
+    const sqrtMax = Math.sqrt(maxCount);
 
     const nodes: GraphNode[] = data.nodes.map((n) => {
       const colors = getNodeColors(n);
+      const minR = fullWidth ? 12 : 8;
+      const maxR = fullWidth ? 42 : 30;
       return {
         id: n.id,
         type: n.type,
@@ -135,14 +158,14 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         count: n.count,
         color: colors.color,
         bg: colors.bg,
-        val: fullWidth ? (12 + (n.count / maxCount) * 30) : (8 + (n.count / maxCount) * 22),
+        val: minR + (Math.sqrt(n.count) / sqrtMax) * (maxR - minR),
         col: COLUMN_CONFIG[n.type] ?? 2,
         metrics: n.metrics,
         source_breakdown: n.source_breakdown,
       };
     });
 
-    // Assign deterministic fx/fy positions by column
+    // Assign positions: use saved positions if available, else compute by column
     const columns = new Map<number, GraphNode[]>();
     nodes.forEach((n) => {
       if (!columns.has(n.col)) columns.set(n.col, []);
@@ -155,8 +178,20 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       const usableHeight = dimensions.height - paddingY * 2;
       const spacing = usableHeight / (colNodes.length + 1);
       colNodes.forEach((n, i) => {
-        n.fx = x;
-        n.fy = paddingY + spacing * (i + 1);
+        const saved = savedPositions.current[n.id];
+        if (saved) {
+          // Validate saved position is still within zone
+          const zone = ZONE_RANGES[n.type];
+          if (zone) {
+            n.fx = Math.max(zone[0] * dimensions.width, Math.min(zone[1] * dimensions.width, saved.fx));
+          } else {
+            n.fx = saved.fx;
+          }
+          n.fy = saved.fy;
+        } else {
+          n.fx = x;
+          n.fy = paddingY + spacing * (i + 1);
+        }
       });
     });
 
@@ -170,20 +205,36 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         volume: e.volume || 0,
       }));
 
-    // Dev mode edge validation
-    if (process.env.NODE_ENV === 'development') {
-      const nodeTypeMap = new Map(nodes.map(n => [n.id, n.type]));
-      links.forEach(link => {
-        const srcCol = COLUMN_CONFIG[nodeTypeMap.get(link.source) || ''] ?? -1;
-        const tgtCol = COLUMN_CONFIG[nodeTypeMap.get(link.target) || ''] ?? -1;
-        if (srcCol >= tgtCol) {
-          console.warn(`[SystemMap] Invalid edge: ${link.source} (col ${srcCol}) → ${link.target} (col ${tgtCol})`);
-        }
-      });
+    // Data validation
+    const warnings: string[] = [];
+    const totalSources = nodes.filter(n => n.type === 'source').reduce((s, n) => s + n.count, 0);
+    const totalEntries = nodes.filter(n => n.type === 'entry').reduce((s, n) => s + n.count, 0);
+    if (totalSources > 0 && Math.abs(totalSources - totalEntries) / totalSources > 0.2) {
+      warnings.push(`Source total (${totalSources}) vs Entry total (${totalEntries}) mismatch >20%`);
     }
+    links.forEach(link => {
+      const srcNode = nodes.find(n => n.id === link.source);
+      if (srcNode && link.volume > srcNode.count) {
+        warnings.push(`Edge ${link.source}\u2192${link.target}: volume (${link.volume}) > source count (${srcNode.count})`);
+      }
+    });
+
+    // Edge direction validation
+    const nodeTypeMap = new Map(nodes.map(n => [n.id, n.type]));
+    links.forEach(link => {
+      const srcCol = COLUMN_CONFIG[nodeTypeMap.get(link.source) || ''] ?? -1;
+      const tgtCol = COLUMN_CONFIG[nodeTypeMap.get(link.target) || ''] ?? -1;
+      if (srcCol >= tgtCol) {
+        warnings.push(`Invalid edge direction: ${link.source} (col ${srcCol}) \u2192 ${link.target} (col ${tgtCol})`);
+      }
+    });
+
+    // Update warnings state (deferred to avoid render-during-render)
+    setTimeout(() => setValidationWarnings(warnings), 0);
 
     return { nodes, links };
-  }, [data, dimensions.width, dimensions.height, fullWidth]);
+    // eslint-disable-next-line
+  }, [data, dimensions.width, dimensions.height, fullWidth, layoutVersion]);
 
   // Max volume for scaling
   const maxVolume = useMemo(
@@ -231,7 +282,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
   const paintNode = useCallback(
     (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const n = node as GraphNode;
-      const radius = fullWidth ? (22 + n.val * 0.8) : (16 + n.val * 0.6);
+      const radius = fullWidth ? (18 + n.val * 0.7) : (14 + n.val * 0.5);
       const isHovered = hoveredNode?.id === n.id;
       const isSelected = selectedNode?.id === n.id;
       const fontSize = fullWidth ? Math.max(13 / globalScale, 4) : Math.max(11 / globalScale, 3);
@@ -325,17 +376,17 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       }
     }
 
-    const alpha = 0.3 + (volume / maxVolume) * 0.5;
+    const alpha = 0.3 + (Math.sqrt(volume) / Math.sqrt(maxVolume)) * 0.5;
     return `rgba(160, 174, 192, ${alpha})`;
   }, [highlightNodeId, connectedSet, maxVolume]);
 
   const getLinkWidth = useCallback((link: any) => {
     const volume = (link as GraphLink).volume || 0;
-    return 0.8 + (volume / maxVolume) * 3;
+    return 1 + (Math.sqrt(volume) / Math.sqrt(maxVolume)) * 4;
   }, [maxVolume]);
 
   const getParticleCount = useCallback((link: any) => {
-    if (!isVisible) return 0;
+    if (!isVisible || isDragging.current) return 0;
     const volume = (link as GraphLink).volume || 0;
     if (maxVolume === 0 || volume === 0) return 0;
 
@@ -372,7 +423,11 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
 
   const getLinkLabel = useCallback((link: any) => {
     const l = link as GraphLink;
-    return l.volume > 0 ? `${l.label}: ${l.volume} flow` : l.label;
+    if (l.volume <= 0) return l.label;
+    const src = link.source as GraphNode;
+    const srcCount = typeof src === 'object' ? src.count : 0;
+    const pct = srcCount > 0 ? ((l.volume / srcCount) * 100).toFixed(1) : '—';
+    return `${l.label}: ${l.volume.toLocaleString()} (${pct}%)`;
   }, []);
 
   const handleNodeHover = useCallback((node: any) => {
@@ -385,6 +440,38 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
 
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node as GraphNode);
+  }, []);
+
+  // Drag handlers with zone constraints
+  const handleNodeDrag = useCallback((node: any) => {
+    isDragging.current = true;
+    const n = node as GraphNode;
+    const zone = ZONE_RANGES[n.type];
+    if (zone) {
+      const minX = zone[0] * dimensions.width;
+      const maxX = zone[1] * dimensions.width;
+      n.fx = Math.max(minX, Math.min(maxX, n.x!));
+    } else {
+      n.fx = n.x;
+    }
+    n.fy = n.y;
+  }, [dimensions.width]);
+
+  const handleNodeDragEnd = useCallback((node: any) => {
+    isDragging.current = false;
+    const n = node as GraphNode;
+    savedPositions.current[n.id] = { fx: n.fx!, fy: n.fy! };
+    // Debounced save to localStorage
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      try { localStorage.setItem(POSITIONS_KEY, JSON.stringify(savedPositions.current)); } catch { /* ignore */ }
+    }, 500);
+  }, []);
+
+  const resetLayout = useCallback(() => {
+    savedPositions.current = {};
+    try { localStorage.removeItem(POSITIONS_KEY); } catch { /* ignore */ }
+    setLayoutVersion(v => v + 1);
   }, []);
 
   if (loading) {
@@ -507,7 +594,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={(node: any, color, ctx) => {
             const n = node as GraphNode;
-            const radius = fullWidth ? (22 + n.val * 0.8) : (16 + n.val * 0.6);
+            const radius = fullWidth ? (18 + n.val * 0.7) : (14 + n.val * 0.5);
             ctx.beginPath();
             ctx.arc(n.x!, n.y!, radius + 4, 0, 2 * Math.PI);
             ctx.fillStyle = color;
@@ -525,14 +612,61 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
           linkDirectionalParticleColor={getParticleColor}
           onNodeHover={handleNodeHover}
           onNodeClick={handleNodeClick}
+          onNodeDrag={handleNodeDrag}
+          onNodeDragEnd={handleNodeDragEnd}
           cooldownTicks={0}
-          enableNodeDrag={false}
+          enableNodeDrag={true}
           enableZoomInteraction={true}
           enablePanInteraction={true}
           backgroundColor="transparent"
           minZoom={0.3}
           maxZoom={8}
+          onRenderFramePre={(ctx: CanvasRenderingContext2D, globalScale: number) => {
+            // Draw subtle zone separator lines
+            ctx.save();
+            ctx.setLineDash([4, 6]);
+            ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
+            ctx.lineWidth = 1 / globalScale;
+            [0.23, 0.49, 0.76].forEach(pct => {
+              const x = pct * dimensions.width;
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x, dimensions.height);
+              ctx.stroke();
+            });
+            ctx.setLineDash([]);
+            ctx.restore();
+          }}
         />
+
+        {/* Validation warnings badge */}
+        {validationWarnings.length > 0 && (
+          <div style={{ position: 'absolute', top: fullWidth ? 28 : 8, right: 8, zIndex: 12 }}>
+            <button
+              className="btn btn-sm btn-outline-warning position-relative"
+              style={{ width: 26, height: 26, padding: 0, fontSize: '0.7rem', background: 'rgba(255,255,255,0.95)' }}
+              onClick={() => setShowWarnings(!showWarnings)}
+              title={`${validationWarnings.length} data warning(s)`}
+            >
+              !
+            </button>
+            {showWarnings && (
+              <div
+                style={{
+                  position: 'absolute', top: 30, right: 0, width: 280,
+                  background: 'white', border: '1px solid #e2e8f0', borderRadius: 6,
+                  padding: '8px 10px', boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                  fontSize: '0.65rem', zIndex: 20,
+                }}
+              >
+                <div className="fw-semibold text-warning mb-1">Data Warnings</div>
+                {validationWarnings.map((w, i) => (
+                  <div key={i} className="text-muted mb-1">{w}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Zoom controls */}
         <div
@@ -565,6 +699,15 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             aria-label="Reset view"
           >
             ⟳
+          </button>
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            style={{ width: 26, height: 26, padding: 0, fontSize: '0.55rem', background: 'rgba(255,255,255,0.9)' }}
+            onClick={resetLayout}
+            title="Reset node positions"
+            aria-label="Reset layout"
+          >
+            ↺
           </button>
         </div>
 
