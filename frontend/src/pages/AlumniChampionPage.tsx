@@ -100,6 +100,13 @@ function AlumniChampionPage() {
               >
                 Activate Referral Benefits
               </a>
+              <a
+                href="/pricing"
+                className="btn btn-lg px-4"
+                style={{ background: 'transparent', color: DARK.textMuted, border: `1px solid ${DARK.border}` }}
+              >
+                View Pricing
+              </a>
             </div>
           </div>
         </section>
@@ -119,6 +126,11 @@ function AlumniChampionPage() {
                   style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
                 >
                   <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 1 &mdash; Enroll Yourself</h3>
+                  <div className="mb-3" style={{ background: 'rgba(59,130,246,0.08)', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(59,130,246,0.15)' }}>
+                    <span style={{ color: DARK.accent, fontWeight: 700, fontSize: '1.1rem' }}>$4,500</span>
+                    <span style={{ color: DARK.textMuted, fontSize: '0.85rem', marginLeft: 8 }}>per participant</span>
+                    <a href="/pricing" target="_blank" rel="noopener noreferrer" style={{ color: DARK.accent, fontSize: '0.85rem', marginLeft: 12, textDecoration: 'underline' }}>View full pricing</a>
+                  </div>
                   {[
                     'Join the AI Leadership Accelerator',
                     'Ask your company to sponsor you',
@@ -259,7 +271,9 @@ function AlumniChampionPage() {
             </div>
             <div className="text-center mt-4">
               <a
-                href="/enroll"
+                href="/program"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="btn fw-bold px-4"
                 style={{ background: 'transparent', color: DARK.accent, border: `1px solid ${DARK.accent}` }}
               >
