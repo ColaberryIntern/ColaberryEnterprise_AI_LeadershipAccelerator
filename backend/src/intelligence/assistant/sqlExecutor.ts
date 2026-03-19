@@ -149,12 +149,12 @@ function buildLeadQueries(tables: string[]): TemplateQuery[] {
   if (tables.includes('leads')) {
     // Total counts first — contextBuilder uses these for accurate totals
     queries.push({
-      sql: `SELECT COUNT(*) AS total_leads, COUNT(*) FILTER (WHERE temperature = 'hot') AS hot_leads, COUNT(*) FILTER (WHERE temperature = 'warm') AS warm_leads, COUNT(*) FILTER (WHERE temperature = 'cold') AS cold_leads FROM leads`,
+      sql: `SELECT COUNT(*) AS total_leads, COUNT(*) FILTER (WHERE lead_temperature = 'hot') AS hot_leads, COUNT(*) FILTER (WHERE lead_temperature = 'warm') AS warm_leads, COUNT(*) FILTER (WHERE lead_temperature = 'cold') AS cold_leads FROM leads`,
       description: 'Lead totals by temperature',
       tables: ['leads'],
     });
     queries.push({
-      sql: `SELECT COALESCE(pipeline_stage, 'unknown') AS stage, COUNT(*) AS count, COALESCE(temperature, 'unknown') AS temperature FROM leads GROUP BY pipeline_stage, temperature ORDER BY count DESC LIMIT 30`,
+      sql: `SELECT COALESCE(pipeline_stage, 'unknown') AS stage, COUNT(*) AS count, COALESCE(lead_temperature, 'unknown') AS temperature FROM leads GROUP BY pipeline_stage, lead_temperature ORDER BY count DESC LIMIT 30`,
       description: 'Lead distribution by pipeline stage and temperature',
       tables: ['leads'],
     });
