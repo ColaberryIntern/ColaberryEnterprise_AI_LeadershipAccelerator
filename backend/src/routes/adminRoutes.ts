@@ -37,6 +37,7 @@ import projectOverviewRoutes from './admin/projectOverviewRoutes';
 import testSetupRoutes from './admin/testSetupRoutes';
 import productionCleanupRoutes from './admin/productionCleanupRoute';
 import productionActivationRoutes from './admin/productionActivationRoute';
+import campaignDiagnosticsRoutes from './admin/campaignDiagnosticsRoutes';
 
 const router = Router();
 
@@ -78,5 +79,6 @@ router.use(projectOverviewRoutes);
 router.use(testSetupRoutes);
 router.use(productionCleanupRoutes);
 router.use(productionActivationRoutes);
+router.use(campaignDiagnosticsRoutes);
 
 export default router;

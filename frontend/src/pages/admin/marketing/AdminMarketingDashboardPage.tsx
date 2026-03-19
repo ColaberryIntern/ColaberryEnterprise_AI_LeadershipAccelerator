@@ -447,17 +447,19 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                   Loading performance data...
                 </div>
               ) : roi ? (
-                <div className="row g-3 mb-4">
+                <div className="row g-3 mb-3">
                   {[
-                    { label: 'Visitors', value: (roi.visitors || 0).toLocaleString() },
-                    { label: 'Leads', value: (roi.leads || 0).toLocaleString() },
-                    { label: 'Enrollments', value: (roi.enrollments || 0).toLocaleString() },
-                    { label: 'Revenue', value: fmt$(roi.revenue || 0) },
-                    { label: 'ROI', value: roi.roi != null ? `${(roi.roi * 100).toFixed(0)}%` : '\u2014' },
-                    { label: 'Cost/Lead', value: roi.cost_per_lead ? fmt$(roi.cost_per_lead) : '\u2014' },
+                    { label: 'Visitors', value: (roi.visitors || 0).toLocaleString(), tooltip: 'Total unique visitors from this campaign' },
+                    { label: 'Identified', value: (roi.leads || 0).toLocaleString(), tooltip: 'Visitors matched to a known lead' },
+                    { label: 'Engaged', value: (roi.engaged || 0).toLocaleString(), tooltip: 'Visitors with 30s+ on page or 3+ interactions' },
+                    { label: 'Enrolled', value: (roi.enrollments || 0).toLocaleString(), tooltip: 'Visitors who completed enrollment' },
+                    { label: 'Revenue', value: fmt$(roi.revenue || 0), tooltip: 'Total revenue from enrolled visitors' },
+                    { label: 'ROI', value: roi.roi != null ? `${(roi.roi * 100).toFixed(0)}%` : '\u2014', tooltip: 'Return on investment: (revenue - spend) / spend' },
+                    { label: 'Cost/Lead', value: roi.cost_per_lead ? fmt$(roi.cost_per_lead) : '\u2014', tooltip: 'Budget spent divided by number of identified leads' },
+                    { label: 'Cost/Enroll', value: roi.cost_per_enrollment ? fmt$(roi.cost_per_enrollment) : '\u2014', tooltip: 'Budget spent divided by number of enrollments' },
                   ].map(kpi => (
-                    <div className="col-4 col-md-2" key={kpi.label}>
-                      <div className="card border-0 bg-light">
+                    <div className="col-4 col-md-3" key={kpi.label}>
+                      <div className="card border-0 bg-light" title={kpi.tooltip}>
                         <div className="card-body text-center p-2">
                           <div className="small text-muted">{kpi.label}</div>
                           <div className="fw-bold" style={{ fontSize: '1rem' }}>{kpi.value}</div>
@@ -466,6 +468,25 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                     </div>
                   ))}
                 </div>
+                {/* Conversion Funnel Rates */}
+                {(() => {
+                  const v = roi.visitors || 0;
+                  const l = roi.leads || 0;
+                  const eng = roi.engaged || 0;
+                  const en = roi.enrollments || 0;
+                  const vtl = v > 0 ? ((l / v) * 100).toFixed(1) : '0';
+                  const lte = l > 0 ? ((en / l) * 100).toFixed(1) : '0';
+                  const vte = v > 0 ? ((en / v) * 100).toFixed(1) : '0';
+                  const engRate = v > 0 ? ((eng / v) * 100).toFixed(1) : '0';
+                  return (
+                    <div className="d-flex gap-3 mb-4 flex-wrap" style={{ fontSize: '0.8rem' }}>
+                      <span className="text-muted" title="Percentage of visitors who became identified leads">Visitor{'\u2192'}Lead: <strong>{vtl}%</strong></span>
+                      <span className="text-muted" title="Percentage of leads who enrolled">Lead{'\u2192'}Enroll: <strong>{lte}%</strong></span>
+                      <span className="text-muted" title="Percentage of visitors who are actively engaged">Engagement Rate: <strong>{engRate}%</strong></span>
+                      <span className="text-muted" title="Overall conversion from visitor to enrollment">Overall Conv: <strong>{vte}%</strong></span>
+                    </div>
+                  );
+                })()}
               ) : (
                 <div className="text-muted small mb-4">No performance data available yet.</div>
               )}
@@ -839,8 +860,15 @@ function RevenueIntelligenceTab() {
     try {
       const res = await api.get(`/api/admin/campaigns/${campaignId}`);
       const camp = res.data?.campaign || res.data;
-      if (camp) setSelectedCampaign(camp);
-    } catch {}
+      if (camp && camp.id) {
+        // Ensure required fields for CampaignDetailModal
+        if (!camp.type) camp.type = camp.campaign_type || 'marketing';
+        if (!camp.status) camp.status = 'active';
+        setSelectedCampaign(camp);
+      }
+    } catch (err) {
+      console.error('[Marketing] Failed to load campaign detail:', err);
+    }
   };
 
   const fetchData = useCallback(async () => {
@@ -1075,12 +1103,12 @@ function RevenueIntelligenceTab() {
                     <SortTh k="strategy_calls">Calls</SortTh>
                     <SortTh k="enrollments_count">Enrolled</SortTh>
                     <SortTh k="total_revenue">Revenue</SortTh>
-                    <SortTh k="revenue_per_visitor">Rev/Visitor</SortTh>
-                    <SortTh k="revenue_per_lead">Rev/Lead</SortTh>
-                    <SortTh k="visitor_to_lead_pct">V{'\u2192'}L %</SortTh>
-                    <SortTh k="lead_to_call_pct">L{'\u2192'}C %</SortTh>
-                    <SortTh k="call_to_enroll_pct">C{'\u2192'}E %</SortTh>
-                    <SortTh k="conversion_rate">Conv %</SortTh>
+                    <SortTh k="revenue_per_visitor"><span title="Revenue per visitor">Rev/Visitor</span></SortTh>
+                    <SortTh k="revenue_per_lead"><span title="Revenue per lead">Rev/Lead</span></SortTh>
+                    <SortTh k="visitor_to_lead_pct"><span title="Visitor to Lead conversion rate">Visitor{'\u2192'}Lead %</span></SortTh>
+                    <SortTh k="lead_to_call_pct"><span title="Lead to Strategy Call conversion rate">Lead{'\u2192'}Call %</span></SortTh>
+                    <SortTh k="call_to_enroll_pct"><span title="Strategy Call to Enrollment conversion rate">Call{'\u2192'}Enroll %</span></SortTh>
+                    <SortTh k="conversion_rate"><span title="Overall visitor to enrollment conversion rate">Overall Conv %</span></SortTh>
                   </tr>
                 </thead>
                 <tbody>

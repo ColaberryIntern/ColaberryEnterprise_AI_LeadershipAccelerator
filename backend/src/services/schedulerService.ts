@@ -1151,6 +1151,16 @@ export function startScheduler(): void {
     });
   });
 
+  // Campaign watchdog: detect silent failures and auto-recover every 7 minutes
+  cron.schedule('*/7 * * * *', () => {
+    instrumentCronJob('CampaignWatchdog', async () => {
+      const { runWatchdog } = require('./campaignWatchdogService');
+      await runWatchdog();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Campaign watchdog error:', err.message);
+    });
+  });
+
   // Compute ICP insights daily at 2 AM, then auto-refresh active ICP profiles
   cron.schedule('0 2 * * *', () => {
     instrumentCronJob('ICPInsightComputer', async () => {
