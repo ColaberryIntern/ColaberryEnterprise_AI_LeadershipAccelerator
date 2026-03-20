@@ -88,6 +88,7 @@ function ContactPage() {
       };
       await api.post('/api/leads', toLeadPayload(lead));
       setSubmitted(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err: any) {
       if (err.response?.status === 400 && err.response?.data?.details) {
         const fieldErrors: Record<string, string> = {};
