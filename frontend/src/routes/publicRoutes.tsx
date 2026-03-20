@@ -14,6 +14,7 @@ import ExecOverviewThankYouPage from '../pages/ExecOverviewThankYouPage';
 import StrategyCallPrepPage from '../pages/StrategyCallPrepPage';
 import ExecutiveROICalculatorPage from '../pages/ExecutiveROICalculatorPage';
 import AIArchitectLandingPage from '../pages/AIArchitectLandingPage';
+import InstructorPage from '../pages/InstructorPage';
 import NotFoundPage from '../pages/NotFoundPage';
 
 const publicRoutes = (
@@ -32,6 +33,7 @@ const publicRoutes = (
     <Route path="/strategy-call-prep" element={<StrategyCallPrepPage />} />
     <Route path="/executive-roi-calculator" element={<ExecutiveROICalculatorPage />} />
     <Route path="/ai-architect" element={<AIArchitectLandingPage />} />
+    <Route path="/ai-architect/instructor" element={<InstructorPage />} />
     <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="*" element={<NotFoundPage />} />
   </>
