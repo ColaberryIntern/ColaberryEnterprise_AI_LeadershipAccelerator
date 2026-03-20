@@ -30,15 +30,10 @@ async function findLeadByNormalizedPhone(phone: string | undefined, excludeId?: 
 
 /* ── Warm campaign auto-enrollment ──────────────────────────────── */
 
-const ENROLLMENT_BYPASS_PHONES = ['6825975784'];
+const TEST_BYPASS_PHONES = ['6825975784'];
 
 async function tryEnrollInWarmCampaign(lead: any) {
   if (!lead.phone || !lead.phone.trim()) return;
-  const normalized = normalizePhone(lead.phone);
-  if (normalized && ENROLLMENT_BYPASS_PHONES.includes(normalized)) {
-    console.log(`[LeadService] Skipping warm enrollment for bypass phone ${normalized}`);
-    return;
-  }
   try {
     const { CampaignLead } = require('../models');
     const warmCampaign = await Campaign.findOne({
@@ -128,37 +123,42 @@ export function calculateLeadScore(lead: LeadInput): number {
 }
 
 export async function createLead(data: LeadInput) {
-  // Duplicate check: same email within 24 hours
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentDuplicate = await Lead.findOne({
-    where: {
-      email: data.email,
-      created_at: { [Op.gte]: oneDayAgo },
-    },
-    order: [['created_at', 'DESC']],
-  });
+  // Skip duplicate checks for test bypass phones so full flow can be re-tested
+  const isBypassPhone = data.phone && TEST_BYPASS_PHONES.includes(normalizePhone(data.phone) || '');
 
-  if (recentDuplicate) {
-    await tryEnrollInWarmCampaign(recentDuplicate);
-    return { lead: recentDuplicate, isDuplicate: true };
-  }
+  if (!isBypassPhone) {
+    // Duplicate check: same email within 24 hours
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentDuplicate = await Lead.findOne({
+      where: {
+        email: data.email,
+        created_at: { [Op.gte]: oneDayAgo },
+      },
+      order: [['created_at', 'DESC']],
+    });
 
-  // Duplicate check: same email (any age) — prevents unique constraint violation
-  const existingByEmail = await Lead.findOne({
-    where: { email: data.email },
-    order: [['created_at', 'DESC']],
-  });
-  if (existingByEmail) {
-    await tryEnrollInWarmCampaign(existingByEmail);
-    return { lead: existingByEmail, isDuplicate: true };
-  }
+    if (recentDuplicate) {
+      await tryEnrollInWarmCampaign(recentDuplicate);
+      return { lead: recentDuplicate, isDuplicate: true };
+    }
 
-  // Duplicate check: same phone (normalized)
-  if (data.phone) {
-    const phoneMatch = await findLeadByNormalizedPhone(data.phone);
-    if (phoneMatch) {
-      await tryEnrollInWarmCampaign(phoneMatch);
-      return { lead: phoneMatch, isDuplicate: true };
+    // Duplicate check: same email (any age) — prevents unique constraint violation
+    const existingByEmail = await Lead.findOne({
+      where: { email: data.email },
+      order: [['created_at', 'DESC']],
+    });
+    if (existingByEmail) {
+      await tryEnrollInWarmCampaign(existingByEmail);
+      return { lead: existingByEmail, isDuplicate: true };
+    }
+
+    // Duplicate check: same phone (normalized)
+    if (data.phone) {
+      const phoneMatch = await findLeadByNormalizedPhone(data.phone);
+      if (phoneMatch) {
+        await tryEnrollInWarmCampaign(phoneMatch);
+        return { lead: phoneMatch, isDuplicate: true };
+      }
     }
   }
 
