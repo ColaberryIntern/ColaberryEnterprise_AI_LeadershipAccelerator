@@ -178,15 +178,23 @@ async function checkEmptyQueues(
     });
 
     if (pendingActions === 0) {
-      // Check if all leads have completed the sequence (not actually stalled)
-      const completedLeads = await CampaignLead.count({
-        where: { campaign_id: campaign.id, status: 'completed' },
-      });
-      const totalLeads = await CampaignLead.count({
-        where: { campaign_id: campaign.id },
+      // Under event-driven sequencing, 0 pending is normal between steps.
+      // Only rebuild if there are leads that haven't had ANY action sent recently
+      // (i.e., truly stalled, not just waiting for next step to be scheduled).
+      const recentlySent = await ScheduledEmail.count({
+        where: {
+          campaign_id: campaign.id,
+          status: 'sent',
+          sent_at: { [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
       });
 
+      // If actions were sent in the last 24 hours, the campaign is healthy —
+      // next steps will be created by scheduleNextStep() after each send.
+      if (recentlySent > 0) continue;
+
       // Only stalled if there are non-completed leads with no pending actions
+      // AND nothing was sent recently (truly stalled, not event-driven gap)
       if (activeLeadCount > 0) {
         stalledCount++;
 
