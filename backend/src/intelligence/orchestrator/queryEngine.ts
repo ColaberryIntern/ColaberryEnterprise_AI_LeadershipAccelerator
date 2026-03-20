@@ -79,18 +79,19 @@ export async function handleQuery(
 
 /**
  * Handle executive summary with fallback.
- * Accepts optional entity_type to scope the summary.
+ * Accepts optional entity_type and entity_name to scope the summary.
  */
-export async function handleExecutiveSummary(entityType?: string): Promise<QueryResponse> {
+export async function handleExecutiveSummary(entityType?: string, entityName?: string): Promise<QueryResponse> {
   // Use the full assistant pipeline for rich, diverse charts + KPI insights
   // This is the same pipeline Cory questions use — guarantees 2-4 charts with variety
   try {
-    const question = entityType
-      ? `Give me an executive overview of ${entityType}`
+    const scopeLabel = entityName || entityType;
+    const question = scopeLabel
+      ? `Give me an executive overview of the ${scopeLabel} department — leads, campaigns, enrollments, emails, and performance metrics`
       : 'Give me a full executive overview of the business — leads, campaigns, enrollments, and system health';
     const result = await runAssistantPipeline(question, entityType);
     return {
-      question: 'Executive Summary',
+      question: scopeLabel ? `Executive Summary: ${scopeLabel}` : 'Executive Summary',
       intent: 'executive_summary',
       narrative: result.narrative,
       data: {
@@ -110,13 +111,18 @@ export async function handleExecutiveSummary(entityType?: string): Promise<Query
 
 /**
  * Handle ranked insights with fallback.
+ * Accepts optional entity_type and entity_name to scope the insights.
  */
-export async function handleRankedInsights(): Promise<QueryResponse> {
+export async function handleRankedInsights(entityType?: string, entityName?: string): Promise<QueryResponse> {
   // Use assistant pipeline for data-driven insights
   try {
-    const result = await runAssistantPipeline('What are the top insights across leads, enrollments, and campaigns?');
+    const scopeLabel = entityName || entityType;
+    const question = scopeLabel
+      ? `What are the top insights for the ${scopeLabel} department — leads, campaigns, enrollments, and performance?`
+      : 'What are the top insights across leads, enrollments, and campaigns?';
+    const result = await runAssistantPipeline(question, entityType);
     return {
-      question: 'Ranked Insights',
+      question: scopeLabel ? `Ranked Insights: ${scopeLabel}` : 'Ranked Insights',
       intent: 'general_insight',
       narrative: result.narrative,
       data: { insights: result.insights },
@@ -126,7 +132,10 @@ export async function handleRankedInsights(): Promise<QueryResponse> {
       execution_path: result.execution_path,
     };
   } catch {
-    return handleLocalQuery('What are the top insights across leads, enrollments, and campaigns?');
+    const question = entityType
+      ? `What are the top insights for ${entityType}?`
+      : 'What are the top insights across leads, enrollments, and campaigns?';
+    return handleLocalQuery(question);
   }
 }
 

@@ -1683,8 +1683,8 @@ function IntelligenceOSContent() {
   }, [loadNetwork]);
 
   // Unified scoped data loader — reloads ALL analytics + executive summary
-  const loadScopedAnalytics = useCallback((entityType?: string) => {
-    const params = entityType ? { entity_type: entityType } : undefined;
+  const loadScopedAnalytics = useCallback((entityType?: string, entityName?: string) => {
+    const params = entityType ? { entity_type: entityType, entity_name: entityName } : undefined;
     console.log('[Intelligence OS] Loading analytics for scope:', entityType || 'global');
 
     setAnalyticsLoading(true);
@@ -1743,7 +1743,8 @@ function IntelligenceOSContent() {
     scopeKeyRef.current = scopeKey;
 
     const entityType = scope.level === 'global' ? undefined : scope.entity_type;
-    loadScopedAnalytics(entityType);
+    const entityName = scope.level === 'global' ? undefined : scope.entity_name;
+    loadScopedAnalytics(entityType, entityName);
   }, [scope, loadScopedAnalytics]);
 
   // Health polling every 60 seconds (health only — KPIs managed by scope loader)

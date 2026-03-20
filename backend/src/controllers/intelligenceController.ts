@@ -180,7 +180,9 @@ export async function handleQueryOrchestrator(req: Request, res: Response, next:
 
 export async function handleGetExecutiveSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = await handleExecutiveSummary(req.query.entity_type as string | undefined);
+    const entityType = req.query.entity_type as string | undefined;
+    const entityName = req.query.entity_name as string | undefined;
+    const data = await handleExecutiveSummary(entityType, entityName);
     res.json(data);
   } catch (error: any) {
     next(error);
@@ -189,7 +191,9 @@ export async function handleGetExecutiveSummary(req: Request, res: Response, nex
 
 export async function handleGetRankedInsights(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = await handleRankedInsights();
+    const entityType = req.query.entity_type as string | undefined;
+    const entityName = req.query.entity_name as string | undefined;
+    const data = await handleRankedInsights(entityType, entityName);
     res.json(data);
   } catch (error: any) {
     next(error);

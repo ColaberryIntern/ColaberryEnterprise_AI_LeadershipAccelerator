@@ -153,9 +153,9 @@ export interface AssistantResponse {
 export const assistantQuery = (question: string, entityType?: string) =>
   api.post<AssistantResponse>('/assistant', { question, entity_type: entityType });
 
-export const getExecutiveSummary = (params?: { entity_type?: string }) =>
+export const getExecutiveSummary = (params?: { entity_type?: string; entity_name?: string }) =>
   api.get<QueryResponse>('/executive-summary', { params });
-export const getRankedInsights = (params?: { entity_type?: string }) =>
+export const getRankedInsights = (params?: { entity_type?: string; entity_name?: string }) =>
   api.get<QueryResponse>('/insights', { params });
 export const getEntityNetwork = () => api.get<EntityNetwork>('/entity-network');
 
@@ -604,71 +604,6 @@ export const getFlowNodeSessions = (nodeId: string, page = 1, limit = 50) =>
   axios.get<{ sessions: FlowSessionRecord[]; total: number }>(
     '/api/admin/visitor-flow/graph/node-sessions',
     { ...adminHeaders(), params: { nodeId, page, limit } },
-  );
-
-// ── Marketing Funnel Graph ──────────────────────────────────────────────────
-
-export interface FunnelGraphNode {
-  id: string;
-  type: 'channel' | 'campaign' | 'engagement' | 'conversion' | 'outcome';
-  label: string;
-  count: number;
-  metrics: {
-    lead_count?: number;
-    campaign_count?: number;
-    budget_spent?: number;
-    budget_total?: number;
-    engagement_rate?: number;
-    avg_lead_score?: number;
-    pct_of_total?: number;
-  };
-}
-
-export interface FunnelGraphEdge {
-  from: string;
-  to: string;
-  volume: number;
-}
-
-export interface FunnelGraphValidation {
-  total_leads: number;
-  total_campaigns: number;
-  leads_with_touchpoints: number;
-  leads_enrolled: number;
-  warnings: string[];
-}
-
-export interface FunnelGraphData {
-  nodes: FunnelGraphNode[];
-  edges: FunnelGraphEdge[];
-  validation: FunnelGraphValidation;
-  time_window?: string;
-}
-
-export interface FunnelLeadRecord {
-  lead_id: number;
-  name: string;
-  email: string;
-  pipeline_stage: string;
-  lead_score: number;
-  campaign_name: string;
-  engagement_level: string;
-  lifecycle_status: string;
-  touchpoint_count: number;
-  response_count: number;
-  enrolled_at: string;
-}
-
-export const getMarketingFunnelGraph = (timeWindow?: string) =>
-  axios.get<FunnelGraphData>('/api/admin/marketing/funnel/graph', {
-    ...adminHeaders(),
-    params: timeWindow && timeWindow !== 'all' ? { timeWindow } : {},
-  });
-
-export const getFunnelNodeLeads = (nodeId: string, page = 1, limit = 20, timeWindow?: string) =>
-  axios.get<{ leads: FunnelLeadRecord[]; total: number }>(
-    '/api/admin/marketing/funnel/graph/node-leads',
-    { ...adminHeaders(), params: { nodeId, page, limit, timeWindow } },
   );
 
 export default api;
