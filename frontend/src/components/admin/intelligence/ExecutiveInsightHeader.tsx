@@ -266,7 +266,7 @@ export default function ExecutiveInsightHeader({ kpis, loading, entityType, onCo
       {(kpis as any)?.cory_kpis?.map((ckpi: any, idx: number) => (
         <KPICard
           key={`cory-${idx}`}
-          label={ckpi.name || 'Metric'}
+          label={ckpi.name || ckpi.label || 'Metric'}
           accent="var(--color-primary-light)"
           onCoryClick={onCoryClick ? () => onCoryClick(`Tell me more about ${ckpi.name}: current value is ${ckpi.value}`) : undefined}
         >

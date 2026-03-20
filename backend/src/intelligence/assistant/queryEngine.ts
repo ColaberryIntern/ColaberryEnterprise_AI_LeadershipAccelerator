@@ -12,7 +12,7 @@ import { buildContext, Insight, PipelineContext } from './contextBuilder';
 import { selectVisualizations, guaranteeCharts, ChartConfig } from './chartSelector';
 import { generateFollowups } from './followupGenerator';
 import { chatCompletion } from './openaiHelper';
-import { validateAndEnrichResults } from './agents/dataAnalystAgent';
+import { validateAndEnrichResults, getBusinessLabel } from './agents/dataAnalystAgent';
 import { validateAndFixCharts, extractNormalizedConfig } from './agents/chartValidationAgent';
 import { validateReport } from './agents/reportQualityAgent';
 
@@ -364,6 +364,7 @@ ${context.formattedContext.slice(0, 6000)}`;
 /**
  * Ensure insights contain KPI-bearing entries (metric + value) so the frontend
  * can render dynamic KPI cards from every Cory response.
+ * Uses getBusinessLabel to ensure human-readable metric names.
  */
 function extractKPIsFromResults(
   insights: Array<{ type: string; severity: string; message: string; metric?: string; value?: number }>,
@@ -382,11 +383,12 @@ function extractKPIsFromResults(
       if (key.endsWith('_at') || key.endsWith('_date') || key === 'created_at' || key === 'updated_at') continue;
       const num = Number(val);
       if (!isNaN(num) && num > 0 && isFinite(num)) {
+        const bizLabel = getBusinessLabel(key);
         insights.push({
           type: 'metric',
           severity: 'info',
-          message: `${key.replace(/_/g, ' ')}: ${num.toLocaleString()}`,
-          metric: key,
+          message: `${bizLabel}: ${num.toLocaleString()}`,
+          metric: bizLabel,
           value: num,
         });
       }
@@ -398,21 +400,21 @@ function extractKPIsFromResults(
   if (!insights.some((i) => i.metric)) {
     for (const sr of sqlResults) {
       if (sr.rows.length < 2) continue;
-      // Use row count as a KPI (e.g. "13 campaigns", "849 leads")
+      // Use row count as a KPI (e.g. "15 Campaigns", "849 Leads")
       const desc = sr.description.toLowerCase();
-      let label = 'records';
-      if (desc.includes('campaign')) label = 'campaigns';
-      else if (desc.includes('lead')) label = 'leads';
-      else if (desc.includes('email')) label = 'emails';
-      else if (desc.includes('enrollment') || desc.includes('student')) label = 'enrollments';
-      else if (desc.includes('agent')) label = 'agents';
-      else if (desc.includes('communication') || desc.includes('touchpoint')) label = 'touchpoints';
+      let label = 'Records';
+      if (desc.includes('campaign')) label = 'Campaigns';
+      else if (desc.includes('lead')) label = 'Leads';
+      else if (desc.includes('email')) label = 'Emails Sent';
+      else if (desc.includes('enrollment') || desc.includes('student')) label = 'Enrollments';
+      else if (desc.includes('agent')) label = 'Automation Processes';
+      else if (desc.includes('communication') || desc.includes('touchpoint')) label = 'Touchpoints';
 
       insights.push({
         type: 'metric',
         severity: 'info',
-        message: `${sr.rows.length} ${label} found`,
-        metric: `total_${label}`,
+        message: `${sr.rows.length} ${label}`,
+        metric: `Total ${label}`,
         value: sr.rows.length,
       });
 
@@ -426,11 +428,12 @@ function extractKPIsFromResults(
       if (numKey) {
         const total = sr.rows.reduce((sum, r) => sum + (Number(r[numKey]) || 0), 0);
         if (total > 0) {
+          const bizLabel = getBusinessLabel(numKey);
           insights.push({
             type: 'metric',
             severity: 'info',
-            message: `${numKey.replace(/_/g, ' ')}: ${total.toLocaleString()}`,
-            metric: numKey,
+            message: `${bizLabel}: ${total.toLocaleString()}`,
+            metric: bizLabel,
             value: total,
           });
         }

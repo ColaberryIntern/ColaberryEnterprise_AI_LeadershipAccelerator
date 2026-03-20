@@ -26,6 +26,25 @@ export interface PipelineContext {
 
 // ─── Semantic Formatters ─────────────────────────────────────────────────────
 
+/** Convert raw column name to business-friendly label (Title Case with common abbreviations). */
+function formatColumnLabel(key: string): string {
+  const KNOWN: Record<string, string> = {
+    total_count: 'Total Count', count: 'Count', lead_count: 'Total Leads',
+    total_leads: 'Total Leads', enrollment_count: 'Total Enrollments',
+    total_enrollments: 'Total Enrollments', total_students: 'Total Students',
+    campaign_count: 'Active Campaigns', email_count: 'Emails Sent',
+    total_campaigns: 'Total Campaigns', active_campaigns: 'Active Campaigns',
+    paused_campaigns: 'Paused Campaigns', completed_campaigns: 'Completed Campaigns',
+    hot_leads: 'Hot Leads', warm_leads: 'Warm Leads', cold_leads: 'Cold Leads',
+    avg_score: 'Average Score', conversion_rate: 'Conversion Rate',
+    open_rate: 'Open Rate', click_rate: 'Click Rate', bounce_rate: 'Bounce Rate',
+    error_count: 'Errors', run_count: 'Total Runs', success_count: 'Successful Runs',
+    amount: 'Amount', revenue: 'Revenue', total_revenue: 'Total Revenue',
+    status: 'Status', stage: 'Stage', source: 'Source', channel: 'Channel',
+  };
+  return KNOWN[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function formatValue(key: string, value: any): string {
   if (value == null) return 'N/A';
   const num = Number(value);
@@ -165,18 +184,19 @@ function extractInsights(
   // Runs after intent-specific analyzers to fill gaps (e.g. campaign_analysis only adds
   // insights when paused > 5 or errors > 10, leaving most responses with 0 insights)
   if (!insights.some((i) => i.metric && i.value != null)) {
-    for (const { rows, description } of sqlResults) {
+    for (const { rows } of sqlResults) {
       if (rows.length !== 1) continue;
       const row = rows[0];
       for (const [key, val] of Object.entries(row)) {
         if (key.endsWith('_at') || key.endsWith('_date')) continue;
         const num = Number(val);
         if (!isNaN(num) && num > 0 && isFinite(num)) {
+          const bizLabel = formatColumnLabel(key);
           insights.push({
             type: 'KPI',
             severity: 'info',
-            message: `${key.replace(/_/g, ' ')}: ${num.toLocaleString()}`,
-            metric: key,
+            message: `${bizLabel}: ${num.toLocaleString()}`,
+            metric: bizLabel,
             value: num,
           });
         }

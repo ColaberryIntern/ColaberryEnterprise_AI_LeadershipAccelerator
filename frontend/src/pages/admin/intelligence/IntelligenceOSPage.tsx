@@ -1623,7 +1623,8 @@ function IntelligenceOSContent() {
               setKpis((prev: any) => ({
                 ...prev,
                 cory_kpis: metricInsights.slice(0, 6).map((i: any) => ({
-                  label: (i.metric || '').replace(/_/g, ' '),
+                  name: (i.metric || 'Metric').replace(/_/g, ' '),
+                  label: (i.metric || 'Metric').replace(/_/g, ' '),
                   value: i.value,
                   source: 'executive_summary',
                 })),
@@ -1788,8 +1789,14 @@ function IntelligenceOSContent() {
   }, []);
 
   const handleInsightsUpdate = useCallback((ins: any[]) => {
-    // Map Cory insights into AutoInsightsGrid format
-    setAutoInsights(ins.map((i: any) => ({
+    // Map Cory insights into AutoInsightsGrid format — only include insights with meaningful messages
+    const meaningfulInsights = ins.filter((i: any) => {
+      const msg = (i.message || '').trim();
+      // Filter out raw single-word values like "active", "draft", "completed"
+      if (msg.length < 5 || !msg.includes(' ')) return false;
+      return true;
+    });
+    setAutoInsights(meaningfulInsights.map((i: any) => ({
       title: i.message || i.title || '',
       severity: i.severity,
       metric_value: i.value,
@@ -1805,7 +1812,7 @@ function IntelligenceOSContent() {
         const matches = [...(insight.message || '').matchAll(numberPattern)];
         for (const match of matches) {
           kpiInsights.push({
-            metric: match[2],
+            metric: match[2].charAt(0).toUpperCase() + match[2].slice(1),
             value: parseFloat(match[1].replace(/,/g, '')),
             severity: insight.severity,
           });
@@ -1816,8 +1823,8 @@ function IntelligenceOSContent() {
     if (kpiInsights.length > 0) {
       setKpis((prev: any) => ({
         ...prev,
-        cory_kpis: kpiInsights.map((i: any) => ({
-          name: (i.metric || '').replace(/_/g, ' '),
+        cory_kpis: kpiInsights.slice(0, 6).map((i: any) => ({
+          name: (i.metric || 'Metric').replace(/_/g, ' '),
           value: i.value,
           unit: '',
           trend: i.severity === 'warning' ? 'down' : 'stable',
