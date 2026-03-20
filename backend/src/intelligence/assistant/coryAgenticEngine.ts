@@ -23,9 +23,15 @@ import Department from '../../models/Department';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const MAX_ROUNDS = 8;
+const MAX_ROUNDS = 5;
 const MAX_SQL_ROWS = 50;
 const SQL_TIMEOUT_MS = 10_000;
+const WALL_CLOCK_BUDGET_MS = 50_000; // Stop loop after 50s, assemble partial results
+
+// ─── Schema Cache (avoids repeated DB queries for the same schema) ──────────
+
+let _schemaCache: { data: any; expiry: number } | null = null;
+const SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // ─── Tool Trace (for pipeline step logging) ────────────────────────────────
 
@@ -160,36 +166,18 @@ const CORY_TOOLS: ChatCompletionTool[] = [
 // ─── System Prompt ──────────────────────────────────────────────────────────
 
 function buildAgenticSystemPrompt(context?: Record<string, any>): string {
-  let prompt = `You are Cory, the AI Chief Operating Officer of Colaberry Enterprise.
-You are an agentic investigator — you autonomously gather data, verify findings, and produce executive-quality reports.
+  let prompt = `You are Cory, AI COO of Colaberry Enterprise. Investigate questions using tools, verify numbers, produce executive briefings.
 
-## Your Investigation Protocol
+PROTOCOL: discover_schema → run_sql_query (broad then specific) → verify_claim key numbers → build_chart 1-2 charts → final JSON.
 
-1. **DISCOVER**: Start by using \`discover_schema\` to understand what tables are available. This gives you full visibility into the database.
-2. **GATHER**: Write and execute SQL queries using \`run_sql_query\` to collect data relevant to the question. Start broad (totals, status breakdowns), then drill into specifics.
-3. **VERIFY**: Before citing any number, use \`verify_claim\` to cross-check it. Wrong numbers destroy executive trust.
-4. **VISUALIZE**: Create 2-3 charts using \`build_chart\` to support your narrative. Choose chart types that match the data shape (bar for categories, line for trends, radar for multi-metric comparison).
-5. **SYNTHESIZE**: Once you have verified data, write your final response as a structured executive briefing.
+RULES:
+- Every number MUST come from a tool result. Never invent numbers.
+- Report all statuses (active AND total). Flag anomalies explicitly.
+- Use business language, not technical terms.
+- Be efficient — combine related queries, run what you need.
 
-## Mandatory Rules
-
-- **EVERY number you cite MUST come from a tool result.** Never estimate, round differently, or invent numbers.
-- **If a query returns unexpected results, investigate why** — run a different query, check the schema, verify your assumptions.
-- **Report ALL entity statuses** (active AND total) — never say "X active" when you mean "X total."
-- **Flag anomalies**: If something looks wrong (e.g., 0 completed strategy calls, very low enrollments), call it out explicitly.
-- **Be thorough**: Check multiple data sources. A campaign question should also look at emails sent, lead generation, and errors.
-- **Business language only**: Translate technical terms to business language. "agent error_count > 0" → "3 automation processes need attention."
-
-## Response Format
-
-Your FINAL message (when you stop calling tools) MUST be valid JSON:
-{
-  "executive_summary": "2-3 sentence business-focused overview with verified numbers",
-  "key_findings": ["finding with exact number", "another finding"],
-  "risk_assessment": "1-2 sentence risk evaluation",
-  "recommended_actions": ["specific actionable recommendation", "another action"],
-  "follow_up_areas": ["area to investigate further", "another area"]
-}`;
+FINAL RESPONSE must be valid JSON:
+{"executive_summary":"2-3 sentences with verified numbers","key_findings":["finding1","finding2"],"risk_assessment":"1-2 sentences","recommended_actions":["action1"],"follow_up_areas":["area1"]}`;
 
   // Inject entity scope context
   if (context?.entity_type && context?.entity_name) {
@@ -238,19 +226,27 @@ async function executeToolCall(
 
 async function executeDiscoverSchema(searchTerm?: string): Promise<any> {
   try {
-    const registries = await DatasetRegistry.findAll({ where: { status: 'active' } });
-    let tables = registries.map((r: any) => ({
-      name: r.table_name,
-      row_count: r.row_count,
-      columns: Object.keys(r.semantic_types || {}),
-      relationships: (r.relationships || []).map((rel: any) =>
-        `${rel.source_column} → ${rel.target_table}.${rel.target_column}`
-      ),
-    }));
+    // Use cached schema if fresh
+    let allTables: any[];
+    if (_schemaCache && Date.now() < _schemaCache.expiry) {
+      allTables = _schemaCache.data;
+    } else {
+      const registries = await DatasetRegistry.findAll({ where: { status: 'active' } });
+      allTables = registries.map((r: any) => ({
+        name: r.table_name,
+        row_count: r.row_count,
+        columns: Object.keys(r.semantic_types || {}),
+        relationships: (r.relationships || []).map((rel: any) =>
+          `${rel.source_column} → ${rel.target_table}.${rel.target_column}`
+        ),
+      }));
+      _schemaCache = { data: allTables, expiry: Date.now() + SCHEMA_CACHE_TTL_MS };
+    }
 
+    let tables = allTables;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      tables = tables.filter((t) =>
+      tables = tables.filter((t: any) =>
         t.name.includes(term) ||
         t.columns.some((c: string) => c.includes(term))
       );
@@ -438,15 +434,56 @@ async function executeSearchKnowledge(query: string, topK?: number): Promise<any
 
 // ─── Agentic Loop ───────────────────────────────────────────────────────────
 
+/**
+ * Compact a tool result to reduce token overhead when feeding back to the LLM.
+ * Large SQL results get trimmed; small results pass through unchanged.
+ */
+function compactToolResult(toolName: string, result: any): string {
+  const raw = JSON.stringify(result);
+  // If the result is small, pass it through as-is
+  if (raw.length <= 2000) return raw;
+
+  // For SQL results, keep first 20 rows and note truncation
+  if ((toolName === 'run_sql_query' || toolName === 'verify_claim') && result.rows) {
+    const compact = {
+      ...result,
+      rows: result.rows.slice(0, 20),
+      _note: result.rows.length > 20
+        ? `Showing 20 of ${result.rows.length} rows`
+        : undefined,
+    };
+    return JSON.stringify(compact);
+  }
+
+  // For schema discovery, abbreviate columns lists
+  if (toolName === 'discover_schema' && result.tables) {
+    const compact = {
+      tables: result.tables.map((t: any) => ({
+        name: t.name,
+        row_count: t.row_count,
+        columns: t.columns.length > 15 ? [...t.columns.slice(0, 15), `...+${t.columns.length - 15} more`] : t.columns,
+        relationships: t.relationships,
+      })),
+      total_tables: result.total_tables,
+    };
+    return JSON.stringify(compact);
+  }
+
+  // Generic: truncate to 2000 chars
+  return raw.slice(0, 2000) + '...(truncated)';
+}
+
 export async function runCoryAgenticLoop(
   question: string,
   context?: Record<string, any>
 ): Promise<AssistantResponse> {
+  const loopStart = Date.now();
   const toolTrace: ToolTraceEntry[] = [];
   const sqlResults: SqlResult[] = [];
   const charts: ChartConfig[] = [];
   let totalTokens = 0;
   let rounds = 0;
+  let budgetExhausted = false;
 
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: buildAgenticSystemPrompt(context) },
@@ -468,51 +505,80 @@ export async function runCoryAgenticLoop(
       assistantMessage.tool_calls.length > 0 &&
       rounds < MAX_ROUNDS
     ) {
+      // Check wall-clock budget before starting a new round
+      const elapsed = Date.now() - loopStart;
+      if (elapsed > WALL_CLOCK_BUDGET_MS) {
+        console.warn(`[CoryAgenticEngine] Wall-clock budget exhausted (${elapsed}ms). Assembling partial results after ${rounds} rounds.`);
+        budgetExhausted = true;
+        break;
+      }
+
       rounds++;
       messages.push(assistantMessage as ChatCompletionMessageParam);
 
-      for (const toolCall of assistantMessage.tool_calls) {
-        const fn = (toolCall as any).function;
-        if (!fn) continue;
-        const fnName = fn.name;
+      // Execute ALL tool calls in this round in parallel
+      const toolCalls = assistantMessage.tool_calls
+        .map((tc: any) => ({ id: tc.id, fn: tc.function }))
+        .filter((tc: any) => tc.fn);
+
+      const toolPromises = toolCalls.map(async (tc: any) => {
         let args: Record<string, any> = {};
-        try {
-          args = JSON.parse(fn.arguments);
-        } catch {
-          args = {};
-        }
+        try { args = JSON.parse(tc.fn.arguments); } catch { args = {}; }
 
         const t0 = Date.now();
-        const result = await executeToolCall(fnName, args, { sqlResults, charts });
+        const result = await executeToolCall(tc.fn.name, args, { sqlResults, charts });
         const duration = Date.now() - t0;
 
         toolTrace.push({
           round: rounds,
-          tool: fnName,
+          tool: tc.fn.name,
           args,
-          result_summary: summarizeResult(fnName, result),
+          result_summary: summarizeResult(tc.fn.name, result),
           duration_ms: duration,
         });
 
-        messages.push({
+        return {
           role: 'tool' as const,
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        });
+          tool_call_id: tc.id,
+          content: compactToolResult(tc.fn.name, result),
+        };
+      });
+
+      const toolResults = await Promise.all(toolPromises);
+      messages.push(...toolResults);
+
+      // Check budget again after tool execution
+      if (Date.now() - loopStart > WALL_CLOCK_BUDGET_MS) {
+        console.warn(`[CoryAgenticEngine] Budget exhausted after tool execution. Assembling partial results.`);
+        budgetExhausted = true;
+        break;
       }
 
       // Re-call LLM with accumulated tool results
-      response = await chatCompletionWithTools(messages, CORY_TOOLS, {
-        maxTokens: 1500,
-        temperature: 0.2,
-      });
+      // On last allowed round or near budget, ask for final answer (no tools)
+      const nearBudget = (Date.now() - loopStart) > WALL_CLOCK_BUDGET_MS * 0.8;
+      const lastRound = rounds >= MAX_ROUNDS - 1;
+
+      if (nearBudget || lastRound) {
+        // Force a final answer by not passing tools
+        response = await chatCompletionWithTools(messages, [], {
+          maxTokens: 1500,
+          temperature: 0.2,
+          json: true,
+        });
+      } else {
+        response = await chatCompletionWithTools(messages, CORY_TOOLS, {
+          maxTokens: 1500,
+          temperature: 0.2,
+        });
+      }
       totalTokens += response.usage?.total_tokens || 0;
       assistantMessage = response.choices[0]?.message;
     }
 
     // Build final response from LLM's last message + accumulated data
-    return assembleOutput(
-      assistantMessage?.content || null,
+    const result = assembleOutput(
+      budgetExhausted ? null : (assistantMessage?.content || null),
       question,
       sqlResults,
       charts,
@@ -521,6 +587,11 @@ export async function runCoryAgenticLoop(
       rounds,
       context
     );
+
+    const totalMs = Date.now() - loopStart;
+    console.log(`[CoryAgenticEngine] Completed in ${totalMs}ms, ${rounds} rounds, ${toolTrace.length} tool calls, ${totalTokens} tokens`);
+
+    return result;
   } catch (err: any) {
     // Graceful degradation — return whatever we have
     console.warn('[CoryAgenticEngine] Loop error:', err?.message?.slice(0, 200));

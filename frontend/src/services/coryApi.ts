@@ -4,7 +4,7 @@ const API_BASE = '/api/admin/intelligence/cory';
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 60000,
+  timeout: 120000,
   headers: { 'Content-Type': 'application/json' },
 });
 
