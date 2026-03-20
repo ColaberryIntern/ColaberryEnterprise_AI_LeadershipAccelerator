@@ -2,6 +2,7 @@ import { intelligenceProxy } from '../../services/intelligenceProxyService';
 import { generateLocalSummary } from '../services/executiveSummaryService';
 import { handleLocalQuery } from '../services/localQueryEngine';
 import { buildEntityNetwork, EntityNetwork } from '../services/entityGraphService';
+import { runAssistantPipeline } from '../assistant/queryEngine';
 
 interface QueryResponse {
   question: string;
@@ -63,7 +64,7 @@ export async function handleQuery(
       const result = await Promise.race([
         intelligenceProxy.queryOrchestrator({ question, scope }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Python query timeout')), 30000)
+          setTimeout(() => reject(new Error('Python query timeout')), 8000)
         ),
       ]);
       return (result as any).data;
@@ -81,47 +82,52 @@ export async function handleQuery(
  * Accepts optional entity_type to scope the summary.
  */
 export async function handleExecutiveSummary(entityType?: string): Promise<QueryResponse> {
-  const pyAvailable = await isPythonAvailable();
-
-  if (pyAvailable && !entityType) {
-    try {
-      const result = await Promise.race([
-        intelligenceProxy.getExecutiveSummary(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Python summary timeout')), 20000)
-        ),
-      ]);
-      return (result as any).data;
-    } catch {
-      // Fall through to local
-    }
+  // Use the full assistant pipeline for rich, diverse charts + KPI insights
+  // This is the same pipeline Cory questions use — guarantees 2-4 charts with variety
+  try {
+    const question = entityType
+      ? `Give me an executive overview of ${entityType}`
+      : 'Give me a full executive overview of the business — leads, campaigns, enrollments, and system health';
+    const result = await runAssistantPipeline(question, entityType);
+    return {
+      question: 'Executive Summary',
+      intent: 'executive_summary',
+      narrative: result.narrative,
+      data: {
+        insights: result.insights,
+        narrative_sections: result.narrative_sections,
+      },
+      visualizations: result.visualizations,
+      follow_ups: result.recommendations,
+      sources: result.sources,
+      execution_path: result.execution_path,
+    };
+  } catch {
+    // Fallback to simple local summary if pipeline fails
+    return generateLocalSummary(entityType);
   }
-
-  return generateLocalSummary(entityType);
 }
 
 /**
  * Handle ranked insights with fallback.
  */
 export async function handleRankedInsights(): Promise<QueryResponse> {
-  const pyAvailable = await isPythonAvailable();
-
-  if (pyAvailable) {
-    try {
-      const result = await Promise.race([
-        intelligenceProxy.getRankedInsights(),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Python insights timeout')), 20000)
-        ),
-      ]);
-      return (result as any).data;
-    } catch {
-      // Fall through
-    }
+  // Use assistant pipeline for data-driven insights
+  try {
+    const result = await runAssistantPipeline('What are the top insights across leads, enrollments, and campaigns?');
+    return {
+      question: 'Ranked Insights',
+      intent: 'general_insight',
+      narrative: result.narrative,
+      data: { insights: result.insights },
+      visualizations: result.visualizations,
+      follow_ups: result.recommendations,
+      sources: result.sources,
+      execution_path: result.execution_path,
+    };
+  } catch {
+    return handleLocalQuery('What are the top insights across leads, enrollments, and campaigns?');
   }
-
-  // Local fallback: use smart query engine for ranked insights
-  return handleLocalQuery('What are the top insights across leads, enrollments, and campaigns?');
 }
 
 /**
@@ -135,7 +141,7 @@ export async function handleEntityNetwork(): Promise<EntityNetwork> {
       const result = await Promise.race([
         intelligenceProxy.getEntityNetwork(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Python entity-network timeout')), 10000)
+          setTimeout(() => reject(new Error('Python entity-network timeout')), 5000)
         ),
       ]);
       const data = (result as any).data;

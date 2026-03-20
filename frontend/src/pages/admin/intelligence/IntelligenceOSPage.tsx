@@ -1615,6 +1615,21 @@ function IntelligenceOSContent() {
         }
         if (data.data) {
           setSummary(data.data);
+          // Extract KPIs from assistant pipeline insights (returned in data.data.insights)
+          const pipelineInsights = data.data?.insights;
+          if (Array.isArray(pipelineInsights) && pipelineInsights.length > 0) {
+            const metricInsights = pipelineInsights.filter((i: any) => i.metric && i.value != null);
+            if (metricInsights.length > 0) {
+              setKpis((prev: any) => ({
+                ...prev,
+                cory_kpis: metricInsights.slice(0, 6).map((i: any) => ({
+                  label: (i.metric || '').replace(/_/g, ' '),
+                  value: i.value,
+                  source: 'executive_summary',
+                })),
+              }));
+            }
+          }
         }
         setLastRefresh(new Date().toLocaleString());
       })
