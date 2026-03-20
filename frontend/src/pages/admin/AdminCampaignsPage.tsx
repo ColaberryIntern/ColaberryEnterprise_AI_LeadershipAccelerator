@@ -50,7 +50,10 @@ const TYPE_BORDER_COLORS: Record<string, string> = {
   behavioral_trigger: '#38a169',
 };
 
+type CampaignTab = 'intelligence' | 'campaigns';
+
 function AdminCampaignsPage() {
+  const [activeTab, setActiveTab] = useState<CampaignTab>('intelligence');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,102 +151,136 @@ function AdminCampaignsPage() {
   return (
     <div>
       <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-3">
         <h2 className="mb-0">Campaigns</h2>
         <div className="d-flex gap-2">
-          <Link to="/admin/campaigns/build-cold" className="btn btn-outline-primary">
+          <Link to="/admin/campaigns/build-cold" className="btn btn-outline-primary btn-sm">
             Build Cold Campaign
           </Link>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
             + New Campaign
           </button>
         </div>
       </div>
 
-      {/* Campaign Intelligence Graph */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white d-flex justify-content-between align-items-center">
-          <span className="fw-semibold" style={{ color: 'var(--color-primary)' }}>Campaign Intelligence Graph</span>
-          <span className="text-muted small">Click nodes for details</span>
-        </div>
-        <div className="card-body p-0" style={{ height: 560 }}>
-          <CampaignGraphTab fullWidth />
-        </div>
-      </div>
+      {/* Tab Navigation */}
+      <ul className="nav nav-tabs mb-3">
+        <li className="nav-item">
+          <button
+            className={`nav-link${activeTab === 'intelligence' ? ' active' : ''}`}
+            onClick={() => setActiveTab('intelligence')}
+            type="button"
+          >
+            Campaign Intelligence
+          </button>
+        </li>
+        <li className="nav-item">
+          <button
+            className={`nav-link${activeTab === 'campaigns' ? ' active' : ''}`}
+            onClick={() => setActiveTab('campaigns')}
+            type="button"
+          >
+            Campaigns
+            {campaigns.length > 0 && (
+              <span className="badge bg-secondary ms-2">{campaigns.length}</span>
+            )}
+          </button>
+        </li>
+      </ul>
 
-      <div className="row mb-3">
-        <div className="col-auto">
-          <select className="form-select form-select-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-            <option value="">All Types</option>
-            <option value="warm_nurture">Warm Nurture</option>
-            <option value="cold_outbound">Cold Outbound</option>
-            <option value="re_engagement">Re-Engagement</option>
-          </select>
-        </div>
-        <div className="col-auto">
-          <select className="form-select form-select-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-            <option value="">All Statuses</option>
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-            <option value="completed">Completed</option>
-          </select>
-        </div>
-      </div>
-
-      {campaigns.length === 0 ? (
-        <div className="card">
-          <div className="card-body text-center py-5 text-muted">
-            <p className="mb-2">No campaigns yet.</p>
-            <button className="btn btn-outline-primary btn-sm" onClick={() => setShowModal(true)}>
-              Create your first campaign
-            </button>
+      {/* Campaign Intelligence Graph — full viewport */}
+      {activeTab === 'intelligence' && (
+        <div style={{ height: 'calc(100vh - 220px)', minHeight: 400 }}>
+          <div className="card border-0 shadow-sm d-flex flex-column" style={{ height: '100%' }}>
+            <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
+              <span className="fw-semibold" style={{ color: 'var(--color-primary)', fontSize: '0.85rem' }}>Campaign Intelligence Graph</span>
+              <span className="text-muted" style={{ fontSize: '0.65rem' }}>Click nodes for details</span>
+            </div>
+            <div className="card-body p-0" style={{ flex: '1 1 0', minHeight: 0 }}>
+              <CampaignGraphTab fullWidth />
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="row g-3">
-          {campaigns.map((c) => (
-            <div key={c.id} className="col-md-6 col-lg-4">
-              <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none">
-                <div className="card h-100 admin-table-card card-lift" style={{ borderTop: `3px solid ${TYPE_BORDER_COLORS[c.type] || '#6c757d'}` }}>
-                  <div className="card-body">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <h6 className="card-title text-dark mb-0">{c.name}</h6>
-                      <span className={`badge rounded-pill bg-${STATUS_COLORS[c.status] || 'secondary'}`}>
-                        {c.status}
-                      </span>
-                    </div>
-                    <div className="d-flex gap-1 mb-2 flex-wrap">
-                      <span className="badge bg-light text-dark border">
-                        {TYPE_LABELS[c.type] || c.type}
-                      </span>
-                      {c.campaign_mode === 'autonomous' && (
-                        <span className="badge bg-info text-white">Autonomous</span>
-                      )}
-                      {c.campaign_mode === 'autonomous' && c.ramp_state && c.ramp_state.status !== 'complete' && (
-                        <span className="badge bg-outline-primary border text-primary">
-                          Phase {c.ramp_state.current_phase}/{c.ramp_state.phase_sizes?.length || 4}
-                        </span>
-                      )}
-                    </div>
-                    {c.description && (
-                      <p className="text-muted small mb-2" style={{ WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {c.description}
-                      </p>
-                    )}
-                    <div className="d-flex gap-3 text-muted small mt-auto">
-                      <span>{c.lead_count} leads</span>
-                      {c.sequence && <span>Seq: {c.sequence.name}</span>}
-                      {c.budget_total != null && c.budget_total > 0 && (
-                        <span>${(c.budget_spent || 0).toFixed(0)} / ${c.budget_total.toFixed(0)}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Link>
+      )}
+
+      {/* Campaign List Tab */}
+      {activeTab === 'campaigns' && (
+        <>
+          <div className="row mb-3">
+            <div className="col-auto">
+              <select className="form-select form-select-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                <option value="">All Types</option>
+                <option value="warm_nurture">Warm Nurture</option>
+                <option value="cold_outbound">Cold Outbound</option>
+                <option value="re_engagement">Re-Engagement</option>
+              </select>
             </div>
-          ))}
-        </div>
+            <div className="col-auto">
+              <select className="form-select form-select-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                <option value="">All Statuses</option>
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          </div>
+
+          {campaigns.length === 0 ? (
+            <div className="card">
+              <div className="card-body text-center py-5 text-muted">
+                <p className="mb-2">No campaigns yet.</p>
+                <button className="btn btn-outline-primary btn-sm" onClick={() => setShowModal(true)}>
+                  Create your first campaign
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="row g-3">
+              {campaigns.map((c) => (
+                <div key={c.id} className="col-md-6 col-lg-4">
+                  <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none">
+                    <div className="card h-100 admin-table-card card-lift" style={{ borderTop: `3px solid ${TYPE_BORDER_COLORS[c.type] || '#6c757d'}` }}>
+                      <div className="card-body">
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <h6 className="card-title text-dark mb-0">{c.name}</h6>
+                          <span className={`badge rounded-pill bg-${STATUS_COLORS[c.status] || 'secondary'}`}>
+                            {c.status}
+                          </span>
+                        </div>
+                        <div className="d-flex gap-1 mb-2 flex-wrap">
+                          <span className="badge bg-light text-dark border">
+                            {TYPE_LABELS[c.type] || c.type}
+                          </span>
+                          {c.campaign_mode === 'autonomous' && (
+                            <span className="badge bg-info text-white">Autonomous</span>
+                          )}
+                          {c.campaign_mode === 'autonomous' && c.ramp_state && c.ramp_state.status !== 'complete' && (
+                            <span className="badge bg-outline-primary border text-primary">
+                              Phase {c.ramp_state.current_phase}/{c.ramp_state.phase_sizes?.length || 4}
+                            </span>
+                          )}
+                        </div>
+                        {c.description && (
+                          <p className="text-muted small mb-2" style={{ WebkitLineClamp: 2, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {c.description}
+                          </p>
+                        )}
+                        <div className="d-flex gap-3 text-muted small mt-auto">
+                          <span>{c.lead_count} leads</span>
+                          {c.sequence && <span>Seq: {c.sequence.name}</span>}
+                          {c.budget_total != null && c.budget_total > 0 && (
+                            <span>${(c.budget_spent || 0).toFixed(0)} / ${c.budget_total.toFixed(0)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Create Campaign Modal */}

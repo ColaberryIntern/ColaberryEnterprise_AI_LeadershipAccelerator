@@ -462,7 +462,7 @@ export default function VisitorFlowGraph() {
   const nodeMap = new Map(data.nodes.map(n => [n.id, n]));
 
   return (
-    <div className="card border-0 shadow-sm">
+    <div className="card border-0 shadow-sm d-flex flex-column" style={{ height: '100%' }}>
       <div className="card-header bg-white d-flex align-items-center justify-content-between py-2 px-3">
         <div className="fw-semibold" style={{ fontSize: '0.85rem' }}>
           Visitor Navigation Flow
@@ -487,7 +487,7 @@ export default function VisitorFlowGraph() {
         </div>
       </div>
 
-      <div className="d-flex" style={{ height: 540 }}>
+      <div className="d-flex" style={{ flex: '1 1 0', minHeight: 0 }}>
         {/* Graph area */}
         <div
           ref={containerRef}

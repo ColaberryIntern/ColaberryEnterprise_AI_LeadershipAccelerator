@@ -1202,15 +1202,17 @@ function AdminMarketingDashboardPage() {
       </ul>
 
       {activeTab === 'funnel' && (
-        <Suspense fallback={
-          <div className="text-center py-5">
-            <div className="spinner-border text-primary" role="status">
-              <span className="visually-hidden">Loading...</span>
+        <div style={{ height: 'calc(100vh - 170px)', minHeight: 400 }}>
+          <Suspense fallback={
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
             </div>
-          </div>
-        }>
-          <MarketingFunnelGraph />
-        </Suspense>
+          }>
+            <MarketingFunnelGraph />
+          </Suspense>
+        </div>
       )}
       {activeTab === 'revenue' && <RevenueIntelligenceTab />}
       {activeTab === 'registry' && <CampaignLinkRegistryTab />}

@@ -447,7 +447,7 @@ export default function MarketingFunnelGraph() {
   const separatorPcts = [0.16, 0.37, 0.59, 0.80];
 
   return (
-    <div className="card border-0 shadow-sm">
+    <div className="card border-0 shadow-sm d-flex flex-column" style={{ height: '100%' }}>
       <div className="card-header bg-white d-flex align-items-center justify-content-between py-2 px-3">
         <div className="fw-semibold" style={{ fontSize: '0.85rem' }}>
           Marketing Funnel
@@ -472,7 +472,7 @@ export default function MarketingFunnelGraph() {
         </div>
       </div>
 
-      <div className="d-flex" style={{ height: 540 }}>
+      <div className="d-flex" style={{ flex: '1 1 0', minHeight: 0 }}>
         <div
           ref={containerRef}
           style={{ flex: selectedNode ? '1 1 65%' : '1 1 100%', position: 'relative', overflow: 'hidden', transition: 'flex 0.3s' }}

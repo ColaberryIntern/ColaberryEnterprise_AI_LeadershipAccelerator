@@ -1373,9 +1373,11 @@ function AdminVisitorsPage() {
       {!loading && activeTab === 'sessions' && renderSessionsTab()}
       {!loading && activeTab === 'chat' && renderChatTab()}
       {activeTab === 'flow' && (
-        <Suspense fallback={<div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>}>
-          <VisitorFlowGraph />
-        </Suspense>
+        <div style={{ height: 'calc(100vh - 200px)', minHeight: 400 }}>
+          <Suspense fallback={<div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>}>
+            <VisitorFlowGraph />
+          </Suspense>
+        </div>
       )}
 
       {/* Visitor detail modal */}
