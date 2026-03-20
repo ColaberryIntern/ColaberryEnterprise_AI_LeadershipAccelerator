@@ -540,7 +540,10 @@ async function processScheduledActions(): Promise<void> {
     // Guard: skip actions for non-active campaigns (archived, paused, completed, draft)
     const cachedCampaign = campaignCache[campaignId];
     if (cachedCampaign && cachedCampaign.status !== 'active') {
-      await action.update({ status: 'cancelled' } as any);
+      await action.update({
+        status: 'cancelled',
+        metadata: { ...(action.metadata || {}), blocked_reason: `campaign_${cachedCampaign.status}` },
+      } as any);
       console.log(`[Scheduler] Cancelled action ${action.id} — campaign ${campaignId} is ${cachedCampaign.status}`);
       continue;
     }
