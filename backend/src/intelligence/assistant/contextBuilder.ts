@@ -161,6 +161,31 @@ function extractInsights(
     analyzer(sqlResults, mlResults, insights, narrative, recommendations, entityType);
   }
 
+  // Universal KPI extraction — guarantees metric-bearing insights from any SQL totals
+  // Runs after intent-specific analyzers to fill gaps (e.g. campaign_analysis only adds
+  // insights when paused > 5 or errors > 10, leaving most responses with 0 insights)
+  if (!insights.some((i) => i.metric && i.value != null)) {
+    for (const { rows, description } of sqlResults) {
+      if (rows.length !== 1) continue;
+      const row = rows[0];
+      for (const [key, val] of Object.entries(row)) {
+        if (key.endsWith('_at') || key.endsWith('_date')) continue;
+        const num = Number(val);
+        if (!isNaN(num) && num > 0 && isFinite(num)) {
+          insights.push({
+            type: 'KPI',
+            severity: 'info',
+            message: `${key.replace(/_/g, ' ')}: ${num.toLocaleString()}`,
+            metric: key,
+            value: num,
+          });
+        }
+      }
+      // Cap at 6 KPIs from aggregates
+      if (insights.filter((i) => i.metric).length >= 6) break;
+    }
+  }
+
   // ML-specific insights
   for (const mr of mlResults) {
     if (mr.status !== 'success' || mr.data.length === 0) continue;

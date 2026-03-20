@@ -348,22 +348,71 @@ function extractKPIsFromResults(
   const hasMetricInsights = insights.some((i) => i.metric && i.value != null);
   if (hasMetricInsights) return;
 
-  // Extract from single-row aggregate SQL results (e.g. SELECT COUNT(*) AS total)
+  // Phase 1: Extract from single-row aggregate SQL results (e.g. SELECT COUNT(*) AS total)
+  // PostgreSQL COUNT/SUM returns bigint which Sequelize may deliver as string — handle both
   for (const sr of sqlResults) {
     if (sr.rows.length !== 1) continue;
     const row = sr.rows[0];
     for (const [key, val] of Object.entries(row)) {
-      if (typeof val === 'number' && val > 0) {
+      // Skip timestamps and non-numeric values
+      if (key.endsWith('_at') || key.endsWith('_date') || key === 'created_at' || key === 'updated_at') continue;
+      const num = Number(val);
+      if (!isNaN(num) && num > 0 && isFinite(num)) {
         insights.push({
           type: 'metric',
           severity: 'info',
-          message: `${key.replace(/_/g, ' ')}: ${val.toLocaleString()}`,
+          message: `${key.replace(/_/g, ' ')}: ${num.toLocaleString()}`,
           metric: key,
-          value: val,
+          value: num,
         });
       }
     }
     if (insights.some((i) => i.metric)) break;
+  }
+
+  // Phase 2: If still no KPIs, generate summary metrics from multi-row results
+  if (!insights.some((i) => i.metric)) {
+    for (const sr of sqlResults) {
+      if (sr.rows.length < 2) continue;
+      // Use row count as a KPI (e.g. "13 campaigns", "849 leads")
+      const desc = sr.description.toLowerCase();
+      let label = 'records';
+      if (desc.includes('campaign')) label = 'campaigns';
+      else if (desc.includes('lead')) label = 'leads';
+      else if (desc.includes('email')) label = 'emails';
+      else if (desc.includes('enrollment') || desc.includes('student')) label = 'enrollments';
+      else if (desc.includes('agent')) label = 'agents';
+      else if (desc.includes('communication') || desc.includes('touchpoint')) label = 'touchpoints';
+
+      insights.push({
+        type: 'metric',
+        severity: 'info',
+        message: `${sr.rows.length} ${label} found`,
+        metric: `total_${label}`,
+        value: sr.rows.length,
+      });
+
+      // Also extract a numeric aggregate from the rows if available
+      const keys = Object.keys(sr.rows[0]);
+      const numKey = keys.find((k) => {
+        const v = sr.rows[0][k];
+        return (k === 'count' || k === 'total' || k.startsWith('total_') || k.endsWith('_count'))
+          && !isNaN(Number(v)) && Number(v) > 0;
+      });
+      if (numKey) {
+        const total = sr.rows.reduce((sum, r) => sum + (Number(r[numKey]) || 0), 0);
+        if (total > 0) {
+          insights.push({
+            type: 'metric',
+            severity: 'info',
+            message: `${numKey.replace(/_/g, ' ')}: ${total.toLocaleString()}`,
+            metric: numKey,
+            value: total,
+          });
+        }
+      }
+      if (insights.filter((i) => i.metric).length >= 4) break;
+    }
   }
 }
 
