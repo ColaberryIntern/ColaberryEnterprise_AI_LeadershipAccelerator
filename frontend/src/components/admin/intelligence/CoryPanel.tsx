@@ -11,10 +11,12 @@ import FeedbackButtons from './FeedbackButtons';
 
 interface NarrativeSections {
   executive_summary: string;
+  detailed_analysis?: string;
   key_findings: string[];
   risk_assessment: string;
   recommended_actions: string[];
   follow_up_areas: string[];
+  tickets_created?: Array<{ ticket_number: number; title: string; priority: string; assigned_to?: string }>;
 }
 
 interface ChatMessage {
@@ -46,41 +48,6 @@ interface CoryPanelProps {
 
 // ─── Markdown-like renderer ─────────────────────────────────────────────────
 
-function renderFormattedText(text: string): React.ReactNode {
-  if (!text) return null;
-  // Split into paragraphs
-  const paragraphs = text.split(/\n\n+/);
-  return paragraphs.map((para, pi) => {
-    // Check if it's a bullet list
-    const lines = para.split('\n');
-    const isList = lines.every((l) => /^[-•*]\s/.test(l.trim()) || l.trim() === '');
-    if (isList) {
-      const items = lines.filter((l) => l.trim());
-      return (
-        <ul key={pi} className="mb-2 ps-3" style={{ fontSize: 'inherit' }}>
-          {items.map((item, ii) => (
-            <li key={ii} className="mb-1">{renderInlineFormatting(item.replace(/^[-•*]\s+/, ''))}</li>
-          ))}
-        </ul>
-      );
-    }
-    // Check if it's a numbered list
-    const isNumbered = lines.every((l) => /^\d+[.)]\s/.test(l.trim()) || l.trim() === '');
-    if (isNumbered) {
-      const items = lines.filter((l) => l.trim());
-      return (
-        <ol key={pi} className="mb-2 ps-3" style={{ fontSize: 'inherit' }}>
-          {items.map((item, ii) => (
-            <li key={ii} className="mb-1">{renderInlineFormatting(item.replace(/^\d+[.)]\s+/, ''))}</li>
-          ))}
-        </ol>
-      );
-    }
-    // Regular paragraph
-    return <p key={pi} className="mb-2">{renderInlineFormatting(para.replace(/\n/g, ' '))}</p>;
-  });
-}
-
 function renderInlineFormatting(text: string): React.ReactNode {
   // Split on bold (**text**) and internal links (→ /path)
   const parts = text.split(/(\*\*[^*]+\*\*|→\s*\/\S+)/g);
@@ -88,7 +55,6 @@ function renderInlineFormatting(text: string): React.ReactNode {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
     }
-    // Internal link: → /admin/tickets
     const linkMatch = part.match(/^→\s*(\/\S+)/);
     if (linkMatch) {
       return (
@@ -96,17 +62,158 @@ function renderInlineFormatting(text: string): React.ReactNode {
           key={i}
           href={linkMatch[1]}
           style={{ color: 'var(--color-primary-light)', fontWeight: 600, textDecoration: 'none', marginLeft: 4 }}
-          onClick={(e) => {
-            e.preventDefault();
-            window.location.href = linkMatch[1];
-          }}
+          onClick={(e) => { e.preventDefault(); window.location.href = linkMatch[1]; }}
         >
-          View Tickets →
+          View →
         </a>
       );
     }
     return part;
   });
+}
+
+/**
+ * Render a markdown table string into a styled HTML table.
+ */
+function renderMarkdownTable(lines: string[]): React.ReactNode {
+  // Parse header row
+  const headerCells = lines[0].split('|').map((c) => c.trim()).filter(Boolean);
+  // Skip separator row (line[1])
+  const bodyRows = lines.slice(2).map((row) =>
+    row.split('|').map((c) => c.trim()).filter(Boolean)
+  );
+
+  return (
+    <div className="table-responsive mb-2">
+      <table className="table table-sm table-hover mb-0" style={{ fontSize: '0.75rem' }}>
+        <thead className="table-light">
+          <tr>
+            {headerCells.map((h, i) => (
+              <th key={i} className="py-1 px-2" style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                {renderInlineFormatting(h)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {bodyRows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="py-1 px-2">{renderInlineFormatting(cell)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Enhanced markdown renderer — supports headers, tables, lists, bold, HR.
+ */
+function renderFormattedText(text: string): React.ReactNode {
+  if (!text) return null;
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip empty lines
+    if (!trimmed) { i++; continue; }
+
+    // Horizontal rule
+    if (/^---+$/.test(trimmed) || /^\*\*\*+$/.test(trimmed)) {
+      elements.push(<hr key={i} className="my-2" style={{ borderColor: 'var(--color-border)' }} />);
+      i++;
+      continue;
+    }
+
+    // Headers: ## or ###
+    const headerMatch = trimmed.match(/^(#{1,4})\s+(.+)/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const headerText = headerMatch[2];
+      const style: React.CSSProperties = {
+        color: 'var(--color-primary)',
+        fontWeight: 700,
+        fontSize: level <= 2 ? '0.88rem' : '0.82rem',
+        marginTop: level <= 2 ? 12 : 8,
+        marginBottom: 6,
+        borderBottom: level <= 2 ? '1px solid var(--color-border)' : 'none',
+        paddingBottom: level <= 2 ? 4 : 0,
+      };
+      elements.push(<div key={i} style={style}>{renderInlineFormatting(headerText)}</div>);
+      i++;
+      continue;
+    }
+
+    // Table: starts with | and followed by |---|
+    if (trimmed.startsWith('|') && i + 1 < lines.length && /^\|[\s-:|]+\|/.test(lines[i + 1]?.trim())) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+      if (tableLines.length >= 2) {
+        elements.push(<React.Fragment key={`table-${i}`}>{renderMarkdownTable(tableLines)}</React.Fragment>);
+      }
+      continue;
+    }
+
+    // Bullet list block
+    if (/^[-•*]\s/.test(trimmed)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-•*]\s/.test(lines[i]?.trim())) {
+        items.push(lines[i].trim().replace(/^[-•*]\s+/, ''));
+        i++;
+      }
+      elements.push(
+        <ul key={`ul-${i}`} className="mb-2 ps-3" style={{ fontSize: 'inherit' }}>
+          {items.map((item, ii) => (
+            <li key={ii} className="mb-1" style={{ lineHeight: 1.5 }}>{renderInlineFormatting(item)}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    // Numbered list block
+    if (/^\d+[.)]\s/.test(trimmed)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+[.)]\s/.test(lines[i]?.trim())) {
+        items.push(lines[i].trim().replace(/^\d+[.)]\s+/, ''));
+        i++;
+      }
+      elements.push(
+        <ol key={`ol-${i}`} className="mb-2 ps-3" style={{ fontSize: 'inherit' }}>
+          {items.map((item, ii) => (
+            <li key={ii} className="mb-1" style={{ lineHeight: 1.5 }}>{renderInlineFormatting(item)}</li>
+          ))}
+        </ol>
+      );
+      continue;
+    }
+
+    // Regular paragraph — accumulate consecutive non-special lines
+    const paraLines: string[] = [];
+    while (i < lines.length && lines[i]?.trim() && !/^#{1,4}\s/.test(lines[i].trim()) && !/^\|/.test(lines[i].trim()) && !/^[-•*]\s/.test(lines[i].trim()) && !/^\d+[.)]\s/.test(lines[i].trim()) && !/^---+$/.test(lines[i].trim())) {
+      paraLines.push(lines[i].trim());
+      i++;
+    }
+    if (paraLines.length > 0) {
+      elements.push(
+        <p key={`p-${i}`} className="mb-2" style={{ lineHeight: 1.65 }}>
+          {renderInlineFormatting(paraLines.join(' '))}
+        </p>
+      );
+    }
+  }
+
+  return <>{elements}</>;
 }
 
 // ─── Briefing Card (redesigned) ─────────────────────────────────────────────
@@ -280,6 +387,7 @@ function ActionButtons({ onAction }: { onAction: (q: string) => void }) {
 function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSections; onDrillDown: (q: string) => void }) {
   return (
     <div>
+      {/* Executive Summary — always at the top */}
       {sections.executive_summary && (
         <div className="mb-3">
           <div
@@ -294,7 +402,17 @@ function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSectio
         </div>
       )}
 
-      {sections.key_findings?.length > 0 && (
+      {/* Detailed Analysis — the main content block (markdown with tables, headers, etc.) */}
+      {sections.detailed_analysis && (
+        <div className="mb-3">
+          <div style={{ fontSize: '0.78rem' }}>
+            {renderFormattedText(sections.detailed_analysis)}
+          </div>
+        </div>
+      )}
+
+      {/* Key Findings — only show if no detailed_analysis (avoid redundancy) */}
+      {!sections.detailed_analysis && sections.key_findings?.length > 0 && (
         <div className="mb-3">
           <div className="fw-semibold mb-2" style={{ color: 'var(--color-primary)', fontSize: '0.8rem' }}>
             Key Findings
@@ -314,6 +432,55 @@ function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSectio
         </div>
       )}
 
+      {/* Tickets Created — show any action items Cory created */}
+      {sections.tickets_created && sections.tickets_created.length > 0 && (
+        <div className="mb-3">
+          <div className="fw-semibold mb-2" style={{ color: 'var(--color-primary)', fontSize: '0.8rem' }}>
+            Action Items Created
+          </div>
+          {sections.tickets_created.map((t, ti) => {
+            const priorityColor = t.priority === 'critical' ? 'var(--color-secondary)'
+              : t.priority === 'high' ? '#d69e2e'
+              : 'var(--color-primary-light)';
+            return (
+              <div
+                key={ti}
+                className="d-flex align-items-center gap-2 mb-2 px-2 py-2 rounded-1"
+                style={{ background: 'rgba(56, 161, 105, 0.04)', border: '1px solid rgba(56, 161, 105, 0.12)', fontSize: '0.76rem' }}
+              >
+                <span
+                  className="badge flex-shrink-0"
+                  style={{ fontSize: '0.6rem', background: 'var(--color-accent)', color: '#fff' }}
+                >
+                  TK-{t.ticket_number}
+                </span>
+                <span className="flex-grow-1" style={{ lineHeight: 1.4 }}>{t.title}</span>
+                <span
+                  className="badge flex-shrink-0"
+                  style={{ fontSize: '0.55rem', background: 'transparent', color: priorityColor, border: `1px solid ${priorityColor}` }}
+                >
+                  {t.priority}
+                </span>
+                {t.assigned_to && (
+                  <span className="text-muted flex-shrink-0" style={{ fontSize: '0.6rem' }}>
+                    {t.assigned_to}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <a
+            href="/admin/tickets"
+            className="d-inline-block mt-1"
+            style={{ fontSize: '0.68rem', color: 'var(--color-primary-light)', textDecoration: 'none' }}
+            onClick={(e) => { e.preventDefault(); window.location.href = '/admin/tickets'; }}
+          >
+            View all tickets →
+          </a>
+        </div>
+      )}
+
+      {/* Risk Assessment */}
       {sections.risk_assessment && (
         <div className="mb-3">
           <div
@@ -328,6 +495,7 @@ function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSectio
         </div>
       )}
 
+      {/* Recommended Actions */}
       {sections.recommended_actions?.length > 0 && (
         <div className="mb-3">
           <div className="fw-semibold mb-2" style={{ color: 'var(--color-primary)', fontSize: '0.8rem' }}>
@@ -338,13 +506,9 @@ function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSectio
               <div
                 className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
                 style={{
-                  width: 20,
-                  height: 20,
-                  background: 'var(--color-accent)',
-                  color: '#fff',
-                  fontSize: '0.6rem',
-                  fontWeight: 700,
-                  marginTop: 2,
+                  width: 20, height: 20,
+                  background: 'var(--color-accent)', color: '#fff',
+                  fontSize: '0.6rem', fontWeight: 700, marginTop: 2,
                 }}
               >
                 {ai + 1}
@@ -355,12 +519,10 @@ function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSectio
               <button
                 className="btn btn-sm flex-shrink-0"
                 style={{
-                  fontSize: '0.58rem',
-                  padding: '1px 6px',
+                  fontSize: '0.58rem', padding: '1px 6px',
                   color: 'var(--color-primary-light)',
                   border: '1px solid var(--color-border)',
-                  borderRadius: 10,
-                  marginTop: 2,
+                  borderRadius: 10, marginTop: 2,
                 }}
                 onClick={() => onDrillDown(`How should we implement: ${a.slice(0, 60)}?`)}
               >
@@ -372,6 +534,7 @@ function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSectio
         </div>
       )}
 
+      {/* Follow-up Areas */}
       {sections.follow_up_areas?.length > 0 && (
         <div className="mb-2">
           <div className="fw-semibold mb-1" style={{ color: 'var(--color-text-light)', fontSize: '0.72rem' }}>
@@ -383,8 +546,7 @@ function NarrativeDisplay({ sections, onDrillDown }: { sections: NarrativeSectio
                 key={fi}
                 className="btn btn-sm"
                 style={{
-                  fontSize: '0.68rem',
-                  padding: '3px 10px',
+                  fontSize: '0.68rem', padding: '3px 10px',
                   color: 'var(--color-primary)',
                   background: 'rgba(26, 54, 93, 0.04)',
                   border: '1px solid var(--color-border)',

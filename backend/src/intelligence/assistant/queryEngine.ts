@@ -28,10 +28,12 @@ export interface PipelineStep {
 
 export interface NarrativeSections {
   executive_summary: string;
+  detailed_analysis: string;
   key_findings: string[];
   risk_assessment: string;
   recommended_actions: string[];
   follow_up_areas: string[];
+  tickets_created?: Array<{ ticket_number: number; title: string; priority: string; assigned_to?: string }>;
 }
 
 export interface AssistantResponse {
@@ -349,6 +351,7 @@ ${context.formattedContext.slice(0, 6000)}`;
     const parsed = JSON.parse(raw);
     const sections: NarrativeSections = {
       executive_summary: parsed.executive_summary || '',
+      detailed_analysis: parsed.detailed_analysis || '',
       key_findings: Array.isArray(parsed.key_findings) ? parsed.key_findings : [],
       risk_assessment: parsed.risk_assessment || '',
       recommended_actions: Array.isArray(parsed.recommended_actions) ? parsed.recommended_actions : [],
@@ -448,6 +451,7 @@ function buildRuleBasedSections(context: PipelineContext, followUps: string[]): 
   const criticalInsights = context.insights.filter((i) => i.severity === 'critical' || i.severity === 'warning');
   return {
     executive_summary: context.ruleNarrative || 'Analysis complete based on available data.',
+    detailed_analysis: '',
     key_findings: context.insights.slice(0, 5).map((i) => i.message),
     risk_assessment: criticalInsights.length > 0
       ? `${criticalInsights.length} issue${criticalInsights.length > 1 ? 's' : ''} detected requiring attention: ${criticalInsights.map((i) => i.message).join('; ')}`

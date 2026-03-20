@@ -137,10 +137,12 @@ function filterTechnicalTerms(text: string): string {
 function filterSections(sections: NarrativeSections): NarrativeSections {
   return {
     executive_summary: filterTechnicalTerms(sections.executive_summary),
+    detailed_analysis: sections.detailed_analysis ? filterTechnicalTerms(sections.detailed_analysis) : '',
     key_findings: sections.key_findings.map(filterTechnicalTerms).filter(Boolean),
     risk_assessment: filterTechnicalTerms(sections.risk_assessment),
     recommended_actions: sections.recommended_actions.map(filterTechnicalTerms).filter(Boolean),
     follow_up_areas: sections.follow_up_areas.map(filterTechnicalTerms).filter(Boolean),
+    tickets_created: sections.tickets_created,
   };
 }
 

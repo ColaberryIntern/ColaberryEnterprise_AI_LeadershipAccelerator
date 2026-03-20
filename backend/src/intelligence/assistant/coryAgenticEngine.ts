@@ -19,6 +19,7 @@ import { validateReport } from './agents/reportQualityAgent';
 import type { AssistantResponse, NarrativeSections, PipelineStep } from './queryEngine';
 import type { ChartConfig, ChartType } from './chartSelector';
 import { getDepartmentDetail } from '../../services/departmentIntelligenceService';
+import { createTicket, assignTicket } from '../../services/ticketService';
 import Department from '../../models/Department';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -161,23 +162,74 @@ const CORY_TOOLS: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'create_action_ticket',
+      description: 'Create an actionable ticket/task for an agent or team to work on. Use this when your investigation reveals issues that need fixing, optimizations to make, or follow-up work. Each ticket gets a tracking number.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Clear, actionable ticket title (e.g., "Fix 100% strategy call no-show rate")' },
+          description: { type: 'string', description: 'Detailed description including: what the problem is, what data supports it, what the expected outcome is' },
+          priority: { type: 'string', enum: ['critical', 'high', 'medium', 'low'], description: 'Priority based on business impact' },
+          type: { type: 'string', enum: ['task', 'bug', 'agent_action', 'strategic', 'ai_optimization'], description: 'Ticket type' },
+          assigned_agent: { type: 'string', description: 'Agent name to assign (e.g., "CampaignRepairAgent", "EmailDeliveryAgent"). Leave empty for manual assignment.' },
+          entity_type: { type: 'string', description: 'Related entity type (e.g., "campaign", "lead", "agent")' },
+          entity_id: { type: 'string', description: 'Related entity ID if known' },
+          estimated_effort: { type: 'string', description: 'Estimated effort (e.g., "1h", "2h", "1d")' },
+        },
+        required: ['title', 'description', 'priority', 'type'],
+      },
+    },
+  },
 ];
 
 // ─── System Prompt ──────────────────────────────────────────────────────────
 
 function buildAgenticSystemPrompt(context?: Record<string, any>): string {
-  let prompt = `You are Cory, AI COO of Colaberry Enterprise. Investigate questions using tools, verify numbers, produce executive briefings.
+  let prompt = `You are Cory, AI COO of Colaberry Enterprise. You investigate questions thoroughly and produce detailed, data-driven executive reports — like a senior analyst briefing a CEO.
 
-PROTOCOL: discover_schema → run_sql_query (broad then specific) → verify_claim key numbers → build_chart 1-2 charts → final JSON.
+## Investigation Protocol
 
-RULES:
-- Every number MUST come from a tool result. Never invent numbers.
-- Report all statuses (active AND total). Flag anomalies explicitly.
-- Use business language, not technical terms.
-- Be efficient — combine related queries, run what you need.
+1. **DISCOVER** → Use \`discover_schema\` to find relevant tables
+2. **GATHER** → Run multiple SQL queries to build a complete picture:
+   - Overall metrics (totals, counts, status breakdowns)
+   - Performance data (rates, conversions, trends)
+   - Granular breakdowns (per-campaign, per-status, per-day tables)
+   - Anomalies and edge cases (zeros, nulls, extremes)
+3. **VERIFY** → Cross-check key numbers with \`verify_claim\`
+4. **VISUALIZE** → Create 1-2 charts with \`build_chart\`
+5. **ACT** → Create tickets with \`create_action_ticket\` for any issues found
+6. **REPORT** → Produce a comprehensive detailed analysis
 
-FINAL RESPONSE must be valid JSON:
-{"executive_summary":"2-3 sentences with verified numbers","key_findings":["finding1","finding2"],"risk_assessment":"1-2 sentences","recommended_actions":["action1"],"follow_up_areas":["area1"]}`;
+## Analysis Quality Standard
+
+Your analysis must match the depth of a senior consultant's report:
+- **Break down every dimension**: Don't just say "12 campaigns active" — show each campaign's name, status, leads, emails sent, conversion rate
+- **Use markdown tables** for structured data: | Campaign | Status | Leads | Emails | Open Rate |
+- **Show comparisons**: "vs yesterday", "vs target", percentages
+- **Flag anomalies explicitly**: "CRITICAL: 0 strategy calls completed out of 5 scheduled (100% no-show rate)"
+- **Quantify everything**: Never say "some" or "several" — give exact numbers
+- **Create tickets** for every actionable issue you discover
+
+## Rules
+- Every number MUST come from a tool result. Never invent or estimate.
+- Report ALL statuses (active AND total, sent AND pending, completed AND failed).
+- Use business language. Translate technical terms.
+
+## Final Response Format
+
+Your FINAL message must be valid JSON:
+{
+  "executive_summary": "2-3 sentence high-level overview with key numbers",
+  "detailed_analysis": "COMPREHENSIVE markdown-formatted analysis. Use ## headers, **bold**, | tables |, bullet points, numbered lists. This is the MAIN content the executive reads. Include: metric breakdowns, per-entity tables, trend analysis, anomaly callouts. Minimum 300 words.",
+  "key_findings": ["specific finding with number", "another finding with number"],
+  "risk_assessment": "Detailed risk evaluation with specific numbers and severity levels",
+  "recommended_actions": ["Specific action with expected outcome", "Another action"],
+  "follow_up_areas": ["Area needing investigation", "Another area"],
+  "tickets_created": "auto-populated from create_action_ticket calls"
+}`;
 
   // Inject entity scope context
   if (context?.entity_type && context?.entity_name) {
@@ -199,10 +251,17 @@ Reference specific numbers and data relevant to this scope.`;
 
 // ─── Tool Executors ─────────────────────────────────────────────────────────
 
+interface TicketRecord {
+  ticket_number: number;
+  title: string;
+  priority: string;
+  assigned_to?: string;
+}
+
 async function executeToolCall(
   toolName: string,
   args: Record<string, any>,
-  state: { sqlResults: SqlResult[]; charts: ChartConfig[] }
+  state: { sqlResults: SqlResult[]; charts: ChartConfig[]; ticketsCreated: TicketRecord[] }
 ): Promise<any> {
   switch (toolName) {
     case 'discover_schema':
@@ -219,6 +278,8 @@ async function executeToolCall(
       return executeGetDepartmentContext(args.department_name);
     case 'search_knowledge':
       return executeSearchKnowledge(args.query, args.top_k);
+    case 'create_action_ticket':
+      return executeCreateTicket(args, state.ticketsCreated);
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
@@ -432,6 +493,54 @@ async function executeSearchKnowledge(query: string, topK?: number): Promise<any
   }
 }
 
+async function executeCreateTicket(
+  args: Record<string, any>,
+  ticketsCreated: TicketRecord[]
+): Promise<any> {
+  try {
+    const ticket = await createTicket({
+      title: args.title,
+      description: args.description,
+      priority: args.priority || 'medium',
+      type: args.type || 'task',
+      source: 'cory_agentic',
+      created_by_type: 'cory',
+      created_by_id: 'CoryAgenticEngine',
+      entity_type: args.entity_type || null,
+      entity_id: args.entity_id || null,
+      estimated_effort: args.estimated_effort || null,
+      metadata: { created_via: 'agentic_investigation', assigned_agent: args.assigned_agent || null },
+    });
+
+    // Assign to agent if specified
+    if (args.assigned_agent && ticket.id) {
+      try {
+        await assignTicket(ticket.id, 'agent', args.assigned_agent, 'cory', 'CoryAgenticEngine');
+      } catch { /* assignment is non-critical */ }
+    }
+
+    const record: TicketRecord = {
+      ticket_number: (ticket as any).ticket_number,
+      title: args.title,
+      priority: args.priority || 'medium',
+      assigned_to: args.assigned_agent,
+    };
+    ticketsCreated.push(record);
+
+    return {
+      created: true,
+      ticket_number: (ticket as any).ticket_number,
+      ticket_id: ticket.id,
+      title: args.title,
+      priority: args.priority,
+      assigned_to: args.assigned_agent || 'unassigned',
+      status: 'backlog',
+    };
+  } catch (err: any) {
+    return { created: false, error: err.message?.slice(0, 200) };
+  }
+}
+
 // ─── Agentic Loop ───────────────────────────────────────────────────────────
 
 /**
@@ -481,6 +590,7 @@ export async function runCoryAgenticLoop(
   const toolTrace: ToolTraceEntry[] = [];
   const sqlResults: SqlResult[] = [];
   const charts: ChartConfig[] = [];
+  const ticketsCreated: TicketRecord[] = [];
   let totalTokens = 0;
   let rounds = 0;
   let budgetExhausted = false;
@@ -526,7 +636,7 @@ export async function runCoryAgenticLoop(
         try { args = JSON.parse(tc.fn.arguments); } catch { args = {}; }
 
         const t0 = Date.now();
-        const result = await executeToolCall(tc.fn.name, args, { sqlResults, charts });
+        const result = await executeToolCall(tc.fn.name, args, { sqlResults, charts, ticketsCreated });
         const duration = Date.now() - t0;
 
         toolTrace.push({
@@ -560,9 +670,9 @@ export async function runCoryAgenticLoop(
       const lastRound = rounds >= MAX_ROUNDS - 1;
 
       if (nearBudget || lastRound) {
-        // Force a final answer by not passing tools
+        // Force a final answer by not passing tools — give more tokens for detailed analysis
         response = await chatCompletionWithTools(messages, [], {
-          maxTokens: 1500,
+          maxTokens: 3000,
           temperature: 0.2,
           json: true,
         });
@@ -582,6 +692,7 @@ export async function runCoryAgenticLoop(
       question,
       sqlResults,
       charts,
+      ticketsCreated,
       toolTrace,
       totalTokens,
       rounds,
@@ -600,6 +711,7 @@ export async function runCoryAgenticLoop(
       question,
       sqlResults,
       charts,
+      ticketsCreated,
       toolTrace,
       totalTokens,
       rounds,
@@ -615,6 +727,7 @@ function assembleOutput(
   question: string,
   sqlResults: SqlResult[],
   charts: ChartConfig[],
+  ticketsCreated: TicketRecord[],
   toolTrace: ToolTraceEntry[],
   totalTokens: number,
   rounds: number,
@@ -623,6 +736,7 @@ function assembleOutput(
   // Parse LLM's final JSON narrative
   let sections: NarrativeSections = {
     executive_summary: '',
+    detailed_analysis: '',
     key_findings: [],
     risk_assessment: '',
     recommended_actions: [],
@@ -637,6 +751,7 @@ function assembleOutput(
         const parsed = JSON.parse(jsonMatch[0]);
         sections = {
           executive_summary: parsed.executive_summary || '',
+          detailed_analysis: parsed.detailed_analysis || '',
           key_findings: Array.isArray(parsed.key_findings) ? parsed.key_findings : [],
           risk_assessment: parsed.risk_assessment || '',
           recommended_actions: Array.isArray(parsed.recommended_actions) ? parsed.recommended_actions : [],
@@ -647,6 +762,11 @@ function assembleOutput(
       // If JSON parse fails, use the raw content as narrative
       sections.executive_summary = finalContent.slice(0, 500);
     }
+  }
+
+  // Attach tickets created during investigation
+  if (ticketsCreated.length > 0) {
+    sections.tickets_created = ticketsCreated;
   }
 
   // Enrich SQL results through the data analyst agent
@@ -749,6 +869,8 @@ function summarizeResult(tool: string, result: any): string {
       return result.name ? `Loaded ${result.name} dept (health: ${result.health_score})` : result.error || 'Unknown';
     case 'search_knowledge':
       return `${result.count || 0} knowledge results`;
+    case 'create_action_ticket':
+      return result.created ? `Ticket TK-${result.ticket_number}: ${result.title}` : `Failed: ${result.error?.slice(0, 80)}`;
     default:
       return 'OK';
   }
