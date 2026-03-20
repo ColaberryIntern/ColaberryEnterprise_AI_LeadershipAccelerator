@@ -87,6 +87,7 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
     name: r.name || r.first_name || '',
     title: r.title || '',
     email: r.email || '',
+    phone_numbers: r.phone_numbers,
     linkedin_url: r.linkedin_url,
     organization: r.organization ? {
       name: r.organization.name || '',
@@ -166,12 +167,14 @@ export interface ColdLeadScoringCriteria {
 
 export async function importApolloResults(
   people: ApolloPersonResult[],
-  options?: { campaign_id?: string; scoring_criteria?: ColdLeadScoringCriteria },
-): Promise<{ imported: number; duplicates: number; errors: number; leads: any[] }> {
+  options?: { campaign_id?: string; scoring_criteria?: ColdLeadScoringCriteria; requirePhone?: boolean },
+): Promise<{ imported: number; duplicates: number; errors: number; skippedNoPhone: number; leads: any[] }> {
   let imported = 0;
   let duplicates = 0;
   let errors = 0;
+  let skippedNoPhone = 0;
   const leads: any[] = [];
+  const requirePhone = options?.requirePhone !== false; // default true
 
   const apiKey = env.apolloApiKey;
 
@@ -189,6 +192,14 @@ export async function importApolloResults(
 
       if (!person.email) {
         errors++;
+        continue;
+      }
+
+      // Skip leads without phone numbers (required for voice outreach)
+      const hasPhone = person.phone_numbers?.some((p) => p.raw_number?.trim());
+      if (requirePhone && !hasPhone) {
+        console.log(`[Apollo] Skipping ${person.email} — no phone number`);
+        skippedNoPhone++;
         continue;
       }
 
@@ -257,7 +268,7 @@ export async function importApolloResults(
     }
   }
 
-  return { imported, duplicates, errors, leads };
+  return { imported, duplicates, errors, skippedNoPhone, leads };
 }
 
 /** Cold lead scoring algorithm — accepts optional ICP criteria to override defaults */
