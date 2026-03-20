@@ -12,25 +12,25 @@ import {
 // ─── Layout Constants ──────────────────────────────────────────────────────────
 
 const COLUMN_CONFIG: Record<string, number> = {
-  referrer: 0, landing: 1, browse: 2, intent: 3, exit: 4,
+  source: 0, landing: 1, browse: 2, intent: 3, exit: 4,
 };
 const COLUMN_X_PCT = [0.08, 0.28, 0.48, 0.68, 0.92];
-const COLUMN_LABELS = ['Referrer', 'Landing Page', 'Browse', 'High Intent', 'Exit'];
+const COLUMN_LABELS = ['Source', 'Landing Page', 'Browse', 'High Intent', 'Exit'];
 
 const ZONE_RANGES: Record<string, [number, number]> = {
-  referrer: [0, 0.18],
+  source:   [0, 0.18],
   landing:  [0.18, 0.38],
   browse:   [0.38, 0.58],
   intent:   [0.58, 0.78],
   exit:     [0.78, 1.0],
 };
 
-const POSITIONS_KEY = 'visitor-flow-graph-positions-v1';
+const POSITIONS_KEY = 'visitor-flow-graph-positions-v2';
 
 // ─── Colors ─────────────────────────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
-  referrer: { color: '#805ad5', bg: '#faf5ff' },
+  source:   { color: '#805ad5', bg: '#faf5ff' },
   landing:  { color: '#2b6cb0', bg: '#ebf4ff' },
   browse:   { color: '#319795', bg: '#e6fffa' },
   intent:   { color: '#dd6b20', bg: '#fffaf0' },
@@ -38,11 +38,16 @@ const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
 };
 
 const NODE_COLORS: Record<string, { color: string; bg: string }> = {
-  ref_direct:  { color: '#4a5568', bg: '#edf2f7' },
-  ref_search:  { color: '#3182ce', bg: '#ebf8ff' },
-  ref_social:  { color: '#805ad5', bg: '#faf5ff' },
-  ref_email:   { color: '#d69e2e', bg: '#fefcbf' },
-  ref_other:   { color: '#a0aec0', bg: '#f7fafc' },
+  src_direct:     { color: '#4a5568', bg: '#edf2f7' },
+  src_google:     { color: '#4285f4', bg: '#e8f0fe' },
+  src_bing:       { color: '#00809d', bg: '#e0f7fa' },
+  src_linkedin:   { color: '#0077b5', bg: '#e8f4f8' },
+  src_facebook:   { color: '#1877f2', bg: '#e7f3ff' },
+  src_instagram:  { color: '#e1306c', bg: '#fce4ec' },
+  src_twitter:    { color: '#1da1f2', bg: '#e8f5fd' },
+  src_youtube:    { color: '#ff0000', bg: '#ffebee' },
+  src_reddit:     { color: '#ff4500', bg: '#fff3e0' },
+  src_email:      { color: '#d69e2e', bg: '#fefcbf' },
   exit_bounced:   { color: '#a0aec0', bg: '#f7fafc' },
   exit_exited:    { color: '#e53e3e', bg: '#fff5f5' },
   exit_converted: { color: '#38a169', bg: '#f0fff4' },

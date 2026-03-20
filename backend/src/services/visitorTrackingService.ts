@@ -20,16 +20,26 @@ export function categorizePagePath(path: string): string {
     '/case-studies': 'case_studies',
     '/contact': 'contact',
     '/enroll': 'enroll',
+    '/enroll/success': 'enroll',
+    '/enroll/cancel': 'enroll',
     '/advisory': 'advisory',
     '/sponsorship': 'sponsorship',
     '/strategy-call-prep': 'strategy_call_prep',
     '/executive-overview': 'executive_overview',
+    '/executive-overview/thank-you': 'executive_overview',
+    '/executive-roi-calculator': 'roi_calculator',
     '/champion': 'champion',
+    '/alumni-ai-champion': 'alumni',
+    '/ai-architect': 'ai_architect',
+    '/ai-architect/instructor': 'ai_architect',
+    '/about': 'homepage',
     '/referrals/login': 'referrals',
   };
 
-  // Also match /referrals/* paths
+  // Prefix-based matching
   if (cleaned.startsWith('/referrals')) return 'referrals';
+  if (cleaned.startsWith('/portal')) return 'portal';
+  if (cleaned.startsWith('/admin')) return 'admin';
 
   return categoryMap[cleaned] || 'other';
 }

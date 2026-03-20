@@ -547,7 +547,7 @@ export const getCampaignGraphSlice = (nodeIds: string[]) =>
 
 export interface FlowGraphNode {
   id: string;
-  type: 'referrer' | 'landing' | 'browse' | 'intent' | 'exit';
+  type: 'source' | 'landing' | 'browse' | 'intent' | 'exit';
   label: string;
   count: number;
   metrics: {

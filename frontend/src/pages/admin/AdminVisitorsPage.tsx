@@ -222,7 +222,7 @@ function getIntentLevel(v: Visitor): string | null {
 
 function AdminVisitorsPage() {
   /* --- Tab state --- */
-  const [activeTab, setActiveTab] = useState<TabKey>('live');
+  const [activeTab, setActiveTab] = useState<TabKey>('flow');
 
   /* --- Live visitors --- */
   const [liveVisitors, setLiveVisitors] = useState<Visitor[]>([]);
@@ -1334,13 +1334,13 @@ function AdminVisitorsPage() {
       <nav>
         <ul className="nav nav-tabs mb-4">
           {([
+            { key: 'flow' as TabKey, label: 'Navigation Flow' },
             { key: 'live' as TabKey, label: 'Live Visitors' },
             { key: 'all' as TabKey, label: 'All Visitors' },
             { key: 'high_intent' as TabKey, label: 'High Intent' },
             { key: 'analytics' as TabKey, label: 'Analytics' },
             { key: 'sessions' as TabKey, label: 'Sessions' },
             { key: 'chat' as TabKey, label: 'Chat' },
-            { key: 'flow' as TabKey, label: 'Navigation Flow' },
           ]).map((tab) => (
             <li className="nav-item" key={tab.key}>
               <button

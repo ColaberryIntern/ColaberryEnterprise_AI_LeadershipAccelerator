@@ -3,10 +3,11 @@ import VisitorSession from '../../models/VisitorSession';
 import PageEvent from '../../models/PageEvent';
 import Visitor from '../../models/Visitor';
 import { sequelize } from '../../config/database';
+import { categorizePagePath } from '../visitorTrackingService';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type FlowNodeType = 'referrer' | 'landing' | 'browse' | 'intent' | 'exit';
+export type FlowNodeType = 'source' | 'landing' | 'browse' | 'intent' | 'exit';
 
 export interface FlowGraphNode {
   id: string;
@@ -63,12 +64,21 @@ const HIGH_INTENT = new Set([
   'pricing', 'contact', 'strategy_call_prep', 'enroll', 'advisory', 'sponsorship',
 ]);
 
-const REFERRER_LABELS: Record<string, string> = {
-  ref_direct: 'Direct',
-  ref_search: 'Search',
-  ref_social: 'Social Media',
-  ref_email: 'Email',
-  ref_other: 'Other Referrer',
+// Well-known domain → friendly label
+const KNOWN_SOURCES: Record<string, string> = {
+  'google': 'Google',
+  'bing': 'Bing',
+  'yahoo': 'Yahoo',
+  'duckduckgo': 'DuckDuckGo',
+  'facebook': 'Facebook',
+  'instagram': 'Instagram',
+  'twitter': 'Twitter / X',
+  'linkedin': 'LinkedIn',
+  'tiktok': 'TikTok',
+  'reddit': 'Reddit',
+  'youtube': 'YouTube',
+  'gmail': 'Email (Gmail)',
+  'outlook': 'Email (Outlook)',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -82,8 +92,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   sponsorship: 'Sponsorship',
   strategy_call_prep: 'Strategy Call',
   executive_overview: 'Executive Overview',
+  roi_calculator: 'ROI Calculator',
   champion: 'AI Champion',
+  alumni: 'Alumni',
+  ai_architect: 'AI Architect',
   referrals: 'Referrals',
+  portal: 'Student Portal',
+  admin: 'Admin',
   other: 'Other Pages',
 };
 
@@ -95,19 +110,72 @@ const EXIT_LABELS: Record<string, string> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function classifyReferrer(domain: string | null, utmMedium: string | null): string {
-  if (!domain) return 'ref_direct';
-  const d = domain.toLowerCase();
-  if (/google|bing|yahoo|duckduckgo|baidu/.test(d)) return 'ref_search';
-  if (/facebook|instagram|twitter|linkedin|tiktok|reddit|youtube/.test(d)) return 'ref_social';
-  if (utmMedium === 'email' || /mail/.test(d)) return 'ref_email';
-  return 'ref_other';
+/**
+ * Classify session source using utm_source, utm_campaign, referrer_domain.
+ * Returns a specific source ID like "src_google", "src_linkedin", "src_campaign:spring_push",
+ * "src_direct", etc. — much more granular than the old "ref_search" / "ref_social" buckets.
+ */
+function classifySource(
+  referrerDomain: string | null,
+  utmSource: string | null,
+  utmCampaign: string | null,
+  utmMedium: string | null,
+): string {
+  // Priority 1: UTM source (most explicit signal)
+  if (utmSource) {
+    const s = utmSource.toLowerCase().trim();
+    // Check known sources first
+    for (const [key] of Object.entries(KNOWN_SOURCES)) {
+      if (s.includes(key)) return `src_${key}`;
+    }
+    // UTM source is set but not a well-known platform — use it directly
+    return `src_${s.replace(/[^a-z0-9_-]/g, '_')}`;
+  }
+
+  // Priority 2: UTM campaign without source (e.g. email campaigns)
+  if (utmCampaign) {
+    const c = utmCampaign.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '_');
+    return `src_campaign_${c}`;
+  }
+
+  // Priority 3: Referrer domain
+  if (referrerDomain) {
+    const d = referrerDomain.toLowerCase();
+    for (const [key] of Object.entries(KNOWN_SOURCES)) {
+      if (d.includes(key)) return `src_${key}`;
+    }
+    // Email medium
+    if (utmMedium === 'email' || /mail/.test(d)) return 'src_email';
+    // Unknown referrer — use the domain itself
+    const clean = d.replace(/^(www\.)?/, '').replace(/\..+$/, '').replace(/[^a-z0-9_-]/g, '_');
+    return `src_${clean || 'other'}`;
+  }
+
+  // No referrer, no UTM — direct traffic
+  return 'src_direct';
+}
+
+function getSourceLabel(id: string): string {
+  if (id === 'src_direct') return 'Direct';
+  if (id === 'src_email') return 'Email';
+  // Campaign-based
+  if (id.startsWith('src_campaign_')) {
+    const name = id.replace('src_campaign_', '').replace(/_/g, ' ');
+    // Title case
+    return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  // Known source
+  const key = id.replace('src_', '');
+  for (const [k, label] of Object.entries(KNOWN_SOURCES)) {
+    if (k === key) return label;
+  }
+  // Fallback: title-case the ID
+  return key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
 }
 
 function getNodeLabel(id: string, type: FlowNodeType): string {
-  if (type === 'referrer') return REFERRER_LABELS[id] || id;
+  if (type === 'source') return getSourceLabel(id);
   if (type === 'exit') return EXIT_LABELS[id] || id;
-  // For landing/browse/intent, strip the prefix to get category
   const cat = id.replace(/^(land_|browse_|intent_)/, '');
   return CATEGORY_LABELS[cat] || cat;
 }
@@ -135,7 +203,7 @@ export async function buildVisitorFlowGraph(timeWindow?: string): Promise<FlowGr
     attributes: [
       'id', 'visitor_id', 'started_at', 'duration_seconds', 'pageview_count',
       'entry_page', 'exit_page', 'is_bounce', 'landing_page_category',
-      'referrer_domain', 'utm_medium', 'device_type',
+      'referrer_domain', 'utm_source', 'utm_campaign', 'utm_medium', 'device_type',
     ],
     order: [['started_at', 'DESC']],
     limit: 50000,
@@ -190,12 +258,15 @@ export async function buildVisitorFlowGraph(timeWindow?: string): Promise<FlowGr
     // Build the session path through the 5 layers
     const path: string[] = [];
 
-    // Layer 1: Referrer
-    const refId = classifyReferrer(session.referrer_domain, session.utm_medium);
-    path.push(refId);
+    // Layer 1: Source (what brought them to the site)
+    const srcId = classifySource(session.referrer_domain, session.utm_source, session.utm_campaign, session.utm_medium);
+    path.push(srcId);
 
-    // Layer 2: Landing page
-    const landCat = session.landing_page_category || 'other';
+    // Layer 2: Landing page — re-derive from entry_page if stored as 'other' (backfill)
+    let landCat = session.landing_page_category || 'other';
+    if (landCat === 'other' && session.entry_page) {
+      landCat = categorizePagePath(session.entry_page);
+    }
     const landId = `land_${landCat}`;
     path.push(landId);
 
@@ -270,7 +341,7 @@ export async function buildVisitorFlowGraph(timeWindow?: string): Promise<FlowGr
 
   // 3. Build output nodes
   const nodeTypeMap = (id: string): FlowNodeType => {
-    if (id.startsWith('ref_')) return 'referrer';
+    if (id.startsWith('src_')) return 'source';
     if (id.startsWith('land_')) return 'landing';
     if (id.startsWith('browse_')) return 'browse';
     if (id.startsWith('intent_')) return 'intent';
@@ -310,7 +381,7 @@ export async function buildVisitorFlowGraph(timeWindow?: string): Promise<FlowGr
   }
 
   // Sort nodes by type order then by count desc
-  const typeOrder: Record<string, number> = { referrer: 0, landing: 1, browse: 2, intent: 3, exit: 4 };
+  const typeOrder: Record<string, number> = { source: 0, landing: 1, browse: 2, intent: 3, exit: 4 };
   nodes.sort((a, b) => (typeOrder[a.type] || 0) - (typeOrder[b.type] || 0) || b.count - a.count);
 
   // 4. Build output edges
@@ -357,15 +428,15 @@ export async function getFlowNodeSessions(
   const whereClause: any = {};
   if (cutoff) whereClause.started_at = { [Op.gte]: cutoff };
 
-  const nodeType = nodeId.startsWith('ref_') ? 'referrer'
+  const nodeType = nodeId.startsWith('src_') ? 'source'
     : nodeId.startsWith('land_') ? 'landing'
     : nodeId.startsWith('browse_') ? 'browse'
     : nodeId.startsWith('intent_') ? 'intent'
     : 'exit';
 
   // Add type-specific filters to narrow the query
-  if (nodeType === 'referrer') {
-    // We need to classify referrer_domain — do it in memory
+  if (nodeType === 'source') {
+    // We need to classify source — do it in memory
   } else if (nodeType === 'landing') {
     const cat = nodeId.replace('land_', '');
     whereClause.landing_page_category = cat;
@@ -390,9 +461,9 @@ export async function getFlowNodeSessions(
   // Filter sessions by node membership
   let matchingSessions = sessions;
 
-  if (nodeType === 'referrer') {
+  if (nodeType === 'source') {
     matchingSessions = sessions.filter(s => {
-      return classifyReferrer(s.referrer_domain, s.utm_medium) === nodeId;
+      return classifySource(s.referrer_domain, s.utm_source, s.utm_campaign, s.utm_medium) === nodeId;
     });
   } else if (nodeType === 'browse' || nodeType === 'intent') {
     const cat = nodeId.replace(/^(browse_|intent_)/, '');
