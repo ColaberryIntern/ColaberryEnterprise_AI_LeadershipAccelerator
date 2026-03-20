@@ -517,6 +517,36 @@ function AdminVisitorsPage() {
         </div>
       )}
 
+      {/* 30-day summary */}
+      {stats && (stats.visitors30d > 0 || stats.sessions30d > 0) && (
+        <div className="row g-3 mb-4">
+          <div className="col-sm-4">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #805ad5' }}>
+                <div className="text-muted small">Visitors (30 days)</div>
+                <div className="h4 fw-bold mb-0">{stats.visitors30d ?? 0}</div>
+              </div>
+            </div>
+          </div>
+          <div className="col-sm-4">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #319795' }}>
+                <div className="text-muted small">Sessions (30 days)</div>
+                <div className="h4 fw-bold mb-0">{stats.sessions30d ?? 0}</div>
+              </div>
+            </div>
+          </div>
+          <div className="col-sm-4">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body p-3" style={{ borderLeft: '4px solid #dd6b20' }}>
+                <div className="text-muted small">Avg Duration / Bounce Rate</div>
+                <div className="h4 fw-bold mb-0">{formatDuration(stats.avgDuration ?? 0)} / {stats.bounceRate ?? 0}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Live visitors table */}
       <div className="card border-0 shadow-sm">
         <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
@@ -541,8 +571,14 @@ function AdminVisitorsPage() {
               <tbody>
                 {liveVisitors.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center text-muted py-4">
-                      No visitors currently on the site.
+                    <td colSpan={8} className="text-center py-4">
+                      <div className="text-muted mb-2">No visitors currently on the site.</div>
+                      <button
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => setActiveTab('flow')}
+                      >
+                        View Navigation Flow &rarr;
+                      </button>
                     </td>
                   </tr>
                 ) : (
