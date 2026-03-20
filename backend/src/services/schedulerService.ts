@@ -490,7 +490,7 @@ async function processScheduledActions(): Promise<void> {
             AND scheduled_for <= NOW()
             AND attempts_made < max_attempts
           ORDER BY scheduled_for ASC
-          LIMIT 20
+          LIMIT 40
           FOR UPDATE SKIP LOCKED
         )
         RETURNING *
@@ -706,7 +706,7 @@ async function processScheduledActions(): Promise<void> {
 
       // Pacing delay between sends
       const delayMs = (campaignSettings.delay_between_sends || 0) * 1000;
-      if (delayMs > 0 && delayMs <= 30000) {
+      if (delayMs > 0 && delayMs <= 180000) {
         await new Promise((r) => setTimeout(r, delayMs));
       }
     } catch (error: any) {
