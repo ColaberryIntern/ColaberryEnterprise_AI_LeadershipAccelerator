@@ -490,7 +490,7 @@ async function processScheduledActions(): Promise<void> {
             AND scheduled_for <= NOW()
             AND attempts_made < max_attempts
           ORDER BY scheduled_for ASC
-          LIMIT 50
+          LIMIT 20
           FOR UPDATE SKIP LOCKED
         )
         RETURNING *
@@ -574,7 +574,9 @@ async function processScheduledActions(): Promise<void> {
     const maxPerCycle = await calculatePacedLimit(campaignId, campaignSettings);
     campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);
     if (campaignProcessed[campaignId] >= maxPerCycle) {
-      continue; // Skip — will be picked up next cycle
+      // Reset back to pending so it can be picked up next cycle (don't leave stuck in processing)
+      await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
+      continue;
     }
 
     // Send window: skip email/SMS actions outside business hours (default 8 AM - 9 PM CT)
@@ -598,6 +600,8 @@ async function processScheduledActions(): Promise<void> {
       dailyCallCount[campaignId] = (dailyCallCount[campaignId] || 0);
       const maxDailyCalls = campaignSettings.max_daily_calls || 50;
       if (dailyCallCount[campaignId] >= maxDailyCalls) {
+        // Reset back to pending so it can be picked up next cycle
+        await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
         console.log(`[Scheduler] Daily call limit reached for campaign ${campaignId}`);
         continue;
       }
@@ -625,8 +629,11 @@ async function processScheduledActions(): Promise<void> {
         }
       }
 
-      // Step 1: AI content generation (for all channels)
-      await generateAIContent(action);
+      // Step 1: AI content generation (for all channels) — 60s timeout to prevent hanging
+      await Promise.race([
+        generateAIContent(action),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AI content generation timed out after 60s')), 60000)),
+      ]);
 
       // Step 2: Communication safety check (test mode, unsubscribe, rate limit)
       const safetyDecision = await evaluateSend({
@@ -692,7 +699,7 @@ async function processScheduledActions(): Promise<void> {
       console.error(`[Scheduler] Failed to process action ${action.id} (${channel}):`, error.message);
 
       const newAttempts = (action.attempts_made || 0) + 1;
-      const maxAttempts = action.max_attempts || 1;
+      const maxAttempts = action.max_attempts || 2;
 
       if (newAttempts < maxAttempts) {
         // Retry: reset to pending, reschedule 30 minutes later
