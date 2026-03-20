@@ -41,10 +41,20 @@ export async function executeSQLQueries(
   const results: SqlResult[] = [];
 
   // Phase 1: Run predefined templates (baseline context)
+  // For department-scoped queries, add department-specific agent filters
+  const agentCategories: string[] = plan.parameters?.department_agent_categories || [];
+  const deptEntityName: string | null = plan.parameters?.entity_name || null;
+  const isDeptScope = entityType === 'department' && !!deptEntityName;
+
   const templateResults = buildTemplateQueries(intent, plan.tables, question);
   for (const tq of templateResults) {
-    const rows = await executeSQL(tq.sql);
-    results.push({ rows, query: tq.sql, description: tq.description, tables: tq.tables, method: 'template' });
+    // For department scope, filter agent queries by department's categories
+    let sql = tq.sql;
+    if (isDeptScope && agentCategories.length > 0) {
+      sql = applyDepartmentAgentFilter(sql, agentCategories);
+    }
+    const rows = await executeSQL(sql);
+    results.push({ rows, query: sql, description: isDeptScope ? `[${deptEntityName}] ${tq.description}` : tq.description, tables: tq.tables, method: 'template' });
   }
 
   // Phase 2: ALWAYS try LLM-generated SQL for question-specific data
@@ -418,6 +428,45 @@ function buildGeneralQueries(tables: string[]): TemplateQuery[] {
   return queries;
 }
 
+// ─── Department Agent Filtering ─────────────────────────────────────────────
+// When querying agent-related tables for a specific department, filter by agent categories.
+
+function applyDepartmentAgentFilter(sql: string, agentCategories: string[]): string {
+  if (agentCategories.length === 0) return sql;
+
+  // Only apply to queries that reference ai_agents or ai_agent_activity_logs
+  const sqlLower = sql.toLowerCase();
+  if (!sqlLower.includes('ai_agents') && !sqlLower.includes('ai_agent_activity_logs')) {
+    return sql;
+  }
+
+  const categoryList = agentCategories.map((c) => `'${c.replace(/'/g, "''")}'`).join(', ');
+
+  // For queries that have a WHERE clause, add AND; otherwise add WHERE
+  // We need to filter by category on the ai_agents table
+  if (sqlLower.includes('from ai_agents') && !sqlLower.includes('join')) {
+    // Simple ai_agents query — add category filter
+    if (sqlLower.includes('where')) {
+      return sql.replace(/WHERE/i, `WHERE category IN (${categoryList}) AND`);
+    } else if (sqlLower.includes('group by')) {
+      return sql.replace(/GROUP BY/i, `WHERE category IN (${categoryList}) GROUP BY`);
+    } else if (sqlLower.includes('order by')) {
+      return sql.replace(/ORDER BY/i, `WHERE category IN (${categoryList}) ORDER BY`);
+    }
+  }
+
+  // For JOIN queries (activity logs joined with agents), add filter on agents
+  if (sqlLower.includes('join ai_agents')) {
+    // Add category filter after the JOIN ON clause
+    const joinMatch = sql.match(/(JOIN\s+ai_agents\s+\w+\s+ON\s+[^\s]+\s*=\s*[^\s]+)/i);
+    if (joinMatch) {
+      return sql.replace(joinMatch[0], `${joinMatch[0]} AND ${joinMatch[0].match(/ai_agents\s+(\w+)/i)?.[1] || 'a'}.category IN (${categoryList})`);
+    }
+  }
+
+  return sql;
+}
+
 // ─── LLM SQL Generation ─────────────────────────────────────────────────────
 
 async function generateAndExecuteLLMSQL(
@@ -490,6 +539,10 @@ Rules:
   if (relationshipContext) userPrompt += `RELATIONSHIPS:\n${relationshipContext}\n\n`;
   if (fullIndex) userPrompt += `ALL OTHER TABLES (available for queries):\n${fullIndex}\n\n`;
   if (entityType) userPrompt += `Entity scope: ${entityType}\n\n`;
+  // For department scope, guide the LLM to filter by relevant agent categories
+  if (entityType === 'department') {
+    userPrompt += `IMPORTANT: This query is scoped to a specific department. When querying ai_agents or ai_agent_activity_logs, filter by the department's agent categories using the "category" column on ai_agents. Focus only on data relevant to this department's domain.\n\n`;
+  }
   userPrompt += `Question: ${question}`;
 
   // Cap context to avoid excessive token usage

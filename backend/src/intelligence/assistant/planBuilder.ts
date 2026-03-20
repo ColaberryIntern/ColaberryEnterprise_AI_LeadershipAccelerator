@@ -117,6 +117,118 @@ const ENTITY_TABLE_FILTER: Record<string, string[]> = {
   ],
 };
 
+// ─── Department → Data Focus ──────────────────────────────────────────────
+// Maps each department to the specific DB tables relevant to its mission.
+// Used when entityType === 'department' to scope queries to department-relevant data.
+
+interface DepartmentFocus {
+  tables: string[];
+  intent: Intent;           // Best-fit intent for template query selection
+  agentCategories: string[]; // Agent categories owned by this department
+}
+
+const DEPARTMENT_DATA_FOCUS: Record<string, DepartmentFocus> = {
+  executive: {
+    tables: ['leads', 'campaigns', 'enrollments', 'ai_agents', 'system_processes', 'scheduled_emails'],
+    intent: 'general_insight',
+    agentCategories: ['executive'],
+  },
+  strategy: {
+    tables: ['leads', 'strategy_calls', 'opportunity_scores', 'campaigns', 'enrollments'],
+    intent: 'lead_analysis',
+    agentCategories: ['strategic', 'dept_strategy'],
+  },
+  marketing: {
+    tables: ['campaigns', 'campaign_health', 'campaign_errors', 'leads', 'scheduled_emails', 'communication_logs', 'follow_up_sequences', 'icp_profiles'],
+    intent: 'campaign_analysis',
+    agentCategories: ['outbound', 'openclaw'],
+  },
+  admissions: {
+    tables: ['leads', 'strategy_calls', 'enrollments', 'activities', 'opportunity_scores', 'communication_logs'],
+    intent: 'lead_analysis',
+    agentCategories: ['admissions', 'admissions_ops'],
+  },
+  alumni: {
+    tables: ['enrollments', 'cohorts', 'leads', 'communication_logs'],
+    intent: 'student_analysis',
+    agentCategories: ['alumni'],
+  },
+  partnerships: {
+    tables: ['leads', 'icp_profiles', 'campaigns', 'communication_logs'],
+    intent: 'lead_analysis',
+    agentCategories: ['partnerships'],
+  },
+  education: {
+    tables: ['enrollments', 'cohorts', 'attendance_records', 'lesson_instances', 'skill_mastery', 'assignment_submissions'],
+    intent: 'student_analysis',
+    agentCategories: ['accelerator', 'curriculum'],
+  },
+  student_success: {
+    tables: ['enrollments', 'attendance_records', 'skill_mastery', 'cohorts', 'lesson_instances'],
+    intent: 'student_analysis',
+    agentCategories: ['student_success'],
+  },
+  platform: {
+    tables: ['system_processes', 'ai_agents', 'ai_agent_activity_logs', 'orchestration_health'],
+    intent: 'agent_analysis',
+    agentCategories: ['maintenance', 'operations', 'website_intelligence', 'orchestration'],
+  },
+  intelligence: {
+    tables: ['ai_agents', 'ai_agent_activity_logs', 'orchestration_health', 'ai_system_events', 'system_processes'],
+    intent: 'agent_analysis',
+    agentCategories: ['behavioral', 'ai_ops', 'memory', 'meta', 'autonomous'],
+  },
+  governance: {
+    tables: ['ai_agents', 'ai_agent_activity_logs', 'system_processes', 'campaign_errors'],
+    intent: 'anomaly_detection',
+    agentCategories: ['security', 'governance_ops'],
+  },
+  reporting: {
+    tables: ['system_processes', 'ai_agent_activity_logs', 'leads', 'campaigns', 'enrollments'],
+    intent: 'general_insight',
+    agentCategories: ['reporting'],
+  },
+  finance: {
+    tables: ['enrollments', 'campaigns', 'leads', 'strategy_calls'],
+    intent: 'general_insight',
+    agentCategories: [],
+  },
+  operations: {
+    tables: ['system_processes', 'scheduled_emails', 'communication_logs', 'ai_agents', 'orchestration_health'],
+    intent: 'agent_analysis',
+    agentCategories: [],
+  },
+  orchestration: {
+    tables: ['ai_agents', 'ai_agent_activity_logs', 'orchestration_health', 'system_processes'],
+    intent: 'agent_analysis',
+    agentCategories: [],
+  },
+  growth: {
+    tables: ['leads', 'campaigns', 'enrollments', 'scheduled_emails', 'communication_logs', 'activities'],
+    intent: 'forecast_request',
+    agentCategories: [],
+  },
+  infrastructure: {
+    tables: ['system_processes', 'orchestration_health', 'ai_agents', 'ai_agent_activity_logs'],
+    intent: 'agent_analysis',
+    agentCategories: [],
+  },
+  security: {
+    tables: ['ai_agents', 'ai_agent_activity_logs', 'system_processes', 'campaign_errors', 'orchestration_health'],
+    intent: 'anomaly_detection',
+    agentCategories: ['security_ops'],
+  },
+};
+
+/**
+ * Resolve a department name (from entity_name) to its data focus.
+ * Normalizes the name to lowercase slug format for lookup.
+ */
+export function getDepartmentFocus(departmentName: string): DepartmentFocus | null {
+  const slug = departmentName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, '');
+  return DEPARTMENT_DATA_FOCUS[slug] || null;
+}
+
 /**
  * Generate an execution plan for the given intent.
  * Optionally verifies table existence via DatasetRegistry.
@@ -124,10 +236,24 @@ const ENTITY_TABLE_FILTER: Record<string, string[]> = {
 export async function generatePlan(
   intent: Intent,
   question: string,
-  entityType?: string
+  entityType?: string,
+  entityName?: string
 ): Promise<ExecutionPlan> {
+  let effectiveIntent = intent;
   const template = INTENT_PLAN_MAP[intent] || INTENT_PLAN_MAP.general_insight;
   let tables = [...template.tables];
+
+  // Department-specific scoping: translate department name → relevant tables + intent
+  if (entityType === 'department' && entityName) {
+    const deptFocus = getDepartmentFocus(entityName);
+    if (deptFocus) {
+      tables = [...deptFocus.tables];
+      effectiveIntent = deptFocus.intent;
+      // Use the department-appropriate intent template for ML/vector tasks
+      const deptTemplate = INTENT_PLAN_MAP[deptFocus.intent] || template;
+      return buildVerifiedPlan(deptTemplate, tables, entityType, entityName, question, deptFocus.agentCategories);
+    }
+  }
 
   // Narrow tables by entity scope
   if (entityType && ENTITY_TABLE_FILTER[entityType]) {
@@ -159,6 +285,47 @@ export async function generatePlan(
     tables,
     parameters: {
       entity_type: entityType || null,
+      question_keywords: extractKeywords(question),
+    },
+  };
+}
+
+/**
+ * Build a plan with DatasetRegistry verification.
+ * Used for department-scoped plans that have already determined their tables.
+ */
+async function buildVerifiedPlan(
+  template: PlanTemplate,
+  tables: string[],
+  entityType: string,
+  entityName: string,
+  question: string,
+  agentCategories: string[]
+): Promise<ExecutionPlan> {
+  // Verify tables exist in DatasetRegistry (best-effort)
+  try {
+    const registry = await DatasetRegistry.findAll({
+      attributes: ['table_name'],
+      where: { status: 'active' },
+    });
+    const existingTables = new Set(registry.map((r: any) => r.table_name));
+    const verified = tables.filter((t) => existingTables.has(t));
+    if (verified.length > 0) {
+      tables = verified;
+    }
+  } catch {
+    // DatasetRegistry unavailable — use hardcoded tables
+  }
+
+  return {
+    sql: template.sql,
+    ml: [...template.ml],
+    vector: [...template.vector],
+    tables,
+    parameters: {
+      entity_type: entityType,
+      entity_name: entityName,
+      department_agent_categories: agentCategories,
       question_keywords: extractKeywords(question),
     },
   };

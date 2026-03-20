@@ -273,13 +273,13 @@ export async function handleDataAccessReport(req: Request, res: Response, next: 
 
 export async function handleAssistantQuery(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { question, entity_type } = req.body;
+    const { question, entity_type, entity_name } = req.body;
     if (!question) {
       res.status(400).json({ error: 'question is required' });
       return;
     }
     const { runAssistantPipeline } = await import('../intelligence/assistant/queryEngine');
-    const data = await runAssistantPipeline(question, entity_type);
+    const data = await runAssistantPipeline(question, entity_type, entity_name);
 
     // Store in Q&A history
     const QAHistory = (await import('../models/QAHistory')).default;

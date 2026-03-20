@@ -53,7 +53,8 @@ export interface AssistantResponse {
 
 export async function runAssistantPipeline(
   question: string,
-  entityType?: string
+  entityType?: string,
+  entityName?: string
 ): Promise<AssistantResponse> {
   const steps: PipelineStep[] = [];
   let t0: number;
@@ -83,7 +84,7 @@ export async function runAssistantPipeline(
   t0 = Date.now();
   let plan: ExecutionPlan = { sql: true, ml: [], vector: [], tables: [], parameters: {} };
   try {
-    plan = await generatePlan(intent, question, entityType);
+    plan = await generatePlan(intent, question, entityType, entityName);
     steps.push({
       step: 2,
       name: 'Generate plan',
