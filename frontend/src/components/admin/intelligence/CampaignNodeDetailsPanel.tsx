@@ -14,6 +14,8 @@ interface Props {
   onClose: () => void;
   onSlice?: (nodeId: string) => void;
   sliceContext?: SliceContext | null;
+  sliceLoading?: boolean;
+  sliceStack?: string[];
 }
 
 const NODE_COLORS: Record<string, { color: string; bg: string }> = {
@@ -570,7 +572,7 @@ const DETAIL_COMPONENTS: Record<string, React.FC<{ node: CampaignGraphNode; edge
   outcome: OutcomeDetails,
 };
 
-export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClose, onSlice, sliceContext }: Props) {
+export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClose, onSlice, sliceContext, sliceLoading, sliceStack }: Props) {
   const colors = getColors(node);
   const typeLabel = TYPE_LABELS[node.type] || node.type;
   const DetailComponent = DETAIL_COMPONENTS[node.type] || EntryDetails;
@@ -625,14 +627,17 @@ export default function CampaignNodeDetailsPanel({ node, edges, allNodes, onClos
           </div>
         </div>
 
-        {/* Slice by cohort button */}
-        {onSlice && node.count > 0 && (
+        {/* Slice by cohort button — hidden if already filtering by this node */}
+        {onSlice && node.count > 0 && !sliceStack?.includes(node.id) && (
           <button
             className="btn btn-sm btn-primary w-100 mb-3"
             style={{ fontSize: '0.72rem' }}
             onClick={() => onSlice(node.id)}
+            disabled={sliceLoading}
           >
-            Slice graph by this cohort ({node.count.toLocaleString()} leads)
+            {sliceContext
+              ? `Drill deeper: ${node.label} (${node.count.toLocaleString()} leads)`
+              : `Slice graph by this cohort (${node.count.toLocaleString()} leads)`}
           </button>
         )}
 

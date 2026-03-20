@@ -433,7 +433,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       .then((res) => {
         if (cancelled) return;
         setData(res.data);
-        if (timeWindow === 'all') setGlobalData(res.data);
+        setGlobalData(prev => prev || res.data);
       })
       .catch((err) => { if (!cancelled) setError(err.message || 'Failed to load'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -628,7 +628,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
 
       // Slice mode: heavily dim zero-count nodes
       const sliceDimmed = !dimmed && !!sliceContext && n.count === 0;
-      if (sliceDimmed) ctx.globalAlpha = 0.08;
+      if (sliceDimmed) ctx.globalAlpha = 0.10;
 
       // High-activity glow
       if (isHighActivity && !isHovered && !dimmed) {
@@ -652,16 +652,17 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         ctx.lineWidth = 1.5;
         ctx.globalAlpha = pulseA;
         ctx.stroke();
-        ctx.globalAlpha = dimmed ? 0.12 : sliceDimmed ? 0.08 : 1;
+        ctx.globalAlpha = dimmed ? 0.12 : sliceDimmed ? 0.10 : 1;
       }
 
-      // Slice origin highlight ring
-      const isSliceOrigin = !!sliceContext && sliceContext.nodeId === n.id;
+      // Slice origin highlight ring (all nodes in drill-down stack)
+      const isSliceOrigin = sliceStack.includes(n.id);
       if (isSliceOrigin && !dimmed) {
+        const isPrimary = sliceStack[0] === n.id;
         ctx.beginPath();
         ctx.arc(n.x!, n.y!, radius + 7, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#2b6cb0';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = isPrimary ? '#2b6cb0' : '#319795';
+        ctx.lineWidth = isPrimary ? 3 : 2;
         ctx.stroke();
       }
 
@@ -706,11 +707,16 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       ctx.fillStyle = n.color;
       ctx.fillText(n.label, n.x!, n.y! - 2);
 
-      // Count below label
+      // Count below label (with cohort percentage in slice mode)
       const smallFont = Math.max(7 / globalScale, 2);
       ctx.font = `${smallFont}px -apple-system, BlinkMacSystemFont, sans-serif`;
       ctx.fillStyle = '#718096';
-      ctx.fillText(formatCount(n.count), n.x!, n.y! + fontSize * 0.8);
+      let countText = formatCount(n.count);
+      if (sliceContext && sliceContext.cohortSize > 0 && n.count > 0) {
+        const pct = Math.round((n.count / sliceContext.cohortSize) * 100);
+        countText = `${formatCount(n.count)} (${pct}%)`;
+      }
+      ctx.fillText(countText, n.x!, n.y! + fontSize * 0.8);
 
       // Count badge
       const badgeRadius = Math.max(6 / globalScale, 2.5);
@@ -727,7 +733,7 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
       // Restore alpha
       if (dimmed || isZeroCount || sliceDimmed) ctx.globalAlpha = 1;
     },
-    [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId, sliceContext, animationsEnabled]
+    [hoveredNode, selectedNode, connectedSet, fullWidth, highlightNodeId, sliceContext, sliceStack, animationsEnabled]
   );
 
   // Declarative link helpers
@@ -823,10 +829,47 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     setMousePos({ x: e.clientX, y: e.clientY });
   }, []);
 
-  const handleNodeClick = useCallback((node: any) => {
+  const handleNodeClick = useCallback(async (node: any) => {
+    const n = node as GraphNode;
     setSelectedEdge(null);
-    setSelectedNode(node as GraphNode);
-  }, []);
+    setSelectedNode(n);
+
+    // Don't slice on zero-count nodes or while loading
+    if (n.count === 0 || sliceLoading) return;
+    // Don't re-slice by a node already in the stack
+    if (sliceStack.includes(n.id)) return;
+
+    // Store global data on first slice
+    if (!globalData && data) setGlobalData(data);
+
+    setSliceLoading(true);
+    try {
+      const newStack = [...sliceStack, n.id];
+      const res = await getCampaignGraphSlice(newStack);
+      setSliceStack(newStack);
+      setSliceContext(res.data.sliceContext);
+      setData(res.data);
+      // Refresh selectedNode with updated counts from new data
+      const updatedNode = res.data.nodes.find((nd: CampaignGraphNode) => nd.id === n.id);
+      if (updatedNode) {
+        const colors = getNodeColors(updatedNode);
+        setSelectedNode({
+          ...n,
+          count: updatedNode.count,
+          metrics: updatedNode.metrics,
+          source_breakdown: updatedNode.source_breakdown,
+          color: colors.color,
+          bg: colors.bg,
+        });
+      }
+      setSourceFilter(null);
+      setOutreachFilter(null);
+    } catch (err: any) {
+      console.error('Slice failed:', err);
+    } finally {
+      setSliceLoading(false);
+    }
+  }, [sliceStack, sliceLoading, data, globalData]);
 
   const handleLinkClick = useCallback((link: any) => {
     const src = link.source as GraphNode;
@@ -907,6 +950,16 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
     setSelectedEdge(null);
   }, [globalData]);
 
+  // Escape key resets slice mode
+  useEffect(() => {
+    if (!sliceContext) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleSliceReset();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [sliceContext, handleSliceReset]);
+
   if (loading) {
     return (
       <div className="d-flex align-items-center justify-content-center h-100 text-muted">
@@ -943,6 +996,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
         onClose={() => setSelectedNode(null)}
         onSlice={handleSliceClick}
         sliceContext={sliceContext}
+        sliceLoading={sliceLoading}
+        sliceStack={sliceStack}
       />
     );
   }
@@ -1102,6 +1157,11 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
               </span>
               {sliceStack.length > 1 && (
                 <span className="badge bg-info">{sliceStack.length} levels deep</span>
+              )}
+              {sliceLoading && (
+                <span className="spinner-border spinner-border-sm ms-1" role="status">
+                  <span className="visually-hidden">Loading cohort...</span>
+                </span>
               )}
             </div>
             <button
@@ -1315,6 +1375,8 @@ export default function CampaignGraphTab({ fullWidth = false }: CampaignGraphTab
             onClose={() => setSelectedNode(null)}
             onSlice={handleSliceClick}
             sliceContext={sliceContext}
+            sliceLoading={sliceLoading}
+            sliceStack={sliceStack}
           />
         </div>
       )}
