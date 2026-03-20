@@ -34,6 +34,9 @@ const CHART_MAP: Record<string, React.LazyExoticComponent<React.ComponentType<Ch
   root_cause_split: IntelRootCausePanel,
   tree: IntelBarChart, // fallback to bar for decomposition
   geo: IntelHeatmap, // fallback to heatmap for geo data
+  pie: IntelBarChart, // fallback to bar — no dedicated pie component
+  table: IntelBarChart, // fallback to bar — tables not visual
+  decomposition_tree: IntelBarChart, // fallback to bar
 };
 
 const EMPTY_HINTS: Record<string, string> = {

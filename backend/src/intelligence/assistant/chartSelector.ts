@@ -1,5 +1,5 @@
 // ─── Chart Selector ──────────────────────────────────────────────────────
-// Selects chart types based on intent + data shape. 12 supported chart types.
+// Selects chart types based on intent + data shape. Guarantees minimum charts.
 
 import { Intent } from './intentClassifier';
 import { SqlResult } from './sqlExecutor';
@@ -7,9 +7,9 @@ import { MlResult } from './mlExecutor';
 import { VectorResult } from './vectorExecutor';
 
 export type ChartType =
-  | 'line' | 'bar' | 'pie' | 'combo' | 'heatmap' | 'geo'
+  | 'line' | 'bar' | 'combo' | 'heatmap' | 'geo'
   | 'network' | 'radar' | 'waterfall' | 'forecast_cone'
-  | 'risk_matrix' | 'decomposition_tree' | 'cluster' | 'table';
+  | 'risk_matrix' | 'decomposition_tree' | 'cluster';
 
 export interface ChartConfig {
   type: ChartType;
@@ -34,20 +34,26 @@ export function selectVisualizations(
   // SQL-based charts
   for (const sr of sqlResults) {
     if (sr.rows.length === 0) continue;
-    const chartType = selectChartType(intent, sr.description, sr.rows);
     const { labelKey, valueKey } = detectKeys(sr.rows);
 
     if (!labelKey || !valueKey) {
+      // Fallback: find any string + numeric key pair and make a bar chart
+      const fallbackLabel = findStringKey(sr.rows[0], Object.keys(sr.rows[0])) || Object.keys(sr.rows[0])[0];
+      const fallbackValue = findNumericKey(sr.rows[0], Object.keys(sr.rows[0])) || Object.keys(sr.rows[0])[1] || Object.keys(sr.rows[0])[0];
       charts.push({
-        type: 'table',
+        type: 'bar',
         title: sr.description,
-        data: sr.rows.slice(0, 20),
-        labelKey: Object.keys(sr.rows[0])[0],
-        valueKey: Object.keys(sr.rows[0])[1] || Object.keys(sr.rows[0])[0],
+        data: sr.rows.slice(0, 20).map((r) => ({
+          label: formatLabel(r[fallbackLabel]),
+          value: Number(r[fallbackValue]) || 0,
+        })),
+        labelKey: 'label',
+        valueKey: 'value',
       });
       continue;
     }
 
+    const chartType = selectChartType(intent, sr.description, sr.rows);
     charts.push({
       type: chartType,
       title: sr.description,
@@ -129,36 +135,101 @@ export function selectVisualizations(
   return charts.slice(0, 4);
 }
 
+/**
+ * Guarantee at least 2 charts are returned. Synthesizes additional charts
+ * from SQL data if needed, picking types that differ from existing ones.
+ */
+export function guaranteeCharts(
+  charts: ChartConfig[],
+  intent: Intent,
+  sqlResults: SqlResult[]
+): ChartConfig[] {
+  if (charts.length >= 2) return charts;
+
+  const existingTypes = new Set(charts.map((c) => c.type));
+  const VARIETY_TYPES: ChartType[] = ['radar', 'line', 'bar', 'combo'];
+
+  // Try to synthesize a chart from each SQL result with a different type
+  for (const sr of sqlResults) {
+    if (sr.rows.length === 0 || charts.length >= 2) continue;
+    const keys = Object.keys(sr.rows[0]);
+    const stringKey = keys.find((k) => typeof sr.rows[0][k] === 'string' && !k.endsWith('_at') && !k.endsWith('_id'));
+    const numericKey = keys.find((k) => typeof sr.rows[0][k] === 'number');
+    if (!stringKey || !numericKey) continue;
+
+    const selectedType = VARIETY_TYPES.find((t) => !existingTypes.has(t)) || 'bar';
+    existingTypes.add(selectedType);
+
+    charts.push({
+      type: selectedType,
+      title: `${sr.description} — Overview`,
+      data: sr.rows.slice(0, 10).map((r) => ({
+        label: formatLabel(r[stringKey]),
+        value: Number(r[numericKey]) || 0,
+      })),
+      labelKey: 'label',
+      valueKey: 'value',
+    });
+  }
+
+  // Last resort: summary chart showing row counts per SQL query
+  if (charts.length < 2 && sqlResults.some((sr) => sr.rows.length > 0)) {
+    const summaryData = sqlResults
+      .filter((sr) => sr.rows.length > 0)
+      .map((sr) => ({
+        label: sr.description.length > 35 ? sr.description.slice(0, 35) + '...' : sr.description,
+        value: sr.rows.length,
+      }));
+    if (summaryData.length > 0) {
+      const selectedType = VARIETY_TYPES.find((t) => !existingTypes.has(t)) || 'bar';
+      charts.push({
+        type: selectedType,
+        title: 'Data Coverage Summary',
+        data: summaryData,
+        labelKey: 'label',
+        valueKey: 'value',
+      });
+    }
+  }
+
+  return charts.slice(0, 4);
+}
+
 // ─── Chart Type Selection ────────────────────────────────────────────────────
 
 function selectChartType(intent: Intent, description: string, rows: Record<string, any>[]): ChartType {
   const desc = description.toLowerCase();
 
   // Time-series → line
-  if (desc.includes('trend') || desc.includes('weekly') || desc.includes('daily')) return 'line';
+  if (desc.includes('trend') || desc.includes('weekly') || desc.includes('daily') || desc.includes('over time')) return 'line';
   if (hasTimeColumn(rows)) return 'line';
 
-  // Forecast → forecast_cone (but only from ML, SQL forecasts use line)
+  // Forecast → line
   if (intent === 'forecast_request') return 'line';
 
-  // Distribution → bar or pie
-  if (desc.includes('distribution') || desc.includes('by status') || desc.includes('by type')) {
-    return rows.length <= 6 ? 'pie' : 'bar';
-  }
+  // Multi-metric with time → combo
+  const numericKeys = Object.keys(rows[0] || {}).filter((k) => typeof rows[0][k] === 'number');
+  if (numericKeys.length >= 2 && hasTimeColumn(rows)) return 'combo';
 
-  // Comparison → radar
+  // Waterfall for breakdowns
+  if (desc.includes('breakdown') || desc.includes('contribution') || desc.includes('waterfall')) return 'waterfall';
+
+  // Distribution → bar (no pie — no IntelPieChart component)
+  if (desc.includes('distribution') || desc.includes('by status') || desc.includes('by type')) return 'bar';
+
+  // Comparison → radar for small sets
   if (intent === 'comparison') return rows.length <= 8 ? 'radar' : 'bar';
 
   // Anomaly → bar (ranked)
   if (intent === 'anomaly_detection') return 'bar';
 
-  // Size heuristics
-  if (rows.length <= 5) return 'pie';
-  if (rows.length <= 30) return 'bar';
-  return 'table';
+  // Size heuristics — never return 'table' or 'pie'
+  if (rows.length <= 8) return 'radar';
+  if (hasTimeColumn(rows)) return 'line';
+  return 'bar';
 }
 
-// ─── Key Detection (carried over from visualizationBuilder.ts) ──────────────
+// ─── Key Detection ──────────────────────────────────────────────────────────
 
 function detectKeys(rows: Record<string, any>[]): { labelKey: string | null; valueKey: string | null } {
   if (rows.length === 0) return { labelKey: null, valueKey: null };
@@ -168,7 +239,9 @@ function detectKeys(rows: Record<string, any>[]): { labelKey: string | null; val
     'label', 'name', 'status', 'stage', 'agent_name', 'module',
     'error_type', 'health_status', 'component', 'campaign_type',
     'temperature', 'level', 'group_val', 'week', 'day', 'hour',
-    'entity',
+    'entity', 'type', 'category', 'source', 'channel', 'program',
+    'cohort', 'department', 'title', 'company', 'industry',
+    'first_name', 'last_name', 'email', 'campaign_name', 'agent_type',
   ];
   const VALUE_CANDIDATES = [
     'count', 'total', 'value', 'error_count', 'executions',
@@ -176,7 +249,10 @@ function detectKeys(rows: Record<string, any>[]): { labelKey: string | null; val
     'new_enrollments', 'campaigns_created', 'activity_count',
     'error_rate_pct', 'avg_duration_ms', 'scored_leads',
     'unique_students', 'event_count', 'risk_score', 'score',
-    'anomaly_score', 'similarity',
+    'anomaly_score', 'similarity', 'amount', 'revenue',
+    'conversion_rate', 'open_rate', 'click_rate', 'bounce_rate',
+    'run_count', 'success_count', 'fail_count', 'duration',
+    'id', 'avg_confidence', 'total_leads', 'total_students',
   ];
 
   const labelKey = LABEL_CANDIDATES.find((k) => keys.includes(k)) || findStringKey(rows[0], keys);
@@ -195,7 +271,7 @@ function findNumericKey(row: Record<string, any>, keys: string[]): string | unde
 
 function hasTimeColumn(rows: Record<string, any>[]): boolean {
   if (rows.length === 0) return false;
-  return Object.keys(rows[0]).some((k) => k === 'week' || k === 'day' || k === 'hour' || k.endsWith('_date'));
+  return Object.keys(rows[0]).some((k) => k === 'week' || k === 'day' || k === 'hour' || k.endsWith('_date') || k === 'month' || k === 'date');
 }
 
 function formatLabel(val: any): string {

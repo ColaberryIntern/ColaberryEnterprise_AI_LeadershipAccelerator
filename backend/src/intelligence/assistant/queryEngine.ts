@@ -9,7 +9,7 @@ import { executeSQLQueries, SqlResult } from './sqlExecutor';
 import { executeML, MlResult } from './mlExecutor';
 import { executeVectorSearch, VectorResult } from './vectorExecutor';
 import { buildContext, Insight, PipelineContext } from './contextBuilder';
-import { selectVisualizations, ChartConfig } from './chartSelector';
+import { selectVisualizations, guaranteeCharts, ChartConfig } from './chartSelector';
 import { generateFollowups } from './followupGenerator';
 import { chatCompletion } from './openaiHelper';
 
@@ -39,7 +39,7 @@ export interface AssistantResponse {
   narrative: string;
   narrative_sections: NarrativeSections | null;
   insights: Array<{ type: string; severity: string; message: string; metric?: string; value?: number }>;
-  charts: Array<{ type: string; title: string; data: Record<string, any>[]; labelKey: string; valueKey: string }>;
+  visualizations: Array<{ chart_type: string; title: string; data: Record<string, any>[]; config: Record<string, any> }>;
   recommendations: string[];
   sources: string[];
   pipelineSteps: PipelineStep[];
@@ -180,12 +180,13 @@ export async function runAssistantPipeline(
   let charts: ChartConfig[] = [];
   try {
     charts = selectVisualizations(intent, sqlResults, mlResults, vectorResults);
+    charts = guaranteeCharts(charts, intent, sqlResults);
     steps.push({
       step: 7,
       name: 'Select visualizations',
       status: 'completed',
       duration_ms: Date.now() - t0,
-      detail: `${charts.length} charts`,
+      detail: `${charts.length} charts (guaranteed)`,
     });
   } catch (err: any) {
     steps.push({ step: 7, name: 'Select visualizations', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
@@ -236,6 +237,24 @@ export async function runAssistantPipeline(
     .map((s) => s.name.toLowerCase().replace(/\s+/g, '_'))
     .join(' → ');
 
+  // Map insights and guarantee KPI-bearing entries
+  const mappedInsights = context.insights.map((i: Insight) => ({
+    type: i.type,
+    severity: i.severity,
+    message: i.message,
+    metric: i.metric,
+    value: i.value,
+  }));
+  extractKPIsFromResults(mappedInsights, sqlResults);
+
+  // Transform ChartConfig[] → VisualizationSpec[] (frontend expects chart_type + config)
+  const visualizations = charts.map((c) => ({
+    chart_type: c.type,
+    title: c.title,
+    data: c.data,
+    config: { labelKey: c.labelKey, valueKey: c.valueKey },
+  }));
+
   return {
     question,
     entity_type: entityType || null,
@@ -243,14 +262,8 @@ export async function runAssistantPipeline(
     confidence,
     narrative,
     narrative_sections: narrativeSections,
-    insights: context.insights.map((i: Insight) => ({
-      type: i.type,
-      severity: i.severity,
-      message: i.message,
-      metric: i.metric,
-      value: i.value,
-    })),
-    charts,
+    insights: mappedInsights,
+    visualizations,
     recommendations: recommendations.length > 0 ? recommendations : followUps,
     sources: context.sources,
     pipelineSteps: steps,
@@ -321,6 +334,36 @@ ${context.formattedContext.slice(0, 6000)}`;
     return { narrative, sections, recommendations };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Ensure insights contain KPI-bearing entries (metric + value) so the frontend
+ * can render dynamic KPI cards from every Cory response.
+ */
+function extractKPIsFromResults(
+  insights: Array<{ type: string; severity: string; message: string; metric?: string; value?: number }>,
+  sqlResults: SqlResult[]
+): void {
+  const hasMetricInsights = insights.some((i) => i.metric && i.value != null);
+  if (hasMetricInsights) return;
+
+  // Extract from single-row aggregate SQL results (e.g. SELECT COUNT(*) AS total)
+  for (const sr of sqlResults) {
+    if (sr.rows.length !== 1) continue;
+    const row = sr.rows[0];
+    for (const [key, val] of Object.entries(row)) {
+      if (typeof val === 'number' && val > 0) {
+        insights.push({
+          type: 'metric',
+          severity: 'info',
+          message: `${key.replace(/_/g, ' ')}: ${val.toLocaleString()}`,
+          metric: key,
+          value: val,
+        });
+      }
+    }
+    if (insights.some((i) => i.metric)) break;
   }
 }
 

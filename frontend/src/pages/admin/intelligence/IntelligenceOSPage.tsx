@@ -1745,6 +1745,27 @@ function IntelligenceOSContent() {
     setVisualizations(viz);
     setLastRefresh(new Date().toLocaleString());
     setIsProcessing(false);
+
+    // Cross-populate analytics grid from Cory visualization data
+    for (const v of viz) {
+      if (v.chart_type === 'heatmap' && v.data?.length > 0) {
+        setAnomalies((prev) => prev.length > 0 ? prev : v.data.map((d: any) => ({
+          entity: d.label || d.name || 'Unknown',
+          score: d.value || d.anomaly_score || 50,
+          metric: v.title,
+        })));
+      }
+      if ((v.chart_type === 'forecast' || v.chart_type === 'forecast_cone') && v.data?.length > 0) {
+        setForecasts((prev: any) => prev || { data: v.data, title: v.title });
+      }
+      if ((v.chart_type === 'risk_matrix' || v.chart_type === 'scatter') && v.data?.length > 0) {
+        setRiskEntities((prev) => prev.length > 0 ? prev : v.data.map((d: any) => ({
+          name: d.label || d.entity || 'Unknown',
+          risk_score: d.value || d.risk_score || 0,
+          factors: [],
+        })));
+      }
+    }
   }, []);
 
   const handleSummaryUpdate = useCallback((data: Record<string, any>) => {
@@ -1761,7 +1782,22 @@ function IntelligenceOSContent() {
       trend: i.severity === 'warning' ? 'down' : i.severity === 'critical' ? 'down' : 'stable',
     })));
     // Extract metric insights as dynamic KPI cards
-    const kpiInsights = ins.filter((i: any) => i.metric && i.value != null);
+    let kpiInsights = ins.filter((i: any) => i.metric && i.value != null);
+    // Fallback: parse numbers from insight messages if no explicit metrics
+    if (kpiInsights.length === 0) {
+      const numberPattern = /(\d[\d,]*\.?\d*)\s*(leads?|enrollments?|campaigns?|students?|emails?|revenue|total|count|agents?|errors?)/gi;
+      for (const insight of ins) {
+        const matches = [...(insight.message || '').matchAll(numberPattern)];
+        for (const match of matches) {
+          kpiInsights.push({
+            metric: match[2],
+            value: parseFloat(match[1].replace(/,/g, '')),
+            severity: insight.severity,
+          });
+        }
+        if (kpiInsights.length >= 4) break;
+      }
+    }
     if (kpiInsights.length > 0) {
       setKpis((prev: any) => ({
         ...prev,
