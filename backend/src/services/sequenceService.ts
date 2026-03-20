@@ -417,7 +417,15 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
     }
   }
 
+  // Event-driven sequencing: for regular campaigns, only schedule Step 0 at enrollment.
+  // Subsequent steps are scheduled after each step is sent (see scheduleNextStep).
+  // T-minus campaigns (appointment/cohort-relative) still pre-schedule all steps.
+  const isEventDriven = !isTMinus && !isCohortTMinus;
+
   for (let i = 0; i < sequence.steps.length; i++) {
+    // Event-driven: only create Step 0 at enrollment; later steps are created by scheduleNextStep()
+    if (isEventDriven && i > 0) continue;
+
     const step = sequence.steps[i];
     const channel: CampaignChannel = step.channel || 'email';
 
@@ -440,6 +448,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
         continue;
       }
     } else {
+      // Step 0 always has delay_days=0, so this schedules immediately
       scheduledFor = new Date(now.getTime() + step.delay_days * 24 * 60 * 60 * 1000);
     }
 
@@ -507,6 +516,94 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
   }
 
   return scheduledActions;
+}
+
+/**
+ * Event-driven sequencing: after a step is sent, schedule the next step in the sequence.
+ * The delay between steps is computed from the sequence definition (gap between consecutive delay_days).
+ * Returns the created ScheduledEmail, or null if the sequence is complete or N/A.
+ */
+export async function scheduleNextStep(completedAction: any): Promise<any | null> {
+  if (!completedAction.sequence_id) return null;
+
+  const sequence = await FollowUpSequence.findByPk(completedAction.sequence_id);
+  if (!sequence || !sequence.steps) return null;
+
+  const nextIndex = (completedAction.step_index ?? 0) + 1;
+  if (nextIndex >= sequence.steps.length) return null; // Sequence complete
+
+  // Skip T-minus campaigns — those are pre-scheduled at enrollment
+  const allZeroDelay = sequence.steps.every((s: SequenceStep) => (s.delay_days || 0) === 0);
+  const isTMinus = allZeroDelay && sequence.steps.some((s: SequenceStep) => s.minutes_before_call != null);
+  const isCohortTMinus = allZeroDelay && sequence.steps.some((s: SequenceStep) => s.days_before_cohort_start != null);
+  if (isTMinus || isCohortTMinus) return null;
+
+  // Idempotency: check if next step already exists (from pre-scheduled enrollment or duplicate call)
+  const existing = await ScheduledEmail.count({
+    where: {
+      lead_id: completedAction.lead_id,
+      sequence_id: completedAction.sequence_id,
+      step_index: nextIndex,
+      status: { [Op.in]: ['pending', 'processing', 'sent'] },
+    },
+  });
+  if (existing > 0) return null;
+
+  const lead = await Lead.findByPk(completedAction.lead_id);
+  if (!lead) return null;
+
+  const nextStep = sequence.steps[nextIndex];
+  const currentStep = sequence.steps[completedAction.step_index ?? 0];
+  const channel: CampaignChannel = nextStep.channel || 'email';
+
+  // Compute gap: difference between consecutive delay_days values
+  const gapDays = (nextStep.delay_days || 0) - (currentStep.delay_days || 0);
+  const scheduledFor = new Date(Date.now() + Math.max(gapDays, 0) * 24 * 60 * 60 * 1000);
+
+  // Replace template variables
+  const replaceVars = (text: string) =>
+    text
+      .replace(/\{\{name\}\}/g, lead.name)
+      .replace(/\{\{company\}\}/g, lead.company || '')
+      .replace(/\{\{title\}\}/g, lead.title || '')
+      .replace(/\{\{email\}\}/g, lead.email)
+      .replace(/\{\{phone\}\}/g, lead.phone || '')
+      .replace(/\{\{referred_by\}\}/g, (lead as any).alumni_context?.referred_by_name || '');
+
+  const subject = replaceVars(nextStep.subject || '');
+  const body = replaceVars(
+    channel === 'sms' && nextStep.sms_template
+      ? nextStep.sms_template
+      : nextStep.body_template || ''
+  );
+
+  const action = await ScheduledEmail.create({
+    lead_id: completedAction.lead_id,
+    sequence_id: completedAction.sequence_id,
+    campaign_id: completedAction.campaign_id || null,
+    step_index: nextIndex,
+    channel,
+    subject,
+    body,
+    to_email: lead.email,
+    to_phone: lead.phone || null,
+    voice_agent_type: channel === 'voice' ? (nextStep.voice_agent_type || 'interest') : null,
+    max_attempts: nextStep.max_attempts || (channel === 'voice' ? 2 : 1),
+    attempts_made: 0,
+    fallback_channel: nextStep.fallback_channel || null,
+    scheduled_for: scheduledFor,
+    status: 'pending',
+    ai_instructions: nextStep.ai_instructions || null,
+    metadata: {
+      step_goal: nextStep.step_goal || null,
+      ai_tone: nextStep.ai_tone || null,
+      ai_context_notes: nextStep.ai_context_notes || null,
+      voice_prompt: channel === 'voice' && nextStep.voice_prompt ? nextStep.voice_prompt : null,
+    },
+  } as any);
+
+  console.log(`[Sequence] Scheduled next step ${nextIndex} (${channel}) for lead ${lead.id} at ${scheduledFor.toISOString()}`);
+  return action;
 }
 
 export async function cancelSequenceForLead(leadId: number) {

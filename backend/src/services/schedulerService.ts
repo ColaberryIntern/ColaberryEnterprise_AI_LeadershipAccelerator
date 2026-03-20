@@ -688,6 +688,20 @@ async function processScheduledActions(): Promise<void> {
           await action.update({ status: 'failed' } as any);
       }
 
+      // Event-driven sequencing: schedule the next step after successful send
+      try {
+        await action.reload();
+        if (action.status === 'sent') {
+          const { scheduleNextStep } = require('./sequenceService');
+          const nextAction = await scheduleNextStep(action);
+          if (nextAction) {
+            console.log(`[Scheduler] Next step ${nextAction.step_index} (${nextAction.channel}) for lead ${action.lead_id} at ${nextAction.scheduled_for}`);
+          }
+        }
+      } catch (err: any) {
+        console.error(`[Scheduler] Failed to schedule next step for action ${action.id}:`, err.message);
+      }
+
       campaignProcessed[campaignId]++;
 
       // Pacing delay between sends

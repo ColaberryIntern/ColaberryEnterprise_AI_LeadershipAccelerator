@@ -124,9 +124,14 @@ export async function recordOutcome(params: RecordOutcomeParams): Promise<void> 
             });
             updates.next_action_at = nextAction ? nextAction.scheduled_for : null;
 
-            // Auto-complete CampaignLead when no more pending actions
-            if (!nextAction) {
-              updates.status = 'completed';
+            // Auto-complete CampaignLead when no more pending actions AND this was the last step.
+            // Under event-driven sequencing, the next step may not exist yet (it gets created
+            // by scheduleNextStep after this), so only complete if we've reached the final step.
+            if (!nextAction && params.step_index !== undefined) {
+              const totalSteps = (campaignLead as any).total_steps || 0;
+              if (totalSteps === 0 || params.step_index >= totalSteps - 1) {
+                updates.status = 'completed';
+              }
             }
           }
 
