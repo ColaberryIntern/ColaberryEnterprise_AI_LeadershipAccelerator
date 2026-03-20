@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import {
   FunnelChart, Funnel, Tooltip, ResponsiveContainer, LabelList, Cell,
 } from 'recharts';
 import api from '../../../utils/api';
+
+const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -452,7 +454,7 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                     {[
                       { label: 'Visitors', value: (roi.visitors || 0).toLocaleString(), tooltip: 'Total unique visitors from this campaign' },
                       { label: 'Identified', value: (roi.leads || 0).toLocaleString(), tooltip: 'Visitors matched to a known lead' },
-                      { label: 'Engaged', value: (roi.engaged || 0).toLocaleString(), tooltip: 'Visitors with 30s+ on page or 3+ interactions' },
+                      { label: 'Engaged', value: (roi.engaged || 0).toLocaleString(), tooltip: 'Visitors with 30s+ on page, 50%+ scroll, or CTA click' },
                       { label: 'Enrolled', value: (roi.enrollments || 0).toLocaleString(), tooltip: 'Visitors who completed enrollment' },
                       { label: 'Revenue', value: fmt$(roi.revenue || 0), tooltip: 'Total revenue from enrolled visitors' },
                       { label: 'ROI', value: roi.roi != null ? `${(roi.roi * 100).toFixed(0)}%` : '\u2014', tooltip: 'Return on investment: (revenue - spend) / spend' },
@@ -529,8 +531,10 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                           <th>Last Seen</th>
                           <th>Name</th>
                           <th>Email</th>
-                          <th>Time</th>
-                          <th>Engaged</th>
+                          <th title="Time on page in seconds">Time</th>
+                          <th title="Max scroll depth reached">Scroll</th>
+                          <th title="Clicked a call-to-action button">CTA</th>
+                          <th title="30s+ on page, 50%+ scroll, or CTA click">Engaged</th>
                           <th>Source</th>
                         </tr>
                       </thead>
@@ -541,6 +545,8 @@ function CampaignDetailModal({ campaign: c, onClose, onEdit, onRefresh }: {
                             <td className="fw-medium">{v.lead_name || <span className="text-muted">Anonymous</span>}</td>
                             <td>{v.lead_email || '-'}</td>
                             <td>{v.time_on_page ? `${v.time_on_page}s` : '-'}</td>
+                            <td>{v.scroll_depth ? `${v.scroll_depth}%` : '-'}</td>
+                            <td>{v.cta_clicked ? <span className="badge bg-info text-dark" style={{ fontSize: 9 }}>Yes</span> : '-'}</td>
                             <td>{v.engaged ? <span className="badge bg-success" style={{ fontSize: 9 }}>Yes</span> : <span className="badge bg-secondary" style={{ fontSize: 9 }}>No</span>}</td>
                             <td><span className="badge bg-secondary" style={{ fontSize: 9 }}>{v.utm_source || 'direct'}</span></td>
                           </tr>
@@ -1163,12 +1169,20 @@ function RevenueIntelligenceTab() {
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 function AdminMarketingDashboardPage() {
-  const [activeTab, setActiveTab] = useState<'revenue' | 'registry'>('revenue');
+  const [activeTab, setActiveTab] = useState<'funnel' | 'revenue' | 'registry'>('funnel');
 
   return (
     <div>
       {/* Tab Navigation */}
       <ul className="nav nav-tabs mb-4">
+        <li className="nav-item">
+          <button
+            className={`nav-link ${activeTab === 'funnel' ? 'active' : ''}`}
+            onClick={() => setActiveTab('funnel')}
+          >
+            Marketing Funnel
+          </button>
+        </li>
         <li className="nav-item">
           <button
             className={`nav-link ${activeTab === 'revenue' ? 'active' : ''}`}
@@ -1187,6 +1201,17 @@ function AdminMarketingDashboardPage() {
         </li>
       </ul>
 
+      {activeTab === 'funnel' && (
+        <Suspense fallback={
+          <div className="text-center py-5">
+            <div className="spinner-border text-primary" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        }>
+          <MarketingFunnelGraph />
+        </Suspense>
+      )}
       {activeTab === 'revenue' && <RevenueIntelligenceTab />}
       {activeTab === 'registry' && <CampaignLinkRegistryTab />}
     </div>

@@ -39,6 +39,7 @@ import productionCleanupRoutes from './admin/productionCleanupRoute';
 import productionActivationRoutes from './admin/productionActivationRoute';
 import campaignDiagnosticsRoutes from './admin/campaignDiagnosticsRoutes';
 import visitorFlowRoutes from './admin/visitorFlowRoutes';
+import marketingFunnelRoutes from './admin/marketingFunnelRoutes';
 
 const router = Router();
 
@@ -82,5 +83,6 @@ router.use(productionCleanupRoutes);
 router.use(productionActivationRoutes);
 router.use(campaignDiagnosticsRoutes);
 router.use(visitorFlowRoutes);
+router.use(marketingFunnelRoutes);
 
 export default router;
