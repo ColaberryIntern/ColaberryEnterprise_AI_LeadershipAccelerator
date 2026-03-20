@@ -34,7 +34,7 @@ const COLD_SEQUENCE = {
       channel: 'voice' as const,
       subject: 'Intro call — connect on AI challenges',
       body_template: '',
-      ai_instructions: 'Generate voice agent instructions for a cold outreach call. The agent should introduce themselves as Alex from Colaberry Enterprise AI Division, reference the two emails sent previously, and transition into a consultative conversation about the lead\'s AI challenges. Goal is to identify pain points and book a 15-minute strategy call with Ali Merchant. Be warm and peer-like, not pushy.',
+      ai_instructions: 'Generate voice agent instructions for a cold outreach call. The agent should introduce themselves as Maya, Director of Admissions at Colaberry Enterprise AI Division, reference the two emails sent previously, and transition into a consultative conversation about the lead\'s AI challenges. Goal is to identify pain points and book a 15-minute strategy call with Ali Merchant. Be warm and peer-like, not pushy.',
       ai_tone: 'friendly',
       voice_agent_type: 'interest' as const,
       step_goal: 'First call — establish human connection, identify pain, book strategy call',

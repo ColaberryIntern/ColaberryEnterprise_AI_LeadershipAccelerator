@@ -12,7 +12,7 @@ const DEFAULT_SEQUENCE = {
       channel: 'voice' as const,
       subject: 'Intro call — identify pain, book strategy session',
       body_template: 'Day 0 welcome call — AI-driven intro conversation with new lead',
-      voice_prompt: `You are Alex, calling on behalf of Colaberry's Enterprise AI Division. You are reaching out to {{name}}{{company ? ' at ' + company : ''}}.
+      voice_prompt: `You are Maya, Director of Admissions at Colaberry's Enterprise AI Division. You are reaching out to {{name}}{{company ? ' at ' + company : ''}}.
 
 They recently expressed interest in the Enterprise AI Leadership Accelerator — a 5-day intensive program where executives build a working AI proof of concept, executive presentation, and 90-day roadmap.
 
@@ -86,7 +86,7 @@ Colaberry Enterprise AI Division</p>`,
       channel: 'voice' as const,
       subject: 'Follow-up call — reference prior touchpoints, close on meeting',
       body_template: 'Day 6 follow-up call — reference prior emails, push for strategy call',
-      voice_prompt: `You are Alex, calling {{name}}{{company ? ' at ' + company : ''}} again from Colaberry's Enterprise AI Division. This is a follow-up — you've been in touch before.
+      voice_prompt: `You are Maya, Director of Admissions, calling {{name}}{{company ? ' at ' + company : ''}} again from Colaberry's Enterprise AI Division. This is a follow-up — you've been in touch before.
 
 CONTEXT:
 - Next cohort: {{cohort_name}} starting {{cohort_start}} ({{seats_remaining}} seats remaining, max 15)

@@ -96,14 +96,16 @@ Max 140 characters (an opt-out footer is appended automatically — do NOT inclu
 Be direct with a clear CTA. Include a way to reply (e.g., "Reply YES").
 No hashtags, no emojis unless natural.`,
 
-    voice: `You are writing AI agent instructions for a voice call (Synthflow AI).
+    voice: `You are writing AI agent instructions for a voice call by Maya, Director of Admissions at Colaberry Enterprise AI Division.
 OUTPUT FORMAT — respond with ONLY the voice prompt instructions, no JSON, no quotes.
-Write in second person ("You are calling..."). Include:
+Write in second person ("You are Maya, calling..."). Include:
 - The objective of the call
 - Key talking points based on the lead's context
 - How to handle objections
 - What constitutes a successful outcome
-Keep it conversational and natural. The AI agent will use these instructions to guide the call.`,
+Keep it conversational and natural. The AI agent will use these instructions to guide the call.
+CRITICAL: The voice agent's name is Maya. NEVER use placeholder brackets like [Your name], [Name], or [Agent Name]. Always use "Maya" directly.
+CRITICAL: Always address the lead by their actual name from the LEAD PROFILE below. NEVER use placeholder brackets like [Lead Name] or [Name] for the lead either.`,
   };
 
   const defaultPersona = `You are a professional outreach specialist for Colaberry Enterprise AI Division. You write personalized, consultative messages that feel like 1:1 conversations, not marketing templates. You reference the lead's specific context naturally. You never sound like a mass email.`;

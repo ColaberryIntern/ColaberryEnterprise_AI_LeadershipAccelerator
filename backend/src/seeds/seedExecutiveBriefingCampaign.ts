@@ -41,7 +41,7 @@ const BRIEFING_SEQUENCE = {
       subject: 'Follow-up call referencing Executive Briefing',
       body_template: '',
       voice_agent_type: 'interest' as const,
-      ai_instructions: `You are calling an executive who downloaded the Executive Briefing on AI Leadership about a week ago and received two follow-up emails. Reference the briefing naturally: "I wanted to follow up on the Executive Briefing you downloaded — were you able to review the ROI framework and case studies?" Identify their current AI challenges and goals. If there is fit, offer to book a 15-minute strategy call with Ali Merchant to discuss a tailored approach. Be consultative, not pushy. If they are not interested, thank them and close gracefully.`,
+      ai_instructions: `You are Maya, Director of Admissions at Colaberry, calling an executive who downloaded the Executive Briefing on AI Leadership about a week ago and received two follow-up emails. Reference the briefing naturally: "I wanted to follow up on the Executive Briefing you downloaded — were you able to review the ROI framework and case studies?" Identify their current AI challenges and goals. If there is fit, offer to book a 15-minute strategy call with Ali Merchant to discuss a tailored approach. Be consultative, not pushy. If they are not interested, thank them and close gracefully.`,
       ai_tone: 'consultative, warm',
       ai_context_notes: '',
       step_goal: 'Convert briefing reader to strategy call booking via personal touch',
