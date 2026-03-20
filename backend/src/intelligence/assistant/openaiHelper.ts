@@ -3,6 +3,7 @@
 // Returns null when API key is missing — callers fall back to rule-based logic.
 
 import OpenAI from 'openai';
+import type { ChatCompletionMessageParam, ChatCompletionTool, ChatCompletion } from 'openai/resources/chat/completions';
 
 let _client: OpenAI | null = null;
 
@@ -44,3 +45,29 @@ export async function chatCompletion(
     return null;
   }
 }
+
+/**
+ * Send a chat completion request with tool/function calling support.
+ * Used by the Cory agentic engine for iterative tool-calling loops.
+ * Throws on failure (caller handles retry/fallback).
+ */
+export async function chatCompletionWithTools(
+  messages: ChatCompletionMessageParam[],
+  tools: ChatCompletionTool[],
+  options?: { maxTokens?: number; temperature?: number; json?: boolean }
+): Promise<ChatCompletion> {
+  const client = getOpenAIClient();
+  if (!client) throw new Error('OpenAI API key not configured');
+
+  return client.chat.completions.create({
+    model: MODEL,
+    messages,
+    tools,
+    max_tokens: options?.maxTokens ?? 1500,
+    temperature: options?.temperature ?? 0.2,
+    ...(options?.json ? { response_format: { type: 'json_object' as const } } : {}),
+  });
+}
+
+export { MODEL };
+export type { ChatCompletionMessageParam, ChatCompletionTool, ChatCompletion };

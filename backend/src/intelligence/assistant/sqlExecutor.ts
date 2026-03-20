@@ -578,7 +578,7 @@ Rules:
   }
 }
 
-function validateSQL(sql: string): boolean {
+export function validateSQL(sql: string): boolean {
   const upper = sql.toUpperCase().trim();
   // Must start with SELECT or WITH (for CTEs)
   if (!upper.startsWith('SELECT') && !upper.startsWith('WITH')) return false;
@@ -589,4 +589,81 @@ function validateSQL(sql: string): boolean {
     if (new RegExp(`\\b${kw}\\b`).test(upper)) return false;
   }
   return true;
+}
+
+// ─── Schema Loading (shared by LLM SQL generation and agentic engine) ───────
+
+async function loadSchemaContext(focusTables?: string[]): Promise<{ primarySchema: string; fullIndex: string; relationshipContext: string } | null> {
+  try {
+    const registries = await DatasetRegistry.findAll({ where: { status: 'active' } });
+    const focus = focusTables || [];
+
+    const primaryTables = focus.length > 0
+      ? registries.filter((r: any) => focus.includes(r.table_name))
+      : registries;
+    const primarySchema = primaryTables.map((r: any) => {
+      const cols = Object.keys(r.semantic_types || {}).join(', ');
+      return `Table "${r.table_name}" (${r.row_count} rows): ${cols}`;
+    }).join('\n');
+
+    const otherTables = focus.length > 0 ? registries.filter((r: any) => !focus.includes(r.table_name)) : [];
+    const fullIndex = otherTables.map((r: any) => {
+      const cols = Object.keys(r.semantic_types || {});
+      const keyCols = cols.filter((c: string) =>
+        c === 'id' || c.endsWith('_id') || c === 'status' || c === 'name' ||
+        c === 'email' || c === 'created_at' || c === 'type' || c === 'channel'
+      );
+      const preview = keyCols.length > 0 ? keyCols.join(', ') : cols.slice(0, 6).join(', ');
+      return `"${r.table_name}" (${r.row_count} rows): ${preview}`;
+    }).join('\n');
+
+    const relLines: string[] = [];
+    for (const r of primaryTables as any[]) {
+      const rels = r.relationships || [];
+      for (const rel of rels) {
+        relLines.push(`${rel.source_table}.${rel.source_column} → ${rel.target_table}.${rel.target_column}`);
+      }
+    }
+    const relationshipContext = relLines.length > 0 ? [...new Set(relLines)].slice(0, 30).join('\n') : '';
+
+    return { primarySchema, fullIndex, relationshipContext };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generate a SQL query from a natural-language question WITHOUT executing it.
+ * Used by the agentic engine so Cory can inspect SQL before running.
+ */
+export async function generateSQL(
+  question: string,
+  tables?: string[]
+): Promise<{ sql: string; tables_used: string[] } | null> {
+  const schema = await loadSchemaContext(tables);
+  if (!schema || (!schema.primarySchema && !schema.fullIndex)) return null;
+
+  const system = `You are a PostgreSQL query generator for a business intelligence system.
+Generate a single read-only SELECT query to answer the user's question.
+Rules:
+- Only SELECT statements (no INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE)
+- Use COALESCE for nullable columns
+- Use LIMIT to cap results at 50 rows
+- Use JOINs when data spans multiple tables; refer to the relationships section for foreign keys
+- Return only the SQL, no explanation
+- Do not use semicolons`;
+
+  let userPrompt = '';
+  if (schema.primarySchema) userPrompt += `TABLES:\n${schema.primarySchema}\n\n`;
+  if (schema.relationshipContext) userPrompt += `RELATIONSHIPS:\n${schema.relationshipContext}\n\n`;
+  if (schema.fullIndex) userPrompt += `OTHER TABLES:\n${schema.fullIndex}\n\n`;
+  userPrompt += `Question: ${question}`;
+
+  const sql = await chatCompletion(system, userPrompt.slice(0, 12000), { maxTokens: 800, temperature: 0.1 });
+  if (!sql) return null;
+
+  const cleaned = sql.trim().replace(/;$/, '');
+  if (!validateSQL(cleaned)) return null;
+
+  return { sql: cleaned, tables_used: tables || [] };
 }

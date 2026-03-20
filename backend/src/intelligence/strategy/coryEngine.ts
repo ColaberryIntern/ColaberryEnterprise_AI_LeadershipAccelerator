@@ -5,6 +5,7 @@
 import crypto from 'crypto';
 import { chatCompletion } from '../assistant/openaiHelper';
 import { runAssistantPipeline, type AssistantResponse } from '../assistant/queryEngine';
+import { runCoryAgenticLoop } from '../assistant/coryAgenticEngine';
 import { getLatestStrategicReport, type StrategicReport } from './aiCOO';
 import { getReasoningTimeline, type TimelineEntry } from './reasoningTimeline';
 import { createAgent, retireAgent, getDepartmentSummary, type AgentSpec, type DepartmentSummary } from '../agents/agentFactory';
@@ -596,11 +597,20 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
       case 'analyze':
       case 'general_query':
       case 'optimize': {
-        // Delegate to the existing assistant pipeline
-        const pipelineEntityType = parameters.entity_type || cmd.context?.entity_type;
-        assistantResponse = await runAssistantPipeline(cmd.command, pipelineEntityType);
-        agentsDispatched.push('IntentAgent', 'SQLAgent', 'MLAgent', 'NarrativeAgent');
-        actionsPerformed.push(`Ran ${assistantResponse.pipelineSteps.length}-step analysis pipeline`);
+        // Use agentic engine — Cory autonomously investigates with tools
+        try {
+          assistantResponse = await runCoryAgenticLoop(cmd.command, cmd.context);
+          agentsDispatched.push('CoryAgenticEngine');
+          const toolCount = assistantResponse.pipelineSteps?.length || 0;
+          actionsPerformed.push(`Agentic investigation: ${toolCount} tool calls via ${assistantResponse.execution_path || 'agentic_loop'}`);
+        } catch (agenticErr: any) {
+          // Fallback to existing pipeline if agentic engine fails
+          console.warn('[CoryEngine] Agentic engine failed, falling back to pipeline:', agenticErr?.message?.slice(0, 200));
+          const pipelineEntityType = parameters.entity_type || cmd.context?.entity_type;
+          assistantResponse = await runAssistantPipeline(cmd.command, pipelineEntityType);
+          agentsDispatched.push('IntentAgent', 'SQLAgent', 'MLAgent', 'NarrativeAgent');
+          actionsPerformed.push(`Fallback: ${assistantResponse.pipelineSteps.length}-step pipeline`);
+        }
 
         // Convert recommendations to briefings
         if (assistantResponse.recommendations.length > 0) {
