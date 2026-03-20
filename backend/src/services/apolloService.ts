@@ -180,8 +180,9 @@ export async function importApolloResults(
 
   for (const person of people) {
     try {
-      // Enrich leads missing email (search results are obfuscated in new Apollo API)
-      if (!person.email && person.id && apiKey) {
+      // Enrich leads missing email or phone (search results are obfuscated in new Apollo API)
+      const needsEnrichment = !person.email || (requirePhone && !person.phone_numbers?.some((p) => p.raw_number?.trim()));
+      if (needsEnrichment && person.id && apiKey) {
         try {
           const enriched = await enrichPersonById(apiKey, person.id);
           if (enriched) Object.assign(person, enriched);
