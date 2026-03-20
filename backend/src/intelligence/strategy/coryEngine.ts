@@ -170,9 +170,9 @@ function translateMetric(code: string): string {
 
 /**
  * Translate raw analysis_summary into business-friendly language.
- * Removes technical jargon like "root cause(s)", "related entities".
+ * Removes technical jargon and suppresses text that just repeats the problem.
  */
-function translateAnalysis(raw: string | null): string | undefined {
+function translateAnalysis(raw: string | null, problemDetected?: string): string | undefined {
   if (!raw) return undefined;
   // Strip "Investigated: " prefix — the problem_detected already shows what was investigated
   let text = raw.replace(/^Investigated:\s*/i, '');
@@ -180,7 +180,12 @@ function translateAnalysis(raw: string | null): string | undefined {
   text = text.replace(/\.\s*Found\s+\d+\s+potential\s+root\s+cause.*$/i, '');
   // Remove "Confidence: X%" — already shown separately
   text = text.replace(/\.\s*Confidence:\s*\d+%?\s*$/i, '');
-  return text.trim() || undefined;
+  text = text.trim();
+  // If the analysis is just repeating the problem statement, suppress it
+  if (problemDetected && text && text.toLowerCase() === problemDetected.toLowerCase()) {
+    return undefined;
+  }
+  return text || undefined;
 }
 
 /**
@@ -568,7 +573,8 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
 
         briefings = recentDecisions.map((d: any) => ({
           problem_detected: d.problem_detected,
-          analysis: translateAnalysis(d.analysis_summary),
+          // Only show analysis if it adds info beyond the problem statement
+          analysis: translateAnalysis(d.analysis_summary, d.problem_detected),
           action_taken: d.recommended_action || undefined,
           expected_impact: d.impact_estimate?.change_pct
             ? `${translateMetric(d.impact_estimate.metric)} ${d.impact_estimate.change_pct > 0 ? 'increased' : 'decreased'} by ${Math.abs(d.impact_estimate.change_pct)}%`
@@ -576,7 +582,9 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
           confidence: d.confidence_score || 0,
         }));
 
-        agentsDispatched.push('StrategicIntelligenceAgent', 'GovernanceAgent');
+        // Also run the assistant pipeline for charts + data-driven insights
+        assistantResponse = await runAssistantPipeline(cmd.command);
+        agentsDispatched.push('StrategicIntelligenceAgent', 'GovernanceAgent', 'SQLAgent', 'NarrativeAgent');
         actionsPerformed.push('Retrieved latest strategic report', `Found ${recentDecisions.length} recent decisions`);
 
         if (report) {
