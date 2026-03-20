@@ -235,8 +235,8 @@ function HomePage() {
             <div className="col-lg-6">
               <div className="img-accent-frame">
                 <img
-                  src="https://images.unsplash.com/photo-1593062096033-9a26b09da705?auto=format&fit=crop&w=800&q=80"
-                  alt="Professional working at a multi-monitor desk with AI dashboards and data visualizations"
+                  src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80"
+                  alt="Developer at a professional multi-monitor workstation with code and dashboards"
                   className="img-feature img-feature-tall"
                 />
               </div>
