@@ -1651,27 +1651,32 @@ function IntelligenceOSContent() {
       getRiskEntities().then((r) => setRiskEntities(r.data || [])).catch(() => {}),
     ]).finally(() => setAnalyticsLoading(false));
 
-    // Auto-load ranked insights
+    // Auto-load ranked insights — use actual insights from the pipeline, NOT chart data
     getRankedInsights()
       .then((r) => {
         const data = r.data;
-        // Try to extract insight cards from the response
-        if (data.data && Array.isArray(data.data)) {
-          setAutoInsights(data.data);
-        } else if (data.visualizations?.length) {
-          // Extract insights from visualization data
-          const viz = data.visualizations[0];
-          if (viz?.data?.length) {
-            setAutoInsights(
-              viz.data.slice(0, 6).map((d: Record<string, any>) => ({
-                title: d.title || d.label || d.name || 'Insight',
-                severity: d.severity || d.risk_level || d.priority,
-                description: d.description || d.detail || d.narrative,
-                metric_value: d.metric_value || d.value || d.score,
-                trend: d.trend || d.direction,
-              }))
-            );
-          }
+        // Prefer pipeline insights (structured with message, severity, metric)
+        const pipelineIns = data.data?.insights;
+        if (Array.isArray(pipelineIns) && pipelineIns.length > 0) {
+          setAutoInsights(pipelineIns
+            .filter((i: any) => (i.message || '').trim().length > 5)
+            .slice(0, 6)
+            .map((i: any) => ({
+              title: i.message || '',
+              severity: i.severity || 'info',
+              metric_value: i.value,
+              description: i.message || '',
+              trend: i.severity === 'warning' ? 'down' : 'stable',
+            }))
+          );
+        } else if (data.follow_ups?.length) {
+          // Fallback: use narrative findings as insights
+          setAutoInsights(data.follow_ups.slice(0, 6).map((f: string) => ({
+            title: f,
+            severity: 'info',
+            description: f,
+            trend: 'stable',
+          })));
         }
       })
       .catch(() => {});
@@ -1700,21 +1705,26 @@ function IntelligenceOSContent() {
       }).catch(() => {}),
       getRankedInsights(params).then((r) => {
         const data = r.data;
-        if (data.data && Array.isArray(data.data)) {
-          setAutoInsights(data.data);
-        } else if (data.visualizations?.length) {
-          const viz = data.visualizations[0];
-          if (viz?.data?.length) {
-            setAutoInsights(
-              viz.data.slice(0, 6).map((d: Record<string, any>) => ({
-                title: d.title || d.label || d.name || 'Insight',
-                severity: d.severity || d.risk_level || d.priority,
-                description: d.description || d.detail || d.narrative,
-                metric_value: d.metric_value || d.value || d.score,
-                trend: d.trend || d.direction,
-              }))
-            );
-          }
+        const pipelineIns = data.data?.insights;
+        if (Array.isArray(pipelineIns) && pipelineIns.length > 0) {
+          setAutoInsights(pipelineIns
+            .filter((i: any) => (i.message || '').trim().length > 5)
+            .slice(0, 6)
+            .map((i: any) => ({
+              title: i.message || '',
+              severity: i.severity || 'info',
+              metric_value: i.value,
+              description: i.message || '',
+              trend: i.severity === 'warning' ? 'down' : 'stable',
+            }))
+          );
+        } else if (data.follow_ups?.length) {
+          setAutoInsights(data.follow_ups.slice(0, 6).map((f: string) => ({
+            title: f,
+            severity: 'info',
+            description: f,
+            trend: 'stable',
+          })));
         }
       }).catch(() => {}),
     ]).finally(() => {
