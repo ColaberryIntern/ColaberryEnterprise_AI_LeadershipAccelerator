@@ -1,5 +1,6 @@
 // ─── Chart Selector ──────────────────────────────────────────────────────
-// Selects chart types based on intent + data shape. Guarantees minimum charts.
+// Selects chart types based on intent + data shape. Guarantees minimum charts
+// with variety — never returns empty, never all-bar.
 
 import { Intent } from './intentClassifier';
 import { SqlResult } from './sqlExecutor';
@@ -19,9 +20,12 @@ export interface ChartConfig {
   valueKey: string;
 }
 
+// Chart types to rotate through for variety (order matters — preferred first)
+const VARIETY_ROTATION: ChartType[] = ['bar', 'radar', 'line', 'combo', 'waterfall'];
+
 /**
  * Select and configure visualizations from query results.
- * Returns max 4 charts.
+ * Returns max 4 charts. Skips single-row aggregates (those become KPIs).
  */
 export function selectVisualizations(
   intent: Intent,
@@ -30,18 +34,23 @@ export function selectVisualizations(
   vectorResults: VectorResult[]
 ): ChartConfig[] {
   const charts: ChartConfig[] = [];
+  const usedTypes = new Set<ChartType>();
 
-  // SQL-based charts
+  // SQL-based charts — skip single-row aggregates (better as KPIs)
   for (const sr of sqlResults) {
-    if (sr.rows.length === 0) continue;
+    if (sr.rows.length <= 1) continue; // Skip aggregates like { total: 849 }
+    if (charts.length >= 4) break;
+
     const { labelKey, valueKey } = detectKeys(sr.rows);
 
     if (!labelKey || !valueKey) {
-      // Fallback: find any string + numeric key pair and make a bar chart
+      // Fallback: find any string + numeric key pair
       const fallbackLabel = findStringKey(sr.rows[0], Object.keys(sr.rows[0])) || Object.keys(sr.rows[0])[0];
       const fallbackValue = findNumericKey(sr.rows[0], Object.keys(sr.rows[0])) || Object.keys(sr.rows[0])[1] || Object.keys(sr.rows[0])[0];
+      const chartType = pickVariedType(usedTypes, sr.rows.length, sr.description);
+      usedTypes.add(chartType);
       charts.push({
-        type: 'bar',
+        type: chartType,
         title: sr.description,
         data: sr.rows.slice(0, 20).map((r) => ({
           label: formatLabel(r[fallbackLabel]),
@@ -53,7 +62,8 @@ export function selectVisualizations(
       continue;
     }
 
-    const chartType = selectChartType(intent, sr.description, sr.rows);
+    const chartType = pickVariedType(usedTypes, sr.rows.length, sr.description, intent);
+    usedTypes.add(chartType);
     charts.push({
       type: chartType,
       title: sr.description,
@@ -136,8 +146,8 @@ export function selectVisualizations(
 }
 
 /**
- * Guarantee at least 2 charts are returned. Synthesizes additional charts
- * from SQL data if needed, picking types that differ from existing ones.
+ * Guarantee at least 2 charts. Synthesizes from SQL data if needed.
+ * Also includes single-row aggregates as simple bar charts if we're under the minimum.
  */
 export function guaranteeCharts(
   charts: ChartConfig[],
@@ -146,23 +156,26 @@ export function guaranteeCharts(
 ): ChartConfig[] {
   if (charts.length >= 2) return charts;
 
-  const existingTypes = new Set(charts.map((c) => c.type));
-  const VARIETY_TYPES: ChartType[] = ['radar', 'line', 'bar', 'combo'];
+  const usedTypes = new Set(charts.map((c) => c.type));
 
-  // Try to synthesize a chart from each SQL result with a different type
+  // First: try multi-row results we might have missed
   for (const sr of sqlResults) {
-    if (sr.rows.length === 0 || charts.length >= 2) continue;
+    if (sr.rows.length <= 1 || charts.length >= 4) continue;
     const keys = Object.keys(sr.rows[0]);
     const stringKey = keys.find((k) => typeof sr.rows[0][k] === 'string' && !k.endsWith('_at') && !k.endsWith('_id'));
     const numericKey = keys.find((k) => typeof sr.rows[0][k] === 'number');
     if (!stringKey || !numericKey) continue;
 
-    const selectedType = VARIETY_TYPES.find((t) => !existingTypes.has(t)) || 'bar';
-    existingTypes.add(selectedType);
+    // Check if we already have a chart with similar data
+    const alreadyUsed = charts.some((c) => c.title === sr.description);
+    if (alreadyUsed) continue;
+
+    const selectedType = pickVariedType(usedTypes, sr.rows.length, sr.description);
+    usedTypes.add(selectedType);
 
     charts.push({
       type: selectedType,
-      title: `${sr.description} — Overview`,
+      title: sr.description,
       data: sr.rows.slice(0, 10).map((r) => ({
         label: formatLabel(r[stringKey]),
         value: Number(r[numericKey]) || 0,
@@ -170,6 +183,27 @@ export function guaranteeCharts(
       labelKey: 'label',
       valueKey: 'value',
     });
+  }
+
+  // Second: if still under 2, use single-row aggregates as bar charts
+  if (charts.length < 2) {
+    for (const sr of sqlResults) {
+      if (sr.rows.length !== 1 || charts.length >= 4) continue;
+      const row = sr.rows[0];
+      const numericEntries = Object.entries(row).filter(([, v]) => typeof v === 'number' && v > 0);
+      if (numericEntries.length === 0) continue;
+
+      charts.push({
+        type: 'bar',
+        title: sr.description,
+        data: numericEntries.map(([k, v]) => ({
+          label: k.replace(/_/g, ' '),
+          value: Number(v),
+        })),
+        labelKey: 'label',
+        valueKey: 'value',
+      });
+    }
   }
 
   // Last resort: summary chart showing row counts per SQL query
@@ -181,7 +215,7 @@ export function guaranteeCharts(
         value: sr.rows.length,
       }));
     if (summaryData.length > 0) {
-      const selectedType = VARIETY_TYPES.find((t) => !existingTypes.has(t)) || 'bar';
+      const selectedType = pickVariedType(usedTypes, summaryData.length, 'summary');
       charts.push({
         type: selectedType,
         title: 'Data Coverage Summary',
@@ -195,38 +229,41 @@ export function guaranteeCharts(
   return charts.slice(0, 4);
 }
 
-// ─── Chart Type Selection ────────────────────────────────────────────────────
+// ─── Chart Type Selection with Variety ──────────────────────────────────────
 
-function selectChartType(intent: Intent, description: string, rows: Record<string, any>[]): ChartType {
+/**
+ * Pick a chart type that provides variety. Avoids repeating types already used.
+ */
+function pickVariedType(
+  usedTypes: Set<ChartType>,
+  rowCount: number,
+  description: string,
+  intent?: Intent
+): ChartType {
   const desc = description.toLowerCase();
 
-  // Time-series → line
+  // Strong signal overrides — always use these types
   if (desc.includes('trend') || desc.includes('weekly') || desc.includes('daily') || desc.includes('over time')) return 'line';
-  if (hasTimeColumn(rows)) return 'line';
-
-  // Forecast → line
+  if (desc.includes('breakdown') || desc.includes('contribution')) return 'waterfall';
   if (intent === 'forecast_request') return 'line';
 
-  // Multi-metric with time → combo
-  const numericKeys = Object.keys(rows[0] || {}).filter((k) => typeof rows[0][k] === 'number');
-  if (numericKeys.length >= 2 && hasTimeColumn(rows)) return 'combo';
+  // Determine the ideal type based on data shape
+  let ideal: ChartType;
+  if (rowCount <= 6) {
+    ideal = 'radar';
+  } else if (rowCount <= 20) {
+    ideal = 'bar';
+  } else {
+    ideal = 'line';
+  }
 
-  // Waterfall for breakdowns
-  if (desc.includes('breakdown') || desc.includes('contribution') || desc.includes('waterfall')) return 'waterfall';
+  // If ideal type already used, pick the next unused type from the rotation
+  if (usedTypes.has(ideal)) {
+    const alternative = VARIETY_ROTATION.find((t) => !usedTypes.has(t));
+    if (alternative) return alternative;
+  }
 
-  // Distribution → bar (no pie — no IntelPieChart component)
-  if (desc.includes('distribution') || desc.includes('by status') || desc.includes('by type')) return 'bar';
-
-  // Comparison → radar for small sets
-  if (intent === 'comparison') return rows.length <= 8 ? 'radar' : 'bar';
-
-  // Anomaly → bar (ranked)
-  if (intent === 'anomaly_detection') return 'bar';
-
-  // Size heuristics — never return 'table' or 'pie'
-  if (rows.length <= 8) return 'radar';
-  if (hasTimeColumn(rows)) return 'line';
-  return 'bar';
+  return ideal;
 }
 
 // ─── Key Detection ──────────────────────────────────────────────────────────
