@@ -46,19 +46,19 @@ const RAMP_PROFILES: Record<string, RampProfile> = {
     phase_sizes: [20, 80, 200, -1],
     advance_threshold: 70,
     hold_threshold: 50,
-    evaluation_window_hours: 24,
+    evaluation_window_hours: 12,
   },
   alumni: {
     phase_sizes: [15, 30, 75, 150, -1],
     advance_threshold: 65,
     hold_threshold: 50,
-    evaluation_window_hours: 24,
+    evaluation_window_hours: 12,
   },
   alumni_re_engagement: {
     phase_sizes: [10, 25, 50, -1],
     advance_threshold: 65,
     hold_threshold: 50,
-    evaluation_window_hours: 24,
+    evaluation_window_hours: 12,
   },
 };
 

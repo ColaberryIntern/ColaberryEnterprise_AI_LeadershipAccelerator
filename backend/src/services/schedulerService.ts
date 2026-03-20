@@ -383,8 +383,8 @@ function isWithinSendWindow(settings: Record<string, any>): boolean {
   return isWithinScheduleWindow(
     settings.send_timezone || settings.call_timezone || 'America/Chicago',
     settings.send_time_start || '08:00',
-    settings.send_time_end || '21:00',
-    settings.send_active_days || settings.call_active_days || [1, 2, 3, 4, 5, 6],
+    settings.send_time_end || '17:00',
+    settings.send_active_days || settings.call_active_days || [1, 2, 3, 4, 5],
   );
 }
 
@@ -406,6 +406,68 @@ function getCampaignSettingsFromRecord(campaign: any): Record<string, any> {
     pass_prior_conversations: true,
   };
   return { ...defaults, ...(campaign.settings || {}) };
+}
+
+// ── Auto-Pacing: spread emails evenly across the send window ──────────────
+
+const pacedLimitCache = new Map<string, { limit: number; ts: number }>();
+const PACED_CACHE_TTL = 5 * 60 * 1000; // cache per scheduler cycle (5 min)
+
+async function calculatePacedLimit(
+  campaignId: string,
+  settings: Record<string, any>,
+): Promise<number> {
+  const fallback = settings.max_leads_per_cycle || 10;
+
+  // Return cached value if fresh (avoids re-querying every action in the same cycle)
+  const cached = pacedLimitCache.get(campaignId);
+  if (cached && Date.now() - cached.ts < PACED_CACHE_TTL) return cached.limit;
+
+  try {
+    // Count pending actions for this campaign that are due today
+    const tz = settings.send_timezone || settings.call_timezone || 'America/Chicago';
+    const nowStr = new Date().toLocaleString('en-US', { timeZone: tz });
+    const nowLocal = new Date(nowStr);
+
+    const endOfDay = new Date(nowLocal);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const pendingToday = await ScheduledEmail.count({
+      where: {
+        campaign_id: campaignId,
+        status: 'pending',
+        scheduled_for: { [Op.lte]: endOfDay },
+      },
+    });
+
+    if (pendingToday === 0) {
+      pacedLimitCache.set(campaignId, { limit: fallback, ts: Date.now() });
+      return fallback;
+    }
+
+    // Calculate hours remaining in send window
+    const sendEnd = settings.send_time_end || '17:00';
+    const [endH, endM] = sendEnd.split(':').map(Number);
+    const endMinutes = endH * 60 + endM;
+    const nowMinutes = nowLocal.getHours() * 60 + nowLocal.getMinutes();
+    const minutesRemaining = Math.max(0, endMinutes - nowMinutes);
+
+    if (minutesRemaining <= 60) {
+      // Less than 1 hour left — send remaining to catch up
+      pacedLimitCache.set(campaignId, { limit: fallback, ts: Date.now() });
+      return fallback;
+    }
+
+    const hoursRemaining = minutesRemaining / 60;
+    const targetPerHour = Math.ceil(pendingToday / hoursRemaining);
+    const cyclesPerHour = 12; // scheduler runs every 5 min
+    const limit = Math.max(1, Math.ceil(targetPerHour / cyclesPerHour));
+
+    pacedLimitCache.set(campaignId, { limit, ts: Date.now() });
+    return limit;
+  } catch {
+    return fallback;
+  }
 }
 
 async function processScheduledActions(): Promise<void> {
@@ -505,8 +567,8 @@ async function processScheduledActions(): Promise<void> {
       }
     }
 
-    // Pacing: limit actions per campaign per cycle
-    const maxPerCycle = campaignSettings.max_leads_per_cycle || 10;
+    // Pacing: spread emails evenly across the send window
+    const maxPerCycle = await calculatePacedLimit(campaignId, campaignSettings);
     campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);
     if (campaignProcessed[campaignId] >= maxPerCycle) {
       continue; // Skip — will be picked up next cycle
@@ -1444,17 +1506,17 @@ export function startScheduler(): void {
 
   console.log('[Scheduler] Alumni: lifecycle processor daily at 6 AM CT (11 UTC)');
 
-  // ── Autonomous Ramp Evaluator (every 2 hours) ─────────────────────────
+  // ── Autonomous Ramp Evaluator (8 AM CT weekdays = 13:00 UTC Mon-Fri) ──
   const { runRampEvaluator } = require('./autonomousRampService');
 
-  cron.schedule('0 */2 * * *', () => {
+  cron.schedule('0 13 * * 1-5', () => {
     instrumentCronJob('AutonomousRampEvaluator', async () => {
       await runRampEvaluator();
     }).catch((err: any) => {
       console.error('[Scheduler] Autonomous ramp evaluator error:', err.message);
     });
   });
-  console.log('[Scheduler] Autonomous ramp evaluator: every 2 hours');
+  console.log('[Scheduler] Autonomous ramp evaluator: 8 AM CT weekdays (13:00 UTC Mon-Fri)');
 
   // ── Campaign Evolution Engine (every 4 hours) ─────────────────────────
   const { runEvolutionEngine } = require('./campaignEvolutionService');
