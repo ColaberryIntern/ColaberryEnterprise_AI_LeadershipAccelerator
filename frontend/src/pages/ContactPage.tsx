@@ -132,10 +132,17 @@ function ContactPage() {
           {submitted ? (
             <div className="text-center py-5" role="alert">
               <h2 className="text-success mb-3">Inquiry Received</h2>
-              <p className="fs-5 mb-4">
-                Our Enterprise AI team will be in touch within one business day.
-                {sendBriefing && ' The Executive Briefing will be sent to your email shortly.'}
-              </p>
+              {form.phone.trim() ? (
+                <p className="fs-5 mb-4">
+                  Maya, our Director of Admissions, will be calling you in less than 60 seconds to discuss your AI initiatives.
+                  {sendBriefing && ' The Executive Briefing will also be sent to your email shortly.'}
+                </p>
+              ) : (
+                <p className="fs-5 mb-4">
+                  Our Enterprise AI team will follow up via email shortly.
+                  {sendBriefing && ' The Executive Briefing will be sent to your email as well.'}
+                </p>
+              )}
               <p className="text-muted">
                 If your inquiry is time-sensitive, reach us at{' '}
                 <a href="mailto:info@colaberry.com">info@colaberry.com</a>.

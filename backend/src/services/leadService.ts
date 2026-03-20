@@ -28,6 +28,33 @@ async function findLeadByNormalizedPhone(phone: string | undefined, excludeId?: 
   return leads.find(l => normalizePhone(l.phone) === normalized) || null;
 }
 
+/* ── Warm campaign auto-enrollment ──────────────────────────────── */
+
+async function tryEnrollInWarmCampaign(lead: any) {
+  if (!lead.phone || !lead.phone.trim()) return;
+  try {
+    const { CampaignLead } = require('../models');
+    const warmCampaign = await Campaign.findOne({
+      where: { name: 'Inbound Warm Lead Nurture', status: 'active' },
+    });
+    if (!warmCampaign || !(warmCampaign as any).sequence_id) return;
+
+    // Skip if already enrolled
+    const existing = await CampaignLead.findOne({
+      where: { campaign_id: (warmCampaign as any).id, lead_id: lead.id },
+    });
+    if (existing) {
+      console.log(`[LeadService] Lead ${lead.id} already enrolled in warm campaign`);
+      return;
+    }
+
+    await enrollLeadInSequence(lead.id, (warmCampaign as any).sequence_id, (warmCampaign as any).id);
+    console.log(`[LeadService] Auto-enrolled lead ${lead.id} in Inbound Warm Lead Nurture`);
+  } catch (err) {
+    console.error('[LeadService] Warm campaign auto-enrollment failed:', err);
+  }
+}
+
 export const leadSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   email: z.string().email('Invalid email address').max(255),
@@ -105,6 +132,7 @@ export async function createLead(data: LeadInput) {
   });
 
   if (recentDuplicate) {
+    await tryEnrollInWarmCampaign(recentDuplicate);
     return { lead: recentDuplicate, isDuplicate: true };
   }
 
@@ -114,6 +142,7 @@ export async function createLead(data: LeadInput) {
     order: [['created_at', 'DESC']],
   });
   if (existingByEmail) {
+    await tryEnrollInWarmCampaign(existingByEmail);
     return { lead: existingByEmail, isDuplicate: true };
   }
 
@@ -121,6 +150,7 @@ export async function createLead(data: LeadInput) {
   if (data.phone) {
     const phoneMatch = await findLeadByNormalizedPhone(data.phone);
     if (phoneMatch) {
+      await tryEnrollInWarmCampaign(phoneMatch);
       return { lead: phoneMatch, isDuplicate: true };
     }
   }
@@ -149,20 +179,7 @@ export async function createLead(data: LeadInput) {
     status: 'new',
   });
 
-  // Auto-enroll in warm inbound campaign if phone provided
-  if (lead.phone && lead.phone.trim()) {
-    try {
-      const warmCampaign = await Campaign.findOne({
-        where: { name: 'Inbound Warm Lead Nurture', status: 'active' },
-      });
-      if (warmCampaign && (warmCampaign as any).sequence_id) {
-        await enrollLeadInSequence(lead.id, (warmCampaign as any).sequence_id, (warmCampaign as any).id);
-        console.log(`[LeadService] Auto-enrolled lead ${lead.id} in Inbound Warm Lead Nurture`);
-      }
-    } catch (err) {
-      console.error('[LeadService] Warm campaign auto-enrollment failed:', err);
-    }
-  }
+  await tryEnrollInWarmCampaign(lead);
 
   return { lead, isDuplicate: false };
 }
