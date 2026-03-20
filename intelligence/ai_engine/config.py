@@ -57,6 +57,7 @@ class Config:
         # LLM
         self.llm_model: str = _env("LLM_MODEL", "gpt-4o")
         self.llm_temperature: float = _env("LLM_TEMPERATURE", 0.3, float)
+        self.llm_max_tokens: int = _env("LLM_MAX_TOKENS", 2048, int)
 
         # Embedding
         self.embedding_model: str = _env("EMBEDDING_MODEL", "text-embedding-3-small")
