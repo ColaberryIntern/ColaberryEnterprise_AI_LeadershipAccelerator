@@ -4,6 +4,7 @@ import { handlePaySimpleWebhook } from '../controllers/webhookController';
 import { handleMandrillWebhook, handleMandrillWebhookHead, handleMandrillInbound } from '../controllers/mandrillWebhookController';
 import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
+import { handleApolloPhoneReveal } from '../controllers/apolloWebhookController';
 
 const router = Router();
 
@@ -23,5 +24,8 @@ router.post('/api/webhook/ghl/sms-reply', express.json(), handleGhlSmsReply);
 
 // Synthflow voice call completion webhook — JSON body from Synthflow
 router.post('/api/webhook/synthflow/call-complete', express.json(), handleSynthflowCallComplete);
+
+// Apollo phone number reveal webhook — async phone enrichment callback
+router.post('/api/webhook/apollo/phone-reveal', express.json(), handleApolloPhoneReveal);
 
 export default router;

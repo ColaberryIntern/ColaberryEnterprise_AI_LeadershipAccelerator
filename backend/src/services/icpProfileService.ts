@@ -142,6 +142,7 @@ export async function searchApolloFromProfile(
 export async function searchApolloFromProfileBulk(
   profileId: string,
   maxLeads = 100,
+  extraFilters?: { has_direct_phone?: boolean },
 ) {
   const profile = await getICPProfile(profileId);
   const filters = buildApolloFilters(profile);
@@ -153,6 +154,7 @@ export async function searchApolloFromProfileBulk(
   while (allPeople.length < maxLeads) {
     const result = await searchPeople({
       ...filters,
+      ...extraFilters,
       page: currentPage,
       per_page: perPage,
     });
@@ -205,7 +207,8 @@ export async function searchAndEnrollFromProfile(
     const poolSize = Math.min(maxLeads * 3, 3000);
     console.log(`[ICP] Cold scoring: fetching pool of ${poolSize} for top ${maxLeads}`);
 
-    const people = await searchApolloFromProfileBulk(profileId, poolSize);
+    // Only fetch leads with direct phone numbers for cold outbound (voice campaigns)
+    const people = await searchApolloFromProfileBulk(profileId, poolSize, { has_direct_phone: true });
     if (people.length === 0) {
       return { imported: 0, duplicates: 0, enrolled: 0, errors: 0, leads: [], intelligence_summary: undefined };
     }

@@ -14,6 +14,7 @@ export interface ApolloSearchParams {
   q_keywords?: string;
   per_page?: number;
   page?: number;
+  has_direct_phone?: boolean;
 }
 
 export interface ApolloPersonResult {
@@ -55,6 +56,7 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   if (params.organization_num_employees_ranges?.length) body.organization_num_employees_ranges = params.organization_num_employees_ranges;
   if (params.person_locations?.length) body.person_locations = params.person_locations;
   if (params.q_keywords) body.q_keywords = params.q_keywords;
+  if (params.has_direct_phone) body.contact_has_direct_phone = true;
 
   console.log(`[Apollo] Search request body:`, JSON.stringify(body));
 
@@ -106,11 +108,19 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   };
 }
 
-async function enrichPersonById(apiKey: string, personId: string): Promise<ApolloPersonResult | null> {
+const PHONE_REVEAL_WEBHOOK_URL = 'https://enterprise.colaberry.ai/api/webhook/apollo/phone-reveal';
+
+async function enrichPersonById(apiKey: string, personId: string, revealPhone = true): Promise<ApolloPersonResult | null> {
+  const payload: any = { id: personId };
+  if (revealPhone) {
+    payload.reveal_phone_number = true;
+    payload.webhook_url = PHONE_REVEAL_WEBHOOK_URL;
+  }
+
   const response = await fetch(`${APOLLO_BASE_URL}/v1/people/match`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
-    body: JSON.stringify({ id: personId }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) return null;
@@ -261,6 +271,13 @@ export async function importApolloResults(
         console.error(`[Apollo] GHL sync error ${person.email}: ${err.message}`)
       );
 
+      // Request async phone reveal if lead has no phone and has apollo_id
+      if (!phone && person.id && apiKey) {
+        requestPhoneReveal(apiKey, person.id).catch((err) =>
+          console.warn(`[Apollo] Phone reveal request failed for ${person.email}: ${err.message}`)
+        );
+      }
+
       imported++;
       leads.push(lead);
     } catch (err: any) {
@@ -339,6 +356,26 @@ export function calculateColdLeadScore(
   }
 
   return Math.min(score, 100);
+}
+
+/** Request async phone number reveal from Apollo — result delivered via webhook */
+export async function requestPhoneReveal(apiKey: string, personId: string): Promise<void> {
+  const response = await fetch(`${APOLLO_BASE_URL}/v1/people/match`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
+    body: JSON.stringify({
+      id: personId,
+      reveal_phone_number: true,
+      webhook_url: PHONE_REVEAL_WEBHOOK_URL,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Apollo phone reveal failed ${response.status}: ${text}`);
+  }
+
+  console.log(`[Apollo] Phone reveal requested for person ${personId}`);
 }
 
 export async function getApolloQuota(): Promise<{ available: boolean; message: string }> {
