@@ -174,7 +174,7 @@ export async function importApolloResults(
   let errors = 0;
   let skippedNoPhone = 0;
   const leads: any[] = [];
-  const requirePhone = options?.requirePhone !== false; // default true
+  const requirePhone = options?.requirePhone === true; // default false — Apollo API rarely returns phone data
 
   const apiKey = env.apolloApiKey;
 
