@@ -30,8 +30,15 @@ async function findLeadByNormalizedPhone(phone: string | undefined, excludeId?: 
 
 /* ── Warm campaign auto-enrollment ──────────────────────────────── */
 
+const ENROLLMENT_BYPASS_PHONES = ['6825975784'];
+
 async function tryEnrollInWarmCampaign(lead: any) {
   if (!lead.phone || !lead.phone.trim()) return;
+  const normalized = normalizePhone(lead.phone);
+  if (normalized && ENROLLMENT_BYPASS_PHONES.includes(normalized)) {
+    console.log(`[LeadService] Skipping warm enrollment for bypass phone ${normalized}`);
+    return;
+  }
   try {
     const { CampaignLead } = require('../models');
     const warmCampaign = await Campaign.findOne({
