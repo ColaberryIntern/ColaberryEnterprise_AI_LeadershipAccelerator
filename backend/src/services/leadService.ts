@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { Op } from 'sequelize';
 import Lead from '../models/Lead';
-import { AdminUser, AutomationLog } from '../models';
+import { AdminUser, AutomationLog, Campaign, FollowUpSequence } from '../models';
 import { Parser } from 'json2csv';
+import { enrollLeadInSequence } from './sequenceService';
 
 /* ── Phone normalization ─────────────────────────────────────────── */
 
@@ -147,6 +148,22 @@ export async function createLead(data: LeadInput) {
     corporate_sponsorship_interest: data.corporate_sponsorship_interest,
     status: 'new',
   });
+
+  // Auto-enroll in warm inbound campaign if phone provided
+  if (lead.phone && lead.phone.trim()) {
+    try {
+      const warmCampaign = await Campaign.findOne({
+        where: { name: 'Inbound Warm Lead Nurture', status: 'active' },
+      });
+      if (warmCampaign && (warmCampaign as any).sequence_id) {
+        await enrollLeadInSequence(lead.id, (warmCampaign as any).sequence_id, (warmCampaign as any).id);
+        console.log(`[LeadService] Auto-enrolled lead ${lead.id} in Inbound Warm Lead Nurture`);
+      }
+    } catch (err) {
+      console.error('[LeadService] Warm campaign auto-enrollment failed:', err);
+    }
+  }
+
   return { lead, isDuplicate: false };
 }
 
