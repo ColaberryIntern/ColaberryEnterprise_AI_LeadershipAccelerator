@@ -148,6 +148,42 @@ Report findings as structured executive briefings. Be concise but insightful.
 When presenting data, lead with the most important finding. Use numbers.`;
 
 /**
+ * Translate raw metric codes to business-friendly labels.
+ */
+function translateMetric(code: string): string {
+  const MAP: Record<string, string> = {
+    conversion_drop: 'Conversion Rate',
+    conversion_rate: 'Conversion Rate',
+    lead_stagnation: 'Lead Pipeline',
+    lead_generation: 'Lead Generation',
+    campaign_stall: 'Campaign Performance',
+    agent_error: 'Automation Reliability',
+    email_bounce: 'Email Deliverability',
+    open_rate: 'Email Open Rate',
+    click_rate: 'Click-Through Rate',
+    enrollment_rate: 'Enrollment Rate',
+    churn_rate: 'Student Retention',
+    revenue: 'Revenue',
+  };
+  return MAP[code] || code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Translate raw analysis_summary into business-friendly language.
+ * Removes technical jargon like "root cause(s)", "related entities".
+ */
+function translateAnalysis(raw: string | null): string | undefined {
+  if (!raw) return undefined;
+  // Strip "Investigated: " prefix — the problem_detected already shows what was investigated
+  let text = raw.replace(/^Investigated:\s*/i, '');
+  // Remove the technical suffix like "Found 3 potential root cause(s). 0 related entities..."
+  text = text.replace(/\.\s*Found\s+\d+\s+potential\s+root\s+cause.*$/i, '');
+  // Remove "Confidence: X%" — already shown separately
+  text = text.replace(/\.\s*Confidence:\s*\d+%?\s*$/i, '');
+  return text.trim() || undefined;
+}
+
+/**
  * Format department detail data into a concise text block for LLM context injection.
  */
 function formatDepartmentDataForLLM(detail: any): string {
@@ -532,10 +568,10 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
 
         briefings = recentDecisions.map((d: any) => ({
           problem_detected: d.problem_detected,
-          analysis: d.analysis_summary,
-          action_taken: `${d.recommended_action}: ${d.execution_status}`,
+          analysis: translateAnalysis(d.analysis_summary),
+          action_taken: d.recommended_action || undefined,
           expected_impact: d.impact_estimate?.change_pct
-            ? `${d.impact_estimate.metric} ${d.impact_estimate.change_pct > 0 ? '+' : ''}${d.impact_estimate.change_pct}%`
+            ? `${translateMetric(d.impact_estimate.metric)} ${d.impact_estimate.change_pct > 0 ? 'increased' : 'decreased'} by ${Math.abs(d.impact_estimate.change_pct)}%`
             : undefined,
           confidence: d.confidence_score || 0,
         }));
@@ -794,6 +830,17 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
   }
 
   // Step 4: Monitor results (already awaited above)
+
+  // Dedup briefings: keep only unique problem_detected entries
+  if (briefings.length > 1) {
+    const seen = new Set<string>();
+    briefings = briefings.filter((b) => {
+      const key = b.problem_detected || b.action_taken || b.analysis || '';
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
 
   // Step 5: Report to user in Cory's voice (scope-aware)
   const message = await formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse, cmd.context, cmd.command);
