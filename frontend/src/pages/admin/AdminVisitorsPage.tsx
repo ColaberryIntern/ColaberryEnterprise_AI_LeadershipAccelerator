@@ -425,6 +425,8 @@ function AdminVisitorsPage() {
       fetchSessions().finally(() => setLoading(false));
     } else if (activeTab === 'chat') {
       fetchChat().finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
   }, [activeTab, fetchLive, fetchStats, fetchAllVisitors, fetchHighIntent, fetchAnalytics, fetchSessions, fetchChat]);
 
@@ -1282,19 +1284,6 @@ function AdminVisitorsPage() {
   /*  Main render                                                      */
   /* ---------------------------------------------------------------- */
 
-  if (loading) {
-    return (
-      <>
-        <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Visitors' }]} />
-        <div className="text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading visitor data...</span>
-          </div>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Visitors' }]} />
@@ -1334,12 +1323,19 @@ function AdminVisitorsPage() {
       </nav>
 
       {/* Tab content */}
-      {activeTab === 'live' && renderLiveTab()}
-      {activeTab === 'all' && renderAllTab()}
-      {activeTab === 'high_intent' && renderHighIntentTab()}
-      {activeTab === 'analytics' && renderAnalyticsTab()}
-      {activeTab === 'sessions' && renderSessionsTab()}
-      {activeTab === 'chat' && renderChatTab()}
+      {loading && activeTab !== 'flow' && (
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      )}
+      {!loading && activeTab === 'live' && renderLiveTab()}
+      {!loading && activeTab === 'all' && renderAllTab()}
+      {!loading && activeTab === 'high_intent' && renderHighIntentTab()}
+      {!loading && activeTab === 'analytics' && renderAnalyticsTab()}
+      {!loading && activeTab === 'sessions' && renderSessionsTab()}
+      {!loading && activeTab === 'chat' && renderChatTab()}
       {activeTab === 'flow' && (
         <Suspense fallback={<div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>}>
           <VisitorFlowGraph />
