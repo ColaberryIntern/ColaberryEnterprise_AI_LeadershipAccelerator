@@ -107,14 +107,20 @@ export async function detectInactiveLeads(): Promise<{
     cutoffDate.setDate(cutoffDate.getDate() - inactivityDays);
 
     // Find completed leads who are still marked 'active' in lifecycle
+    // Only consider leads truly inactive: last_activity_at older than cutoff,
+    // or if never tracked (NULL), enrolled_at must also be older than cutoff.
+    // This prevents treating freshly-enrolled leads with no opens as "inactive."
     const inactiveLeads = await CampaignLead.findAll({
       where: {
         campaign_id: campaign.id,
         status: 'completed',
         lifecycle_status: 'active',
         [Op.or]: [
-          { last_activity_at: { [Op.is]: null as any } },
           { last_activity_at: { [Op.lt]: cutoffDate } },
+          {
+            last_activity_at: { [Op.is]: null as any },
+            enrolled_at: { [Op.lt]: cutoffDate },
+          },
         ],
       } as any,
     }) as any[];
