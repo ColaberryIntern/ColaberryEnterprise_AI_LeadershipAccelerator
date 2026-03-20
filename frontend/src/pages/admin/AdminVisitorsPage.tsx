@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import Breadcrumb from '../../components/ui/Breadcrumb';
 import Pagination from '../../components/ui/Pagination';
+
+const VisitorFlowGraph = lazy(() => import('../../components/admin/visitors/VisitorFlowGraph'));
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -120,7 +122,7 @@ interface ChatMessageData2 {
   timestamp: string;
 }
 
-type TabKey = 'live' | 'all' | 'high_intent' | 'analytics' | 'sessions' | 'chat';
+type TabKey = 'live' | 'all' | 'high_intent' | 'analytics' | 'sessions' | 'chat' | 'flow';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -1313,6 +1315,7 @@ function AdminVisitorsPage() {
             { key: 'analytics' as TabKey, label: 'Analytics' },
             { key: 'sessions' as TabKey, label: 'Sessions' },
             { key: 'chat' as TabKey, label: 'Chat' },
+            { key: 'flow' as TabKey, label: 'Navigation Flow' },
           ]).map((tab) => (
             <li className="nav-item" key={tab.key}>
               <button
@@ -1337,6 +1340,11 @@ function AdminVisitorsPage() {
       {activeTab === 'analytics' && renderAnalyticsTab()}
       {activeTab === 'sessions' && renderSessionsTab()}
       {activeTab === 'chat' && renderChatTab()}
+      {activeTab === 'flow' && (
+        <Suspense fallback={<div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>}>
+          <VisitorFlowGraph />
+        </Suspense>
+      )}
 
       {/* Visitor detail modal */}
       {renderDetailModal()}

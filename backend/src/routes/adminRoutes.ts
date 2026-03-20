@@ -38,6 +38,7 @@ import testSetupRoutes from './admin/testSetupRoutes';
 import productionCleanupRoutes from './admin/productionCleanupRoute';
 import productionActivationRoutes from './admin/productionActivationRoute';
 import campaignDiagnosticsRoutes from './admin/campaignDiagnosticsRoutes';
+import visitorFlowRoutes from './admin/visitorFlowRoutes';
 
 const router = Router();
 
@@ -80,5 +81,6 @@ router.use(testSetupRoutes);
 router.use(productionCleanupRoutes);
 router.use(productionActivationRoutes);
 router.use(campaignDiagnosticsRoutes);
+router.use(visitorFlowRoutes);
 
 export default router;

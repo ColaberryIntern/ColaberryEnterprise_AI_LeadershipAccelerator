@@ -543,4 +543,67 @@ export const getCampaignGraphSlice = (nodeIds: string[]) =>
     params: { nodeIds: nodeIds.join(',') },
   });
 
+// ─── Visitor Navigation Flow Graph ──────────────────────────────────────────
+
+export interface FlowGraphNode {
+  id: string;
+  type: 'referrer' | 'landing' | 'browse' | 'intent' | 'exit';
+  label: string;
+  count: number;
+  metrics: {
+    avg_duration?: number;
+    bounce_rate?: number;
+    unique_visitors?: number;
+  };
+}
+
+export interface FlowGraphEdge {
+  from: string;
+  to: string;
+  volume: number;
+}
+
+export interface FlowGraphValidation {
+  total_sessions: number;
+  total_visitors: number;
+  bounce_rate: number;
+  avg_pages_per_session: number;
+  warnings: string[];
+}
+
+export interface FlowGraphData {
+  nodes: FlowGraphNode[];
+  edges: FlowGraphEdge[];
+  validation: FlowGraphValidation;
+  time_window?: string;
+}
+
+export interface FlowSessionRecord {
+  session_id: string;
+  visitor_id: string;
+  visitor_fingerprint: string;
+  lead_name?: string;
+  lead_email?: string;
+  entry_page: string;
+  exit_page: string;
+  pageview_count: number;
+  duration_seconds: number;
+  is_bounce: boolean;
+  device_type?: string;
+  started_at: string;
+  pages: string[];
+}
+
+export const getVisitorFlowGraph = (timeWindow?: string) =>
+  axios.get<FlowGraphData>('/api/admin/visitor-flow/graph', {
+    ...adminHeaders(),
+    params: timeWindow && timeWindow !== 'all' ? { timeWindow } : {},
+  });
+
+export const getFlowNodeSessions = (nodeId: string, page = 1, limit = 50) =>
+  axios.get<{ sessions: FlowSessionRecord[]; total: number }>(
+    '/api/admin/visitor-flow/graph/node-sessions',
+    { ...adminHeaders(), params: { nodeId, page, limit } },
+  );
+
 export default api;
