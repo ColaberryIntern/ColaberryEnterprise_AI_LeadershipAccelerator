@@ -12,6 +12,9 @@ import { buildContext, Insight, PipelineContext } from './contextBuilder';
 import { selectVisualizations, guaranteeCharts, ChartConfig } from './chartSelector';
 import { generateFollowups } from './followupGenerator';
 import { chatCompletion } from './openaiHelper';
+import { validateAndEnrichResults } from './agents/dataAnalystAgent';
+import { validateAndFixCharts, extractNormalizedConfig } from './agents/chartValidationAgent';
+import { validateReport } from './agents/reportQualityAgent';
 
 // ─── Response Types (matching frontend AssistantResponse) ────────────────────
 
@@ -175,18 +178,34 @@ export async function runAssistantPipeline(
     steps.push({ step: 6, name: 'Build context', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
   }
 
+  // ── Step 6.5: Data Analyst Agent ──────────────────────────────────────────
+  // Enrich labels, filter garbage rows, coerce PostgreSQL string-typed numbers
+  t0 = Date.now();
+  try {
+    const enriched = validateAndEnrichResults(sqlResults, context.insights);
+    sqlResults = enriched.sqlResults;
+    context = { ...context, insights: enriched.insights };
+    steps.push({ step: 6, name: 'Data analyst validation', status: 'completed', duration_ms: Date.now() - t0, detail: 'labels enriched, types coerced' });
+  } catch {
+    // Fail-safe: continue with original data
+  }
+
   // ── Step 7: Select Visualizations ──────────────────────────────────────────
   t0 = Date.now();
   let charts: ChartConfig[] = [];
   try {
     charts = selectVisualizations(intent, sqlResults, mlResults, vectorResults);
     charts = guaranteeCharts(charts, intent, sqlResults);
+
+    // Step 7.5: Chart Validation Agent — fix types, normalize config keys
+    charts = validateAndFixCharts(charts, sqlResults);
+
     steps.push({
       step: 7,
       name: 'Select visualizations',
       status: 'completed',
       duration_ms: Date.now() - t0,
-      detail: `${charts.length} charts (guaranteed)`,
+      detail: `${charts.length} charts (validated)`,
     });
   } catch (err: any) {
     steps.push({ step: 7, name: 'Select visualizations', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
@@ -248,14 +267,15 @@ export async function runAssistantPipeline(
   extractKPIsFromResults(mappedInsights, sqlResults);
 
   // Transform ChartConfig[] → VisualizationSpec[] (frontend expects chart_type + config)
+  // Uses extractNormalizedConfig to send the exact keys each frontend chart component needs
   const visualizations = charts.map((c) => ({
     chart_type: c.type,
     title: c.title,
     data: c.data,
-    config: { labelKey: c.labelKey, valueKey: c.valueKey },
+    config: { ...extractNormalizedConfig(c), labelKey: c.labelKey, valueKey: c.valueKey },
   }));
 
-  return {
+  const response: AssistantResponse = {
     question,
     entity_type: entityType || null,
     intent,
@@ -269,6 +289,10 @@ export async function runAssistantPipeline(
     pipelineSteps: steps,
     execution_path: executionPath,
   };
+
+  // ── Step 9.5: Report Quality Agent ──────────────────────────────────────
+  // Final quality gate: filter technical terms, ensure minimum insights
+  return validateReport(response, sqlResults);
 }
 
 // ─── LLM Narrative Generation ────────────────────────────────────────────────
