@@ -40,14 +40,30 @@ export const APPOINTMENT_TYPES = [
   { value: 'enrollment_close', label: 'Enrollment Close' },
 ];
 
-export const NAV_LINKS = [
+export type NavItem = {
+  label: string;
+  path?: string;
+  children?: { path: string; label: string }[];
+};
+
+export const NAV_LINKS: NavItem[] = [
   { path: '/', label: 'Home' },
-  { path: '/program', label: 'Program' },
-  { path: '/pricing', label: 'Pricing' },
-  { path: '/sponsorship', label: 'Sponsorship' },
-  { path: '/advisory', label: 'Advisory' },
-  { path: '/case-studies', label: 'Case Studies' },
-  { path: '/enroll', label: 'Enroll' },
+  {
+    label: 'Program',
+    children: [
+      { path: '/program', label: 'Program Overview' },
+      { path: '/advisory', label: 'Advisory' },
+      { path: '/case-studies', label: 'Case Studies' },
+    ],
+  },
+  {
+    label: 'Get Started',
+    children: [
+      { path: '/pricing', label: 'Pricing' },
+      { path: '/sponsorship', label: 'Corporate Sponsorship' },
+      { path: '/enroll', label: 'Enroll' },
+    ],
+  },
   { path: '/contact', label: 'Contact' },
 ];
 
