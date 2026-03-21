@@ -809,22 +809,7 @@ function DynamicCanvas({
         ))}
       </div>
 
-      {/* Section 4: Intelligence Analytics Grid */}
-      {(!analyticsLoading || anomalies.length > 0 || riskEntities.length > 0) && (
-        <div className="mt-3">
-          <h6 className="fw-semibold small mb-2" style={{ color: 'var(--color-primary)' }}>
-            {entityType ? `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} Analytics` : 'Intelligence Analytics'}
-          </h6>
-          <IntelligenceAnalyticsGrid
-            anomalies={anomalies}
-            forecasts={forecasts}
-            riskEntities={riskEntities}
-            entityNetwork={entityNetwork}
-            loading={analyticsLoading}
-            entityType={entityType}
-          />
-        </div>
-      )}
+      {/* Intelligence Analytics Grid removed — entity-specific KPI charts above replace it */}
 
       {/* Section 5: Auto-Insights Grid */}
       {autoInsights.length > 0 && (
@@ -1691,6 +1676,7 @@ function IntelligenceOSContent() {
     setAnalyticsLoading(true);
     setSummaryLoading(true);
     setIsProcessing(true);
+    setVisualizations([]); // Clear stale charts before loading new entity
 
     // Fetch all 7 data sources with entity scope
     Promise.all([
