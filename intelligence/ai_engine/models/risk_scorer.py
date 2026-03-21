@@ -75,7 +75,8 @@ class RiskScorer(BaseMLModel):
             return {"scores": [], "error": "Not enough data"}
 
         df = pd.DataFrame(rows)
-        feature_df = df[numeric_cols].fillna(0).astype(float)
+        # Clean formatted strings like '26.2M', '1.5K', '$500' before casting
+        feature_df = df[numeric_cols].fillna(0).apply(pd.to_numeric, errors="coerce").fillna(0)
 
         # Compute component scores (0-100)
         components = {}

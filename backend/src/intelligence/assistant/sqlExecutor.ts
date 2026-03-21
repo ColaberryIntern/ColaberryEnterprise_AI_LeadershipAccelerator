@@ -38,33 +38,43 @@ export async function executeSQLQueries(
 ): Promise<SqlResult[]> {
   if (!plan.sql) return [];
 
-  const results: SqlResult[] = [];
-
-  // Phase 1: Run predefined templates (baseline context)
   // For department-scoped queries, add department-specific agent filters
   const agentCategories: string[] = plan.parameters?.department_agent_categories || [];
   const deptEntityName: string | null = plan.parameters?.entity_name || null;
   const isDeptScope = entityType === 'department' && !!deptEntityName;
 
-  const templateResults = buildTemplateQueries(intent, plan.tables, question);
-  for (const tq of templateResults) {
-    // For department scope, filter agent queries by department's categories
+  const templateQueries = buildTemplateQueries(intent, plan.tables, question);
+
+  // Run ALL template queries + LLM SQL generation in PARALLEL
+  // Templates are independent reads; LLM generation is IO-bound (OpenAI call)
+  const templatePromises = templateQueries.map((tq) => {
     let sql = tq.sql;
     if (isDeptScope && agentCategories.length > 0) {
       sql = applyDepartmentAgentFilter(sql, agentCategories);
     }
-    const rows = await executeSQL(sql);
-    results.push({ rows, query: sql, description: isDeptScope ? `[${deptEntityName}] ${tq.description}` : tq.description, tables: tq.tables, method: 'template' });
+    return executeSQL(sql).then((rows): SqlResult => ({
+      rows,
+      query: sql,
+      description: isDeptScope ? `[${deptEntityName}] ${tq.description}` : tq.description,
+      tables: tq.tables,
+      method: 'template',
+    }));
+  });
+
+  const [templateSettled, llmSettled] = await Promise.all([
+    Promise.allSettled(templatePromises),
+    generateAndExecuteLLMSQL(question, plan.tables, entityType).catch(() => null),
+  ]);
+
+  const results: SqlResult[] = [];
+  for (const r of templateSettled) {
+    if (r.status === 'fulfilled') results.push(r.value);
+  }
+  if (llmSettled && (llmSettled as SqlResult | null)?.rows?.length) {
+    results.push(llmSettled as SqlResult);
   }
 
-  // Phase 2: ALWAYS try LLM-generated SQL for question-specific data
-  // Templates provide generic context; LLM SQL targets the user's actual question
-  const llmResult = await generateAndExecuteLLMSQL(question, plan.tables, entityType);
-  if (llmResult && llmResult.rows.length > 0) {
-    results.push(llmResult);
-  }
-
-  // Phase 3: Fallback only if NO results at all
+  // Fallback only if NO results at all
   if (results.every((r) => r.rows.length === 0)) {
     const table = plan.tables[0] || 'leads';
     const rows = await executeSQL(`SELECT COUNT(*) AS total FROM "${table}"`);
