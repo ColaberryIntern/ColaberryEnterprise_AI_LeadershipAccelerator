@@ -450,10 +450,6 @@ export default function ObjectConfigEngine(props: Props) {
                       <label className="form-label small fw-medium mb-0">Description</label>
                       <textarea className="form-control form-control-sm" rows={2} value={editing.description || ''} onChange={e => props.onUpdate({ description: e.target.value })} />
                     </div>
-                    <div className="col-12">
-                      <label className="form-label small fw-medium mb-0">Learning Goal</label>
-                      <textarea className="form-control form-control-sm" rows={2} value={editing.settings_json?.learning_goal || ''} onChange={e => props.onUpdate({ settings_json: { ...(editing.settings_json || {}), learning_goal: e.target.value } })} placeholder="What should the student learn from this section?" />
-                    </div>
                   </div>
 
                   {/* Prompts */}
