@@ -1265,7 +1265,7 @@ async function generateGlobalCharts(): Promise<ChartSpec[]> {
       SELECT status, COUNT(*)::text AS count FROM ai_agents GROUP BY status ORDER BY count DESC`),
     safeQuery<{ name: string; health: string; leads: string; errors: string }>(`
       SELECT c.name, COALESCE(ch.health_score, 0)::text AS health,
-             (SELECT COUNT(*)::text FROM leads l WHERE l.campaign_id = c.id) AS leads,
+             (SELECT COUNT(*)::text FROM campaign_leads cl WHERE cl.campaign_id = c.id) AS leads,
              (SELECT COUNT(*)::text FROM campaign_errors ce WHERE ce.campaign_id = c.id) AS errors
       FROM campaigns c LEFT JOIN campaign_health ch ON ch.campaign_id = c.id
       WHERE c.status = 'active' ORDER BY c.name LIMIT 10`),
@@ -1302,26 +1302,26 @@ async function generateGlobalCharts(): Promise<ChartSpec[]> {
 async function generateCampaignCharts(): Promise<ChartSpec[]> {
   const [healthTrend, leadsByCampaign, errorBreakdown, campaignRadar] = await Promise.all([
     safeQuery<{ day: string; avg_health: string; campaigns: string }>(`
-      SELECT date_trunc('day', recorded_at)::date AS day,
+      SELECT date_trunc('day', created_at)::date AS day,
              ROUND(AVG(health_score))::text AS avg_health,
              COUNT(DISTINCT campaign_id)::text AS campaigns
       FROM campaign_health
-      WHERE recorded_at >= NOW() - INTERVAL '14 days'
+      WHERE created_at >= NOW() - INTERVAL '14 days'
       GROUP BY day ORDER BY day`),
     safeQuery<{ campaign: string; leads: string; converted: string }>(`
-      SELECT c.name AS campaign, COUNT(l.id)::text AS leads,
-             COUNT(CASE WHEN l.temperature = 'hot' THEN 1 END)::text AS converted
-      FROM campaigns c LEFT JOIN leads l ON l.campaign_id = c.id
+      SELECT c.name AS campaign, COUNT(cl.id)::text AS leads,
+             COUNT(CASE WHEN cl.status = 'converted' THEN 1 END)::text AS converted
+      FROM campaigns c LEFT JOIN campaign_leads cl ON cl.campaign_id = c.id
       WHERE c.status = 'active' GROUP BY c.name ORDER BY leads DESC LIMIT 8`),
-    safeQuery<{ error_type: string; count: string }>(`
-      SELECT error_type, COUNT(*)::text AS count
+    safeQuery<{ component: string; count: string }>(`
+      SELECT component, COUNT(*)::text AS count
       FROM campaign_errors
       WHERE created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY error_type ORDER BY count DESC LIMIT 8`),
+      GROUP BY component ORDER BY count DESC LIMIT 8`),
     safeQuery<{ campaign: string; health: string; lead_count: string; error_count: string; email_count: string }>(`
       SELECT c.name AS campaign,
              COALESCE(ch.health_score, 50)::text AS health,
-             (SELECT COUNT(*) FROM leads l WHERE l.campaign_id = c.id)::text AS lead_count,
+             (SELECT COUNT(*) FROM campaign_leads cl WHERE cl.campaign_id = c.id)::text AS lead_count,
              (SELECT COUNT(*) FROM campaign_errors ce WHERE ce.campaign_id = c.id)::text AS error_count,
              (SELECT COUNT(*) FROM scheduled_emails se WHERE se.campaign_id = c.id)::text AS email_count
       FROM campaigns c LEFT JOIN campaign_health ch ON ch.campaign_id = c.id
@@ -1348,7 +1348,7 @@ async function generateCampaignCharts(): Promise<ChartSpec[]> {
     {
       chart_type: 'waterfall',
       title: 'Error Breakdown (7 Days)',
-      data: errorBreakdown.map((d) => ({ category: d.error_type, value: Number(d.count) })),
+      data: errorBreakdown.map((d) => ({ category: d.component, value: Number(d.count) })),
       config: { label_key: 'category', value_key: 'value' },
     },
     {
@@ -1376,17 +1376,17 @@ async function generateLeadCharts(): Promise<ChartSpec[]> {
       FROM leads WHERE created_at >= NOW() - INTERVAL '8 weeks'
       GROUP BY week ORDER BY week`),
     safeQuery<{ temperature: string; count: string }>(`
-      SELECT COALESCE(temperature, 'unknown') AS temperature, COUNT(*)::text AS count
-      FROM leads GROUP BY temperature ORDER BY count DESC`),
+      SELECT COALESCE(lead_temperature, 'unknown') AS temperature, COUNT(*)::text AS count
+      FROM leads GROUP BY lead_temperature ORDER BY count DESC`),
     safeQuery<{ stage: string; count: string }>(`
-      SELECT COALESCE(stage, 'new') AS stage, COUNT(*)::text AS count
-      FROM leads GROUP BY stage ORDER BY count DESC LIMIT 8`),
+      SELECT COALESCE(pipeline_stage, 'new') AS stage, COUNT(*)::text AS count
+      FROM leads GROUP BY pipeline_stage ORDER BY count DESC LIMIT 8`),
     safeQuery<{ step: string; value: string }>(`
       SELECT 'Total Leads' AS step, COUNT(*)::text AS value FROM leads
       UNION ALL SELECT 'With Email', COUNT(*)::text FROM leads WHERE email IS NOT NULL
       UNION ALL SELECT 'With Activity', COUNT(DISTINCT lead_id)::text FROM activities
-      UNION ALL SELECT 'Hot Leads', COUNT(*)::text FROM leads WHERE temperature = 'hot'
-      UNION ALL SELECT 'Converted', COUNT(*)::text FROM leads WHERE stage = 'converted'`),
+      UNION ALL SELECT 'Hot Leads', COUNT(*)::text FROM leads WHERE lead_temperature = 'hot'
+      UNION ALL SELECT 'Converted', COUNT(*)::text FROM leads WHERE pipeline_stage = 'converted'`),
   ]);
 
   return [
@@ -1433,8 +1433,8 @@ async function generateStudentCharts(): Promise<ChartSpec[]> {
       SELECT 'Enrollments' AS dimension, COUNT(*)::text AS score FROM enrollments
       UNION ALL SELECT 'Active', COUNT(*)::text FROM enrollments WHERE status = 'active'
       UNION ALL SELECT 'Cohorts', COUNT(*)::text FROM cohorts
-      UNION ALL SELECT 'Modules', COUNT(*)::text FROM modules
-      UNION ALL SELECT 'Lessons', COUNT(*)::text FROM lessons`),
+      UNION ALL SELECT 'Modules', COUNT(*)::text FROM curriculum_modules
+      UNION ALL SELECT 'Lessons', COUNT(*)::text FROM curriculum_lessons`),
   ]);
 
   return [
@@ -1463,29 +1463,29 @@ async function generateStudentCharts(): Promise<ChartSpec[]> {
 async function generateAgentCharts(): Promise<ChartSpec[]> {
   const [execDaily, topAgents, agentRadar, errorTrend] = await Promise.all([
     safeQuery<{ day: string; executions: string; errors: string }>(`
-      SELECT date_trunc('day', started_at)::date AS day,
+      SELECT date_trunc('day', created_at)::date AS day,
              COUNT(*)::text AS executions,
              COUNT(CASE WHEN result = 'error' THEN 1 END)::text AS errors
-      FROM ai_agent_activity_logs WHERE started_at >= NOW() - INTERVAL '14 days'
+      FROM ai_agent_activity_logs WHERE created_at >= NOW() - INTERVAL '14 days'
       GROUP BY day ORDER BY day`),
     safeQuery<{ agent: string; runs: string; errors: string; avg_ms: string }>(`
-      SELECT a.name AS agent, COUNT(l.id)::text AS runs,
+      SELECT a.agent_name AS agent, COUNT(l.id)::text AS runs,
              COUNT(CASE WHEN l.result = 'error' THEN 1 END)::text AS errors,
              ROUND(AVG(l.duration_ms))::text AS avg_ms
       FROM ai_agents a JOIN ai_agent_activity_logs l ON l.agent_id = a.id
-      WHERE l.started_at >= NOW() - INTERVAL '24 hours'
-      GROUP BY a.name ORDER BY runs DESC LIMIT 8`),
+      WHERE l.created_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY a.agent_name ORDER BY runs DESC LIMIT 8`),
     safeQuery<{ agent: string; runs: string; success_rate: string; avg_duration: string }>(`
-      SELECT a.name AS agent,
+      SELECT a.agent_name AS agent,
              COUNT(l.id)::text AS runs,
              ROUND(100.0 * COUNT(CASE WHEN l.result = 'success' THEN 1 END) / GREATEST(COUNT(l.id), 1))::text AS success_rate,
              ROUND(AVG(l.duration_ms) / 1000)::text AS avg_duration
       FROM ai_agents a JOIN ai_agent_activity_logs l ON l.agent_id = a.id
-      WHERE l.started_at >= NOW() - INTERVAL '24 hours'
-      GROUP BY a.name ORDER BY runs DESC LIMIT 6`),
+      WHERE l.created_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY a.agent_name ORDER BY runs DESC LIMIT 6`),
     safeQuery<{ day: string; errors: string }>(`
-      SELECT date_trunc('day', started_at)::date AS day, COUNT(*)::text AS errors
-      FROM ai_agent_activity_logs WHERE result = 'error' AND started_at >= NOW() - INTERVAL '14 days'
+      SELECT date_trunc('day', created_at)::date AS day, COUNT(*)::text AS errors
+      FROM ai_agent_activity_logs WHERE result = 'error' AND created_at >= NOW() - INTERVAL '14 days'
       GROUP BY day ORDER BY day`),
   ]);
 
@@ -1533,14 +1533,14 @@ async function generateVisitorCharts(): Promise<ChartSpec[]> {
       SELECT date_trunc('day', vs.started_at)::date AS day,
              COUNT(vs.id)::text AS sessions,
              COUNT(DISTINCT vs.visitor_id)::text AS visitors,
-             COALESCE(SUM(vs.pages_viewed), 0)::text AS pageviews
+             COALESCE(SUM(vs.pageview_count), 0)::text AS pageviews
       FROM visitor_sessions vs WHERE vs.started_at >= NOW() - INTERVAL '14 days'
       GROUP BY day ORDER BY day`),
     safeQuery<{ source: string; sessions: string; bounced: string; converted: string }>(`
-      SELECT COALESCE(v.utm_source, 'direct') AS source,
+      SELECT COALESCE(vs.utm_source, v.utm_source, 'direct') AS source,
              COUNT(vs.id)::text AS sessions,
-             COUNT(CASE WHEN vs.pages_viewed <= 1 THEN 1 END)::text AS bounced,
-             COUNT(CASE WHEN vs.converted THEN 1 END)::text AS converted
+             COUNT(CASE WHEN vs.is_bounce THEN 1 END)::text AS bounced,
+             COUNT(CASE WHEN vs.lead_id IS NOT NULL THEN 1 END)::text AS converted
       FROM visitors v JOIN visitor_sessions vs ON vs.visitor_id = v.id
       GROUP BY source ORDER BY sessions DESC LIMIT 8`),
     safeQuery<{ page: string; views: string }>(`
@@ -1549,8 +1549,8 @@ async function generateVisitorCharts(): Promise<ChartSpec[]> {
       WHERE created_at >= NOW() - INTERVAL '7 days'
       GROUP BY page_path ORDER BY views DESC LIMIT 10`),
     safeQuery<{ source: string; bounce_rate: string; sessions: string }>(`
-      SELECT COALESCE(v.utm_source, 'direct') AS source,
-             ROUND(100.0 * COUNT(CASE WHEN vs.pages_viewed <= 1 THEN 1 END) / GREATEST(COUNT(vs.id), 1))::text AS bounce_rate,
+      SELECT COALESCE(vs.utm_source, v.utm_source, 'direct') AS source,
+             ROUND(100.0 * COUNT(CASE WHEN vs.is_bounce THEN 1 END) / GREATEST(COUNT(vs.id), 1))::text AS bounce_rate,
              COUNT(vs.id)::text AS sessions
       FROM visitors v JOIN visitor_sessions vs ON vs.visitor_id = v.id
       GROUP BY source HAVING COUNT(vs.id) >= 2
@@ -1558,9 +1558,9 @@ async function generateVisitorCharts(): Promise<ChartSpec[]> {
     safeQuery<{ step: string; value: string }>(`
       SELECT 'Total Visitors' AS step, COUNT(*)::text AS value FROM visitors
       UNION ALL SELECT 'Had Sessions', COUNT(DISTINCT visitor_id)::text FROM visitor_sessions
-      UNION ALL SELECT 'Multi-Page', COUNT(DISTINCT visitor_id)::text FROM visitor_sessions WHERE pages_viewed > 1
+      UNION ALL SELECT 'Multi-Page', COUNT(DISTINCT visitor_id)::text FROM visitor_sessions WHERE pageview_count > 1
       UNION ALL SELECT 'Returned', COUNT(*)::text FROM (SELECT visitor_id FROM visitor_sessions GROUP BY visitor_id HAVING COUNT(*) > 1) r
-      UNION ALL SELECT 'Converted', COUNT(*)::text FROM visitor_sessions WHERE converted = true`),
+      UNION ALL SELECT 'With Lead', COUNT(*)::text FROM visitor_sessions WHERE lead_id IS NOT NULL`),
   ]);
 
   return [
@@ -1622,8 +1622,8 @@ async function generateCohortCharts(): Promise<ChartSpec[]> {
     safeQuery<{ cohort: string; students: string; modules: string; lessons: string }>(`
       SELECT c.name AS cohort,
              COUNT(DISTINCT e.id)::text AS students,
-             (SELECT COUNT(*) FROM modules)::text AS modules,
-             (SELECT COUNT(*) FROM lessons)::text AS lessons
+             (SELECT COUNT(*) FROM curriculum_modules)::text AS modules,
+             (SELECT COUNT(*) FROM curriculum_lessons)::text AS lessons
       FROM cohorts c LEFT JOIN enrollments e ON e.cohort_id = c.id
       GROUP BY c.name`),
   ]);
@@ -1661,19 +1661,19 @@ async function generateCurriculumCharts(): Promise<ChartSpec[]> {
       SELECT m.title AS module,
              COUNT(DISTINCT l.id)::text AS lessons,
              COUNT(DISTINCT s.id)::text AS sections
-      FROM modules m
-      LEFT JOIN lessons l ON l.module_id = m.id
-      LEFT JOIN sections s ON s.lesson_id = l.id
+      FROM curriculum_modules m
+      LEFT JOIN curriculum_lessons l ON l.module_id = m.id
+      LEFT JOIN mini_sections s ON s.lesson_id = l.id
       GROUP BY m.title ORDER BY sections DESC`),
     safeQuery<{ status: string; count: string }>(`
-      SELECT CASE WHEN published THEN 'Published' ELSE 'Draft' END AS status,
+      SELECT CASE WHEN is_active THEN 'Active' ELSE 'Draft' END AS status,
              COUNT(*)::text AS count
-      FROM sections GROUP BY published`),
+      FROM mini_sections GROUP BY is_active`),
     safeQuery<{ level: string; count: string }>(`
-      SELECT 'Modules' AS level, COUNT(*)::text AS count FROM modules
-      UNION ALL SELECT 'Lessons', COUNT(*)::text FROM lessons
-      UNION ALL SELECT 'Sections', COUNT(*)::text FROM sections
-      UNION ALL SELECT 'Published', COUNT(*)::text FROM sections WHERE published = true`),
+      SELECT 'Modules' AS level, COUNT(*)::text AS count FROM curriculum_modules
+      UNION ALL SELECT 'Lessons', COUNT(*)::text FROM curriculum_lessons
+      UNION ALL SELECT 'Sections', COUNT(*)::text FROM mini_sections
+      UNION ALL SELECT 'Active', COUNT(*)::text FROM mini_sections WHERE is_active = true`),
   ]);
 
   return [
