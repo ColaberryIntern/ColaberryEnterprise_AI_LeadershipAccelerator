@@ -1495,6 +1495,7 @@ function IntelligenceOSContent() {
   const [riskEntities, setRiskEntities] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [investigationTarget, setInvestigationTarget] = useState<any>(null);
+  const [queryContext, setQueryContext] = useState<{ text: string; timestamp: Date } | null>(null);
 
   // Business hierarchy state
   const [businessHierarchy, setBusinessHierarchy] = useState<BusinessEntityNetwork | null>(null);
@@ -1679,6 +1680,7 @@ function IntelligenceOSContent() {
     setVisualizations([]); // Clear stale charts before loading new entity
     setAutoInsights([]); // Clear stale insights from previous entity
     setInsights(null); // Clear stale executive summary from previous entity
+    setQueryContext(null); // Clear Cory query context when entity is clicked
 
     try {
       // ── Phase 1: Load KPIs + other data in parallel (no charts yet) ──
@@ -1881,6 +1883,106 @@ function IntelligenceOSContent() {
     setInvestigationTarget(anomaly);
   }, []);
 
+  // ── Cory → Dashboard unification ──
+
+  const handleCoryProcessingStart = useCallback(() => {
+    setAnalyticsLoading(true);
+    setSummaryLoading(true);
+    setIsProcessing(true);
+    setVisualizations([]);
+    setAutoInsights([]);
+    setInsights(null);
+    setInvestigationTarget(null);
+    setQueryContext(null);
+  }, []);
+
+  const handleCoryDashboardPopulate = useCallback((payload: {
+    question: string;
+    visualizations: any[];
+    insights: any[];
+    narrative: string;
+    narrativeSections: any;
+    sources: string[];
+    followUps: string[];
+    pipelineSteps: any[];
+    executionPath: string;
+    confidence: number;
+  }) => {
+    // 1. Context banner — show the question
+    setQueryContext({ text: payload.question, timestamp: new Date() });
+
+    // 2. KPIs — extract metric insights
+    const metricInsights = payload.insights.filter((i: any) => i.metric && i.value != null);
+    if (metricInsights.length > 0) {
+      setKpis((prev: any) => ({
+        ...(prev || {}),
+        cory_kpis: metricInsights.slice(0, 8).map((i: any) => ({
+          name: (i.metric || 'Metric').replace(/_/g, ' '),
+          value: i.value,
+          unit: '',
+          trend: i.severity === 'warning' ? 'down' : i.severity === 'critical' ? 'down' : 'stable',
+        })),
+      }));
+    }
+
+    // 3. Charts
+    if (payload.visualizations?.length) {
+      setVisualizations(payload.visualizations);
+    }
+
+    // 4. Key Insights
+    const meaningful = payload.insights
+      .filter((i: any) => {
+        const msg = (i.message || '').trim();
+        return msg.length > 5 && msg.includes(' ');
+      })
+      .slice(0, 6)
+      .map((i: any) => ({
+        title: i.message || i.title || '',
+        severity: i.severity || 'info',
+        metric_value: i.value,
+        description: i.message || '',
+        trend: i.severity === 'warning' ? 'down' : i.severity === 'critical' ? 'down' : 'stable',
+      }));
+    setAutoInsights(meaningful);
+
+    // 5. Executive Summary narrative
+    setInsights({
+      narrative: payload.narrative,
+      narrative_sections: payload.narrativeSections,
+      sources: payload.sources,
+      follow_ups: payload.followUps,
+    } as any);
+
+    // 6. Investigation — show Cory's pipeline steps
+    if (payload.pipelineSteps?.length > 0) {
+      setInvestigationTarget({
+        id: 'cory-investigation',
+        entity: payload.question.length > 60 ? payload.question.slice(0, 57) + '...' : payload.question,
+        entity_type: 'cory_analysis',
+        metric: 'Cory Investigation',
+        severity: payload.confidence >= 0.8 ? 'info' : payload.confidence >= 0.5 ? 'warning' : 'error',
+        description: `Cory analyzed: "${payload.question}" — ${payload.pipelineSteps.length} steps executed via ${payload.executionPath}`,
+        detected_at: new Date().toISOString(),
+        factors: Object.fromEntries(
+          payload.pipelineSteps.map((s: any) => [
+            s.name || `Step ${s.step}`,
+            s.status === 'completed' ? 100 : s.status === 'error' ? 0 : 50,
+          ])
+        ),
+        pipelineSteps: payload.pipelineSteps,
+        executionPath: payload.executionPath,
+        recommendedActions: payload.followUps,
+      });
+    }
+
+    // 7. Clear loading
+    setAnalyticsLoading(false);
+    setSummaryLoading(false);
+    setIsProcessing(false);
+    setLastRefresh(new Date().toLocaleString());
+  }, []);
+
   // ── Compact (mobile) layout ──
   if (isCompact) {
     return (
@@ -1924,6 +2026,8 @@ function IntelligenceOSContent() {
               onSummaryUpdate={handleSummaryUpdate}
               onInsightsUpdate={handleInsightsUpdate}
               onNarrativeUpdate={handleNarrativeUpdate}
+              onDashboardPopulate={handleCoryDashboardPopulate}
+              onProcessingStart={handleCoryProcessingStart}
               externalQuery={externalQuery}
             />
           )}
@@ -1942,6 +2046,8 @@ function IntelligenceOSContent() {
                 onSummaryUpdate={handleSummaryUpdate}
                 onInsightsUpdate={handleInsightsUpdate}
                 onNarrativeUpdate={handleNarrativeUpdate}
+                onDashboardPopulate={handleCoryDashboardPopulate}
+                onProcessingStart={handleCoryProcessingStart}
                 externalQuery={externalQuery}
               />
             </CoryOverlay>
@@ -1980,21 +2086,37 @@ function IntelligenceOSContent() {
 
         {/* Center Panel: Intelligence Dashboard */}
         <div className="flex-grow-1 intel-gradient-bg d-flex flex-column" style={{ minWidth: 0, overflow: 'hidden' }}>
-          {/* Scope indicator */}
-          {selectedEntity && (
+          {/* Scope indicator — entity click or Cory question */}
+          {(selectedEntity || queryContext) && (
             <div
               className="d-flex align-items-center gap-2 px-3 py-2 border-bottom intel-fade-in"
               style={{ flexShrink: 0, borderColor: 'rgba(226,232,240,0.5)', background: 'rgba(26, 54, 93, 0.03)' }}
             >
-              <span
-                className="badge"
-                style={{ fontSize: '0.68rem', background: 'var(--color-primary)', color: '#fff' }}
-              >
-                {selectedEntity.name}
-              </span>
-              <small className="text-muted" style={{ fontSize: '0.65rem' }}>
-                Context: {selectedEntity.type} &middot; All dashboard charts filtered
-              </small>
+              {queryContext ? (
+                <>
+                  <span
+                    className="badge"
+                    style={{ fontSize: '0.68rem', background: 'var(--color-primary-light)', color: '#fff' }}
+                  >
+                    Cory Analysis
+                  </span>
+                  <small className="text-muted text-truncate" style={{ fontSize: '0.65rem', maxWidth: 500 }}>
+                    &ldquo;{queryContext.text}&rdquo;
+                  </small>
+                </>
+              ) : selectedEntity ? (
+                <>
+                  <span
+                    className="badge"
+                    style={{ fontSize: '0.68rem', background: 'var(--color-primary)', color: '#fff' }}
+                  >
+                    {selectedEntity.name}
+                  </span>
+                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>
+                    Context: {selectedEntity.type} &middot; All dashboard charts filtered
+                  </small>
+                </>
+              ) : null}
             </div>
           )}
 
@@ -2032,6 +2154,8 @@ function IntelligenceOSContent() {
             onSummaryUpdate={handleSummaryUpdate}
             onInsightsUpdate={handleInsightsUpdate}
             onNarrativeUpdate={handleNarrativeUpdate}
+            onDashboardPopulate={handleCoryDashboardPopulate}
+            onProcessingStart={handleCoryProcessingStart}
             externalQuery={externalQuery}
           />
         </CoryOverlay>

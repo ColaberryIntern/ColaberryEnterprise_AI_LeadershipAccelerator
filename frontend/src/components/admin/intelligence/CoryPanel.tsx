@@ -38,11 +38,26 @@ interface ChatMessage {
   suggestedQuestions?: string[];
 }
 
+interface CoryDashboardPayload {
+  question: string;
+  visualizations: any[];
+  insights: any[];
+  narrative: string;
+  narrativeSections: any;
+  sources: string[];
+  followUps: string[];
+  pipelineSteps: any[];
+  executionPath: string;
+  confidence: number;
+}
+
 interface CoryPanelProps {
   onVisualizationsUpdate: (viz: VisualizationSpec[]) => void;
   onSummaryUpdate: (data: Record<string, any>) => void;
   onInsightsUpdate: (insights: any[]) => void;
   onNarrativeUpdate?: (narrative: { narrative: string; narrative_sections?: any; sources?: string[]; follow_ups?: string[] }) => void;
+  onDashboardPopulate?: (data: CoryDashboardPayload) => void;
+  onProcessingStart?: () => void;
   externalQuery: string | null;
 }
 
@@ -571,6 +586,8 @@ export default function CoryPanel({
   onSummaryUpdate,
   onInsightsUpdate,
   onNarrativeUpdate,
+  onDashboardPopulate,
+  onProcessingStart,
   externalQuery,
 }: CoryPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -645,6 +662,7 @@ export default function CoryPanel({
       setQueryCount((c) => c + 1);
       setLoading(true);
       setCoryStatus('thinking');
+      if (onProcessingStart) onProcessingStart(); // Clear dashboard + show loading skeleton
 
       try {
         // Pass recent conversation history so Cory maintains context
@@ -680,16 +698,34 @@ export default function CoryPanel({
             suggestedQuestions: coryResult.suggested_questions,
           };
           setMessages((prev) => [...prev, msg]);
-          if (ar.visualizations?.length) onVisualizationsUpdate(ar.visualizations);
-          if (ar.data) onSummaryUpdate(ar.data);
-          if (ar.insights?.length) onInsightsUpdate(ar.insights);
-          if (onNarrativeUpdate && ar.narrative) {
-            onNarrativeUpdate({
-              narrative: ar.narrative,
-              narrative_sections: ar.narrative_sections || ar.narrativeSections,
-              sources: ar.sources,
-              follow_ups: ar.recommendations,
+
+          // Unified dashboard population — populates KPIs, charts, insights, investigation
+          if (onDashboardPopulate) {
+            onDashboardPopulate({
+              question,
+              visualizations: ar.visualizations || [],
+              insights: ar.insights || [],
+              narrative: ar.narrative || '',
+              narrativeSections: ar.narrative_sections || ar.narrativeSections || null,
+              sources: ar.sources || [],
+              followUps: ar.recommendations || [],
+              pipelineSteps: ar.pipelineSteps || [],
+              executionPath: ar.execution_path || '',
+              confidence: ar.confidence || 0,
             });
+          } else {
+            // Fallback to granular callbacks if onDashboardPopulate not provided
+            if (ar.visualizations?.length) onVisualizationsUpdate(ar.visualizations);
+            if (ar.data) onSummaryUpdate(ar.data);
+            if (ar.insights?.length) onInsightsUpdate(ar.insights);
+            if (onNarrativeUpdate && ar.narrative) {
+              onNarrativeUpdate({
+                narrative: ar.narrative,
+                narrative_sections: ar.narrative_sections || ar.narrativeSections,
+                sources: ar.sources,
+                follow_ups: ar.recommendations,
+              });
+            }
           }
         } else {
           const msg: ChatMessage = {
@@ -714,7 +750,7 @@ export default function CoryPanel({
         setCoryStatus('active');
       }
     },
-    [input, loading, queryLoading, scope, messages, onVisualizationsUpdate, onSummaryUpdate, onInsightsUpdate, onNarrativeUpdate],
+    [input, loading, queryLoading, scope, messages, onVisualizationsUpdate, onSummaryUpdate, onInsightsUpdate, onNarrativeUpdate, onDashboardPopulate, onProcessingStart],
   );
 
   // Handle external queries

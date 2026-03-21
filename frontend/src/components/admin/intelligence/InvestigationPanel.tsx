@@ -9,6 +9,9 @@ interface AnomalyData {
   description: string;
   detected_at: string;
   factors?: Record<string, any>;
+  pipelineSteps?: Array<{ step: number; name: string; status: string; duration_ms: number; detail?: string }>;
+  executionPath?: string;
+  recommendedActions?: string[];
 }
 
 interface Props {
@@ -68,6 +71,7 @@ function formatTimestamp(ts: string): string {
 export default function InvestigationPanel({ anomaly, onClose }: Props) {
   if (!anomaly) return null;
 
+  const isCoryAnalysis = anomaly.entity_type === 'cory_analysis';
   const rec = getRecommendation(anomaly.severity);
   const factors = anomaly.factors || {};
   const factorEntries = Object.entries(factors);
@@ -94,7 +98,7 @@ export default function InvestigationPanel({ anomaly, onClose }: Props) {
       <div className="card-header bg-white d-flex justify-content-between align-items-center">
         <div className="d-flex align-items-center gap-2">
           <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-            Investigation: {anomaly.entity}
+            {isCoryAnalysis ? 'Cory Investigation' : `Investigation: ${anomaly.entity}`}
           </span>
           <span className={`badge ${getSeverityBadgeClass(anomaly.severity)}`} style={{ fontSize: '0.6rem' }}>
             {anomaly.severity.toUpperCase()}
@@ -155,34 +159,66 @@ export default function InvestigationPanel({ anomaly, onClose }: Props) {
             )}
           </div>
 
-          {/* Event Timeline */}
+          {/* Event Timeline / Pipeline Steps */}
           <div className="bg-light rounded p-3">
             <small className="fw-semibold text-uppercase d-block mb-2" style={{ fontSize: '0.65rem', letterSpacing: '0.5px', color: 'var(--color-text-light)' }}>
-              Event Timeline
+              {isCoryAnalysis ? 'Pipeline Execution' : 'Event Timeline'}
             </small>
-            <div className="d-flex align-items-start gap-2 mb-2">
-              <div
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--color-primary-light)',
-                  marginTop: 4,
-                  flexShrink: 0,
-                }}
-              />
-              <div>
-                <small className="fw-semibold d-block" style={{ fontSize: '0.72rem', color: 'var(--color-primary)' }}>
-                  Detected
-                </small>
-                <small className="text-muted" style={{ fontSize: '0.68rem' }}>
-                  {formatTimestamp(anomaly.detected_at)}
-                </small>
-              </div>
-            </div>
-            <p className="mb-0" style={{ fontSize: '0.72rem', color: 'var(--color-text)', lineHeight: 1.5 }}>
-              {anomaly.description}
-            </p>
+            {isCoryAnalysis && anomaly.pipelineSteps?.length ? (
+              anomaly.pipelineSteps.map((step: any, idx: number) => (
+                <div key={idx} className="d-flex align-items-start gap-2 mb-2">
+                  <div
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: step.status === 'completed' ? '#38a169' : step.status === 'error' ? '#e53e3e' : '#d69e2e',
+                      marginTop: 4,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div className="flex-grow-1">
+                    <div className="d-flex justify-content-between">
+                      <small className="fw-semibold" style={{ fontSize: '0.72rem', color: 'var(--color-primary)' }}>
+                        {step.name}
+                      </small>
+                      <small className="text-muted" style={{ fontSize: '0.65rem' }}>
+                        {step.duration_ms}ms
+                      </small>
+                    </div>
+                    {step.detail && (
+                      <small className="text-muted d-block" style={{ fontSize: '0.65rem' }}>{step.detail}</small>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <>
+                <div className="d-flex align-items-start gap-2 mb-2">
+                  <div
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--color-primary-light)',
+                      marginTop: 4,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div>
+                    <small className="fw-semibold d-block" style={{ fontSize: '0.72rem', color: 'var(--color-primary)' }}>
+                      Detected
+                    </small>
+                    <small className="text-muted" style={{ fontSize: '0.68rem' }}>
+                      {formatTimestamp(anomaly.detected_at)}
+                    </small>
+                  </div>
+                </div>
+                <p className="mb-0" style={{ fontSize: '0.72rem', color: 'var(--color-text)', lineHeight: 1.5 }}>
+                  {anomaly.description}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Risk Assessment */}
@@ -221,20 +257,30 @@ export default function InvestigationPanel({ anomaly, onClose }: Props) {
           {/* Recommended Action */}
           <div className="bg-light rounded p-3">
             <small className="fw-semibold text-uppercase d-block mb-2" style={{ fontSize: '0.65rem', letterSpacing: '0.5px', color: 'var(--color-text-light)' }}>
-              Recommended Action
+              {isCoryAnalysis ? 'Suggested Actions' : 'Recommended Action'}
             </small>
-            <div className="d-flex align-items-center gap-2 mb-2">
-              <small className="text-muted" style={{ fontSize: '0.65rem' }}>Response window:</small>
-              <span
-                className={`badge ${anomaly.severity === 'critical' ? 'bg-danger' : anomaly.severity === 'error' ? 'bg-warning text-dark' : 'bg-info text-dark'}`}
-                style={{ fontSize: '0.6rem' }}
-              >
-                {rec.urgency}
-              </span>
-            </div>
-            <p className="mb-0" style={{ fontSize: '0.72rem', color: 'var(--color-text)', lineHeight: 1.5 }}>
-              {rec.action}
-            </p>
+            {isCoryAnalysis && anomaly.recommendedActions?.length ? (
+              <ul className="mb-0 ps-3" style={{ fontSize: '0.72rem', color: 'var(--color-text)', lineHeight: 1.6 }}>
+                {anomaly.recommendedActions.slice(0, 4).map((action: string, idx: number) => (
+                  <li key={idx}>{action}</li>
+                ))}
+              </ul>
+            ) : (
+              <>
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <small className="text-muted" style={{ fontSize: '0.65rem' }}>Response window:</small>
+                  <span
+                    className={`badge ${anomaly.severity === 'critical' ? 'bg-danger' : anomaly.severity === 'error' ? 'bg-warning text-dark' : 'bg-info text-dark'}`}
+                    style={{ fontSize: '0.6rem' }}
+                  >
+                    {rec.urgency}
+                  </span>
+                </div>
+                <p className="mb-0" style={{ fontSize: '0.72rem', color: 'var(--color-text)', lineHeight: 1.5 }}>
+                  {rec.action}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
