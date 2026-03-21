@@ -396,4 +396,58 @@ router.get('/api/portal/project/export', requireParticipant, async (req: Request
   }
 });
 
+// ---------------------------------------------------------------------------
+// Next Action Engine Routes
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/next-action', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getNextAction } = await import('../services/nextAction/nextActionService');
+    const action = await getNextAction(enrollmentId);
+    if (!action) {
+      res.json({ action: null, message: 'No next action available — all requirements are complete or none have been extracted.' });
+      return;
+    }
+    res.json({ action });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /next-action error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/next-action/accept', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { action_id } = req.body;
+    if (!action_id) {
+      res.status(400).json({ error: 'action_id is required' });
+      return;
+    }
+    const { acceptAction } = await import('../services/nextAction/nextActionService');
+    const action = await acceptAction(action_id);
+    res.json({ action });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /next-action/accept error:', err.message);
+    const status = err.message.includes('not found') || err.message.includes('not pending') ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/next-action/complete', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { action_id } = req.body;
+    if (!action_id) {
+      res.status(400).json({ error: 'action_id is required' });
+      return;
+    }
+    const { completeAction } = await import('../services/nextAction/nextActionService');
+    const action = await completeAction(action_id);
+    res.json({ action });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /next-action/complete error:', err.message);
+    const status = err.message.includes('not found') || err.message.includes('cannot be') ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 export default router;
