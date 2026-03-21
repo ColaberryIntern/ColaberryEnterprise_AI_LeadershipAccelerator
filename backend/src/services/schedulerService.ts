@@ -1562,6 +1562,60 @@ export function startScheduler(): void {
 
   console.log('[Scheduler] Alumni: lifecycle processor daily at 6 AM CT (11 UTC)');
 
+  // ── Hot Lead Escalation (hourly during business hours, weekdays) ────────
+  // Detects leads with 2+ email opens or any click, enrolls them in
+  // Executive Briefing Interest Campaign for personal follow-up
+  cron.schedule('30 13-22 * * 1-5', () => { // 8:30AM-5:30PM CT (13:30-22:30 UTC)
+    instrumentCronJob('HotLeadEscalation', async () => {
+      const execBriefingCampaignId = '45a7e4e3-b9e4-4ab9-bd12-d34279e8a083';
+
+      // Find hot leads not already in escalation campaign
+      const [hotLeads] = await sequelize.query(`
+        SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone
+        FROM (
+          SELECT lead_id FROM interaction_outcomes
+          WHERE outcome = 'opened'
+          GROUP BY lead_id HAVING COUNT(*) >= 2
+          UNION
+          SELECT DISTINCT lead_id FROM interaction_outcomes WHERE outcome = 'clicked'
+        ) sub
+        JOIN leads l ON l.id = sub.lead_id
+        WHERE NOT EXISTS (
+          SELECT 1 FROM campaign_leads cl
+          WHERE cl.lead_id = sub.lead_id
+          AND cl.campaign_id = :campaignId
+        )
+      `, { replacements: { campaignId: execBriefingCampaignId } });
+
+      if ((hotLeads as any[]).length === 0) return;
+
+      console.log(`[HotLead] Found ${(hotLeads as any[]).length} new hot leads to escalate`);
+
+      // Enroll each in Executive Briefing Interest Campaign
+      const { enrollLeadInSequence } = require('./sequenceService');
+      let enrolled = 0;
+      for (const lead of hotLeads as any[]) {
+        try {
+          await enrollLeadInSequence(lead.lead_id, execBriefingCampaignId);
+          enrolled++;
+          console.log(`[HotLead] Escalated ${lead.name} (${lead.email}) — enrolled in Executive Briefing`);
+        } catch (err: any) {
+          // Skip if already enrolled or other error
+          if (!err.message?.includes('already enrolled')) {
+            console.warn(`[HotLead] Failed to escalate ${lead.email}: ${err.message}`);
+          }
+        }
+      }
+
+      if (enrolled > 0) {
+        console.log(`[HotLead] Escalated ${enrolled} hot leads to Executive Briefing campaign`);
+      }
+    }).catch((err: any) => {
+      console.error('[Scheduler] Hot lead escalation error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Hot lead escalation: hourly during business hours (weekdays)');
+
   // ── Autonomous Ramp Evaluator (8 AM CT weekdays = 13:00 UTC Mon-Fri) ──
   const { runRampEvaluator } = require('./autonomousRampService');
 
