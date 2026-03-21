@@ -7,7 +7,7 @@ import {
   EntityNode,
 } from '../../../../services/intelligenceApi';
 
-const MAX_GRAPH_NODES = 120;
+const MAX_GRAPH_NODES = 250;
 
 interface SchemaGraphNode {
   id: string;
@@ -283,7 +283,7 @@ export default function SchemaExplorerTab({ network, onRefresh }: Props) {
     );
   }
 
-  const useGraph = viewMode === 'graph' && network.nodes.length <= MAX_GRAPH_NODES && !search;
+  const useGraph = viewMode === 'graph' && filteredNodes.length <= MAX_GRAPH_NODES;
 
   return (
     <div className="d-flex flex-column h-100">
@@ -332,7 +332,7 @@ export default function SchemaExplorerTab({ network, onRefresh }: Props) {
       <div className="flex-grow-1" style={{ overflowY: useGraph ? 'hidden' : 'auto', minHeight: 0 }}>
         {useGraph ? (
           <SchemaForceGraph
-            nodes={network.nodes}
+            nodes={filteredNodes}
             edges={network.edges}
             onNodeClick={handleNodeClick}
           />
