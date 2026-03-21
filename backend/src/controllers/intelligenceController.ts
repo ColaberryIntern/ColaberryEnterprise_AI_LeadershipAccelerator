@@ -258,7 +258,11 @@ export async function handleGetRiskEntities(req: Request, res: Response, next: N
 export async function handleGetEntityCharts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getEntityCharts } = await import('../intelligence/services/analyticsService');
-    const data = await getEntityCharts(req.query.entity_type as string | undefined, req.query.entity_name as string | undefined);
+    // Accept KPI data from POST body or fall back to query params
+    const entityType = (req.body?.entity_type || req.query.entity_type) as string | undefined;
+    const entityName = (req.body?.entity_name || req.query.entity_name) as string | undefined;
+    const kpis = req.body?.kpis || undefined;
+    const data = await getEntityCharts(entityType, entityName, kpis);
     res.json(data);
   } catch (error) { next(error); }
 }

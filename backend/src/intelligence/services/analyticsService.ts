@@ -1221,11 +1221,15 @@ interface ChartSpec {
   config: Record<string, any>;
 }
 
-export async function getEntityCharts(entityType?: string, entityName?: string): Promise<ChartSpec[]> {
+export async function getEntityCharts(
+  entityType?: string,
+  entityName?: string,
+  kpis?: Record<string, any>,
+): Promise<ChartSpec[]> {
   const resolved = resolveEntityType(entityType, entityName);
   const generator = CHART_GENERATORS[resolved] || CHART_GENERATORS['global'];
   try {
-    const charts = await generator();
+    const charts = await generator(kpis || {});
     // Filter out empty charts
     return charts.filter((c) => c.data && c.data.length > 0);
   } catch {
@@ -1241,7 +1245,17 @@ function resolveEntityType(entityType?: string, entityName?: string): string {
   return entityType || 'global';
 }
 
-const CHART_GENERATORS: Record<string, () => Promise<ChartSpec[]>> = {
+/** Helper: enrich chart title with actual KPI value when available */
+function kpiTitle(base: string, kpis: Record<string, any>, key: string, fmt?: (v: any) => string): string {
+  const kpi = kpis[key];
+  if (!kpi) return base;
+  const val = kpi.score ?? kpi.count ?? kpi.value ?? kpi.count_24h;
+  if (val === undefined || val === null) return base;
+  const label = fmt ? fmt(val) : String(val);
+  return `${base} (${label})`;
+}
+
+const CHART_GENERATORS: Record<string, (kpis: Record<string, any>) => Promise<ChartSpec[]>> = {
   global: generateGlobalCharts,
   campaigns: generateCampaignCharts,
   leads: generateLeadCharts,
@@ -1254,7 +1268,7 @@ const CHART_GENERATORS: Record<string, () => Promise<ChartSpec[]>> = {
 };
 
 // ── Global Charts ─────────────────────────────────────────────────────────────
-async function generateGlobalCharts(): Promise<ChartSpec[]> {
+async function generateGlobalCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [processWeekly, agentStatus, campaignHealth] = await Promise.all([
     safeQuery<{ week: string; count: string }>(`
       SELECT date_trunc('week', created_at)::date AS week, COUNT(*)::text AS count
@@ -1299,7 +1313,7 @@ async function generateGlobalCharts(): Promise<ChartSpec[]> {
 }
 
 // ── Campaign Charts ───────────────────────────────────────────────────────────
-async function generateCampaignCharts(): Promise<ChartSpec[]> {
+async function generateCampaignCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [healthTrend, leadsByCampaign, errorBreakdown, campaignRadar] = await Promise.all([
     safeQuery<{ day: string; avg_health: string; campaigns: string }>(`
       SELECT date_trunc('day', created_at)::date AS day,
@@ -1328,16 +1342,20 @@ async function generateCampaignCharts(): Promise<ChartSpec[]> {
       WHERE c.status = 'active' LIMIT 6`),
   ]);
 
+  const healthScore = kpis.system_health?.score;
+  const alertCount = kpis.active_alerts?.count;
+  const leadTrend = kpis.lead_trend?.value;
+
   return [
     {
       chart_type: 'line',
-      title: 'Campaign Health Trend (14 Days)',
+      title: healthScore !== undefined ? `Health Trend — currently ${healthScore}%` : 'Campaign Health Trend (14 Days)',
       data: healthTrend.map((d) => ({ day: d.day, health: Number(d.avg_health), campaigns: Number(d.campaigns) })),
       config: { x_axis: 'day', y_axes: ['health', 'campaigns'] },
     },
     {
       chart_type: 'bar',
-      title: 'Leads by Campaign',
+      title: leadTrend ? `Leads by Campaign — ${leadTrend} total` : 'Leads by Campaign',
       data: leadsByCampaign.map((d) => ({
         campaign: d.campaign.length > 18 ? d.campaign.slice(0, 18) + '…' : d.campaign,
         leads: Number(d.leads),
@@ -1347,7 +1365,7 @@ async function generateCampaignCharts(): Promise<ChartSpec[]> {
     },
     {
       chart_type: 'waterfall',
-      title: 'Error Breakdown (7 Days)',
+      title: alertCount ? `Error Breakdown — ${alertCount} alerts` : 'Error Breakdown (7 Days)',
       data: errorBreakdown.map((d) => ({ category: d.component, value: Number(d.count) })),
       config: { label_key: 'category', value_key: 'value' },
     },
@@ -1367,7 +1385,7 @@ async function generateCampaignCharts(): Promise<ChartSpec[]> {
 }
 
 // ── Lead Charts ───────────────────────────────────────────────────────────────
-async function generateLeadCharts(): Promise<ChartSpec[]> {
+async function generateLeadCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [leadWeekly, byTemp, byStage, conversionFunnel] = await Promise.all([
     safeQuery<{ week: string; new_leads: string; total: string }>(`
       SELECT date_trunc('week', created_at)::date AS week,
@@ -1418,7 +1436,7 @@ async function generateLeadCharts(): Promise<ChartSpec[]> {
 }
 
 // ── Student Charts ────────────────────────────────────────────────────────────
-async function generateStudentCharts(): Promise<ChartSpec[]> {
+async function generateStudentCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [enrollmentTrend, byCohort, completionRadar] = await Promise.all([
     safeQuery<{ week: string; enrollments: string }>(`
       SELECT date_trunc('week', created_at)::date AS week, COUNT(*)::text AS enrollments
@@ -1460,7 +1478,7 @@ async function generateStudentCharts(): Promise<ChartSpec[]> {
 }
 
 // ── Agent Charts ──────────────────────────────────────────────────────────────
-async function generateAgentCharts(): Promise<ChartSpec[]> {
+async function generateAgentCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [execDaily, topAgents, agentRadar, errorTrend] = await Promise.all([
     safeQuery<{ day: string; executions: string; errors: string }>(`
       SELECT date_trunc('day', created_at)::date AS day,
@@ -1527,7 +1545,7 @@ async function generateAgentCharts(): Promise<ChartSpec[]> {
 }
 
 // ── Visitor Charts ────────────────────────────────────────────────────────────
-async function generateVisitorCharts(): Promise<ChartSpec[]> {
+async function generateVisitorCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [sessionDaily, utmSources, pageBreakdown, bounceBySource, visitorFunnel] = await Promise.all([
     safeQuery<{ day: string; sessions: string; visitors: string; pageviews: string }>(`
       SELECT date_trunc('day', vs.started_at)::date AS day,
@@ -1563,10 +1581,16 @@ async function generateVisitorCharts(): Promise<ChartSpec[]> {
       UNION ALL SELECT 'With Lead', COUNT(*)::text FROM visitor_sessions WHERE lead_id IS NOT NULL`),
   ]);
 
+  // Use KPI values to contextualize chart titles
+  const bounceKpi = kpis.risk_level?.score;
+  const sessionsKpi = kpis.lead_trend?.value;
+  const convKpi = kpis.system_health?.score;
+  const pvKpi = kpis.process_activity?.count_24h;
+
   return [
     {
       chart_type: 'line',
-      title: 'Visitor Sessions & Pageviews (14 Days)',
+      title: sessionsKpi ? `Sessions Trend — ${sessionsKpi} this week` : 'Visitor Sessions & Pageviews (14 Days)',
       data: sessionDaily.map((d) => ({ day: d.day, sessions: Number(d.sessions), visitors: Number(d.visitors), pageviews: Number(d.pageviews) })),
       config: { x_axis: 'day', y_axes: ['sessions', 'visitors', 'pageviews'] },
     },
@@ -1583,19 +1607,19 @@ async function generateVisitorCharts(): Promise<ChartSpec[]> {
     },
     {
       chart_type: 'waterfall',
-      title: 'Visitor Conversion Funnel',
+      title: convKpi !== undefined ? `Conversion Funnel — ${convKpi}% rate` : 'Visitor Conversion Funnel',
       data: visitorFunnel.map((d) => ({ category: d.step, value: Number(d.value) })),
       config: { label_key: 'category', value_key: 'value' },
     },
     {
       chart_type: 'bar',
-      title: 'Bounce Rate by Source',
+      title: bounceKpi !== undefined ? `Bounce Rate by Source — ${bounceKpi}% overall` : 'Bounce Rate by Source',
       data: bounceBySource.map((d) => ({ source: d.source, bounce_rate: Number(d.bounce_rate), sessions: Number(d.sessions) })),
       config: { x_axis: 'source', bars: ['bounce_rate', 'sessions'] },
     },
     {
       chart_type: 'bar',
-      title: 'Top Pages by Views (7 Days)',
+      title: pvKpi ? `Top Pages — ${pvKpi.toLocaleString()} total pageviews` : 'Top Pages by Views (7 Days)',
       data: pageBreakdown.map((d) => ({
         page: d.page.length > 25 ? '…' + d.page.slice(-22) : d.page,
         views: Number(d.views),
@@ -1606,7 +1630,7 @@ async function generateVisitorCharts(): Promise<ChartSpec[]> {
 }
 
 // ── Cohort Charts ─────────────────────────────────────────────────────────────
-async function generateCohortCharts(): Promise<ChartSpec[]> {
+async function generateCohortCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [cohortOverview, enrollmentTrend, cohortRadar] = await Promise.all([
     safeQuery<{ cohort: string; enrolled: string; active: string; completed: string }>(`
       SELECT c.name AS cohort,
@@ -1655,7 +1679,7 @@ async function generateCohortCharts(): Promise<ChartSpec[]> {
 }
 
 // ── Curriculum Charts ─────────────────────────────────────────────────────────
-async function generateCurriculumCharts(): Promise<ChartSpec[]> {
+async function generateCurriculumCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [moduleBreakdown, publishStatus, contentWaterfall] = await Promise.all([
     safeQuery<{ module: string; lessons: string; sections: string }>(`
       SELECT m.title AS module,
@@ -1707,7 +1731,7 @@ async function generateCurriculumCharts(): Promise<ChartSpec[]> {
 }
 
 // ── System Charts ─────────────────────────────────────────────────────────────
-async function generateSystemCharts(): Promise<ChartSpec[]> {
+async function generateSystemCharts(kpis: Record<string, any>): Promise<ChartSpec[]> {
   const [processDaily, emailStatus, errorModules, systemRadar] = await Promise.all([
     safeQuery<{ day: string; processes: string; errors: string }>(`
       SELECT date_trunc('day', created_at)::date AS day,

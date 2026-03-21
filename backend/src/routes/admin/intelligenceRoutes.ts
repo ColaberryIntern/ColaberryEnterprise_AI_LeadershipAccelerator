@@ -58,6 +58,7 @@ router.get('/api/admin/intelligence/kpis', requireAdmin, handleGetKPIs);
 router.get('/api/admin/intelligence/anomalies', requireAdmin, handleGetAnomalies);
 router.get('/api/admin/intelligence/forecasts', requireAdmin, handleGetForecasts);
 router.get('/api/admin/intelligence/risk-entities', requireAdmin, handleGetRiskEntities);
+router.post('/api/admin/intelligence/entity-charts', requireAdmin, handleGetEntityCharts);
 router.get('/api/admin/intelligence/entity-charts', requireAdmin, handleGetEntityCharts);
 
 // Business Hierarchy

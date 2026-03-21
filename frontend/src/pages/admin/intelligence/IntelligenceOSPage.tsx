@@ -1669,7 +1669,7 @@ function IntelligenceOSContent() {
   }, [loadNetwork]);
 
   // Unified scoped data loader — reloads ALL analytics + executive summary
-  const loadScopedAnalytics = useCallback((entityType?: string, entityName?: string) => {
+  const loadScopedAnalytics = useCallback(async (entityType?: string, entityName?: string) => {
     const params = entityType ? { entity_type: entityType, entity_name: entityName } : undefined;
     console.log('[Intelligence OS] Loading analytics for scope:', entityType || 'global');
 
@@ -1678,58 +1678,66 @@ function IntelligenceOSContent() {
     setIsProcessing(true);
     setVisualizations([]); // Clear stale charts before loading new entity
 
-    // Fetch all 7 data sources with entity scope
-    Promise.all([
-      getKPIs(params).then((r) => setKpis(r.data)).catch(() => {}),
-      getAnomalies(params).then((r) => setAnomalies(r.data || [])).catch(() => {}),
-      getForecasts(params).then((r) => setForecasts(r.data)).catch(() => {}),
-      getRiskEntities(params).then((r) => setRiskEntities(r.data || [])).catch(() => {}),
-      // Entity-specific KPI-driven charts (primary source when entity is scoped)
-      getEntityCharts(params).then((r) => {
-        const charts = r.data;
+    try {
+      // ── Phase 1: Load KPIs + other data in parallel (no charts yet) ──
+      let kpiData: Record<string, any> = {};
+      await Promise.all([
+        getKPIs(params).then((r) => { kpiData = r.data; setKpis(r.data); }).catch(() => {}),
+        getAnomalies(params).then((r) => setAnomalies(r.data || [])).catch(() => {}),
+        getForecasts(params).then((r) => setForecasts(r.data)).catch(() => {}),
+        getRiskEntities(params).then((r) => setRiskEntities(r.data || [])).catch(() => {}),
+        getExecutiveSummary(params).then((r) => {
+          const data = r.data;
+          if (data.narrative) setInsights(data);
+          if (data.data) setSummary(data.data);
+        }).catch(() => {}),
+        getRankedInsights(params).then((r) => {
+          const data = r.data;
+          const pipelineIns = data.data?.insights;
+          if (Array.isArray(pipelineIns) && pipelineIns.length > 0) {
+            setAutoInsights(pipelineIns
+              .filter((i: any) => (i.message || '').trim().length > 5)
+              .slice(0, 6)
+              .map((i: any) => ({
+                title: i.message || '',
+                severity: i.severity || 'info',
+                metric_value: i.value,
+                description: i.message || '',
+                trend: i.severity === 'warning' ? 'down' : 'stable',
+              }))
+            );
+          } else if (data.follow_ups?.length) {
+            setAutoInsights(data.follow_ups.slice(0, 6).map((f: string) => ({
+              title: f,
+              severity: 'info',
+              description: f,
+              trend: 'stable',
+            })));
+          }
+        }).catch(() => {}),
+      ]);
+
+      // ── Phase 2: Build charts from KPI results ──
+      console.log('[Intelligence OS] KPIs loaded, building KPI-driven charts...');
+      try {
+        const chartRes = await getEntityCharts({
+          entity_type: entityType,
+          entity_name: entityName,
+          kpis: kpiData,
+        });
+        const charts = chartRes.data;
         if (Array.isArray(charts) && charts.length > 0) {
           setVisualizations(charts);
         }
-      }).catch(() => {}),
-      getExecutiveSummary(params).then((r) => {
-        const data = r.data;
-        if (data.narrative) setInsights(data);
-        // Only use executive summary charts if no entity charts loaded
-        if (data.visualizations?.length) {
-          setVisualizations((prev: any) => (prev && prev.length > 0) ? prev : data.visualizations);
-        }
-        if (data.data) setSummary(data.data);
-      }).catch(() => {}),
-      getRankedInsights(params).then((r) => {
-        const data = r.data;
-        const pipelineIns = data.data?.insights;
-        if (Array.isArray(pipelineIns) && pipelineIns.length > 0) {
-          setAutoInsights(pipelineIns
-            .filter((i: any) => (i.message || '').trim().length > 5)
-            .slice(0, 6)
-            .map((i: any) => ({
-              title: i.message || '',
-              severity: i.severity || 'info',
-              metric_value: i.value,
-              description: i.message || '',
-              trend: i.severity === 'warning' ? 'down' : 'stable',
-            }))
-          );
-        } else if (data.follow_ups?.length) {
-          setAutoInsights(data.follow_ups.slice(0, 6).map((f: string) => ({
-            title: f,
-            severity: 'info',
-            description: f,
-            trend: 'stable',
-          })));
-        }
-      }).catch(() => {}),
-    ]).finally(() => {
+      } catch {
+        // Charts failed — leave empty, KPIs still visible
+      }
+    } finally {
       setAnalyticsLoading(false);
       setSummaryLoading(false);
       setIsProcessing(false);
       setLastRefresh(new Date().toLocaleString());
-    });
+    }
   }, []);
 
   // Scope-aware reload: when entity is selected or reset to global

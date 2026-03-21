@@ -168,8 +168,8 @@ export const getKPIs = (params?: { entity_type?: string; entity_name?: string })
 export const getAnomalies = (params?: { entity_type?: string; entity_name?: string }) => api.get('/anomalies', { params });
 export const getForecasts = (params?: { entity_type?: string; entity_name?: string }) => api.get('/forecasts', { params });
 export const getRiskEntities = (params?: { entity_type?: string; entity_name?: string }) => api.get('/risk-entities', { params });
-export const getEntityCharts = (params?: { entity_type?: string; entity_name?: string }) =>
-  api.get<Array<{ chart_type: string; title: string; data: Record<string, any>[]; config: Record<string, any> }>>('/entity-charts', { params });
+export const getEntityCharts = (body?: { entity_type?: string; entity_name?: string; kpis?: Record<string, any> }) =>
+  api.post<Array<{ chart_type: string; title: string; data: Record<string, any>[]; config: Record<string, any> }>>('/entity-charts', body || {});
 
 // Business Hierarchy
 export interface BusinessCategory {
