@@ -516,12 +516,29 @@ async function processScheduledActions(): Promise<void> {
 
   console.log(`[Scheduler] Processing ${pendingActions.length} scheduled actions (${processorId})`);
 
+  // Interleave actions across campaigns to spread API load
+  // Instead of [A,A,A,B,B,B] process as [A,B,A,B,A,B]
+  const byCampaign: Record<string, typeof pendingActions> = {};
+  for (const a of pendingActions) {
+    const cid = a.campaign_id || '_none_';
+    (byCampaign[cid] = byCampaign[cid] || []).push(a);
+  }
+  const interleaved: typeof pendingActions = [];
+  const queues = Object.values(byCampaign);
+  let maxLen = 0;
+  for (const q of queues) if (q.length > maxLen) maxLen = q.length;
+  for (let i = 0; i < maxLen; i++) {
+    for (const q of queues) {
+      if (i < q.length) interleaved.push(q[i]);
+    }
+  }
+
   // Group actions by campaign and apply per-campaign pacing
   const campaignCache: Record<string, any> = {};
   const campaignProcessed: Record<string, number> = {};
   const dailyCallCount: Record<string, number> = {};
 
-  for (const action of pendingActions) {
+  for (const action of interleaved) {
     const channel = (action.channel || 'email') as CampaignChannel;
     const campaignId = action.campaign_id || '_none_';
 
@@ -700,13 +717,22 @@ async function processScheduledActions(): Promise<void> {
         }
       } catch (err: any) {
         console.error(`[Scheduler] Failed to schedule next step for action ${action.id}:`, err.message);
+        // Track failure in settings for health monitor visibility
+        try {
+          const { getSetting, setSetting } = require('./settingsService');
+          const count = parseInt(await getSetting('schedule_next_step_failures') || '0', 10);
+          await setSetting('schedule_next_step_failures', String(count + 1));
+        } catch { /* non-blocking */ }
       }
 
       campaignProcessed[campaignId]++;
 
-      // Pacing delay between sends
+      // Base delay between ALL actions (prevents API call stacking across campaigns)
+      await new Promise((r) => setTimeout(r, 5000));
+
+      // Additional per-campaign pacing delay
       const delayMs = (campaignSettings.delay_between_sends || 0) * 1000;
-      if (delayMs > 0 && delayMs <= 180000) {
+      if (delayMs > 5000 && delayMs <= 180000) {
         await new Promise((r) => setTimeout(r, delayMs));
       }
     } catch (error: any) {

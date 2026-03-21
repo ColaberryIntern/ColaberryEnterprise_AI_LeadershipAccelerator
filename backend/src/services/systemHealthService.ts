@@ -135,7 +135,7 @@ async function checkSequenceProgression(checks: HealthCheck[]): Promise<void> {
       SELECT se.id, se.lead_id, se.campaign_id, se.sequence_id, se.step_index, se.sent_at
       FROM scheduled_emails se
       WHERE se.status = 'sent'
-        AND se.sent_at < NOW() - INTERVAL '4 hours'
+        AND se.sent_at < NOW() - INTERVAL '30 minutes'
         AND se.sent_at > NOW() - INTERVAL '7 days'
         AND se.sequence_id IS NOT NULL
         AND NOT EXISTS (
