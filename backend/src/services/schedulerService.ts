@@ -1563,13 +1563,12 @@ export function startScheduler(): void {
   console.log('[Scheduler] Alumni: lifecycle processor daily at 6 AM CT (11 UTC)');
 
   // ── Hot Lead Escalation (hourly during business hours, weekdays) ────────
-  // Detects leads with 2+ email opens or any click, enrolls them in
-  // Executive Briefing Interest Campaign for personal follow-up
-  cron.schedule('30 13-22 * * 1-5', () => { // 8:30AM-5:30PM CT (13:30-22:30 UTC)
+  // Detects leads with 2+ email opens or any click, triggers a one-off
+  // Cory voice call + marks lead_temperature = 'hot'. Does NOT change
+  // campaign enrollment (leads stay in Cold Outbound / Alumni Champion).
+  cron.schedule('30 14-22 * * 1-5', () => { // 9:30AM-5:30PM CT
     instrumentCronJob('HotLeadEscalation', async () => {
-      const execBriefingCampaignId = '45a7e4e3-b9e4-4ab9-bd12-d34279e8a083';
-
-      // Find hot leads not already in escalation campaign
+      // Find hot leads who haven't been called yet
       const [hotLeads] = await sequelize.query(`
         SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone
         FROM (
@@ -1580,41 +1579,97 @@ export function startScheduler(): void {
           SELECT DISTINCT lead_id FROM interaction_outcomes WHERE outcome = 'clicked'
         ) sub
         JOIN leads l ON l.id = sub.lead_id
-        WHERE NOT EXISTS (
-          SELECT 1 FROM campaign_leads cl
-          WHERE cl.lead_id = sub.lead_id
-          AND cl.campaign_id = :campaignId
-        )
-      `, { replacements: { campaignId: execBriefingCampaignId } });
+        WHERE l.lead_temperature IS DISTINCT FROM 'hot'
+          AND l.phone IS NOT NULL
+          AND l.phone != ''
+          AND NOT EXISTS (
+            SELECT 1 FROM communication_logs cl
+            WHERE cl.lead_id = sub.lead_id
+            AND cl.channel = 'voice'
+            AND cl.metadata->>'trigger' = 'hot_lead_escalation'
+          )
+        LIMIT 5
+      `);
 
       if ((hotLeads as any[]).length === 0) return;
 
-      console.log(`[HotLead] Found ${(hotLeads as any[]).length} new hot leads to escalate`);
+      console.log(`[HotLead] Found ${(hotLeads as any[]).length} hot leads for Cory outreach`);
 
-      // Enroll each in Executive Briefing Interest Campaign
-      const { enrollLeadInSequence } = require('./sequenceService');
-      let enrolled = 0;
+      const { triggerVoiceCall } = require('./synthflowService');
+      const { logCommunication } = require('./communicationLogService');
+      const Lead = require('../models').Lead;
+
+      let called = 0;
       for (const lead of hotLeads as any[]) {
         try {
-          await enrollLeadInSequence(lead.lead_id, execBriefingCampaignId);
-          enrolled++;
-          console.log(`[HotLead] Escalated ${lead.name} (${lead.email}) — enrolled in Executive Briefing`);
-        } catch (err: any) {
-          // Skip if already enrolled or other error
-          if (!err.message?.includes('already enrolled')) {
-            console.warn(`[HotLead] Failed to escalate ${lead.email}: ${err.message}`);
+          // Mark lead as hot
+          await Lead.update(
+            { lead_temperature: 'hot' },
+            { where: { id: lead.lead_id } },
+          );
+
+          // Trigger Cory voice call
+          const prompt = [
+            'You are Maya, the AI Admissions Director for the Colaberry Enterprise AI Leadership Accelerator.',
+            `You are calling ${lead.name} because they have shown strong interest in our program — they opened multiple emails and engaged with our content.`,
+            'Be warm, conversational, and professional. Start by saying "Hi ' + lead.name.split(' ')[0] + ', this is Maya from Colaberry Enterprise AI. I noticed you\'ve been checking out our AI Leadership Accelerator program and wanted to reach out personally."',
+            '',
+            'Key talking points:',
+            '- The program helps data professionals and leaders build and deploy real AI systems in 3 weeks',
+            '- Next cohort starts April 14th with limited seats',
+            '- It is a corporate training that companies can sponsor for their teams',
+            '- Ask what their current role is and what interests them about AI systems',
+            '- If interested, offer to book a strategy call with Ali, the program director',
+            '',
+            'If they are not interested, thank them for their time. If they have questions, answer based on what you know.',
+            'Keep the call under 3 minutes unless they want to talk more.',
+          ].join('\n');
+
+          const result = await triggerVoiceCall({
+            name: lead.name,
+            phone: lead.phone,
+            callType: 'interest',
+            prompt,
+            context: {
+              lead_name: lead.name,
+              lead_email: lead.email,
+              step_goal: 'Hot lead outreach — gauge interest and offer strategy call',
+            },
+          });
+
+          if (result.success && !result.data?.skipped) {
+            called++;
+            // Log the call
+            await logCommunication({
+              lead_id: lead.lead_id,
+              channel: 'voice',
+              direction: 'outbound',
+              delivery_mode: 'live',
+              status: 'sent',
+              to_address: lead.phone,
+              subject: 'Hot lead interest call',
+              provider: 'synthflow',
+              provider_message_id: result.data?.call_id || null,
+              metadata: { trigger: 'hot_lead_escalation', lead_temperature: 'hot' },
+            }).catch(() => {});
+            console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
           }
+        } catch (err: any) {
+          console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
         }
+
+        // 30s between calls to avoid Synthflow rate limits
+        await new Promise((r) => setTimeout(r, 30000));
       }
 
-      if (enrolled > 0) {
-        console.log(`[HotLead] Escalated ${enrolled} hot leads to Executive Briefing campaign`);
+      if (called > 0) {
+        console.log(`[HotLead] Made ${called} outreach calls to hot leads`);
       }
     }).catch((err: any) => {
       console.error('[Scheduler] Hot lead escalation error:', err.message);
     });
   });
-  console.log('[Scheduler] Hot lead escalation: hourly during business hours (weekdays)');
+  console.log('[Scheduler] Hot lead escalation: hourly during business hours (Cory voice call to engaged leads)');
 
   // ── Autonomous Ramp Evaluator (8 AM CT weekdays = 13:00 UTC Mon-Fri) ──
   const { runRampEvaluator } = require('./autonomousRampService');
