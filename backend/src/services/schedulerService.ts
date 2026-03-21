@@ -1569,8 +1569,10 @@ export function startScheduler(): void {
   cron.schedule('30 14-22 * * 1-5', () => { // 9:30AM-5:30PM CT
     instrumentCronJob('HotLeadEscalation', async () => {
       // Find hot leads who haven't been called yet
+      // Find hot leads with their active campaign, who haven't been called yet
       const [hotLeads] = await sequelize.query(`
-        SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone
+        SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone,
+          cl_camp.campaign_id as active_campaign_id, c.name as campaign_name
         FROM (
           SELECT lead_id FROM interaction_outcomes
           WHERE outcome = 'opened'
@@ -1579,14 +1581,14 @@ export function startScheduler(): void {
           SELECT DISTINCT lead_id FROM interaction_outcomes WHERE outcome = 'clicked'
         ) sub
         JOIN leads l ON l.id = sub.lead_id
+        LEFT JOIN campaign_leads cl_camp ON cl_camp.lead_id = sub.lead_id AND cl_camp.status = 'active'
+        LEFT JOIN campaigns c ON c.id = cl_camp.campaign_id
         WHERE l.lead_temperature IS DISTINCT FROM 'hot'
-          AND l.phone IS NOT NULL
-          AND l.phone != ''
           AND NOT EXISTS (
-            SELECT 1 FROM communication_logs cl
-            WHERE cl.lead_id = sub.lead_id
-            AND cl.channel = 'voice'
-            AND cl.metadata->>'trigger' = 'hot_lead_escalation'
+            SELECT 1 FROM communication_logs comm
+            WHERE comm.lead_id = sub.lead_id
+            AND comm.channel = 'voice'
+            AND comm.metadata->>'trigger' = 'hot_lead_escalation'
           )
         LIMIT 5
       `);
@@ -1608,20 +1610,31 @@ export function startScheduler(): void {
             { where: { id: lead.lead_id } },
           );
 
-          // Trigger Cory voice call
+          // Skip voice call if no phone — still mark as hot
+          if (!lead.phone) {
+            console.log(`[HotLead] Marked ${lead.name} as hot (no phone — email-only lead)`);
+            continue;
+          }
+
+          // Trigger Cory voice call — pitch to book a call with BD team
+          const firstName = (lead.name || '').split(' ')[0];
           const prompt = [
             'You are Maya, the AI Admissions Director for the Colaberry Enterprise AI Leadership Accelerator.',
-            `You are calling ${lead.name} because they have shown strong interest in our program — they opened multiple emails and engaged with our content.`,
-            'Be warm, conversational, and professional. Start by saying "Hi ' + lead.name.split(' ')[0] + ', this is Maya from Colaberry Enterprise AI. I noticed you\'ve been checking out our AI Leadership Accelerator program and wanted to reach out personally."',
+            `You are calling ${lead.name} because they showed interest in our content about building AI systems.`,
+            `Be warm, conversational, and professional. Start by saying "Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I saw that you showed some interest in our content about building AI systems and I wanted to reach out personally to see if I can answer any questions."`,
+            '',
+            'Your goal is to schedule a call between them and our Business Development team.',
             '',
             'Key talking points:',
+            '- You noticed they engaged with our content about AI systems and leadership',
+            '- Ask what caught their attention or what challenges they are facing with AI',
             '- The program helps data professionals and leaders build and deploy real AI systems in 3 weeks',
-            '- Next cohort starts April 14th with limited seats',
-            '- It is a corporate training that companies can sponsor for their teams',
-            '- Ask what their current role is and what interests them about AI systems',
-            '- If interested, offer to book a strategy call with Ali, the program director',
+            '- Next cohort starts April 14th with limited seats available',
+            '- Companies can sponsor their teams for corporate training',
+            '- Offer to schedule a 15-minute call with our Business Development team to discuss fit and answer questions',
             '',
-            'If they are not interested, thank them for their time. If they have questions, answer based on what you know.',
+            'If they want to schedule, say you will send them a link to book a time that works for them.',
+            'If they are not interested right now, thank them and let them know they can reach out anytime.',
             'Keep the call under 3 minutes unless they want to talk more.',
           ].join('\n');
 
@@ -1639,18 +1652,24 @@ export function startScheduler(): void {
 
           if (result.success && !result.data?.skipped) {
             called++;
-            // Log the call
+            // Log the call under the lead's active campaign
             await logCommunication({
               lead_id: lead.lead_id,
+              campaign_id: lead.active_campaign_id || null,
               channel: 'voice',
               direction: 'outbound',
               delivery_mode: 'live',
               status: 'sent',
               to_address: lead.phone,
-              subject: 'Hot lead interest call',
+              subject: 'Hot lead interest call — schedule BD call',
               provider: 'synthflow',
               provider_message_id: result.data?.call_id || null,
-              metadata: { trigger: 'hot_lead_escalation', lead_temperature: 'hot' },
+              metadata: {
+                trigger: 'hot_lead_escalation',
+                lead_temperature: 'hot',
+                campaign_name: lead.campaign_name || 'unknown',
+                goal: 'Book call with Business Development team',
+              },
             }).catch(() => {});
             console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
           }
