@@ -1554,6 +1554,86 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Campaign evolution engine: every 4 hours');
 
+  // ── Campaign Health Monitor (every 30 min on weekdays during business hours) ──
+  cron.schedule('*/30 * * * 1-5', () => {
+    instrumentCronJob('CampaignHealthMonitor', async () => {
+      const nowCT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+      const hour = nowCT.getHours();
+      if (hour < 8 || hour >= 17) return; // Only during send window
+
+      // 1. Check for stuck-in-processing actions (>10 min old)
+      const stuckCount = await ScheduledEmail.count({
+        where: {
+          status: 'processing',
+          scheduled_for: { [Op.lt]: new Date(Date.now() - 10 * 60 * 1000) },
+        },
+      } as any) as unknown as number;
+      if (stuckCount > 0) {
+        console.warn(`[HealthMonitor] ⚠ ${stuckCount} action(s) stuck in processing for >10 min`);
+      }
+
+      // 2. Check Cold Outbound is active (auto-reactivate if draft)
+      const coldOutbound = await Campaign.findOne({ where: { name: { [Op.like]: '%Cold Outbound%' } } });
+      if (coldOutbound && (coldOutbound as any).status === 'draft') {
+        await (coldOutbound as any).update({ status: 'active' });
+        console.warn(`[HealthMonitor] ⚠ Cold Outbound was in draft — auto-reactivated to active`);
+      }
+
+      // 3. Check if any sends happened in the last hour during business hours
+      const recentSends = await ScheduledEmail.count({
+        where: {
+          status: 'sent',
+          channel: { [Op.ne]: null }, // proxy: sent actions always have a channel
+        },
+      } as any) as unknown as number;
+      // Filter to last hour via raw query for accurate sent_at check
+      const [recentSendRows] = await sequelize.query(
+        `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'sent' AND sent_at >= NOW() - INTERVAL '1 hour'`
+      );
+      const recentSendCount = parseInt((recentSendRows as any)[0]?.cnt || '0', 10);
+
+      const totalPending = await ScheduledEmail.count({
+        where: {
+          status: 'pending',
+          scheduled_for: { [Op.lte]: new Date() },
+        },
+      }) as unknown as number;
+      if (recentSendCount === 0 && totalPending > 0) {
+        console.warn(`[HealthMonitor] ⚠ No sends in last hour but ${totalPending} action(s) are past-due and pending`);
+      }
+
+      // 4. Check for high failure rate in last hour
+      const [recentFailRows] = await sequelize.query(
+        `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'failed' AND updated_at >= NOW() - INTERVAL '1 hour'`
+      );
+      const recentFails = parseInt((recentFailRows as any)[0]?.cnt || '0', 10);
+      if (recentFails > 5) {
+        console.warn(`[HealthMonitor] ⚠ ${recentFails} action(s) failed in the last hour`);
+      }
+
+      if (stuckCount === 0 && recentFails === 0 && (recentSendCount > 0 || totalPending === 0)) {
+        console.log(`[HealthMonitor] ✓ All systems healthy — ${recentSendCount} sent last hour, ${totalPending} pending`);
+      }
+    }).catch((err: any) => {
+      console.error('[Scheduler] Health monitor error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Campaign health monitor: every 30 min (weekdays 8AM-5PM CT)');
+
+  // ── Cold Outbound startup reactivation ──────────────────────────────
+  // Cold Outbound reverts to draft on container restart — fix on startup
+  (async () => {
+    try {
+      const coldOutbound = await Campaign.findOne({ where: { name: { [Op.like]: '%Cold Outbound%' } } });
+      if (coldOutbound && (coldOutbound as any).status === 'draft') {
+        await (coldOutbound as any).update({ status: 'active' });
+        console.log('[Scheduler] Cold Outbound was in draft — auto-reactivated on startup');
+      }
+    } catch (err: any) {
+      console.error('[Scheduler] Cold Outbound startup check failed:', err.message);
+    }
+  })();
+
   // AI Operations Layer scheduler (async — reads schedules from governance DB)
   const { startAIOpsScheduler } = require('./aiOpsScheduler');
   startAIOpsScheduler().catch((err: any) => {
