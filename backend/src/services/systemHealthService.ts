@@ -159,7 +159,7 @@ async function checkSequenceProgression(checks: HealthCheck[]): Promise<void> {
       try {
         const { scheduleNextStep } = require('./sequenceService');
         const ScheduledEmail = require('../models').ScheduledEmail;
-        for (const gap of gaps.slice(0, 50)) { // Cap at 50 to avoid overload
+        for (const gap of gaps.slice(0, 100)) { // Cap at 100 per run to avoid overload
           const completedAction = await ScheduledEmail.findByPk(gap.id);
           if (completedAction) {
             const next = await scheduleNextStep(completedAction);
@@ -314,7 +314,7 @@ async function checkEmailDelivery(checks: HealthCheck[]): Promise<void> {
         COUNT(*) FILTER (WHERE status = 'sent' AND channel = 'email') as email_sent,
         COUNT(*) FILTER (WHERE status = 'failed' AND channel = 'email') as email_failed
       FROM scheduled_emails
-      WHERE updated_at >= NOW() - INTERVAL '2 hours'
+      WHERE created_at >= NOW() - INTERVAL '2 hours'
     `);
     const r = (rows as any)[0] || {};
     const sent = parseInt(r.email_sent || '0', 10);
@@ -421,7 +421,7 @@ async function checkCampaignHealth(checks: HealthCheck[]): Promise<void> {
   try {
     // Stuck-in-processing actions
     const [stuckRows] = await sequelize.query(
-      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'processing' AND updated_at < NOW() - INTERVAL '10 minutes'`
+      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'processing' AND processing_started_at < NOW() - INTERVAL '10 minutes'`
     );
     const stuckCount = parseInt((stuckRows as any)[0]?.cnt || '0', 10);
     if (stuckCount > 0) {
@@ -464,7 +464,7 @@ async function checkCampaignHealth(checks: HealthCheck[]): Promise<void> {
 
     // Failure spike
     const [failRows] = await sequelize.query(
-      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'failed' AND updated_at >= NOW() - INTERVAL '1 hour'`
+      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'failed' AND created_at >= NOW() - INTERVAL '1 hour'`
     );
     const recentFails = parseInt((failRows as any)[0]?.cnt || '0', 10);
     if (recentFails > 5) {
