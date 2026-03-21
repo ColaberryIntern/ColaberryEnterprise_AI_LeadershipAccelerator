@@ -21,6 +21,7 @@ import {
   handleGetBusinessHierarchy,
   handleDataAccessReport,
   handleAssistantQuery,
+  handleGetEntityCharts,
 } from '../../controllers/intelligenceController';
 
 const router = Router();
@@ -57,6 +58,7 @@ router.get('/api/admin/intelligence/kpis', requireAdmin, handleGetKPIs);
 router.get('/api/admin/intelligence/anomalies', requireAdmin, handleGetAnomalies);
 router.get('/api/admin/intelligence/forecasts', requireAdmin, handleGetForecasts);
 router.get('/api/admin/intelligence/risk-entities', requireAdmin, handleGetRiskEntities);
+router.get('/api/admin/intelligence/entity-charts', requireAdmin, handleGetEntityCharts);
 
 // Business Hierarchy
 router.get('/api/admin/intelligence/business-hierarchy', requireAdmin, handleGetBusinessHierarchy);

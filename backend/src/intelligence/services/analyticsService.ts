@@ -1209,3 +1209,560 @@ export async function getRiskEntities(entityType?: string, entityName?: string) 
   const strategy = resolveEntityStrategy(entityType, entityName);
   return strategy.getRiskEntities();
 }
+
+// ─── Entity-Specific Chart Generation ─────────────────────────────────────────
+// Produces KPI-driven, diverse charts for each entity type.
+// Each chart explains a KPI and its key dimension.
+
+interface ChartSpec {
+  chart_type: string;
+  title: string;
+  data: Record<string, any>[];
+  config: Record<string, any>;
+}
+
+export async function getEntityCharts(entityType?: string, entityName?: string): Promise<ChartSpec[]> {
+  const resolved = resolveEntityType(entityType, entityName);
+  const generator = CHART_GENERATORS[resolved] || CHART_GENERATORS['global'];
+  try {
+    const charts = await generator();
+    // Filter out empty charts
+    return charts.filter((c) => c.data && c.data.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function resolveEntityType(entityType?: string, entityName?: string): string {
+  if (entityType === 'department' && entityName) {
+    const slug = entityName.toLowerCase().replace(/\s+/g, '_');
+    return DEPT_ENTITY_MAP[slug] || 'global';
+  }
+  return entityType || 'global';
+}
+
+const CHART_GENERATORS: Record<string, () => Promise<ChartSpec[]>> = {
+  global: generateGlobalCharts,
+  campaigns: generateCampaignCharts,
+  leads: generateLeadCharts,
+  students: generateStudentCharts,
+  agents: generateAgentCharts,
+  visitors: generateVisitorCharts,
+  cohorts: generateCohortCharts,
+  curriculum: generateCurriculumCharts,
+  system: generateSystemCharts,
+};
+
+// ── Global Charts ─────────────────────────────────────────────────────────────
+async function generateGlobalCharts(): Promise<ChartSpec[]> {
+  const [processWeekly, agentStatus, campaignHealth] = await Promise.all([
+    safeQuery<{ week: string; count: string }>(`
+      SELECT date_trunc('week', created_at)::date AS week, COUNT(*)::text AS count
+      FROM system_processes
+      WHERE created_at >= NOW() - INTERVAL '8 weeks'
+      GROUP BY week ORDER BY week`),
+    safeQuery<{ status: string; count: string }>(`
+      SELECT status, COUNT(*)::text AS count FROM ai_agents GROUP BY status ORDER BY count DESC`),
+    safeQuery<{ name: string; health: string; leads: string; errors: string }>(`
+      SELECT c.name, COALESCE(ch.health_score, 0)::text AS health,
+             (SELECT COUNT(*)::text FROM leads l WHERE l.campaign_id = c.id) AS leads,
+             (SELECT COUNT(*)::text FROM campaign_errors ce WHERE ce.campaign_id = c.id) AS errors
+      FROM campaigns c LEFT JOIN campaign_health ch ON ch.campaign_id = c.id
+      WHERE c.status = 'active' ORDER BY c.name LIMIT 10`),
+  ]);
+
+  return [
+    {
+      chart_type: 'line',
+      title: 'System Process Activity (8 Weeks)',
+      data: processWeekly.map((w) => ({ week: w.week, processes: Number(w.count) })),
+      config: { x_axis: 'week', y_axes: ['processes'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Campaign Health Overview',
+      data: campaignHealth.map((c) => ({
+        campaign: c.name.length > 15 ? c.name.slice(0, 15) + '…' : c.name,
+        health: Number(c.health),
+        leads: Number(c.leads),
+        errors: Number(c.errors),
+      })),
+      config: { angle_key: 'campaign', value_keys: ['health', 'leads', 'errors'] },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Agent Fleet Status',
+      data: agentStatus,
+      config: { x_axis: 'status', bars: ['count'] },
+    },
+  ];
+}
+
+// ── Campaign Charts ───────────────────────────────────────────────────────────
+async function generateCampaignCharts(): Promise<ChartSpec[]> {
+  const [healthTrend, leadsByCampaign, errorBreakdown, campaignRadar] = await Promise.all([
+    safeQuery<{ day: string; avg_health: string; campaigns: string }>(`
+      SELECT date_trunc('day', recorded_at)::date AS day,
+             ROUND(AVG(health_score))::text AS avg_health,
+             COUNT(DISTINCT campaign_id)::text AS campaigns
+      FROM campaign_health
+      WHERE recorded_at >= NOW() - INTERVAL '14 days'
+      GROUP BY day ORDER BY day`),
+    safeQuery<{ campaign: string; leads: string; converted: string }>(`
+      SELECT c.name AS campaign, COUNT(l.id)::text AS leads,
+             COUNT(CASE WHEN l.temperature = 'hot' THEN 1 END)::text AS converted
+      FROM campaigns c LEFT JOIN leads l ON l.campaign_id = c.id
+      WHERE c.status = 'active' GROUP BY c.name ORDER BY leads DESC LIMIT 8`),
+    safeQuery<{ error_type: string; count: string }>(`
+      SELECT error_type, COUNT(*)::text AS count
+      FROM campaign_errors
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY error_type ORDER BY count DESC LIMIT 8`),
+    safeQuery<{ campaign: string; health: string; lead_count: string; error_count: string; email_count: string }>(`
+      SELECT c.name AS campaign,
+             COALESCE(ch.health_score, 50)::text AS health,
+             (SELECT COUNT(*) FROM leads l WHERE l.campaign_id = c.id)::text AS lead_count,
+             (SELECT COUNT(*) FROM campaign_errors ce WHERE ce.campaign_id = c.id)::text AS error_count,
+             (SELECT COUNT(*) FROM scheduled_emails se WHERE se.campaign_id = c.id)::text AS email_count
+      FROM campaigns c LEFT JOIN campaign_health ch ON ch.campaign_id = c.id
+      WHERE c.status = 'active' LIMIT 6`),
+  ]);
+
+  return [
+    {
+      chart_type: 'line',
+      title: 'Campaign Health Trend (14 Days)',
+      data: healthTrend.map((d) => ({ day: d.day, health: Number(d.avg_health), campaigns: Number(d.campaigns) })),
+      config: { x_axis: 'day', y_axes: ['health', 'campaigns'] },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Leads by Campaign',
+      data: leadsByCampaign.map((d) => ({
+        campaign: d.campaign.length > 18 ? d.campaign.slice(0, 18) + '…' : d.campaign,
+        leads: Number(d.leads),
+        hot: Number(d.converted),
+      })),
+      config: { x_axis: 'campaign', bars: ['leads', 'hot'] },
+    },
+    {
+      chart_type: 'waterfall',
+      title: 'Error Breakdown (7 Days)',
+      data: errorBreakdown.map((d) => ({ category: d.error_type, value: Number(d.count) })),
+      config: { label_key: 'category', value_key: 'value' },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Campaign Performance Comparison',
+      data: campaignRadar.map((d) => ({
+        campaign: d.campaign.length > 12 ? d.campaign.slice(0, 12) + '…' : d.campaign,
+        health: Number(d.health),
+        leads: Number(d.lead_count),
+        errors: Number(d.error_count),
+        emails: Number(d.email_count),
+      })),
+      config: { angle_key: 'campaign', value_keys: ['health', 'leads', 'errors', 'emails'] },
+    },
+  ];
+}
+
+// ── Lead Charts ───────────────────────────────────────────────────────────────
+async function generateLeadCharts(): Promise<ChartSpec[]> {
+  const [leadWeekly, byTemp, byStage, conversionFunnel] = await Promise.all([
+    safeQuery<{ week: string; new_leads: string; total: string }>(`
+      SELECT date_trunc('week', created_at)::date AS week,
+             COUNT(*)::text AS new_leads,
+             SUM(COUNT(*)) OVER (ORDER BY date_trunc('week', created_at))::text AS total
+      FROM leads WHERE created_at >= NOW() - INTERVAL '8 weeks'
+      GROUP BY week ORDER BY week`),
+    safeQuery<{ temperature: string; count: string }>(`
+      SELECT COALESCE(temperature, 'unknown') AS temperature, COUNT(*)::text AS count
+      FROM leads GROUP BY temperature ORDER BY count DESC`),
+    safeQuery<{ stage: string; count: string }>(`
+      SELECT COALESCE(stage, 'new') AS stage, COUNT(*)::text AS count
+      FROM leads GROUP BY stage ORDER BY count DESC LIMIT 8`),
+    safeQuery<{ step: string; value: string }>(`
+      SELECT 'Total Leads' AS step, COUNT(*)::text AS value FROM leads
+      UNION ALL SELECT 'With Email', COUNT(*)::text FROM leads WHERE email IS NOT NULL
+      UNION ALL SELECT 'With Activity', COUNT(DISTINCT lead_id)::text FROM activities
+      UNION ALL SELECT 'Hot Leads', COUNT(*)::text FROM leads WHERE temperature = 'hot'
+      UNION ALL SELECT 'Converted', COUNT(*)::text FROM leads WHERE stage = 'converted'`),
+  ]);
+
+  return [
+    {
+      chart_type: 'line',
+      title: 'Lead Growth Trend (8 Weeks)',
+      data: leadWeekly.map((d) => ({ week: d.week, new_leads: Number(d.new_leads), cumulative: Number(d.total) })),
+      config: { x_axis: 'week', y_axes: ['new_leads', 'cumulative'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Lead Temperature Distribution',
+      data: byTemp.map((d) => ({ temperature: d.temperature, count: Number(d.count) })),
+      config: { angle_key: 'temperature', value_keys: ['count'] },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Pipeline by Stage',
+      data: byStage.map((d) => ({ stage: d.stage, count: Number(d.count) })),
+      config: { x_axis: 'stage', bars: ['count'] },
+    },
+    {
+      chart_type: 'waterfall',
+      title: 'Lead Conversion Funnel',
+      data: conversionFunnel.map((d) => ({ category: d.step, value: Number(d.value) })),
+      config: { label_key: 'category', value_key: 'value' },
+    },
+  ];
+}
+
+// ── Student Charts ────────────────────────────────────────────────────────────
+async function generateStudentCharts(): Promise<ChartSpec[]> {
+  const [enrollmentTrend, byCohort, completionRadar] = await Promise.all([
+    safeQuery<{ week: string; enrollments: string }>(`
+      SELECT date_trunc('week', created_at)::date AS week, COUNT(*)::text AS enrollments
+      FROM enrollments WHERE created_at >= NOW() - INTERVAL '12 weeks'
+      GROUP BY week ORDER BY week`),
+    safeQuery<{ cohort: string; enrolled: string; active: string }>(`
+      SELECT c.name AS cohort, COUNT(e.id)::text AS enrolled,
+             COUNT(CASE WHEN e.status = 'active' THEN 1 END)::text AS active
+      FROM cohorts c LEFT JOIN enrollments e ON e.cohort_id = c.id
+      GROUP BY c.name ORDER BY enrolled DESC LIMIT 6`),
+    safeQuery<{ dimension: string; score: string }>(`
+      SELECT 'Enrollments' AS dimension, COUNT(*)::text AS score FROM enrollments
+      UNION ALL SELECT 'Active', COUNT(*)::text FROM enrollments WHERE status = 'active'
+      UNION ALL SELECT 'Cohorts', COUNT(*)::text FROM cohorts
+      UNION ALL SELECT 'Modules', COUNT(*)::text FROM modules
+      UNION ALL SELECT 'Lessons', COUNT(*)::text FROM lessons`),
+  ]);
+
+  return [
+    {
+      chart_type: 'line',
+      title: 'Enrollment Trend (12 Weeks)',
+      data: enrollmentTrend.map((d) => ({ week: d.week, enrollments: Number(d.enrollments) })),
+      config: { x_axis: 'week', y_axes: ['enrollments'] },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Enrollments by Cohort',
+      data: byCohort.map((d) => ({ cohort: d.cohort, enrolled: Number(d.enrolled), active: Number(d.active) })),
+      config: { x_axis: 'cohort', bars: ['enrolled', 'active'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Education System Overview',
+      data: completionRadar.map((d) => ({ dimension: d.dimension, value: Number(d.score) })),
+      config: { angle_key: 'dimension', value_keys: ['value'] },
+    },
+  ];
+}
+
+// ── Agent Charts ──────────────────────────────────────────────────────────────
+async function generateAgentCharts(): Promise<ChartSpec[]> {
+  const [execDaily, topAgents, agentRadar, errorTrend] = await Promise.all([
+    safeQuery<{ day: string; executions: string; errors: string }>(`
+      SELECT date_trunc('day', started_at)::date AS day,
+             COUNT(*)::text AS executions,
+             COUNT(CASE WHEN result = 'error' THEN 1 END)::text AS errors
+      FROM ai_agent_activity_logs WHERE started_at >= NOW() - INTERVAL '14 days'
+      GROUP BY day ORDER BY day`),
+    safeQuery<{ agent: string; runs: string; errors: string; avg_ms: string }>(`
+      SELECT a.name AS agent, COUNT(l.id)::text AS runs,
+             COUNT(CASE WHEN l.result = 'error' THEN 1 END)::text AS errors,
+             ROUND(AVG(l.duration_ms))::text AS avg_ms
+      FROM ai_agents a JOIN ai_agent_activity_logs l ON l.agent_id = a.id
+      WHERE l.started_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY a.name ORDER BY runs DESC LIMIT 8`),
+    safeQuery<{ agent: string; runs: string; success_rate: string; avg_duration: string }>(`
+      SELECT a.name AS agent,
+             COUNT(l.id)::text AS runs,
+             ROUND(100.0 * COUNT(CASE WHEN l.result = 'success' THEN 1 END) / GREATEST(COUNT(l.id), 1))::text AS success_rate,
+             ROUND(AVG(l.duration_ms) / 1000)::text AS avg_duration
+      FROM ai_agents a JOIN ai_agent_activity_logs l ON l.agent_id = a.id
+      WHERE l.started_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY a.name ORDER BY runs DESC LIMIT 6`),
+    safeQuery<{ day: string; errors: string }>(`
+      SELECT date_trunc('day', started_at)::date AS day, COUNT(*)::text AS errors
+      FROM ai_agent_activity_logs WHERE result = 'error' AND started_at >= NOW() - INTERVAL '14 days'
+      GROUP BY day ORDER BY day`),
+  ]);
+
+  return [
+    {
+      chart_type: 'line',
+      title: 'Agent Executions & Errors (14 Days)',
+      data: execDaily.map((d) => ({ day: d.day, executions: Number(d.executions), errors: Number(d.errors) })),
+      config: { x_axis: 'day', y_axes: ['executions', 'errors'] },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Top Agents by Volume (24h)',
+      data: topAgents.map((d) => ({
+        agent: d.agent.length > 18 ? d.agent.slice(0, 18) + '…' : d.agent,
+        runs: Number(d.runs),
+        errors: Number(d.errors),
+      })),
+      config: { x_axis: 'agent', bars: ['runs', 'errors'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Agent Performance Profile',
+      data: agentRadar.map((d) => ({
+        agent: d.agent.length > 12 ? d.agent.slice(0, 12) + '…' : d.agent,
+        runs: Number(d.runs),
+        success_rate: Number(d.success_rate),
+        avg_seconds: Number(d.avg_duration),
+      })),
+      config: { angle_key: 'agent', value_keys: ['runs', 'success_rate', 'avg_seconds'] },
+    },
+    {
+      chart_type: 'line',
+      title: 'Error Trend (14 Days)',
+      data: errorTrend.map((d) => ({ day: d.day, errors: Number(d.errors) })),
+      config: { x_axis: 'day', y_axes: ['errors'] },
+    },
+  ];
+}
+
+// ── Visitor Charts ────────────────────────────────────────────────────────────
+async function generateVisitorCharts(): Promise<ChartSpec[]> {
+  const [sessionDaily, utmSources, pageBreakdown, bounceBySource, visitorFunnel] = await Promise.all([
+    safeQuery<{ day: string; sessions: string; visitors: string; pageviews: string }>(`
+      SELECT date_trunc('day', vs.started_at)::date AS day,
+             COUNT(vs.id)::text AS sessions,
+             COUNT(DISTINCT vs.visitor_id)::text AS visitors,
+             COALESCE(SUM(vs.pages_viewed), 0)::text AS pageviews
+      FROM visitor_sessions vs WHERE vs.started_at >= NOW() - INTERVAL '14 days'
+      GROUP BY day ORDER BY day`),
+    safeQuery<{ source: string; sessions: string; bounced: string; converted: string }>(`
+      SELECT COALESCE(v.utm_source, 'direct') AS source,
+             COUNT(vs.id)::text AS sessions,
+             COUNT(CASE WHEN vs.pages_viewed <= 1 THEN 1 END)::text AS bounced,
+             COUNT(CASE WHEN vs.converted THEN 1 END)::text AS converted
+      FROM visitors v JOIN visitor_sessions vs ON vs.visitor_id = v.id
+      GROUP BY source ORDER BY sessions DESC LIMIT 8`),
+    safeQuery<{ page: string; views: string }>(`
+      SELECT page_path AS page, COUNT(*)::text AS views
+      FROM page_events
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY page_path ORDER BY views DESC LIMIT 10`),
+    safeQuery<{ source: string; bounce_rate: string; sessions: string }>(`
+      SELECT COALESCE(v.utm_source, 'direct') AS source,
+             ROUND(100.0 * COUNT(CASE WHEN vs.pages_viewed <= 1 THEN 1 END) / GREATEST(COUNT(vs.id), 1))::text AS bounce_rate,
+             COUNT(vs.id)::text AS sessions
+      FROM visitors v JOIN visitor_sessions vs ON vs.visitor_id = v.id
+      GROUP BY source HAVING COUNT(vs.id) >= 2
+      ORDER BY bounce_rate DESC LIMIT 6`),
+    safeQuery<{ step: string; value: string }>(`
+      SELECT 'Total Visitors' AS step, COUNT(*)::text AS value FROM visitors
+      UNION ALL SELECT 'Had Sessions', COUNT(DISTINCT visitor_id)::text FROM visitor_sessions
+      UNION ALL SELECT 'Multi-Page', COUNT(DISTINCT visitor_id)::text FROM visitor_sessions WHERE pages_viewed > 1
+      UNION ALL SELECT 'Returned', COUNT(*)::text FROM (SELECT visitor_id FROM visitor_sessions GROUP BY visitor_id HAVING COUNT(*) > 1) r
+      UNION ALL SELECT 'Converted', COUNT(*)::text FROM visitor_sessions WHERE converted = true`),
+  ]);
+
+  return [
+    {
+      chart_type: 'line',
+      title: 'Visitor Sessions & Pageviews (14 Days)',
+      data: sessionDaily.map((d) => ({ day: d.day, sessions: Number(d.sessions), visitors: Number(d.visitors), pageviews: Number(d.pageviews) })),
+      config: { x_axis: 'day', y_axes: ['sessions', 'visitors', 'pageviews'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Traffic Source Analysis',
+      data: utmSources.map((d) => ({
+        source: d.source,
+        sessions: Number(d.sessions),
+        bounced: Number(d.bounced),
+        converted: Number(d.converted),
+      })),
+      config: { angle_key: 'source', value_keys: ['sessions', 'bounced', 'converted'] },
+    },
+    {
+      chart_type: 'waterfall',
+      title: 'Visitor Conversion Funnel',
+      data: visitorFunnel.map((d) => ({ category: d.step, value: Number(d.value) })),
+      config: { label_key: 'category', value_key: 'value' },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Bounce Rate by Source',
+      data: bounceBySource.map((d) => ({ source: d.source, bounce_rate: Number(d.bounce_rate), sessions: Number(d.sessions) })),
+      config: { x_axis: 'source', bars: ['bounce_rate', 'sessions'] },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Top Pages by Views (7 Days)',
+      data: pageBreakdown.map((d) => ({
+        page: d.page.length > 25 ? '…' + d.page.slice(-22) : d.page,
+        views: Number(d.views),
+      })),
+      config: { x_axis: 'page', bars: ['views'], layout: 'horizontal' },
+    },
+  ];
+}
+
+// ── Cohort Charts ─────────────────────────────────────────────────────────────
+async function generateCohortCharts(): Promise<ChartSpec[]> {
+  const [cohortOverview, enrollmentTrend, cohortRadar] = await Promise.all([
+    safeQuery<{ cohort: string; enrolled: string; active: string; completed: string }>(`
+      SELECT c.name AS cohort,
+             COUNT(e.id)::text AS enrolled,
+             COUNT(CASE WHEN e.status = 'active' THEN 1 END)::text AS active,
+             COUNT(CASE WHEN e.status = 'completed' THEN 1 END)::text AS completed
+      FROM cohorts c LEFT JOIN enrollments e ON e.cohort_id = c.id
+      GROUP BY c.name ORDER BY enrolled DESC`),
+    safeQuery<{ week: string; enrollments: string }>(`
+      SELECT date_trunc('week', e.created_at)::date AS week, COUNT(*)::text AS enrollments
+      FROM enrollments e WHERE e.created_at >= NOW() - INTERVAL '12 weeks'
+      GROUP BY week ORDER BY week`),
+    safeQuery<{ cohort: string; students: string; modules: string; lessons: string }>(`
+      SELECT c.name AS cohort,
+             COUNT(DISTINCT e.id)::text AS students,
+             (SELECT COUNT(*) FROM modules)::text AS modules,
+             (SELECT COUNT(*) FROM lessons)::text AS lessons
+      FROM cohorts c LEFT JOIN enrollments e ON e.cohort_id = c.id
+      GROUP BY c.name`),
+  ]);
+
+  return [
+    {
+      chart_type: 'bar',
+      title: 'Cohort Enrollment Breakdown',
+      data: cohortOverview.map((d) => ({
+        cohort: d.cohort, enrolled: Number(d.enrolled), active: Number(d.active), completed: Number(d.completed),
+      })),
+      config: { x_axis: 'cohort', bars: ['enrolled', 'active', 'completed'] },
+    },
+    {
+      chart_type: 'line',
+      title: 'Enrollment Trend (12 Weeks)',
+      data: enrollmentTrend.map((d) => ({ week: d.week, enrollments: Number(d.enrollments) })),
+      config: { x_axis: 'week', y_axes: ['enrollments'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Cohort Capacity Overview',
+      data: cohortRadar.map((d) => ({
+        cohort: d.cohort, students: Number(d.students), modules: Number(d.modules), lessons: Number(d.lessons),
+      })),
+      config: { angle_key: 'cohort', value_keys: ['students', 'modules', 'lessons'] },
+    },
+  ];
+}
+
+// ── Curriculum Charts ─────────────────────────────────────────────────────────
+async function generateCurriculumCharts(): Promise<ChartSpec[]> {
+  const [moduleBreakdown, publishStatus, contentWaterfall] = await Promise.all([
+    safeQuery<{ module: string; lessons: string; sections: string }>(`
+      SELECT m.title AS module,
+             COUNT(DISTINCT l.id)::text AS lessons,
+             COUNT(DISTINCT s.id)::text AS sections
+      FROM modules m
+      LEFT JOIN lessons l ON l.module_id = m.id
+      LEFT JOIN sections s ON s.lesson_id = l.id
+      GROUP BY m.title ORDER BY sections DESC`),
+    safeQuery<{ status: string; count: string }>(`
+      SELECT CASE WHEN published THEN 'Published' ELSE 'Draft' END AS status,
+             COUNT(*)::text AS count
+      FROM sections GROUP BY published`),
+    safeQuery<{ level: string; count: string }>(`
+      SELECT 'Modules' AS level, COUNT(*)::text AS count FROM modules
+      UNION ALL SELECT 'Lessons', COUNT(*)::text FROM lessons
+      UNION ALL SELECT 'Sections', COUNT(*)::text FROM sections
+      UNION ALL SELECT 'Published', COUNT(*)::text FROM sections WHERE published = true`),
+  ]);
+
+  return [
+    {
+      chart_type: 'bar',
+      title: 'Content by Module',
+      data: moduleBreakdown.map((d) => ({
+        module: d.module.length > 20 ? d.module.slice(0, 20) + '…' : d.module,
+        lessons: Number(d.lessons),
+        sections: Number(d.sections),
+      })),
+      config: { x_axis: 'module', bars: ['lessons', 'sections'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'Content Distribution by Module',
+      data: moduleBreakdown.slice(0, 6).map((d) => ({
+        module: d.module.length > 12 ? d.module.slice(0, 12) + '…' : d.module,
+        lessons: Number(d.lessons),
+        sections: Number(d.sections),
+      })),
+      config: { angle_key: 'module', value_keys: ['lessons', 'sections'] },
+    },
+    {
+      chart_type: 'waterfall',
+      title: 'Content Pipeline',
+      data: contentWaterfall.map((d) => ({ category: d.level, value: Number(d.count) })),
+      config: { label_key: 'category', value_key: 'value' },
+    },
+  ];
+}
+
+// ── System Charts ─────────────────────────────────────────────────────────────
+async function generateSystemCharts(): Promise<ChartSpec[]> {
+  const [processDaily, emailStatus, errorModules, systemRadar] = await Promise.all([
+    safeQuery<{ day: string; processes: string; errors: string }>(`
+      SELECT date_trunc('day', created_at)::date AS day,
+             COUNT(*)::text AS processes,
+             COUNT(CASE WHEN status = 'error' THEN 1 END)::text AS errors
+      FROM system_processes WHERE created_at >= NOW() - INTERVAL '14 days'
+      GROUP BY day ORDER BY day`),
+    safeQuery<{ status: string; count: string }>(`
+      SELECT status, COUNT(*)::text AS count
+      FROM scheduled_emails
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY status ORDER BY count DESC`),
+    safeQuery<{ module: string; total: string; errors: string; rate: string }>(`
+      SELECT source_module AS module,
+             COUNT(*)::text AS total,
+             COUNT(CASE WHEN status = 'error' THEN 1 END)::text AS errors,
+             ROUND(100.0 * COUNT(CASE WHEN status = 'error' THEN 1 END) / GREATEST(COUNT(*), 1))::text AS rate
+      FROM system_processes
+      WHERE created_at >= NOW() - INTERVAL '7 days' AND source_module IS NOT NULL
+      GROUP BY source_module ORDER BY total DESC LIMIT 8`),
+    safeQuery<{ dimension: string; value: string }>(`
+      SELECT 'Processes (24h)' AS dimension, COUNT(*)::text AS value FROM system_processes WHERE created_at >= NOW() - INTERVAL '1 day'
+      UNION ALL SELECT 'Emails Sent', COUNT(*)::text FROM scheduled_emails WHERE status = 'sent' AND created_at >= NOW() - INTERVAL '7 days'
+      UNION ALL SELECT 'Email Errors', COUNT(*)::text FROM scheduled_emails WHERE status IN ('failed', 'error') AND created_at >= NOW() - INTERVAL '7 days'
+      UNION ALL SELECT 'Active Agents', COUNT(*)::text FROM ai_agents WHERE status = 'active'
+      UNION ALL SELECT 'Agent Errors', COUNT(*)::text FROM ai_agent_activity_logs WHERE result = 'error' AND started_at >= NOW() - INTERVAL '1 day'`),
+  ]);
+
+  return [
+    {
+      chart_type: 'line',
+      title: 'System Process Activity (14 Days)',
+      data: processDaily.map((d) => ({ day: d.day, processes: Number(d.processes), errors: Number(d.errors) })),
+      config: { x_axis: 'day', y_axes: ['processes', 'errors'] },
+    },
+    {
+      chart_type: 'bar',
+      title: 'Email Delivery Status (7 Days)',
+      data: emailStatus.map((d) => ({ status: d.status, count: Number(d.count) })),
+      config: { x_axis: 'status', bars: ['count'] },
+    },
+    {
+      chart_type: 'radar',
+      title: 'System Health Dimensions',
+      data: systemRadar.map((d) => ({ dimension: d.dimension, value: Number(d.value) })),
+      config: { angle_key: 'dimension', value_keys: ['value'] },
+    },
+    {
+      chart_type: 'waterfall',
+      title: 'Error Distribution by Module',
+      data: errorModules.map((d) => ({
+        category: d.module.length > 15 ? d.module.slice(0, 15) + '…' : d.module,
+        value: Number(d.errors),
+      })),
+      config: { label_key: 'category', value_key: 'value' },
+    },
+  ];
+}

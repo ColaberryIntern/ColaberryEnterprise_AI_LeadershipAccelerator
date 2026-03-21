@@ -255,6 +255,14 @@ export async function handleGetRiskEntities(req: Request, res: Response, next: N
   } catch (error) { next(error); }
 }
 
+export async function handleGetEntityCharts(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { getEntityCharts } = await import('../intelligence/services/analyticsService');
+    const data = await getEntityCharts(req.query.entity_type as string | undefined, req.query.entity_name as string | undefined);
+    res.json(data);
+  } catch (error) { next(error); }
+}
+
 export async function handleGetBusinessHierarchy(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { buildBusinessEntityHierarchy } = await import('../intelligence/services/businessEntityService');

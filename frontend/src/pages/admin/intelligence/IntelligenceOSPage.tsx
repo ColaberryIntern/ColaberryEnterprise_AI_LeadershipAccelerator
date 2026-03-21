@@ -13,6 +13,7 @@ import {
   getAnomalies,
   getForecasts,
   getRiskEntities,
+  getEntityCharts,
   simulateAutonomyCycle,
   runAutonomyCycle,
   getDepartmentDetail,
@@ -1691,16 +1692,26 @@ function IntelligenceOSContent() {
     setSummaryLoading(true);
     setIsProcessing(true);
 
-    // Fetch all 6 data sources with entity scope
+    // Fetch all 7 data sources with entity scope
     Promise.all([
       getKPIs(params).then((r) => setKpis(r.data)).catch(() => {}),
       getAnomalies(params).then((r) => setAnomalies(r.data || [])).catch(() => {}),
       getForecasts(params).then((r) => setForecasts(r.data)).catch(() => {}),
       getRiskEntities(params).then((r) => setRiskEntities(r.data || [])).catch(() => {}),
+      // Entity-specific KPI-driven charts (primary source when entity is scoped)
+      getEntityCharts(params).then((r) => {
+        const charts = r.data;
+        if (Array.isArray(charts) && charts.length > 0) {
+          setVisualizations(charts);
+        }
+      }).catch(() => {}),
       getExecutiveSummary(params).then((r) => {
         const data = r.data;
         if (data.narrative) setInsights(data);
-        if (data.visualizations?.length) setVisualizations(data.visualizations);
+        // Only use executive summary charts if no entity charts loaded
+        if (data.visualizations?.length) {
+          setVisualizations((prev: any) => (prev && prev.length > 0) ? prev : data.visualizations);
+        }
         if (data.data) setSummary(data.data);
       }).catch(() => {}),
       getRankedInsights(params).then((r) => {
