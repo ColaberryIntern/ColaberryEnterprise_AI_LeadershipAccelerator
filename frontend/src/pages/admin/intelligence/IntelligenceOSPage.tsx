@@ -759,8 +759,8 @@ function DynamicCanvas({
         </div>
       )}
 
-      {/* Section 2: Narrative Summary (global level only) */}
-      {narrativeText && !isDeptView && (
+      {/* Section 2: Narrative Summary (global level only) — wait for all loading */}
+      {!analyticsLoading && narrativeText && !isDeptView && (
         <div className="card border-0 shadow-sm mb-3 mt-3">
           <div className="card-header bg-white fw-semibold small d-flex justify-content-between align-items-center"
             style={{ color: 'var(--color-primary)' }}
@@ -1678,6 +1678,7 @@ function IntelligenceOSContent() {
     setIsProcessing(true);
     setVisualizations([]); // Clear stale charts before loading new entity
     setAutoInsights([]); // Clear stale insights from previous entity
+    setInsights(null); // Clear stale executive summary from previous entity
 
     try {
       // ── Phase 1: Load KPIs + other data in parallel (no charts yet) ──
