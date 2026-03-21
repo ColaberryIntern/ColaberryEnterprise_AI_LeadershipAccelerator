@@ -31,6 +31,9 @@ export const env = {
   synthflowWelcomeAgentId: process.env.SYNTHFLOW_WELCOME_AGENT_ID || '',
   synthflowInterestAgentId: process.env.SYNTHFLOW_INTEREST_AGENT_ID || '',
 
+  // Admin alert phone (for Cory health monitor voice alerts)
+  adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',
+
   // OpenAI
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   aiModel: process.env.AI_MODEL || 'gpt-4o-mini',
