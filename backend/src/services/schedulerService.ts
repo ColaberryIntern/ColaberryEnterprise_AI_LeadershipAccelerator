@@ -739,6 +739,12 @@ async function processScheduledActions(): Promise<void> {
       }
     }
   }
+
+  // Update scheduler heartbeat for liveness monitoring
+  try {
+    const { setSetting } = require('./settingsService');
+    await setSetting('scheduler_heartbeat', new Date().toISOString());
+  } catch { /* heartbeat write failure is non-blocking */ }
 }
 
 /**
@@ -1554,173 +1560,112 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Campaign evolution engine: every 4 hours');
 
-  // ── Campaign Health Monitor (every 30 min on weekdays during business hours) ──
-  // Tracks last alert time to avoid repeated calls within 2 hours
+  // ── Comprehensive System Health Monitor (every 15 min on weekdays) ──────────
+  // Covers: campaigns, sequences, scheduler, DB, memory, email delivery, APIs, nginx
   let lastHealthAlertAt = 0;
 
-  cron.schedule('*/30 * * * 1-5', () => {
-    instrumentCronJob('CampaignHealthMonitor', async () => {
+  cron.schedule('3,18,33,48 * * * 1-5', () => {
+    instrumentCronJob('SystemHealthMonitor', async () => {
       const nowCT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
       const hour = nowCT.getHours();
-      if (hour < 8 || hour >= 17) return; // Only during send window
+      if (hour < 7 || hour >= 18) return; // Extended window: 7AM-6PM CT
 
-      const issues: string[] = [];
-      const autoFixed: string[] = [];
+      const { runFullSystemHealthCheck, formatHealthReportText } = require('./systemHealthService');
+      const report = await runFullSystemHealthCheck();
 
-      // 1. Check for stuck-in-processing actions (>10 min old)
-      const stuckCount = await ScheduledEmail.count({
-        where: {
-          status: 'processing',
-          scheduled_for: { [Op.lt]: new Date(Date.now() - 10 * 60 * 1000) },
-        },
-      } as any) as unknown as number;
-      if (stuckCount > 0) {
-        issues.push(`${stuckCount} actions are stuck in processing status for over 10 minutes`);
-        console.warn(`[HealthMonitor] ⚠ ${stuckCount} action(s) stuck in processing for >10 min`);
+      const issues = report.checks.filter((c: any) => c.severity !== 'ok');
+      const criticals = report.checks.filter((c: any) => c.severity === 'critical');
+      const autoFixed = report.checks.filter((c: any) => c.autoFixed);
+
+      if (issues.length === 0) {
+        console.log(`[SystemHealth] ✓ All ${report.checks.length} checks passed (${report.duration_ms}ms)`);
+        return;
       }
 
-      // 2. Check Cold Outbound is active (auto-reactivate if draft)
-      const coldOutbound = await Campaign.findOne({ where: { name: { [Op.like]: '%Cold Outbound%' } } });
-      if (coldOutbound && (coldOutbound as any).status === 'draft') {
-        await (coldOutbound as any).update({ status: 'active' });
-        autoFixed.push('Cold Outbound campaign had reverted to draft status. I automatically reactivated it.');
-        console.warn(`[HealthMonitor] ⚠ Cold Outbound was in draft — auto-reactivated to active`);
+      // Log all issues
+      for (const check of issues) {
+        const icon = check.severity === 'critical' ? '🔴' : '🟡';
+        console.warn(`[SystemHealth] ${icon} ${check.name}: ${check.detail}`);
+        if (check.autoFixed) console.log(`[SystemHealth] ✅ Auto-fixed: ${check.autoFixed}`);
       }
 
-      // 3. Check if any sends happened in the last hour during business hours
-      const [recentSendRows] = await sequelize.query(
-        `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'sent' AND sent_at >= NOW() - INTERVAL '1 hour'`
-      );
-      const recentSendCount = parseInt((recentSendRows as any)[0]?.cnt || '0', 10);
+      // Alert on critical issues or auto-fixes
+      const shouldAlert = criticals.length > 0 || autoFixed.length > 0;
+      if (!shouldAlert) return;
 
-      const totalPending = await ScheduledEmail.count({
-        where: {
-          status: 'pending',
-          scheduled_for: { [Op.lte]: new Date() },
-        },
-      }) as unknown as number;
-      if (recentSendCount === 0 && totalPending > 0) {
-        issues.push(`No emails or messages have been sent in the last hour, but there are ${totalPending} actions that are past due and waiting to be processed. The scheduler may be stalled.`);
-        console.warn(`[HealthMonitor] ⚠ No sends in last hour but ${totalPending} action(s) are past-due and pending`);
+      const timeSinceLastAlert = Date.now() - lastHealthAlertAt;
+      const twoHoursMs = 2 * 60 * 60 * 1000;
+
+      if (timeSinceLastAlert <= twoHoursMs) {
+        console.log(`[SystemHealth] Alert suppressed (last alert ${Math.round(timeSinceLastAlert / 60000)}m ago, cooldown: 120m)`);
+        return;
       }
 
-      // 4. Check for high failure rate in last hour
-      const [recentFailRows] = await sequelize.query(
-        `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'failed' AND updated_at >= NOW() - INTERVAL '1 hour'`
-      );
-      const recentFails = parseInt((recentFailRows as any)[0]?.cnt || '0', 10);
-      if (recentFails > 5) {
-        issues.push(`${recentFails} actions failed in the last hour, which is above the normal threshold of 5. There may be an issue with the email provider or content generation.`);
-        console.warn(`[HealthMonitor] ⚠ ${recentFails} action(s) failed in the last hour`);
-      }
+      lastHealthAlertAt = Date.now();
+      const reportText = formatHealthReportText(report);
 
-      // 5. Check campaign status summary for context
-      const [campaignRows] = await sequelize.query(
-        `SELECT c.name, c.status, COUNT(se.id) as pending_count
-         FROM campaigns c
-         LEFT JOIN scheduled_emails se ON se.campaign_id = c.id AND se.status = 'pending'
-         WHERE c.status IN ('active', 'draft')
-         GROUP BY c.id, c.name, c.status
-         HAVING COUNT(se.id) > 0
-         ORDER BY COUNT(se.id) DESC`
-      );
+      // Build Cory's voice prompt with full context
+      const alertPrompt = [
+        'You are Cory, the AI operations manager for the Colaberry Enterprise AI Leadership Accelerator platform.',
+        'You are calling Ali, the system owner, to report on system health issues detected by the automated monitoring system.',
+        'Be concise, professional, and direct. Start by saying "Hi Ali, this is Cory, your AI operations manager. I\'m calling because the system health monitor flagged some issues that need your attention."',
+        '',
+        reportText,
+        '',
+        'After explaining the situation, ask if Ali has any questions or wants you to take any specific action.',
+        'If asked about the system, provide details based on what you know from the health report. If asked something you do not know, say so honestly.',
+        'At the end of the call, let Ali know you are also sending a summary email with all the details to ali@colaberry.com.',
+      ].join('\n');
 
-      // Build campaign context summary (used for both call and email)
-      const campaignSummary = (campaignRows as any[]).map((r: any) =>
-        `${r.name}: ${r.status}, ${r.pending_count} pending`
-      ).join('. ');
-
-      const adminEmail = 'ali@colaberry.com';
-
-      // Helper: send health alert email
-      const sendHealthEmail = async (subject: string) => {
+      // Voice call
+      if (env.adminAlertPhone) {
         try {
-          const { sendAlertEmail } = require('./emailService');
-          await sendAlertEmail(adminEmail, {
-            type: 'campaign_health',
-            severity: issues.length > 0 ? 8 : 4,
-            title: subject,
-            description: [
-              issues.length > 0 ? `**Issues Detected:**\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}` : '',
-              autoFixed.length > 0 ? `**Auto-Fixed:**\n${autoFixed.map((f, idx) => `${idx + 1}. ${f}`).join('\n')}` : '',
-              `**Campaign Status:** ${campaignSummary}`,
-              `**Metrics:** ${recentSendCount} sent last hour, ${totalPending} pending past-due`,
-            ].filter(Boolean).join('\n\n'),
-            impact_area: 'Campaign Operations',
-            source_type: 'HealthMonitor',
-            urgency: issues.length > 0 ? 'high' : 'low',
-            created_at: new Date(),
+          const { triggerVoiceCall } = require('./synthflowService');
+          const result = await triggerVoiceCall({
+            name: 'Ali',
+            phone: env.adminAlertPhone,
+            callType: 'interest',
+            prompt: alertPrompt,
+            context: {
+              lead_name: 'Ali',
+              step_goal: `System health alert: ${criticals.length} critical, ${issues.length - criticals.length} warning`,
+            },
           });
-          console.log(`[HealthMonitor] 📧 Alert email sent to ${adminEmail}`);
-        } catch (emailErr: any) {
-          console.error(`[HealthMonitor] Alert email failed: ${emailErr.message}`);
-        }
-      };
-
-      // If there are issues or auto-fixes, call the owner + send email
-      if (issues.length > 0 || autoFixed.length > 0) {
-        const timeSinceLastAlert = Date.now() - lastHealthAlertAt;
-        const twoHoursMs = 2 * 60 * 60 * 1000;
-
-        if (timeSinceLastAlert > twoHoursMs) {
-          lastHealthAlertAt = Date.now();
-
-          const alertPrompt = [
-            'You are Cory, the AI operations manager for the Colaberry Enterprise AI Leadership Accelerator platform.',
-            'You are calling Ali, the system owner, to report on campaign health issues that were just detected.',
-            'Be concise, professional, and direct. Start by saying "Hi Ali, this is Cory, your AI operations manager. I\'m calling because I detected some issues with the campaign system that I wanted to bring to your attention."',
-            '',
-            issues.length > 0 ? `ISSUES DETECTED:\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}` : '',
-            autoFixed.length > 0 ? `\nAUTO-FIXED:\n${autoFixed.map((f, idx) => `${idx + 1}. ${f}`).join('\n')}` : '',
-            `\nCURRENT CAMPAIGN STATUS: ${campaignSummary}`,
-            `\nTotal sent in last hour: ${recentSendCount}. Total pending past-due: ${totalPending}.`,
-            '\nAfter explaining the situation, ask if Ali has any questions or wants you to take any specific action.',
-            'If asked about the system, provide details based on what you know. If asked something you do not know, say so honestly.',
-            '\nAt the end of the call, let Ali know you are also sending a summary email with all the details.',
-          ].filter(Boolean).join('\n');
-
-          // Attempt voice call
-          if (env.adminAlertPhone) {
-            try {
-              const { triggerVoiceCall } = require('./synthflowService');
-              const result = await triggerVoiceCall({
-                name: 'Ali',
-                phone: env.adminAlertPhone,
-                callType: 'interest',
-                prompt: alertPrompt,
-                context: {
-                  lead_name: 'Ali',
-                  step_goal: 'Campaign health alert — report issues and answer questions',
-                },
-              });
-              if (result.success) {
-                console.log(`[HealthMonitor] 📞 Alert call initiated to ${env.adminAlertPhone}`);
-              } else {
-                console.error(`[HealthMonitor] Alert call failed: ${result.error}`);
-              }
-            } catch (callErr: any) {
-              console.error(`[HealthMonitor] Failed to initiate alert call: ${callErr.message}`);
-            }
+          if (result.success) {
+            console.log(`[SystemHealth] 📞 Alert call initiated to ${env.adminAlertPhone}`);
           } else {
-            console.warn('[HealthMonitor] ADMIN_ALERT_PHONE not configured — skipping voice call');
+            console.error(`[SystemHealth] Alert call failed: ${result.error}`);
           }
-
-          // Always send follow-up email (acts as written record + fallback if call not answered)
-          const emailSubject = issues.length > 0
-            ? `⚠ Campaign Health Alert: ${issues.length} issue(s) detected`
-            : `ℹ Campaign Health Update: ${autoFixed.length} auto-fix(es) applied`;
-          await sendHealthEmail(emailSubject);
-        } else {
-          console.log(`[HealthMonitor] Issues detected but alert suppressed (last alert ${Math.round(timeSinceLastAlert / 60000)}m ago, cooldown: 120m)`);
+        } catch (callErr: any) {
+          console.error(`[SystemHealth] Failed to initiate alert call: ${callErr.message}`);
         }
-      } else {
-        console.log(`[HealthMonitor] ✓ All systems healthy — ${recentSendCount} sent last hour, ${totalPending} pending`);
+      }
+
+      // Email (always — written record + fallback if call not answered)
+      try {
+        const { sendAlertEmail } = require('./emailService');
+        const emailSubject = criticals.length > 0
+          ? `🔴 System Health Alert: ${criticals.length} critical issue(s)`
+          : `🟡 System Health Update: ${autoFixed.length} auto-fix(es) applied`;
+        await sendAlertEmail('ali@colaberry.com', {
+          type: 'system_health',
+          severity: criticals.length > 0 ? 9 : 5,
+          title: emailSubject,
+          description: reportText,
+          impact_area: 'System Operations',
+          source_type: 'SystemHealthMonitor',
+          urgency: criticals.length > 0 ? 'critical' : 'medium',
+          created_at: new Date(),
+        });
+        console.log(`[SystemHealth] 📧 Alert email sent to ali@colaberry.com`);
+      } catch (emailErr: any) {
+        console.error(`[SystemHealth] Alert email failed: ${emailErr.message}`);
       }
     }).catch((err: any) => {
-      console.error('[Scheduler] Health monitor error:', err.message);
+      console.error('[Scheduler] System health monitor error:', err.message);
     });
   });
-  console.log('[Scheduler] Campaign health monitor: every 30 min (weekdays 8AM-5PM CT, voice alert on issues)');
+  console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
   // ── Cold Outbound startup reactivation ──────────────────────────────
   // Cold Outbound reverts to draft on container restart — fix on startup
