@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import portalApi from '../../utils/portalApi';
+import GuidedExecutionPanel from './GuidedExecutionPanel';
 
 interface NextActionData {
   id: string;
@@ -33,6 +34,7 @@ function ProjectNextActionPanel() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<'accepting' | 'completing' | null>(null);
   const [noAction, setNoAction] = useState(false);
+  const [showGuidance, setShowGuidance] = useState(false);
 
   const fetchAction = useCallback(() => {
     setLoading(true);
@@ -61,6 +63,7 @@ function ProjectNextActionPanel() {
     try {
       const res = await portalApi.post('/api/portal/project/next-action/accept', { action_id: action.id });
       setAction(res.data.action);
+      setShowGuidance(true);
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to accept action');
     } finally { setActing(null); }
@@ -69,6 +72,7 @@ function ProjectNextActionPanel() {
   const handleComplete = async () => {
     if (!action) return;
     setActing('completing');
+    setShowGuidance(false);
     try {
       await portalApi.post('/api/portal/project/next-action/complete', { action_id: action.id });
       // Re-fetch to get the next action
@@ -114,6 +118,7 @@ function ProjectNextActionPanel() {
   const isAccepted = action.status === 'accepted';
 
   return (
+    <>
     <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid var(--color-primary)' }}>
       <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
         <div className="fw-semibold small">
@@ -209,6 +214,8 @@ function ProjectNextActionPanel() {
         </div>
       </div>
     </div>
+    {showGuidance && action && <GuidedExecutionPanel actionId={action.id} />}
+    </>
   );
 }
 

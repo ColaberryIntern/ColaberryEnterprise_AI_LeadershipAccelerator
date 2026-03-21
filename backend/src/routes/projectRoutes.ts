@@ -450,4 +450,26 @@ router.post('/api/portal/project/next-action/complete', requireParticipant, asyn
   }
 });
 
+// ---------------------------------------------------------------------------
+// Guided Execution Engine Routes
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/guided-execution', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const actionId = req.query.action_id as string;
+    if (!actionId) {
+      res.status(400).json({ error: 'action_id query parameter is required' });
+      return;
+    }
+    const { getGuidedExecution } = await import('../services/guidedExecution/guidedExecutionService');
+    const payload = await getGuidedExecution(enrollmentId, actionId);
+    res.json(payload);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /guided-execution error:', err.message);
+    const status = err.message.includes('not found') ? 404 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 export default router;
