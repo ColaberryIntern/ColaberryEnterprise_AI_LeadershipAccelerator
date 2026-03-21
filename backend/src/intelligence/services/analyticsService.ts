@@ -794,6 +794,355 @@ const globalStrategy: EntityStrategy = {
   },
 };
 
+// ─── Strategy: Visitors ──────────────────────────────────────────────────────
+
+const visitorStrategy: EntityStrategy = {
+  async getKPIs() {
+    const totalVisitors = await safeCount('SELECT COUNT(*) as count FROM "visitors"');
+    const totalSessions = await safeCount('SELECT COUNT(*) as count FROM "visitor_sessions"');
+    const totalPageviews = await safeCount(
+      'SELECT COALESCE(SUM(total_pageviews), 0) as count FROM "visitors"',
+    );
+
+    // Visitors this week vs last week
+    const visitorsThisWeek = await safeCount(
+      `SELECT COUNT(*) as count FROM "visitors" WHERE created_at >= NOW() - INTERVAL '7 days'`,
+    );
+    const visitorsLastWeek = await safeCount(
+      `SELECT COUNT(*) as count FROM "visitors" WHERE created_at >= NOW() - INTERVAL '14 days' AND created_at < NOW() - INTERVAL '7 days'`,
+    );
+    const visitorDelta = pctDelta(visitorsThisWeek, visitorsLastWeek);
+
+    // Bounce rate
+    const bouncedSessions = await safeCount(
+      `SELECT COUNT(*) as count FROM "visitor_sessions" WHERE is_bounce = true`,
+    );
+    const bounceRate = totalSessions > 0 ? Math.round((bouncedSessions / totalSessions) * 100) : 0;
+
+    // Conversion: visitors with a lead_id
+    const convertedVisitors = await safeCount(
+      'SELECT COUNT(*) as count FROM "visitors" WHERE lead_id IS NOT NULL',
+    );
+    const conversionRate = totalVisitors > 0 ? Math.round((convertedVisitors / totalVisitors) * 100) : 0;
+
+    // Device distribution
+    const mobileCount = await safeCount(
+      `SELECT COUNT(*) as count FROM "visitors" WHERE device_type = 'mobile'`,
+    );
+
+    // Avg session duration
+    const avgDuration = await safeQuery<{ avg: string }>(
+      `SELECT AVG(duration_seconds) as avg FROM "visitor_sessions" WHERE duration_seconds > 0`,
+    );
+    const avgDurationSec = Math.round(Number(avgDuration[0]?.avg ?? 0));
+
+    return {
+      risk_level: { score: bounceRate, label: `${bounceRate}% bounce`, delta: 0 },
+      active_alerts: { count: bouncedSessions, delta: 0 },
+      lead_trend: { value: `${visitorsThisWeek}`, delta: visitorDelta, total: totalVisitors },
+      system_health: { score: conversionRate, label: `${conversionRate}% conversion` },
+      agent_health: { running: totalSessions, errored: bouncedSessions, total: totalVisitors, idle: 0, paused: 0 },
+      process_activity: { count_24h: totalPageviews, delta: 0 },
+    };
+  },
+
+  async getAnomalies() {
+    // High bounce rate sources
+    const bouncySources = await safeQuery<{ utm_source: string; sessions: string; bounces: string; rate: string }>(
+      `SELECT COALESCE(v.utm_source, 'direct') as utm_source,
+              COUNT(vs.id) as sessions,
+              COUNT(CASE WHEN vs.is_bounce THEN 1 END) as bounces,
+              ROUND(COUNT(CASE WHEN vs.is_bounce THEN 1 END)::numeric / NULLIF(COUNT(vs.id), 0) * 100) as rate
+       FROM "visitor_sessions" vs
+       JOIN "visitors" v ON v.id = vs.visitor_id
+       GROUP BY v.utm_source
+       HAVING COUNT(vs.id) >= 2 AND COUNT(CASE WHEN vs.is_bounce THEN 1 END)::numeric / NULLIF(COUNT(vs.id), 0) > 0.6
+       ORDER BY rate DESC
+       LIMIT 10`,
+    );
+
+    const anomalies = bouncySources.map((s, i) => ({
+      id: `vis-bounce-${i}`,
+      entity: `Source: ${s.utm_source}`,
+      entity_type: 'visitor',
+      metric: 'bounce_rate',
+      severity: Number(s.rate) > 80 ? 'error' : 'warning',
+      description: `${s.utm_source} has ${s.rate}% bounce rate (${s.bounces}/${s.sessions} sessions)`,
+      detected_at: new Date(),
+      factors: { bounce_rate: Number(s.rate), sessions: Number(s.sessions) },
+    }));
+
+    // Visitors without conversion
+    const unconverted = await safeCount(
+      'SELECT COUNT(*) as count FROM "visitors" WHERE lead_id IS NULL AND total_sessions >= 2',
+    );
+    if (unconverted > 0) {
+      anomalies.push({
+        id: 'vis-unconverted',
+        entity: 'Returning Visitors',
+        entity_type: 'visitor',
+        metric: 'conversion',
+        severity: unconverted > 10 ? 'warning' : 'info',
+        description: `${unconverted} returning visitors have not converted to leads`,
+        detected_at: new Date(),
+        factors: { bounce_rate: 0, sessions: unconverted },
+      });
+    }
+
+    return anomalies;
+  },
+
+  async getForecasts() {
+    const visitorWeeks = await safeQuery<{ week: string; count: string }>(
+      `SELECT DATE_TRUNC('week', created_at) as week, COUNT(*) as count
+       FROM "visitors" WHERE created_at >= NOW() - INTERVAL '12 weeks'
+       GROUP BY week ORDER BY week`,
+    );
+
+    const sessionWeeks = await safeQuery<{ week: string; count: string }>(
+      `SELECT DATE_TRUNC('week', created_at) as week, COUNT(*) as count
+       FROM "visitor_sessions" WHERE created_at >= NOW() - INTERVAL '12 weeks'
+       GROUP BY week ORDER BY week`,
+    );
+
+    return {
+      leads_30d: buildForecast(visitorWeeks),
+      enrollments_30d: buildForecast(sessionWeeks),
+    };
+  },
+
+  async getRiskEntities() {
+    // Low-engagement visitors (many sessions, no conversion)
+    const lowEngagement = await safeQuery<{ id: string; total_sessions: string; total_pageviews: string; utm_source: string }>(
+      `SELECT id, total_sessions, total_pageviews, COALESCE(utm_source, 'direct') as utm_source
+       FROM "visitors"
+       WHERE lead_id IS NULL AND total_sessions >= 2
+       ORDER BY total_sessions DESC
+       LIMIT 20`,
+    );
+
+    return lowEngagement.map((v) => ({
+      entity: `Visitor ${v.id.slice(0, 8)}... (${v.utm_source})`,
+      entity_type: 'visitor',
+      risk_score: Math.min(90, Number(v.total_sessions) * 20),
+      factors: {
+        sessions: Number(v.total_sessions),
+        pageviews: Number(v.total_pageviews),
+        source: v.utm_source,
+        converted: false,
+      },
+      last_activity: null,
+    }));
+  },
+};
+
+// ─── Strategy: Cohorts ──────────────────────────────────────────────────────
+
+const cohortStrategy: EntityStrategy = {
+  async getKPIs() {
+    const totalCohorts = await safeCount('SELECT COUNT(*) as count FROM "cohorts"');
+    const totalEnrollments = await safeCount('SELECT COUNT(*) as count FROM "enrollments"');
+    const activeEnrollments = await safeCount(
+      `SELECT COUNT(*) as count FROM "enrollments" WHERE status = 'active'`,
+    );
+
+    // Completion stats
+    const completedLessons = await safeCount(
+      `SELECT COUNT(*) as count FROM "lesson_instances" WHERE status = 'completed'`,
+    );
+    const totalLessons = await safeCount('SELECT COUNT(*) as count FROM "lesson_instances"');
+    const completionRate = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+    return {
+      risk_level: { score: totalCohorts === 0 ? 50 : 10, label: riskLabel(totalCohorts === 0 ? 50 : 10), delta: 0 },
+      active_alerts: { count: 0, delta: 0 },
+      lead_trend: { value: `${totalEnrollments}`, delta: 0, total: totalCohorts },
+      system_health: { score: completionRate, label: `${completionRate}% completion` },
+      agent_health: { running: activeEnrollments, errored: 0, total: totalEnrollments, idle: 0, paused: 0 },
+      process_activity: { count_24h: completedLessons, delta: 0 },
+    };
+  },
+
+  async getAnomalies() {
+    return [];
+  },
+
+  async getForecasts() {
+    const enrollWeeks = await safeQuery<{ week: string; count: string }>(
+      `SELECT DATE_TRUNC('week', created_at) as week, COUNT(*) as count
+       FROM "enrollments" WHERE created_at >= NOW() - INTERVAL '12 weeks'
+       GROUP BY week ORDER BY week`,
+    );
+    return { leads_30d: buildForecast(enrollWeeks), enrollments_30d: buildForecast([]) };
+  },
+
+  async getRiskEntities() {
+    return [];
+  },
+};
+
+// ─── Strategy: Curriculum ────────────────────────────────────────────────────
+
+const curriculumStrategy: EntityStrategy = {
+  async getKPIs() {
+    const totalModules = await safeCount('SELECT COUNT(*) as count FROM "curriculum_modules"');
+    const totalLessons = await safeCount('SELECT COUNT(*) as count FROM "curriculum_lessons"');
+    const totalSections = await safeCount('SELECT COUNT(*) as count FROM "mini_sections"');
+
+    // Lesson completion
+    const completedInstances = await safeCount(
+      `SELECT COUNT(*) as count FROM "lesson_instances" WHERE status = 'completed'`,
+    );
+    const totalInstances = await safeCount('SELECT COUNT(*) as count FROM "lesson_instances"');
+    const completionRate = totalInstances > 0 ? Math.round((completedInstances / totalInstances) * 100) : 0;
+
+    // Content coverage
+    const publishedSections = await safeCount(
+      `SELECT COUNT(*) as count FROM "mini_sections" WHERE status = 'published' OR status = 'generated'`,
+    );
+    const coverageRate = totalSections > 0 ? Math.round((publishedSections / totalSections) * 100) : 0;
+
+    return {
+      risk_level: { score: 100 - coverageRate, label: `${coverageRate}% published`, delta: 0 },
+      active_alerts: { count: totalSections - publishedSections, delta: 0 },
+      lead_trend: { value: `${totalLessons}`, delta: 0, total: totalModules },
+      system_health: { score: completionRate, label: `${completionRate}% completion` },
+      agent_health: { running: publishedSections, errored: 0, total: totalSections, idle: 0, paused: 0 },
+      process_activity: { count_24h: totalInstances, delta: 0 },
+    };
+  },
+
+  async getAnomalies() {
+    // Unpublished sections
+    const unpublished = await safeQuery<{ id: string; title: string; status: string }>(
+      `SELECT id, title, status FROM "mini_sections"
+       WHERE status NOT IN ('published', 'generated')
+       ORDER BY created_at DESC LIMIT 20`,
+    );
+    return unpublished.map((s, i) => ({
+      id: `curr-${s.id}-${i}`,
+      entity: s.title || `Section ${s.id.slice(0, 8)}`,
+      entity_type: 'curriculum',
+      metric: 'status',
+      severity: 'warning' as string,
+      description: `Section "${s.title || s.id.slice(0, 8)}" is ${s.status} (not published)`,
+      detected_at: new Date(),
+      factors: { status: s.status },
+    }));
+  },
+
+  async getForecasts() {
+    const sectionWeeks = await safeQuery<{ week: string; count: string }>(
+      `SELECT DATE_TRUNC('week', created_at) as week, COUNT(*) as count
+       FROM "mini_sections" WHERE created_at >= NOW() - INTERVAL '12 weeks'
+       GROUP BY week ORDER BY week`,
+    );
+    return { leads_30d: buildForecast(sectionWeeks), enrollments_30d: buildForecast([]) };
+  },
+
+  async getRiskEntities() {
+    return [];
+  },
+};
+
+// ─── Strategy: System ────────────────────────────────────────────────────────
+
+const systemStrategy: EntityStrategy = {
+  async getKPIs() {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+    const processCount24h = await SystemProcess.count({ where: { created_at: { [Op.gte]: oneDayAgo } } });
+    const processCountPrev = await SystemProcess.count({
+      where: { created_at: { [Op.gte]: twoDaysAgo, [Op.lt]: oneDayAgo } },
+    });
+    const processDelta = pctDelta(processCount24h, processCountPrev);
+
+    const errorProcesses = await safeCount(
+      `SELECT COUNT(*) as count FROM "system_processes" WHERE status = 'error' AND created_at >= NOW() - INTERVAL '24 hours'`,
+    );
+
+    const totalEmails = await safeCount('SELECT COUNT(*) as count FROM "scheduled_emails"');
+    const pendingEmails = await safeCount(
+      `SELECT COUNT(*) as count FROM "scheduled_emails" WHERE status = 'pending'`,
+    );
+    const sentEmails = await safeCount(
+      `SELECT COUNT(*) as count FROM "scheduled_emails" WHERE status = 'sent'`,
+    );
+    const deliveryRate = totalEmails > 0 ? Math.round((sentEmails / totalEmails) * 100) : 0;
+
+    const totalComms = await safeCount(
+      `SELECT COUNT(*) as count FROM "communication_logs" WHERE created_at >= NOW() - INTERVAL '24 hours'`,
+    );
+
+    return {
+      risk_level: { score: errorProcesses > 10 ? 70 : errorProcesses > 0 ? 30 : 5, label: riskLabel(errorProcesses > 10 ? 70 : 30), delta: 0 },
+      active_alerts: { count: errorProcesses, delta: 0 },
+      lead_trend: { value: `${processCount24h}`, delta: processDelta, total: await SystemProcess.count() },
+      system_health: { score: deliveryRate, label: `${deliveryRate}% email delivery` },
+      agent_health: { running: sentEmails, errored: pendingEmails, total: totalEmails, idle: 0, paused: 0 },
+      process_activity: { count_24h: processCount24h + totalComms, delta: processDelta },
+    };
+  },
+
+  async getAnomalies() {
+    const errorProcesses = await safeQuery<{ id: string; process_name: string; error_message: string; created_at: string }>(
+      `SELECT id, process_name, error_message, created_at FROM "system_processes"
+       WHERE status = 'error' AND created_at >= NOW() - INTERVAL '24 hours'
+       ORDER BY created_at DESC LIMIT 20`,
+    );
+    return errorProcesses.map((p, i) => ({
+      id: `sys-${p.id}-${i}`,
+      entity: p.process_name,
+      entity_type: 'system',
+      metric: 'process_error',
+      severity: 'error' as string,
+      description: p.error_message || `Process "${p.process_name}" failed`,
+      detected_at: p.created_at,
+      factors: { process_name: p.process_name },
+    }));
+  },
+
+  async getForecasts() {
+    const processWeeks = await safeQuery<{ week: string; count: string }>(
+      `SELECT DATE_TRUNC('week', created_at) as week, COUNT(*) as count
+       FROM "system_processes" WHERE created_at >= NOW() - INTERVAL '12 weeks'
+       GROUP BY week ORDER BY week`,
+    );
+
+    const emailWeeks = await safeQuery<{ week: string; count: string }>(
+      `SELECT DATE_TRUNC('week', created_at) as week, COUNT(*) as count
+       FROM "scheduled_emails" WHERE created_at >= NOW() - INTERVAL '12 weeks'
+       GROUP BY week ORDER BY week`,
+    );
+
+    return {
+      leads_30d: buildForecast(processWeeks),
+      enrollments_30d: buildForecast(emailWeeks),
+    };
+  },
+
+  async getRiskEntities() {
+    // Processes with high error rates by module
+    const errorModules = await safeQuery<{ source_module: string; errors: string; total: string }>(
+      `SELECT source_module, COUNT(CASE WHEN status = 'error' THEN 1 END) as errors, COUNT(*) as total
+       FROM "system_processes"
+       WHERE created_at >= NOW() - INTERVAL '7 days' AND source_module IS NOT NULL
+       GROUP BY source_module
+       HAVING COUNT(CASE WHEN status = 'error' THEN 1 END) > 0
+       ORDER BY errors DESC
+       LIMIT 20`,
+    );
+    return errorModules.map((m) => ({
+      entity: m.source_module,
+      entity_type: 'system',
+      risk_score: Math.min(100, Math.round((Number(m.errors) / Math.max(Number(m.total), 1)) * 100)),
+      factors: { errors: Number(m.errors), total: Number(m.total) },
+      last_activity: null,
+    }));
+  },
+};
+
 // ─── Strategy Router ──────────────────────────────────────────────────────────
 
 function resolveEntityStrategy(entityType?: string): EntityStrategy {
@@ -802,6 +1151,10 @@ function resolveEntityStrategy(entityType?: string): EntityStrategy {
     case 'leads': return leadStrategy;
     case 'students': return studentStrategy;
     case 'agents': return agentStrategy;
+    case 'visitors': return visitorStrategy;
+    case 'cohorts': return cohortStrategy;
+    case 'curriculum': return curriculumStrategy;
+    case 'system': return systemStrategy;
     default: return globalStrategy;
   }
 }
