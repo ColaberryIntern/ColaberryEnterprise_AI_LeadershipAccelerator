@@ -311,6 +311,11 @@ Lead.init(
         fields: [sequelize.fn('LOWER', sequelize.col('email')) as any],
         name: 'leads_email_unique',
       },
+      { fields: ['lead_temperature'], name: 'idx_leads_temperature' },
+      { fields: ['pipeline_stage'], name: 'idx_leads_pipeline_stage' },
+      { fields: ['created_at'], name: 'idx_leads_created_at' },
+      { fields: ['status'], name: 'idx_leads_status' },
+      { fields: ['pipeline_stage', 'lead_temperature'], name: 'idx_leads_stage_temp' },
     ],
   }
 );

@@ -184,6 +184,10 @@ ScheduledEmail.init(
         name: 'idx_sched_emails_processing_started',
         fields: ['processing_started_at'],
       },
+      { fields: ['campaign_id'], name: 'idx_sched_emails_campaign_id' },
+      { fields: ['campaign_id', 'status'], name: 'idx_sched_emails_campaign_status' },
+      { fields: ['sent_at'], name: 'idx_sched_emails_sent_at' },
+      { fields: ['lead_id', 'status'], name: 'idx_sched_emails_lead_status' },
     ],
   }
 );

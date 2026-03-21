@@ -118,6 +118,10 @@ Cohort.init(
     sequelize,
     tableName: 'cohorts',
     timestamps: false,
+    indexes: [
+      { fields: ['status'], name: 'idx_cohorts_status' },
+      { fields: ['created_at'], name: 'idx_cohorts_created_at' },
+    ],
   }
 );
 

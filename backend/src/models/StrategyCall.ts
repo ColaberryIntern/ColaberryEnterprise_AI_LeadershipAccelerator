@@ -104,6 +104,11 @@ StrategyCall.init(
     sequelize,
     tableName: 'strategy_calls',
     timestamps: false,
+    indexes: [
+      { fields: ['status'], name: 'idx_strategy_calls_status' },
+      { fields: ['created_at'], name: 'idx_strategy_calls_created_at' },
+      { fields: ['lead_id'], name: 'idx_strategy_calls_lead_id' },
+    ],
   }
 );
 

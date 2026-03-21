@@ -75,6 +75,12 @@ Activity.init(
     sequelize,
     tableName: 'activities',
     timestamps: false,
+    indexes: [
+      { fields: ['created_at'], name: 'idx_activities_created_at' },
+      { fields: ['lead_id'], name: 'idx_activities_lead_id' },
+      { fields: ['type'], name: 'idx_activities_type' },
+      { fields: ['lead_id', 'created_at'], name: 'idx_activities_lead_created' },
+    ],
   }
 );
 

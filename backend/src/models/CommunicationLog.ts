@@ -142,6 +142,8 @@ CommunicationLog.init(
       { fields: ['campaign_id'] },
       { fields: ['provider_message_id'] },
       { fields: ['channel'] },
+      { fields: ['created_at', 'channel', 'status'], name: 'idx_comm_logs_created_channel_status' },
+      { fields: ['lead_id', 'created_at'], name: 'idx_comm_logs_lead_created' },
     ],
   }
 );

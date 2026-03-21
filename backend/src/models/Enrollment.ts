@@ -184,6 +184,12 @@ Enrollment.init(
     sequelize,
     tableName: 'enrollments',
     timestamps: false,
+    indexes: [
+      { fields: ['status'], name: 'idx_enrollments_status' },
+      { fields: ['created_at'], name: 'idx_enrollments_created_at' },
+      { fields: ['cohort_id'], name: 'idx_enrollments_cohort_id' },
+      { fields: ['payment_status'], name: 'idx_enrollments_payment_status' },
+    ],
   }
 );
 

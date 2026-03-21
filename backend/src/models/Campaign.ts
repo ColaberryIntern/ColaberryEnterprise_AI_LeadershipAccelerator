@@ -258,6 +258,11 @@ Campaign.init(
     sequelize,
     tableName: 'campaigns',
     timestamps: false,
+    indexes: [
+      { fields: ['status'], name: 'idx_campaigns_status' },
+      { fields: ['type'], name: 'idx_campaigns_type' },
+      { fields: ['created_at'], name: 'idx_campaigns_created_at' },
+    ],
   }
 );
 
