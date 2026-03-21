@@ -214,43 +214,47 @@ export async function runAssistantPipeline(
     steps.push({ step: 7, name: 'Select visualizations', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
   }
 
-  // ── Step 8: Generate Follow-ups ────────────────────────────────────────────
+  // ── Steps 8+9: Generate Follow-ups & Narrative in PARALLEL ────────────────
+  // Both are LLM calls with no dependency — narrative does not need follow-ups.
+  // Follow-ups are only used as fallback if narrative fails (buildRuleBasedSections).
   t0 = Date.now();
   let followUps: string[] = [];
-  try {
-    followUps = await generateFollowups(intent, question, entityType, context.ruleNarrative);
-    steps.push({
-      step: 8,
-      name: 'Generate follow-ups',
-      status: 'completed',
-      duration_ms: Date.now() - t0,
-      detail: `${followUps.length} questions`,
-    });
-  } catch (err: any) {
-    steps.push({ step: 8, name: 'Generate follow-ups', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
-  }
-
-  // ── Step 9: Generate Narrative ─────────────────────────────────────────────
-  t0 = Date.now();
   let narrative = context.ruleNarrative;
   let recommendations = context.recommendations;
   let narrativeSections: NarrativeSections | null = null;
-  try {
-    const llmNarrative = await generateNarrative(context, intent, question, entityType);
+
+  const [followUpSettled, narrativeSettled] = await Promise.allSettled([
+    generateFollowups(intent, question, entityType, context.ruleNarrative),
+    generateNarrative(context, intent, question, entityType),
+  ]);
+
+  const parallelNarrDuration = Date.now() - t0;
+
+  // Extract follow-ups
+  if (followUpSettled.status === 'fulfilled') {
+    followUps = followUpSettled.value;
+    steps.push({ step: 8, name: 'Generate follow-ups', status: 'completed', duration_ms: parallelNarrDuration, detail: `${followUps.length} questions` });
+  } else {
+    steps.push({ step: 8, name: 'Generate follow-ups', status: 'error', duration_ms: parallelNarrDuration, detail: (followUpSettled as PromiseRejectedResult).reason?.message });
+  }
+
+  // Extract narrative
+  if (narrativeSettled.status === 'fulfilled') {
+    const llmNarrative = narrativeSettled.value;
     if (llmNarrative) {
       narrative = llmNarrative.narrative;
       narrativeSections = llmNarrative.sections;
       if (llmNarrative.recommendations.length > 0) {
         recommendations = llmNarrative.recommendations;
       }
-      steps.push({ step: 9, name: 'Generate narrative', status: 'completed', duration_ms: Date.now() - t0, detail: 'LLM-generated' });
+      steps.push({ step: 9, name: 'Generate narrative', status: 'completed', duration_ms: parallelNarrDuration, detail: 'LLM-generated' });
     } else {
       narrativeSections = buildRuleBasedSections(context, followUps);
-      steps.push({ step: 9, name: 'Generate narrative', status: 'completed', duration_ms: Date.now() - t0, detail: 'rule-based fallback' });
+      steps.push({ step: 9, name: 'Generate narrative', status: 'completed', duration_ms: parallelNarrDuration, detail: 'rule-based fallback' });
     }
-  } catch (err: any) {
+  } else {
     narrativeSections = buildRuleBasedSections(context, followUps);
-    steps.push({ step: 9, name: 'Generate narrative', status: 'error', duration_ms: Date.now() - t0, detail: err?.message });
+    steps.push({ step: 9, name: 'Generate narrative', status: 'error', duration_ms: parallelNarrDuration, detail: (narrativeSettled as PromiseRejectedResult).reason?.message });
   }
 
   // ── Build Final Response ───────────────────────────────────────────────────

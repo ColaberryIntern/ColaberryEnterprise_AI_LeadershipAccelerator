@@ -67,7 +67,7 @@ const INTENT_PLAN_MAP: Record<Intent, PlanTemplate> = {
   forecast_request: {
     sql: true,
     ml: ['forecaster'],
-    vector: [],
+    vector: ['semantic_entity_search'],
     tables: ['leads', 'enrollments', 'campaigns', 'activities'],
   },
   comparison: {

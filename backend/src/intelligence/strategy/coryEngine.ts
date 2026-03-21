@@ -597,19 +597,26 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
       case 'analyze':
       case 'general_query':
       case 'optimize': {
-        // Use agentic engine — Cory autonomously investigates with tools
-        try {
-          assistantResponse = await runCoryAgenticLoop(cmd.command, cmd.context);
-          agentsDispatched.push('CoryAgenticEngine');
-          const toolCount = assistantResponse.pipelineSteps?.length || 0;
-          actionsPerformed.push(`Agentic investigation: ${toolCount} tool calls via ${assistantResponse.execution_path || 'agentic_loop'}`);
-        } catch (agenticErr: any) {
-          // Fallback to existing pipeline if agentic engine fails
-          console.warn('[CoryEngine] Agentic engine failed, falling back to pipeline:', agenticErr?.message?.slice(0, 200));
-          const pipelineEntityType = parameters.entity_type || cmd.context?.entity_type;
-          assistantResponse = await runAssistantPipeline(cmd.command, pipelineEntityType);
-          agentsDispatched.push('IntentAgent', 'SQLAgent', 'MLAgent', 'NarrativeAgent');
-          actionsPerformed.push(`Fallback: ${assistantResponse.pipelineSteps.length}-step pipeline`);
+        // Fast path: deterministic pipeline first (~3-5s vs 5-50s for agentic loop)
+        const pipelineEntityType = parameters.entity_type || cmd.context?.entity_type;
+        assistantResponse = await runAssistantPipeline(cmd.command, pipelineEntityType);
+        agentsDispatched.push('IntentAgent', 'SQLAgent', 'MLAgent', 'NarrativeAgent');
+        actionsPerformed.push(`Pipeline: ${assistantResponse.pipelineSteps.length}-step deterministic`);
+
+        // Escalate to agentic loop ONLY if pipeline found no useful data
+        const hasData = (assistantResponse.insights?.length > 0) ||
+                        (assistantResponse.visualizations?.length > 0);
+        if (!hasData) {
+          try {
+            console.log('[CoryEngine] Pipeline returned no data, escalating to agentic loop');
+            assistantResponse = await runCoryAgenticLoop(cmd.command, cmd.context);
+            agentsDispatched.push('CoryAgenticEngine');
+            const toolCount = assistantResponse.pipelineSteps?.length || 0;
+            actionsPerformed.push(`Agentic escalation: ${toolCount} tool calls via ${assistantResponse.execution_path || 'agentic_loop'}`);
+          } catch (agenticErr: any) {
+            console.warn('[CoryEngine] Agentic escalation also failed:', agenticErr?.message?.slice(0, 200));
+            // Keep the pipeline response — it's better than nothing
+          }
         }
 
         // Convert recommendations to briefings
@@ -861,10 +868,30 @@ export async function executeCoryCommand(cmd: CoryCommand): Promise<CoryResponse
   }
 
   // Step 5: Report to user in Cory's voice (scope-aware)
-  const message = await formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse, cmd.context, cmd.command);
+  // Skip redundant LLM calls when the pipeline already produced narrative + follow-ups
+  const hasNarrative = !!assistantResponse?.narrative;
+  const hasFollowUps = (assistantResponse?.recommendations?.length || 0) > 0;
 
-  // Generate 2 contextual follow-up questions
-  const suggested_questions = await generateSuggestedQuestions(cmd.command, intent, actionsPerformed, briefings);
+  let message: string;
+  let suggested_questions: string[];
+
+  if (hasNarrative && hasFollowUps) {
+    // Fast path: use pipeline results directly — no additional LLM calls
+    message = assistantResponse!.narrative;
+    suggested_questions = assistantResponse!.recommendations.slice(0, 2);
+  } else if (hasNarrative) {
+    // Narrative exists but no follow-ups — only generate suggestions
+    message = assistantResponse!.narrative;
+    suggested_questions = await generateSuggestedQuestions(cmd.command, intent, actionsPerformed, briefings);
+  } else {
+    // No narrative — run both in parallel
+    const [msgResult, sqResult] = await Promise.allSettled([
+      formatCoryResponse(intent, actionsPerformed, briefings, assistantResponse, cmd.context, cmd.command),
+      generateSuggestedQuestions(cmd.command, intent, actionsPerformed, briefings),
+    ]);
+    message = msgResult.status === 'fulfilled' ? msgResult.value : `Command processed. ${actionsPerformed.join('. ')}.`;
+    suggested_questions = sqResult.status === 'fulfilled' ? sqResult.value : [];
+  }
 
   return {
     message,

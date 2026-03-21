@@ -141,15 +141,45 @@ export function buildContext(
   // ── Extract Insights (rule-based, carried over from insightEngine.ts) ──
   extractInsights(intent, sqlResults, mlResults, insights, narrativeParts, recommendations, entityType);
 
+  // ── Vector-derived insights — related entities and past Q&A recall ──
+  for (const vr of vectorResults) {
+    if (vr.status !== 'success' || vr.data.length === 0) continue;
+
+    if (vr.task === 'similar_entities') {
+      const highSim = vr.data.filter((d) => (d.similarity || d.score || 0) > 0.8);
+      if (highSim.length > 0) {
+        insights.push({
+          type: 'Related Patterns',
+          severity: 'info',
+          message: `${highSim.length} closely related entities: ${highSim.slice(0, 3).map((d) => d.name || d.entity || 'Unknown').join(', ')}. May share common factors.`,
+        });
+      }
+    }
+
+    if (vr.task === 'semantic_entity_search') {
+      const pastQA = vr.data.filter((d) => d.source === 'qa_history' && (d.similarity || 0) > 0.75);
+      if (pastQA.length > 0) {
+        insights.push({
+          type: 'Previous Analysis',
+          severity: 'info',
+          message: `Similar question previously analyzed: "${(pastQA[0].question || pastQA[0].label || '').slice(0, 80)}".`,
+        });
+        recommendations.push('Review prior analysis for consistency — similar question answered previously.');
+      }
+    }
+  }
+
   // ── Build Context String ──
   let formattedContext = sections.join('\n');
 
-  // Token estimation and truncation
+  // Token estimation and truncation — preserve high-confidence vector matches
   const tokenEstimate = Math.ceil(formattedContext.length / 4);
   if (tokenEstimate > 8000) {
-    // Truncate by priority: keep SQL, trim ML, drop vector
-    const sqlSection = sections.filter((s) => s.startsWith('[SQL]') || !s.startsWith('[')).join('\n');
-    formattedContext = sqlSection.slice(0, 32000); // ~8000 tokens
+    const keepSections = sections.filter((s) =>
+      !s.startsWith('[ML:') && // Drop ML first (already extracted into insights)
+      !(s.startsWith('[Vector:') && !s.includes('score: 0.9') && !s.includes('score: 0.8'))
+    );
+    formattedContext = keepSections.join('\n').slice(0, 32000); // ~8000 tokens
   }
 
   const ruleNarrative = narrativeParts.join(' ') || 'Analysis complete. See data below for details.';
