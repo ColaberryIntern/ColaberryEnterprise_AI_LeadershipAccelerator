@@ -135,9 +135,46 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       } as any);
     }
 
-    // Process transcript via AI to extract lead data (fire-and-forget)
+    // Process transcript via AI to extract lead data
     if (transcript && commLog.lead_id) {
-      processCallTranscript(commLog.lead_id, transcript, call_id).catch((err: any) => {
+      processCallTranscript(commLog.lead_id, transcript, call_id).then(async () => {
+        // If this was a hot lead escalation call and the lead showed interest,
+        // move them from current campaign → Strategy Call Readiness
+        const commMeta = (commLog as any).metadata || {};
+        if (commMeta.trigger === 'hot_lead_escalation') {
+          try {
+            const lead = await Lead.findByPk(commLog.lead_id as any);
+            const interestArea = (lead as any)?.interest_area;
+            // Check if lead expressed interest (transcript processor sets interest_area)
+            if (interestArea === 'strategy_call' || interestArea === 'enrollment' || interestArea === 'executive_briefing') {
+              const { CampaignLead, ScheduledEmail } = require('../models');
+              const strategyCampaignId = '673d0ddf-78fc-44ab-b25e-858ef322d335';
+              const prevCampaignId = commMeta.previous_campaign_id;
+
+              // Unenroll from current campaign
+              if (prevCampaignId) {
+                await CampaignLead.update(
+                  { status: 'completed' },
+                  { where: { lead_id: commLog.lead_id, campaign_id: prevCampaignId, status: 'active' } },
+                );
+                // Cancel pending actions in old campaign
+                await ScheduledEmail.update(
+                  { status: 'cancelled' },
+                  { where: { lead_id: commLog.lead_id, campaign_id: prevCampaignId, status: 'pending' } },
+                );
+                console.log(`[Synthflow Webhook] Unenrolled lead ${commLog.lead_id} from ${prevCampaignId}`);
+              }
+
+              // Enroll in Strategy Call Readiness
+              const { enrollLeadInSequence } = require('../services/sequenceService');
+              await enrollLeadInSequence(commLog.lead_id, strategyCampaignId);
+              console.log(`[Synthflow Webhook] 🎯 Hot lead ${(lead as any)?.name} moved to Strategy Call Readiness (interest: ${interestArea})`);
+            }
+          } catch (moveErr: any) {
+            console.warn(`[Synthflow Webhook] Campaign transition failed: ${moveErr.message}`);
+          }
+        }
+      }).catch((err: any) => {
         console.warn('[Synthflow Webhook] Transcript processing failed:', err.message);
       });
     }

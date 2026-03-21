@@ -1568,8 +1568,7 @@ export function startScheduler(): void {
   // campaign enrollment (leads stay in Cold Outbound / Alumni Champion).
   cron.schedule('30 14-22 * * 1-5', () => { // 9:30AM-5:30PM CT
     instrumentCronJob('HotLeadEscalation', async () => {
-      // Find hot leads who haven't been called yet
-      // Find hot leads with their active campaign, who haven't been called yet
+      // Find ALL hot leads with their active campaign, who haven't been called yet
       const [hotLeads] = await sequelize.query(`
         SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone,
           cl_camp.campaign_id as active_campaign_id, c.name as campaign_name
@@ -1590,16 +1589,17 @@ export function startScheduler(): void {
             AND comm.channel = 'voice'
             AND comm.metadata->>'trigger' = 'hot_lead_escalation'
           )
-        LIMIT 5
       `);
 
       if ((hotLeads as any[]).length === 0) return;
 
-      console.log(`[HotLead] Found ${(hotLeads as any[]).length} hot leads for Cory outreach`);
+      console.log(`[HotLead] Found ${(hotLeads as any[]).length} hot leads for outreach`);
 
       const { triggerVoiceCall } = require('./synthflowService');
       const { logCommunication } = require('./communicationLogService');
       const Lead = require('../models').Lead;
+      const CampaignLead = require('../models').CampaignLead;
+      const strategyCampaignId = '673d0ddf-78fc-44ab-b25e-858ef322d335'; // Strategy Call Readiness
 
       let called = 0;
       for (const lead of hotLeads as any[]) {
@@ -1616,26 +1616,26 @@ export function startScheduler(): void {
             continue;
           }
 
-          // Trigger Cory voice call — pitch to book a call with BD team
+          // Trigger Maya voice call — pitch to book a 30-min strategy call with BD team
           const firstName = (lead.name || '').split(' ')[0];
           const prompt = [
             'You are Maya, the AI Admissions Director for the Colaberry Enterprise AI Leadership Accelerator.',
             `You are calling ${lead.name} because they showed interest in our content about building AI systems.`,
             `Be warm, conversational, and professional. Start by saying "Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I saw that you showed some interest in our content about building AI systems and I wanted to reach out personally to see if I can answer any questions."`,
             '',
-            'Your goal is to schedule a call between them and our Business Development team.',
+            'Your goal is to schedule a 30-minute strategy call between them and our Business Development team.',
             '',
             'Key talking points:',
             '- You noticed they engaged with our content about AI systems and leadership',
-            '- Ask what caught their attention or what challenges they are facing with AI',
+            '- Ask what caught their attention or what challenges they are facing with AI in their organization',
             '- The program helps data professionals and leaders build and deploy real AI systems in 3 weeks',
             '- Next cohort starts April 14th with limited seats available',
             '- Companies can sponsor their teams for corporate training',
-            '- Offer to schedule a 15-minute call with our Business Development team to discuss fit and answer questions',
+            '- Offer to schedule a 30-minute strategy call with our Business Development team to discuss how the program can help their team',
             '',
-            'If they want to schedule, say you will send them a link to book a time that works for them.',
-            'If they are not interested right now, thank them and let them know they can reach out anytime.',
-            'Keep the call under 3 minutes unless they want to talk more.',
+            'If they agree to schedule a call, say "Great, I will send you a link to book a 30-minute strategy call with our Business Development team. You will receive it by email shortly."',
+            'If they are not interested right now, thank them warmly and let them know they can reach out anytime.',
+            'Keep the call conversational. Do not rush.',
           ].join('\n');
 
           const result = await triggerVoiceCall({
@@ -1646,7 +1646,7 @@ export function startScheduler(): void {
             context: {
               lead_name: lead.name,
               lead_email: lead.email,
-              step_goal: 'Hot lead outreach — gauge interest and offer strategy call',
+              step_goal: 'Book 30-min strategy call with Business Development team',
             },
           });
 
@@ -1661,14 +1661,15 @@ export function startScheduler(): void {
               delivery_mode: 'live',
               status: 'sent',
               to_address: lead.phone,
-              subject: 'Hot lead interest call — schedule BD call',
+              subject: 'Hot lead interest call — schedule 30-min BD strategy call',
               provider: 'synthflow',
               provider_message_id: result.data?.call_id || null,
               metadata: {
                 trigger: 'hot_lead_escalation',
                 lead_temperature: 'hot',
                 campaign_name: lead.campaign_name || 'unknown',
-                goal: 'Book call with Business Development team',
+                previous_campaign_id: lead.active_campaign_id || null,
+                goal: 'Book 30-min strategy call with Business Development team',
               },
             }).catch(() => {});
             console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
@@ -1677,8 +1678,8 @@ export function startScheduler(): void {
           console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
         }
 
-        // 30s between calls to avoid Synthflow rate limits
-        await new Promise((r) => setTimeout(r, 30000));
+        // 10s between calls for Synthflow pacing
+        await new Promise((r) => setTimeout(r, 10000));
       }
 
       if (called > 0) {
