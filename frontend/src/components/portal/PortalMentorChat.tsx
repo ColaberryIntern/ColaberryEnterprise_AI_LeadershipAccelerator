@@ -9,27 +9,21 @@ interface Message {
   timestamp?: string;
 }
 
-/* Friendly mentor face SVG — used for FAB and message avatars */
+/* AI Mentor avatar — circular photo used for FAB and message avatars */
 const MentorFace = ({ size = 40 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="32" cy="32" r="30" fill="#eef2ff" stroke="#c7d2fe" strokeWidth="2" />
-    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" fill="none" />
-    <circle cx="22" cy="30" r="3.5" fill="#6366f1" />
-    <circle cx="42" cy="30" r="3.5" fill="#6366f1" />
-    <circle cx="23.2" cy="28.8" r="1.2" fill="#fff" />
-    <circle cx="43.2" cy="28.8" r="1.2" fill="#fff" />
-    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-    <rect x="7" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <rect x="51" y="24" width="6" height="10" rx="3" fill="#8b5cf6" />
-    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" fill="none" />
-    <circle cx="19" cy="45" r="2" fill="#8b5cf6" />
-  </svg>
+  <img
+    src="/ai-mentor-avatar.png"
+    alt="AI Mentor"
+    width={size}
+    height={size}
+    style={{ borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+  />
 );
 
 const MentorAvatar = ({ size = 28 }: { size?: number }) => (
   <div
     className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-    style={{ width: size, height: size, background: '#eef2ff', overflow: 'hidden' }}
+    style={{ width: size, height: size, overflow: 'hidden' }}
   >
     <MentorFace size={size} />
   </div>
