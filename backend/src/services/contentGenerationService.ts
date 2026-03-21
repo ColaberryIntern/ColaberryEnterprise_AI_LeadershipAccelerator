@@ -560,6 +560,14 @@ async function buildCompositePrompt(
   parts.push(`Section: ${lesson.title}`);
   parts.push(`Description: ${lesson.description}`);
   if (lesson.learning_goal) parts.push(`Learning Goal: ${lesson.learning_goal}`);
+  const tpl = lesson.content_template_json || {} as any;
+  if (tpl.key_points?.length) parts.push(`Key Points: ${tpl.key_points.join(', ')}`);
+  if (tpl.book_frameworks) {
+    const bf = tpl.book_frameworks;
+    parts.push(`Primary Framework: ${bf.primary}`);
+    if (bf.secondary?.length) parts.push(`Secondary Frameworks: ${bf.secondary.join(', ')}`);
+    if (bf.inpact_dims?.length) parts.push(`INPACT Dimensions: ${bf.inpact_dims.join(', ')}`);
+  }
   if (lesson.build_phase_flag) parts.push('Phase: BUILD (hands-on creation)');
   if (lesson.presentation_phase_flag) parts.push('Phase: PRESENTATION (executive delivery)');
   parts.push('');
@@ -830,6 +838,14 @@ export async function buildCompositePromptForSimulation(
   parts.push(`Section: ${lesson.title}`);
   parts.push(`Description: ${lesson.description}`);
   if (lesson.learning_goal) parts.push(`Learning Goal: ${lesson.learning_goal}`);
+  const template = lesson.content_template_json || {} as any;
+  if (template.key_points?.length) parts.push(`Key Points: ${template.key_points.join(', ')}`);
+  if (template.book_frameworks) {
+    const bf = template.book_frameworks;
+    parts.push(`Primary Framework: ${bf.primary}`);
+    if (bf.secondary?.length) parts.push(`Secondary Frameworks: ${bf.secondary.join(', ')}`);
+    if (bf.inpact_dims?.length) parts.push(`INPACT Dimensions: ${bf.inpact_dims.join(', ')}`);
+  }
   if (lesson.build_phase_flag) parts.push('Phase: BUILD (hands-on creation)');
   if (lesson.presentation_phase_flag) parts.push('Phase: PRESENTATION (executive delivery)');
   parts.push('');
