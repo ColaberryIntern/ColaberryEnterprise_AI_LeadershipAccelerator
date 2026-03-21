@@ -62,6 +62,9 @@ export const env = {
   enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
   visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
   enableChat: process.env.ENABLE_CHAT === 'true',
+  enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
+  enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
+  enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 

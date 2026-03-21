@@ -196,4 +196,204 @@ router.get('/api/portal/project/requirements/job/:id', requireParticipant, async
   }
 });
 
+// ---------------------------------------------------------------------------
+// Artifact Compiler Routes (V2)
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/project/compile', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { document_type } = req.body;
+    if (!document_type) {
+      res.status(400).json({ error: 'document_type is required' });
+      return;
+    }
+    const { compileDocument } = await import('../services/artifactCompilerService');
+    const result = await compileDocument(enrollmentId, document_type);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /compile error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/compile/all', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { compileAll } = await import('../services/artifactCompilerService');
+    const results = await compileAll(enrollmentId);
+    res.json(results);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /compile/all error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/compile/status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getCompilationStatus } = await import('../services/artifactCompilerService');
+    const status = await getCompilationStatus(enrollmentId);
+    res.json(status);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /compile/status error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Requirements Matching Routes (V2)
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/project/requirements/extract', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { extractRequirements } = await import('../services/requirementsMatchingService');
+    const result = await extractRequirements(project.id);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /requirements/extract error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/requirements/match', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { matchRequirementsToRepo } = await import('../services/requirementsMatchingService');
+    const result = await matchRequirementsToRepo(project.id);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /requirements/match error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/requirements/map', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getRequirementsStatus } = await import('../services/requirementsMatchingService');
+    const status = await getRequirementsStatus(project.id);
+    res.json(status);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /requirements/map error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/api/portal/project/requirements/map/:id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { manualMatch } = await import('../services/requirementsMatchingService');
+    const { file_paths } = req.body;
+    const result = await manualMatch(req.params.id as string, file_paths || []);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] PUT /requirements/map error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GitHub Sync Routes (V2)
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/project/github/sync', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { fullSync } = await import('../services/githubService');
+    const result = await fullSync(enrollmentId);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /github/sync error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/github/tree', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getFileTree } = await import('../services/githubService');
+    const tree = await getFileTree(enrollmentId);
+    res.json({ tree });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /github/tree error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/github/status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getConnection } = await import('../services/githubService');
+    const conn = await getConnection(enrollmentId);
+    if (!conn) { res.json({ connected: false }); return; }
+    res.json({
+      connected: true,
+      repo_url: conn.repo_url,
+      repo_owner: conn.repo_owner,
+      repo_name: conn.repo_name,
+      language: conn.repo_language,
+      file_count: conn.file_count,
+      last_sync: conn.last_sync_at,
+      recent_commits: (conn.commit_summary_json || []).slice(0, 5),
+    });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /github/status error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Progress Routes (V2)
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/progress', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { calculateProgress } = await import('../services/projectProgressService');
+    const progress = await calculateProgress(enrollmentId);
+    res.json(progress);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /progress error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/progress/refresh', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { calculateProgress } = await import('../services/projectProgressService');
+    const progress = await calculateProgress(enrollmentId);
+    res.json(progress);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /progress/refresh error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Export/Import Routes (V2)
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/export', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { exportProjectState } = await import('../services/projectExportService');
+    const state = await exportProjectState(enrollmentId);
+    res.json(state);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /export error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

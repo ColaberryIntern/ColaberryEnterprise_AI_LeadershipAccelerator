@@ -22,6 +22,9 @@ export interface ProjectAttributes {
   portfolio_updated_at?: Date;
   executive_updated_at?: Date;
   maturity_score?: number;
+  requirements_completion_pct?: number;
+  readiness_score_breakdown?: any;
+  progress_computed_at?: Date;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -45,6 +48,9 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare portfolio_updated_at: Date;
   declare executive_updated_at: Date;
   declare maturity_score: number;
+  declare requirements_completion_pct: number;
+  declare readiness_score_breakdown: any;
+  declare progress_computed_at: Date;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -127,6 +133,18 @@ Project.init(
     },
     maturity_score: {
       type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    requirements_completion_pct: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    readiness_score_breakdown: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    progress_computed_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
   },

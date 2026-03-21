@@ -40,6 +40,7 @@ import productionActivationRoutes from './admin/productionActivationRoute';
 import campaignDiagnosticsRoutes from './admin/campaignDiagnosticsRoutes';
 import visitorFlowRoutes from './admin/visitorFlowRoutes';
 import marketingFunnelRoutes from './admin/marketingFunnelRoutes';
+import artifactRelationshipRoutes from './admin/artifactRelationshipRoutes';
 
 const router = Router();
 
@@ -84,5 +85,6 @@ router.use(productionActivationRoutes);
 router.use(campaignDiagnosticsRoutes);
 router.use(visitorFlowRoutes);
 router.use(marketingFunnelRoutes);
+router.use(artifactRelationshipRoutes);
 
 export default router;

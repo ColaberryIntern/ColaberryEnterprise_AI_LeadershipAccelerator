@@ -91,4 +91,24 @@ router.get('/api/admin/projects/overview', requireAdmin, async (_req: Request, r
   }
 });
 
+/**
+ * POST /api/admin/projects/:id/import
+ * Import project state (admin only).
+ */
+router.post('/api/admin/projects/:id/import', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const project = await Project.findByPk(req.params.id as string);
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+    const { importProjectState } = await import('../../services/projectExportService');
+    const result = await importProjectState(project.enrollment_id, req.body);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] POST /import error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

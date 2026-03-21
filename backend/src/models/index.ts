@@ -124,6 +124,8 @@ import MayaConversationOutcome from './MayaConversationOutcome';
 import MentorIntervention from './MentorIntervention';
 import SectionExecutionLog from './SectionExecutionLog';
 import HealingPlan from './HealingPlan';
+import ArtifactRelationship from './ArtifactRelationship';
+import RequirementsMap from './RequirementsMap';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -554,6 +556,17 @@ ProjectArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 
+// --- Artifact Relationship Graph ---
+ArtifactDefinition.hasMany(ArtifactRelationship, { foreignKey: 'parent_artifact_id', as: 'childRelationships' });
+ArtifactDefinition.hasMany(ArtifactRelationship, { foreignKey: 'child_artifact_id', as: 'parentRelationships' });
+ArtifactRelationship.belongsTo(ArtifactDefinition, { foreignKey: 'parent_artifact_id', as: 'parentArtifact' });
+ArtifactRelationship.belongsTo(ArtifactDefinition, { foreignKey: 'child_artifact_id', as: 'childArtifact' });
+
+// --- Requirements Map ---
+Project.hasMany(RequirementsMap, { foreignKey: 'project_id', as: 'requirementsMaps' });
+RequirementsMap.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+RequirementsMap.belongsTo(ArtifactDefinition, { foreignKey: 'source_artifact_id', as: 'sourceArtifact' });
+
 AssignmentSubmission.hasMany(ProjectArtifact, { foreignKey: 'submission_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(AssignmentSubmission, { foreignKey: 'submission_id', as: 'submission' });
 
@@ -732,4 +745,6 @@ export {
   MentorIntervention,
   SectionExecutionLog,
   HealingPlan,
+  ArtifactRelationship,
+  RequirementsMap,
 };

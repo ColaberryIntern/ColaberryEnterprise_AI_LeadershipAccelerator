@@ -90,6 +90,118 @@ export async function getRepoStatus(enrollmentId: string): Promise<any> {
   };
 }
 
+// ---------------------------------------------------------------------------
+// File Tree Sync (Artifact V2)
+// ---------------------------------------------------------------------------
+
+export async function syncFileTree(enrollmentId: string): Promise<{
+  fileCount: number;
+  language: string | null;
+}> {
+  const connection = await getConnection(enrollmentId);
+  if (!connection || !connection.repo_owner || !connection.repo_name) {
+    throw new Error('No GitHub repository connected');
+  }
+
+  const headers: any = { 'Accept': 'application/vnd.github.v3+json' };
+  if (connection.access_token_encrypted) {
+    headers['Authorization'] = `Bearer ${connection.access_token_encrypted}`;
+  }
+
+  // Get default branch
+  const repoRes = await fetch(
+    `https://api.github.com/repos/${connection.repo_owner}/${connection.repo_name}`,
+    { headers }
+  );
+  if (!repoRes.ok) throw new Error(`GitHub API error: ${repoRes.status}`);
+  const repoData: any = await repoRes.json();
+  const branch = repoData.default_branch || 'main';
+
+  // Get recursive tree
+  const treeRes = await fetch(
+    `https://api.github.com/repos/${connection.repo_owner}/${connection.repo_name}/git/trees/${branch}?recursive=1`,
+    { headers }
+  );
+  if (!treeRes.ok) throw new Error(`GitHub tree API error: ${treeRes.status}`);
+  const treeData: any = await treeRes.json();
+
+  const files = (treeData.tree || []).filter((item: any) => item.type === 'blob');
+  const fileCount = files.length;
+
+  // Detect primary language from file extensions
+  const extCounts: Record<string, number> = {};
+  for (const file of files) {
+    const ext = (file.path || '').split('.').pop()?.toLowerCase();
+    if (ext && ext.length <= 10) {
+      extCounts[ext] = (extCounts[ext] || 0) + 1;
+    }
+  }
+  const langMap: Record<string, string> = {
+    ts: 'TypeScript', tsx: 'TypeScript', js: 'JavaScript', jsx: 'JavaScript',
+    py: 'Python', go: 'Go', rs: 'Rust', java: 'Java', rb: 'Ruby', cs: 'C#',
+  };
+  const topExt = Object.entries(extCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const language = topExt ? (langMap[topExt] || topExt) : null;
+
+  connection.file_tree_json = treeData;
+  connection.file_count = fileCount;
+  connection.repo_language = language || '';
+  connection.last_sync_at = new Date();
+  await connection.save();
+
+  return { fileCount, language };
+}
+
+export async function syncCommitHistory(
+  enrollmentId: string,
+  count: number = 20
+): Promise<number> {
+  const connection = await getConnection(enrollmentId);
+  if (!connection || !connection.repo_owner || !connection.repo_name) {
+    throw new Error('No GitHub repository connected');
+  }
+
+  const headers: any = { 'Accept': 'application/vnd.github.v3+json' };
+  if (connection.access_token_encrypted) {
+    headers['Authorization'] = `Bearer ${connection.access_token_encrypted}`;
+  }
+
+  const commitsRes = await fetch(
+    `https://api.github.com/repos/${connection.repo_owner}/${connection.repo_name}/commits?per_page=${count}`,
+    { headers }
+  );
+  if (!commitsRes.ok) throw new Error(`GitHub commits API error: ${commitsRes.status}`);
+  const commits: any[] = (await commitsRes.json()) as any[];
+
+  const summary = commits.map((c: any) => ({
+    sha: c.sha?.substring(0, 7),
+    message: c.commit?.message?.split('\n')[0] || '',
+    author: c.commit?.author?.name || '',
+    date: c.commit?.author?.date || '',
+    files_changed: c.stats?.total || 0,
+  }));
+
+  connection.commit_summary_json = summary;
+  await connection.save();
+
+  return summary.length;
+}
+
+export async function fullSync(enrollmentId: string): Promise<{
+  fileCount: number;
+  language: string | null;
+  commitCount: number;
+}> {
+  const { fileCount, language } = await syncFileTree(enrollmentId);
+  const commitCount = await syncCommitHistory(enrollmentId);
+  return { fileCount, language, commitCount };
+}
+
+export async function getFileTree(enrollmentId: string): Promise<any> {
+  const connection = await getConnection(enrollmentId);
+  return connection?.file_tree_json || null;
+}
+
 export async function generateStatusReport(
   enrollmentId: string
 ): Promise<string | null> {

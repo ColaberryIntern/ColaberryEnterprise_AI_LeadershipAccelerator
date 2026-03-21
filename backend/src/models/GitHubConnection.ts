@@ -10,6 +10,11 @@ export interface GitHubConnectionAttributes {
   access_token_encrypted?: string;
   last_checked_at?: Date;
   status_json?: any;
+  file_tree_json?: any;
+  last_sync_at?: Date;
+  commit_summary_json?: any;
+  repo_language?: string;
+  file_count?: number;
   created_at?: Date;
 }
 
@@ -22,6 +27,11 @@ class GitHubConnection extends Model<GitHubConnectionAttributes> implements GitH
   declare access_token_encrypted: string;
   declare last_checked_at: Date;
   declare status_json: any;
+  declare file_tree_json: any;
+  declare last_sync_at: Date;
+  declare commit_summary_json: any;
+  declare repo_language: string;
+  declare file_count: number;
   declare created_at: Date;
 }
 
@@ -62,6 +72,26 @@ GitHubConnection.init(
       type: DataTypes.JSONB,
       allowNull: true,
       defaultValue: {},
+    },
+    file_tree_json: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    last_sync_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    commit_summary_json: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    repo_language: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    file_count: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,
