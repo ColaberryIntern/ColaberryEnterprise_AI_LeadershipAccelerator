@@ -8,6 +8,7 @@ import ProjectWorkflowPanel from '../../components/project/ProjectWorkflowPanel'
 import ProjectIntelligencePanel from '../../components/project/ProjectIntelligencePanel';
 import ProjectTimeline from '../../components/project/ProjectTimeline';
 import ProjectMentorAlerts from '../../components/project/ProjectMentorAlerts';
+import ProjectNextActionPanel from '../../components/project/ProjectNextActionPanel';
 
 interface ProjectData {
   id: string;
@@ -559,6 +560,8 @@ function ProjectDashboard() {
       />
 
       <ProjectProgress currentStage={project.project_stage} />
+
+      <ProjectNextActionPanel />
 
       <nav className="nav nav-tabs mb-4">
         {tabs.map(t => (
