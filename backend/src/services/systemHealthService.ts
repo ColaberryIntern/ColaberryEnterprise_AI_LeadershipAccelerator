@@ -453,11 +453,25 @@ async function checkCampaignHealth(checks: HealthCheck[]): Promise<void> {
     );
     const pastDuePending = parseInt((pendingRows as any)[0]?.cnt || '0', 10);
 
-    if (recentSends === 0 && pastDuePending > 0) {
+    // Only flag send gap during weekday business hours (campaigns don't send on weekends)
+    const nowCT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+    const dayOfWeek = nowCT.getDay(); // 0=Sun, 6=Sat
+    const hourCT = nowCT.getHours();
+    const isBusinessHours = dayOfWeek >= 1 && dayOfWeek <= 5 && hourCT >= 8 && hourCT < 17;
+
+    if (recentSends === 0 && pastDuePending > 0 && isBusinessHours) {
       checks.push({
         name: 'send_throughput',
         severity: 'critical',
         detail: `No sends in the last hour, but ${pastDuePending} actions are past due and waiting. The scheduler may be stalled or all actions are failing.`,
+        metric: pastDuePending,
+      });
+    } else if (recentSends === 0 && pastDuePending > 0 && !isBusinessHours) {
+      // Expected — campaigns only send during business hours
+      checks.push({
+        name: 'send_throughput',
+        severity: 'ok',
+        detail: `${pastDuePending} actions past due but outside business hours (weekdays 8AM-5PM CT). Will process when send window opens.`,
         metric: pastDuePending,
       });
     }
