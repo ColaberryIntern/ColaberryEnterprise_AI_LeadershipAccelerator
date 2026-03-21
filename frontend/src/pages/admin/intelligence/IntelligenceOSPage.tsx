@@ -811,8 +811,8 @@ function DynamicCanvas({
 
       {/* Intelligence Analytics Grid removed — entity-specific KPI charts above replace it */}
 
-      {/* Section 5: Auto-Insights Grid */}
-      {autoInsights.length > 0 && (
+      {/* Section 5: Auto-Insights Grid — only show after all loading completes */}
+      {!analyticsLoading && autoInsights.length > 0 && (
         <div className="mt-3">
           <h6 className="fw-semibold small mb-2" style={{ color: 'var(--color-primary)' }}>
             Key Insights
@@ -824,8 +824,8 @@ function DynamicCanvas({
       {/* Section 6: Investigation Panel */}
       <InvestigationPanel anomaly={investigationTarget} onClose={onCloseInvestigation} />
 
-      {/* Section 5: Follow-up Questions */}
-      {insights?.follow_ups && insights.follow_ups.length > 0 && (
+      {/* Section 5: Follow-up Questions — only show after all loading completes */}
+      {!analyticsLoading && insights?.follow_ups && insights.follow_ups.length > 0 && (
         <div className="mt-3">
           <small className="fw-semibold text-muted">Suggested follow-ups:</small>
           <div className="d-flex flex-wrap gap-2 mt-2">
@@ -1677,6 +1677,7 @@ function IntelligenceOSContent() {
     setSummaryLoading(true);
     setIsProcessing(true);
     setVisualizations([]); // Clear stale charts before loading new entity
+    setAutoInsights([]); // Clear stale insights from previous entity
 
     try {
       // ── Phase 1: Load KPIs + other data in parallel (no charts yet) ──
