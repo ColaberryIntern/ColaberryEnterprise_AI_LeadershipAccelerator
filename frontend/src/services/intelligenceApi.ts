@@ -163,11 +163,11 @@ export const getEntityNetwork = () => api.get<EntityNetwork>('/entity-network');
 export const getQAHistory = (params?: { limit?: number; offset?: number }) =>
   api.get<{ rows: any[]; count: number }>('/qa-history', { params });
 
-// Analytics (optional entity_type scoping)
-export const getKPIs = (params?: { entity_type?: string }) => api.get('/kpis', { params });
-export const getAnomalies = (params?: { entity_type?: string }) => api.get('/anomalies', { params });
-export const getForecasts = (params?: { entity_type?: string }) => api.get('/forecasts', { params });
-export const getRiskEntities = (params?: { entity_type?: string }) => api.get('/risk-entities', { params });
+// Analytics (optional entity_type + entity_name scoping)
+export const getKPIs = (params?: { entity_type?: string; entity_name?: string }) => api.get('/kpis', { params });
+export const getAnomalies = (params?: { entity_type?: string; entity_name?: string }) => api.get('/anomalies', { params });
+export const getForecasts = (params?: { entity_type?: string; entity_name?: string }) => api.get('/forecasts', { params });
+export const getRiskEntities = (params?: { entity_type?: string; entity_name?: string }) => api.get('/risk-entities', { params });
 
 // Business Hierarchy
 export interface BusinessCategory {

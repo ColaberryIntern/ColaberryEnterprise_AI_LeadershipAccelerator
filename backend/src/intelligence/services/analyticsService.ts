@@ -1143,9 +1143,38 @@ const systemStrategy: EntityStrategy = {
   },
 };
 
+// ─── Department → Entity Mapping ──────────────────────────────────────────────
+// Maps organizational departments to their closest Business Map entity type
+// so department drill-downs show relevant KPIs instead of global data.
+
+const DEPT_ENTITY_MAP: Record<string, string> = {
+  intelligence: 'system',
+  operations: 'system',
+  orchestration: 'agents',
+  infrastructure: 'system',
+  platform: 'system',
+  security: 'system',
+  growth: 'leads',
+  marketing: 'campaigns',
+  admissions: 'leads',
+  education: 'curriculum',
+  student_success: 'students',
+  alumni: 'students',
+  // These departments are cross-cutting — use global strategy
+  // executive, governance, finance, strategy, partnerships, reporting
+};
+
 // ─── Strategy Router ──────────────────────────────────────────────────────────
 
-function resolveEntityStrategy(entityType?: string): EntityStrategy {
+function resolveEntityStrategy(entityType?: string, entityName?: string): EntityStrategy {
+  // Department drill-down: map to closest entity type
+  if (entityType === 'department' && entityName) {
+    const slug = entityName.toLowerCase().replace(/\s+/g, '_');
+    const mapped = DEPT_ENTITY_MAP[slug];
+    if (mapped) return resolveEntityStrategy(mapped);
+    return globalStrategy;
+  }
+
   switch (entityType) {
     case 'campaigns': return campaignStrategy;
     case 'leads': return leadStrategy;
@@ -1161,22 +1190,22 @@ function resolveEntityStrategy(entityType?: string): EntityStrategy {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function getIntelligenceKPIs(entityType?: string) {
-  const strategy = resolveEntityStrategy(entityType);
+export async function getIntelligenceKPIs(entityType?: string, entityName?: string) {
+  const strategy = resolveEntityStrategy(entityType, entityName);
   return strategy.getKPIs();
 }
 
-export async function getAnomalies(entityType?: string) {
-  const strategy = resolveEntityStrategy(entityType);
+export async function getAnomalies(entityType?: string, entityName?: string) {
+  const strategy = resolveEntityStrategy(entityType, entityName);
   return strategy.getAnomalies();
 }
 
-export async function getForecasts(entityType?: string) {
-  const strategy = resolveEntityStrategy(entityType);
+export async function getForecasts(entityType?: string, entityName?: string) {
+  const strategy = resolveEntityStrategy(entityType, entityName);
   return strategy.getForecasts();
 }
 
-export async function getRiskEntities(entityType?: string) {
-  const strategy = resolveEntityStrategy(entityType);
+export async function getRiskEntities(entityType?: string, entityName?: string) {
+  const strategy = resolveEntityStrategy(entityType, entityName);
   return strategy.getRiskEntities();
 }

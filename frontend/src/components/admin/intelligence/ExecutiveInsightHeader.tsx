@@ -48,6 +48,38 @@ const ENTITY_LABELS: Record<string, Record<string, string>> = {
     agent_health: 'Agent Status',
     process_activity: 'Executions (24h)',
   },
+  visitors: {
+    risk_level: 'Bounce Rate',
+    active_alerts: 'High-Bounce Sources',
+    lead_trend: 'Sessions (7d)',
+    system_health: 'Conversion Rate',
+    agent_health: 'UTM Analysis',
+    process_activity: 'Pageviews (24h)',
+  },
+  cohorts: {
+    risk_level: 'Cohort Risk',
+    active_alerts: 'Inactive Cohorts',
+    lead_trend: 'Enrollments',
+    system_health: 'Completion Rate',
+    agent_health: 'Cohort Status',
+    process_activity: 'Lesson Activity',
+  },
+  curriculum: {
+    risk_level: 'Publish Coverage',
+    active_alerts: 'Unpublished Sections',
+    lead_trend: 'Total Lessons',
+    system_health: 'Content Completeness',
+    agent_health: 'Module Status',
+    process_activity: 'Section Count',
+  },
+  system: {
+    risk_level: 'Error Severity',
+    active_alerts: 'Critical Errors',
+    lead_trend: 'Process Runs (24h)',
+    system_health: 'Email Delivery Rate',
+    agent_health: 'Process Health',
+    process_activity: 'Total Activity (24h)',
+  },
 };
 
 const riskColors: Record<string, string> = {

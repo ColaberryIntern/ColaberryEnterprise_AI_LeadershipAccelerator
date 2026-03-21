@@ -226,7 +226,7 @@ export async function handleGetQAHistory(req: Request, res: Response, next: Next
 export async function handleGetKPIs(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getIntelligenceKPIs } = await import('../intelligence/services/analyticsService');
-    const data = await getIntelligenceKPIs(req.query.entity_type as string | undefined);
+    const data = await getIntelligenceKPIs(req.query.entity_type as string | undefined, req.query.entity_name as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
@@ -234,7 +234,7 @@ export async function handleGetKPIs(req: Request, res: Response, next: NextFunct
 export async function handleGetAnomalies(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getAnomalies } = await import('../intelligence/services/analyticsService');
-    const data = await getAnomalies(req.query.entity_type as string | undefined);
+    const data = await getAnomalies(req.query.entity_type as string | undefined, req.query.entity_name as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
@@ -242,7 +242,7 @@ export async function handleGetAnomalies(req: Request, res: Response, next: Next
 export async function handleGetForecasts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getForecasts } = await import('../intelligence/services/analyticsService');
-    const data = await getForecasts(req.query.entity_type as string | undefined);
+    const data = await getForecasts(req.query.entity_type as string | undefined, req.query.entity_name as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
@@ -250,7 +250,7 @@ export async function handleGetForecasts(req: Request, res: Response, next: Next
 export async function handleGetRiskEntities(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { getRiskEntities } = await import('../intelligence/services/analyticsService');
-    const data = await getRiskEntities(req.query.entity_type as string | undefined);
+    const data = await getRiskEntities(req.query.entity_type as string | undefined, req.query.entity_name as string | undefined);
     res.json(data);
   } catch (error) { next(error); }
 }
