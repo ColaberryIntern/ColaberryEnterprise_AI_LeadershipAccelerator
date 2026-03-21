@@ -23,6 +23,7 @@ interface Visitor {
   utm_source?: string;
   referrer_domain?: string;
   campaign_id?: string;
+  campaign?: { id: string; name: string } | null;
   device_type?: string;
   city?: string;
   region?: string;
@@ -701,7 +702,7 @@ function AdminVisitorsPage() {
                       <td>{v.total_pageviews ?? 0}</td>
                       <td className="text-nowrap small">{formatDate(v.first_seen_at)}</td>
                       <td className="text-nowrap small">{formatRelative(v.last_seen_at)}</td>
-                      <td className="small">{v.campaign_id || '-'}</td>
+                      <td className="small">{v.campaign?.name || v.campaign_id || '-'}</td>
                       <td className="small">{v.utm_source || v.referrer_domain || 'Direct'}</td>
                     </tr>
                   ))

@@ -1,5 +1,5 @@
 import { Op, fn, col, literal } from 'sequelize';
-import { Visitor, VisitorSession, PageEvent, Lead, IntentScore } from '../models';
+import { Visitor, VisitorSession, PageEvent, Lead, IntentScore, Campaign } from '../models';
 import { sequelize } from '../config/database';
 
 // ---------------------------------------------------------------------------
@@ -302,6 +302,12 @@ export async function listVisitors(params: {
         model: IntentScore,
         as: 'intentScore',
         attributes: ['score', 'intent_level', 'signals_count', 'last_signal_at', 'score_updated_at'],
+        required: false,
+      },
+      {
+        model: Campaign,
+        as: 'campaign',
+        attributes: ['id', 'name'],
         required: false,
       },
     ],

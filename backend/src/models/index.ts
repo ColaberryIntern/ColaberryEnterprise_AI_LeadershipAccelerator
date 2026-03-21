@@ -201,6 +201,8 @@ LeadTemperatureHistory.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'cam
 // Visitor Intelligence associations
 Visitor.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Lead.hasOne(Visitor, { foreignKey: 'lead_id', as: 'visitor' });
+Visitor.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
+Campaign.hasMany(Visitor, { foreignKey: 'campaign_id', as: 'visitors' });
 
 Visitor.hasMany(VisitorSession, { foreignKey: 'visitor_id', as: 'sessions' });
 VisitorSession.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
