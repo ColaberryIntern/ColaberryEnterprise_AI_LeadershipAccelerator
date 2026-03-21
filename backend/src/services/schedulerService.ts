@@ -1625,54 +1625,91 @@ export function startScheduler(): void {
          ORDER BY COUNT(se.id) DESC`
       );
 
-      // If there are issues or auto-fixes, call the owner
+      // Build campaign context summary (used for both call and email)
+      const campaignSummary = (campaignRows as any[]).map((r: any) =>
+        `${r.name}: ${r.status}, ${r.pending_count} pending`
+      ).join('. ');
+
+      const adminEmail = 'ali@colaberry.com';
+
+      // Helper: send health alert email
+      const sendHealthEmail = async (subject: string) => {
+        try {
+          const { sendAlertEmail } = require('./emailService');
+          await sendAlertEmail(adminEmail, {
+            type: 'campaign_health',
+            severity: issues.length > 0 ? 8 : 4,
+            title: subject,
+            description: [
+              issues.length > 0 ? `**Issues Detected:**\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}` : '',
+              autoFixed.length > 0 ? `**Auto-Fixed:**\n${autoFixed.map((f, idx) => `${idx + 1}. ${f}`).join('\n')}` : '',
+              `**Campaign Status:** ${campaignSummary}`,
+              `**Metrics:** ${recentSendCount} sent last hour, ${totalPending} pending past-due`,
+            ].filter(Boolean).join('\n\n'),
+            impact_area: 'Campaign Operations',
+            source_type: 'HealthMonitor',
+            urgency: issues.length > 0 ? 'high' : 'low',
+            created_at: new Date(),
+          });
+          console.log(`[HealthMonitor] 📧 Alert email sent to ${adminEmail}`);
+        } catch (emailErr: any) {
+          console.error(`[HealthMonitor] Alert email failed: ${emailErr.message}`);
+        }
+      };
+
+      // If there are issues or auto-fixes, call the owner + send email
       if (issues.length > 0 || autoFixed.length > 0) {
         const timeSinceLastAlert = Date.now() - lastHealthAlertAt;
         const twoHoursMs = 2 * 60 * 60 * 1000;
 
-        if (timeSinceLastAlert > twoHoursMs && env.adminAlertPhone) {
+        if (timeSinceLastAlert > twoHoursMs) {
           lastHealthAlertAt = Date.now();
-
-          // Build campaign context summary
-          const campaignSummary = (campaignRows as any[]).map((r: any) =>
-            `${r.name}: ${r.status}, ${r.pending_count} pending`
-          ).join('. ');
 
           const alertPrompt = [
             'You are Cory, the AI operations manager for the Colaberry Enterprise AI Leadership Accelerator platform.',
-            'You are calling the system owner to report on campaign health issues that were just detected.',
-            'Be concise, professional, and direct. Start by saying who you are and why you are calling.',
+            'You are calling Ali, the system owner, to report on campaign health issues that were just detected.',
+            'Be concise, professional, and direct. Start by saying "Hi Ali, this is Cory, your AI operations manager. I\'m calling because I detected some issues with the campaign system that I wanted to bring to your attention."',
             '',
             issues.length > 0 ? `ISSUES DETECTED:\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}` : '',
             autoFixed.length > 0 ? `\nAUTO-FIXED:\n${autoFixed.map((f, idx) => `${idx + 1}. ${f}`).join('\n')}` : '',
             `\nCURRENT CAMPAIGN STATUS: ${campaignSummary}`,
             `\nTotal sent in last hour: ${recentSendCount}. Total pending past-due: ${totalPending}.`,
-            '\nAfter explaining the situation, ask if the owner has any questions or wants you to take any specific action.',
+            '\nAfter explaining the situation, ask if Ali has any questions or wants you to take any specific action.',
             'If asked about the system, provide details based on what you know. If asked something you do not know, say so honestly.',
+            '\nAt the end of the call, let Ali know you are also sending a summary email with all the details.',
           ].filter(Boolean).join('\n');
 
-          try {
-            const { triggerVoiceCall } = require('./synthflowService');
-            const result = await triggerVoiceCall({
-              name: 'System Owner',
-              phone: env.adminAlertPhone,
-              callType: 'interest',
-              prompt: alertPrompt,
-              context: {
-                lead_name: 'System Owner',
-                step_goal: 'Campaign health alert — report issues and answer questions',
-              },
-            });
-            if (result.success) {
-              console.log(`[HealthMonitor] 📞 Alert call initiated to ${env.adminAlertPhone}`);
-            } else {
-              console.error(`[HealthMonitor] Alert call failed: ${result.error}`);
+          // Attempt voice call
+          if (env.adminAlertPhone) {
+            try {
+              const { triggerVoiceCall } = require('./synthflowService');
+              const result = await triggerVoiceCall({
+                name: 'Ali',
+                phone: env.adminAlertPhone,
+                callType: 'interest',
+                prompt: alertPrompt,
+                context: {
+                  lead_name: 'Ali',
+                  step_goal: 'Campaign health alert — report issues and answer questions',
+                },
+              });
+              if (result.success) {
+                console.log(`[HealthMonitor] 📞 Alert call initiated to ${env.adminAlertPhone}`);
+              } else {
+                console.error(`[HealthMonitor] Alert call failed: ${result.error}`);
+              }
+            } catch (callErr: any) {
+              console.error(`[HealthMonitor] Failed to initiate alert call: ${callErr.message}`);
             }
-          } catch (callErr: any) {
-            console.error(`[HealthMonitor] Failed to initiate alert call: ${callErr.message}`);
+          } else {
+            console.warn('[HealthMonitor] ADMIN_ALERT_PHONE not configured — skipping voice call');
           }
-        } else if (!env.adminAlertPhone) {
-          console.warn('[HealthMonitor] Issues detected but ADMIN_ALERT_PHONE not configured — no alert call made');
+
+          // Always send follow-up email (acts as written record + fallback if call not answered)
+          const emailSubject = issues.length > 0
+            ? `⚠ Campaign Health Alert: ${issues.length} issue(s) detected`
+            : `ℹ Campaign Health Update: ${autoFixed.length} auto-fix(es) applied`;
+          await sendHealthEmail(emailSubject);
         } else {
           console.log(`[HealthMonitor] Issues detected but alert suppressed (last alert ${Math.round(timeSinceLastAlert / 60000)}m ago, cooldown: 120m)`);
         }
