@@ -1,0 +1,431 @@
+{
+  "book": {
+    "title": "Trust Before Intelligence",
+    "author": "Ram Katamaraja",
+    "core_thesis": "Enterprise AI failure stems from infrastructure gaps, not AI limitations. 95% of enterprise generative AI pilots fail. Organizational trust must precede technical sophistication."
+  },
+  "frameworks": {
+    "INPACT": {
+      "description": "Six diagnostic dimensions agents need from organizational infrastructure",
+      "dimensions": {
+        "I": "Instant — Sub-2s responses, <30s data freshness",
+        "N": "Natural — Business language understanding without schema knowledge",
+        "P": "Permitted — Dynamic context-aware ABAC authorization",
+        "A": "Adaptive — Continuous learning from feedback",
+        "C": "Contextual — Cross-domain integration, unified visibility",
+        "T": "Transparent — Observable reasoning, complete audit trails"
+      },
+      "scoring": "1-6 per dimension, summed to 36, converted to 100-point scale",
+      "production_threshold": 86
+    },
+    "GOALS": {
+      "description": "Five operational excellence pillars for sustaining trustworthy AI systems",
+      "pillars": {
+        "G": "Governance — Security, compliance, ABAC authorization, HITL workflows",
+        "O": "Observability — Monitoring, cost tracking, distributed tracing, transparency",
+        "A": "Availability — Speed, scale, data freshness, semantic caching",
+        "L": "Lexicon — Semantic understanding, disambiguation, 1000+ business terms",
+        "S": "Solid — Data quality & integrity (ISO/IEC 5259)"
+      },
+      "minimum_maturity": "21/25 total score"
+    },
+    "seven_layer_architecture": {
+      "description": "Technical infrastructure blueprint fulfilling INPACT needs",
+      "layers": {
+        "1": "Multi-Modal Storage — RDBMS, NoSQL, Graph, Object, Lakehouse, Model Registry",
+        "2": "Real-Time Data Fabric — CDC (Debezium), Event Streaming (Kafka), Stream Processing (Flink)",
+        "3": "Semantic Layer — Glossary (1000+ terms), Entity Resolution, Ontologies, Knowledge Graphs",
+        "4": "Intelligence Layer — 7-stage RAG pipeline (query understanding → caching)",
+        "5": "Governance — ABAC engine (OPA), HITL workflows, policy versioning",
+        "6": "Observability — Distributed tracing (OpenTelemetry), APM, cost attribution, drift detection",
+        "7": "Orchestration — Multi-agent coordination, context management, HITL escalation"
+      }
+    },
+    "five_root_causes": {
+      "description": "Why 95% of enterprise AI fails",
+      "causes": {
+        "1": "Data Foundation Gaps (30%) — BI-era batch ETL incompatible with agent sub-2s needs",
+        "2": "Architecture Misalignment (25%) — Role-based access vs required context-aware ABAC",
+        "3": "Demo-Driven Development (20%) — POC mentality, no operational infrastructure",
+        "4": "Reinvention vs Framework (15%) — Custom solutions instead of systematic approach",
+        "5": "Conceptual Misunderstanding (10%) — Treating agents as advanced search vs autonomous systems"
+      }
+    },
+    "trust_band": {
+      "description": "Readiness scoring system for AI deployment",
+      "bands": {
+        "86-100": "High Trust — Production-ready, minimal gaps (2-4 weeks)",
+        "67-85": "Moderate Trust — Pilot-ready with known gaps (4-8 weeks)",
+        "50-66": "Low Trust — Significant work required (8-12 weeks)",
+        "33-49": "Very Low Trust — Major transformation needed (12-16 weeks)",
+        "<33": "Critical — Complete infrastructure rebuild (16+ weeks)"
+      }
+    },
+    "phase_progression": {
+      "description": "90-day implementation model (Echo Health: 28→89 INPACT)",
+      "phases": {
+        "1": "Foundation (Weeks 1-4) — Layers 1-2, INPACT 28→42",
+        "2": "Intelligence (Weeks 5-7) — Layers 3-4, INPACT 42→67",
+        "3": "Trust (Weeks 8-10) — Layers 5-7, INPACT 67→86",
+        "4": "Operations (Weeks 11-12) — UAT + Production, INPACT 86→89"
+      },
+      "case_study": {
+        "organization": "Echo Health Systems",
+        "start_score": 28,
+        "end_score": 89,
+        "duration_weeks": 12,
+        "investment": "$942K (23% under $1.23M budget)",
+        "roi": "209% Year 1, 10-week payback"
+      }
+    }
+  },
+  "sections": [
+    {
+      "module": 1, "section_id": "1.1",
+      "section_title": "Executive AI Reality Check",
+      "mapped_chapter": "Chapter 1: Why 95% of Agents Fail",
+      "mapped_concept": "Five Root Causes of AI Failure",
+      "secondary_frameworks": ["Trust Band Scoring"],
+      "capability_type": "Awareness",
+      "inpact_dimensions": ["C", "T"],
+      "goals_pillars": [],
+      "architecture_layers": [],
+      "learning_goal": "Diagnose your organization's AI readiness by applying the Five Root Causes of AI Failure framework (Data Gaps, Architecture Misalignment, Demo-Driven Development, Reinvention, Misunderstanding) and establishing a Trust Band baseline score.",
+      "expected_artifact": "AI Readiness Diagnostic"
+    },
+    {
+      "module": 1, "section_id": "1.2",
+      "section_title": "Trust Before Intelligence Framework",
+      "mapped_chapter": "Chapter 0: Trust Before Intelligence / Chapter 2: INPACT Framework",
+      "mapped_concept": "INPACT Framework (full diagnostic)",
+      "secondary_frameworks": ["Trust Band Scoring", "Phase Progression"],
+      "capability_type": "Awareness",
+      "inpact_dimensions": ["I", "N", "P", "A", "C", "T"],
+      "goals_pillars": ["G", "O"],
+      "architecture_layers": [5, 6],
+      "learning_goal": "Design a trust architecture using the INPACT framework (Instant, Natural, Permitted, Adaptive, Contextual, Transparent) to define the six infrastructure dimensions that must precede AI deployment.",
+      "expected_artifact": "Trust Architecture Blueprint"
+    },
+    {
+      "module": 1, "section_id": "1.3",
+      "section_title": "Identifying Responsible AI Opportunities",
+      "mapped_chapter": "Chapter 1: Why 95% of Agents Fail (Root Cause #3)",
+      "mapped_concept": "INPACT Permitted & Transparent dimensions",
+      "secondary_frameworks": ["Five Root Causes (#3 Demo-Driven Development)"],
+      "capability_type": "Evaluation",
+      "inpact_dimensions": ["P", "T"],
+      "goals_pillars": ["G", "S"],
+      "architecture_layers": [5],
+      "learning_goal": "Evaluate and score AI opportunities against INPACT Permitted and Transparent dimensions to separate responsible initiatives from demo-driven development traps.",
+      "expected_artifact": "Responsible Opportunity Scorecard"
+    },
+    {
+      "module": 1, "section_id": "1.4",
+      "section_title": "Industry-Specific AI Applications",
+      "mapped_chapter": "Chapter 5: Intelligence Layers (Semantic Layer)",
+      "mapped_concept": "GOALS Lexicon & Solid pillars",
+      "secondary_frameworks": ["7-Layer Architecture (Layer 3 Semantic)"],
+      "capability_type": "Evaluation",
+      "inpact_dimensions": ["N", "C"],
+      "goals_pillars": ["L", "S"],
+      "architecture_layers": [1, 3],
+      "learning_goal": "Map AI capabilities to your industry's value chain using the GOALS Lexicon pillar (semantic understanding, entity resolution) and 7-Layer Architecture Semantic Layer patterns.",
+      "expected_artifact": "Industry AI Value Chain Map"
+    },
+    {
+      "module": 1, "section_id": "1.5",
+      "section_title": "Strategy & Trust: Synthesis & Application",
+      "mapped_chapter": "Chapter 10: Week-by-Week Implementation (Phase 1)",
+      "mapped_concept": "Phase Progression (Foundation phase)",
+      "secondary_frameworks": ["Trust Band Scoring", "INPACT composite"],
+      "capability_type": "Design",
+      "inpact_dimensions": ["I", "N", "P", "A", "C", "T"],
+      "goals_pillars": ["G", "O", "A", "L", "S"],
+      "architecture_layers": [],
+      "learning_goal": "Synthesize INPACT diagnostic, GOALS operational pillars, and Phase Progression frameworks into a unified AI strategy with a baseline Trust Band score and Phase 1 Foundation plan.",
+      "expected_artifact": "Unified AI Strategy Brief"
+    },
+    {
+      "module": 2, "section_id": "2.1",
+      "section_title": "AI Risk Taxonomy",
+      "mapped_chapter": "Chapter 1: Why 95% of Agents Fail (all five causes)",
+      "mapped_concept": "Five Root Causes of AI Failure (complete taxonomy)",
+      "secondary_frameworks": ["GOALS Governance pillar"],
+      "capability_type": "Awareness",
+      "inpact_dimensions": ["P", "T"],
+      "goals_pillars": ["G"],
+      "architecture_layers": [5],
+      "learning_goal": "Classify the full spectrum of AI risks using the Five Root Causes taxonomy (Data Gaps 30%, Architecture Misalignment 25%, Demo-Driven 20%, Reinvention 15%, Misunderstanding 10%) and prioritize by organizational exposure.",
+      "expected_artifact": "AI Risk Register"
+    },
+    {
+      "module": 2, "section_id": "2.2",
+      "section_title": "Data Classification & Sensitivity",
+      "mapped_chapter": "Chapter 7: GOALS Framework (Solid pillar — ISO/IEC 5259)",
+      "mapped_concept": "GOALS Solid pillar — data quality & integrity",
+      "secondary_frameworks": ["7-Layer Architecture (Layer 1 Multi-Modal Storage)"],
+      "capability_type": "Evaluation",
+      "inpact_dimensions": ["P", "C"],
+      "goals_pillars": ["G", "S"],
+      "architecture_layers": [1],
+      "learning_goal": "Design data classification policies aligned with GOALS Solid pillar requirements (accuracy 98%, completeness 99.5%, consistency 95%) and 7-Layer Architecture Layer 1 Multi-Modal Storage patterns.",
+      "expected_artifact": "Data Classification Policy"
+    },
+    {
+      "module": 2, "section_id": "2.3",
+      "section_title": "Failure Modes & Guardrails",
+      "mapped_chapter": "Chapter 6: Transparency & Orchestration (Layer 6 Observability)",
+      "mapped_concept": "7-Layer Architecture Layer 6 Observability",
+      "secondary_frameworks": ["GOALS Observability pillar"],
+      "capability_type": "Design",
+      "inpact_dimensions": ["T", "A"],
+      "goals_pillars": ["O", "A"],
+      "architecture_layers": [6],
+      "learning_goal": "Design layered guardrails mapped to 7-Layer Architecture Layer 6 Observability (distributed tracing, APM, alerting) and GOALS Observability pillar for failure detection and recovery.",
+      "expected_artifact": "Guardrail Specification"
+    },
+    {
+      "module": 2, "section_id": "2.4",
+      "section_title": "Human-in-the-Loop Design",
+      "mapped_chapter": "Chapter 6: Transparency & Orchestration (Layer 5 Governance)",
+      "mapped_concept": "7-Layer Architecture Layer 5 Governance — ABAC & HITL",
+      "secondary_frameworks": ["INPACT Permitted dimension"],
+      "capability_type": "Design",
+      "inpact_dimensions": ["P", "T"],
+      "goals_pillars": ["G"],
+      "architecture_layers": [5],
+      "learning_goal": "Design HITL oversight patterns using 7-Layer Architecture Layer 5 Governance (5-factor ABAC authorization, policy evaluation <10ms) with INPACT Permitted dimension compliance targeting <15% escalation rate.",
+      "expected_artifact": "HITL Oversight Design"
+    },
+    {
+      "module": 2, "section_id": "2.5",
+      "section_title": "Governance: Blueprint & Application",
+      "mapped_chapter": "Chapter 7: GOALS Framework (all five pillars)",
+      "mapped_concept": "GOALS Framework (complete integration)",
+      "secondary_frameworks": ["7-Layer Architecture (Layers 5-6)", "Trust Band Scoring"],
+      "capability_type": "Design",
+      "inpact_dimensions": ["P", "A", "C", "T"],
+      "goals_pillars": ["G", "O", "A", "L", "S"],
+      "architecture_layers": [5, 6],
+      "learning_goal": "Build a governance framework integrating all five GOALS pillars (Governance, Observability, Availability, Lexicon, Solid) with Trust Band target scoring to validate operational readiness.",
+      "expected_artifact": "Governance Framework Document"
+    },
+    {
+      "module": 3, "section_id": "3.1",
+      "section_title": "Translating Business Goals into System Requirements",
+      "mapped_chapter": "Chapter 2: INPACT Framework (Instant & Natural dimensions)",
+      "mapped_concept": "INPACT Instant & Natural performance specifications",
+      "secondary_frameworks": ["Phase Progression (Phase 1 Foundation)"],
+      "capability_type": "Evaluation",
+      "inpact_dimensions": ["I", "N"],
+      "goals_pillars": ["A", "L"],
+      "architecture_layers": [],
+      "learning_goal": "Translate business goals into measurable system requirements using INPACT Instant (<2s response, <30s freshness) and Natural (entity resolution >98%) performance specifications.",
+      "expected_artifact": "System Requirements Specification"
+    },
+    {
+      "module": 3, "section_id": "3.2",
+      "section_title": "Input / Output Mapping",
+      "mapped_chapter": "Chapter 4: Foundation Layers (Layers 1-2)",
+      "mapped_concept": "7-Layer Architecture Layers 1-2 (Storage + Data Fabric)",
+      "secondary_frameworks": ["GOALS Availability pillar"],
+      "capability_type": "Design",
+      "inpact_dimensions": ["I", "C"],
+      "goals_pillars": ["A", "S"],
+      "architecture_layers": [1, 2],
+      "learning_goal": "Design data pipelines using 7-Layer Architecture Layers 1-2 (Multi-Modal Storage with 11 modal types + Real-Time Data Fabric with CDC and event streaming) for sub-30s data freshness.",
+      "expected_artifact": "Data Pipeline I/O Map"
+    },
+    {
+      "module": 3, "section_id": "3.3",
+      "section_title": "Decision Flow Modeling",
+      "mapped_chapter": "Chapter 5: Intelligence Layers (Layer 4 — 7-stage RAG pipeline)",
+      "mapped_concept": "7-Layer Architecture Layer 4 Intelligence",
+      "secondary_frameworks": ["INPACT Adaptive & Transparent dimensions"],
+      "capability_type": "Design",
+      "inpact_dimensions": ["A", "T"],
+      "goals_pillars": ["O"],
+      "architecture_layers": [4],
+      "learning_goal": "Model decision flows using 7-Layer Architecture Layer 4 Intelligence (7-stage RAG: query understanding → embedding → retrieval → reranking → context assembly → generation → caching) with INPACT audit requirements.",
+      "expected_artifact": "Decision Flow Model"
+    },
+    {
+      "module": 3, "section_id": "3.4",
+      "section_title": "Edge Case & Failure State Design",
+      "mapped_chapter": "Chapter 6: Transparency & Orchestration (Layer 6) / Chapter 1 (Root Cause #1)",
+      "mapped_concept": "7-Layer Architecture Layer 6 Observability + Root Cause #1 mitigation",
+      "secondary_frameworks": ["Five Root Causes (#1 Data Foundation Gaps)"],
+      "capability_type": "Design",
+      "inpact_dimensions": ["T", "A"],
+      "goals_pillars": ["O", "S"],
+      "architecture_layers": [6],
+      "learning_goal": "Design edge case recovery patterns using 7-Layer Architecture Layer 6 Observability (trace completeness >98%, automated alerting) and Five Root Causes #1 Data Foundation Gaps mitigation strategies.",
+      "expected_artifact": "Edge Case Catalog"
+    },
+    {
+      "module": 3, "section_id": "3.5",
+      "section_title": "Requirements: Document Builder & Synthesis",
+      "mapped_chapter": "Chapter 10: Week-by-Week Implementation (Phase 1-2 deliverables)",
+      "mapped_concept": "Phase Progression (Foundation + Intelligence phases)",
+      "secondary_frameworks": ["INPACT composite scoring"],
+      "capability_type": "Execution",
+      "inpact_dimensions": ["I", "N", "P", "A", "C", "T"],
+      "goals_pillars": ["G", "O", "A", "L", "S"],
+      "architecture_layers": [1, 2, 3, 4],
+      "learning_goal": "Produce a complete AI requirements specification scored against INPACT composite dimensions and mapped to Phase Progression Phase 1-2 deliverables (Foundation + Intelligence infrastructure).",
+      "expected_artifact": "Complete Requirements Document"
+    },
+    {
+      "module": 4, "section_id": "4.1",
+      "section_title": "Separation of Roles",
+      "mapped_chapter": "Chapter 6: Transparency & Orchestration (Layer 7 Orchestration)",
+      "mapped_concept": "7-Layer Architecture Layer 7 Orchestration — multi-agent coordination",
+      "secondary_frameworks": ["INPACT Transparent dimension"],
+      "capability_type": "Execution",
+      "inpact_dimensions": ["T"],
+      "goals_pillars": ["O"],
+      "architecture_layers": [7],
+      "learning_goal": "Design the Planner-Builder-Reviewer pattern mapped to 7-Layer Architecture Layer 7 Orchestration (multi-agent coordination, shared state management, HITL escalation routing).",
+      "expected_artifact": "3-Agent Role Specification"
+    },
+    {
+      "module": 4, "section_id": "4.2",
+      "section_title": "Planner vs Executor",
+      "mapped_chapter": "Chapter 6: Orchestration / Chapter 1: Root Cause #4",
+      "mapped_concept": "7-Layer Architecture Layer 7 + Five Root Causes (#4 Reinvention)",
+      "secondary_frameworks": ["Five Root Causes (#4 Reinvention vs Framework)"],
+      "capability_type": "Execution",
+      "inpact_dimensions": ["T", "A"],
+      "goals_pillars": ["O"],
+      "architecture_layers": [7],
+      "learning_goal": "Define planning-execution boundaries using Phase Progression methodology to prevent Five Root Causes #4 Reinvention vs Framework failure — systematic approach over custom solutions.",
+      "expected_artifact": "Planning-Execution Boundary Document"
+    },
+    {
+      "module": 4, "section_id": "4.3",
+      "section_title": "One-Step Task Discipline",
+      "mapped_chapter": "Chapter 10: Week-by-Week Implementation (methodology)",
+      "mapped_concept": "Phase Progression implementation methodology",
+      "secondary_frameworks": ["7-Layer Architecture (Layer 7 state management)"],
+      "capability_type": "Execution",
+      "inpact_dimensions": ["I", "T"],
+      "goals_pillars": ["A"],
+      "architecture_layers": [7],
+      "learning_goal": "Break complex AI tasks into atomic, verifiable steps with INPACT Instant (<2s) verification checkpoints and 7-Layer Layer 7 state management (Redis, 15-min TTL) for progress tracking.",
+      "expected_artifact": "Atomic Task Breakdown"
+    },
+    {
+      "module": 4, "section_id": "4.4",
+      "section_title": "Verification & Evidence Gating",
+      "mapped_chapter": "Chapter 6: Transparency (Layer 6) / Chapter 7: GOALS (Observability)",
+      "mapped_concept": "7-Layer Architecture Layer 6 Observability + GOALS Observability",
+      "secondary_frameworks": ["Trust Band evidence requirements"],
+      "capability_type": "Execution",
+      "inpact_dimensions": ["T"],
+      "goals_pillars": ["O", "G"],
+      "architecture_layers": [5, 6],
+      "learning_goal": "Design quality gates using 7-Layer Layer 6 Observability (distributed tracing, 15-25 spans/query) and GOALS Observability pillar with Trust Band evidence requirements at each gate.",
+      "expected_artifact": "Quality Gate Matrix"
+    },
+    {
+      "module": 4, "section_id": "4.5",
+      "section_title": "Controlled Build: Simulation & Application",
+      "mapped_chapter": "Chapter 10: Week-by-Week Implementation (Phases 1-3)",
+      "mapped_concept": "Phase Progression (Foundation → Intelligence → Trust)",
+      "secondary_frameworks": ["Trust Band improvement trajectory (28→86)"],
+      "capability_type": "Execution",
+      "inpact_dimensions": ["I", "N", "P", "A", "C", "T"],
+      "goals_pillars": ["G", "O", "A", "L", "S"],
+      "architecture_layers": [1, 2, 3, 4, 5, 6, 7],
+      "learning_goal": "Integrate 3-agent system into a controlled build methodology targeting Phase Progression Phases 1-3 completion with Trust Band improvement from baseline to Moderate Trust (67+).",
+      "expected_artifact": "Controlled Build Plan"
+    },
+    {
+      "module": 5, "section_id": "5.1",
+      "section_title": "Selling AI Internally",
+      "mapped_chapter": "Chapter 9: Measuring Agent Readiness",
+      "mapped_concept": "Trust Band Scoring as credibility instrument",
+      "secondary_frameworks": ["Five Root Causes (objection-handling framework)"],
+      "capability_type": "Validation",
+      "inpact_dimensions": ["T", "C"],
+      "goals_pillars": ["G"],
+      "architecture_layers": [],
+      "learning_goal": "Map stakeholders and build coalition support using Trust Band Scoring (0-100) as a credibility instrument and Five Root Causes as a structured objection-handling framework.",
+      "expected_artifact": "Stakeholder Engagement Plan"
+    },
+    {
+      "module": 5, "section_id": "5.2",
+      "section_title": "Governance Communication",
+      "mapped_chapter": "Chapter 7: GOALS Framework (Governance + Observability)",
+      "mapped_concept": "GOALS Governance & Observability pillars — board-ready translation",
+      "secondary_frameworks": ["INPACT Transparent dimension"],
+      "capability_type": "Validation",
+      "inpact_dimensions": ["T", "P"],
+      "goals_pillars": ["G", "O"],
+      "architecture_layers": [5, 6],
+      "learning_goal": "Translate GOALS Governance and Observability pillars into board-ready language with INPACT Transparent dimension compliance evidence (audit trails, trace completeness, cost attribution).",
+      "expected_artifact": "Board Governance Brief"
+    },
+    {
+      "module": 5, "section_id": "5.3",
+      "section_title": "ROI Framing",
+      "mapped_chapter": "Chapter 10: Week-by-Week Implementation (Echo Health ROI)",
+      "mapped_concept": "Phase Progression ROI model — Echo Health case study",
+      "secondary_frameworks": ["INPACT composite improvement scoring"],
+      "capability_type": "Validation",
+      "inpact_dimensions": ["I", "A"],
+      "goals_pillars": ["A", "O"],
+      "architecture_layers": [],
+      "learning_goal": "Build a multi-dimensional ROI model using Phase Progression Echo Health benchmark ($942K investment, 209% Year 1 ROI, 10-week payback) as the reference framework.",
+      "expected_artifact": "AI Business Case with ROI"
+    },
+    {
+      "module": 5, "section_id": "5.4",
+      "section_title": "Scaling Strategy",
+      "mapped_chapter": "Chapter 12: Running Agents at Scale / Chapter 10 (Phases 3-4)",
+      "mapped_concept": "Phase Progression Phases 3-4 (Trust → Operations)",
+      "secondary_frameworks": ["7-Layer Architecture (full stack scaling)"],
+      "capability_type": "Scale",
+      "inpact_dimensions": ["I", "N", "P", "A", "C", "T"],
+      "goals_pillars": ["G", "O", "A", "L", "S"],
+      "architecture_layers": [1, 2, 3, 4, 5, 6, 7],
+      "learning_goal": "Design the Phase 3-4 scaling path (Trust → Operations) using the full 7-Layer Architecture stack with a production Trust Band target of High Trust (86+).",
+      "expected_artifact": "Scaling Roadmap"
+    },
+    {
+      "module": 5, "section_id": "5.5",
+      "section_title": "90-Day Roadmap & Executive Demo",
+      "mapped_chapter": "Chapter 10: Week-by-Week Implementation (complete 90-day model)",
+      "mapped_concept": "Phase Progression (complete: Foundation → Intelligence → Trust → Operations)",
+      "secondary_frameworks": ["Trust Band Scoring", "INPACT", "GOALS"],
+      "capability_type": "Scale",
+      "inpact_dimensions": ["I", "N", "P", "A", "C", "T"],
+      "goals_pillars": ["G", "O", "A", "L", "S"],
+      "architecture_layers": [1, 2, 3, 4, 5, 6, 7],
+      "learning_goal": "Synthesize all program frameworks into a 90-day roadmap following the Phase Progression model (Foundation Wk 1-4 → Intelligence Wk 5-7 → Trust Wk 8-10 → Operations Wk 11-12) with INPACT milestone targets per phase.",
+      "expected_artifact": "90-Day Executive Roadmap"
+    }
+  ],
+  "validation": {
+    "duplicates_found": false,
+    "progression_valid": true,
+    "coverage_complete": true,
+    "flagged_sections": [],
+    "framework_coverage": {
+      "INPACT": "25/25 lessons (at least 2 dimensions each)",
+      "GOALS": "20/25 lessons",
+      "seven_layer_architecture": "18/25 lessons",
+      "five_root_causes": "10/25 lessons",
+      "trust_band": "12/25 lessons",
+      "phase_progression": "10/25 lessons"
+    },
+    "progression_distribution": {
+      "Awareness": ["1.1", "1.2", "2.1"],
+      "Evaluation": ["1.3", "1.4", "2.2", "3.1"],
+      "Design": ["1.5", "2.3", "2.4", "2.5", "3.2", "3.3", "3.4"],
+      "Execution": ["3.5", "4.1", "4.2", "4.3", "4.4", "4.5"],
+      "Validation": ["5.1", "5.2", "5.3"],
+      "Scale": ["5.4", "5.5"]
+    }
+  }
+}
