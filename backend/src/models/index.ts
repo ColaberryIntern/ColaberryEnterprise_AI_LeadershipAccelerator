@@ -201,8 +201,8 @@ LeadTemperatureHistory.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'cam
 // Visitor Intelligence associations
 Visitor.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Lead.hasOne(Visitor, { foreignKey: 'lead_id', as: 'visitor' });
-Visitor.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
-Campaign.hasMany(Visitor, { foreignKey: 'campaign_id', as: 'visitors' });
+// Note: visitors.campaign_id is VARCHAR (UTM tracking string), not a UUID FK to campaigns.
+// Do NOT create a Sequelize association here — the types are incompatible.
 
 Visitor.hasMany(VisitorSession, { foreignKey: 'visitor_id', as: 'sessions' });
 VisitorSession.belongsTo(Visitor, { foreignKey: 'visitor_id', as: 'visitor' });
