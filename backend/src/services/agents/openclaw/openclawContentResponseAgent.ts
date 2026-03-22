@@ -24,7 +24,7 @@ export async function runOpenclawContentResponseAgent(
   const actions: AgentAction[] = [];
   const errors: string[] = [];
   const defaultTone = config.default_tone || 'educational';
-  const maxLength = config.max_response_length || 1500;
+  const maxLength = config.max_response_length || 1800;
 
   try {
     // Fetch assigned generate_response tasks
