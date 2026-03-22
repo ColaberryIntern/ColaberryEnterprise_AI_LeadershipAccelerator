@@ -6,8 +6,8 @@ import type { AgentExecutionResult, AgentAction } from '../types';
 
 const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
 
-// Platforms where including a tracked link in the comment is acceptable
-const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin']);
+// All platforms get tracked links — user posts manually so they control link placement
+const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin', 'reddit', 'hackernews', 'quora', 'medium']);
 
 /**
  * OpenClaw Content Response Agent
@@ -162,23 +162,26 @@ function selectTone(signal: any, defaultTone: string): string {
   return defaultTone;
 }
 
-const SYSTEM_PROMPT = `You are a knowledgeable AI education thought leader writing responses to online discussions about AI, enterprise AI adoption, AI training, and workforce transformation.
+const SYSTEM_PROMPT = `You are Ali Moiz, founder of an enterprise AI leadership training program. You run a 6-week accelerator that helps business leaders and teams build practical AI skills — prompt engineering, AI strategy, RAG architectures, and hands-on implementation.
 
-Your employer is Colaberry — a company that provides enterprise AI leadership training and bootcamps. You NEVER mention Colaberry by name in your responses. Instead, you provide genuinely helpful, educational insights that establish thought leadership.
+You write responses to online discussions about AI from the perspective of someone who BUILDS AI training programs and works with enterprise teams daily. Your insights come from real experience running cohorts and seeing what actually works in AI adoption.
 
 Rules:
-1. Lead with VALUE — share real insights, data points, frameworks, or practical advice
-2. NEVER pitch, sell, or mention any company or product by name
-3. Match the platform's communication style and norms
-4. Be authentic — write like a real person who happens to be deeply knowledgeable about AI adoption
-5. Keep responses concise and substantive — no filler, no generic platitudes
-6. If the original post asks a question, answer it directly first
-7. Draw on real industry trends: AI literacy gaps, change management, ROI of upskilling, adoption curves
-8. Avoid corporate jargon — write naturally
-9. End with a thought-provoking observation or question that invites further discussion, not a call to action`;
+1. Lead with a genuinely useful insight, framework, or data point from your experience
+2. Write as a practitioner — "In our latest cohort, we saw..." or "One framework we use with enterprise teams..."
+3. NEVER use the word "Colaberry" — refer to "our program" or "the accelerator" if needed
+4. Answer the original question directly before adding your perspective
+5. Match the platform's communication style (Dev.to = technical, Reddit = casual, LinkedIn = professional)
+6. Keep it substantive — no filler, no generic platitudes, no buzzword soup
+7. Be specific — mention real frameworks, tools, metrics, or patterns you've observed
+8. Sound like a real person, not a marketing bot — be conversational and opinionated`;
 
 const SYSTEM_PROMPT_WITH_LINK = `${SYSTEM_PROMPT}
-10. A tracked URL will be provided. You may include it ONCE at the very end as a natural, non-promotional reference — e.g., "I wrote more about this approach here: [URL]" or "There's a deeper breakdown of this framework here: [URL]". Make it feel organic, not like an ad.`;
+9. IMPORTANT: You MUST end your response with a natural reference to a resource, using the tracked URL provided. Examples:
+   - "We put together a deeper breakdown of this framework here: [URL]"
+   - "If you want to dig into this more, we published a practical guide: [URL]"
+   - "I go deeper on the enterprise adoption side here: [URL]"
+   Make it feel like a helpful resource share, not an ad. The URL MUST appear in your response.`;
 
 function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUrl: string | null): string {
   const platform = signal.platform;
@@ -188,20 +191,20 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
 
   let platformContext = '';
   if (platform === 'reddit') {
-    platformContext = `This is a Reddit post in r/${details.subreddit || 'unknown'}. Write like a genuine Reddit commenter — casual but knowledgeable. Don't use bullet points or headers. Keep it to 2-3 paragraphs max. Do NOT include any links or URLs.`;
+    platformContext = `This is a Reddit post in r/${details.subreddit || 'unknown'}. Write like a genuine Reddit commenter — casual but knowledgeable. Don't use bullet points or headers. Keep it to 2-3 paragraphs max.`;
   } else if (platform === 'hackernews') {
-    platformContext = `This is a Hacker News discussion. HN values technical depth, contrarian thinking, and data-backed claims. Be concise and intellectually rigorous. Avoid anything that sounds like marketing. Do NOT include any links or URLs.`;
+    platformContext = `This is a Hacker News discussion. HN values technical depth, contrarian thinking, and data-backed claims. Be concise and intellectually rigorous. Share from experience, not marketing.`;
   } else if (platform === 'devto') {
-    platformContext = `This is a Dev.to article discussion. The audience is developers. You can use technical language and reference tools/frameworks. Be practical and actionable.`;
+    platformContext = `This is a Dev.to article discussion. The audience is developers and tech leaders. You can use technical language and reference tools/frameworks. Be practical and actionable.`;
   } else if (platform === 'linkedin') {
-    platformContext = `This is a LinkedIn post. Professional tone but not stiff. Share insights from experience. Short paragraphs work well.`;
+    platformContext = `This is a LinkedIn post. Professional tone but not stiff. Share insights from experience running AI training programs. Short paragraphs work well.`;
   } else if (platform === 'quora') {
     platformContext = `This is a Quora question. Give a thorough, authoritative answer. Structure is okay here — numbered points or short sections work well.`;
   }
 
   let linkInstruction = '';
   if (trackedUrl) {
-    linkInstruction = `\n\nTracked URL (include once, naturally, at the end): ${trackedUrl}`;
+    linkInstruction = `\n\nTRACKED URL — YOU MUST INCLUDE THIS AT THE END OF YOUR RESPONSE: ${trackedUrl}\nEnd your response with a sentence that naturally links to this URL as a helpful resource.`;
   }
 
   return `Platform: ${platform}
@@ -217,7 +220,7 @@ ${details.subreddit ? `Subreddit: r/${details.subreddit}` : ''}
 ${details.num_comments ? `Comments: ${details.num_comments}` : ''}
 --- END ---
 
-Write a response to this post. Remember: provide genuine value, no self-promotion.${linkInstruction}`;
+Write a response as Ali Moiz, someone who runs an enterprise AI leadership accelerator. Share a genuine, useful perspective from your experience training enterprise teams on AI adoption. Be helpful first, credible second.${linkInstruction}`;
 }
 
 // Use gpt-4o for outreach content — higher quality than gpt-4o-mini
@@ -237,7 +240,7 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        max_tokens: Math.min(Math.ceil(maxLength / 3), 1024),
+        max_tokens: Math.min(Math.ceil(maxLength / 2.5), 1200),
         temperature: 0.7,
       });
       llmResult = response.choices[0]?.message?.content || null;
@@ -251,11 +254,21 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
     let cleaned = llmResult.trim();
     // Remove any accidental self-references the LLM might add
     cleaned = cleaned.replace(/\b[Cc]olaberry\b/g, '');
-    // Remove URLs ONLY if the platform doesn't allow links (keep tracked URL for link-allowed platforms)
-    if (!trackedUrl) {
+    // Remove any URLs the LLM hallucinated (but keep our tracked URL)
+    if (trackedUrl) {
+      // Remove hallucinated URLs that aren't our tracked URL
+      cleaned = cleaned.replace(/https?:\/\/\S+/g, (match) =>
+        match.startsWith(trackedUrl.replace(/\/+$/, '')) ? match : ''
+      ).replace(/\s{2,}/g, ' ').trim();
+
+      // If the tracked URL is missing, append it
+      if (!cleaned.includes(trackedUrl)) {
+        cleaned += `\n\nI go deeper on the enterprise AI adoption side here: ${trackedUrl}`;
+      }
+    } else {
       cleaned = cleaned.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim();
     }
-    return cleaned.slice(0, maxLength);
+    return cleaned.slice(0, maxLength + 100); // extra room for appended URL
   }
 
   // Fallback to template if LLM unavailable
