@@ -52,6 +52,7 @@ export const NAV_LINKS: NavItem[] = [
     label: 'Program',
     children: [
       { path: '/program', label: 'Program Overview' },
+      { path: '/ai-architect/instructor', label: 'Your Instructor' },
       { path: '/advisory', label: 'Advisory' },
       { path: '/case-studies', label: 'Case Studies' },
     ],
