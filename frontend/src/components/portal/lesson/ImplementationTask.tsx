@@ -632,7 +632,23 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                         background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                         color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none',
                       }}
-                      onClick={() => {
+                      onClick={async () => {
+                        // Fetch mentor briefing from chat history
+                        let mentorBriefing = '';
+                        try {
+                          const tok = localStorage.getItem('participant_token');
+                          if (tok) {
+                            const res = await fetch(`/api/portal/mentor/history?lesson_id=${lessonId}`, {
+                              headers: { 'Authorization': `Bearer ${tok}` },
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              const lastAssistant = [...(data.messages || [])].reverse().find((m: any) => m.role === 'assistant');
+                              if (lastAssistant) mentorBriefing = lastAssistant.content;
+                            }
+                          }
+                        } catch {}
+
                         const prompt = buildFinalPrompt({
                           workstationPrompt: orchContext?.workstationPrompt || lessonContext.workstationPrompt || undefined,
                           learnerContext: learnerProfile ? {
@@ -643,6 +659,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                             ai_maturity: learnerProfile.ai_maturity_level ? `${learnerProfile.ai_maturity_level}/5` : undefined,
                             use_case: learnerProfile.identified_use_case,
                           } : undefined,
+                          mentorOutput: mentorBriefing || undefined,
                           implementationTask: {
                             title, description, deliverable, requirements,
                             artifacts: artifacts.map(a => ({ name: a.name, description: a.description, file_types: a.file_types })),
