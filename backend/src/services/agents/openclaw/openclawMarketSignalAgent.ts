@@ -174,6 +174,58 @@ async function scanPlatform(
       break;
     }
 
+    case 'hashnode': {
+      // Hashnode GraphQL API — search recent AI-tagged articles
+      const query = `query {
+        searchPostsOfFeed(first: ${Math.min(maxResults, 20)}, filter: { tags: ["artificial-intelligence", "ai", "machine-learning", "llm", "generative-ai"] }) {
+          edges {
+            node {
+              id
+              title
+              brief
+              url
+              publishedAt
+              reactionCount
+              responseCount
+              author { username }
+              tags { name slug }
+            }
+          }
+        }
+      }`;
+      try {
+        const resp = await axios.post('https://gql.hashnode.com', { query }, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(process.env.HASHNODE_ACCESS_TOKEN ? { Authorization: process.env.HASHNODE_ACCESS_TOKEN } : {}),
+          },
+          timeout: 15000,
+        });
+        const edges = resp.data?.data?.searchPostsOfFeed?.edges || [];
+        for (const edge of edges) {
+          const node = edge.node;
+          if (!node) continue;
+          results.push({
+            platform: 'hashnode',
+            source_url: node.url || '',
+            author: node.author?.username || '',
+            title: node.title || '',
+            content_excerpt: (node.brief || '').slice(0, 500),
+            details: {
+              id: node.id,
+              positive_reactions_count: node.reactionCount || 0,
+              comments_count: node.responseCount || 0,
+              published_at: node.publishedAt,
+              tags: (node.tags || []).map((t: any) => t.slug || t.name),
+            },
+          });
+        }
+      } catch (err: any) {
+        console.warn('[OpenClaw] Hashnode scan failed:', err?.message?.slice(0, 200));
+      }
+      break;
+    }
+
     case 'quora':
       // Quora has no public API — signals are submitted manually via admin UI
       break;

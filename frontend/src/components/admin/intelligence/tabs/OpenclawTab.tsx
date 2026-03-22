@@ -21,6 +21,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   devto: '#0A0A0A',
   quora: '#B92B27',
   medium: '#00AB6C',
+  hashnode: '#2962FF',
 };
 
 const STATUS_BADGES: Record<string, string> = {
@@ -358,7 +359,7 @@ export default function OpenclawTab() {
           <div>
             <div className="fw-medium small mb-2">Active Scanning Platforms</div>
             <div className="d-flex gap-3 flex-wrap">
-              {['reddit', 'hackernews', 'devto'].map(p => (
+              {['reddit', 'hackernews', 'devto', 'hashnode'].map(p => (
                 <div className="form-check" key={p}>
                   <input
                     type="checkbox"
@@ -369,7 +370,7 @@ export default function OpenclawTab() {
                     disabled={savingConfig === `platform-${p}`}
                   />
                   <label className="form-check-label small" htmlFor={`platform-${p}`}>
-                    {p === 'hackernews' ? 'Hacker News' : p === 'devto' ? 'Dev.to' : p.charAt(0).toUpperCase() + p.slice(1)}
+                    {p === 'hackernews' ? 'Hacker News' : p === 'devto' ? 'Dev.to' : p === 'hashnode' ? 'Hashnode' : p.charAt(0).toUpperCase() + p.slice(1)}
                   </label>
                 </div>
               ))}
