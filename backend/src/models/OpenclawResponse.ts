@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type OpenclawPostStatus = 'draft' | 'approved' | 'posted' | 'failed' | 'removed';
+export type OpenclawPostStatus = 'draft' | 'approved' | 'ready_to_post' | 'posted' | 'failed' | 'removed';
 export type OpenclawTone = 'educational' | 'conversational' | 'technical';
 
 interface OpenclawResponseAttributes {
@@ -12,6 +12,8 @@ interface OpenclawResponseAttributes {
   content: string;
   content_version?: number;
   tone?: OpenclawTone;
+  short_id?: string;
+  tracked_url?: string;
   utm_params?: Record<string, string>;
   campaign_id?: string;
   post_status?: OpenclawPostStatus;
@@ -31,6 +33,8 @@ class OpenclawResponse extends Model<OpenclawResponseAttributes> implements Open
   declare content: string;
   declare content_version: number;
   declare tone: OpenclawTone;
+  declare short_id: string;
+  declare tracked_url: string;
   declare utm_params: Record<string, string>;
   declare campaign_id: string;
   declare post_status: OpenclawPostStatus;
@@ -76,6 +80,15 @@ OpenclawResponse.init(
       type: DataTypes.STRING(50),
       allowNull: true,
       defaultValue: 'educational',
+    },
+    short_id: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      unique: true,
+    },
+    tracked_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
     },
     utm_params: {
       type: DataTypes.JSONB,
@@ -129,6 +142,7 @@ OpenclawResponse.init(
       { fields: ['post_status'] },
       { fields: ['campaign_id'] },
       { fields: ['created_at'] },
+      { fields: ['short_id'], unique: true, name: 'idx_openclaw_responses_short_id' },
     ],
   }
 );

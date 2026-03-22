@@ -1,14 +1,12 @@
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from '../../../models';
+import { postToDevTo, hasPlatformCredentials } from './openclawPlatformPostingService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * OpenClaw Browser Worker Agent
- * Manages Playwright browser sessions to post approved responses.
- * Handles session creation, posting, screenshots, and health tracking.
- *
- * NOTE: Actual Playwright operations are stubbed until the Playwright
- * dependency is installed. The agent tracks session state and task lifecycle.
+ * OpenClaw Posting Agent
+ * Processes approved responses: auto-posts to platforms with API credentials (Dev.to),
+ * queues everything else as 'ready_to_post' for manual posting by admin.
  */
 export async function runOpenclawBrowserWorkerAgent(
   _agentId: string,
@@ -57,51 +55,79 @@ export async function runOpenclawBrowserWorkerAgent(
           continue;
         }
 
-        // Find or create session for this platform
-        let session = await OpenclawSession.findOne({
-          where: {
-            platform: response.platform,
-            session_status: { [Op.in]: ['active', 'idle'] },
-          },
-        });
-
-        if (!session) {
-          session = await OpenclawSession.create({
-            platform: response.platform,
-            session_status: 'active',
-            last_activity_at: new Date(),
-            created_at: new Date(),
-          });
-        }
-
-        // Simulate random delay (anti-detection)
-        const delay = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-
-        // --- Playwright posting would happen here ---
-        // For now, mark as posted with a placeholder URL
-        // In production: launch browser context, navigate, post, screenshot
-
-        await response.update({
-          session_id: session.id,
-          post_status: 'posted',
-          posted_at: new Date(),
-          post_url: `https://${response.platform}.com/posted/${response.id.slice(0, 8)}`,
-          updated_at: new Date(),
-        });
-
-        // Update session activity
-        await session.update({
-          last_activity_at: new Date(),
-          actions_performed: (session.actions_performed || 0) + 1,
-          pages_visited: (session.pages_visited || 0) + 1,
-          updated_at: new Date(),
-        });
-
-        // Link response back to signal
         const signal = response.signal_id
           ? await OpenclawSignal.findByPk(response.signal_id)
           : null;
+
+        // Anti-detection delay
+        const delay = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        // Check if platform supports API posting
+        if (hasPlatformCredentials(response.platform)) {
+          // Auto-post via API
+          try {
+            const postResult = await postToPlatform(response, signal);
+
+            await response.update({
+              post_status: 'posted',
+              posted_at: new Date(),
+              post_url: postResult.post_url,
+              updated_at: new Date(),
+            });
+
+            actions.push({
+              campaign_id: '',
+              action: 'auto_post_response',
+              reason: `Auto-posted to ${response.platform} via API (delay: ${delay}ms)`,
+              confidence: 0.9,
+              before_state: { post_status: 'approved' },
+              after_state: { post_status: 'posted', post_url: postResult.post_url },
+              result: 'success',
+              entity_type: 'system',
+              entity_id: response.id,
+            });
+          } catch (postErr: any) {
+            // API posting failed — fall back to manual queue
+            console.warn(`[OpenClaw Posting] API post failed for ${response.platform}: ${postErr.message}`);
+            await response.update({
+              post_status: 'ready_to_post',
+              updated_at: new Date(),
+            });
+
+            actions.push({
+              campaign_id: '',
+              action: 'queue_manual_post',
+              reason: `API post failed for ${response.platform}, queued for manual posting: ${postErr.message}`,
+              confidence: 0.7,
+              before_state: { post_status: 'approved' },
+              after_state: { post_status: 'ready_to_post' },
+              result: 'success',
+              entity_type: 'system',
+              entity_id: response.id,
+            });
+          }
+        } else {
+          // No API credentials — queue for manual posting
+          await response.update({
+            post_status: 'ready_to_post',
+            updated_at: new Date(),
+          });
+
+          actions.push({
+            campaign_id: '',
+            action: 'queue_manual_post',
+            reason: `No API credentials for ${response.platform} — queued for manual posting`,
+            confidence: 0.9,
+            before_state: { post_status: 'approved' },
+            after_state: { post_status: 'ready_to_post' },
+            result: 'success',
+            entity_type: 'system',
+            entity_id: response.id,
+          });
+        }
+
+        // Update signal status
         if (signal) {
           await signal.update({
             status: 'responded',
@@ -112,21 +138,9 @@ export async function runOpenclawBrowserWorkerAgent(
 
         await task.update({
           status: 'completed',
-          output_data: { post_url: response.post_url, session_id: session.id },
+          output_data: { response_id: response.id, post_status: response.post_status, post_url: response.post_url },
           completed_at: new Date(),
           updated_at: new Date(),
-        });
-
-        actions.push({
-          campaign_id: '',
-          action: 'post_response',
-          reason: `Posted response to ${response.platform} (delay: ${delay}ms)`,
-          confidence: 0.9,
-          before_state: { post_status: 'approved' },
-          after_state: { post_status: 'posted', post_url: response.post_url },
-          result: 'success',
-          entity_type: 'system',
-          entity_id: response.id,
         });
       } catch (err: any) {
         await task.update({
@@ -139,7 +153,7 @@ export async function runOpenclawBrowserWorkerAgent(
       }
     }
   } catch (err: any) {
-    errors.push(err.message || 'Browser worker error');
+    errors.push(err.message || 'Posting agent error');
   }
 
   return {
@@ -150,4 +164,19 @@ export async function runOpenclawBrowserWorkerAgent(
     duration_ms: Date.now() - start,
     entities_processed: actions.filter((a) => a.result === 'success').length,
   };
+}
+
+async function postToPlatform(
+  response: InstanceType<typeof OpenclawResponse>,
+  signal: InstanceType<typeof OpenclawSignal> | null,
+): Promise<{ post_url: string; platform_post_id: string }> {
+  switch (response.platform) {
+    case 'devto': {
+      const articleId = signal?.details?.id;
+      if (!articleId) throw new Error('No Dev.to article ID in signal details');
+      return postToDevTo(articleId, response.content);
+    }
+    default:
+      throw new Error(`No API posting support for platform: ${response.platform}`);
+  }
 }

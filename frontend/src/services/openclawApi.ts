@@ -54,6 +54,8 @@ export interface OpenclawResponseItem {
   post_status: string;
   post_url: string | null;
   posted_at: string | null;
+  short_id: string | null;
+  tracked_url: string | null;
   engagement_metrics: Record<string, any>;
   created_at: string;
   signal?: { title: string; source_url: string; platform: string };
@@ -130,3 +132,6 @@ export const updateOpenclawConfig = (data: { agent_name: string; config?: Record
 
 export const getOpenclawAgentActivity = (agentId: string, params?: Record<string, string>) =>
   api.get<{ activities: OpenclawAgentActivity[]; total: number }>(`${BASE}/agents/${agentId}/activity`, { params });
+
+export const markOpenclawResponsePosted = (id: string, post_url: string) =>
+  api.post(`${BASE}/responses/${id}/mark-posted`, { post_url });

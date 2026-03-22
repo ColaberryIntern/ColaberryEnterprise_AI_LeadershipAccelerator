@@ -1,13 +1,20 @@
+import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { OpenclawSignal, OpenclawTask, OpenclawResponse } from '../../../models';
 import { getOpenAIClient } from '../../../intelligence/assistant/openaiHelper';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
+const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
+
+// Platforms where including a tracked link in the comment is acceptable
+const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin']);
+
 /**
  * OpenClaw Content Response Agent
  * Generates educational, platform-appropriate responses for queued signals.
- * Uses LLM (GPT-4o-mini) for intelligent response generation with template fallback.
+ * Uses LLM (GPT-4o) for intelligent response generation with template fallback.
  * Creates draft responses pending admin approval.
+ * Each response gets a unique marketing tag for attribution tracking.
  */
 export async function runOpenclawContentResponseAgent(
   _agentId: string,
@@ -18,7 +25,6 @@ export async function runOpenclawContentResponseAgent(
   const errors: string[] = [];
   const defaultTone = config.default_tone || 'educational';
   const maxLength = config.max_response_length || 1500;
-  const utmCampaign = config.utm_campaign || 'openclaw';
 
   try {
     // Fetch assigned generate_response tasks
@@ -49,23 +55,28 @@ export async function runOpenclawContentResponseAgent(
           continue;
         }
 
-        // Generate response content
-        const tone = selectTone(signal, defaultTone);
-        const content = await generateLLMResponse(signal, tone, maxLength);
-
-        // Create UTM params
+        // Generate unique per-response marketing tag
+        const shortId = `oc-${signal.platform}-${crypto.randomBytes(4).toString('hex')}`;
+        const trackedUrl = `${BASE_URL}/i/${shortId}`;
         const utmParams = {
           utm_source: signal.platform,
           utm_medium: 'organic_outreach',
-          utm_campaign: utmCampaign,
+          utm_campaign: shortId,
         };
 
-        // Create draft response
+        // Generate response content
+        const tone = selectTone(signal, defaultTone);
+        const includeLink = LINK_ALLOWED_PLATFORMS.has(signal.platform);
+        const content = await generateLLMResponse(signal, tone, maxLength, includeLink ? trackedUrl : null);
+
+        // Create draft response with unique tracking
         const response = await OpenclawResponse.create({
           signal_id: signal.id,
           platform: signal.platform,
           content,
           tone: tone as any,
+          short_id: shortId,
+          tracked_url: trackedUrl,
           utm_params: utmParams,
           post_status: 'draft',
           created_at: new Date(),
@@ -92,7 +103,7 @@ export async function runOpenclawContentResponseAgent(
 
         await task.update({
           status: 'completed',
-          output_data: { response_id: response.id, tone, content_length: content.length },
+          output_data: { response_id: response.id, tone, content_length: content.length, short_id: shortId },
           completed_at: new Date(),
           updated_at: new Date(),
         });
@@ -100,10 +111,10 @@ export async function runOpenclawContentResponseAgent(
         actions.push({
           campaign_id: '',
           action: 'generate_response',
-          reason: `Generated ${tone} response (${content.length} chars) for ${signal.platform} signal`,
+          reason: `Generated ${tone} response (${content.length} chars) for ${signal.platform} signal [tag: ${shortId}]`,
           confidence: 0.85,
           before_state: { signal_status: signal.status },
-          after_state: { response_id: response.id, post_status: 'draft' },
+          after_state: { response_id: response.id, post_status: 'draft', short_id: shortId },
           result: 'success',
           entity_type: 'system',
           entity_id: response.id,
@@ -158,16 +169,18 @@ Your employer is Colaberry — a company that provides enterprise AI leadership 
 Rules:
 1. Lead with VALUE — share real insights, data points, frameworks, or practical advice
 2. NEVER pitch, sell, or mention any company or product by name
-3. NEVER include links or URLs in the response
-4. Match the platform's communication style and norms
-5. Be authentic — write like a real person who happens to be deeply knowledgeable about AI adoption
-6. Keep responses concise and substantive — no filler, no generic platitudes
-7. If the original post asks a question, answer it directly first
-8. Draw on real industry trends: AI literacy gaps, change management, ROI of upskilling, adoption curves
-9. Avoid corporate jargon — write naturally
-10. End with a thought-provoking observation or question that invites further discussion, not a call to action`;
+3. Match the platform's communication style and norms
+4. Be authentic — write like a real person who happens to be deeply knowledgeable about AI adoption
+5. Keep responses concise and substantive — no filler, no generic platitudes
+6. If the original post asks a question, answer it directly first
+7. Draw on real industry trends: AI literacy gaps, change management, ROI of upskilling, adoption curves
+8. Avoid corporate jargon — write naturally
+9. End with a thought-provoking observation or question that invites further discussion, not a call to action`;
 
-function buildUserPrompt(signal: any, tone: string, maxLength: number): string {
+const SYSTEM_PROMPT_WITH_LINK = `${SYSTEM_PROMPT}
+10. A tracked URL will be provided. You may include it ONCE at the very end as a natural, non-promotional reference — e.g., "I wrote more about this approach here: [URL]" or "There's a deeper breakdown of this framework here: [URL]". Make it feel organic, not like an ad.`;
+
+function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUrl: string | null): string {
   const platform = signal.platform;
   const title = signal.title || '';
   const excerpt = signal.content_excerpt || '';
@@ -175,15 +188,20 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number): string {
 
   let platformContext = '';
   if (platform === 'reddit') {
-    platformContext = `This is a Reddit post in r/${details.subreddit || 'unknown'}. Write like a genuine Reddit commenter — casual but knowledgeable. Don't use bullet points or headers. Keep it to 2-3 paragraphs max.`;
+    platformContext = `This is a Reddit post in r/${details.subreddit || 'unknown'}. Write like a genuine Reddit commenter — casual but knowledgeable. Don't use bullet points or headers. Keep it to 2-3 paragraphs max. Do NOT include any links or URLs.`;
   } else if (platform === 'hackernews') {
-    platformContext = `This is a Hacker News discussion. HN values technical depth, contrarian thinking, and data-backed claims. Be concise and intellectually rigorous. Avoid anything that sounds like marketing.`;
+    platformContext = `This is a Hacker News discussion. HN values technical depth, contrarian thinking, and data-backed claims. Be concise and intellectually rigorous. Avoid anything that sounds like marketing. Do NOT include any links or URLs.`;
   } else if (platform === 'devto') {
     platformContext = `This is a Dev.to article discussion. The audience is developers. You can use technical language and reference tools/frameworks. Be practical and actionable.`;
   } else if (platform === 'linkedin') {
     platformContext = `This is a LinkedIn post. Professional tone but not stiff. Share insights from experience. Short paragraphs work well.`;
   } else if (platform === 'quora') {
     platformContext = `This is a Quora question. Give a thorough, authoritative answer. Structure is okay here — numbered points or short sections work well.`;
+  }
+
+  let linkInstruction = '';
+  if (trackedUrl) {
+    linkInstruction = `\n\nTracked URL (include once, naturally, at the end): ${trackedUrl}`;
   }
 
   return `Platform: ${platform}
@@ -199,14 +217,15 @@ ${details.subreddit ? `Subreddit: r/${details.subreddit}` : ''}
 ${details.num_comments ? `Comments: ${details.num_comments}` : ''}
 --- END ---
 
-Write a response to this post. Remember: provide genuine value, no self-promotion, no links.`;
+Write a response to this post. Remember: provide genuine value, no self-promotion.${linkInstruction}`;
 }
 
 // Use gpt-4o for outreach content — higher quality than gpt-4o-mini
 const OPENCLAW_MODEL = 'gpt-4o';
 
-async function generateLLMResponse(signal: any, tone: string, maxLength: number): Promise<string> {
-  const userPrompt = buildUserPrompt(signal, tone, maxLength);
+async function generateLLMResponse(signal: any, tone: string, maxLength: number, trackedUrl: string | null): Promise<string> {
+  const userPrompt = buildUserPrompt(signal, tone, maxLength, trackedUrl);
+  const systemPrompt = trackedUrl ? SYSTEM_PROMPT_WITH_LINK : SYSTEM_PROMPT;
   const client = getOpenAIClient();
 
   let llmResult: string | null = null;
@@ -215,7 +234,7 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number)
       const response = await client.chat.completions.create({
         model: OPENCLAW_MODEL,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
         max_tokens: Math.min(Math.ceil(maxLength / 3), 1024),
@@ -232,8 +251,10 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number)
     let cleaned = llmResult.trim();
     // Remove any accidental self-references the LLM might add
     cleaned = cleaned.replace(/\b[Cc]olaberry\b/g, '');
-    // Remove any URLs the LLM might sneak in
-    cleaned = cleaned.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+    // Remove URLs ONLY if the platform doesn't allow links (keep tracked URL for link-allowed platforms)
+    if (!trackedUrl) {
+      cleaned = cleaned.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+    }
     return cleaned.slice(0, maxLength);
   }
 

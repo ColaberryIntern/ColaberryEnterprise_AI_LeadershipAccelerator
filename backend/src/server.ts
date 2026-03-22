@@ -54,6 +54,45 @@ app.use(trackingRoutes);
 app.use(participantRoutes);
 app.use(alumniReferralRoutes);
 
+// OpenClaw tracked short URL redirect (public, no auth)
+app.get('/i/:tag', async (req, res) => {
+  try {
+    const { OpenclawResponse: OcResponse } = await import('./models');
+    const response = await OcResponse.findOne({ where: { short_id: req.params.tag } });
+    if (!response) return res.redirect('/ai-architect');
+
+    // Record visitor attribution
+    try {
+      const { Visitor } = await import('./models');
+      if (Visitor) {
+        await (Visitor as any).create({
+          campaign_id: response.utm_params?.utm_campaign || response.short_id,
+          source: response.utm_params?.utm_source || response.platform,
+          medium: response.utm_params?.utm_medium || 'organic_outreach',
+          landing_page: '/ai-architect',
+          referrer: req.get('referer') || null,
+          ip_address: req.ip,
+          user_agent: req.get('user-agent'),
+          created_at: new Date(),
+        });
+      }
+    } catch {
+      // Visitor tracking is non-critical
+    }
+
+    // Update engagement metrics
+    const clicks = (response.engagement_metrics?.clicks || 0) + 1;
+    await response.update({
+      engagement_metrics: { ...response.engagement_metrics, clicks },
+      updated_at: new Date(),
+    });
+
+    res.redirect('/ai-architect');
+  } catch {
+    res.redirect('/ai-architect');
+  }
+});
+
 app.use(errorHandler);
 
 // Explicit migration: ensure Campaign Link Registry columns exist even if alter sync fails
