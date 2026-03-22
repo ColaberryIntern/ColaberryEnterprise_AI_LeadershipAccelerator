@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   getOpenclawDashboard,
   getOpenclawResponses,
@@ -233,10 +233,12 @@ export default function OpenclawTab() {
         </div>
       )}
 
-      {/* Agent Status */}
+      {/* Agent Status (collapsible) */}
       {dashboard?.agents && dashboard.agents.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-semibold small">Agent Status — click any row for details</div>
+        <details className="mb-4">
+          <summary className="fw-semibold small mb-2" style={{ cursor: 'pointer', color: 'var(--color-text-light)' }}>Agent Status — {dashboard.agents.filter(a => a.enabled).length} active agents</summary>
+        <div className="card border-0 shadow-sm">
+          <div className="card-header bg-white fw-semibold small">Click any row for details</div>
           <div className="card-body p-0">
             <div className="table-responsive">
               <table className="table table-hover mb-0 small">
@@ -282,12 +284,14 @@ export default function OpenclawTab() {
             </div>
           </div>
         </div>
+        </details>
       )}
 
-      {/* Responses Table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white d-flex justify-content-between align-items-center">
-          <span className="fw-semibold small">Recent Responses</span>
+      {/* Response Review Cards */}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h6 className="fw-semibold mb-0">Response Queue</h6>
+        <div className="d-flex gap-2 align-items-center">
+          <span className="text-muted small">{responses.length} responses</span>
           <select
             className="form-select form-select-sm"
             style={{ width: 'auto', fontSize: '0.75rem' }}
@@ -295,219 +299,243 @@ export default function OpenclawTab() {
             onChange={(e) => setResponseFilter(e.target.value)}
           >
             <option value="">All Statuses</option>
-            <option value="draft">Draft</option>
+            <option value="draft">Draft — Needs Review</option>
             <option value="approved">Approved</option>
             <option value="ready_to_post">Ready to Post</option>
             <option value="posted">Posted</option>
             <option value="failed">Failed</option>
           </select>
         </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover mb-0 small">
-              <thead className="table-light">
-                <tr>
-                  <th>Platform</th>
-                  <th>Signal</th>
-                  <th>Tone</th>
-                  <th>Content</th>
-                  <th>Status</th>
-                  <th>Time</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {responses.map((resp) => {
-                  const isExpanded = expandedResponse === resp.id;
-                  const isReadyToPost = resp.post_status === 'ready_to_post' || resp.post_status === 'approved';
-                  return (
-                    <React.Fragment key={resp.id}>
-                      <tr
-                        style={{ cursor: isReadyToPost ? 'pointer' : undefined }}
-                        onClick={() => isReadyToPost && setExpandedResponse(isExpanded ? null : resp.id)}
-                      >
-                        <td>
-                          <span
-                            className="badge"
-                            style={{ backgroundColor: PLATFORM_COLORS[resp.platform] || '#718096', fontSize: '0.65rem' }}
-                          >
-                            {resp.platform}
-                          </span>
-                        </td>
-                        <td>
-                          {resp.signal?.title ? (
-                            <a
-                              href={resp.signal.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-truncate d-inline-block"
-                              style={{ maxWidth: 200, fontSize: '0.75rem' }}
-                              title={resp.signal.title}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {resp.signal.title}
-                            </a>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td><span className="badge bg-secondary" style={{ fontSize: '0.6rem' }}>{resp.tone}</span></td>
-                        <td>
-                          <span
-                            className="text-truncate d-inline-block text-muted"
-                            style={{ maxWidth: 250, fontSize: '0.7rem' }}
-                            title={resp.content}
-                          >
-                            {resp.content}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge bg-${STATUS_BADGES[resp.post_status] || 'secondary'}`}>
-                            {resp.post_status === 'ready_to_post' ? 'Ready' : resp.post_status}
-                          </span>
-                        </td>
-                        <td className="text-muted text-nowrap">{timeAgo(resp.created_at)}</td>
-                        <td>
-                          {resp.post_status === 'draft' && (
-                            <div className="d-flex gap-1">
-                              <button
-                                className="btn btn-sm btn-outline-success py-0 px-2"
-                                onClick={(e) => { e.stopPropagation(); handleApprove(resp.id); }}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                className="btn btn-sm btn-outline-danger py-0 px-2"
-                                onClick={(e) => { e.stopPropagation(); handleReject(resp.id); }}
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          )}
-                          {isReadyToPost && (
-                            <button
-                              className="btn btn-sm btn-outline-primary py-0 px-2"
-                              onClick={(e) => { e.stopPropagation(); setExpandedResponse(isExpanded ? null : resp.id); }}
-                            >
-                              {isExpanded ? 'Close' : 'Post'}
-                            </button>
-                          )}
-                          {resp.post_url && (
-                            <a href={resp.post_url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary py-0 px-2" onClick={(e) => e.stopPropagation()}>
-                              View
-                            </a>
-                          )}
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={7} className="p-0">
-                            <div className="bg-light p-3 border-top border-bottom">
-                              {/* Source link */}
-                              {resp.signal?.source_url && (
-                                <div className="mb-2">
-                                  <span className="fw-medium small">Source: </span>
-                                  <a
-                                    href={resp.signal.source_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="small"
-                                  >
-                                    {resp.signal.title || resp.signal.source_url}
-                                    <span className="ms-1" style={{ fontSize: '0.65rem' }}>&#8599;</span>
-                                  </a>
-                                </div>
-                              )}
+      </div>
 
-                              {/* Response content with copy */}
-                              <div className="mb-2">
-                                <div className="d-flex justify-content-between align-items-center mb-1">
-                                  <span className="fw-medium small">Response Content</span>
-                                  <button
-                                    className={`btn btn-sm py-0 px-2 ${copiedId === resp.id ? 'btn-success' : 'btn-outline-secondary'}`}
-                                    onClick={() => handleCopy(resp.content, resp.id)}
-                                  >
-                                    {copiedId === resp.id ? 'Copied!' : 'Copy'}
-                                  </button>
-                                </div>
-                                <pre
-                                  className="bg-white border rounded p-2 mb-0"
-                                  style={{ fontSize: '0.75rem', whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto' }}
-                                >
-                                  {resp.content}
-                                </pre>
-                              </div>
-
-                              {/* Tracked URL (for link-allowed platforms) */}
-                              {resp.tracked_url && (
-                                <div className="mb-2">
-                                  <div className="d-flex align-items-center gap-2">
-                                    <span className="fw-medium small">Tracked URL:</span>
-                                    <code className="small">{resp.tracked_url}</code>
-                                    <button
-                                      className={`btn btn-sm py-0 px-2 ${copiedId === `url-${resp.id}` ? 'btn-success' : 'btn-outline-secondary'}`}
-                                      onClick={() => handleCopy(resp.tracked_url!, `url-${resp.id}`)}
-                                    >
-                                      {copiedId === `url-${resp.id}` ? 'Copied!' : 'Copy URL'}
-                                    </button>
-                                  </div>
-                                  {resp.short_id && (
-                                    <span className="text-muted" style={{ fontSize: '0.65rem' }}>Tag: {resp.short_id}</span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Mark as posted */}
-                              <div className="d-flex align-items-center gap-2 mt-2">
-                                <input
-                                  type="text"
-                                  className="form-control form-control-sm"
-                                  placeholder="Paste the URL where you posted this..."
-                                  style={{ maxWidth: 400, fontSize: '0.75rem' }}
-                                  value={expandedResponse === resp.id ? markPostedUrl : ''}
-                                  onChange={(e) => setMarkPostedUrl(e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <button
-                                  className="btn btn-sm btn-primary py-0 px-3"
-                                  disabled={!markPostedUrl.trim()}
-                                  onClick={(e) => { e.stopPropagation(); handleMarkPosted(resp.id); }}
-                                >
-                                  Mark as Posted
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-                {responses.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-4 px-3">
-                      <div className="text-center mb-3 text-muted">No responses yet</div>
-                      <div className="card border-0 bg-light mx-auto" style={{ maxWidth: 600 }}>
-                        <div className="card-body py-3 px-4">
-                          <div className="fw-semibold small mb-2">How OpenClaw Works</div>
-                          <ol className="small text-muted mb-0 ps-3" style={{ lineHeight: 1.8 }}>
-                            <li><strong>Signal Scanning</strong> — agents scan Reddit, Hacker News, and Dev.to every 10 minutes for AI-related conversations ({kpis?.signals_24h || 0} signals found in last 24h)</li>
-                            <li><strong>Draft Generation</strong> — the Content Response agent writes educational, non-promotional responses using GPT-4o</li>
-                            <li><strong>You Review</strong> — drafts appear here. Click <strong>Approve</strong> to move them to the posting queue</li>
-                            <li><strong>Post Manually</strong> — for Reddit/HN: click the source link, copy the response, paste it as your own comment. For Dev.to: auto-posted via API</li>
-                            <li><strong>Mark as Posted</strong> — paste the URL where you posted it so the system can track engagement</li>
-                            <li><strong>Attribution</strong> — each response gets a unique tracked URL. When someone clicks it, they are attributed back to that specific post</li>
-                          </ol>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+      {responses.length === 0 && (
+        <div className="card border-0 bg-light mx-auto" style={{ maxWidth: 650 }}>
+          <div className="card-body py-4 px-4">
+            <div className="text-center mb-3 text-muted">No responses yet</div>
+            <div className="fw-semibold small mb-2">How AI Outreach Works</div>
+            <ol className="small text-muted mb-0 ps-3" style={{ lineHeight: 1.8 }}>
+              <li><strong>Signal Scanning</strong> — agents scan Dev.to, Reddit, and HN for AI-related conversations ({kpis?.signals_24h || 0} signals found in last 24h)</li>
+              <li><strong>Draft Generation</strong> — GPT-4o writes educational, non-promotional responses tailored to the platform</li>
+              <li><strong>You Review</strong> — drafts appear here as cards. Read the original post, review the response, then approve or reject</li>
+              <li><strong>Posting</strong> — Dev.to: auto-posted via API. Reddit/HN: you copy the response, post it from your account</li>
+              <li><strong>Attribution</strong> — each response gets a unique tracked URL for visitor attribution</li>
+            </ol>
           </div>
         </div>
-      </div>
+      )}
+
+      {responses.map((resp) => {
+        const sig = resp.signal;
+        const details = sig?.details || {};
+        const comments = details.num_comments || details.comments_count || 0;
+        const reactions = details.score || details.points || details.positive_reactions_count || 0;
+        const tags: string[] = details.tags || details.topic_tags || [];
+        const publishedAt = details.published_at || details.created_at || details.created_utc;
+        const isExpanded = expandedResponse === resp.id;
+        const isDraft = resp.post_status === 'draft';
+        const isReadyToPost = resp.post_status === 'ready_to_post' || resp.post_status === 'approved';
+
+        return (
+          <div key={resp.id} className="card border-0 shadow-sm mb-3">
+            {/* Card Header — Original Post Context */}
+            <div className="card-header bg-white py-2 px-3">
+              <div className="d-flex justify-content-between align-items-start">
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <span
+                      className="badge"
+                      style={{ backgroundColor: PLATFORM_COLORS[resp.platform] || '#718096', fontSize: '0.65rem' }}
+                    >
+                      {resp.platform}
+                    </span>
+                    <span className={`badge bg-${STATUS_BADGES[resp.post_status] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>
+                      {resp.post_status === 'ready_to_post' ? 'Ready to Post' : resp.post_status}
+                    </span>
+                    <span className="badge bg-secondary" style={{ fontSize: '0.6rem' }}>{resp.tone}</span>
+                    <span className="text-muted" style={{ fontSize: '0.65rem' }}>{timeAgo(resp.created_at)}</span>
+                  </div>
+                  {sig?.title && (
+                    <a
+                      href={sig.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="fw-semibold text-decoration-none d-block"
+                      style={{ fontSize: '0.88rem', color: 'var(--color-primary)' }}
+                    >
+                      {sig.title} <span style={{ fontSize: '0.7rem' }}>&#8599;</span>
+                    </a>
+                  )}
+                </div>
+                {/* Engagement stats */}
+                <div className="d-flex gap-3 ms-3 text-nowrap" style={{ fontSize: '0.75rem' }}>
+                  {reactions > 0 && (
+                    <div className="text-center">
+                      <div className="fw-bold" style={{ color: 'var(--color-accent)' }}>{reactions}</div>
+                      <div className="text-muted" style={{ fontSize: '0.6rem' }}>reactions</div>
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <div className="fw-bold" style={{ color: '#2b6cb0' }}>{comments}</div>
+                    <div className="text-muted" style={{ fontSize: '0.6rem' }}>comments</div>
+                  </div>
+                  {publishedAt && (
+                    <div className="text-center">
+                      <div className="fw-bold text-muted">{timeAgo(typeof publishedAt === 'number' ? new Date(publishedAt * 1000).toISOString() : publishedAt)}</div>
+                      <div className="text-muted" style={{ fontSize: '0.6rem' }}>published</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Tags */}
+              {tags.length > 0 && (
+                <div className="d-flex gap-1 mt-1">
+                  {tags.slice(0, 6).map((tag: string) => (
+                    <span key={tag} className="badge bg-light text-muted border" style={{ fontSize: '0.6rem' }}>#{tag}</span>
+                  ))}
+                </div>
+              )}
+              {/* Author */}
+              {sig?.author && (
+                <div className="text-muted mt-1" style={{ fontSize: '0.68rem' }}>by {sig.author}</div>
+              )}
+            </div>
+
+            <div className="card-body py-2 px-3">
+              {/* Original Post Excerpt */}
+              {sig?.content_excerpt && (
+                <div className="mb-2">
+                  <div className="fw-medium text-muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Original Post</div>
+                  <div
+                    className="text-muted border-start ps-2"
+                    style={{ fontSize: '0.78rem', borderColor: 'var(--color-border)', lineHeight: 1.5 }}
+                  >
+                    {sig.content_excerpt.length > 400 ? sig.content_excerpt.slice(0, 400) + '...' : sig.content_excerpt}
+                  </div>
+                </div>
+              )}
+
+              {/* Generated Response */}
+              <div className="mb-2">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <div className="fw-medium text-muted" style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Our Response ({resp.content.length} chars)
+                  </div>
+                  <button
+                    className={`btn btn-sm py-0 px-2 ${copiedId === resp.id ? 'btn-success' : 'btn-outline-secondary'}`}
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() => handleCopy(resp.content, resp.id)}
+                  >
+                    {copiedId === resp.id ? 'Copied!' : 'Copy Response'}
+                  </button>
+                </div>
+                <div
+                  className="bg-light rounded p-2"
+                  style={{
+                    fontSize: '0.8rem',
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: isExpanded ? 'none' : 120,
+                    overflow: isExpanded ? 'visible' : 'hidden',
+                    position: 'relative',
+                  }}
+                >
+                  {resp.content}
+                  {!isExpanded && resp.content.length > 300 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 40,
+                        background: 'linear-gradient(transparent, #f8f9fa)',
+                      }}
+                    />
+                  )}
+                </div>
+                {resp.content.length > 300 && (
+                  <button
+                    className="btn btn-sm btn-link p-0 mt-1"
+                    style={{ fontSize: '0.72rem' }}
+                    onClick={() => setExpandedResponse(isExpanded ? null : resp.id)}
+                  >
+                    {isExpanded ? 'Show less' : 'Show full response'}
+                  </button>
+                )}
+              </div>
+
+              {/* Tracked URL */}
+              {resp.tracked_url && (
+                <div className="d-flex align-items-center gap-2 mb-2" style={{ fontSize: '0.72rem' }}>
+                  <span className="text-muted">Tracking:</span>
+                  <code style={{ fontSize: '0.7rem' }}>{resp.short_id}</code>
+                  <button
+                    className={`btn btn-sm py-0 px-1 ${copiedId === `url-${resp.id}` ? 'btn-success' : 'btn-outline-secondary'}`}
+                    style={{ fontSize: '0.65rem' }}
+                    onClick={() => handleCopy(resp.tracked_url!, `url-${resp.id}`)}
+                  >
+                    {copiedId === `url-${resp.id}` ? 'Copied!' : 'Copy URL'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Card Footer — Actions */}
+            <div className="card-footer bg-white py-2 px-3 d-flex align-items-center gap-2">
+              {isDraft && (
+                <>
+                  <button className="btn btn-sm btn-success px-3" onClick={() => handleApprove(resp.id)}>
+                    Approve &amp; Queue
+                  </button>
+                  <button className="btn btn-sm btn-outline-danger px-3" onClick={() => handleReject(resp.id)}>
+                    Reject
+                  </button>
+                  <a
+                    href={sig?.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm btn-outline-secondary px-3 ms-auto"
+                  >
+                    View Original Post
+                  </a>
+                </>
+              )}
+              {isReadyToPost && (
+                <>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    placeholder="Paste the URL where you posted this comment..."
+                    style={{ maxWidth: 400, fontSize: '0.75rem' }}
+                    value={expandedResponse === resp.id ? markPostedUrl : ''}
+                    onChange={(e) => { setExpandedResponse(resp.id); setMarkPostedUrl(e.target.value); }}
+                  />
+                  <button
+                    className="btn btn-sm btn-primary px-3"
+                    disabled={!markPostedUrl.trim() || expandedResponse !== resp.id}
+                    onClick={() => handleMarkPosted(resp.id)}
+                  >
+                    Mark as Posted
+                  </button>
+                  <a
+                    href={sig?.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-sm btn-outline-secondary px-3 ms-auto"
+                  >
+                    Open Post to Comment
+                  </a>
+                </>
+              )}
+              {resp.post_status === 'posted' && resp.post_url && (
+                <a href={resp.post_url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-success px-3">
+                  View Posted Comment
+                </a>
+              )}
+            </div>
+          </div>
+        );
+      })}
 
       {/* Agent Detail Modal */}
       {selectedAgent && (

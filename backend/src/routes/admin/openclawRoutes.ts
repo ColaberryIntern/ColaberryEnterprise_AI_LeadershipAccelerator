@@ -143,7 +143,7 @@ router.get(`${BASE}/responses`, async (req: Request, res: Response) => {
       order: [['created_at', 'DESC']],
       limit,
       offset,
-      include: [{ model: OpenclawSignal, as: 'signal', attributes: ['title', 'source_url', 'platform'] as any }],
+      include: [{ model: OpenclawSignal, as: 'signal', attributes: ['title', 'source_url', 'platform', 'content_excerpt', 'details', 'relevance_score', 'engagement_score', 'author'] as any }],
     });
 
     res.json({ responses: rows, total: count, page, limit });
