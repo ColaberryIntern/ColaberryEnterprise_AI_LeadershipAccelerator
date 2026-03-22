@@ -818,12 +818,28 @@ export async function getOrchestrationContext(enrollmentId: string, lessonId: st
     ],
   });
 
+  // Load global AI Workstation prompt regardless of sectionConfig existence
+  const { getSetting } = await import('./settingsService');
+  const globalPromptRaw = await getSetting('workstation_prompt');
+  let workstationPrompt: string | null = null;
+  if (globalPromptRaw) {
+    workstationPrompt = await variableService.resolveTemplate(enrollmentId, globalPromptRaw);
+  }
+  const workstationTestMode = await getSetting('workstation_test_mode') || false;
+
   if (!sectionConfig) {
+    // Still return workstation prompt even without section config
+    const artifactDefs = await ArtifactDefinition.findAll({
+      where: { lesson_id: lessonId },
+      order: [['sort_order', 'ASC']],
+    });
     return {
       sectionConfig: null,
-      artifactDefinitions: [],
+      artifactDefinitions: artifactDefs,
       mentorPromptTemplate: null,
-      resolvedVariables: {},
+      workstationPrompt,
+      workstationTestMode,
+      resolvedVariables: await variableService.getAllVariables(enrollmentId),
     };
   }
 
@@ -846,15 +862,6 @@ export async function getOrchestrationContext(enrollmentId: string, lessonId: st
   // Inject section system variables (section_title, section_description, section_learning_goal)
   const sectionSystemVars = await variableService.getSectionSystemVariables(lessonId);
   Object.assign(resolvedVariables, sectionSystemVars);
-
-  // Load global AI Workstation prompt from system settings
-  const { getSetting } = await import('./settingsService');
-  const globalPromptRaw = await getSetting('workstation_prompt');
-  let workstationPrompt: string | null = null;
-  if (globalPromptRaw) {
-    workstationPrompt = await variableService.resolveTemplate(enrollmentId, globalPromptRaw);
-  }
-  const workstationTestMode = await getSetting('workstation_test_mode') || false;
 
   return {
     sectionConfig: {
