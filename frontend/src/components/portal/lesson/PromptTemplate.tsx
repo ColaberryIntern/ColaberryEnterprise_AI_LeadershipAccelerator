@@ -178,6 +178,15 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
       setSaving(true);
       const merged = { ...(learnerProfile?.personalization_context_json || {}), ...newValues };
       await updateLearnerProfile({ personalization_context_json: merged });
+      // Also save as variables for workspace prompt inclusion
+      const tok = localStorage.getItem('participant_token');
+      if (tok) {
+        fetch('/api/portal/curriculum/variables', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
+          body: JSON.stringify({ variables: newValues }),
+        }).catch(() => {});
+      }
       setSaving(false);
     }
     setFillValues(prev => ({ ...prev, ...values }));

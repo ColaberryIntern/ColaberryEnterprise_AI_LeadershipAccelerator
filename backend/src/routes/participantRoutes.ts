@@ -71,6 +71,28 @@ router.get('/api/portal/context-state', requireParticipant, async (req, res) => 
   }
 });
 
+// Save prompt template fill values as variables
+router.post('/api/portal/curriculum/variables', requireParticipant, async (req, res) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { variables } = req.body;
+    if (!variables || typeof variables !== 'object') {
+      return res.status(400).json({ error: 'variables object required' });
+    }
+    const variableService = require('../services/variableService');
+    let saved = 0;
+    for (const [key, value] of Object.entries(variables)) {
+      if (value && typeof value === 'string' && value.trim()) {
+        await variableService.setVariable(enrollmentId, key, (value as string).trim(), 'section');
+        saved++;
+      }
+    }
+    res.json({ saved });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // NotebookLM upload endpoint
 router.post('/api/portal/curriculum/lessons/:lessonId/notebooklm-upload', requireParticipant, strategyPrepUpload.single('file'), async (req, res) => {
   try {
