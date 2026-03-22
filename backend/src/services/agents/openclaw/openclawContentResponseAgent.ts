@@ -258,19 +258,23 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
     cleaned = cleaned.replace(/\b[Cc]olaberry\b/g, '');
     // Remove any URLs the LLM hallucinated (but keep our tracked URL)
     if (trackedUrl) {
-      // Remove hallucinated URLs that aren't our tracked URL
-      cleaned = cleaned.replace(/https?:\/\/\S+/g, (match) =>
-        match.startsWith(trackedUrl.replace(/\/+$/, '')) ? match : ''
-      ).replace(/\s{2,}/g, ' ').trim();
+      const trackedBase = trackedUrl.replace(/\/+$/, '');
+      // Remove hallucinated URLs but keep our tracked URL (even with trailing punctuation)
+      cleaned = cleaned.replace(/https?:\/\/\S+/g, (match) => {
+        const stripped = match.replace(/[)\]},;.!?]+$/, '');
+        return stripped.startsWith(trackedBase) ? match : '';
+      }).replace(/\s{2,}/g, ' ').trim();
 
-      // If the tracked URL is missing, append it
+      // Ensure tracked URL is present — replace any mangled version or append
       if (!cleaned.includes(trackedUrl)) {
+        // Remove any partial/broken URL remnants from failed LLM formatting
+        cleaned = cleaned.replace(/\[([^\]]*)\]\(\s*\)/g, '$1').trim();
         cleaned += `\n\nI go deeper on the enterprise AI adoption side here: ${trackedUrl}`;
       }
     } else {
       cleaned = cleaned.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim();
     }
-    return cleaned.slice(0, maxLength + 100); // extra room for appended URL
+    return cleaned.slice(0, maxLength + 200); // extra room for appended URL
   }
 
   // Fallback to template if LLM unavailable
