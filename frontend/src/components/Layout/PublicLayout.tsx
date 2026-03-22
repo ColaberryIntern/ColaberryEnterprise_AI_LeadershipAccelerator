@@ -7,7 +7,6 @@ import { captureUTMFromURL } from '../../services/utmService';
 import { captureCampaignFromURL } from '../../services/campaignAttributionService';
 
 const MayaChatWidget = lazy(() => import('../MayaChatWidget'));
-const MarketingMonitorPanel = lazy(() => import('../MarketingMonitorPanel'));
 
 function PublicLayout() {
   useEffect(() => { initTracker(); captureUTMFromURL(); captureCampaignFromURL(); }, []);
@@ -24,9 +23,6 @@ function PublicLayout() {
       <PublicFooter />
       <Suspense fallback={null}>
         <MayaChatWidget />
-      </Suspense>
-      <Suspense fallback={null}>
-        <MarketingMonitorPanel />
       </Suspense>
     </div>
   );
