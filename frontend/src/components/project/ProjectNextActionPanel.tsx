@@ -37,6 +37,7 @@ function ProjectNextActionPanel() {
   const [showGuidance, setShowGuidance] = useState(false);
   const [verificationGaps, setVerificationGaps] = useState<string[] | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [progressionResult, setProgressionResult] = useState<any>(null);
 
   const fetchAction = useCallback(() => {
     setLoading(true);
@@ -75,29 +76,38 @@ function ProjectNextActionPanel() {
     if (!action) return;
     setVerifying(true);
     setVerificationGaps(null);
+    setProgressionResult(null);
     try {
       // Run verification first
-      const verifyRes = await portalApi.post('/api/portal/project/verify');
-      const summary = verifyRes.data;
+      await portalApi.post('/api/portal/project/verify');
 
-      if (summary.not_verified > 0 || summary.verified_partial > 0) {
-        // Fetch details to show gaps
-        const statusRes = await portalApi.get('/api/portal/project/verification-status');
-        const reqs = statusRes.data.requirements || [];
-        const gaps = reqs
-          .filter((r: any) => r.verification_status !== 'verified_complete')
-          .slice(0, 3)
-          .map((r: any) => `${r.requirement_key}: ${r.verification_notes || r.verification_status}`);
-        setVerificationGaps(gaps);
+      // Run adaptive progression evaluation
+      const progressRes = await portalApi.post('/api/portal/project/progression-evaluate', { action_id: action.id });
+      const result = progressRes.data;
+      setProgressionResult(result);
+
+      if (result.decision === 'blocked' && result.learning_injection) {
+        // Show gaps from learning injection
+        setVerificationGaps(result.learning_injection.actions.slice(0, 3));
+      } else if (result.action_completed) {
+        // Action was completed by progression engine — refresh
+        setShowGuidance(false);
+        if (result.next_action) {
+          setAction(result.next_action);
+        } else {
+          fetchAction();
+        }
       }
-
-      // Complete the action regardless (verification is informational)
-      setActing('completing');
-      setShowGuidance(false);
-      await portalApi.post('/api/portal/project/next-action/complete', { action_id: action.id });
-      fetchAction();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to complete action');
+      // Fallback: complete manually if progression fails
+      try {
+        setActing('completing');
+        setShowGuidance(false);
+        await portalApi.post('/api/portal/project/next-action/complete', { action_id: action.id });
+        fetchAction();
+      } catch (fallbackErr: any) {
+        alert(fallbackErr.response?.data?.error || 'Failed to complete action');
+      }
     } finally {
       setActing(null);
       setVerifying(false);
@@ -237,11 +247,52 @@ function ProjectNextActionPanel() {
           </button>
         </div>
 
-        {/* Verification gaps */}
-        {verificationGaps && verificationGaps.length > 0 && (
+        {/* Progression decision */}
+        {progressionResult && (
+          <div className={`mt-2 p-2 rounded small ${
+            progressionResult.decision === 'auto_advanced' ? '' :
+            progressionResult.decision === 'soft_complete' ? '' : ''
+          }`} style={{
+            background: progressionResult.decision === 'auto_advanced' ? '#d1fae5' :
+              progressionResult.decision === 'soft_complete' ? '#dbeafe' : '#fef3c7',
+            border: `1px solid ${
+              progressionResult.decision === 'auto_advanced' ? '#10b981' :
+              progressionResult.decision === 'soft_complete' ? '#3b82f6' : '#f59e0b'
+            }`,
+          }}>
+            <div className="fw-medium mb-1" style={{
+              color: progressionResult.decision === 'auto_advanced' ? '#065f46' :
+                progressionResult.decision === 'soft_complete' ? '#1e40af' : '#92400e',
+            }}>
+              <i className={`bi ${
+                progressionResult.decision === 'auto_advanced' ? 'bi-check-circle-fill' :
+                progressionResult.decision === 'soft_complete' ? 'bi-arrow-right-circle' : 'bi-exclamation-triangle'
+              } me-1`}></i>
+              {progressionResult.decision === 'auto_advanced' ? 'Auto-Advanced' :
+               progressionResult.decision === 'soft_complete' ? 'Soft Complete — follow-up added' :
+               'Needs More Work'}
+            </div>
+            <div style={{
+              color: progressionResult.decision === 'auto_advanced' ? '#065f46' :
+                progressionResult.decision === 'soft_complete' ? '#1e40af' : '#92400e',
+            }}>
+              {progressionResult.reason}
+            </div>
+            {progressionResult.difficulty && progressionResult.difficulty.difficulty_level !== 'standard' && (
+              <div className="mt-1">
+                <span className={`badge ${progressionResult.difficulty.difficulty_level === 'simplified' ? 'bg-info' : 'bg-warning text-dark'}`}>
+                  Difficulty: {progressionResult.difficulty.difficulty_level}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Learning injection actions */}
+        {verificationGaps && verificationGaps.length > 0 && !progressionResult && (
           <div className="mt-2 p-2 rounded small" style={{ background: '#fef3c7', border: '1px solid #f59e0b' }}>
             <div className="fw-medium mb-1" style={{ color: '#92400e' }}>
-              <i className="bi bi-exclamation-triangle me-1"></i>Verification found gaps:
+              <i className="bi bi-exclamation-triangle me-1"></i>Additional steps needed:
             </div>
             <ul className="mb-0 ps-3" style={{ color: '#92400e' }}>
               {verificationGaps.map((gap, i) => <li key={i}>{gap}</li>)}

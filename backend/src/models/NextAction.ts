@@ -10,6 +10,8 @@ export interface NextActionAttributes {
   priority_score: number;
   confidence_score: number;
   status?: string;
+  auto_managed?: boolean;
+  completion_type?: string;
   metadata?: Record<string, any>;
   created_at?: Date;
 }
@@ -23,6 +25,8 @@ class NextAction extends Model<NextActionAttributes> implements NextActionAttrib
   declare priority_score: number;
   declare confidence_score: number;
   declare status: string;
+  declare auto_managed: boolean;
+  declare completion_type: string;
   declare metadata: Record<string, any>;
   declare created_at: Date;
 }
@@ -65,6 +69,16 @@ NextAction.init(
       type: DataTypes.STRING(30),
       allowNull: false,
       defaultValue: 'pending',
+    },
+    auto_managed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    completion_type: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'manual',
     },
     metadata: {
       type: DataTypes.JSONB,

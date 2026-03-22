@@ -503,4 +503,26 @@ router.get('/api/portal/project/verification-status', requireParticipant, async 
   }
 });
 
+// ---------------------------------------------------------------------------
+// Adaptive Progression Routes
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/project/progression-evaluate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { action_id } = req.body;
+    if (!action_id) {
+      res.status(400).json({ error: 'action_id is required' });
+      return;
+    }
+    const { evaluateProgression } = await import('../services/adaptive/progressionOrchestrator');
+    const result = await evaluateProgression(enrollmentId, action_id);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /progression-evaluate error:', err.message);
+    const status = err.message.includes('not found') ? 404 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 export default router;
