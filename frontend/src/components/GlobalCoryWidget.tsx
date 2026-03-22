@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import ExecutiveAwarenessPanel from './ExecutiveAwarenessPanel';
 import api from '../utils/api';
 import { useAdminUser } from '../hooks/useAdminUser';
+
+const CoryPanel = lazy(() => import('./admin/intelligence/CoryPanel'));
+
+// No-op callbacks for floating chat (no dashboard to populate)
+const noop = () => {};
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -11,9 +16,12 @@ export default function GlobalCoryWidget() {
   const adminUser = useAdminUser();
   const [isHovered, setIsHovered] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [badge, setBadge] = useState<{ count: number; maxSeverity: string }>({ count: 0, maxSeverity: 'none' });
   const [stabilityScore, setStabilityScore] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatPanelRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = location.pathname.startsWith('/admin');
   const isCoryAuthorized = adminUser?.email === 'ali@colaberry.com' || adminUser?.role === 'super_admin';
@@ -51,18 +59,43 @@ export default function GlobalCoryWidget() {
     if (!panelOpen && isAdmin) fetchBadge();
   }, [panelOpen, isAdmin, fetchBadge]);
 
-  // Don't render on the Intelligence OS page itself (it has its own CoryOrb)
+  // Close on Escape
+  useEffect(() => {
+    if (!chatOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isFullscreen) setIsFullscreen(false);
+        else setChatOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [chatOpen, isFullscreen]);
+
+  // Focus chat panel when opened
+  useEffect(() => {
+    if (chatOpen && chatPanelRef.current) {
+      chatPanelRef.current.focus();
+    }
+  }, [chatOpen]);
+
+  // Reset fullscreen when closed
+  useEffect(() => {
+    if (!chatOpen) setIsFullscreen(false);
+  }, [chatOpen]);
+
+  // Don't render on the Intelligence OS page itself (it has its own CoryPanel)
   if (location.pathname === '/admin/intelligence') return null;
 
   // Only visible to ali@colaberry.com or super_admin
   if (!isCoryAuthorized) return null;
 
   const handleClick = () => {
-    if (isAdmin && badge.count > 0) {
+    if (isAdmin && badge.count > 0 && !chatOpen) {
       setPanelOpen((prev) => !prev);
     } else {
-      const context = encodeURIComponent(location.pathname);
-      window.open(`/admin/intelligence?cory=open&context=${context}`, '_blank');
+      setChatOpen((prev) => !prev);
+      setPanelOpen(false);
     }
   };
 
@@ -80,14 +113,50 @@ export default function GlobalCoryWidget() {
     ? (stabilityScore >= 80 ? '#38a169' : stabilityScore >= 60 ? '#d69e2e' : stabilityScore >= 40 ? '#dd6b20' : '#e53e3e')
     : 'var(--color-primary)';
 
+  // ── Floating chat panel styles ──
+  const chatPanelStyle: React.CSSProperties = isFullscreen
+    ? {
+        position: 'fixed',
+        top: 16,
+        left: 16,
+        right: 16,
+        bottom: 16,
+        zIndex: 10001,
+        background: '#fff',
+        borderRadius: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
+      }
+    : {
+        position: 'fixed',
+        bottom: 80,
+        right: 24,
+        width: 400,
+        height: chatOpen ? 560 : 0,
+        maxHeight: 'calc(100vh - 120px)',
+        zIndex: 10001,
+        background: '#fff',
+        borderRadius: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(26, 54, 93, 0.25)',
+        transition: 'height 0.25s ease, opacity 0.2s ease',
+        opacity: chatOpen ? 1 : 0,
+        pointerEvents: chatOpen ? 'auto' : 'none',
+      };
+
   return (
     <div className="global-cory-widget">
+      {/* Floating avatar button */}
       <button
         onClick={handleClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        aria-label={badge.count > 0 ? `Cory — ${badge.count} executive events` : 'Open Cory — AI COO'}
-        title={badge.count > 0 ? `${badge.count} executive event${badge.count !== 1 ? 's' : ''}` : stabilityScore != null ? `Cory — Stability: ${stabilityScore}/100` : 'Cory — AI COO'}
+        aria-label={chatOpen ? 'Close Cory chat' : badge.count > 0 ? `Cory — ${badge.count} executive events` : 'Open Cory — AI COO'}
+        title={chatOpen ? 'Close Cory' : badge.count > 0 ? `${badge.count} executive event${badge.count !== 1 ? 's' : ''}` : stabilityScore != null ? `Cory — Stability: ${stabilityScore}/100` : 'Cory — AI COO'}
         style={{
           position: 'relative',
           background: 'none',
@@ -136,7 +205,7 @@ export default function GlobalCoryWidget() {
         />
 
         {/* Badge counter */}
-        {badge.count > 0 && (
+        {badge.count > 0 && !chatOpen && (
           <span
             style={{
               position: 'absolute',
@@ -162,7 +231,7 @@ export default function GlobalCoryWidget() {
         )}
 
         {/* Name tooltip on hover */}
-        {isHovered && (
+        {isHovered && !chatOpen && (
           <span
             className="position-absolute bg-dark text-white rounded px-2 py-1"
             style={{
@@ -183,6 +252,121 @@ export default function GlobalCoryWidget() {
 
       {/* Executive Awareness Panel */}
       <ExecutiveAwarenessPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
+
+      {/* Fullscreen backdrop */}
+      {isFullscreen && chatOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10000,
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={() => setIsFullscreen(false)}
+        />
+      )}
+
+      {/* Floating Cory Chat Panel */}
+      <div
+        ref={chatPanelRef}
+        role={isFullscreen ? 'dialog' : 'complementary'}
+        aria-label={isFullscreen ? 'Cory AI COO — Full Screen' : 'Cory AI COO Chat'}
+        aria-modal={isFullscreen ? true : undefined}
+        tabIndex={-1}
+        style={chatPanelStyle}
+      >
+        {/* Header */}
+        <div
+          className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom"
+          style={{
+            flexShrink: 0,
+            background: 'var(--color-primary)',
+            color: '#fff',
+          }}
+        >
+          <div className="d-flex align-items-center gap-2">
+            <img
+              src="/cory-avatar.jpg"
+              alt="Cory"
+              style={{
+                width: isFullscreen ? 36 : 28,
+                height: isFullscreen ? 36 : 28,
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '2px solid rgba(255,255,255,0.3)',
+              }}
+            />
+            <div>
+              <span className="fw-semibold" style={{ fontSize: isFullscreen ? '1rem' : '0.85rem' }}>
+                Cory &mdash; AI COO
+              </span>
+              {isFullscreen && (
+                <div style={{ fontSize: '0.7rem', opacity: 0.75 }}>Full analysis mode</div>
+              )}
+            </div>
+          </div>
+          <div className="d-flex align-items-center gap-1">
+            <button
+              className="btn btn-sm"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? 'Exit full screen' : 'Expand to full screen'}
+              style={{
+                color: 'rgba(255,255,255,0.85)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                background: 'rgba(255,255,255,0.1)',
+                fontSize: '0.7rem',
+                padding: '3px 8px',
+                lineHeight: 1,
+              }}
+            >
+              {isFullscreen ? 'Minimize' : '\u26F6'}
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() => setChatOpen(false)}
+              aria-label="Close Cory chat"
+              style={{
+                color: 'rgba(255,255,255,0.85)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                background: 'rgba(255,255,255,0.1)',
+                fontSize: '0.75rem',
+                padding: '3px 10px',
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        {/* CoryPanel content — lazy loaded, never unmounted once opened */}
+        <div
+          className={isFullscreen ? 'flex-grow-1 d-flex justify-content-center' : 'flex-grow-1'}
+          style={{ minHeight: 0, overflow: 'hidden' }}
+        >
+          <div style={isFullscreen ? { width: '100%', maxWidth: 820, height: '100%' } : { width: 400, height: '100%' }}>
+            {chatOpen && (
+              <Suspense fallback={
+                <div className="d-flex justify-content-center align-items-center h-100">
+                  <div className="spinner-border spinner-border-sm text-primary" role="status">
+                    <span className="visually-hidden">Loading Cory...</span>
+                  </div>
+                </div>
+              }>
+                <CoryPanel
+                  onVisualizationsUpdate={noop}
+                  onSummaryUpdate={noop}
+                  onInsightsUpdate={noop}
+                  externalQuery={null}
+                />
+              </Suspense>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
