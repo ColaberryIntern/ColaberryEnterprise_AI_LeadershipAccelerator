@@ -337,9 +337,9 @@ export default function OpenclawTab() {
 
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <div className="fw-medium small">Auto-Post to Dev.to</div>
+              <div className="fw-medium small">Auto-Post (Dev.to &amp; Hashnode)</div>
               <div className="text-muted" style={{ fontSize: '0.68rem' }}>
-                When ON, approved Dev.to responses are posted automatically via API. Other platforms remain manual.
+                When ON, approved responses are posted automatically via API to platforms with configured credentials. Other platforms remain manual copy-paste.
               </div>
             </div>
             <div className="form-check form-switch ms-3">
