@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMentorContext } from '../../../contexts/MentorContext';
+import { buildFinalPrompt } from '../../../services/promptBuilder';
 
 /* Friendly mentor face SVG — matches the FAB in PortalMentorChat */
 const MentorFace = ({ size = 20 }: { size?: number }) => (
@@ -105,7 +106,7 @@ function resolveVariablesInText(text: string, vars: Record<string, string>): str
 }
 
 export default function ImplementationTask({ data, lessonId, onSubmit, onArtifactsVerified, initialTaskData }: ImplementationTaskProps) {
-  const { sendToMentor, onMentorResponded, updateLessonContext } = useMentorContext();
+  const { sendToMentor, onMentorResponded, updateLessonContext, openLLMWithPrompt, selectedLLM, learnerProfile, lessonContext } = useMentorContext();
 
   const [orchContext, setOrchContext] = useState<OrchestrationContext | null>(null);
 
@@ -620,9 +621,43 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                 </div>
               )}
               {step2Done && (
-                <span style={{ fontSize: 11, color: '#047857' }}>
-                  <i className="bi bi-check-circle me-1"></i>Briefing received in AI Mentor chat
-                </span>
+                <div>
+                  <span style={{ fontSize: 11, color: '#047857' }}>
+                    <i className="bi bi-check-circle me-1"></i>Briefing received
+                  </span>
+                  <div className="mt-2">
+                    <button
+                      className="btn btn-sm d-flex align-items-center gap-2 px-3 py-2"
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none',
+                      }}
+                      onClick={() => {
+                        const prompt = buildFinalPrompt({
+                          workstationPrompt: orchContext?.workstationPrompt || lessonContext.workstationPrompt || undefined,
+                          learnerContext: learnerProfile ? {
+                            company: learnerProfile.company_name,
+                            industry: learnerProfile.industry,
+                            role: learnerProfile.role,
+                            goal: learnerProfile.goal,
+                            ai_maturity: learnerProfile.ai_maturity_level ? `${learnerProfile.ai_maturity_level}/5` : undefined,
+                            use_case: learnerProfile.identified_use_case,
+                          } : undefined,
+                          implementationTask: {
+                            title, description, deliverable, requirements,
+                            artifacts: artifacts.map(a => ({ name: a.name, description: a.description, file_types: a.file_types })),
+                          },
+                          lessonTitle: lessonContext.lessonTitle,
+                          workstationTestMode: lessonContext.workstationTestMode,
+                        });
+                        openLLMWithPrompt(prompt);
+                      }}
+                    >
+                      <i className={`bi ${selectedLLM.icon}`}></i>
+                      Open AI Workspace — {selectedLLM.name}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
