@@ -175,9 +175,17 @@ async function scanPlatform(
     }
 
     case 'hashnode': {
-      // Hashnode GraphQL API — search recent AI-tagged articles
+      // Hashnode GraphQL API — feed query with tag ObjectIDs
+      // Tag IDs: ai=56744721958ef13879b9488e, artificial-intelligence=56744721958ef13879b94927,
+      //          machine-learning=56744722958ef13879b950a8, llm=635ad52efe8087002dee4707
+      const tagIds = [
+        '56744721958ef13879b9488e',    // ai
+        '56744721958ef13879b94927',    // artificial-intelligence
+        '56744722958ef13879b950a8',    // machine-learning
+        '635ad52efe8087002dee4707',    // llm
+      ];
       const query = `query {
-        searchPostsOfFeed(first: ${Math.min(maxResults, 20)}, filter: { tags: ["artificial-intelligence", "ai", "machine-learning", "llm", "generative-ai"] }) {
+        feed(first: ${Math.min(maxResults, 20)}, filter: { tags: [${tagIds.map(id => `"${id}"`).join(', ')}], type: RECENT }) {
           edges {
             node {
               id
@@ -199,9 +207,9 @@ async function scanPlatform(
             'Content-Type': 'application/json',
             ...(process.env.HASHNODE_ACCESS_TOKEN ? { Authorization: process.env.HASHNODE_ACCESS_TOKEN } : {}),
           },
-          timeout: 15000,
+          timeout: 30000,
         });
-        const edges = resp.data?.data?.searchPostsOfFeed?.edges || [];
+        const edges = resp.data?.data?.feed?.edges || [];
         for (const edge of edges) {
           const node = edge.node;
           if (!node) continue;
