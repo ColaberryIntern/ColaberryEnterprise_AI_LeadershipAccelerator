@@ -3,6 +3,8 @@ import { getProjectByEnrollment } from '../projectService';
 import { analyzeCode, CodeAnalysis } from './codeAnalysisService';
 import { verifyRequirement } from './requirementVerificationService';
 import { computeConfidence } from './completionConfidenceService';
+import { verifySemantic } from './semanticVerificationService';
+import { mergeVerificationResults } from './semanticVerificationAdapter';
 
 export interface VerificationSummary {
   verified_complete: number;
@@ -21,6 +23,9 @@ export interface VerificationDetail {
   matched_files: string[];
   missing_elements: string[];
   last_verified_at: string;
+  semantic_status: string | null;
+  semantic_confidence: number;
+  semantic_reasoning: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,19 +55,32 @@ export async function verifyProject(enrollmentId: string): Promise<VerificationS
   let not_verified = 0;
 
   for (const req of requirements) {
-    // Verify this requirement
-    const result = verifyRequirement(req.requirement_text, analysis);
+    // Step 1: Rule-based verification (V1)
+    const ruleResult = verifyRequirement(req.requirement_text, analysis);
 
-    // Compute confidence
+    // Step 2: Semantic verification (V2) — LLM-assisted
+    const semanticResult = await verifySemantic(enrollmentId, req.requirement_text, analysis);
+
+    // Step 3: Merge results
+    const merged = mergeVerificationResults(ruleResult, semanticResult);
+
+    // Step 4: Compute confidence (uses merged result)
     const hasArtifact = !!req.source_artifact_id;
-    const confidence = computeConfidence(result, analysis, hasArtifact);
+    const confidence = computeConfidence(
+      { ...ruleResult, status: merged.status, confidence_score: merged.confidence_score },
+      analysis,
+      hasArtifact
+    );
+
+    // Use higher of merged confidence and factor-based confidence
+    const finalConfidence = Math.max(merged.confidence_score, confidence.confidence_score);
 
     // Map status
     let verification_status: string;
-    if (result.status === 'complete') {
+    if (merged.status === 'complete') {
       verification_status = 'verified_complete';
       verified_complete++;
-    } else if (result.status === 'partial') {
+    } else if (merged.status === 'partial') {
       verification_status = 'verified_partial';
       verified_partial++;
     } else {
@@ -72,37 +90,49 @@ export async function verifyProject(enrollmentId: string): Promise<VerificationS
 
     // Build notes
     const notes = [
-      result.reasoning,
-      result.missing_elements.length > 0
-        ? `Gaps: ${result.missing_elements.join('; ')}`
+      merged.reasoning,
+      merged.missing_elements.length > 0
+        ? `Gaps: ${merged.missing_elements.join('; ')}`
         : null,
+      `Merge: ${merged.merge_case}`,
       `Factors: code=${confidence.factors.code_presence}, structure=${confidence.factors.structural_alignment}, coverage=${confidence.factors.requirement_coverage}`,
     ].filter(Boolean).join(' | ');
 
-    // Update RequirementsMap
+    // Update RequirementsMap — both V1 and V2 fields
     req.verification_status = verification_status;
-    req.verification_confidence = confidence.confidence_score;
+    req.verification_confidence = finalConfidence;
     req.verification_notes = notes;
     req.last_verified_at = new Date();
+    req.semantic_status = semanticResult.semantic_status;
+    req.semantic_confidence = semanticResult.semantic_confidence;
+    req.semantic_reasoning = semanticResult.semantic_reasoning;
+    req.semantic_last_checked = new Date();
     await req.save();
 
-    // Insert verification log
+    // Insert verification log with semantic evidence
     await VerificationLog.create({
       project_id: project.id,
       requirement_id: req.id,
       status: verification_status,
-      confidence: confidence.confidence_score,
+      confidence: finalConfidence,
       notes,
       evidence: {
-        matched_files: result.matched_files,
-        missing_elements: result.missing_elements,
+        matched_files: ruleResult.matched_files,
+        missing_elements: merged.missing_elements,
         factors: confidence.factors,
         detected_features: analysis.detected_features,
+        merge_case: merged.merge_case,
+        semantic: {
+          status: semanticResult.semantic_status,
+          confidence: semanticResult.semantic_confidence,
+          reasoning: semanticResult.semantic_reasoning,
+          missing_elements: semanticResult.missing_elements,
+        },
       },
     });
 
     console.log(
-      `[Verification] ${req.requirement_key}: ${verification_status} (confidence: ${confidence.confidence_score})`
+      `[Verification] ${req.requirement_key}: ${verification_status} (confidence: ${finalConfidence}, merge: ${merged.merge_case})`
     );
   }
 
@@ -138,5 +168,8 @@ export async function getVerificationStatus(projectId: string): Promise<Verifica
     matched_files: req.github_file_paths || [],
     missing_elements: [],
     last_verified_at: req.last_verified_at?.toISOString() || '',
+    semantic_status: req.semantic_status || null,
+    semantic_confidence: req.semantic_confidence || 0,
+    semantic_reasoning: req.semantic_reasoning || null,
   }));
 }

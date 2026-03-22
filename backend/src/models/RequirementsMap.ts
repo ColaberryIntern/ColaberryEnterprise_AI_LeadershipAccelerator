@@ -16,6 +16,10 @@ export interface RequirementsMapAttributes {
   verification_confidence?: number;
   verification_notes?: string;
   last_verified_at?: Date;
+  semantic_status?: string | null;
+  semantic_confidence?: number;
+  semantic_reasoning?: string | null;
+  semantic_last_checked?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -35,6 +39,10 @@ class RequirementsMap extends Model<RequirementsMapAttributes> implements Requir
   declare verification_confidence: number;
   declare verification_notes: string;
   declare last_verified_at: Date;
+  declare semantic_status: string | null;
+  declare semantic_confidence: number;
+  declare semantic_reasoning: string | null;
+  declare semantic_last_checked: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -102,6 +110,23 @@ RequirementsMap.init(
       allowNull: true,
     },
     last_verified_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    semantic_status: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
+    },
+    semantic_confidence: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    semantic_reasoning: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    semantic_last_checked: {
       type: DataTypes.DATE,
       allowNull: true,
     },
