@@ -193,9 +193,10 @@ export default function ImplementationTask({ data, lessonId, onSubmit, onArtifac
       },
       workstationPrompt: orchContext?.workstationPrompt || undefined,
       workstationTestMode: orchContext?.workstationTestMode || false,
+      resolvedVariables: orchContext?.resolvedVariables || undefined,
     });
-    return () => updateLessonContext({ currentSection: '', workstationPrompt: undefined, workstationTestMode: undefined });
-  }, [title, description, deliverable, requirements, artifacts, orchContext?.workstationPrompt, orchContext?.workstationTestMode, updateLessonContext]);
+    return () => updateLessonContext({ currentSection: '', workstationPrompt: undefined, workstationTestMode: undefined, resolvedVariables: undefined });
+  }, [title, description, deliverable, requirements, artifacts, orchContext?.workstationPrompt, orchContext?.workstationTestMode, orchContext?.resolvedVariables, updateLessonContext]);
 
   const handleMentorResponse = useCallback(() => {
     setBriefingReceived(true);
@@ -660,6 +661,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                             use_case: learnerProfile.identified_use_case,
                           } : undefined,
                           mentorOutput: mentorBriefing || undefined,
+                          resolvedVariables: orchContext?.resolvedVariables || undefined,
                           implementationTask: {
                             title, description, deliverable, requirements,
                             artifacts: artifacts.map(a => ({ name: a.name, description: a.description, file_types: a.file_types })),

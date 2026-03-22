@@ -41,6 +41,7 @@ export interface PromptBuilderInput {
   };
   workstationPrompt?: string;
   workstationTestMode?: boolean;
+  resolvedVariables?: Record<string, string>;
   variableTrace?: { key: string; value?: string | null; source: string; status: string }[];
 }
 
@@ -76,6 +77,17 @@ export function buildFinalPrompt(input: PromptBuilderInput): string {
     if (ctx.use_case) fields.push(`Use Case: ${ctx.use_case}`);
     if (fields.length > 0) {
       parts.push(`[Context about me: ${fields.join(', ')}]`);
+    }
+  }
+
+  // 2b. All resolved variables (from curriculum progress)
+  if (input.resolvedVariables) {
+    const skip = new Set(['full_name', 'email', 'company', 'company_name', 'title']); // already in learner context
+    const varLines = Object.entries(input.resolvedVariables)
+      .filter(([k, v]) => v && !skip.has(k))
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`);
+    if (varLines.length > 0) {
+      parts.push(`[Additional learner data from curriculum progress:\n${varLines.join('\n')}]`);
     }
   }
 

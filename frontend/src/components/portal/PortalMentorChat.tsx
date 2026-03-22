@@ -507,6 +507,7 @@ function PortalMentorChat() {
                         use_case: learnerProfile.identified_use_case,
                       } : undefined,
                       mentorOutput: lastMentorMsg?.content || 'No briefing available yet.',
+                      resolvedVariables: lessonContext.resolvedVariables || undefined,
                       implementationTask: {
                         title: taskData.title,
                         description: taskData.description,
