@@ -224,8 +224,9 @@ const PREVIEW_FALLBACK: MentorContextValue = {
   onMentorResponded: { current: null },
   fireMentorResponded: () => {},
   openLLMWithPrompt: async (prompt: string) => {
+    try { await navigator.clipboard.writeText(prompt); } catch {}
     const encoded = encodeURIComponent(prompt);
-    window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
+    window.open(encoded.length + 40 < 6000 ? `https://chat.openai.com/?q=${encoded}` : 'https://chat.openai.com', '_blank');
   },
   learnerProfile: {
     company_name: 'Preview Corp',
@@ -255,13 +256,20 @@ export function AdminPreviewMentorProvider({ children }: { children: React.React
   const clearPendingMessage = useCallback(() => setPendingMsg(null), []);
 
   const openLLMWithPrompt = useCallback(async (prompt: string) => {
+    try { await navigator.clipboard.writeText(prompt); } catch {}
     const encoded = encodeURIComponent(prompt);
+    const MAX_URL_LENGTH = 6000;
     if (selectedLLM.id === 'chatgpt') {
-      window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
+      const url = encoded.length + 40 < MAX_URL_LENGTH
+        ? `https://chat.openai.com/?q=${encoded}`
+        : 'https://chat.openai.com';
+      window.open(url, '_blank');
     } else if (selectedLLM.id === 'claude') {
-      window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
+      const url = encoded.length + 30 < MAX_URL_LENGTH
+        ? `https://claude.ai/new?q=${encoded}`
+        : 'https://claude.ai/new';
+      window.open(url, '_blank');
     } else {
-      try { await navigator.clipboard.writeText(prompt); } catch {}
       window.open(selectedLLM.url, '_blank');
     }
   }, [selectedLLM]);

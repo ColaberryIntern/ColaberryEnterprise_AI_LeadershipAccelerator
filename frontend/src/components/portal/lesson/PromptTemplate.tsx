@@ -68,7 +68,7 @@ interface PromptTemplateProps {
 }
 
 export default function PromptTemplate({ data, onPromptGenerated, conceptSnapshot, aiStrategy, implementationTask }: PromptTemplateProps) {
-  const { learnerProfile, updateLearnerProfile, selectedLLM, lessonContext } = useMentorContext();
+  const { learnerProfile, updateLearnerProfile, selectedLLM, lessonContext, openLLMWithPrompt } = useMentorContext();
   const [copied, setCopied] = useState(false);
   const [fillValues, setFillValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -209,15 +209,8 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
     });
 
     onPromptGenerated?.();
-    const encoded = encodeURIComponent(promptToSend);
-    if (selectedLLM.id === 'chatgpt') {
-      window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
-    } else if (selectedLLM.id === 'claude') {
-      window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
-    } else {
-      navigator.clipboard.writeText(promptToSend).catch(() => {});
-      window.open(selectedLLM.url, '_blank');
-    }
+    // Use MentorContext's openLLMWithPrompt for consistent URL-length handling
+    openLLMWithPrompt(promptToSend);
   };
 
   // Confirm from modal: save values + open LLM
