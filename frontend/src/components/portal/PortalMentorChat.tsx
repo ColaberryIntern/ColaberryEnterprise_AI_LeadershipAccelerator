@@ -486,7 +486,7 @@ function PortalMentorChat() {
                     const taskData = lessonContext.implementationTaskData!;
                     const lastMentorMsg = [...messages].reverse().find(m => m.role === 'assistant');
                     const prompt = buildFinalPrompt({
-                      systemPrompt: lessonContext.workstationPrompt || undefined,
+                      workstationPrompt: lessonContext.workstationPrompt || undefined,
                       learnerContext: learnerProfile ? {
                         company: learnerProfile.company_name,
                         industry: learnerProfile.industry,

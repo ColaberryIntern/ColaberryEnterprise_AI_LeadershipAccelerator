@@ -54,7 +54,12 @@ All projects will be created in Claude Code. If you suggest a tool, framework, o
 export function buildFinalPrompt(input: PromptBuilderInput): string {
   const parts: string[] = [];
 
-  // 1. System prompt (admin-configured or default)
+  // 1. Workstation prompt (global admin-configured guidance for the AI workspace)
+  if (input.workstationPrompt) {
+    parts.push(input.workstationPrompt);
+  }
+
+  // 1b. System prompt (section-specific, if provided)
   if (input.systemPrompt) {
     parts.push(input.systemPrompt);
   }

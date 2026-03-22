@@ -18,7 +18,7 @@ interface AIStrategyProps {
 }
 
 export default function AIStrategy({ data }: AIStrategyProps) {
-  const { selectedLLM, openLLMWithPrompt, learnerProfile } = useMentorContext();
+  const { selectedLLM, openLLMWithPrompt, learnerProfile, lessonContext } = useMentorContext();
   const [copied, setCopied] = useState(false);
 
   const isNewShape = !!data.when_to_use_ai;
@@ -51,6 +51,7 @@ export default function AIStrategy({ data }: AIStrategyProps) {
 
   const handleRunInLLM = () => {
     const prompt = buildFinalPrompt({
+      workstationPrompt: lessonContext.workstationPrompt || undefined,
       learnerContext: learnerProfile ? {
         company: learnerProfile.company_name,
         industry: learnerProfile.industry,
