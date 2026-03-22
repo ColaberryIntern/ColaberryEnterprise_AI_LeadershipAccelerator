@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getOpenclawDashboard,
   getOpenclawResponses,
+  getOpenclawConfig,
+  updateOpenclawConfig,
   approveOpenclawResponse,
   rejectOpenclawResponse,
   markOpenclawResponsePosted,
+  submitOpenclawSignal,
   getOpenclawAgentActivity,
   OpenclawDashboard,
   OpenclawResponseItem,
@@ -65,6 +68,17 @@ export default function OpenclawTab() {
   const [markPostedUrl, setMarkPostedUrl] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Governance controls state
+  const [requireApproval, setRequireApproval] = useState(true);
+  const [autoPostDevto, setAutoPostDevto] = useState(false);
+  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto']);
+  const [savingConfig, setSavingConfig] = useState<string | null>(null);
+
+  // Manual URL submission state
+  const [submitUrl, setSubmitUrl] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Agent drill-down state
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
   const [agentActivity, setAgentActivity] = useState<OpenclawAgentActivity[]>([]);
@@ -85,6 +99,24 @@ export default function OpenclawTab() {
     }
     setLoading(false);
   }, [responseFilter]);
+
+  // Load governance config on mount
+  useEffect(() => {
+    getOpenclawConfig().then(res => {
+      const agents = res.data?.agents || [];
+      for (const a of agents) {
+        if (a.name === 'OpenclawContentResponseAgent') {
+          setRequireApproval(a.config?.require_approval !== false);
+        }
+        if (a.name === 'OpenclawBrowserWorkerAgent') {
+          setAutoPostDevto(!!a.enabled);
+        }
+        if (a.name === 'OpenclawMarketSignalAgent' && Array.isArray(a.config?.platforms)) {
+          setActivePlatforms(a.config.platforms);
+        }
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -135,6 +167,50 @@ export default function OpenclawTab() {
     setActivityTotal(0);
     setActivityFilter('');
   }, []);
+
+  const handleToggleApproval = async () => {
+    setSavingConfig('approval');
+    try {
+      await updateOpenclawConfig({ agent_name: 'OpenclawContentResponseAgent', config: { require_approval: !requireApproval } });
+      setRequireApproval(!requireApproval);
+    } catch {}
+    setSavingConfig(null);
+  };
+
+  const handleToggleAutoPost = async () => {
+    setSavingConfig('autopost');
+    try {
+      await updateOpenclawConfig({ agent_name: 'OpenclawBrowserWorkerAgent', enabled: !autoPostDevto });
+      setAutoPostDevto(!autoPostDevto);
+    } catch {}
+    setSavingConfig(null);
+  };
+
+  const handleTogglePlatform = async (platform: string) => {
+    const updated = activePlatforms.includes(platform)
+      ? activePlatforms.filter(p => p !== platform)
+      : [...activePlatforms, platform];
+    setSavingConfig(`platform-${platform}`);
+    try {
+      await updateOpenclawConfig({ agent_name: 'OpenclawMarketSignalAgent', config: { platforms: updated } });
+      setActivePlatforms(updated);
+    } catch {}
+    setSavingConfig(null);
+  };
+
+  const handleSubmitUrl = async () => {
+    setSubmitting(true);
+    setSubmitResult(null);
+    try {
+      const res = await submitOpenclawSignal(submitUrl.trim());
+      setSubmitResult({ success: true, message: `Signal created for "${res.data.signal.title?.slice(0, 60) || 'URL'}". Response will appear in the queue shortly.` });
+      setSubmitUrl('');
+      setTimeout(fetchData, 3000);
+    } catch (err: any) {
+      setSubmitResult({ success: false, message: err?.response?.data?.error || 'Failed to submit URL' });
+    }
+    setSubmitting(false);
+  };
 
   const handleApprove = async (id: string) => {
     try {
@@ -232,6 +308,116 @@ export default function OpenclawTab() {
           ))}
         </div>
       )}
+
+      {/* Governance Controls */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small">Governance Controls</div>
+        <div className="card-body py-3 px-3">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <div className="fw-medium small">Require Manual Approval</div>
+              <div className="text-muted" style={{ fontSize: '0.68rem' }}>
+                When ON, all responses stay as &ldquo;draft&rdquo; until you approve. When OFF, responses auto-queue for posting.
+              </div>
+            </div>
+            <div className="form-check form-switch ms-3">
+              <input
+                type="checkbox"
+                className="form-check-input"
+                role="switch"
+                checked={requireApproval}
+                onChange={handleToggleApproval}
+                disabled={savingConfig === 'approval'}
+              />
+            </div>
+          </div>
+
+          <hr className="my-2" />
+
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <div className="fw-medium small">Auto-Post to Dev.to</div>
+              <div className="text-muted" style={{ fontSize: '0.68rem' }}>
+                When ON, approved Dev.to responses are posted automatically via API. Other platforms remain manual.
+              </div>
+            </div>
+            <div className="form-check form-switch ms-3">
+              <input
+                type="checkbox"
+                className="form-check-input"
+                role="switch"
+                checked={autoPostDevto}
+                onChange={handleToggleAutoPost}
+                disabled={savingConfig === 'autopost'}
+              />
+            </div>
+          </div>
+
+          <hr className="my-2" />
+
+          <div>
+            <div className="fw-medium small mb-2">Active Scanning Platforms</div>
+            <div className="d-flex gap-3 flex-wrap">
+              {['reddit', 'hackernews', 'devto'].map(p => (
+                <div className="form-check" key={p}>
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    id={`platform-${p}`}
+                    checked={activePlatforms.includes(p)}
+                    onChange={() => handleTogglePlatform(p)}
+                    disabled={savingConfig === `platform-${p}`}
+                  />
+                  <label className="form-check-label small" htmlFor={`platform-${p}`}>
+                    {p === 'hackernews' ? 'Hacker News' : p === 'devto' ? 'Dev.to' : p.charAt(0).toUpperCase() + p.slice(1)}
+                  </label>
+                </div>
+              ))}
+              <div className="form-check">
+                <input type="checkbox" className="form-check-input" disabled checked={false} />
+                <label className="form-check-label small text-muted">
+                  Quora <span className="badge bg-secondary ms-1" style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>Manual Only</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Manual URL Submission */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small">
+          Submit Question URL
+          <span className="badge bg-secondary ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>Quora, Reddit, Dev.to, HN</span>
+        </div>
+        <div className="card-body py-3 px-3">
+          <div className="text-muted small mb-2">
+            Paste a question URL from any platform. The system will extract the content and generate a response for your review.
+          </div>
+          <div className="d-flex gap-2">
+            <input
+              type="url"
+              className="form-control form-control-sm"
+              placeholder="https://www.quora.com/What-is-..."
+              value={submitUrl}
+              onChange={e => setSubmitUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && submitUrl.trim() && !submitting && handleSubmitUrl()}
+            />
+            <button
+              className="btn btn-sm btn-primary px-3"
+              disabled={!submitUrl.trim() || submitting}
+              onClick={handleSubmitUrl}
+            >
+              {submitting ? 'Submitting...' : 'Submit'}
+            </button>
+          </div>
+          {submitResult && (
+            <div className={`alert alert-${submitResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>
+              {submitResult.message}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Agent Status (collapsible) */}
       {dashboard?.agents && dashboard.agents.length > 0 && (

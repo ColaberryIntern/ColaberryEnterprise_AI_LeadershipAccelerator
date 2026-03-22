@@ -174,6 +174,10 @@ async function scanPlatform(
       break;
     }
 
+    case 'quora':
+      // Quora has no public API — signals are submitted manually via admin UI
+      break;
+
     default:
       // Unsupported platform — skip silently
       break;

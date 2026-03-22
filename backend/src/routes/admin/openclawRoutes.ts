@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Op } from 'sequelize';
+import axios from 'axios';
 import {
   OpenclawSignal,
   OpenclawTask,
@@ -353,6 +354,136 @@ router.post(`${BASE}/config`, async (req: Request, res: Response) => {
 
     await agent.update(updates);
     res.json({ success: true, agent });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Manual Signal Submission ────────────────────────────────────
+
+function detectPlatform(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.replace('www.', '');
+    if (host.includes('quora.com')) return 'quora';
+    if (host.includes('reddit.com')) return 'reddit';
+    if (host === 'dev.to') return 'devto';
+    if (host.includes('ycombinator.com')) return 'hackernews';
+    if (host.includes('linkedin.com')) return 'linkedin';
+    if (host.includes('medium.com')) return 'medium';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function extractContentFromUrl(url: string, platform: string): Promise<{ title: string; content_excerpt: string; details: Record<string, any> }> {
+  const fallback = { title: url, content_excerpt: '', details: { source: 'manual_submission' } };
+
+  try {
+    if (platform === 'reddit') {
+      // Use Reddit's public JSON API
+      const jsonUrl = url.replace(/\/?$/, '.json');
+      const resp = await axios.get(jsonUrl, { headers: { 'User-Agent': 'OpenClaw/1.0' }, timeout: 15000 });
+      const post = resp.data?.[0]?.data?.children?.[0]?.data;
+      if (post) {
+        return {
+          title: post.title || url,
+          content_excerpt: (post.selftext || '').slice(0, 500),
+          details: { source: 'manual_submission', subreddit: post.subreddit, num_comments: post.num_comments, score: post.score, author: post.author },
+        };
+      }
+    }
+
+    if (platform === 'devto') {
+      // Extract article slug and use Dev.to API
+      const slugMatch = url.match(/dev\.to\/[^/]+\/(.+?)(?:\?|#|$)/);
+      if (slugMatch) {
+        const resp = await axios.get(`https://dev.to/api/articles/${slugMatch[1]}`, { timeout: 15000 });
+        const article = resp.data;
+        return {
+          title: article.title || url,
+          content_excerpt: (article.description || '').slice(0, 500),
+          details: { source: 'manual_submission', id: article.id, comments_count: article.comments_count, positive_reactions_count: article.positive_reactions_count, tags: article.tag_list, user: article.user?.username },
+        };
+      }
+    }
+
+    // For Quora, LinkedIn, Medium, HN — scrape og: meta tags
+    const resp = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'Accept': 'text/html',
+      },
+      timeout: 15000,
+      maxRedirects: 5,
+    });
+
+    const html = resp.data as string;
+    const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
+      || html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const descMatch = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i);
+
+    return {
+      title: (titleMatch?.[1] || url).replace(/ - Quora$/, '').replace(/ \| LinkedIn$/, '').trim(),
+      content_excerpt: (descMatch?.[1] || '').slice(0, 500),
+      details: { source: 'manual_submission' },
+    };
+  } catch (err: any) {
+    console.warn(`[OpenClaw] Content extraction failed for ${url}:`, err?.message?.slice(0, 200));
+    return fallback;
+  }
+}
+
+router.post(`${BASE}/signals/submit`, async (req: Request, res: Response) => {
+  try {
+    const { url, platform: overridePlatform } = req.body;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'url is required' });
+    }
+
+    // Validate URL format
+    try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL format' }); }
+
+    const platform = overridePlatform || detectPlatform(url);
+    if (!platform) {
+      return res.status(400).json({ error: 'Could not detect platform from URL. Provide a platform parameter.' });
+    }
+
+    // Check for duplicate
+    const existing = await OpenclawSignal.findOne({ where: { source_url: url } });
+    if (existing) {
+      return res.status(409).json({ error: 'Signal already exists for this URL', signal: existing });
+    }
+
+    // Extract content
+    const { title, content_excerpt, details } = await extractContentFromUrl(url, platform);
+
+    // Create signal with high scores (manually submitted = high value)
+    const signal = await OpenclawSignal.create({
+      platform,
+      source_url: url,
+      title,
+      content_excerpt,
+      details,
+      relevance_score: 0.8,
+      engagement_score: 0.8,
+      risk_score: 0.1,
+      status: 'discovered',
+      topic_tags: [],
+      created_at: new Date(),
+    });
+
+    // Create generate_response task
+    const task = await OpenclawTask.create({
+      task_type: 'generate_response',
+      priority: 8,
+      status: 'pending',
+      signal_id: signal.id,
+      input_data: { source: 'manual_submission' },
+      created_at: new Date(),
+    });
+
+    res.json({ success: true, signal, task_id: task.id });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
