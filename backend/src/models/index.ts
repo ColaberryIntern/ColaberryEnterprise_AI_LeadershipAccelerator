@@ -127,6 +127,7 @@ import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
 import RequirementsMap from './RequirementsMap';
 import NextAction from './NextAction';
+import VerificationLog from './VerificationLog';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -572,6 +573,12 @@ RequirementsMap.belongsTo(ArtifactDefinition, { foreignKey: 'source_artifact_id'
 Project.hasMany(NextAction, { foreignKey: 'project_id', as: 'nextActions' });
 NextAction.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+// --- Verification Logs ---
+Project.hasMany(VerificationLog, { foreignKey: 'project_id', as: 'verificationLogs' });
+VerificationLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+RequirementsMap.hasMany(VerificationLog, { foreignKey: 'requirement_id', as: 'verificationLogs' });
+VerificationLog.belongsTo(RequirementsMap, { foreignKey: 'requirement_id', as: 'requirement' });
+
 AssignmentSubmission.hasMany(ProjectArtifact, { foreignKey: 'submission_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(AssignmentSubmission, { foreignKey: 'submission_id', as: 'submission' });
 
@@ -753,4 +760,5 @@ export {
   ArtifactRelationship,
   RequirementsMap,
   NextAction,
+  VerificationLog,
 };

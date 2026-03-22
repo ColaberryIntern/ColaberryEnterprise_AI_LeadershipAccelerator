@@ -472,4 +472,35 @@ router.get('/api/portal/project/guided-execution', requireParticipant, async (re
   }
 });
 
+// ---------------------------------------------------------------------------
+// Verification Engine Routes
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/project/verify', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { verifyProject } = await import('../services/verification/verificationOrchestrator');
+    const summary = await verifyProject(enrollmentId);
+    res.json(summary);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /verify error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/verification-status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getVerificationStatus } = await import('../services/verification/verificationOrchestrator');
+    const details = await getVerificationStatus(project.id);
+    res.json({ requirements: details });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /verification-status error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

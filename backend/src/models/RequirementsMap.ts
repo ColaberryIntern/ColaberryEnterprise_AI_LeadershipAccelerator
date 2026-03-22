@@ -12,6 +12,10 @@ export interface RequirementsMapAttributes {
   status?: string;
   verified_by?: string;
   metadata?: Record<string, any>;
+  verification_status?: string;
+  verification_confidence?: number;
+  verification_notes?: string;
+  last_verified_at?: Date;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -27,6 +31,10 @@ class RequirementsMap extends Model<RequirementsMapAttributes> implements Requir
   declare status: string;
   declare verified_by: string;
   declare metadata: Record<string, any>;
+  declare verification_status: string;
+  declare verification_confidence: number;
+  declare verification_notes: string;
+  declare last_verified_at: Date;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -77,6 +85,24 @@ RequirementsMap.init(
     },
     metadata: {
       type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    verification_status: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'not_verified',
+    },
+    verification_confidence: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    verification_notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    last_verified_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
   },

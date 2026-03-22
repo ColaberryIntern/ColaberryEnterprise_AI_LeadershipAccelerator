@@ -35,6 +35,8 @@ function ProjectNextActionPanel() {
   const [acting, setActing] = useState<'accepting' | 'completing' | null>(null);
   const [noAction, setNoAction] = useState(false);
   const [showGuidance, setShowGuidance] = useState(false);
+  const [verificationGaps, setVerificationGaps] = useState<string[] | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   const fetchAction = useCallback(() => {
     setLoading(true);
@@ -71,15 +73,35 @@ function ProjectNextActionPanel() {
 
   const handleComplete = async () => {
     if (!action) return;
-    setActing('completing');
-    setShowGuidance(false);
+    setVerifying(true);
+    setVerificationGaps(null);
     try {
+      // Run verification first
+      const verifyRes = await portalApi.post('/api/portal/project/verify');
+      const summary = verifyRes.data;
+
+      if (summary.not_verified > 0 || summary.verified_partial > 0) {
+        // Fetch details to show gaps
+        const statusRes = await portalApi.get('/api/portal/project/verification-status');
+        const reqs = statusRes.data.requirements || [];
+        const gaps = reqs
+          .filter((r: any) => r.verification_status !== 'verified_complete')
+          .slice(0, 3)
+          .map((r: any) => `${r.requirement_key}: ${r.verification_notes || r.verification_status}`);
+        setVerificationGaps(gaps);
+      }
+
+      // Complete the action regardless (verification is informational)
+      setActing('completing');
+      setShowGuidance(false);
       await portalApi.post('/api/portal/project/next-action/complete', { action_id: action.id });
-      // Re-fetch to get the next action
       fetchAction();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to complete action');
-    } finally { setActing(null); }
+    } finally {
+      setActing(null);
+      setVerifying(false);
+    }
   };
 
   // Loading state
@@ -203,15 +225,29 @@ function ProjectNextActionPanel() {
           <button
             className="btn btn-sm btn-outline-success"
             onClick={handleComplete}
-            disabled={!!acting}
+            disabled={!!acting || verifying}
           >
-            {acting === 'completing' ? (
+            {verifying ? (
+              <><span className="spinner-border spinner-border-sm me-1"></span>Verifying...</>
+            ) : acting === 'completing' ? (
               <><span className="spinner-border spinner-border-sm me-1"></span>Completing...</>
             ) : (
               <><i className="bi bi-check-circle me-1"></i>Mark Complete</>
             )}
           </button>
         </div>
+
+        {/* Verification gaps */}
+        {verificationGaps && verificationGaps.length > 0 && (
+          <div className="mt-2 p-2 rounded small" style={{ background: '#fef3c7', border: '1px solid #f59e0b' }}>
+            <div className="fw-medium mb-1" style={{ color: '#92400e' }}>
+              <i className="bi bi-exclamation-triangle me-1"></i>Verification found gaps:
+            </div>
+            <ul className="mb-0 ps-3" style={{ color: '#92400e' }}>
+              {verificationGaps.map((gap, i) => <li key={i}>{gap}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
     {showGuidance && action && <GuidedExecutionPanel actionId={action.id} />}

@@ -128,11 +128,70 @@ function PortalLessonPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: '#6366f1' }} role="status">
-          <span className="visually-hidden">Loading lesson...</span>
+      <div className="d-flex align-items-center justify-content-center" style={{ minHeight: '70vh' }}>
+        <div className="text-center" style={{ maxWidth: 480 }}>
+          {/* Animated orb */}
+          <div className="position-relative mx-auto mb-4" style={{ width: 80, height: 80 }}>
+            <div className="position-absolute w-100 h-100 rounded-circle" style={{
+              background: 'radial-gradient(circle, var(--color-primary-light, #2b6cb0) 0%, var(--color-primary, #1a365d) 70%)',
+              animation: 'lessonOrbPulse 2s ease-in-out infinite',
+            }} />
+            <div className="position-absolute w-100 h-100 rounded-circle" style={{
+              border: '2px solid var(--color-primary-light, #2b6cb0)',
+              opacity: 0.3,
+              animation: 'lessonOrbRing 2s ease-in-out infinite',
+            }} />
+          </div>
+
+          <h5 className="fw-semibold mb-2" style={{ color: 'var(--color-primary, #1a365d)' }}>
+            Building Your Lesson
+          </h5>
+          <p className="text-muted small mb-4" style={{ lineHeight: 1.6 }}>
+            Personalizing content for your industry, role, and AI maturity level.
+            <br />This takes 10-15 seconds.
+          </p>
+
+          {/* Progress steps */}
+          <div className="d-flex flex-column align-items-start mx-auto gap-2" style={{ maxWidth: 280 }}>
+            {[
+              { label: 'Analyzing your profile', delay: '0s' },
+              { label: 'Mapping frameworks to your context', delay: '3s' },
+              { label: 'Generating personalized scenarios', delay: '6s' },
+              { label: 'Building knowledge checks', delay: '9s' },
+            ].map((step, i) => (
+              <div key={i} className="d-flex align-items-center gap-2 small" style={{
+                opacity: 0,
+                animation: `lessonStepFade 0.5s ease forwards`,
+                animationDelay: step.delay,
+              }}>
+                <div className="spinner-border spinner-border-sm" style={{
+                  width: 14, height: 14, borderWidth: 2,
+                  color: 'var(--color-primary-light, #2b6cb0)',
+                }} role="status"><span className="visually-hidden">Loading</span></div>
+                <span className="text-muted">{step.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <style>{`
+            @keyframes lessonOrbPulse {
+              0%, 100% { transform: scale(1); opacity: 0.9; }
+              50% { transform: scale(1.08); opacity: 1; }
+            }
+            @keyframes lessonOrbRing {
+              0%, 100% { transform: scale(1); opacity: 0.3; }
+              50% { transform: scale(1.4); opacity: 0; }
+            }
+            @keyframes lessonStepFade {
+              to { opacity: 1; }
+            }
+            @media (prefers-reduced-motion: reduce) {
+              @keyframes lessonOrbPulse { 0%, 100% { transform: none; opacity: 0.9; } }
+              @keyframes lessonOrbRing { 0%, 100% { transform: none; opacity: 0.2; } }
+              @keyframes lessonStepFade { to { opacity: 1; } }
+            }
+          `}</style>
         </div>
-        <p className="text-muted small mt-3">Generating personalized content...</p>
       </div>
     );
   }
