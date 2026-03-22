@@ -178,14 +178,15 @@ async function scanPlatform(
       // Hashnode GraphQL API — feed query with tag ObjectIDs
       // Tag IDs: ai=56744721958ef13879b9488e, artificial-intelligence=56744721958ef13879b94927,
       //          machine-learning=56744722958ef13879b950a8, llm=635ad52efe8087002dee4707
+      // Use only high-quality tags (artificial-intelligence, machine-learning, llm)
+      // Exclude generic "ai" tag which attracts crypto/spam posts
       const tagIds = [
-        '56744721958ef13879b9488e',    // ai
         '56744721958ef13879b94927',    // artificial-intelligence
         '56744722958ef13879b950a8',    // machine-learning
         '635ad52efe8087002dee4707',    // llm
       ];
       const query = `query {
-        feed(first: ${Math.min(maxResults, 20)}, filter: { tags: [${tagIds.map(id => `"${id}"`).join(', ')}], type: RECENT }) {
+        feed(first: ${Math.min(maxResults, 20)}, filter: { tags: [${tagIds.map(id => `"${id}"`).join(', ')}], type: BEST }) {
           edges {
             node {
               id
