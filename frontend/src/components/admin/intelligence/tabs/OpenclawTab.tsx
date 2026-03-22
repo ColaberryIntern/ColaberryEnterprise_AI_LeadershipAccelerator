@@ -485,8 +485,21 @@ export default function OpenclawTab() {
                 })}
                 {responses.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-muted text-center py-4">
-                      No responses yet — signals will appear once the Market Signal agent runs
+                    <td colSpan={7} className="py-4 px-3">
+                      <div className="text-center mb-3 text-muted">No responses yet</div>
+                      <div className="card border-0 bg-light mx-auto" style={{ maxWidth: 600 }}>
+                        <div className="card-body py-3 px-4">
+                          <div className="fw-semibold small mb-2">How OpenClaw Works</div>
+                          <ol className="small text-muted mb-0 ps-3" style={{ lineHeight: 1.8 }}>
+                            <li><strong>Signal Scanning</strong> — agents scan Reddit, Hacker News, and Dev.to every 10 minutes for AI-related conversations ({kpis?.signals_24h || 0} signals found in last 24h)</li>
+                            <li><strong>Draft Generation</strong> — the Content Response agent writes educational, non-promotional responses using GPT-4o</li>
+                            <li><strong>You Review</strong> — drafts appear here. Click <strong>Approve</strong> to move them to the posting queue</li>
+                            <li><strong>Post Manually</strong> — for Reddit/HN: click the source link, copy the response, paste it as your own comment. For Dev.to: auto-posted via API</li>
+                            <li><strong>Mark as Posted</strong> — paste the URL where you posted it so the system can track engagement</li>
+                            <li><strong>Attribution</strong> — each response gets a unique tracked URL. When someone clicks it, they are attributed back to that specific post</li>
+                          </ol>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 )}

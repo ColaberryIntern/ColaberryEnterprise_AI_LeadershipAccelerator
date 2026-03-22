@@ -14,8 +14,8 @@ export async function runOpenclawConversationDetectionAgent(
   const start = Date.now();
   const actions: AgentAction[] = [];
   const errors: string[] = [];
-  const relevanceThreshold = config.relevance_threshold || 0.6;
-  const engagementThreshold = config.engagement_threshold || 0.4;
+  const relevanceThreshold = config.relevance_threshold || 0.45;
+  const engagementThreshold = config.engagement_threshold || 0.35;
   const riskThreshold = config.risk_threshold || 0.7;
   const maxQueue = config.max_queue_per_run || 20;
 
@@ -113,19 +113,33 @@ export async function runOpenclawConversationDetectionAgent(
 function scoreRelevance(signal: any): number {
   let score = 0.3; // base
   const text = ((signal.title || '') + ' ' + (signal.content_excerpt || '')).toLowerCase();
-  const highValueTerms = ['ai training', 'enterprise ai', 'ai leadership', 'workforce', 'upskilling', 'bootcamp', 'certification'];
-  const mediumTerms = ['artificial intelligence', 'machine learning', 'generative ai', 'llm', 'chatgpt'];
 
-  for (const term of highValueTerms) {
+  // Tier 1: Direct match to our value prop (enterprise AI adoption, training, leadership)
+  const tier1 = ['ai training', 'enterprise ai', 'ai leadership', 'workforce', 'upskilling', 'bootcamp', 'certification', 'ai adoption', 'ai strategy', 'ai transformation', 'ai skills gap'];
+  for (const term of tier1) {
     if (text.includes(term)) score += 0.15;
   }
-  for (const term of mediumTerms) {
-    if (text.includes(term)) score += 0.08;
+
+  // Tier 2: Broad AI topics where we can add value with thought leadership
+  const tier2 = ['artificial intelligence', 'machine learning', 'generative ai', 'llm', 'chatgpt', 'ai agent', 'prompt engineering', 'rag', 'fine-tun', 'ai tool', 'ai workflow', 'ai automat'];
+  for (const term of tier2) {
+    if (text.includes(term)) score += 0.1;
   }
 
-  // Boost for question-style posts
-  if (text.includes('?') || text.includes('how to') || text.includes('recommend')) {
+  // Tier 3: Adjacent tech/business topics where AI commentary is relevant
+  const tier3 = ['data science', 'deep learning', 'neural network', 'nlp', 'computer vision', 'ai model', 'openai', 'anthropic', 'claude', 'gpt', 'copilot', 'ai coding', 'ai engineer'];
+  for (const term of tier3) {
+    if (text.includes(term)) score += 0.06;
+  }
+
+  // General AI mention — signals discovered by MarketSignalAgent already passed keyword filters
+  if (text.includes(' ai ') || text.includes('ai:') || text.match(/\bai\b/)) {
     score += 0.1;
+  }
+
+  // Boost for question-style posts (higher engagement opportunity)
+  if (text.includes('?') || text.includes('how to') || text.includes('recommend') || text.includes('advice') || text.includes('thoughts on')) {
+    score += 0.12;
   }
 
   return Math.min(1, score);
@@ -133,27 +147,32 @@ function scoreRelevance(signal: any): number {
 
 function scoreEngagement(signal: any): number {
   const details = signal.details || {};
-  let score = 0.2;
+  let score = 0.3; // base — if the signal was discovered, it already has some engagement potential
 
   // Platform-specific engagement signals
   const comments = details.num_comments || details.comments_count || 0;
   const upvotes = details.score || details.points || details.positive_reactions_count || 0;
 
-  if (comments >= 5) score += 0.2;
+  if (comments >= 2) score += 0.1;
+  if (comments >= 5) score += 0.1;
   if (comments >= 20) score += 0.15;
-  if (upvotes >= 10) score += 0.15;
+  if (upvotes >= 3) score += 0.1;
+  if (upvotes >= 10) score += 0.1;
   if (upvotes >= 50) score += 0.1;
 
-  // Recency boost (less than 6 hours old)
+  // Recency boost (less than 24 hours old)
   const createdAt = details.created_utc
     ? new Date(details.created_utc * 1000)
     : details.created_at
     ? new Date(details.created_at)
+    : details.published_at
+    ? new Date(details.published_at)
     : null;
   if (createdAt) {
     const hoursOld = (Date.now() - createdAt.getTime()) / 3600000;
     if (hoursOld < 2) score += 0.2;
-    else if (hoursOld < 6) score += 0.1;
+    else if (hoursOld < 6) score += 0.15;
+    else if (hoursOld < 24) score += 0.05;
   }
 
   return Math.min(1, score);

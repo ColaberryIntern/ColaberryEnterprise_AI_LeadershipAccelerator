@@ -5,6 +5,7 @@ import {
 import api from '../../../utils/api';
 
 const MarketingFunnelGraph = lazy(() => import('../../../components/admin/marketing/MarketingFunnelGraph'));
+const OpenclawTab = lazy(() => import('../../../components/admin/intelligence/tabs/OpenclawTab'));
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1169,7 +1170,7 @@ function RevenueIntelligenceTab() {
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 function AdminMarketingDashboardPage() {
-  const [activeTab, setActiveTab] = useState<'funnel' | 'revenue' | 'registry'>('funnel');
+  const [activeTab, setActiveTab] = useState<'funnel' | 'revenue' | 'registry' | 'outreach'>('funnel');
 
   return (
     <div>
@@ -1199,6 +1200,14 @@ function AdminMarketingDashboardPage() {
             Campaign Link Registry
           </button>
         </li>
+        <li className="nav-item">
+          <button
+            className={`nav-link ${activeTab === 'outreach' ? 'active' : ''}`}
+            onClick={() => setActiveTab('outreach')}
+          >
+            AI Outreach
+          </button>
+        </li>
       </ul>
 
       {activeTab === 'funnel' && (
@@ -1216,6 +1225,17 @@ function AdminMarketingDashboardPage() {
       )}
       {activeTab === 'revenue' && <RevenueIntelligenceTab />}
       {activeTab === 'registry' && <CampaignLinkRegistryTab />}
+      {activeTab === 'outreach' && (
+        <Suspense fallback={
+          <div className="text-center py-5">
+            <div className="spinner-border spinner-border-sm text-primary" role="status">
+              <span className="visually-hidden">Loading outreach...</span>
+            </div>
+          </div>
+        }>
+          <OpenclawTab />
+        </Suspense>
+      )}
     </div>
   );
 }
