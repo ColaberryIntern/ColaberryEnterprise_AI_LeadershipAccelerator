@@ -634,21 +634,29 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                         color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none',
                       }}
                       onClick={async () => {
-                        // Fetch mentor briefing from chat history
+                        const tok = localStorage.getItem('participant_token');
+                        // Fetch mentor briefing + fresh variables in parallel
                         let mentorBriefing = '';
-                        try {
-                          const tok = localStorage.getItem('participant_token');
-                          if (tok) {
-                            const res = await fetch(`/api/portal/mentor/history?lesson_id=${lessonId}`, {
+                        let freshVars: Record<string, string> = orchContext?.resolvedVariables || {};
+                        if (tok) {
+                          const [mentorRes, orchRes] = await Promise.all([
+                            fetch(`/api/portal/mentor/history?lesson_id=${lessonId}`, {
                               headers: { 'Authorization': `Bearer ${tok}` },
-                            });
-                            if (res.ok) {
-                              const data = await res.json();
-                              const lastAssistant = [...(data.messages || [])].reverse().find((m: any) => m.role === 'assistant');
-                              if (lastAssistant) mentorBriefing = lastAssistant.content;
-                            }
+                            }).catch(() => null),
+                            fetch(`/api/portal/curriculum/lessons/${lessonId}/orchestration-context`, {
+                              headers: { 'Authorization': `Bearer ${tok}` },
+                            }).catch(() => null),
+                          ]);
+                          if (mentorRes?.ok) {
+                            const data = await mentorRes.json();
+                            const lastAssistant = [...(data.messages || [])].reverse().find((m: any) => m.role === 'assistant');
+                            if (lastAssistant) mentorBriefing = lastAssistant.content;
                           }
-                        } catch {}
+                          if (orchRes?.ok) {
+                            const orchData = await orchRes.json();
+                            if (orchData.resolvedVariables) freshVars = orchData.resolvedVariables;
+                          }
+                        }
 
                         const prompt = buildFinalPrompt({
                           workstationPrompt: orchContext?.workstationPrompt || lessonContext.workstationPrompt || undefined,
@@ -661,7 +669,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                             use_case: learnerProfile.identified_use_case,
                           } : undefined,
                           mentorOutput: mentorBriefing || undefined,
-                          resolvedVariables: orchContext?.resolvedVariables || undefined,
+                          resolvedVariables: freshVars,
                           implementationTask: {
                             title, description, deliverable, requirements,
                             artifacts: artifacts.map(a => ({ name: a.name, description: a.description, file_types: a.file_types })),
