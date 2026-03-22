@@ -525,4 +525,82 @@ router.post('/api/portal/project/progression-evaluate', requireParticipant, asyn
   }
 });
 
+// ---------------------------------------------------------------------------
+// War Room Aggregation Route
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/warroom', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    // Parallel data fetching
+    const [progressResult, nextActionResult, verificationResult, recentActivity, graphResult] = await Promise.all([
+      import('../services/projectProgressService').then(m => m.calculateProgress(enrollmentId).catch(() => null)),
+      import('../services/nextAction/nextActionService').then(m => m.getNextAction(enrollmentId).catch(() => null)),
+      import('../services/verification/verificationOrchestrator').then(m => m.getVerificationStatus(project.id).catch(() => [])),
+      buildActivityFeed(project.id),
+      import('../services/artifactGraphService').then(m => m.getFullGraph().catch(() => ({ nodes: [], edges: [] }))),
+    ]);
+
+    // Coverage summary
+    const requirements = verificationResult || [];
+    const coverageSummary = {
+      total: requirements.length,
+      verified_complete: requirements.filter((r: any) => r.verification_status === 'verified_complete').length,
+      verified_partial: requirements.filter((r: any) => r.verification_status === 'verified_partial').length,
+      not_verified: requirements.filter((r: any) => r.verification_status === 'not_verified' || !r.verification_status).length,
+    };
+
+    res.json({
+      progress: progressResult,
+      current_action: nextActionResult,
+      requirements,
+      recent_activity: recentActivity,
+      artifact_graph: graphResult,
+      coverage_summary: coverageSummary,
+    });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /warroom error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function buildActivityFeed(projectId: string): Promise<any[]> {
+  const { VerificationLog, ProgressionLog } = await import('../models');
+
+  const [verLogs, progLogs] = await Promise.all([
+    VerificationLog.findAll({ where: { project_id: projectId }, order: [['created_at', 'DESC']], limit: 15 }),
+    ProgressionLog.findAll({ where: { project_id: projectId }, order: [['created_at', 'DESC']], limit: 15 }),
+  ]);
+
+  const feed: any[] = [];
+
+  for (const log of verLogs) {
+    feed.push({
+      type: 'verification',
+      timestamp: log.created_at?.toISOString(),
+      title: `Verification: ${log.status}`,
+      detail: log.notes || '',
+      confidence: log.confidence,
+    });
+  }
+
+  for (const log of progLogs) {
+    feed.push({
+      type: 'progression',
+      timestamp: log.created_at?.toISOString(),
+      title: `Decision: ${log.decision_type}`,
+      detail: log.reason || '',
+      confidence: log.confidence,
+    });
+  }
+
+  // Sort by timestamp descending and limit
+  feed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return feed.slice(0, 20);
+}
+
 export default router;
