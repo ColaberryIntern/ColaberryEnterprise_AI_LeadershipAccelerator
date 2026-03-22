@@ -244,6 +244,13 @@ function PortalMentorChat() {
   };
 
   const toggleOpen = () => {
+    if (!isMentorOpen) {
+      // Opening — go straight to fullscreen
+      setIsFullscreen(true);
+    } else {
+      // Closing — exit fullscreen too
+      setIsFullscreen(false);
+    }
     toggleMentorPanel();
     setHasNewMessage(false);
   };
@@ -325,7 +332,7 @@ function PortalMentorChat() {
               </div>
             </div>
             {/* LLM Selector */}
-            {!isFullscreen && (
+            {(
               <div className="d-flex align-items-center gap-2">
                 <span style={{ fontSize: 10, opacity: 0.7 }}>AI Workspace:</span>
                 <select
@@ -370,37 +377,41 @@ function PortalMentorChat() {
           >
           <div style={isFullscreen ? { maxWidth: 768, margin: '0 auto', width: '100%' } : {}}>
             {messages.length === 0 && (
-              <div className="text-center py-3">
-                <div className="d-inline-block mb-2">
-                  <MentorFace size={48} />
+              <div className={isFullscreen ? 'd-flex flex-column align-items-center justify-content-center' : 'text-center py-3'} style={isFullscreen ? { minHeight: '50vh' } : {}}>
+                <div className="d-inline-block mb-3">
+                  <MentorFace size={isFullscreen ? 72 : 48} />
                 </div>
-                <p className="fw-semibold small mb-1" style={{ color: '#1e293b' }}>
-                  Hi! I'm your AI Mentor.
+                <h4 className={`fw-semibold ${isFullscreen ? 'mb-2' : 'small mb-1'}`} style={{ color: '#1e293b', fontSize: isFullscreen ? 22 : undefined }}>
+                  {isFullscreen ? 'What can I help you with?' : 'Hi! I\'m your AI Mentor.'}
+                </h4>
+                <p className="text-muted mb-4" style={{ fontSize: isFullscreen ? 14 : 12, maxWidth: isFullscreen ? 480 : undefined }}>
+                  {isFullscreen
+                    ? 'Ask about AI strategy, governance frameworks, your curriculum, or how to apply concepts to your organization.'
+                    : 'Ask me anything about AI strategy, your curriculum, or how to apply concepts to your organization.'}
                 </p>
-                <p className="small text-muted mb-3" style={{ fontSize: 12 }}>
-                  Ask me anything about AI strategy, your curriculum, or how to apply concepts to your organization.
-                </p>
-                <div className="d-flex flex-column gap-2">
+                <div className={`d-flex ${isFullscreen ? 'flex-wrap justify-content-center' : 'flex-column'} gap-2`} style={isFullscreen ? { maxWidth: 600 } : {}}>
                   {[
-                    'How do I get started with AI strategy?',
-                    'Explain the Trust Before Intelligence framework',
-                    'Help me think about AI governance',
+                    { text: 'How do I get started with AI strategy?', icon: 'bi-rocket-takeoff' },
+                    { text: 'Explain the Trust Before Intelligence framework', icon: 'bi-shield-check' },
+                    { text: 'Help me think about AI governance', icon: 'bi-diagram-3' },
+                    ...(isFullscreen ? [{ text: 'What is the INPACT framework?', icon: 'bi-grid-3x3-gap' }] : []),
                   ].map((prompt) => (
                     <button
-                      key={prompt}
+                      key={prompt.text}
                       className="btn btn-sm text-start"
                       style={{
                         background: '#fff',
                         border: '1px solid #e2e8f0',
-                        borderRadius: 8,
-                        fontSize: 11,
+                        borderRadius: isFullscreen ? 12 : 8,
+                        fontSize: isFullscreen ? 13 : 11,
                         color: '#475569',
-                        padding: '6px 10px',
+                        padding: isFullscreen ? '10px 16px' : '6px 10px',
+                        minWidth: isFullscreen ? 220 : undefined,
                       }}
-                      onClick={() => sendMessage(prompt)}
+                      onClick={() => sendMessage(prompt.text)}
                     >
-                      <i className="bi bi-chat-quote me-1" style={{ color: '#6366f1' }}></i>
-                      {prompt}
+                      <i className={`bi ${prompt.icon} me-2`} style={{ color: 'var(--color-primary-light, #2b6cb0)' }}></i>
+                      {prompt.text}
                     </button>
                   ))}
                 </div>
@@ -515,7 +526,7 @@ function PortalMentorChat() {
                   disabled={sending}
                 >
                   <i className={`bi ${selectedLLM.icon}`}></i>
-                  Open AI Workspace — Run in {selectedLLM.name}
+                  <i className="bi bi-clipboard-check me-1"></i> Copy & Open in {selectedLLM.name}
                 </button>
               ) : suggestedPrompts.length > 0 ? (
                 <div className="d-flex flex-wrap gap-1">

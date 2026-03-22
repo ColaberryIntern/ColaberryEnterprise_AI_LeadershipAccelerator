@@ -653,8 +653,8 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                         openLLMWithPrompt(prompt);
                       }}
                     >
-                      <i className={`bi ${selectedLLM.icon}`}></i>
-                      Open AI Workspace — {selectedLLM.name}
+                      <i className="bi bi-clipboard-check me-1"></i>
+                      Copy & Open in {selectedLLM.name}
                     </button>
                   </div>
                 </div>
