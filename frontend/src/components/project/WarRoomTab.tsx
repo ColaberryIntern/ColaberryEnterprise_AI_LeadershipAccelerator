@@ -46,6 +46,25 @@ interface WarRoomData {
     nodes: any[];
     edges: any[];
   };
+  risk_summary?: {
+    risks: Array<{
+      risk_level: string;
+      risk_type: string;
+      reason: string;
+      suggested_action: string;
+      confidence: number;
+    }>;
+    anomalies: Array<{
+      anomaly_type: string;
+      details: any;
+      severity: string;
+    }>;
+    health: {
+      health_score: number;
+      velocity_score: number;
+      stability_score: number;
+    };
+  };
 }
 
 function WarRoomTab() {
@@ -84,6 +103,46 @@ function WarRoomTab() {
 
   return (
     <>
+      {/* Risk Alert Banner */}
+      {data.risk_summary && data.risk_summary.risks.length > 0 && (() => {
+        const topRisk = data.risk_summary!.risks.reduce((a, b) =>
+          a.risk_level === 'high' ? a : b.risk_level === 'high' ? b : a
+        );
+        const bannerStyle = topRisk.risk_level === 'high'
+          ? { bg: '#fef2f2', border: '#ef4444', color: '#991b1b', icon: 'bi-exclamation-octagon-fill' }
+          : topRisk.risk_level === 'medium'
+          ? { bg: '#fef3c7', border: '#f59e0b', color: '#92400e', icon: 'bi-exclamation-triangle-fill' }
+          : { bg: '#d1fae5', border: '#10b981', color: '#065f46', icon: 'bi-info-circle-fill' };
+        return (
+          <div className="p-3 rounded mb-4 small" style={{ background: bannerStyle.bg, border: `1px solid ${bannerStyle.border}` }}>
+            <div className="fw-bold mb-1" style={{ color: bannerStyle.color }}>
+              <i className={`bi ${bannerStyle.icon} me-2`}></i>
+              {topRisk.risk_level.toUpperCase()} RISK: {topRisk.risk_type.replace(/_/g, ' ')}
+            </div>
+            <div style={{ color: bannerStyle.color }}>{topRisk.reason}</div>
+            <div className="mt-1 fw-medium" style={{ color: bannerStyle.color }}>
+              <i className="bi bi-arrow-right me-1"></i>{topRisk.suggested_action}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Health Scores */}
+      {data.risk_summary?.health && (
+        <div className="row g-3 mb-4">
+          <div className="col-md-4">
+            <StatCard icon="bi-heart-pulse" value={`${Math.round(data.risk_summary.health.health_score * 100)}%`} label="Health Score"
+              color={data.risk_summary.health.health_score >= 0.7 ? 'var(--color-accent)' : data.risk_summary.health.health_score >= 0.4 ? '#f59e0b' : 'var(--color-secondary)'} />
+          </div>
+          <div className="col-md-4">
+            <StatCard icon="bi-lightning" value={`${Math.round(data.risk_summary.health.velocity_score * 100)}%`} label="Velocity" color="var(--color-primary)" />
+          </div>
+          <div className="col-md-4">
+            <StatCard icon="bi-shield-check" value={`${Math.round(data.risk_summary.health.stability_score * 100)}%`} label="Stability" color="var(--color-primary-light)" />
+          </div>
+        </div>
+      )}
+
       {/* Header Stats */}
       <div className="row g-3 mb-4">
         <div className="col-md-3">
@@ -264,6 +323,33 @@ function WarRoomTab() {
           </div>
         </div>
       </div>
+
+      {/* Anomalies */}
+      {data.risk_summary && data.risk_summary.anomalies.length > 0 && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white fw-semibold small">
+            <i className="bi bi-bug me-2" style={{ color: '#f59e0b' }}></i>
+            Detected Anomalies ({data.risk_summary.anomalies.length})
+          </div>
+          <div className="card-body p-0">
+            {data.risk_summary.anomalies.map((anomaly, i) => (
+              <div key={i} className="px-3 py-2 small d-flex justify-content-between align-items-start" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <div>
+                  <span className="fw-medium">{anomaly.anomaly_type.replace(/_/g, ' ')}</span>
+                  {anomaly.details && (
+                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                      {Object.entries(anomaly.details).map(([k, v]) => `${k}: ${v}`).join(' | ')}
+                    </div>
+                  )}
+                </div>
+                <span className={`badge ${anomaly.severity === 'high' ? 'bg-danger' : anomaly.severity === 'medium' ? 'bg-warning text-dark' : 'bg-secondary'}`}>
+                  {anomaly.severity}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Artifact Graph Summary */}
       {data.artifact_graph.nodes.length > 0 && (

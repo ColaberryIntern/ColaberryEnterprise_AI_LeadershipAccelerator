@@ -129,6 +129,8 @@ import RequirementsMap from './RequirementsMap';
 import NextAction from './NextAction';
 import VerificationLog from './VerificationLog';
 import ProgressionLog from './ProgressionLog';
+import ProjectRisk from './ProjectRisk';
+import AnomalyLog from './AnomalyLog';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -586,6 +588,12 @@ ProgressionLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 NextAction.hasMany(ProgressionLog, { foreignKey: 'action_id', as: 'progressionLogs' });
 ProgressionLog.belongsTo(NextAction, { foreignKey: 'action_id', as: 'action' });
 
+// --- Risk + Anomaly ---
+Project.hasMany(ProjectRisk, { foreignKey: 'project_id', as: 'projectRisks' });
+ProjectRisk.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Project.hasMany(AnomalyLog, { foreignKey: 'project_id', as: 'anomalyLogs' });
+AnomalyLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
 AssignmentSubmission.hasMany(ProjectArtifact, { foreignKey: 'submission_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(AssignmentSubmission, { foreignKey: 'submission_id', as: 'submission' });
 
@@ -769,4 +777,6 @@ export {
   NextAction,
   VerificationLog,
   ProgressionLog,
+  ProjectRisk,
+  AnomalyLog,
 };

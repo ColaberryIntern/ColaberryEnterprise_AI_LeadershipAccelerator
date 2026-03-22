@@ -537,12 +537,13 @@ router.get('/api/portal/project/warroom', requireParticipant, async (req: Reques
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
 
     // Parallel data fetching
-    const [progressResult, nextActionResult, verificationResult, recentActivity, graphResult] = await Promise.all([
+    const [progressResult, nextActionResult, verificationResult, recentActivity, graphResult, riskResult] = await Promise.all([
       import('../services/projectProgressService').then(m => m.calculateProgress(enrollmentId).catch(() => null)),
       import('../services/nextAction/nextActionService').then(m => m.getNextAction(enrollmentId).catch(() => null)),
       import('../services/verification/verificationOrchestrator').then(m => m.getVerificationStatus(project.id).catch(() => [])),
       buildActivityFeed(project.id),
       import('../services/artifactGraphService').then(m => m.getFullGraph().catch(() => ({ nodes: [], edges: [] }))),
+      import('../services/risk/riskOrchestrator').then(m => m.evaluateProjectRisk(enrollmentId).catch(() => ({ risks: [], anomalies: [], health: { health_score: 0, velocity_score: 0, stability_score: 0 } }))),
     ]);
 
     // Coverage summary
@@ -561,6 +562,7 @@ router.get('/api/portal/project/warroom', requireParticipant, async (req: Reques
       recent_activity: recentActivity,
       artifact_graph: graphResult,
       coverage_summary: coverageSummary,
+      risk_summary: riskResult,
     });
   } catch (err: any) {
     console.error('[ProjectRoutes] GET /warroom error:', err.message);
@@ -602,5 +604,21 @@ async function buildActivityFeed(projectId: string): Promise<any[]> {
   feed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   return feed.slice(0, 20);
 }
+
+// ---------------------------------------------------------------------------
+// Risk + Anomaly Route
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/risk-summary', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { evaluateProjectRisk } = await import('../services/risk/riskOrchestrator');
+    const result = await evaluateProjectRisk(enrollmentId);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /risk-summary error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

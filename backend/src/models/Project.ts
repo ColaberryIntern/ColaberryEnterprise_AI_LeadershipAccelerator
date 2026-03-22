@@ -25,6 +25,9 @@ export interface ProjectAttributes {
   requirements_completion_pct?: number;
   readiness_score_breakdown?: any;
   progress_computed_at?: Date;
+  health_score?: number;
+  velocity_score?: number;
+  stability_score?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -51,6 +54,9 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare requirements_completion_pct: number;
   declare readiness_score_breakdown: any;
   declare progress_computed_at: Date;
+  declare health_score: number;
+  declare velocity_score: number;
+  declare stability_score: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -145,6 +151,18 @@ Project.init(
     },
     progress_computed_at: {
       type: DataTypes.DATE,
+      allowNull: true,
+    },
+    health_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    velocity_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    stability_score: {
+      type: DataTypes.FLOAT,
       allowNull: true,
     },
   },
