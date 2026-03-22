@@ -186,7 +186,7 @@ async function scanPlatform(
         '635ad52efe8087002dee4707',    // llm
       ];
       const query = `query {
-        feed(first: ${Math.min(maxResults, 20)}, filter: { tags: [${tagIds.map(id => `"${id}"`).join(', ')}], type: BEST }) {
+        feed(first: ${Math.min(maxResults, 20)}, filter: { tags: [${tagIds.map(id => `"${id}"`).join(', ')}], type: RELEVANT }) {
           edges {
             node {
               id
