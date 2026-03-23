@@ -174,12 +174,12 @@ async function postToPlatform(
     case 'devto': {
       const articleId = signal?.details?.id;
       if (!articleId) throw new Error('No Dev.to article ID in signal details');
-      return postToDevTo(articleId, response.content);
+      return postToDevTo(articleId, response.content, signal?.source_url);
     }
     case 'hashnode': {
       const postId = signal?.details?.id;
       if (!postId) throw new Error('No Hashnode post ID in signal details');
-      return postToHashnode(postId, response.content);
+      return postToHashnode(postId, response.content, signal?.source_url);
     }
     case 'discourse': {
       const topicId = signal?.details?.topic_id;
