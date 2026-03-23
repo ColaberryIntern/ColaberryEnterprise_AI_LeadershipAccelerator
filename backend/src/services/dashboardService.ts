@@ -58,12 +58,20 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
     // Query 3: Active campaigns count
     Campaign.count({ where: { status: 'active' } }),
 
-    // Query 4: Hot leads count
-    Lead.count({ where: { lead_temperature: 'hot' } }),
+    // Query 4: Hot leads count (2+ opens OR any click — matches escalation trigger)
+    sequelize.query(`
+      SELECT COUNT(DISTINCT sub.lead_id) as cnt FROM (
+        SELECT lead_id FROM interaction_outcomes WHERE outcome = 'opened'
+        GROUP BY lead_id HAVING COUNT(*) >= 2
+        UNION
+        SELECT DISTINCT lead_id FROM interaction_outcomes WHERE outcome = 'clicked'
+      ) sub
+    `, { type: QueryTypes.SELECT }),
   ]);
 
   const ch = (channelCounts as any)[0] || {};
   const eng = (engagementRates as any)[0] || {};
+  const hotCount = parseInt((hotLeads as any)[0]?.cnt || '0', 10);
 
   const totalSent = parseInt(eng.total_sent || '0', 10);
   const totalOpened = parseInt(eng.total_opened || '0', 10);
@@ -80,7 +88,7 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
     open_rate: totalSent > 0 ? Math.round((totalOpened / totalSent) * 100 * 10) / 10 : 0,
     click_rate: totalSent > 0 ? Math.round((totalClicked / totalSent) * 100 * 10) / 10 : 0,
     bounce_rate: totalSent > 0 ? Math.round((totalBounced / totalSent) * 100 * 10) / 10 : 0,
-    hot_leads_count: hotLeads,
+    hot_leads_count: hotCount,
     active_campaigns: activeCampaigns,
   };
 }
