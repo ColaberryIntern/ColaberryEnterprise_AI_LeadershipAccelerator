@@ -211,7 +211,8 @@ function categorizeSource(source: string | null): 'marketing' | 'cold_outbound' 
   if (s === 'ccpp_alumni' || s === 'alumni_referral' || s === 'alumni_referral_anonymous') return 'alumni';
   if (s === 'apollo' || s.startsWith('cold') || s.startsWith('outbound')) return 'cold_outbound';
   if (s.startsWith('campaign') || s.includes('utm_') || s.includes('utm=') || s === 'website') return 'marketing';
-  if (s === 'strategy_call' || s === 'maya_chat' || s === 'enrollment') return 'marketing';
+  // strategy_call, maya_chat, enrollment = inbound actions from anonymous site visitors
+  if (s === 'strategy_call' || s === 'maya_chat' || s === 'enrollment') return 'anonymous';
   return 'anonymous';
 }
 
