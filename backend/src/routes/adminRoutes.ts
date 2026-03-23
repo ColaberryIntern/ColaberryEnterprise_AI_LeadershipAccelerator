@@ -42,6 +42,7 @@ import visitorFlowRoutes from './admin/visitorFlowRoutes';
 import marketingFunnelRoutes from './admin/marketingFunnelRoutes';
 import artifactRelationshipRoutes from './admin/artifactRelationshipRoutes';
 import dashboardRoutes from './admin/dashboardRoutes';
+import communicationRoutes from './admin/communicationRoutes';
 
 const router = Router();
 
@@ -88,5 +89,6 @@ router.use(visitorFlowRoutes);
 router.use(marketingFunnelRoutes);
 router.use(artifactRelationshipRoutes);
 router.use(dashboardRoutes);
+router.use(communicationRoutes);
 
 export default router;

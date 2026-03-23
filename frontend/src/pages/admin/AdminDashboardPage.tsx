@@ -313,13 +313,13 @@ function AdminDashboardPage() {
       {/* ROW 2: Campaign Activity                                     */}
       {/* ============================================================ */}
       <div className="row g-3 mb-3">
-        {kpiLink('/admin/campaigns', 'Emails Sent', campaignActivity?.emails_sent_today ?? '--', '#2b6cb0',
+        {kpiLink('/admin/communications?channel=email', 'Emails Sent', campaignActivity?.emails_sent_today ?? '--', '#2b6cb0',
           campaignActivity ? `${campaignActivity.emails_sent_week} this week` : undefined
         )}
-        {kpiLink('/admin/campaigns', 'SMS Sent', campaignActivity?.sms_sent_today ?? '--', '#6f42c1',
+        {kpiLink('/admin/communications?channel=sms', 'SMS Sent', campaignActivity?.sms_sent_today ?? '--', '#6f42c1',
           campaignActivity ? `${campaignActivity.sms_sent_week} this week` : undefined
         )}
-        {kpiLink('/admin/campaigns', 'Voice Calls', campaignActivity?.voice_calls_today ?? '--', '#805ad5',
+        {kpiLink('/admin/communications?channel=voice', 'Voice Calls', campaignActivity?.voice_calls_today ?? '--', '#805ad5',
           campaignActivity ? `${campaignActivity.voice_calls_week} this week` : undefined
         )}
         {kpiLink('/admin/campaigns', 'Open Rate', campaignActivity ? `${campaignActivity.open_rate}%` : '--', '#38a169',
