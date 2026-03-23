@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
 export type OpenclawPostStatus = 'draft' | 'approved' | 'ready_to_post' | 'posted' | 'failed' | 'removed';
-export type OpenclawTone = 'educational' | 'conversational' | 'technical';
+export type OpenclawTone = 'educational' | 'conversational' | 'technical' | 'professional';
 
 interface OpenclawResponseAttributes {
   id?: string;
