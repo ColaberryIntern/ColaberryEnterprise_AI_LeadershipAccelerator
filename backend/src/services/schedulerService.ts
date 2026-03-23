@@ -1576,15 +1576,16 @@ export function startScheduler(): void {
         await settingsSvc.setSetting('hot_lead_calls_date', todayStr);
         await settingsSvc.setSetting('hot_lead_calls_today', '0');
       }
-      if (callsToday >= 50) {
-        console.log(`[HotLead] Daily cap reached (${callsToday}/50)`);
+      if (callsToday >= 100) {
+        console.log(`[HotLead] Daily cap reached (${callsToday}/100)`);
         return;
       }
-      const remaining = 50 - callsToday;
+      const remaining = 100 - callsToday;
 
       // Find hot leads — prioritize newest engagement, cap by remaining
       const [hotLeads] = await sequelize.query(`
         SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone,
+          l.company as lead_company, l.title as lead_title,
           cl_camp.campaign_id as active_campaign_id, c.name as campaign_name
         FROM (
           SELECT lead_id FROM interaction_outcomes
@@ -1633,24 +1634,59 @@ export function startScheduler(): void {
             continue;
           }
 
-          // Trigger Maya voice call — pitch to book a 30-min strategy call with BD team
+          // Build campaign-aware prompt for Maya
           const firstName = (lead.name || '').split(' ')[0];
+          const isAlumni = (lead.campaign_name || '').includes('Alumni');
+          const isCold = (lead.campaign_name || '').includes('Cold Outbound');
+
+          const companyInfo = lead.lead_company ? ` at ${lead.lead_company}` : '';
+          const titleInfo = lead.lead_title ? ` (${lead.lead_title})` : '';
+
+          const campaignContext = isAlumni
+            ? `${lead.name} is a Colaberry alumni who is part of the Alumni AI Champion program. They were reached out to about helping others in their network get into AI leadership training through the referral program. They have been opening and engaging with emails about the Alumni AI Champion program.`
+            : isCold
+            ? `${lead.name}${titleInfo} works${companyInfo}. They received cold outreach emails about the Enterprise AI Leadership Accelerator — a 3-week program to build and deploy real AI systems. They opened multiple emails showing strong interest in AI systems and leadership.`
+            : `${lead.name} showed interest in the Colaberry Enterprise AI Leadership Accelerator program.`;
+
+          const coldOpening = lead.lead_company
+            ? `Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I noticed that someone from ${lead.lead_company} has been engaging with our content about building AI systems and I wanted to reach out personally to see how we can help your team.`
+            : `Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I saw that you showed some interest in our content about building AI systems and I wanted to reach out personally to see if I can answer any questions.`;
+
+          const openingLine = isAlumni
+            ? `Hi ${firstName}, this is Maya from Colaberry. I noticed you have been engaging with our Alumni AI Champion program and I wanted to reach out personally to see if you had any questions about the referral program or how you can help others in your network get into AI leadership.`
+            : coldOpening;
+
+          const talkingPoints = isAlumni
+            ? [
+              '- Ask if they have any questions about the Alumni AI Champion referral program',
+              '- The referral program helps them recommend colleagues and people in their network for AI leadership training',
+              '- As a Colaberry alumni, they understand the value of the training and are well positioned to identify people who would benefit',
+              '- Next cohort starts April 14th with limited seats',
+              '- Ask if they know anyone who might benefit from learning to build and deploy AI systems',
+              '- Offer to schedule a 30-minute strategy call with the Business Development team to discuss the referral program in detail',
+            ]
+            : [
+              '- Ask what caught their attention or what challenges they are facing with AI in their organization',
+              '- The program helps data professionals and leaders build and deploy real AI systems in 3 weeks',
+              '- Next cohort starts April 14th with limited seats available',
+              '- Companies can sponsor their teams for corporate training',
+              '- Offer to schedule a 30-minute strategy call with the Business Development team to discuss how the program can help their team',
+            ];
+
           const prompt = [
             'You are Maya, the AI Admissions Director for the Colaberry Enterprise AI Leadership Accelerator.',
-            `You are calling ${lead.name} because they showed interest in our content about building AI systems.`,
-            `Be warm, conversational, and professional. Start by saying "Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I saw that you showed some interest in our content about building AI systems and I wanted to reach out personally to see if I can answer any questions."`,
+            '',
+            `LEAD CONTEXT: ${campaignContext}`,
+            `CAMPAIGN: ${lead.campaign_name || 'Unknown'}`,
+            '',
+            `Be warm, conversational, and professional. Start by saying "${openingLine}"`,
             '',
             'Your goal is to schedule a 30-minute strategy call between them and our Business Development team.',
             '',
             'Key talking points:',
-            '- You noticed they engaged with our content about AI systems and leadership',
-            '- Ask what caught their attention or what challenges they are facing with AI in their organization',
-            '- The program helps data professionals and leaders build and deploy real AI systems in 3 weeks',
-            '- Next cohort starts April 14th with limited seats available',
-            '- Companies can sponsor their teams for corporate training',
-            '- Offer to schedule a 30-minute strategy call with our Business Development team to discuss how the program can help their team',
+            ...talkingPoints,
             '',
-            'If they agree to schedule a call, say "Great, I will send you a link to book a 30-minute strategy call with our Business Development team. You will receive it by email shortly."',
+            'If they agree to schedule a call, say "Great, I will send you a link to book a 30-minute strategy call with our Business Development team."',
             'If they are not interested right now, thank them warmly and let them know they can reach out anytime.',
             'Keep the call conversational. Do not rush.',
           ].join('\n');
