@@ -443,7 +443,7 @@ function AdminCommunicationsPage() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="mt-3">
-          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
       )}
     </>
