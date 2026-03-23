@@ -39,10 +39,10 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
       type: QueryTypes.SELECT,
     }),
 
-    // Query 2: Engagement rates from interaction_outcomes
+    // Query 2: Engagement rates — emails sent from communication_logs, engagement from interaction_outcomes
     sequelize.query(`
       SELECT
-        COUNT(*) FILTER (WHERE outcome = 'sent') as total_sent,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'email' AND created_at >= :weekAgo) as total_sent,
         COUNT(*) FILTER (WHERE outcome = 'opened') as total_opened,
         COUNT(*) FILTER (WHERE outcome = 'clicked') as total_clicked,
         COUNT(*) FILTER (WHERE outcome = 'bounced') as total_bounced

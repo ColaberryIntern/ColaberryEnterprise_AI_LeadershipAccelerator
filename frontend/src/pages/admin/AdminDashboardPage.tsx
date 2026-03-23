@@ -343,10 +343,10 @@ function AdminDashboardPage() {
         {kpiLink('/admin/communications?channel=voice', 'Voice Calls', campaignActivity?.voice_calls_today ?? '--', '#805ad5',
           campaignActivity ? `${campaignActivity.voice_calls_week} this week` : undefined
         )}
-        {kpiLink('/admin/campaigns', 'Open Rate', campaignActivity ? `${campaignActivity.open_rate}%` : '--', '#38a169',
+        {kpiLink('/admin/campaigns', 'Open Rate (7d)', campaignActivity ? `${campaignActivity.open_rate}%` : '--', '#38a169',
           campaignActivity ? `${campaignActivity.active_campaigns} active campaigns` : undefined
         )}
-        {kpiLink('/admin/campaigns', 'Click Rate', campaignActivity ? `${campaignActivity.click_rate}%` : '--', '#0dcaf0')}
+        {kpiLink('/admin/campaigns', 'Click Rate (7d)', campaignActivity ? `${campaignActivity.click_rate}%` : '--', '#0dcaf0')}
         {kpiLink('/admin/leads?temperature=hot', 'Hot Leads', campaignActivity?.hot_leads_count ?? '--', '#e53e3e',
           'Engaged 2+ times'
         )}
