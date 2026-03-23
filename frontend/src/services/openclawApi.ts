@@ -58,7 +58,16 @@ export interface OpenclawResponseItem {
   tracked_url: string | null;
   engagement_metrics: Record<string, any>;
   created_at: string;
-  signal?: { title: string; source_url: string; platform: string };
+  signal?: {
+    title: string;
+    source_url: string;
+    platform: string;
+    content_excerpt: string | null;
+    details: Record<string, any> | null;
+    relevance_score: number | null;
+    engagement_score: number | null;
+    author: string | null;
+  };
 }
 
 export interface OpenclawSessionItem {
@@ -135,3 +144,9 @@ export const getOpenclawAgentActivity = (agentId: string, params?: Record<string
 
 export const markOpenclawResponsePosted = (id: string, post_url: string) =>
   api.post(`${BASE}/responses/${id}/mark-posted`, { post_url });
+
+export const submitOpenclawSignal = (url: string, platform?: string) =>
+  api.post<{ success: boolean; signal: OpenclawSignalItem; task_id: string }>(`${BASE}/signals/submit`, { url, platform });
+
+export const generateLinkedInPost = (topic: string) =>
+  api.post<{ success: boolean; signal: OpenclawSignalItem; response: any; short_id: string }>(`${BASE}/linkedin/generate`, { topic });
