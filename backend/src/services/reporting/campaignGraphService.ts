@@ -279,13 +279,12 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
       raw: true,
     }).catch(() => []) as Promise<Array<{ visitor_id: string; earliest: Date }>>,
 
-    // 1g: Visitor records linked to leads
+    // 1g: Visitor records linked to leads (via Visitor.lead_id OR Lead.visitor_id)
     Visitor.findAll({
-      attributes: ['lead_id', 'total_sessions', 'total_pageviews', 'first_seen_at', 'last_seen_at'],
-      where: { lead_id: { [Op.ne]: null as any } },
+      attributes: ['id', 'lead_id', 'total_sessions', 'total_pageviews', 'first_seen_at', 'last_seen_at'],
       raw: true,
     }).catch(() => []) as Promise<Array<{
-      lead_id: number; total_sessions: number; total_pageviews: number;
+      id: string; lead_id: number | null; total_sessions: number; total_pageviews: number;
       first_seen_at: Date; last_seen_at: Date;
     }>>,
 
@@ -359,18 +358,24 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
     if (vc.visitor_id) visitorChatMap.set(vc.visitor_id, new Date(vc.earliest));
   }
 
-  // Visitor data lookup map
-  const visitorMap = new Map<number, { total_sessions: number; total_pageviews: number; first_seen_at: Date | null; last_seen_at: Date | null }>();
+  // Visitor data lookup maps — by lead_id (Visitor.lead_id) and by visitor id (Lead.visitor_id)
+  type VisitorData = { total_sessions: number; total_pageviews: number; first_seen_at: Date | null; last_seen_at: Date | null };
+  const visitorByLeadId = new Map<number, VisitorData>();
+  const visitorByVisitorId = new Map<string, VisitorData>();
   for (const v of visitorsByLead) {
-    if (v.lead_id) {
-      visitorMap.set(v.lead_id, {
-        total_sessions: v.total_sessions || 0,
-        total_pageviews: v.total_pageviews || 0,
-        first_seen_at: v.first_seen_at ? new Date(v.first_seen_at) : null,
-        last_seen_at: v.last_seen_at ? new Date(v.last_seen_at) : null,
-      });
-    }
+    const data: VisitorData = {
+      total_sessions: v.total_sessions || 0,
+      total_pageviews: v.total_pageviews || 0,
+      first_seen_at: v.first_seen_at ? new Date(v.first_seen_at) : null,
+      last_seen_at: v.last_seen_at ? new Date(v.last_seen_at) : null,
+    };
+    if (v.lead_id) visitorByLeadId.set(v.lead_id, data);
+    if (v.id) visitorByVisitorId.set(v.id, data);
   }
+
+  // Diagnostic: log visitor linkage stats
+  const leadsWithVisitorId = allLeads.filter(l => l.visitor_id).length;
+  console.log(`[CampaignGraph] Visitor diagnostics: ${visitorsByLead.length} total visitors, ${visitorByLeadId.size} with lead_id, ${visitorByVisitorId.size} by visitor_id, ${leadsWithVisitorId} leads with visitor_id set`);
 
   // Outreach data lookup map: lead_id → { email, sms, voice }
   const emptyChannel = { count: 0, earliest: null as Date | null, latest_status: null as string | null };
@@ -484,8 +489,9 @@ async function buildLeadPaths(): Promise<LeadPathRecord[]> {
       ? { type: candidates[0].type, timestamp: candidates[0].ts }
       : { type: null as any, timestamp: null };
 
-    // Visitor data
-    const visitorData = visitorMap.get(lead.id);
+    // Visitor data — check both directions: Visitor.lead_id → lead, and Lead.visitor_id → visitor
+    const visitorData = visitorByLeadId.get(lead.id)
+      || (lead.visitor_id ? visitorByVisitorId.get(lead.visitor_id) : undefined);
 
     // Outreach data
     const outreachData = outreachMap.get(lead.id) || {
@@ -635,10 +641,11 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
       touchType = 'no_entry'; // no first touch — tracked in visitor layer only
     }
 
-    if (!hasFirstTouch) {
+    if (!hasFirstTouch && !hasVisitor) {
+      // Truly never engaged: no site visit and no first touch
       neverVisitedCount++;
       neverVisitedSourceBreakdown[src] = (neverVisitedSourceBreakdown[src] || 0) + 1;
-    } else {
+    } else if (hasFirstTouch) {
       entryTouchCounts[touchType]++;
       entrySourceBreakdown[touchType][src] = (entrySourceBreakdown[touchType][src] || 0) + 1;
     }
@@ -669,27 +676,33 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
         engagementChannelBreakdown[engLevel][ch]++;
       }
 
-      if (!hasFirstTouch) {
-        addEdge(engagementToNever, `engagement_${engLevel}|visitor_never`);
-      } else if (hasVisitor) {
+      if (hasVisitor) {
+        // Visited the site — route through Site Visitors
         engagementVisitCounts[engLevel]++;
         addEdge(engagementToVisitor, `engagement_${engLevel}|visitor_site`);
-        addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
-      } else {
-        // Contacted + has first touch but no visitor record → skip visitor
+        if (hasFirstTouch) {
+          addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
+        }
+        // Visited but no first touch: terminal at Site Visitors (no entry edge)
+      } else if (hasFirstTouch) {
+        // Has first touch but no visitor record → skip visitor layer
         addEdge(engagementToEntry, `engagement_${engLevel}|entry_${touchType}`);
-      }
-    } else if (!hasFirstTouch) {
-      // Non-contacted, never visited
-      addEdge(srcToNever, `src_${src}|visitor_never`);
-    } else {
-      // Non-contacted leads bypass outreach AND engagement entirely
-      if (hasVisitor) {
-        addEdge(srcToVisitor, `src_${src}|visitor_site`);
-        addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
       } else {
-        addEdge(srcToEntry, `src_${src}|entry_${touchType}`);
+        // No visitor record, no first touch → truly never visited
+        addEdge(engagementToNever, `engagement_${engLevel}|visitor_never`);
       }
+    } else if (hasVisitor) {
+      // Non-contacted but visited the site
+      addEdge(srcToVisitor, `src_${src}|visitor_site`);
+      if (hasFirstTouch) {
+        addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
+      }
+    } else if (hasFirstTouch) {
+      // Non-contacted, no visitor record, but has first touch → direct to entry
+      addEdge(srcToEntry, `src_${src}|entry_${touchType}`);
+    } else {
+      // Non-contacted, no visitor record, no first touch → never visited
+      addEdge(srcToNever, `src_${src}|visitor_never`);
     }
 
     // Entry → Campaign edges (only for engaged leads with campaign enrollments)

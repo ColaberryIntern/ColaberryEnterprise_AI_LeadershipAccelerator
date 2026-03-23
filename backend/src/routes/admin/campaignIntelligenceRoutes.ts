@@ -131,6 +131,53 @@ router.get('/api/admin/persona-archetypes', requireAdmin, async (_req: Request, 
   }
 });
 
+// ── Visitor Linkage Diagnostics ──────────────────────────────────────────
+
+router.get('/api/admin/campaign-intelligence/visitor-diagnostics', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const { Visitor, Lead, VisitorSession } = require('../../models');
+    const { Op, fn, col } = require('sequelize');
+
+    const [totalVisitors, visitorsWithLeadId, totalLeads, leadsWithVisitorId, sessionsWithLeadId, totalSessions] = await Promise.all([
+      Visitor.count(),
+      Visitor.count({ where: { lead_id: { [Op.ne]: null } } }),
+      Lead.count(),
+      Lead.count({ where: { visitor_id: { [Op.ne]: null } } }),
+      VisitorSession.count({ where: { lead_id: { [Op.ne]: null } } }),
+      VisitorSession.count(),
+    ]);
+
+    // Sample: first 5 visitors with lead_id
+    const sampleLinked = await Visitor.findAll({
+      attributes: ['id', 'lead_id', 'total_sessions', 'total_pageviews', 'first_seen_at'],
+      where: { lead_id: { [Op.ne]: null } },
+      limit: 5,
+      raw: true,
+    });
+
+    // Sample: first 5 leads with visitor_id
+    const sampleLeadsWithVisitor = await Lead.findAll({
+      attributes: ['id', 'email', 'visitor_id', 'source'],
+      where: { visitor_id: { [Op.ne]: null } },
+      limit: 5,
+      raw: true,
+    });
+
+    res.json({
+      total_visitors: totalVisitors,
+      visitors_with_lead_id: visitorsWithLeadId,
+      total_leads: totalLeads,
+      leads_with_visitor_id: leadsWithVisitorId,
+      total_sessions: totalSessions,
+      sessions_with_lead_id: sessionsWithLeadId,
+      sample_linked_visitors: sampleLinked,
+      sample_leads_with_visitor: sampleLeadsWithVisitor,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Campaign Intelligence Graph ─────────────────────────────────────────
 
 router.get('/api/admin/campaign-intelligence/graph', requireAdmin, async (req: Request, res: Response) => {
