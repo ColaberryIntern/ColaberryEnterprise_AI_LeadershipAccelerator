@@ -1654,9 +1654,15 @@ export function startScheduler(): void {
             'Keep the call conversational. Do not rush.',
           ].join('\n');
 
+          // Normalize phone: strip non-digits, prepend +1 if 10 digits
+          let phone = (lead.phone || '').replace(/[^0-9]/g, '');
+          if (phone.length === 10) phone = '+1' + phone;
+          else if (phone.length === 11 && phone.startsWith('1')) phone = '+' + phone;
+          else if (!phone.startsWith('+')) phone = '+' + phone;
+
           const result = await triggerVoiceCall({
             name: lead.name,
-            phone: lead.phone,
+            phone,
             callType: 'interest',
             prompt,
             context: {
