@@ -600,14 +600,23 @@ export default function OpenclawTab() {
                       <div className="card-body py-2 px-3">
                         <div className="fw-semibold small mb-1">Original Signal</div>
                         <div className="mb-1">
-                          {selectedResponse.signal.source_url.startsWith('http') ? (
-                            <a href={selectedResponse.signal.source_url} target="_blank" rel="noopener noreferrer" className="small fw-medium" style={{ color: 'var(--color-primary-light)' }}>
-                              {selectedResponse.signal.title || selectedResponse.signal.source_url}
-                              <span className="ms-1" style={{ fontSize: '0.65rem' }}>&#8599;</span>
-                            </a>
-                          ) : (
-                            <span className="small fw-medium">{selectedResponse.signal.title || selectedResponse.signal.source_url}</span>
-                          )}
+                          {(() => {
+                            const sig = selectedResponse.signal!;
+                            const href = sig.source_url?.startsWith('http') ? sig.source_url
+                              : sig.title?.startsWith('http') ? sig.title
+                              : sig.details?.linkedin_profile || null;
+                            const label = sig.title?.startsWith('http')
+                              ? (sig.title.length > 80 ? sig.title.slice(0, 80) + '...' : sig.title)
+                              : sig.title || sig.source_url;
+                            return href ? (
+                              <a href={href} target="_blank" rel="noopener noreferrer" className="small fw-medium" style={{ color: 'var(--color-primary-light)' }}>
+                                {label}
+                                <span className="ms-1" style={{ fontSize: '0.65rem' }}>&#8599;</span>
+                              </a>
+                            ) : (
+                              <span className="small fw-medium">{label}</span>
+                            );
+                          })()}
                         </div>
                         {selectedResponse.signal.author && (
                           <div style={{ fontSize: '0.72rem' }} className="text-muted mb-1">
