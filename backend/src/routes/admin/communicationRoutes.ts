@@ -135,7 +135,7 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
     // Temperature history around this communication
     const tempHistory = await sequelize.query(`
       SELECT previous_temperature, new_temperature, trigger_type, trigger_detail, created_at
-      FROM lead_temperature_histories
+      FROM lead_temperature_history
       WHERE lead_id = :leadId
       AND created_at BETWEEN :from::timestamp - interval '1 day' AND :from::timestamp + interval '2 days'
       ORDER BY created_at ASC
@@ -144,19 +144,22 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
       type: QueryTypes.SELECT,
     });
 
-    // Campaign enrollment context
-    const enrollment = await sequelize.query(`
-      SELECT cl.status as enrollment_status, cl.enrolled_at,
-        (SELECT COUNT(*) FROM scheduled_emails se WHERE se.lead_id = :leadId AND se.campaign_id = cl.campaign_id AND se.status = 'sent') as steps_completed,
-        (SELECT jsonb_array_length(fs.steps) FROM follow_up_sequences fs WHERE fs.id = c.sequence_id) as total_steps
-      FROM campaign_leads cl
-      JOIN campaigns c ON c.id = cl.campaign_id
-      WHERE cl.lead_id = :leadId AND cl.campaign_id = :campaignId
-      LIMIT 1
-    `, {
-      replacements: { leadId: comm.lead_id, campaignId: comm.campaign_id },
-      type: QueryTypes.SELECT,
-    });
+    // Campaign enrollment context (only if communication has a campaign)
+    let enrollment: any[] = [];
+    if (comm.campaign_id) {
+      enrollment = await sequelize.query(`
+        SELECT cl.status as enrollment_status, cl.enrolled_at,
+          (SELECT COUNT(*) FROM scheduled_emails se WHERE se.lead_id = :leadId AND se.campaign_id = cl.campaign_id AND se.status = 'sent') as steps_completed,
+          (SELECT jsonb_array_length(fs.steps) FROM follow_up_sequences fs WHERE fs.id = c.sequence_id) as total_steps
+        FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        WHERE cl.lead_id = :leadId AND cl.campaign_id = :campaignId
+        LIMIT 1
+      `, {
+        replacements: { leadId: comm.lead_id, campaignId: comm.campaign_id },
+        type: QueryTypes.SELECT,
+      }) as any[];
+    }
 
     // Scheduled email context (if linked via metadata)
     let scheduledAction = null;
