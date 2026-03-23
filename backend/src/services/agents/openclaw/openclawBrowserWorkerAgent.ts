@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from '../../../models';
-import { postToDevTo, postToHashnode, hasPlatformCredentials } from './openclawPlatformPostingService';
+import { postToDevTo, postToHashnode, postToMedium, postToDiscourse, hasPlatformCredentials } from './openclawPlatformPostingService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
@@ -180,6 +180,18 @@ async function postToPlatform(
       const postId = signal?.details?.id;
       if (!postId) throw new Error('No Hashnode post ID in signal details');
       return postToHashnode(postId, response.content);
+    }
+    case 'medium': {
+      const title = signal?.title || 'AI Leadership Insights';
+      const tags = (signal?.topic_tags || []).slice(0, 5);
+      return postToMedium(title, response.content, tags.length > 0 ? tags : undefined);
+    }
+    case 'discourse': {
+      const topicId = signal?.details?.topic_id;
+      const forumUrl = signal?.details?.forum_url;
+      if (!topicId || !forumUrl) throw new Error('No Discourse topic_id or forum_url in signal details');
+      const forumEnvPrefix = signal?.details?.forum_env_prefix;
+      return postToDiscourse(forumUrl, topicId, response.content, forumEnvPrefix);
     }
     default:
       throw new Error(`No API posting support for platform: ${response.platform}`);

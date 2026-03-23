@@ -7,7 +7,7 @@ import type { AgentExecutionResult, AgentAction } from '../types';
 const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
 
 // All platforms get tracked links — user posts manually so they control link placement
-const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin', 'reddit', 'hackernews', 'quora', 'medium', 'hashnode']);
+const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin', 'reddit', 'hackernews', 'quora', 'medium', 'hashnode', 'discourse']);
 
 /**
  * OpenClaw Content Response Agent
@@ -202,6 +202,11 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
     platformContext = `This is a Quora question. Give a thorough, authoritative answer. Structure is okay here — numbered points or short sections work well.`;
   } else if (platform === 'hashnode') {
     platformContext = `This is a Hashnode article discussion. The audience is developers, tech founders, and engineering leaders. Technical depth is valued — share real frameworks, architecture decisions, and practical insights from running AI training programs. Markdown formatting works well.`;
+  } else if (platform === 'medium') {
+    platformContext = `This will be published as a short Medium article. Write a polished, insightful piece — NOT a comment. Use a compelling opening hook, 2-3 subheadings (## format), and share practical insights from running AI training programs for enterprise teams. End with a clear takeaway. Medium readers expect well-structured prose.`;
+  } else if (platform === 'discourse') {
+    const forumName = details.forum_name || 'a community forum';
+    platformContext = `This is a post on ${forumName} (Discourse forum). The audience is technical practitioners and AI enthusiasts. Give a helpful, substantive reply. You can use code examples, numbered steps, or bullet points. Be genuine and community-oriented — this is a place where people help each other.`;
   }
 
   let linkInstruction = '';

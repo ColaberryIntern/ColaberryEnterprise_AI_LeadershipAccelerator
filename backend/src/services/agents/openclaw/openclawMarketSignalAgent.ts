@@ -29,7 +29,7 @@ export async function runOpenclawMarketSignalAgent(
 
   for (const platform of platforms) {
     try {
-      const results = await scanPlatform(platform, keywords, maxSignals);
+      const results = await scanPlatform(platform, keywords, maxSignals, config);
 
       for (const item of results) {
         // Deduplicate by source_url
@@ -94,6 +94,7 @@ async function scanPlatform(
   platform: string,
   keywords: string[],
   maxResults: number,
+  config: Record<string, any> = {},
 ): Promise<PlatformResult[]> {
   const query = keywords.slice(0, 3).join(' OR ');
   const results: PlatformResult[] = [];
@@ -231,6 +232,93 @@ async function scanPlatform(
         }
       } catch (err: any) {
         console.warn('[OpenClaw] Hashnode scan failed:', err?.message?.slice(0, 200));
+      }
+      break;
+    }
+
+    case 'medium': {
+      // Medium tag RSS feeds — parse XML for article discovery
+      const mediumTags = ['artificial-intelligence', 'machine-learning', 'ai-leadership'];
+      for (const tag of mediumTags.slice(0, 2)) {
+        try {
+          const resp = await axios.get(`https://medium.com/feed/tag/${tag}`, {
+            headers: { 'User-Agent': 'OpenclawBot/1.0', Accept: 'application/rss+xml,application/xml' },
+            timeout: 15000,
+          });
+          const xml: string = resp.data;
+          // Simple RSS item extraction — no XML parser dependency needed
+          const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+          let match;
+          while ((match = itemRegex.exec(xml)) !== null && results.length < maxResults) {
+            const item = match[1];
+            const getTag = (tag: string) => {
+              const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
+              return m ? (m[1] || m[2] || '').trim() : '';
+            };
+            const link = getTag('link');
+            const title = getTag('title');
+            const creator = getTag('dc:creator');
+            const pubDate = getTag('pubDate');
+            // Extract categories
+            const cats: string[] = [];
+            const catRegex = /<category[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/category>/g;
+            let catMatch;
+            while ((catMatch = catRegex.exec(item)) !== null) cats.push(catMatch[1].trim());
+
+            if (link) {
+              results.push({
+                platform: 'medium',
+                source_url: link.split('?')[0], // strip query params
+                author: creator,
+                title,
+                content_excerpt: '', // RSS doesn't include clean excerpts
+                details: { published_at: pubDate, categories: cats },
+              });
+            }
+          }
+        } catch (err: any) {
+          console.warn(`[OpenClaw] Medium tag "${tag}" scan failed:`, err?.message?.slice(0, 200));
+        }
+      }
+      break;
+    }
+
+    case 'discourse': {
+      // Scan configured Discourse forums for AI discussions
+      const forums: Array<{ name: string; base_url: string }> = config.discourse_forums || [
+        { name: 'Hugging Face', base_url: 'https://discuss.huggingface.co' },
+        { name: 'OpenAI', base_url: 'https://community.openai.com' },
+      ];
+      const perForum = Math.max(5, Math.floor(maxResults / forums.length));
+      for (const forum of forums) {
+        try {
+          const resp = await axios.get(`${forum.base_url}/search.json`, {
+            params: { q: `${query} in:first order:latest` },
+            headers: { 'User-Agent': 'OpenclawBot/1.0' },
+            timeout: 15000,
+          });
+          const topics = resp.data?.topics || [];
+          for (const topic of topics.slice(0, perForum)) {
+            results.push({
+              platform: 'discourse',
+              source_url: `${forum.base_url}/t/${topic.slug}/${topic.id}`,
+              author: topic.last_poster_username || '',
+              title: topic.title || '',
+              content_excerpt: (topic.excerpt || '').slice(0, 500),
+              details: {
+                forum_name: forum.name,
+                forum_url: forum.base_url,
+                topic_id: topic.id,
+                posts_count: topic.posts_count,
+                views: topic.views,
+                like_count: topic.like_count,
+                created_at: topic.created_at,
+              },
+            });
+          }
+        } catch (err: any) {
+          console.warn(`[OpenClaw] Discourse scan failed for ${forum.name}:`, err?.message?.slice(0, 200));
+        }
       }
       break;
     }

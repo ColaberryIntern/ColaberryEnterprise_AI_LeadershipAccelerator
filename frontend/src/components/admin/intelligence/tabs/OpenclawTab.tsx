@@ -22,6 +22,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   quora: '#B92B27',
   medium: '#00AB6C',
   hashnode: '#2962FF',
+  discourse: '#FFC107',
 };
 
 const STATUS_BADGES: Record<string, string> = {
@@ -72,7 +73,7 @@ export default function OpenclawTab() {
   // Governance controls state
   const [requireApproval, setRequireApproval] = useState(true);
   const [autoPostDevto, setAutoPostDevto] = useState(false);
-  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto']);
+  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto', 'hashnode', 'medium', 'discourse']);
   const [savingConfig, setSavingConfig] = useState<string | null>(null);
 
   // Manual URL submission state
@@ -337,9 +338,9 @@ export default function OpenclawTab() {
 
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
-              <div className="fw-medium small">Auto-Post (Dev.to &amp; Hashnode)</div>
+              <div className="fw-medium small">Auto-Post (Dev.to, Hashnode, Medium, Discourse)</div>
               <div className="text-muted" style={{ fontSize: '0.68rem' }}>
-                When ON, approved responses are posted automatically via API to platforms with configured credentials. Other platforms remain manual copy-paste.
+                When ON, approved responses are posted automatically via API to platforms with configured credentials. Medium publishes as draft articles. Other platforms remain manual copy-paste.
               </div>
             </div>
             <div className="form-check form-switch ms-3">
@@ -358,22 +359,30 @@ export default function OpenclawTab() {
 
           <div>
             <div className="fw-medium small mb-2">Active Scanning Platforms</div>
+            <div className="text-muted mb-2" style={{ fontSize: '0.65rem' }}>
+              Scan + Auto-Post: Dev.to, Hashnode, Medium, Discourse &bull; Scan for Intel Only: Reddit, HN (no links — ban risk)
+            </div>
             <div className="d-flex gap-3 flex-wrap">
-              {['reddit', 'hackernews', 'devto', 'hashnode'].map(p => (
-                <div className="form-check" key={p}>
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    id={`platform-${p}`}
-                    checked={activePlatforms.includes(p)}
-                    onChange={() => handleTogglePlatform(p)}
-                    disabled={savingConfig === `platform-${p}`}
-                  />
-                  <label className="form-check-label small" htmlFor={`platform-${p}`}>
-                    {p === 'hackernews' ? 'Hacker News' : p === 'devto' ? 'Dev.to' : p === 'hashnode' ? 'Hashnode' : p.charAt(0).toUpperCase() + p.slice(1)}
-                  </label>
-                </div>
-              ))}
+              {['reddit', 'hackernews', 'devto', 'hashnode', 'medium', 'discourse'].map(p => {
+                const intelOnly = p === 'reddit' || p === 'hackernews';
+                const label = p === 'hackernews' ? 'Hacker News' : p === 'devto' ? 'Dev.to' : p === 'hashnode' ? 'Hashnode' : p === 'discourse' ? 'Discourse Forums' : p.charAt(0).toUpperCase() + p.slice(1);
+                return (
+                  <div className="form-check" key={p}>
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      id={`platform-${p}`}
+                      checked={activePlatforms.includes(p)}
+                      onChange={() => handleTogglePlatform(p)}
+                      disabled={savingConfig === `platform-${p}`}
+                    />
+                    <label className="form-check-label small" htmlFor={`platform-${p}`}>
+                      {label}
+                      {intelOnly && <span className="badge bg-info ms-1" style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>Intel</span>}
+                    </label>
+                  </div>
+                );
+              })}
               <div className="form-check">
                 <input type="checkbox" className="form-check-input" disabled checked={false} />
                 <label className="form-check-label small text-muted">
@@ -389,7 +398,7 @@ export default function OpenclawTab() {
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold small">
           Submit Question URL
-          <span className="badge bg-secondary ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>Quora, Reddit, Dev.to, HN</span>
+          <span className="badge bg-secondary ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>Any Platform</span>
         </div>
         <div className="card-body py-3 px-3">
           <div className="text-muted small mb-2">

@@ -370,6 +370,9 @@ function detectPlatform(url: string): string | null {
     if (host.includes('ycombinator.com')) return 'hackernews';
     if (host.includes('linkedin.com')) return 'linkedin';
     if (host.includes('medium.com')) return 'medium';
+    if (host.includes('hashnode.dev') || host.includes('hashnode.com')) return 'hashnode';
+    // Common Discourse forums
+    if (host === 'discuss.huggingface.co' || host === 'community.openai.com' || host === 'forums.fast.ai') return 'discourse';
     return null;
   } catch {
     return null;
@@ -408,7 +411,24 @@ async function extractContentFromUrl(url: string, platform: string): Promise<{ t
       }
     }
 
-    // For Quora, LinkedIn, Medium, HN — scrape og: meta tags
+    if (platform === 'discourse') {
+      // Discourse topics have a JSON endpoint
+      const topicMatch = url.match(/\/t\/[^/]+\/(\d+)/);
+      if (topicMatch) {
+        const topicId = topicMatch[1];
+        const baseUrl = new URL(url).origin;
+        const resp = await axios.get(`${baseUrl}/t/${topicId}.json`, { headers: { 'User-Agent': 'OpenClaw/1.0' }, timeout: 15000 });
+        const topic = resp.data;
+        const firstPost = topic?.post_stream?.posts?.[0];
+        return {
+          title: topic.title || url,
+          content_excerpt: (firstPost?.cooked?.replace(/<[^>]+>/g, '') || '').slice(0, 500),
+          details: { source: 'manual_submission', topic_id: Number(topicId), forum_url: baseUrl, forum_name: new URL(url).hostname, posts_count: topic.posts_count, views: topic.views, like_count: topic.like_count },
+        };
+      }
+    }
+
+    // For Quora, LinkedIn, Medium, HN, Hashnode — scrape og: meta tags
     const resp = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',

@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type OpenclawPlatform = 'reddit' | 'linkedin' | 'hackernews' | 'quora' | 'devto' | 'medium' | 'hashnode';
+export type OpenclawPlatform = 'reddit' | 'linkedin' | 'hackernews' | 'quora' | 'devto' | 'medium' | 'hashnode' | 'discourse';
 export type OpenclawSignalStatus = 'discovered' | 'scored' | 'queued' | 'responded' | 'skipped' | 'expired';
 
 interface OpenclawSignalAttributes {
