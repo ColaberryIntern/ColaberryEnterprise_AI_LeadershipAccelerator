@@ -25,17 +25,15 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const [channelCounts, engagementRates, activeCampaigns, hotLeads] = await Promise.all([
-    // Query 1: Channel send counts
+    // Query 1: Email counts from scheduled_emails, SMS+voice from communication_logs
     sequelize.query(`
       SELECT
-        COUNT(*) FILTER (WHERE channel = 'email' AND sent_at >= :today) as emails_today,
-        COUNT(*) FILTER (WHERE channel = 'email' AND sent_at >= :weekAgo) as emails_week,
-        COUNT(*) FILTER (WHERE channel = 'sms' AND sent_at >= :today) as sms_today,
-        COUNT(*) FILTER (WHERE channel = 'sms' AND sent_at >= :weekAgo) as sms_week,
-        COUNT(*) FILTER (WHERE channel = 'voice' AND sent_at >= :today) as voice_today,
-        COUNT(*) FILTER (WHERE channel = 'voice' AND sent_at >= :weekAgo) as voice_week
-      FROM scheduled_emails
-      WHERE status = 'sent' AND sent_at >= :weekAgo
+        (SELECT COUNT(*) FROM scheduled_emails WHERE channel = 'email' AND status = 'sent' AND sent_at >= :today) as emails_today,
+        (SELECT COUNT(*) FROM scheduled_emails WHERE channel = 'email' AND status = 'sent' AND sent_at >= :weekAgo) as emails_week,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND status IN ('sent','delivered') AND created_at >= :today) as sms_today,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND status IN ('sent','delivered') AND created_at >= :weekAgo) as sms_week,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'voice' AND direction = 'outbound' AND created_at >= :today) as voice_today,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'voice' AND direction = 'outbound' AND created_at >= :weekAgo) as voice_week
     `, {
       replacements: { today: todayStart.toISOString(), weekAgo: weekAgo.toISOString() },
       type: QueryTypes.SELECT,
