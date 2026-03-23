@@ -260,7 +260,7 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
     // Clean up any LLM artifacts
     let cleaned = llmResult.trim();
     // Remove any accidental self-references the LLM might add
-    cleaned = cleaned.replace(/\b[Cc]olaberry\b/g, '');
+    cleaned = cleaned.replace(/\b[Cc]olaberry\b(?![./])/g, '');
     // Remove any URLs the LLM hallucinated (but keep our tracked URL)
     if (trackedUrl) {
       const trackedBase = trackedUrl.replace(/\/+$/, '');

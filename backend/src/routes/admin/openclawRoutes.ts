@@ -578,18 +578,18 @@ router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => 
       content = `Most organizations are getting AI adoption wrong.\n\nThey buy tools. They run pilots. They send people to conferences.\n\nBut they don't build systems.\n\nAfter running multiple cohorts of enterprise AI training, here's what I've learned about ${topic}:\n\nThe teams that succeed don't start with the technology. They start with a clear business problem, build AI literacy across the organization, and then deploy systems — not just tools.\n\nThe gap isn't technical. It's strategic.\n\nIf your team is navigating AI adoption and wants to go from idea to deployed system in 3 weeks, let's talk: ${trackedUrl}`;
     }
 
-    // Clean up
-    content = content.replace(/\b[Cc]olaberry\b/g, '').trim();
-    // Ensure tracked URL is present
-    if (!content.includes(trackedUrl)) {
-      content += `\n\nIf your team wants to go from AI strategy to deployed system in 3 weeks, book a call: ${trackedUrl}`;
-    }
-    // Remove any hallucinated URLs
+    // Clean up — remove "Colaberry" from prose but protect URLs
+    content = content.replace(/\b[Cc]olaberry\b(?![./])/g, '').trim();
+    // Remove hallucinated URLs (keep tracked URL and LinkedIn profile)
     const trackedBase = trackedUrl.replace(/\/+$/, '');
     content = content.replace(/https?:\/\/\S+/g, (match) => {
       const stripped = match.replace(/[)\]},;.!?]+$/, '');
       return stripped.startsWith(trackedBase) || stripped.startsWith(LINKEDIN_PROFILE) ? match : '';
-    }).replace(/\s{2,}/g, ' ').replace(/ \n/g, '\n').trim();
+    }).replace(/  +/g, ' ').replace(/ \n/g, '\n').trim();
+    // Ensure tracked URL is present (after URL cleanup)
+    if (!content.includes(trackedUrl)) {
+      content += `\n\nIf your team wants to go from AI strategy to deployed system in 3 weeks, book a call: ${trackedUrl}`;
+    }
 
     // Create response
     const response = await OpenclawResponse.create({
