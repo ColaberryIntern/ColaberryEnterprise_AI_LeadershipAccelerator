@@ -5,6 +5,7 @@ import { InteractionOutcome } from '../models';
 import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
+import { logActivity } from '../services/activityService';
 import OpenAI from 'openai';
 import { env } from '../config/env';
 import { getTestOverrides } from '../services/settingsService';
@@ -95,6 +96,40 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       },
     } as any);
 
+    const commMeta = (commLog as any).metadata || {};
+
+    // Bridge voice call to Activity timeline
+    if (commLog.lead_id) {
+      try {
+        const leadRecord = await Lead.findByPk(commLog.lead_id);
+        const leadName = (leadRecord as any)?.name || 'Lead';
+        const firstName = leadName.split(' ')[0];
+        const isVoicemail = disposition === 'voicemail';
+        const durationMin = duration ? `${Math.floor(duration / 60)}m ${duration % 60}s` : '';
+
+        await logActivity({
+          lead_id: commLog.lead_id as number,
+          type: 'call',
+          subject: isVoicemail
+            ? `Maya called ${firstName} — voicemail`
+            : `Maya called ${firstName}${durationMin ? ` (${durationMin})` : ''}`,
+          body: transcript ? transcript.substring(0, 2000) : undefined,
+          metadata: {
+            activity_subtype: 'voice_call',
+            call_id,
+            duration,
+            disposition,
+            recording_url: recording_url || undefined,
+            has_transcript: !!transcript,
+            trigger: commMeta.trigger || 'outbound_call',
+            status,
+          },
+        });
+      } catch (actErr: any) {
+        console.warn(`[Synthflow Webhook] Activity bridge error:`, actErr.message);
+      }
+    }
+
     // If this was a simulation step, update step details with transcript
     if (commLog.simulation_step_id) {
       const simStep = await CampaignSimulationStep.findByPk(commLog.simulation_step_id);
@@ -136,7 +171,6 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     }
 
     // If hot lead escalation call went to voicemail → send fallback SMS
-    const commMeta = (commLog as any).metadata || {};
     if (disposition === 'voicemail' && commMeta.trigger === 'hot_lead_escalation' && commLog.lead_id) {
       sendVoicemailFallbackSms(commLog.lead_id as any).catch((err: any) => {
         console.warn('[Synthflow Webhook] Voicemail fallback SMS failed:', err.message);

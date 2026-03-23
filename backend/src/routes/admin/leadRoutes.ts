@@ -61,6 +61,23 @@ router.patch('/api/admin/leads/:id/temperature', requireAdmin, handleUpdateTempe
 router.get('/api/admin/leads/:id/strategy-prep', requireAdmin, handleGetLeadStrategyPrep);
 router.get('/api/admin/leads/:id/journey', requireAdmin, handleGetLeadJourney);
 
+// Fetch scheduled email content for email preview popup
+router.get('/api/admin/scheduled-emails/:id/content', requireAdmin, async (req, res) => {
+  try {
+    const { ScheduledEmail } = require('../../models');
+    const email = await ScheduledEmail.findByPk(req.params.id, {
+      attributes: ['id', 'subject', 'body', 'to_email', 'sent_at', 'channel', 'lead_id'],
+    });
+    if (!email) {
+      res.status(404).json({ error: 'Email not found' });
+      return;
+    }
+    res.json({ email });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Lead engagement data (opens, clicks, calls, campaign status)
 router.get('/api/admin/leads/:id/engagement', requireAdmin, async (req, res) => {
   try {
