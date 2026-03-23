@@ -1581,8 +1581,9 @@ export function startScheduler(): void {
         return;
       }
       const remaining = 100 - callsToday;
+      const perCycle = 5; // Max 5 calls per 15-min cycle to spread throughout the day
 
-      // Find hot leads — prioritize newest engagement, cap by remaining
+      // Find hot leads — prioritize newest engagement, cap by per-cycle limit
       const [hotLeads] = await sequelize.query(`
         SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone,
           l.company as lead_company, l.title as lead_title,
@@ -1605,7 +1606,7 @@ export function startScheduler(): void {
             AND comm.metadata->>'trigger' = 'hot_lead_escalation'
           )
         ORDER BY sub.lead_id DESC
-        LIMIT ${remaining}
+        LIMIT ${Math.min(perCycle, remaining)}
       `);
 
       if ((hotLeads as any[]).length === 0) return;
@@ -1739,8 +1740,8 @@ export function startScheduler(): void {
           console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
         }
 
-        // 10s between calls for Synthflow pacing
-        await new Promise((r) => setTimeout(r, 10000));
+        // 60s between calls — spread calls throughout the cycle
+        await new Promise((r) => setTimeout(r, 60000));
       }
 
       if (called > 0) {
