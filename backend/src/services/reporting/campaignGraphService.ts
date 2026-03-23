@@ -553,7 +553,7 @@ function shortenCampaignName(name: string): string {
   return label;
 }
 
-async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<CampaignGraphData> {
+async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVisitors: number = 0): Promise<CampaignGraphData> {
   const totalLeads = leadPaths.length;
 
   // ── Source counts ──────────────────────────────────────────────────────
@@ -830,18 +830,21 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[]): Promise<Campaig
     });
   }
 
-  // Visitor nodes
+  // Visitor nodes — include both linked leads AND anonymous (unlinked) visitors
   const visitorEngagedCount = leadPaths.filter(l => l.has_visitor_record && l.first_touch.type !== null).length;
+  const anonymousOnlyCount = Math.max(0, totalAnonymousVisitors - visitorLeadCount);
+  const totalSiteVisitors = visitorLeadCount + anonymousOnlyCount;
   nodes.push({
     id: 'visitor_site',
     type: 'visitor',
     label: 'Site Visitors',
-    count: visitorLeadCount,
+    count: totalSiteVisitors,
     metrics: {
-      active_users: visitorLeadCount,
+      active_users: totalSiteVisitors,
       engaged_count: visitorEngagedCount,
-      unengaged_count: visitorLeadCount - visitorEngagedCount,
-      conversion_rate: totalLeads > 0 ? Math.round((visitorLeadCount / totalLeads) * 100) : 0,
+      unengaged_count: totalSiteVisitors - visitorEngagedCount,
+      conversion_rate: totalLeads > 0 ? Math.round((totalSiteVisitors / totalLeads) * 100) : 0,
+      visits_generated: anonymousOnlyCount,  // anonymous (unlinked) visitors
     },
   });
 
@@ -1252,14 +1255,19 @@ export async function getCampaignGraphData(timeWindow?: string): Promise<Campaig
     return graphCache.data;
   }
 
-  let leadPaths = await buildLeadPaths();
+  // Fetch lead paths and total anonymous visitor count in parallel
+  const [leadPaths_raw, totalAnonymousVisitors] = await Promise.all([
+    buildLeadPaths(),
+    Visitor.count().catch(() => 0),
+  ]);
 
+  let leadPaths = leadPaths_raw;
   if (timeWindow && timeWindow !== 'all') {
     const cutoff = getTimeWindowCutoff(timeWindow);
     if (cutoff) leadPaths = leadPaths.filter(lp => lp.created_at >= cutoff);
   }
 
-  const data = await buildGraphFromPaths(leadPaths);
+  const data = await buildGraphFromPaths(leadPaths, totalAnonymousVisitors);
   data.time_window = cacheKey;
 
   graphCache = { data, leadPaths, ts: Date.now(), cacheKey };
