@@ -1,5 +1,5 @@
 // ─── Full Funnel Intelligence Engine ────────────────────────────────────────
-// Builds a 7-layer system map: SOURCE → OUTREACH → ENGAGEMENT → VISITOR → FIRST TOUCH → CAMPAIGN → OUTCOME
+// Builds a 6-layer system map: SOURCE → OUTREACH → ENGAGEMENT → VISITOR → FIRST TOUCH → OUTCOME
 // ALL edges and counts are derived from real per-lead path tracing.
 // NO proportional estimates. NO inferred paths. NO assumptions.
 
@@ -140,7 +140,7 @@ export interface GraphUserRecord {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const LAYER_ORDER: Record<string, number> = { source: 0, outreach: 1, engagement: 2, visitor: 3, entry: 4, campaign: 5, outcome: 6 };
+const LAYER_ORDER: Record<string, number> = { source: 0, outreach: 1, engagement: 2, visitor: 3, entry: 4, outcome: 5 };
 
 // ─── Velocity Helpers ────────────────────────────────────────────────────────
 
@@ -565,13 +565,10 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
   const outreachToEngagement = new Map<string, Set<number>>(); // outreach → engagement
   const engagementToVisitor = new Map<string, Set<number>>();  // engagement → visitor
   const engagementToNever = new Map<string, Set<number>>();    // engagement → never visited
-  const engagementToEntry = new Map<string, Set<number>>();    // engagement → entry (no visitor)
   const srcToVisitor = new Map<string, Set<number>>();         // source → visitor (not contacted)
-  const visitorToEntry = new Map<string, Set<number>>();
+  const visitorToEntry = new Map<string, Set<number>>();       // visitor → first touch
   const srcToNever = new Map<string, Set<number>>();           // source → never visited (no visitor, no outreach)
-  const srcToEntry = new Map<string, Set<number>>();           // direct (no visitor, no outreach, engaged)
-  const entryToCampaign = new Map<string, Set<number>>();
-  const campaignToOutcome = new Map<string, Set<number>>();
+  const entryToOutcome = new Map<string, Set<number>>();       // first touch → outcome (enrolled/paid)
 
   // ── Engagement tracking ─────────────────────────────────────────────
   const engagementCounts: Record<string, number> = { engaged: 0, opened: 0, ignored: 0 };
@@ -594,10 +591,6 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     activated_referral: {},
   };
 
-  // ── Campaign data accumulation ─────────────────────────────────────────
-  const campaignLeadSets = new Map<string, Set<number>>();
-  const campaignNames = new Map<string, string>();
-  const campaignSourceBreakdown = new Map<string, Record<string, number>>();
 
   // ── Visitor & outreach tracking ──────────────────────────────────────
   let visitorLeadCount = 0;
@@ -676,19 +669,15 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
         engagementChannelBreakdown[engLevel][ch]++;
       }
 
+      // All paths to First Touch must go through Site Visitors
       if (hasVisitor) {
-        // Visited the site — route through Site Visitors
         engagementVisitCounts[engLevel]++;
         addEdge(engagementToVisitor, `engagement_${engLevel}|visitor_site`);
         if (hasFirstTouch) {
           addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
         }
-        // Visited but no first touch: terminal at Site Visitors (no entry edge)
-      } else if (hasFirstTouch) {
-        // Has first touch but no visitor record → skip visitor layer
-        addEdge(engagementToEntry, `engagement_${engLevel}|entry_${touchType}`);
       } else {
-        // No visitor record, no first touch → truly never visited
+        // No visitor record → never visited
         addEdge(engagementToNever, `engagement_${engLevel}|visitor_never`);
       }
     } else if (hasVisitor) {
@@ -697,77 +686,19 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
       if (hasFirstTouch) {
         addEdge(visitorToEntry, `visitor_site|entry_${touchType}`);
       }
-    } else if (hasFirstTouch) {
-      // Non-contacted, no visitor record, but has first touch → direct to entry
-      addEdge(srcToEntry, `src_${src}|entry_${touchType}`);
     } else {
-      // Non-contacted, no visitor record, no first touch → never visited
+      // Non-contacted, no visitor record → never visited
       addEdge(srcToNever, `src_${src}|visitor_never`);
     }
 
-    // Entry → Campaign edges (only for engaged leads with campaign enrollments)
+    // Entry → Outcome edges (direct from first touch to enrolled/paid)
     if (hasFirstTouch) {
-      for (const enrollment of lead.campaign_enrollments) {
-        const etcKey = `entry_${touchType}|campaign_${enrollment.campaign_id}`;
-        if (!entryToCampaign.has(etcKey)) entryToCampaign.set(etcKey, new Set());
-        entryToCampaign.get(etcKey)!.add(lead.lead_id);
-
-        // Track campaign data
-        if (!campaignLeadSets.has(enrollment.campaign_id)) campaignLeadSets.set(enrollment.campaign_id, new Set());
-        campaignLeadSets.get(enrollment.campaign_id)!.add(lead.lead_id);
-        campaignNames.set(enrollment.campaign_id, enrollment.campaign_name);
-
-        // Campaign source breakdown
-        if (!campaignSourceBreakdown.has(enrollment.campaign_id)) campaignSourceBreakdown.set(enrollment.campaign_id, {});
-        const csb = campaignSourceBreakdown.get(enrollment.campaign_id)!;
-        csb[src] = (csb[src] || 0) + 1;
-      }
-    }
-
-    // Campaign → Outcome edges
-    for (const enrollment of lead.campaign_enrollments) {
       if (lead.outcome.enrolled) {
-        const ceKey = `campaign_${enrollment.campaign_id}|outcome_enrolled`;
-        if (!campaignToOutcome.has(ceKey)) campaignToOutcome.set(ceKey, new Set());
-        campaignToOutcome.get(ceKey)!.add(lead.lead_id);
+        addEdge(entryToOutcome, `entry_${touchType}|outcome_enrolled`);
       }
       if (lead.outcome.paid) {
-        const cpKey = `campaign_${enrollment.campaign_id}|outcome_paid`;
-        if (!campaignToOutcome.has(cpKey)) campaignToOutcome.set(cpKey, new Set());
-        campaignToOutcome.get(cpKey)!.add(lead.lead_id);
+        addEdge(entryToOutcome, `entry_${touchType}|outcome_paid`);
       }
-    }
-  }
-
-  // ── Get campaign-level metrics (messages sent, active count) ───────────
-  const campaignIds = Array.from(campaignLeadSets.keys());
-  const campaignMetrics = new Map<string, { activeCount: number; messagesSent: number }>();
-
-  if (campaignIds.length > 0) {
-    const [activeCounts, messageCounts] = await Promise.all([
-      CampaignLead.findAll({
-        attributes: ['campaign_id', [fn('COUNT', col('id')), 'cnt']],
-        where: { campaign_id: { [Op.in]: campaignIds }, status: { [Op.in]: ['enrolled', 'active'] } },
-        group: ['campaign_id'],
-        raw: true,
-      }).catch(() => []) as Promise<Array<{ campaign_id: string; cnt: string }>>,
-      CommunicationLog.findAll({
-        attributes: ['campaign_id', [fn('COUNT', col('id')), 'cnt']],
-        where: { campaign_id: { [Op.in]: campaignIds } },
-        group: ['campaign_id'],
-        raw: true,
-      }).catch(() => []) as Promise<Array<{ campaign_id: string; cnt: string }>>,
-    ]);
-
-    for (const ac of activeCounts) {
-      const m = campaignMetrics.get(ac.campaign_id) || { activeCount: 0, messagesSent: 0 };
-      m.activeCount = parseInt(ac.cnt, 10) || 0;
-      campaignMetrics.set(ac.campaign_id, m);
-    }
-    for (const mc of messageCounts) {
-      const m = campaignMetrics.get(mc.campaign_id) || { activeCount: 0, messagesSent: 0 };
-      m.messagesSent = parseInt(mc.cnt, 10) || 0;
-      campaignMetrics.set(mc.campaign_id, m);
     }
   }
 
@@ -884,26 +815,6 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     });
   }
 
-  // Campaign nodes
-  for (const [campaignId, leadSet] of campaignLeadSets) {
-    const name = campaignNames.get(campaignId) || 'Unknown';
-    const metrics = campaignMetrics.get(campaignId) || { activeCount: 0, messagesSent: 0 };
-    const count = leadSet.size;
-
-    nodes.push({
-      id: `campaign_${campaignId}`,
-      type: 'campaign',
-      label: shortenCampaignName(name),
-      count,
-      metrics: {
-        active_users: metrics.activeCount,
-        messages_sent: metrics.messagesSent,
-        conversion_rate: count > 0 ? Math.round((metrics.activeCount / count) * 100) : 0,
-      },
-      source_breakdown: campaignSourceBreakdown.get(campaignId),
-    });
-  }
-
   // Outcome nodes
   const enrolledCount = enrolledLeads.size;
   const paidCount = paidLeads.size;
@@ -938,11 +849,6 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     edges.push({ from, to, label: 'no visit', volume: leadSet.size });
   }
 
-  for (const [key, leadSet] of engagementToEntry) {
-    const [from, to] = key.split('|');
-    edges.push({ from, to, label: 'converts', volume: leadSet.size });
-  }
-
   for (const [key, leadSet] of srcToVisitor) {
     const [from, to] = key.split('|');
     edges.push({ from, to, label: 'visits', volume: leadSet.size });
@@ -958,17 +864,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     edges.push({ from, to, label: 'no visit', volume: leadSet.size });
   }
 
-  for (const [key, leadSet] of srcToEntry) {
-    const [from, to] = key.split('|');
-    edges.push({ from, to, label: 'feeds', volume: leadSet.size });
-  }
-
-  for (const [key, leadSet] of entryToCampaign) {
-    const [from, to] = key.split('|');
-    edges.push({ from, to, label: 'enrolls', volume: leadSet.size });
-  }
-
-  for (const [key, leadSet] of campaignToOutcome) {
+  for (const [key, leadSet] of entryToOutcome) {
     const [from, to] = key.split('|');
     edges.push({ from, to, label: 'converts', volume: leadSet.size });
   }
@@ -977,8 +873,7 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
   const leadById = new Map(leadPaths.map(lp => [lp.lead_id, lp]));
   const allEdgeMaps: Map<string, Set<number>>[] = [
     srcToOutreach, outreachToEngagement, engagementToVisitor, engagementToNever,
-    engagementToEntry, srcToVisitor, visitorToEntry, srcToNever, srcToEntry,
-    entryToCampaign, campaignToOutcome,
+    srcToVisitor, visitorToEntry, srcToNever, entryToOutcome,
   ];
   const edgeLeadSets = new Map<string, Set<number>>();
   for (const edgeMap of allEdgeMaps) {
@@ -1400,16 +1295,10 @@ export async function getEdgeUsers(
       return lead.engagement_level === engLevel && lead.has_visitor_record;
     }
 
-    // Engagement → Never Visited
+    // Engagement → Never Visited (no visitor record)
     if (fromId.startsWith('engagement_') && toId === 'visitor_never') {
       const engLevel = fromId.replace('engagement_', '');
-      return lead.engagement_level === engLevel && !lead.has_visitor_record && lead.first_touch.type === null;
-    }
-
-    // Engagement → Entry (contacted, has first touch, no visitor)
-    if (fromId.startsWith('engagement_') && toId.startsWith('entry_')) {
-      const engLevel = fromId.replace('engagement_', '');
-      return lead.engagement_level === engLevel && !lead.has_visitor_record && entryId === toId;
+      return lead.engagement_level === engLevel && !lead.has_visitor_record;
     }
 
     // Source → Visitor (non-contacted path)
@@ -1417,9 +1306,9 @@ export async function getEdgeUsers(
       return srcMatch && !lead.was_contacted && lead.has_visitor_record;
     }
 
-    // Source → Never Visited (non-contacted, no visitor, no first touch)
+    // Source → Never Visited (non-contacted, no visitor)
     if (fromId.startsWith('src_') && toId === 'visitor_never') {
-      return srcMatch && !lead.was_contacted && !lead.has_visitor_record && !hasFirstTouch;
+      return srcMatch && !lead.was_contacted && !lead.has_visitor_record;
     }
 
     // Visitor → Entry
@@ -1427,22 +1316,9 @@ export async function getEdgeUsers(
       return lead.has_visitor_record && entryId === toId;
     }
 
-    // Source → Entry (direct, no visitor, no outreach)
-    if (fromId.startsWith('src_') && toId.startsWith('entry_')) {
-      return srcMatch && !lead.was_contacted && !lead.has_visitor_record && entryId === toId;
-    }
-
-    // Entry → Campaign
-    if (fromId.startsWith('entry_') && toId.startsWith('campaign_')) {
-      const campaignId = toId.replace('campaign_', '');
-      return entryId === fromId && lead.campaign_enrollments.some(e => e.campaign_id === campaignId);
-    }
-
-    // Campaign → Outcome
-    if (fromId.startsWith('campaign_') && toId.startsWith('outcome_')) {
-      const campaignId = fromId.replace('campaign_', '');
-      const inCampaign = lead.campaign_enrollments.some(e => e.campaign_id === campaignId);
-      if (!inCampaign) return false;
+    // Entry → Outcome (direct from first touch)
+    if (fromId.startsWith('entry_') && toId.startsWith('outcome_')) {
+      if (entryId !== fromId) return false;
       if (toId === 'outcome_enrolled') return lead.outcome.enrolled;
       if (toId === 'outcome_paid') return lead.outcome.paid;
       return false;
