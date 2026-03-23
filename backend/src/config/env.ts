@@ -71,6 +71,9 @@ export const env = {
   // Intelligence Engine
   intelligenceEngineUrl: process.env.INTELLIGENCE_ENGINE_URL || 'http://localhost:5000',
 
+  // AI Project Architect
+  aiProjectArchitectUrl: process.env.AI_PROJECT_ARCHITECT_URL || 'http://localhost:8000',
+
   // MSSQL (Alumni Data Source)
   mssqlHost: process.env.MSSQL_HOST || '',
   mssqlPort: parseInt(process.env.MSSQL_PORT || '1433', 10),

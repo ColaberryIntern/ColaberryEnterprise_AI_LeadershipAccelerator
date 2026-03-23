@@ -10,6 +10,7 @@ import ProjectTimeline from '../../components/project/ProjectTimeline';
 import ProjectMentorAlerts from '../../components/project/ProjectMentorAlerts';
 import ProjectNextActionPanel from '../../components/project/ProjectNextActionPanel';
 import WarRoomTab from '../../components/project/WarRoomTab';
+import ProjectLockInScreen from '../../components/project/ProjectLockInScreen';
 
 interface ProjectData {
   id: string;
@@ -34,7 +35,7 @@ interface ProjectData {
   updated_at: string;
 }
 
-type TabKey = 'overview' | 'requirements' | 'github' | 'compile' | 'readiness' | 'warroom';
+type TabKey = 'overview' | 'requirements' | 'github' | 'compile' | 'readiness' | 'warroom' | 'contract';
 
 function formatTimeAgo(dateStr: string): string {
   const now = new Date();
@@ -549,6 +550,7 @@ function ProjectDashboard() {
     { key: 'github', label: 'GitHub', icon: 'bi-github' },
     { key: 'compile', label: 'Compile', icon: 'bi-file-earmark-code' },
     { key: 'warroom', label: 'War Room', icon: 'bi-activity' },
+    { key: 'contract', label: 'Design Contract', icon: 'bi-file-earmark-code' },
   ];
 
   return (
@@ -730,6 +732,7 @@ function ProjectDashboard() {
       {activeTab === 'github' && <GitHubTab />}
       {activeTab === 'compile' && <CompileTab />}
       {activeTab === 'warroom' && <WarRoomTab />}
+      {activeTab === 'contract' && <ProjectLockInScreen />}
     </>
   );
 }

@@ -621,4 +621,48 @@ router.get('/api/portal/project/risk-summary', requireParticipant, async (req: R
   }
 });
 
+// ---------------------------------------------------------------------------
+// System Design Contract Routes
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/project/contract/generate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { slug } = req.body;
+    if (!slug) { res.status(400).json({ error: 'slug is required' }); return; }
+    const { fetchAndStoreContract } = await import('../services/architectIntegrationService');
+    const contract = await fetchAndStoreContract(enrollmentId, slug);
+    res.json(contract);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /contract/generate error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/project/contract', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getStoredContract } = await import('../services/architectIntegrationService');
+    const contract = await getStoredContract(enrollmentId);
+    if (!contract) { res.json({ contract: null }); return; }
+    res.json(contract);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /contract error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/contract/lock', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { lockContract } = await import('../services/architectIntegrationService');
+    const contract = await lockContract(enrollmentId);
+    res.json(contract);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /contract/lock error:', err.message);
+    const status = err.message.includes('already locked') || err.message.includes('No contract') ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 export default router;
