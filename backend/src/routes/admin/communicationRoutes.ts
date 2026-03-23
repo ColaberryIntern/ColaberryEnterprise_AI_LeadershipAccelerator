@@ -49,14 +49,14 @@ router.get('/api/admin/communications', requireAdmin, async (req: Request, res: 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
     // Count total
-    const [countResult] = await sequelize.query(
+    const countResult = (await sequelize.query(
       `SELECT COUNT(*) as cnt FROM communication_logs cl LEFT JOIN leads l ON l.id = cl.lead_id ${whereClause}`,
       { replacements, type: QueryTypes.SELECT },
-    );
-    const total = parseInt((countResult as any).cnt || '0', 10);
+    )) as any[];
+    const total = parseInt(countResult[0]?.cnt || '0', 10);
 
     // Fetch rows with lead + campaign context
-    const [rows] = await sequelize.query(`
+    const rows = await sequelize.query(`
       SELECT cl.id, cl.lead_id, cl.campaign_id, cl.channel, cl.direction, cl.status,
         cl.to_address, cl.from_address, cl.subject, LEFT(cl.body, 200) as body_preview,
         cl.provider, cl.provider_message_id, cl.error_message,
@@ -99,7 +99,7 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
     const commId = req.params.id as string;
 
     // The communication log record
-    const [commRows] = await sequelize.query(`
+    const commRows = await sequelize.query(`
       SELECT cl.*,
         cl.provider_response->>'transcript' as transcript,
         cl.provider_response->>'duration' as call_duration,
@@ -114,14 +114,14 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
       WHERE cl.id = :commId
     `, { replacements: { commId }, type: QueryTypes.SELECT });
 
-    if (!commRows || (commRows as any[]).length === 0) {
+    if (!(commRows as any[]).length) {
       res.status(404).json({ error: 'Communication not found' });
       return;
     }
     const comm = (commRows as any[])[0];
 
     // All interaction outcomes for this lead around this time
-    const [outcomes] = await sequelize.query(`
+    const outcomes = await sequelize.query(`
       SELECT outcome, channel, step_index, metadata, created_at
       FROM interaction_outcomes
       WHERE lead_id = :leadId
@@ -133,7 +133,7 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
     });
 
     // Temperature history around this communication
-    const [tempHistory] = await sequelize.query(`
+    const tempHistory = await sequelize.query(`
       SELECT previous_temperature, new_temperature, trigger_type, trigger_detail, created_at
       FROM lead_temperature_histories
       WHERE lead_id = :leadId
@@ -145,7 +145,7 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
     });
 
     // Campaign enrollment context
-    const [enrollment] = await sequelize.query(`
+    const enrollment = await sequelize.query(`
       SELECT cl.status as enrollment_status, cl.enrolled_at,
         (SELECT COUNT(*) FROM scheduled_emails se WHERE se.lead_id = :leadId AND se.campaign_id = cl.campaign_id AND se.status = 'sent') as steps_completed,
         (SELECT jsonb_array_length(fs.steps) FROM follow_up_sequences fs WHERE fs.id = c.sequence_id) as total_steps
@@ -162,19 +162,19 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
     let scheduledAction = null;
     const seId = comm.metadata?.scheduled_email_id;
     if (seId) {
-      const [seRows] = await sequelize.query(`
+      const seRows = await sequelize.query(`
         SELECT id, step_index, channel, subject, body, ai_generated, ai_instructions,
           scheduled_for, sent_at, status
         FROM scheduled_emails WHERE id = :seId
       `, { replacements: { seId }, type: QueryTypes.SELECT });
-      scheduledAction = (seRows as any[])[0] || null;
+      scheduledAction = (seRows as any)[0] || null;
     }
 
     res.json({
       communication: comm,
       outcomes,
       temperature_changes: tempHistory,
-      enrollment: (enrollment as any[])[0] || null,
+      enrollment: (enrollment as any)[0] || null,
       scheduled_action: scheduledAction,
     });
   } catch (err: any) {
@@ -186,7 +186,7 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
 // Campaign list for filter dropdown
 router.get('/api/admin/communications/campaigns', requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const [campaigns] = await sequelize.query(`
+    const campaigns = await sequelize.query(`
       SELECT id, name FROM campaigns WHERE status = 'active' ORDER BY name
     `, { type: QueryTypes.SELECT });
     res.json(campaigns);
