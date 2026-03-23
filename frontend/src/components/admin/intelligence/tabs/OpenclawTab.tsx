@@ -664,6 +664,23 @@ export default function OpenclawTab() {
                     <pre className="bg-light border rounded p-2 mb-0" style={{ fontSize: '0.75rem', whiteSpace: 'pre-wrap', maxHeight: 250, overflow: 'auto' }}>
                       {selectedResponse.content}
                     </pre>
+                    {/* Post to LinkedIn button */}
+                    {selectedResponse.platform === 'linkedin' && selectedResponse.post_status !== 'posted' && (
+                      <div className="mt-2">
+                        <button
+                          className="btn btn-sm text-white fw-medium"
+                          style={{ backgroundColor: '#0A66C2' }}
+                          onClick={() => {
+                            const url = `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(selectedResponse.content)}`;
+                            window.open(url, '_blank');
+                          }}
+                        >
+                          <i className="bi bi-linkedin me-1" />
+                          Open in LinkedIn
+                        </button>
+                        <span className="text-muted ms-2" style={{ fontSize: '0.65rem' }}>Opens LinkedIn with post pre-filled — just click Post</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Tracking Info */}
