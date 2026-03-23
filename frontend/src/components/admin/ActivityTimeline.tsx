@@ -33,6 +33,7 @@ const SUBTYPE_CONFIG: Record<string, { icon: string; color: string; label: strin
   email_clicked: { icon: 'bi-cursor', color: '#0dcaf0', label: 'Email Click' },
   website_signal: { icon: 'bi-globe2', color: '#6f42c1', label: 'Website Activity' },
   voice_call: { icon: 'bi-telephone-outbound', color: '#6f42c1', label: 'Maya Call' },
+  strategy_call_booked: { icon: 'bi-calendar-check', color: '#198754', label: 'Strategy Call Booked' },
 };
 
 function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
@@ -263,8 +264,18 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
                 </div>
               )}
 
+              {/* Strategy call meet link */}
+              {activity.metadata?.activity_subtype === 'strategy_call_booked' && activity.metadata?.meet_link && (
+                <div className="small mt-1">
+                  <i className="bi bi-camera-video me-1 text-success" />
+                  <a href={activity.metadata.meet_link} target="_blank" rel="noopener noreferrer" className="text-decoration-none">
+                    Join Meeting
+                  </a>
+                </div>
+              )}
+
               {/* Generic body for non-special types */}
-              {activity.body && !isEmailClick && !isWebsiteSignal && !isCall && (
+              {activity.body && !isEmailClick && !isWebsiteSignal && !isCall && activity.metadata?.activity_subtype !== 'strategy_call_booked' && (
                 <div className="text-muted small mt-1" style={{ whiteSpace: 'pre-wrap' }}>
                   {activity.body}
                 </div>

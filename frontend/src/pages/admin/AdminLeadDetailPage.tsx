@@ -160,8 +160,29 @@ function AdminLeadDetailPage() {
 
   const fetchAppointments = async () => {
     try {
-      const res = await api.get('/api/admin/appointments', { params: { leadId: id } });
-      setAppointments(res.data.appointments);
+      const [apptRes, stratRes] = await Promise.allSettled([
+        api.get('/api/admin/appointments', { params: { leadId: id } }),
+        api.get(`/api/admin/leads/${id}/strategy-prep`),
+      ]);
+      const appts = apptRes.status === 'fulfilled' ? apptRes.value.data.appointments : [];
+      const strats = stratRes.status === 'fulfilled' ? (stratRes.value.data.strategyCalls || []) : [];
+      // Merge strategy calls as appointment-like entries (avoid duplicates by id)
+      const apptIds = new Set(appts.map((a: any) => a.id));
+      const merged = [
+        ...appts,
+        ...strats.filter((sc: any) => !apptIds.has(sc.id)).map((sc: any) => ({
+          id: sc.id,
+          title: `Strategy Call${sc.meet_link ? '' : ''}`,
+          description: sc.meet_link ? `Meet link: ${sc.meet_link}` : sc.notes || '',
+          scheduled_at: sc.scheduled_at,
+          duration_minutes: 30,
+          type: 'strategy_call',
+          status: sc.status,
+          outcome_notes: sc.outcome_notes || '',
+          lead: sc.lead,
+        })),
+      ].sort((a: any, b: any) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+      setAppointments(merged);
     } catch (err) {
       console.error('Failed to fetch appointments:', err);
     }

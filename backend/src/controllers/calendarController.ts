@@ -10,6 +10,7 @@ import { enrollInPrepNudge } from '../services/strategyPrepService';
 import { advancePipelineStage } from '../services/pipelineService';
 import { syncNewLeadToGhl } from '../services/ghlService';
 import { recordOutcome } from '../services/interactionService';
+import { logActivity } from '../services/activityService';
 
 export async function handleGetAvailability(
   req: Request,
@@ -107,6 +108,25 @@ export async function handleBookCall(
 
       leadId = lead.id;
       await call.update({ lead_id: leadId });
+
+      // Log activity for the strategy call booking
+      const callDate = new Date(booking.startTime).toLocaleString('en-US', {
+        timeZone: 'America/Chicago',
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      });
+      logActivity({
+        lead_id: leadId,
+        type: 'meeting',
+        subject: `Strategy call booked for ${callDate} CT`,
+        body: call.meet_link ? `Meeting link: ${call.meet_link}` : undefined,
+        metadata: {
+          activity_subtype: 'strategy_call_booked',
+          strategy_call_id: call.id,
+          scheduled_at: booking.startTime,
+          meet_link: call.meet_link || undefined,
+        },
+      }).catch((err: any) => console.warn('[Calendar] Activity log failed:', err.message));
 
       // Record booked_meeting interaction for temperature classification (40 pts → warm)
       recordOutcome({
