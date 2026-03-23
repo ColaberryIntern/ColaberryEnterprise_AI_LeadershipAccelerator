@@ -295,7 +295,16 @@ function AdminCommunicationsPage() {
       {/* Table */}
       <div className="card border-0 shadow-sm">
         <div className="table-responsive">
-          <table className="table table-hover mb-0">
+          <table className="table table-hover mb-0" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '6%' }} />
+            </colgroup>
             <thead className="table-light">
               <tr>
                 <th className="small fw-medium">Time</th>
@@ -313,197 +322,198 @@ function AdminCommunicationsPage() {
               ) : rows.length === 0 ? (
                 <tr><td colSpan={7} className="text-center py-4 text-muted">No communications found</td></tr>
               ) : rows.map(row => (
-                <React.Fragment key={row.id}>
-                  <tr style={{ cursor: 'pointer', borderLeft: row.campaign_id ? `4px solid ${getCampaignColor(row.campaign_id, campaignColorMap)}` : undefined }}
-                    onClick={() => toggleDetail(row.id)}
-                    className={expandedId === row.id ? 'table-active' : ''}>
-                    <td className="small text-nowrap">{fmtTime(row.created_at)}</td>
-                    <td className="small">
-                      <Link to={`/admin/leads/${row.lead_id}`} className="text-decoration-none fw-medium"
+                <tr key={row.id}
+                  style={{ cursor: 'pointer', borderLeft: row.campaign_id ? `4px solid ${getCampaignColor(row.campaign_id, campaignColorMap)}` : undefined }}
+                  onClick={() => toggleDetail(row.id)}
+                  className={expandedId === row.id ? 'table-active' : ''}>
+                  <td className="small text-nowrap">{fmtTime(row.created_at)}</td>
+                  <td className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <Link to={`/admin/leads/${row.lead_id}`} className="text-decoration-none fw-medium"
+                      onClick={e => e.stopPropagation()}>
+                      {row.lead_name || row.to_address}
+                    </Link>
+                    {row.lead_company && <div className="text-muted text-truncate" style={{ fontSize: '0.75rem' }}>{row.lead_company}</div>}
+                  </td>
+                  <td className="small text-nowrap">
+                    {channelIcon(row.channel)}
+                    {row.channel}
+                  </td>
+                  <td className="small text-truncate">
+                    {row.campaign_id ? (
+                      <Link to={`/admin/campaigns/${row.campaign_id}`} className="text-decoration-none"
                         onClick={e => e.stopPropagation()}>
-                        {row.lead_name || row.to_address}
+                        {row.campaign_name || '--'}
                       </Link>
-                      {row.lead_company && <div className="text-muted" style={{ fontSize: '0.75rem' }}>{row.lead_company}</div>}
-                    </td>
-                    <td className="small text-nowrap">
-                      {channelIcon(row.channel)}
-                      {row.channel}
-                      {row.call_duration && <span className="text-muted ms-1">({row.call_duration}s)</span>}
-                    </td>
-                    <td className="small">
-                      {row.campaign_id ? (
-                        <Link to={`/admin/campaigns/${row.campaign_id}`} className="text-decoration-none"
-                          onClick={e => e.stopPropagation()}>
-                          {row.campaign_name ? (row.campaign_name.length > 25 ? row.campaign_name.substring(0, 23) + '...' : row.campaign_name) : '--'}
-                        </Link>
-                      ) : <span className="text-muted">--</span>}
-                    </td>
-                    <td className="small" style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {row.subject || row.body_preview || (row.metadata?.trigger) || '--'}
-                    </td>
-                    <td className="small">{outcomeBadge(bestOutcome(row))}</td>
-                    <td className="small">
-                      <button className="btn btn-sm btn-outline-secondary py-0 px-2"
-                        onClick={e => { e.stopPropagation(); toggleDetail(row.id); }}>
-                        {expandedId === row.id ? '▲' : '▼'}
-                      </button>
-                    </td>
-                  </tr>
-
-                  {/* Expanded Detail */}
-                  {expandedId === row.id && (
-                    <tr>
-                      <td colSpan={7} className="p-0">
-                        <div className="bg-light p-3 border-top">
-                          {detailLoading ? (
-                            <div className="text-center text-muted py-3">Loading details...</div>
-                          ) : detail ? (
-                            <div className="row g-3">
-                              {/* Left: Content */}
-                              <div className="col-lg-8">
-                                {/* Message content */}
-                                {row.channel === 'voice' && detail.communication?.transcript ? (
-                                  <div className="card border-0 mb-3">
-                                    <div className="card-header bg-white fw-semibold small">Call Transcript</div>
-                                    <div className="card-body small" style={{ maxHeight: 300, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
-                                      {detail.communication.transcript}
-                                    </div>
-                                    {detail.communication.recording_url && (
-                                      <div className="card-footer bg-white">
-                                        <a href={detail.communication.recording_url} target="_blank" rel="noreferrer"
-                                          className="btn btn-sm btn-outline-primary">Listen to Recording</a>
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="card border-0 mb-3">
-                                    <div className="card-header bg-white fw-semibold small">
-                                      {row.channel === 'sms' ? 'SMS Message' : 'Email Content'}
-                                    </div>
-                                    <div className="card-body small">
-                                      {detail.communication?.subject && (
-                                        <div className="fw-medium mb-2">Subject: {detail.communication.subject}</div>
-                                      )}
-                                      <div style={{ maxHeight: 200, overflowY: 'auto' }}
-                                        dangerouslySetInnerHTML={{ __html: detail.communication?.body || detail.communication?.body_preview || '(no content)' }} />
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Outcomes timeline */}
-                                {detail.outcomes && detail.outcomes.length > 0 && (
-                                  <div className="card border-0 mb-3">
-                                    <div className="card-header bg-white fw-semibold small">Engagement Timeline</div>
-                                    <div className="card-body p-0">
-                                      <ul className="list-group list-group-flush">
-                                        {detail.outcomes.map((o, i) => (
-                                          <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2">
-                                            <span className="small">{outcomeBadge(o.outcome)} {o.channel}</span>
-                                            <span className="small text-muted">{fmtTime(o.created_at)}</span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Temperature changes */}
-                                {detail.temperature_changes && detail.temperature_changes.length > 0 && (
-                                  <div className="card border-0">
-                                    <div className="card-header bg-white fw-semibold small">Temperature Changes</div>
-                                    <div className="card-body p-0">
-                                      <ul className="list-group list-group-flush">
-                                        {detail.temperature_changes.map((tc, i) => (
-                                          <li key={i} className="list-group-item py-2 small">
-                                            {tc.previous_temperature} → <strong>{tc.new_temperature}</strong>
-                                            <span className="text-muted ms-2">({tc.trigger_type})</span>
-                                            <span className="text-muted float-end">{fmtTime(tc.created_at)}</span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Right: Lead Context */}
-                              <div className="col-lg-4">
-                                <div className="card border-0 mb-3">
-                                  <div className="card-header bg-white fw-semibold small">Lead Profile</div>
-                                  <div className="card-body small">
-                                    <div className="fw-medium mb-1">
-                                      <Link to={`/admin/leads/${row.lead_id}`}>{detail.communication?.lead_name}</Link>
-                                    </div>
-                                    <div className="text-muted">{detail.communication?.lead_email}</div>
-                                    {detail.communication?.lead_phone && <div className="text-muted">{detail.communication.lead_phone}</div>}
-                                    {detail.communication?.lead_company && <div className="text-muted">{detail.communication.lead_company}</div>}
-                                    <hr className="my-2" />
-                                    <div className="d-flex justify-content-between">
-                                      <span>Temperature</span>
-                                      <span className="fw-medium">{detail.communication?.lead_temperature || '--'}</span>
-                                    </div>
-                                    <div className="d-flex justify-content-between">
-                                      <span>Pipeline</span>
-                                      <span className="fw-medium">{detail.communication?.pipeline_stage || '--'}</span>
-                                    </div>
-                                    <div className="d-flex justify-content-between">
-                                      <span>Score</span>
-                                      <span className="fw-medium">{detail.communication?.lead_score || '--'}</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Campaign context */}
-                                {detail.enrollment && (
-                                  <div className="card border-0 mb-3">
-                                    <div className="card-header bg-white fw-semibold small">Campaign</div>
-                                    <div className="card-body small">
-                                      <div className="fw-medium mb-1">
-                                        <Link to={`/admin/campaigns/${row.campaign_id}`}>{detail.communication?.campaign_name}</Link>
-                                      </div>
-                                      <div className="d-flex justify-content-between">
-                                        <span>Status</span>
-                                        <span className="badge bg-success">{detail.enrollment.enrollment_status}</span>
-                                      </div>
-                                      <div className="d-flex justify-content-between mt-1">
-                                        <span>Progress</span>
-                                        <span>{detail.enrollment.steps_completed}/{detail.enrollment.total_steps || '?'} steps</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Scheduled action context */}
-                                {detail.scheduled_action && (
-                                  <div className="card border-0">
-                                    <div className="card-header bg-white fw-semibold small">Action Details</div>
-                                    <div className="card-body small">
-                                      <div className="d-flex justify-content-between">
-                                        <span>Step</span>
-                                        <span>{detail.scheduled_action.step_index}</span>
-                                      </div>
-                                      <div className="d-flex justify-content-between mt-1">
-                                        <span>AI Generated</span>
-                                        <span>{detail.scheduled_action.ai_generated ? 'Yes' : 'No'}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-center text-muted py-3">Failed to load details</div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                    ) : <span className="text-muted">--</span>}
+                  </td>
+                  <td className="small text-truncate">
+                    {row.subject || row.body_preview || (row.metadata?.trigger) || '--'}
+                  </td>
+                  <td className="small">{outcomeBadge(bestOutcome(row))}</td>
+                  <td className="small text-end">
+                    <button className="btn btn-sm btn-outline-secondary py-0 px-2"
+                      onClick={e => { e.stopPropagation(); toggleDetail(row.id); }}>
+                      {expandedId === row.id ? '▲' : '▼'}
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Expanded Detail Panel — rendered outside the table to avoid layout issues */}
+      {expandedId && (() => {
+        const row = rows.find(r => r.id === expandedId);
+        if (!row) return null;
+        return (
+          <div className="card border-0 shadow-sm mt-0 mb-3" style={{ borderTop: '3px solid var(--color-primary)' }}>
+            <div className="card-header bg-light d-flex justify-content-between align-items-center py-2">
+              <span className="small fw-semibold">
+                {row.lead_name} &middot; {row.channel} &middot; {fmtTime(row.created_at)}
+              </span>
+              <button className="btn-close btn-close-sm" aria-label="Close" onClick={() => { setExpandedId(null); setDetail(null); }} />
+            </div>
+            <div className="card-body p-3">
+              {detailLoading ? (
+                <div className="text-center text-muted py-3">Loading details...</div>
+              ) : detail ? (
+                <div className="row g-3">
+                  {/* Left: Content */}
+                  <div className="col-lg-8">
+                    {row.channel === 'voice' && detail.communication?.transcript ? (
+                      <div className="card border-0 mb-3">
+                        <div className="card-header bg-white fw-semibold small">Call Transcript</div>
+                        <div className="card-body small" style={{ maxHeight: 300, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                          {detail.communication.transcript}
+                        </div>
+                        {detail.communication.recording_url && (
+                          <div className="card-footer bg-white">
+                            <a href={detail.communication.recording_url} target="_blank" rel="noreferrer"
+                              className="btn btn-sm btn-outline-primary">Listen to Recording</a>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="card border-0 mb-3">
+                        <div className="card-header bg-white fw-semibold small">
+                          {row.channel === 'sms' ? 'SMS Message' : 'Email Content'}
+                        </div>
+                        <div className="card-body small">
+                          {detail.communication?.subject && (
+                            <div className="fw-medium mb-2">Subject: {detail.communication.subject}</div>
+                          )}
+                          <div style={{ maxHeight: 250, overflowY: 'auto' }}
+                            dangerouslySetInnerHTML={{ __html: detail.communication?.body || detail.communication?.body_preview || '(no content)' }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {detail.outcomes && detail.outcomes.length > 0 && (
+                      <div className="card border-0 mb-3">
+                        <div className="card-header bg-white fw-semibold small">Engagement Timeline</div>
+                        <div className="card-body p-0">
+                          <ul className="list-group list-group-flush">
+                            {detail.outcomes.map((o, i) => (
+                              <li key={i} className="list-group-item d-flex justify-content-between align-items-center py-2">
+                                <span className="small">{outcomeBadge(o.outcome)} {o.channel}</span>
+                                <span className="small text-muted">{fmtTime(o.created_at)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {detail.temperature_changes && detail.temperature_changes.length > 0 && (
+                      <div className="card border-0">
+                        <div className="card-header bg-white fw-semibold small">Temperature Changes</div>
+                        <div className="card-body p-0">
+                          <ul className="list-group list-group-flush">
+                            {detail.temperature_changes.map((tc, i) => (
+                              <li key={i} className="list-group-item py-2 small">
+                                {tc.previous_temperature} → <strong>{tc.new_temperature}</strong>
+                                <span className="text-muted ms-2">({tc.trigger_type})</span>
+                                <span className="text-muted float-end">{fmtTime(tc.created_at)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Lead Context */}
+                  <div className="col-lg-4">
+                    <div className="card border-0 mb-3">
+                      <div className="card-header bg-white fw-semibold small">Lead Profile</div>
+                      <div className="card-body small">
+                        <div className="fw-medium mb-1">
+                          <Link to={`/admin/leads/${row.lead_id}`}>{detail.communication?.lead_name}</Link>
+                        </div>
+                        <div className="text-muted">{detail.communication?.lead_email}</div>
+                        {detail.communication?.lead_phone && <div className="text-muted">{detail.communication.lead_phone}</div>}
+                        {detail.communication?.lead_company && <div className="text-muted">{detail.communication.lead_company}</div>}
+                        <hr className="my-2" />
+                        <div className="d-flex justify-content-between">
+                          <span>Temperature</span>
+                          <span className="fw-medium">{detail.communication?.lead_temperature || '--'}</span>
+                        </div>
+                        <div className="d-flex justify-content-between">
+                          <span>Pipeline</span>
+                          <span className="fw-medium">{detail.communication?.pipeline_stage || '--'}</span>
+                        </div>
+                        <div className="d-flex justify-content-between">
+                          <span>Score</span>
+                          <span className="fw-medium">{detail.communication?.lead_score || '--'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {detail.enrollment && (
+                      <div className="card border-0 mb-3">
+                        <div className="card-header bg-white fw-semibold small">Campaign</div>
+                        <div className="card-body small">
+                          <div className="fw-medium mb-1">
+                            <Link to={`/admin/campaigns/${row.campaign_id}`}>{detail.communication?.campaign_name}</Link>
+                          </div>
+                          <div className="d-flex justify-content-between">
+                            <span>Status</span>
+                            <span className="badge bg-success">{detail.enrollment.enrollment_status}</span>
+                          </div>
+                          <div className="d-flex justify-content-between mt-1">
+                            <span>Progress</span>
+                            <span>{detail.enrollment.steps_completed}/{detail.enrollment.total_steps || '?'} steps</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {detail.scheduled_action && (
+                      <div className="card border-0">
+                        <div className="card-header bg-white fw-semibold small">Action Details</div>
+                        <div className="card-body small">
+                          <div className="d-flex justify-content-between">
+                            <span>Step</span>
+                            <span>{detail.scheduled_action.step_index}</span>
+                          </div>
+                          <div className="d-flex justify-content-between mt-1">
+                            <span>AI Generated</span>
+                            <span>{detail.scheduled_action.ai_generated ? 'Yes' : 'No'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center text-muted py-3">Failed to load details</div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Pagination */}
       {totalPages > 1 && (
