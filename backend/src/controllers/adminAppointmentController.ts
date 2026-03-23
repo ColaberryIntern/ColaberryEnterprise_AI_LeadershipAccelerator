@@ -43,7 +43,34 @@ export async function handleGetUpcomingAppointments(
   try {
     const days = parseInt(req.query.days as string, 10) || 7;
     const appointments = await getUpcomingAppointments(days);
-    res.json({ appointments });
+
+    // Also include upcoming strategy calls (separate table)
+    const { QueryTypes } = require('sequelize');
+    const { sequelize } = require('../config/database');
+    const strategyCalls = await sequelize.query(`
+      SELECT sc.id, sc.name, sc.scheduled_at, sc.meet_link, sc.status, sc.lead_id,
+        l.name as lead_name, l.company as lead_company
+      FROM strategy_calls sc
+      LEFT JOIN leads l ON l.id = sc.lead_id
+      WHERE sc.status = 'scheduled'
+        AND sc.scheduled_at > NOW()
+        AND sc.scheduled_at < NOW() + INTERVAL '${days} days'
+      ORDER BY sc.scheduled_at ASC
+    `, { type: QueryTypes.SELECT });
+
+    const mapped = (strategyCalls as any[]).map((sc: any) => ({
+      id: sc.id,
+      title: 'Strategy Call',
+      scheduled_at: sc.scheduled_at,
+      type: 'Strategy Call',
+      status: sc.status,
+      lead: sc.lead_id ? { id: sc.lead_id, name: sc.lead_name || sc.name, company: sc.lead_company } : null,
+    }));
+
+    const all = [...appointments, ...mapped].sort((a: any, b: any) =>
+      new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+    );
+    res.json({ appointments: all });
   } catch (error) {
     next(error);
   }

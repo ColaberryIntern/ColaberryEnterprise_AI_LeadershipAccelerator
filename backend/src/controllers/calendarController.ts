@@ -116,6 +116,41 @@ export async function handleBookCall(
         outcome: 'booked_meeting',
         metadata: { strategy_call_id: call.id, scheduled_at: booking.startTime },
       }).catch((err) => console.error('[Calendar] booked_meeting outcome failed:', err));
+
+      // Send admin notification email for new booking
+      try {
+        const { getSetting } = require('../services/settingsService');
+        const { sendAlertEmail } = require('../services/emailService');
+        const adminEmail = await getSetting('admin_notification_emails');
+        if (adminEmail) {
+          const callDate = new Date(booking.startTime).toLocaleString('en-US', {
+            timeZone: 'America/Chicago',
+            weekday: 'long', month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit',
+          });
+          await sendAlertEmail(adminEmail, {
+            type: 'strategy_call_booked',
+            severity: 3,
+            title: `New Strategy Call Booked: ${data.name}`,
+            description: [
+              `**${data.name}** just booked a strategy call.`,
+              `**Email:** ${emailLower}`,
+              data.company ? `**Company:** ${data.company}` : '',
+              data.phone ? `**Phone:** ${data.phone}` : '',
+              `**Scheduled:** ${callDate} CT`,
+              call.meet_link ? `**Meeting Link:** ${call.meet_link}` : '',
+              `**Lead Profile:** https://enterprise.colaberry.ai/admin/leads/${leadId}`,
+            ].filter(Boolean).join('\n'),
+            impact_area: 'Sales',
+            source_type: 'StrategyCallBooking',
+            urgency: 'high',
+            created_at: new Date(),
+          });
+          console.log(`[Calendar] Admin notification sent to ${adminEmail} for ${data.name}`);
+        }
+      } catch (notifErr: any) {
+        console.warn('[Calendar] Admin notification failed:', notifErr.message);
+      }
     } catch (err) {
       console.error('[Calendar] Lead find-or-create failed (non-blocking):', err);
     }
