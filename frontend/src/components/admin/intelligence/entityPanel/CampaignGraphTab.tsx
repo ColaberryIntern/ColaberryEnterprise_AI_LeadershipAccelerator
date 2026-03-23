@@ -14,25 +14,26 @@ import {
 } from '../../../../services/intelligenceApi';
 import CampaignNodeDetailsPanel from '../CampaignNodeDetailsPanel';
 
-// ─── Full Funnel 6-Layer Config ─────────────────────────────────────────────
+// ─── Full Funnel 7-Layer Config ─────────────────────────────────────────────
 
 const COLUMN_CONFIG: Record<string, number> = {
-  source: 0, outreach: 1, engagement: 2, visitor: 3, entry: 4, outcome: 5,
+  source: 0, outreach: 1, engagement: 2, visitor: 3, entry: 4, campaign: 5, outcome: 6,
 };
-const COLUMN_X_PCT = [0.05, 0.19, 0.33, 0.50, 0.67, 0.90];
-const COLUMN_LABELS = ['Sources', 'Outreach', 'Engagement', 'Visitors', 'First Touch', 'Outcomes'];
+const COLUMN_X_PCT = [0.05, 0.17, 0.30, 0.42, 0.56, 0.75, 0.94];
+const COLUMN_LABELS = ['Sources', 'Outreach', 'Engagement', 'Visitors', 'First Touch', 'Campaigns', 'Outcomes'];
 
 // Zone boundaries for column-constrained dragging (percentage of width)
 const ZONE_RANGES: Record<string, [number, number]> = {
-  source:     [0, 0.12],
-  outreach:   [0.12, 0.26],
-  engagement: [0.26, 0.41],
-  visitor:    [0.41, 0.58],
-  entry:      [0.58, 0.78],
-  outcome:    [0.78, 1.0],
+  source:     [0, 0.11],
+  outreach:   [0.11, 0.23],
+  engagement: [0.23, 0.36],
+  visitor:    [0.36, 0.49],
+  entry:      [0.49, 0.65],
+  campaign:   [0.65, 0.85],
+  outcome:    [0.85, 1.0],
 };
 
-const POSITIONS_KEY = 'campaign-graph-positions-v6';
+const POSITIONS_KEY = 'campaign-graph-positions-v7';
 
 const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
   source:     { color: '#805ad5', bg: '#faf5ff' },
@@ -40,6 +41,7 @@ const TYPE_COLORS: Record<string, { color: string; bg: string }> = {
   engagement: { color: '#4299e1', bg: '#ebf8ff' },
   visitor:    { color: '#dd6b20', bg: '#fffaf0' },
   entry:      { color: '#319795', bg: '#e6fffa' },
+  campaign:   { color: '#2b6cb0', bg: '#ebf4ff' },
   outcome:    { color: '#38a169', bg: '#f0fff4' },
 };
 
