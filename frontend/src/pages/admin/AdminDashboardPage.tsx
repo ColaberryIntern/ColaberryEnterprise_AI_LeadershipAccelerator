@@ -94,10 +94,13 @@ interface CampaignRow {
 interface AppointmentRow {
   id: string;
   title: string;
+  description?: string;
   scheduled_at: string;
+  duration_minutes?: number;
   type: string;
   status: string;
-  lead: { id: number; name: string; company: string } | null;
+  outcome_notes?: string;
+  lead: { id: number; name: string; email?: string; company: string } | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -137,6 +140,7 @@ function AdminDashboardPage() {
   const [admissionsStats, setAdmissionsStats] = useState<AdmissionsStats | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
+  const [expandedAppt, setExpandedAppt] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.allSettled([
@@ -234,6 +238,19 @@ function AdminDashboardPage() {
       {to && <Link to={to} className="btn btn-sm btn-outline-secondary">View All</Link>}
     </div>
   );
+
+  const APPT_TYPE_LABELS: Record<string, string> = {
+    strategy_call: 'Strategy Call', demo: 'Demo', follow_up: 'Follow Up', enrollment_close: 'Enrollment Close',
+  };
+
+  const handleApptStatus = async (apptId: string, newStatus: string) => {
+    try {
+      await api.patch(`/api/admin/appointments/${apptId}`, { status: newStatus });
+      setAppointments(prev => prev.map(a => a.id === apptId ? { ...a, status: newStatus } : a));
+    } catch (err) {
+      console.error('Failed to update appointment:', err);
+    }
+  };
 
   /* ---------- skeleton ---------- */
 
@@ -433,15 +450,99 @@ function AdminDashboardPage() {
                 <div className="text-center text-muted small py-4">No upcoming appointments</div>
               ) : (
                 <ul className="list-group list-group-flush">
-                  {appointments.slice(0, 5).map(a => (
-                    <li key={a.id} className="list-group-item d-flex justify-content-between align-items-center">
-                      <div>
-                        <div className="small fw-medium">{a.lead?.name || a.title}</div>
-                        <div className="small text-muted">{a.lead?.company} &middot; {a.type}</div>
-                      </div>
-                      <span className="badge bg-info">{fmtDateTime(a.scheduled_at)}</span>
-                    </li>
-                  ))}
+                  {appointments.slice(0, 5).map(a => {
+                    const isExpanded = expandedAppt === a.id;
+                    return (
+                      <li key={a.id} className="list-group-item p-0">
+                        <div
+                          className="d-flex justify-content-between align-items-center px-3 py-2"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setExpandedAppt(isExpanded ? null : a.id)}
+                        >
+                          <div>
+                            <div className="small fw-medium">
+                              {a.lead ? (
+                                <Link
+                                  to={`/admin/leads/${a.lead.id}`}
+                                  className="text-decoration-none"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  {a.lead.name}
+                                </Link>
+                              ) : a.title}
+                            </div>
+                            <div className="small text-muted">
+                              {a.lead?.company ? `${a.lead.company} · ` : ''}
+                              {APPT_TYPE_LABELS[a.type] || a.type}
+                            </div>
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-info">{fmtDateTime(a.scheduled_at)}</span>
+                            <i className={`bi bi-chevron-${isExpanded ? 'up' : 'down'} small text-muted`} />
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="px-3 pb-3 border-top" style={{ background: 'var(--color-bg-alt)' }}>
+                            <div className="row g-2 mt-1">
+                              <div className="col-sm-6">
+                                <div className="text-muted small">Title</div>
+                                <div className="small fw-medium">{a.title}</div>
+                              </div>
+                              <div className="col-sm-3">
+                                <div className="text-muted small">Duration</div>
+                                <div className="small fw-medium">{a.duration_minutes || 30} min</div>
+                              </div>
+                              <div className="col-sm-3">
+                                <div className="text-muted small">Status</div>
+                                <span className={`badge ${a.status === 'scheduled' ? 'bg-primary' : a.status === 'completed' ? 'bg-success' : a.status === 'no_show' ? 'bg-danger' : 'bg-secondary'}`}>
+                                  {a.status}
+                                </span>
+                              </div>
+                            </div>
+
+                            {a.lead && (
+                              <div className="mt-2">
+                                <div className="text-muted small">Lead</div>
+                                <div className="small">
+                                  <Link to={`/admin/leads/${a.lead.id}`} className="text-decoration-none fw-medium">
+                                    {a.lead.name}
+                                  </Link>
+                                  {a.lead.email && <span className="text-muted ms-2">{a.lead.email}</span>}
+                                  {a.lead.company && <span className="text-muted ms-2">· {a.lead.company}</span>}
+                                </div>
+                              </div>
+                            )}
+
+                            {a.description && (
+                              <div className="mt-2">
+                                <div className="text-muted small">Description</div>
+                                <div className="small">{a.description}</div>
+                              </div>
+                            )}
+
+                            {a.outcome_notes && (
+                              <div className="mt-2">
+                                <div className="text-muted small">Outcome Notes</div>
+                                <div className="small">{a.outcome_notes}</div>
+                              </div>
+                            )}
+
+                            {a.status === 'scheduled' && (
+                              <div className="d-flex gap-2 mt-2">
+                                <button className="btn btn-success btn-sm" style={{ fontSize: '0.75rem' }}
+                                  onClick={() => handleApptStatus(a.id, 'completed')}>Complete</button>
+                                <button className="btn btn-outline-danger btn-sm" style={{ fontSize: '0.75rem' }}
+                                  onClick={() => handleApptStatus(a.id, 'no_show')}>No Show</button>
+                                <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: '0.75rem' }}
+                                  onClick={() => handleApptStatus(a.id, 'cancelled')}>Cancel</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

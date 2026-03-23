@@ -49,7 +49,7 @@ export async function handleGetUpcomingAppointments(
     const { sequelize } = require('../config/database');
     const strategyCalls = await sequelize.query(`
       SELECT sc.id, sc.name, sc.scheduled_at, sc.meet_link, sc.status, sc.lead_id,
-        l.name as lead_name, l.company as lead_company
+        l.name as lead_name, l.email as lead_email, l.company as lead_company
       FROM strategy_calls sc
       LEFT JOIN leads l ON l.id = sc.lead_id
       WHERE sc.status = 'scheduled'
@@ -61,10 +61,12 @@ export async function handleGetUpcomingAppointments(
     const mapped = (strategyCalls as any[]).map((sc: any) => ({
       id: sc.id,
       title: 'Strategy Call',
+      description: sc.meet_link ? `Meet link: ${sc.meet_link}` : undefined,
       scheduled_at: sc.scheduled_at,
+      duration_minutes: 30,
       type: 'Strategy Call',
       status: sc.status,
-      lead: sc.lead_id ? { id: sc.lead_id, name: sc.lead_name || sc.name, company: sc.lead_company } : null,
+      lead: sc.lead_id ? { id: sc.lead_id, name: sc.lead_name || sc.name, email: sc.lead_email, company: sc.lead_company } : null,
     }));
 
     const all = [...appointments, ...mapped].sort((a: any, b: any) =>
