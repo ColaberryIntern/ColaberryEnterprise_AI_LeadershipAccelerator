@@ -269,12 +269,14 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
       if (!cleaned.includes(trackedUrl)) {
         // Remove any partial/broken URL remnants from failed LLM formatting
         cleaned = cleaned.replace(/\[([^\]]*)\]\(\s*\)/g, '$1').trim();
-        cleaned += `\n\nI go deeper on the enterprise AI adoption side here: ${trackedUrl}`;
+        // Truncate main content first so the appended URL is never cut off
+        const suffix = `\n\nI go deeper on the enterprise AI adoption side here: ${trackedUrl}`;
+        cleaned = cleaned.slice(0, maxLength - suffix.length) + suffix;
       }
     } else {
       cleaned = cleaned.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim();
     }
-    return cleaned.slice(0, maxLength + 200); // extra room for appended URL
+    return cleaned;
   }
 
   // Fallback to template if LLM unavailable
