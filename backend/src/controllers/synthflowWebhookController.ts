@@ -135,12 +135,19 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       } as any);
     }
 
+    // If hot lead escalation call went to voicemail → send fallback SMS
+    const commMeta = (commLog as any).metadata || {};
+    if (disposition === 'voicemail' && commMeta.trigger === 'hot_lead_escalation' && commLog.lead_id) {
+      sendVoicemailFallbackSms(commLog.lead_id as any).catch((err: any) => {
+        console.warn('[Synthflow Webhook] Voicemail fallback SMS failed:', err.message);
+      });
+    }
+
     // Process transcript via AI to extract lead data
     if (transcript && commLog.lead_id) {
       processCallTranscript(commLog.lead_id, transcript, call_id).then(async () => {
         // If this was a hot lead escalation call and the lead showed interest,
         // move them from current campaign → Strategy Call Readiness
-        const commMeta = (commLog as any).metadata || {};
         if (commMeta.trigger === 'hot_lead_escalation') {
           try {
             const lead = await Lead.findByPk(commLog.lead_id as any);
@@ -284,4 +291,59 @@ RULES:
     console.warn(`[PostCallSMS] AI summary failed: ${err.message}. Using fallback.`);
     return `Hi ${firstName}, thanks for chatting with me about the AI Leadership Accelerator! Book a strategy call to continue our conversation: https://enterprise.colaberry.ai/program - Maya, Colaberry`;
   }
+}
+
+// ─── Voicemail Fallback SMS ─────────────────────────────────────────────────
+// Sends a quick SMS when Maya's hot lead call goes to voicemail.
+
+async function sendVoicemailFallbackSms(leadId: number): Promise<void> {
+  const lead = await Lead.findByPk(leadId);
+  if (!lead) return;
+
+  const leadName = (lead as any).name || 'there';
+  const firstName = leadName.split(' ')[0];
+
+  // Resolve GHL contact (same pattern as sendPostCallSms)
+  let ghlContactId: string | null = null;
+  const testOverrides = await getTestOverrides();
+
+  if (testOverrides.enabled && testOverrides.email) {
+    const testContact = await findContactByEmail(testOverrides.email);
+    ghlContactId = testContact?.id || null;
+  } else {
+    ghlContactId = (lead as any).ghl_contact_id;
+    if (!ghlContactId) {
+      const syncResult = await syncLeadToGhl(lead, 'voice_call', false, true);
+      ghlContactId = syncResult.contactId;
+    }
+  }
+
+  if (!ghlContactId) {
+    console.warn(`[VM-SMS] No GHL contact for lead ${leadId}. SMS skipped.`);
+    return;
+  }
+
+  const smsBody = `Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I just tried to give you a call — I noticed you've been engaging with our content about building AI systems and wanted to connect personally. Feel free to reply here or book a 30-min strategy call: https://enterprise.colaberry.ai/ai-architect - Maya, Colaberry`;
+
+  const result = await sendSmsViaGhl(ghlContactId, smsBody);
+  if (result.success) {
+    console.log(`[VM-SMS] Voicemail fallback SMS sent to lead ${leadId} (${firstName})`);
+  } else {
+    console.error(`[VM-SMS] SMS failed for lead ${leadId}: ${result.error}`);
+  }
+
+  // Log communication
+  const { logCommunication } = require('../services/communicationLogService');
+  await logCommunication({
+    lead_id: leadId,
+    channel: 'sms',
+    direction: 'outbound',
+    delivery_mode: 'live',
+    status: result.success ? 'sent' : 'failed',
+    to_address: (lead as any).phone,
+    subject: 'Voicemail fallback SMS',
+    body: smsBody,
+    provider: 'ghl',
+    metadata: { trigger: 'hot_lead_vm_fallback' },
+  }).catch(() => {});
 }
