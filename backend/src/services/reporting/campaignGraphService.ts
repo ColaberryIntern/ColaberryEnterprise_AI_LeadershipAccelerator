@@ -869,6 +869,25 @@ async function buildGraphFromPaths(leadPaths: LeadPathRecord[], totalAnonymousVi
     edges.push({ from, to, label: 'converts', volume: leadSet.size });
   }
 
+  // ── Structural edges: Site Visitors is the gateway to all First Touch nodes ──
+  // These always render to show the logical flow, even when no leads have traversed yet
+  const entryNodeKeys = ['cory_chat', 'blueprint', 'sponsorship', 'strategy_call', 'activated_referral'];
+  const existingVisitorToEntry = new Set(
+    edges.filter(e => e.from === 'visitor_site' && e.to.startsWith('entry_')).map(e => e.to)
+  );
+  for (const key of entryNodeKeys) {
+    const entryId = `entry_${key}`;
+    if (!existingVisitorToEntry.has(entryId)) {
+      edges.push({ from: 'visitor_site', to: entryId, label: 'engages', volume: 0 });
+    }
+  }
+
+  // Anonymous/Direct → Site Visitors (anonymous visitors come to the site first)
+  const hasAnonymousToVisitor = edges.some(e => e.from === 'src_anonymous' && e.to === 'visitor_site');
+  if (!hasAnonymousToVisitor) {
+    edges.push({ from: 'src_anonymous', to: 'visitor_site', label: 'visits', volume: 0 });
+  }
+
   // ── Velocity computation ──────────────────────────────────────────────
   const leadById = new Map(leadPaths.map(lp => [lp.lead_id, lp]));
   const allEdgeMaps: Map<string, Set<number>>[] = [
