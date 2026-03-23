@@ -86,9 +86,13 @@ interface AdmissionsStats {
 interface CampaignRow {
   id: string;
   name: string;
-  status: string;
-  type: string;
-  stats?: { total_leads?: number; sent?: number; open_rate?: number };
+  active_leads: number;
+  channels: { email: number; sms: number; voice: number };
+  open_rate: number;
+  click_rate: number;
+  replies: number;
+  bounces: number;
+  meetings_booked: number;
 }
 
 interface AppointmentRow {
@@ -155,7 +159,7 @@ function AdminDashboardPage() {
       api.get('/api/admin/scheduler/status'),                                         // 8
       api.get('/api/admin/intelligence/cory/status'),                                 // 9
       api.get('/api/admin/admissions/stats'),                                         // 10
-      api.get('/api/admin/campaigns', { params: { limit: 5, status: 'active' } }),    // 11
+      api.get('/api/admin/dashboard/campaign-performance'),                            // 11
       api.get('/api/admin/appointments/upcoming', { params: { days: 7 } }),           // 12
     ]).then(([sR, cR, osR, fR, lsR, psR, caR, hrR, scR, coR, adR, cpR, apR]) => {
       const s = settled(sR); if (s) setStats(s.data.stats);
@@ -169,7 +173,7 @@ function AdminDashboardPage() {
       const sc = settled(scR); if (sc) setSchedulerStatus(sc.data);
       const co = settled(coR); if (co) setCoryStatus(co.data);
       const ad = settled(adR); if (ad) setAdmissionsStats(ad.data);
-      const cp = settled(cpR); if (cp) setCampaigns(Array.isArray(cp.data) ? cp.data : cp.data?.rows || []);
+      const cp = settled(cpR); if (cp) setCampaigns(cp.data?.campaigns || []);
       const ap = settled(apR); if (ap) setAppointments(ap.data.appointments || []);
     }).finally(() => setLoading(false));
   }, []);
@@ -368,71 +372,141 @@ function AdminDashboardPage() {
       </div>
 
       {/* ============================================================ */}
-      {/* SECTION: Pipeline + Top Campaigns                            */}
+      {/* SECTION: Pipeline                                             */}
       {/* ============================================================ */}
       <div className="row g-4 mb-4">
-        {/* Pipeline at a Glance */}
-        <div className="col-lg-7">
-          <div className="card border-0 shadow-sm h-100">
+        <div className="col-12">
+          <div className="card border-0 shadow-sm">
             <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
               Pipeline at a Glance
               <Link to="/admin/pipeline" className="btn btn-sm btn-outline-secondary">View Pipeline</Link>
             </div>
             <div className="card-body">
-              {Object.entries(PIPELINE_STAGES).map(([key, { label, color }]) => {
-                const count = pipelineStats[key] || 0;
-                const pct = (count / totalPipeline) * 100;
-                return (
-                  <div key={key} className="d-flex align-items-center mb-2">
-                    <span className="small text-muted" style={{ width: 90 }}>{label}</span>
-                    <div className="flex-grow-1 mx-2" style={{ height: 20, background: '#f1f3f5', borderRadius: 4 }}>
-                      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.4s' }} />
+              <div className="d-flex align-items-center gap-2">
+                {Object.entries(PIPELINE_STAGES).map(([key, { label, color }]) => {
+                  const count = pipelineStats[key] || 0;
+                  const pct = Math.max((count / totalPipeline) * 100, count > 0 ? 3 : 0);
+                  return (
+                    <div key={key} className="text-center" style={{ flex: pct || 1 }}>
+                      <div style={{ height: 28, background: color, borderRadius: 4, opacity: count > 0 ? 1 : 0.15 }} />
+                      <div className="small text-muted mt-1">{label}</div>
+                      <div className="small fw-semibold">{count}</div>
                     </div>
-                    <span className="small fw-semibold" style={{ width: 40, textAlign: 'right' }}>{count}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Top Active Campaigns */}
-        <div className="col-lg-5">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-              Active Campaigns
-              <Link to="/admin/campaigns" className="btn btn-sm btn-outline-secondary">View All</Link>
-            </div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th className="small fw-medium">Campaign</th>
-                      <th className="small fw-medium text-end">Leads</th>
-                      <th className="small fw-medium text-end">Sent</th>
-                      <th className="small fw-medium text-end">Open %</th>
+      {/* ============================================================ */}
+      {/* SECTION: Campaign Performance                                 */}
+      {/* ============================================================ */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+          Campaign Performance
+          <Link to="/admin/campaigns" className="btn btn-sm btn-outline-secondary">View All</Link>
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table table-hover mb-0" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: '24%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '8%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '8%' }} />
+              </colgroup>
+              <thead className="table-light">
+                <tr>
+                  <th className="small fw-medium">Campaign</th>
+                  <th className="small fw-medium text-end">Leads</th>
+                  <th className="small fw-medium text-end" title="Emails sent">Emails</th>
+                  <th className="small fw-medium text-end" title="SMS sent">SMS</th>
+                  <th className="small fw-medium text-end" title="Voice calls">Voice</th>
+                  <th className="small fw-medium text-end">Open %</th>
+                  <th className="small fw-medium text-end">Click %</th>
+                  <th className="small fw-medium text-end">Replies</th>
+                  <th className="small fw-medium text-end">Bounces</th>
+                  <th className="small fw-medium text-end">Meetings</th>
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.length === 0 ? (
+                  <tr><td colSpan={10} className="text-center text-muted small py-3">No active campaigns</td></tr>
+                ) : campaigns.map(c => {
+                  const totalSent = c.channels.email + c.channels.sms + c.channels.voice;
+                  return (
+                    <tr key={c.id}>
+                      <td className="small text-truncate">
+                        <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none">
+                          {c.name}
+                        </Link>
+                      </td>
+                      <td className="small text-end">{c.active_leads}</td>
+                      <td className="small text-end">{c.channels.email || <span className="text-muted">-</span>}</td>
+                      <td className="small text-end">{c.channels.sms || <span className="text-muted">-</span>}</td>
+                      <td className="small text-end">{c.channels.voice || <span className="text-muted">-</span>}</td>
+                      <td className="small text-end">
+                        {c.open_rate > 0 ? (
+                          <span className={c.open_rate >= 25 ? 'text-success fw-medium' : c.open_rate >= 15 ? '' : 'text-danger'}>
+                            {c.open_rate}%
+                          </span>
+                        ) : <span className="text-muted">-</span>}
+                      </td>
+                      <td className="small text-end">
+                        {c.click_rate > 0 ? (
+                          <span className={c.click_rate >= 3 ? 'text-success fw-medium' : ''}>
+                            {c.click_rate}%
+                          </span>
+                        ) : <span className="text-muted">-</span>}
+                      </td>
+                      <td className="small text-end">{c.replies || <span className="text-muted">-</span>}</td>
+                      <td className="small text-end">
+                        {c.bounces > 0 ? <span className="text-danger">{c.bounces}</span> : <span className="text-muted">-</span>}
+                      </td>
+                      <td className="small text-end">
+                        {c.meetings_booked > 0 ? <span className="text-success fw-medium">{c.meetings_booked}</span> : <span className="text-muted">-</span>}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {campaigns.length === 0 ? (
-                      <tr><td colSpan={4} className="text-center text-muted small py-3">No active campaigns</td></tr>
-                    ) : campaigns.slice(0, 5).map(c => (
-                      <tr key={c.id}>
-                        <td className="small">
-                          <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none">
-                            {c.name.length > 30 ? c.name.substring(0, 28) + '...' : c.name}
-                          </Link>
-                        </td>
-                        <td className="small text-end">{c.stats?.total_leads ?? '--'}</td>
-                        <td className="small text-end">{c.stats?.sent ?? '--'}</td>
-                        <td className="small text-end">{c.stats?.open_rate != null ? `${c.stats.open_rate}%` : '--'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  );
+                })}
+              </tbody>
+              {campaigns.length > 0 && (
+                <tfoot className="table-light">
+                  <tr>
+                    <td className="small fw-semibold">Totals ({campaigns.length} campaigns)</td>
+                    <td className="small text-end fw-semibold">{campaigns.reduce((s, c) => s + c.active_leads, 0)}</td>
+                    <td className="small text-end fw-semibold">{campaigns.reduce((s, c) => s + c.channels.email, 0)}</td>
+                    <td className="small text-end fw-semibold">{campaigns.reduce((s, c) => s + c.channels.sms, 0)}</td>
+                    <td className="small text-end fw-semibold">{campaigns.reduce((s, c) => s + c.channels.voice, 0)}</td>
+                    <td className="small text-end fw-semibold">
+                      {(() => {
+                        const te = campaigns.reduce((s, c) => s + c.channels.email, 0);
+                        const to = campaigns.reduce((s, c) => s + Math.round(c.channels.email * c.open_rate / 100), 0);
+                        return te > 0 ? `${Math.round(to / te * 100)}%` : '-';
+                      })()}
+                    </td>
+                    <td className="small text-end fw-semibold">
+                      {(() => {
+                        const te = campaigns.reduce((s, c) => s + c.channels.email, 0);
+                        const tc = campaigns.reduce((s, c) => s + Math.round(c.channels.email * c.click_rate / 100), 0);
+                        return te > 0 ? `${Math.round(tc / te * 100)}%` : '-';
+                      })()}
+                    </td>
+                    <td className="small text-end fw-semibold">{campaigns.reduce((s, c) => s + c.replies, 0)}</td>
+                    <td className="small text-end fw-semibold">{campaigns.reduce((s, c) => s + c.bounces, 0)}</td>
+                    <td className="small text-end fw-semibold">{campaigns.reduce((s, c) => s + c.meetings_booked, 0)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
           </div>
         </div>
       </div>

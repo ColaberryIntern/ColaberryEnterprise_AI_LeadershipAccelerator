@@ -352,6 +352,55 @@ router.get('/api/admin/scheduler/status', requireAdmin, async (_req: Request, re
   }
 });
 
+// Dashboard campaign performance summary
+router.get('/api/admin/dashboard/campaign-performance', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const { QueryTypes } = require('sequelize');
+    const { sequelize } = require('../../config/database');
+    const campaigns = await sequelize.query(`
+      SELECT c.id, c.name, c.status,
+        (SELECT COUNT(*) FROM campaign_leads cl WHERE cl.campaign_id = c.id AND cl.status = 'active') as active_leads,
+        (SELECT COUNT(*) FROM communication_logs cl WHERE cl.campaign_id = c.id AND cl.channel = 'email') as total_emails,
+        (SELECT COUNT(*) FROM communication_logs cl WHERE cl.campaign_id = c.id AND cl.channel = 'sms') as total_sms,
+        (SELECT COUNT(*) FROM communication_logs cl WHERE cl.campaign_id = c.id AND cl.channel = 'voice') as total_voice,
+        (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'opened') as opens,
+        (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'clicked') as clicks,
+        (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'replied') as replies,
+        (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'bounced') as bounces,
+        (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'booked_meeting') as meetings_booked
+      FROM campaigns c
+      WHERE c.status = 'active'
+      ORDER BY (SELECT COUNT(*) FROM communication_logs cl2 WHERE cl2.campaign_id = c.id AND cl2.created_at > NOW() - INTERVAL '7 days') DESC
+      LIMIT 10
+    `, { type: QueryTypes.SELECT });
+
+    const rows = (campaigns as any[]).map(c => {
+      const emails = parseInt(c.total_emails) || 0;
+      const opens = parseInt(c.opens) || 0;
+      const clicks = parseInt(c.clicks) || 0;
+      return {
+        id: c.id,
+        name: c.name,
+        active_leads: parseInt(c.active_leads) || 0,
+        channels: {
+          email: emails,
+          sms: parseInt(c.total_sms) || 0,
+          voice: parseInt(c.total_voice) || 0,
+        },
+        open_rate: emails > 0 ? Math.round((opens / emails) * 1000) / 10 : 0,
+        click_rate: emails > 0 ? Math.round((clicks / emails) * 1000) / 10 : 0,
+        replies: parseInt(c.replies) || 0,
+        bounces: parseInt(c.bounces) || 0,
+        meetings_booked: parseInt(c.meetings_booked) || 0,
+      };
+    });
+
+    res.json({ campaigns: rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/api/admin/campaigns/launch-readiness', requireAdmin, async (_req: Request, res: Response) => {
   try {
     const { getLaunchReadiness } = require('../../services/schedulerService');
