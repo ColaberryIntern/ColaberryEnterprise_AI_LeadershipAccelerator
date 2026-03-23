@@ -195,7 +195,6 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
 
     // Build unified prompt via single source of truth
     const promptToSend = buildFinalPrompt({
-      workstationPrompt: lessonContext.workstationPrompt || undefined,
       learnerContext: {
         company: learnerProfile?.company_name,
         industry: learnerProfile?.industry,

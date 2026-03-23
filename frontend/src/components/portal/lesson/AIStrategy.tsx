@@ -51,7 +51,6 @@ export default function AIStrategy({ data }: AIStrategyProps) {
 
   const handleRunInLLM = () => {
     const prompt = buildFinalPrompt({
-      workstationPrompt: lessonContext.workstationPrompt || undefined,
       learnerContext: learnerProfile ? {
         company: learnerProfile.company_name,
         industry: learnerProfile.industry,

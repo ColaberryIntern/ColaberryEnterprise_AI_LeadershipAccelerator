@@ -665,4 +665,38 @@ router.post('/api/portal/project/contract/lock', requireParticipant, async (req:
   }
 });
 
+// ---------------------------------------------------------------------------
+// Project Suggestion + Selection Routes
+// ---------------------------------------------------------------------------
+
+router.post('/api/portal/project/suggestions/generate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { generateSuggestions } = await import('../services/projectSuggestionService');
+    const suggestions = await generateSuggestions(enrollmentId);
+    res.json({ suggestions });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /suggestions/generate error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/suggestions/select', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { suggestion_id, suggestions } = req.body;
+    if (!suggestion_id || !suggestions) {
+      res.status(400).json({ error: 'suggestion_id and suggestions are required' });
+      return;
+    }
+    const { selectProject } = await import('../services/projectSelectionService');
+    const result = await selectProject(enrollmentId, suggestion_id, suggestions);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /suggestions/select error:', err.message);
+    const status = err.message.includes('not found') ? 404 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 export default router;
