@@ -147,3 +147,6 @@ export const markOpenclawResponsePosted = (id: string, post_url: string) =>
 
 export const submitOpenclawSignal = (url: string, platform?: string) =>
   api.post<{ success: boolean; signal: OpenclawSignalItem; task_id: string }>(`${BASE}/signals/submit`, { url, platform });
+
+export const generateLinkedInPost = (topic: string) =>
+  api.post<{ success: boolean; signal: OpenclawSignalItem; response: any; short_id: string }>(`${BASE}/linkedin/generate`, { topic });

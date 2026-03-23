@@ -509,4 +509,107 @@ router.post(`${BASE}/signals/submit`, async (req: Request, res: Response) => {
   }
 });
 
+// ── LinkedIn Post Generator ─────────────────────────────────────────────────
+const LINKEDIN_PROFILE = 'https://www.linkedin.com/in/ali-muwwakkil-6278992b/';
+const LINKEDIN_SYSTEM_PROMPT = `You are Ali Moiz (Ali Muwwakkil), Managing Director at Colaberry and founder of an enterprise AI leadership accelerator. You help data professionals and leaders build and deploy AI systems in 3 weeks.
+
+You write LinkedIn posts that share genuine insights from running AI training cohorts for enterprise teams. Your voice is confident, practical, and opinionated — you've seen what works and what doesn't.
+
+Rules:
+1. NEVER use the word "Colaberry" — say "our program", "the accelerator", or "my team"
+2. Start with a strong hook (1 line that stops the scroll)
+3. Use short paragraphs (1-2 sentences each) — LinkedIn rewards line breaks
+4. Share a specific insight, framework, or observation from your experience
+5. NO hashtags, NO emojis, NO "follow me for more" — you're a practitioner, not an influencer
+6. End with a clear CTA pointing to the TRACKED URL for booking a strategy call
+7. Keep it under 1300 characters (sweet spot for LinkedIn engagement)
+8. Sound like a real person sharing hard-won experience, not a thought leader template`;
+
+router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => {
+  try {
+    const { topic } = req.body;
+    if (!topic || typeof topic !== 'string') {
+      return res.status(400).json({ error: 'topic is required' });
+    }
+
+    const crypto = await import('crypto');
+    const shortId = `oc-linkedin-${crypto.randomBytes(4).toString('hex')}`;
+    const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
+    const trackedUrl = `${BASE_URL}/i/${shortId}`;
+
+    // Create signal for tracking
+    const signal = await OpenclawSignal.create({
+      platform: 'linkedin',
+      source_url: `linkedin:post:${shortId}`,
+      title: topic,
+      content_excerpt: '',
+      details: { source: 'linkedin_post_generator', linkedin_profile: LINKEDIN_PROFILE },
+      relevance_score: 0.9,
+      engagement_score: 0.9,
+      risk_score: 0.0,
+      status: 'queued',
+      topic_tags: [],
+      created_at: new Date(),
+    });
+
+    // Generate post with LLM
+    const { getOpenAIClient } = await import('../../intelligence/assistant/openaiHelper');
+    const client = getOpenAIClient();
+    let content = '';
+
+    if (client) {
+      try {
+        const result = await client.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: LINKEDIN_SYSTEM_PROMPT },
+            { role: 'user', content: `Write a LinkedIn post about this topic: "${topic}"\n\nTRACKED URL — you MUST end the post with a CTA that includes this link: ${trackedUrl}\nThis link takes them to a page where they can book a strategy call about building AI systems for their team.` },
+          ],
+          max_tokens: 800,
+          temperature: 0.75,
+        });
+        content = result.choices[0]?.message?.content || '';
+      } catch (err: any) {
+        console.warn('[OpenClaw LinkedIn] LLM failed:', err?.message?.slice(0, 200));
+      }
+    }
+
+    if (!content) {
+      content = `Most organizations are getting AI adoption wrong.\n\nThey buy tools. They run pilots. They send people to conferences.\n\nBut they don't build systems.\n\nAfter running multiple cohorts of enterprise AI training, here's what I've learned about ${topic}:\n\nThe teams that succeed don't start with the technology. They start with a clear business problem, build AI literacy across the organization, and then deploy systems — not just tools.\n\nThe gap isn't technical. It's strategic.\n\nIf your team is navigating AI adoption and wants to go from idea to deployed system in 3 weeks, let's talk: ${trackedUrl}`;
+    }
+
+    // Clean up
+    content = content.replace(/\b[Cc]olaberry\b/g, '').trim();
+    // Ensure tracked URL is present
+    if (!content.includes(trackedUrl)) {
+      content += `\n\nIf your team wants to go from AI strategy to deployed system in 3 weeks, book a call: ${trackedUrl}`;
+    }
+    // Remove any hallucinated URLs
+    const trackedBase = trackedUrl.replace(/\/+$/, '');
+    content = content.replace(/https?:\/\/\S+/g, (match) => {
+      const stripped = match.replace(/[)\]},;.!?]+$/, '');
+      return stripped.startsWith(trackedBase) || stripped.startsWith(LINKEDIN_PROFILE) ? match : '';
+    }).replace(/\s{2,}/g, ' ').replace(/ \n/g, '\n').trim();
+
+    // Create response
+    const response = await OpenclawResponse.create({
+      signal_id: signal.id,
+      platform: 'linkedin',
+      content,
+      tone: 'professional',
+      short_id: shortId,
+      tracked_url: trackedUrl,
+      utm_params: { utm_source: 'linkedin', utm_medium: 'organic_post', utm_campaign: shortId },
+      post_status: 'draft',
+      created_at: new Date(),
+    });
+
+    await signal.update({ response_id: response.id, updated_at: new Date() });
+
+    res.json({ success: true, signal, response, short_id: shortId });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

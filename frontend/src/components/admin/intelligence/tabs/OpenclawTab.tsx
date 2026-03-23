@@ -8,6 +8,7 @@ import {
   rejectOpenclawResponse,
   markOpenclawResponsePosted,
   submitOpenclawSignal,
+  generateLinkedInPost,
   getOpenclawAgentActivity,
   OpenclawDashboard,
   OpenclawResponseItem,
@@ -80,6 +81,11 @@ export default function OpenclawTab() {
   const [submitUrl, setSubmitUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // LinkedIn post generator state
+  const [linkedinTopic, setLinkedinTopic] = useState('');
+  const [generatingLinkedin, setGeneratingLinkedin] = useState(false);
+  const [linkedinResult, setLinkedinResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Agent drill-down state
   const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | null>(null);
@@ -212,6 +218,20 @@ export default function OpenclawTab() {
       setSubmitResult({ success: false, message: err?.response?.data?.error || 'Failed to submit URL' });
     }
     setSubmitting(false);
+  };
+
+  const handleGenerateLinkedIn = async () => {
+    setGeneratingLinkedin(true);
+    setLinkedinResult(null);
+    try {
+      const res = await generateLinkedInPost(linkedinTopic.trim());
+      setLinkedinResult({ success: true, message: `LinkedIn post generated (${res.data.short_id}). Check the response queue to review and copy.` });
+      setLinkedinTopic('');
+      setTimeout(fetchData, 2000);
+    } catch (err: any) {
+      setLinkedinResult({ success: false, message: err?.response?.data?.error || 'Failed to generate post' });
+    }
+    setGeneratingLinkedin(false);
   };
 
   const handleApprove = async (id: string) => {
@@ -424,6 +444,41 @@ export default function OpenclawTab() {
           {submitResult && (
             <div className={`alert alert-${submitResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>
               {submitResult.message}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* LinkedIn Post Generator */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small">
+          Generate LinkedIn Post
+          <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#0A66C2', color: '#fff' }}>LinkedIn</span>
+        </div>
+        <div className="card-body py-3 px-3">
+          <div className="text-muted mb-2" style={{ fontSize: '0.68rem' }}>
+            Enter a topic or trend. AI generates a practitioner-voice LinkedIn post with a tracked link to your strategy call booking page.
+          </div>
+          <div className="d-flex gap-2">
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              placeholder="e.g., Why most AI pilots fail at the enterprise level"
+              value={linkedinTopic}
+              onChange={e => setLinkedinTopic(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && linkedinTopic.trim() && !generatingLinkedin && handleGenerateLinkedIn()}
+            />
+            <button
+              className="btn btn-sm btn-primary text-nowrap"
+              onClick={handleGenerateLinkedIn}
+              disabled={!linkedinTopic.trim() || generatingLinkedin}
+            >
+              {generatingLinkedin ? 'Generating...' : 'Generate'}
+            </button>
+          </div>
+          {linkedinResult && (
+            <div className={`alert alert-${linkedinResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>
+              {linkedinResult.message}
             </div>
           )}
         </div>
