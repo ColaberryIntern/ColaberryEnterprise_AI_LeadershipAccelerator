@@ -600,10 +600,14 @@ export default function OpenclawTab() {
                       <div className="card-body py-2 px-3">
                         <div className="fw-semibold small mb-1">Original Signal</div>
                         <div className="mb-1">
-                          <a href={selectedResponse.signal.source_url} target="_blank" rel="noopener noreferrer" className="small fw-medium" style={{ color: 'var(--color-primary-light)' }}>
-                            {selectedResponse.signal.title || selectedResponse.signal.source_url}
-                            <span className="ms-1" style={{ fontSize: '0.65rem' }}>&#8599;</span>
-                          </a>
+                          {selectedResponse.signal.source_url.startsWith('http') ? (
+                            <a href={selectedResponse.signal.source_url} target="_blank" rel="noopener noreferrer" className="small fw-medium" style={{ color: 'var(--color-primary-light)' }}>
+                              {selectedResponse.signal.title || selectedResponse.signal.source_url}
+                              <span className="ms-1" style={{ fontSize: '0.65rem' }}>&#8599;</span>
+                            </a>
+                          ) : (
+                            <span className="small fw-medium">{selectedResponse.signal.title || selectedResponse.signal.source_url}</span>
+                          )}
                         </div>
                         {selectedResponse.signal.author && (
                           <div style={{ fontSize: '0.72rem' }} className="text-muted mb-1">
