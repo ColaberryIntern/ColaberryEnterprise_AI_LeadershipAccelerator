@@ -41,6 +41,8 @@ import {
   handleGetImportTemplate,
 } from '../../controllers/adminImportController';
 import { handleGetLeadJourney } from '../../controllers/adminOpportunityController';
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
 
 const router = Router();
 
@@ -58,6 +60,59 @@ router.get('/api/admin/leads/:id/temperature-history', requireAdmin, handleGetTe
 router.patch('/api/admin/leads/:id/temperature', requireAdmin, handleUpdateTemperature);
 router.get('/api/admin/leads/:id/strategy-prep', requireAdmin, handleGetLeadStrategyPrep);
 router.get('/api/admin/leads/:id/journey', requireAdmin, handleGetLeadJourney);
+
+// Lead engagement data (opens, clicks, calls, campaign status)
+router.get('/api/admin/leads/:id/engagement', requireAdmin, async (req, res) => {
+  try {
+    const leadId = parseInt(req.params.id as string, 10);
+    const [outcomes, calls, campaign] = await Promise.all([
+      sequelize.query(`
+        SELECT outcome, COUNT(*) as cnt,
+          json_agg(json_build_object('at', created_at, 'step_index', step_index, 'metadata', metadata) ORDER BY created_at DESC) as events
+        FROM interaction_outcomes
+        WHERE lead_id = :leadId AND outcome IN ('sent','opened','clicked','replied','bounced')
+        GROUP BY outcome
+      `, { replacements: { leadId }, type: QueryTypes.SELECT }),
+      sequelize.query(`
+        SELECT created_at as at, status,
+          provider_response->>'duration' as duration,
+          provider_response->>'end_call_reason' as outcome,
+          LEFT(provider_response->>'transcript', 200) as transcript_preview,
+          metadata->>'trigger' as trigger
+        FROM communication_logs
+        WHERE lead_id = :leadId AND channel = 'voice'
+        ORDER BY created_at DESC LIMIT 10
+      `, { replacements: { leadId }, type: QueryTypes.SELECT }),
+      sequelize.query(`
+        SELECT c.name as campaign_name, c.status as campaign_status, cl.status as enrollment_status,
+          cl.enrolled_at,
+          (SELECT COUNT(*) FROM scheduled_emails se WHERE se.lead_id = :leadId AND se.campaign_id = c.id AND se.status = 'sent') as steps_completed,
+          (SELECT jsonb_array_length(fs.steps) FROM follow_up_sequences fs WHERE fs.id = c.sequence_id) as total_steps,
+          (SELECT MIN(se.scheduled_for) FROM scheduled_emails se WHERE se.lead_id = :leadId AND se.campaign_id = c.id AND se.status = 'pending') as next_scheduled
+        FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        WHERE cl.lead_id = :leadId AND cl.status = 'active'
+        ORDER BY cl.enrolled_at DESC LIMIT 1
+      `, { replacements: { leadId }, type: QueryTypes.SELECT }),
+    ]);
+    const outcomesMap: Record<string, any> = {};
+    for (const row of outcomes as any[]) {
+      outcomesMap[row.outcome] = { count: parseInt(row.cnt, 10), events: row.events?.slice(0, 20) || [] };
+    }
+    res.json({
+      emails_sent: outcomesMap.sent?.count || 0,
+      opens: outcomesMap.opened || { count: 0, events: [] },
+      clicks: outcomesMap.clicked || { count: 0, events: [] },
+      replies: outcomesMap.replied?.count || 0,
+      bounces: outcomesMap.bounced?.count || 0,
+      voice_calls: calls,
+      campaign: (campaign as any[])[0] || null,
+    });
+  } catch (err: any) {
+    console.error('[LeadEngagement] Error:', err.message);
+    res.status(500).json({ error: 'Failed to load engagement data' });
+  }
+});
 
 // Pipeline
 router.get('/api/admin/pipeline/stats', requireAdmin, handleAdminGetPipelineStats);

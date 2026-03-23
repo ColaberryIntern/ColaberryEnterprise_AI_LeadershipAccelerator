@@ -11,6 +11,7 @@ export const leadFilterSchema = z.object({
   status: z.enum(['new', 'contacted', 'qualified', 'enrolled', 'lost']).optional(),
   search: z.string().max(255).optional(),
   source: z.string().max(100).optional(),
+  temperature: z.enum(['cold', 'cool', 'warm', 'hot', 'qualified']).optional(),
   scoreMin: z.coerce.number().int().min(0).optional(),
   scoreMax: z.coerce.number().int().max(200).optional(),
   dateFrom: z.string().optional(),

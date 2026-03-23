@@ -326,7 +326,7 @@ function AdminDashboardPage() {
           campaignActivity ? `${campaignActivity.active_campaigns} active campaigns` : undefined
         )}
         {kpiLink('/admin/campaigns', 'Click Rate', campaignActivity ? `${campaignActivity.click_rate}%` : '--', '#0dcaf0')}
-        {kpiLink('/admin/leads', 'Hot Leads', campaignActivity?.hot_leads_count ?? '--', '#e53e3e',
+        {kpiLink('/admin/leads?temperature=hot', 'Hot Leads', campaignActivity?.hot_leads_count ?? '--', '#e53e3e',
           'Engaged 2+ times'
         )}
       </div>

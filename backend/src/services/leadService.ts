@@ -244,6 +244,10 @@ export async function listLeads(params: ListLeadsParams) {
     }
   }
 
+  if ((params as any).temperature) {
+    where.lead_temperature = (params as any).temperature;
+  }
+
   if (params.search) {
     where[Op.or] = [
       { name: { [Op.iLike]: `%${params.search}%` } },

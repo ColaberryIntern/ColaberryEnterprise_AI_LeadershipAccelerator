@@ -54,6 +54,15 @@ const SOURCE_OPTIONS = [
   { value: 'sponsorship_pipeline', label: 'Sponsorship Pipeline' },
 ];
 
+const TEMP_OPTIONS = [
+  { value: '', label: 'All Temps' },
+  { value: 'hot', label: 'Hot' },
+  { value: 'warm', label: 'Warm' },
+  { value: 'cool', label: 'Cool' },
+  { value: 'cold', label: 'Cold' },
+  { value: 'qualified', label: 'Qualified' },
+];
+
 function AdminLeadsPage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<LeadStats | null>(null);
@@ -64,6 +73,7 @@ function AdminLeadsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [tempFilter, setTempFilter] = useState(() => new URLSearchParams(window.location.search).get('temperature') || '');
   const [scoreMin, setScoreMin] = useState('');
   const [scoreMax, setScoreMax] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -78,6 +88,7 @@ function AdminLeadsPage() {
       const params: Record<string, string> = { page: String(page), limit: '25' };
       if (statusFilter) params.status = statusFilter;
       if (sourceFilter) params.source = sourceFilter;
+      if (tempFilter) params.temperature = tempFilter;
       if (scoreMin) params.scoreMin = scoreMin;
       if (scoreMax) params.scoreMax = scoreMax;
       if (dateFrom) params.dateFrom = dateFrom;
@@ -90,7 +101,7 @@ function AdminLeadsPage() {
     } catch (err) {
       console.error('Failed to fetch leads:', err);
     }
-  }, [page, statusFilter, sourceFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
+  }, [page, statusFilter, sourceFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
 
   const fetchStats = async () => {
     try {
@@ -296,6 +307,18 @@ function AdminLeadsPage() {
                 onChange={(e) => { setSourceFilter(e.target.value); setPage(1); }}
               >
                 {SOURCE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-md-2">
+              <label className="form-label small text-muted">Temperature</label>
+              <select
+                className="form-select"
+                value={tempFilter}
+                onChange={(e) => { setTempFilter(e.target.value); setPage(1); }}
+              >
+                {TEMP_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
