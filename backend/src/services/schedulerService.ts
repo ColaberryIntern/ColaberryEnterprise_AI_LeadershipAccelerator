@@ -1735,7 +1735,8 @@ export function startScheduler(): void {
 
   // ── Comprehensive System Health Monitor (every 15 min on weekdays) ──────────
   // Covers: campaigns, sequences, scheduler, DB, memory, email delivery, APIs, nginx
-  let lastHealthAlertAt = 0;
+  // Suppress alerts for first 5 min after startup (avoids spam during deploys/restarts)
+  let lastHealthAlertAt = Date.now();
 
   cron.schedule('3,18,33,48 * * * 1-5', () => {
     instrumentCronJob('SystemHealthMonitor', async () => {
