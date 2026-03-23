@@ -81,6 +81,7 @@ export async function classifyLead(
   leadId: number,
   campaignId?: string,
   triggerOutcome?: string,
+  extraMetadata?: Record<string, any>,
 ): Promise<{
   previous: string;
   current: LeadTemperature;
@@ -110,7 +111,7 @@ export async function classifyLead(
       trigger_type: 'interaction_outcome',
       trigger_detail: triggerOutcome || 'engagement_score_change',
       campaign_id: campaignId || null,
-      metadata: { score, breakdown },
+      metadata: { score, breakdown, ...(extraMetadata || {}) },
     } as any);
 
     console.log(`[Classification] Lead ${leadId}: ${previousTemp} → ${newTemp} (score: ${score})`);

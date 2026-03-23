@@ -1,6 +1,7 @@
 import { InteractionOutcome, Lead, ScheduledEmail, CampaignLead } from '../models';
 import type { OutcomeType } from '../models/InteractionOutcome';
 import { classifyLead } from './leadClassificationService';
+import { logActivity } from './activityService';
 
 export interface RecordOutcomeParams {
   lead_id: number;
@@ -75,9 +76,61 @@ export async function recordOutcome(params: RecordOutcomeParams): Promise<void> 
       metadata: params.metadata || null,
     } as any);
 
+    // Bridge email opens/clicks to Activity timeline
+    if (lead && ['opened', 'clicked'].includes(params.outcome)) {
+      try {
+        // Look up email subject from ScheduledEmail
+        let emailSubject = params.metadata?.subject || '';
+        if (!emailSubject && params.scheduled_email_id) {
+          const se = await ScheduledEmail.findByPk(params.scheduled_email_id, { attributes: ['subject'], raw: true }) as any;
+          emailSubject = se?.subject || '';
+        }
+
+        if (params.outcome === 'opened') {
+          await logActivity({
+            lead_id: lead.id,
+            type: 'email_opened',
+            subject: emailSubject ? `Opened: ${emailSubject}` : 'Opened campaign email',
+            body: emailSubject || undefined,
+            metadata: {
+              interaction_outcome: 'opened',
+              scheduled_email_id: params.scheduled_email_id,
+              campaign_id: params.campaign_id,
+            },
+          });
+        } else {
+          // clicked — use 'system' type with activity_subtype in metadata
+          const clickedUrl = params.metadata?.url || '';
+          await logActivity({
+            lead_id: lead.id,
+            type: 'system',
+            subject: clickedUrl
+              ? `Clicked link: ${clickedUrl}`
+              : emailSubject
+                ? `Clicked link in: ${emailSubject}`
+                : 'Clicked link in email',
+            body: clickedUrl || undefined,
+            metadata: {
+              activity_subtype: 'email_clicked',
+              interaction_outcome: 'clicked',
+              clicked_url: clickedUrl || undefined,
+              email_subject: emailSubject || undefined,
+              scheduled_email_id: params.scheduled_email_id,
+              campaign_id: params.campaign_id,
+            },
+          });
+        }
+      } catch (actErr: any) {
+        console.warn(`[InteractionService] Activity bridge error:`, actErr.message);
+      }
+    }
+
     // Auto-classify lead temperature after every interaction
     try {
-      await classifyLead(params.lead_id, params.campaign_id, params.outcome);
+      await classifyLead(params.lead_id, params.campaign_id, params.outcome, {
+        email_subject: params.metadata?.subject,
+        outcome: params.outcome,
+      });
     } catch (classErr: any) {
       console.error(`[InteractionService] Classification error:`, classErr.message);
     }

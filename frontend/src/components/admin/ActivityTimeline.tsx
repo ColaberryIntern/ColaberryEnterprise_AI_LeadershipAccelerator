@@ -28,6 +28,12 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
   system: { icon: 'bi-gear', color: '#adb5bd', label: 'System' },
 };
 
+/** Subtype overrides for system activities — keyed by metadata.activity_subtype */
+const SUBTYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
+  email_clicked: { icon: 'bi-cursor', color: '#0dcaf0', label: 'Email Click' },
+  website_signal: { icon: 'bi-globe2', color: '#6f42c1', label: 'Website Activity' },
+};
+
 function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
   const [activities, setActivities] = useState<ActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +64,11 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
     });
   };
 
-  const getConfig = (type: string) => TYPE_CONFIG[type] || TYPE_CONFIG.system;
+  const getConfig = (activity: ActivityEntry) => {
+    const subtype = activity.metadata?.activity_subtype;
+    if (subtype && SUBTYPE_CONFIG[subtype]) return SUBTYPE_CONFIG[subtype];
+    return TYPE_CONFIG[activity.type] || TYPE_CONFIG.system;
+  };
 
   if (loading) {
     return <div className="text-center py-3"><div className="spinner-border spinner-border-sm text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>;
@@ -83,7 +93,11 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
       />
 
       {activities.map((activity) => {
-        const config = getConfig(activity.type);
+        const config = getConfig(activity);
+        const subtype = activity.metadata?.activity_subtype;
+        const isWebsiteSignal = subtype === 'website_signal';
+        const isEmailClick = subtype === 'email_clicked';
+
         return (
           <div key={activity.id} className="mb-3 position-relative">
             {/* Dot */}
@@ -106,6 +120,7 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
                   className="badge me-2"
                   style={{ backgroundColor: config.color, fontSize: '0.7rem' }}
                 >
+                  <i className={`bi ${config.icon} me-1`} />
                   {config.label}
                 </span>
                 {activity.subject && (
@@ -117,7 +132,30 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
               </span>
             </div>
 
-            {activity.body && (
+            {/* Extra details for website signals */}
+            {isWebsiteSignal && activity.metadata?.signal_type && (
+              <div className="mt-1">
+                <span className="badge bg-light text-dark border me-1" style={{ fontSize: '0.65rem' }}>
+                  {activity.metadata.signal_type.replace(/_/g, ' ')}
+                </span>
+                {activity.metadata.page_url && (
+                  <span className="text-muted small">{activity.metadata.page_url}</span>
+                )}
+                {activity.metadata.depth_percent && (
+                  <span className="text-muted small ms-1">({activity.metadata.depth_percent}% scrolled)</span>
+                )}
+              </div>
+            )}
+
+            {/* Extra details for email clicks */}
+            {isEmailClick && activity.metadata?.clicked_url && (
+              <div className="text-muted small mt-1">
+                <i className="bi bi-link-45deg me-1" />
+                {activity.metadata.clicked_url}
+              </div>
+            )}
+
+            {activity.body && !isEmailClick && !isWebsiteSignal && (
               <div className="text-muted small mt-1" style={{ whiteSpace: 'pre-wrap' }}>
                 {activity.body}
               </div>

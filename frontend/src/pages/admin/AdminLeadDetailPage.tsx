@@ -604,13 +604,26 @@ function AdminLeadDetailPage() {
                 <div className="card-header fw-bold py-3">Temperature History</div>
                 <div className="card-body p-0">
                   {tempHistory.slice(0, 5).map((entry: any) => (
-                    <div key={entry.id} className="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
-                      <TemperatureBadge temperature={entry.previous_temperature} />
-                      <span className="text-muted small">&rarr;</span>
-                      <TemperatureBadge temperature={entry.new_temperature} />
-                      <span className="text-muted small ms-auto">
-                        {entry.trigger_type === 'manual' ? 'Manual' : entry.trigger_detail?.replace(/_/g, ' ')}
-                      </span>
+                    <div key={entry.id} className="px-3 py-2 border-bottom">
+                      <div className="d-flex align-items-center gap-2">
+                        <TemperatureBadge temperature={entry.previous_temperature} />
+                        <span className="text-muted small">&rarr;</span>
+                        <TemperatureBadge temperature={entry.new_temperature} />
+                        <span className="text-muted small ms-auto">
+                          {entry.trigger_type === 'manual' ? 'Manual' : entry.trigger_detail?.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      {entry.metadata?.email_subject && (
+                        <div className="text-muted small mt-1 ps-2" style={{ fontSize: '0.75rem' }}>
+                          <i className="bi bi-envelope-open me-1" />
+                          {entry.metadata.email_subject}
+                        </div>
+                      )}
+                      {entry.metadata?.score !== undefined && (
+                        <div className="text-muted small ps-2" style={{ fontSize: '0.7rem' }}>
+                          Score: {entry.metadata.score}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

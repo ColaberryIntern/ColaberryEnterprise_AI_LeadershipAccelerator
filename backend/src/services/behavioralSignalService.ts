@@ -5,6 +5,7 @@ import {
   Visitor,
   VisitorSession,
 } from '../models';
+import { logActivity } from './activityService';
 
 /**
  * Signal type definitions with base strength values.
@@ -43,6 +44,45 @@ const SIGNAL_DEFINITIONS: Record<string, { strength: number; description: string
   research_pattern:      { strength: 30, description: 'Viewed program + pricing + case studies' },
   evaluation_pattern:    { strength: 45, description: 'Viewed pricing + enroll page' },
 };
+
+/** Format a behavioral signal into a human-readable timeline description */
+function formatSignalForTimeline(
+  signalType: string,
+  context: Record<string, any>,
+  def?: { description: string },
+): string {
+  const page = context.page || context.page_category || '';
+  switch (signalType) {
+    case 'pricing_visit': return `Visited pricing page${page ? ': ' + page : ''}`;
+    case 'enroll_page_visit': return `Visited enrollment page${page ? ': ' + page : ''}`;
+    case 'contact_page_visit': return `Visited contact page${page ? ': ' + page : ''}`;
+    case 'strategy_call_visit': return `Visited strategy call page${page ? ': ' + page : ''}`;
+    case 'deep_scroll_program':
+    case 'deep_scroll_pricing':
+    case 'deep_scroll_case_study':
+      return `Scrolled ${context.depth_percent || '75+'}% on${page ? ': ' + page : ' page'}`;
+    case 'cta_click_enroll': return `Clicked enrollment CTA${context.text ? ' ("' + context.text + '")' : ''}`;
+    case 'cta_click_contact': return `Clicked contact CTA`;
+    case 'cta_click_strategy': return `Clicked strategy call CTA`;
+    case 'form_started': return `Started filling out a form`;
+    case 'form_submitted': return `Submitted a form`;
+    case 'multi_page_session': return `Browsed ${context.pageview_count || '3+'} pages in one session`;
+    case 'long_session': {
+      const mins = context.duration_seconds ? Math.round(context.duration_seconds / 60) : 5;
+      return `Session lasted ${mins}+ minutes`;
+    }
+    case 'extended_time_on_page': {
+      const secs = context.seconds || 180;
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      return `Spent ${m}m ${s}s on${page ? ': ' + page : ' a page'}`;
+    }
+    case 'return_visit': return `Return visit (session #${context.session_count || '2+'})`;
+    case 'research_pattern': return `Research pattern: viewed program + pricing + case studies`;
+    case 'evaluation_pattern': return `Evaluation pattern: viewed pricing + enrollment`;
+    default: return def?.description || signalType.replace(/_/g, ' ');
+  }
+}
 
 /**
  * Detect behavioral signals from events within a single session.
@@ -209,7 +249,16 @@ export async function detectSessionSignals(sessionId: string): Promise<Behaviora
     }
   }
 
-  // Bulk create all new signals
+  // Bulk create all new signals + bridge high-intent ones to Activity timeline
+  const HIGH_INTENT_SIGNALS = new Set([
+    'pricing_visit', 'enroll_page_visit', 'contact_page_visit', 'strategy_call_visit',
+    'cta_click_enroll', 'cta_click_contact', 'cta_click_strategy',
+    'form_started', 'form_submitted',
+    'deep_scroll_program', 'deep_scroll_pricing', 'deep_scroll_case_study',
+    'multi_page_session', 'return_visit', 'long_session', 'extended_time_on_page',
+    'research_pattern', 'evaluation_pattern',
+  ]);
+
   const now = new Date();
   const created: BehavioralSignal[] = [];
   for (const sig of newSignals) {
@@ -223,6 +272,27 @@ export async function detectSessionSignals(sessionId: string): Promise<Behaviora
       detected_at: now,
     } as any);
     created.push(record);
+
+    // Bridge to Activity timeline for leads
+    if (leadId && HIGH_INTENT_SIGNALS.has(sig.signal_type)) {
+      try {
+        const def = SIGNAL_DEFINITIONS[sig.signal_type];
+        await logActivity({
+          lead_id: leadId,
+          type: 'system',
+          subject: formatSignalForTimeline(sig.signal_type, sig.context, def),
+          metadata: {
+            activity_subtype: 'website_signal',
+            signal_type: sig.signal_type,
+            signal_strength: sig.signal_strength,
+            page_url: sig.context.page || sig.context.page_category || undefined,
+            ...sig.context,
+          },
+        });
+      } catch (actErr: any) {
+        console.warn(`[BehavioralSignal] Activity bridge error:`, actErr.message);
+      }
+    }
   }
 
   return created;
