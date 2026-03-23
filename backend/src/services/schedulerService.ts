@@ -1620,11 +1620,12 @@ export function startScheduler(): void {
       let called = 0;
       for (const lead of hotLeads as any[]) {
         try {
-          // Mark lead as hot
-          await Lead.update(
-            { lead_temperature: 'hot' },
-            { where: { id: lead.lead_id } },
-          );
+          // Mark lead as hot (with temperature history)
+          const { classifyLeadManual } = require('./leadClassificationService');
+          await classifyLeadManual(lead.lead_id, 'hot', 'system:hot_lead_escalation').catch(() => {
+            // Fallback to direct update if classifyLeadManual fails
+            Lead.update({ lead_temperature: 'hot' }, { where: { id: lead.lead_id } });
+          });
 
           // Skip voice call if no phone — still mark as hot
           if (!lead.phone) {
