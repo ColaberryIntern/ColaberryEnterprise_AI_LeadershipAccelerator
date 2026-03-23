@@ -269,6 +269,8 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
     attendees: [
       { email: attendeeEmail, displayName: data.name },
       ...(env.googleCalendarOwnerEmail ? [{ email: env.googleCalendarOwnerEmail }] : []),
+      { email: 'ali@colaberry.com' },
+      { email: 'ram@colaberry.com' },
     ],
     reminders: {
       useDefault: false,

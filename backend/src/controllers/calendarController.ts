@@ -121,8 +121,9 @@ export async function handleBookCall(
       try {
         const { getSetting } = require('../services/settingsService');
         const { sendAlertEmail } = require('../services/emailService');
-        const adminEmail = await getSetting('admin_notification_emails');
-        if (adminEmail) {
+        const adminEmailSetting = await getSetting('admin_notification_emails');
+        const adminEmails = (adminEmailSetting || '').split(',').map((e: string) => e.trim()).filter(Boolean);
+        for (const adminEmail of adminEmails) {
           const callDate = new Date(booking.startTime).toLocaleString('en-US', {
             timeZone: 'America/Chicago',
             weekday: 'long', month: 'short', day: 'numeric',
