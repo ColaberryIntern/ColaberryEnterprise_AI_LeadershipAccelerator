@@ -27,6 +27,7 @@ services:
     environment:
       DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@postgres:5432/${DB_NAME:-accelerator_prod}
       INTELLIGENCE_ENGINE_URL: http://intelligence:5000
+      NODE_OPTIONS: "--max-old-space-size=512"
     depends_on:
       postgres:
         condition: service_healthy
