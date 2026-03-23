@@ -131,6 +131,7 @@ import VerificationLog from './VerificationLog';
 import ProgressionLog from './ProgressionLog';
 import ProjectRisk from './ProjectRisk';
 import AnomalyLog from './AnomalyLog';
+import ProjectSystemContract from './ProjectSystemContract';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -588,6 +589,10 @@ ProgressionLog.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 NextAction.hasMany(ProgressionLog, { foreignKey: 'action_id', as: 'progressionLogs' });
 ProgressionLog.belongsTo(NextAction, { foreignKey: 'action_id', as: 'action' });
 
+// --- System Design Contract ---
+Project.hasOne(ProjectSystemContract, { foreignKey: 'project_id', as: 'systemContract' });
+ProjectSystemContract.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
 // --- Risk + Anomaly ---
 Project.hasMany(ProjectRisk, { foreignKey: 'project_id', as: 'projectRisks' });
 ProjectRisk.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
@@ -779,4 +784,5 @@ export {
   ProgressionLog,
   ProjectRisk,
   AnomalyLog,
+  ProjectSystemContract,
 };

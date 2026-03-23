@@ -36,7 +36,6 @@ export interface LessonContext {
   implementationTaskData?: ImplementationTaskData;
   workstationPrompt?: string;
   workstationTestMode?: boolean;
-  resolvedVariables?: Record<string, string>;
 }
 
 export interface LearnerProfile {
@@ -165,37 +164,20 @@ export function MentorContextProvider({ children }: { children: React.ReactNode 
 
   const openLLMWithPrompt = useCallback(async (prompt: string) => {
     const personalized = buildPersonalizedPrompt(prompt);
-    // Always copy to clipboard — URL query strings have length limits
+    // Always copy to clipboard first — URL query strings have length limits
     try { await navigator.clipboard.writeText(personalized); } catch {}
     const encoded = encodeURIComponent(personalized);
-    const MAX_URL = 6000;
-    const useClipboard = encoded.length + 50 > MAX_URL;
-    if (useClipboard) {
-      // Show toast telling user to paste
-      const toast = document.createElement('div');
-      toast.innerHTML = `
-        <div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;
-          background:#1a365d;color:#fff;padding:14px 24px;border-radius:10px;
-          box-shadow:0 4px 20px rgba(0,0,0,0.25);font-size:14px;font-weight:500;
-          display:flex;align-items:center;gap:10px;max-width:440px;
-          animation:toastSlideIn 0.3s ease">
-          <span style="font-size:20px">📋</span>
-          <div>
-            <div style="font-weight:600">Prompt copied to clipboard</div>
-            <div style="font-size:12px;opacity:0.85;margin-top:2px">
-              ${selectedLLM.name} is opening — press <strong>Ctrl+V</strong> (or ⌘V) to paste your prompt
-            </div>
-          </div>
-        </div>
-        <style>@keyframes toastSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
-      `;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 6000);
-    }
+    const MAX_URL_LENGTH = 6000; // safe limit for most browsers/servers
     if (selectedLLM.id === 'chatgpt') {
-      window.open(useClipboard ? 'https://chat.openai.com' : `https://chat.openai.com/?q=${encoded}`, '_blank');
+      const url = encoded.length + 40 < MAX_URL_LENGTH
+        ? `https://chat.openai.com/?q=${encoded}`
+        : 'https://chat.openai.com';
+      window.open(url, '_blank');
     } else if (selectedLLM.id === 'claude') {
-      window.open(useClipboard ? 'https://claude.ai/new' : `https://claude.ai/new?q=${encoded}`, '_blank');
+      const url = encoded.length + 30 < MAX_URL_LENGTH
+        ? `https://claude.ai/new?q=${encoded}`
+        : 'https://claude.ai/new';
+      window.open(url, '_blank');
     } else {
       window.open(selectedLLM.url, '_blank');
     }
@@ -250,9 +232,8 @@ const PREVIEW_FALLBACK: MentorContextValue = {
   onMentorResponded: { current: null },
   fireMentorResponded: () => {},
   openLLMWithPrompt: async (prompt: string) => {
-    try { await navigator.clipboard.writeText(prompt); } catch {}
     const encoded = encodeURIComponent(prompt);
-    window.open(encoded.length + 40 < 6000 ? `https://chat.openai.com/?q=${encoded}` : 'https://chat.openai.com', '_blank');
+    window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
   },
   learnerProfile: {
     company_name: 'Preview Corp',
@@ -282,36 +263,13 @@ export function AdminPreviewMentorProvider({ children }: { children: React.React
   const clearPendingMessage = useCallback(() => setPendingMsg(null), []);
 
   const openLLMWithPrompt = useCallback(async (prompt: string) => {
-    try { await navigator.clipboard.writeText(prompt); } catch {}
     const encoded = encodeURIComponent(prompt);
-    const MAX_URL = 6000;
-    const useClipboard = encoded.length + 50 > MAX_URL;
-    if (useClipboard) {
-      const toast = document.createElement('div');
-      toast.innerHTML = `
-        <div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;
-          background:#1a365d;color:#fff;padding:14px 24px;border-radius:10px;
-          box-shadow:0 4px 20px rgba(0,0,0,0.25);font-size:14px;font-weight:500;
-          display:flex;align-items:center;gap:10px;max-width:440px;
-          animation:toastSlideIn 0.3s ease">
-          <span style="font-size:20px">📋</span>
-          <div>
-            <div style="font-weight:600">Prompt copied to clipboard</div>
-            <div style="font-size:12px;opacity:0.85;margin-top:2px">
-              ${selectedLLM.name} is opening — press <strong>Ctrl+V</strong> (or ⌘V) to paste your prompt
-            </div>
-          </div>
-        </div>
-        <style>@keyframes toastSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
-      `;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 6000);
-    }
     if (selectedLLM.id === 'chatgpt') {
-      window.open(useClipboard ? 'https://chat.openai.com' : `https://chat.openai.com/?q=${encoded}`, '_blank');
+      window.open(`https://chat.openai.com/?q=${encoded}`, '_blank');
     } else if (selectedLLM.id === 'claude') {
-      window.open(useClipboard ? 'https://claude.ai/new' : `https://claude.ai/new?q=${encoded}`, '_blank');
+      window.open(`https://claude.ai/new?q=${encoded}`, '_blank');
     } else {
+      try { await navigator.clipboard.writeText(prompt); } catch {}
       window.open(selectedLLM.url, '_blank');
     }
   }, [selectedLLM]);
