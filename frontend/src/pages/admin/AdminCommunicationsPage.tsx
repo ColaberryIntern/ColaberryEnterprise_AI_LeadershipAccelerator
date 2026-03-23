@@ -85,6 +85,38 @@ const CHANNEL_ICONS: Record<string, string> = {
 };
 
 /* ------------------------------------------------------------------ */
+/*  Campaign Colors                                                    */
+/* ------------------------------------------------------------------ */
+
+// Deterministic color palette for campaigns — visually distinct, accessible against white
+const CAMPAIGN_COLORS = [
+  '#1a365d', // navy
+  '#2b6cb0', // blue
+  '#2c7a7b', // teal
+  '#276749', // forest
+  '#6b46c1', // purple
+  '#c05621', // orange
+  '#b7791f', // gold
+  '#9b2c2c', // crimson
+  '#2d3748', // charcoal
+  '#0987a0', // cyan
+  '#805ad5', // violet
+  '#d53f8c', // pink
+  '#38a169', // green
+  '#dd6b20', // amber
+  '#3182ce', // cerulean
+  '#e53e3e', // red
+];
+
+function getCampaignColor(campaignId: string, campaignMap: Map<string, number>): string {
+  if (!campaignId) return 'transparent';
+  if (!campaignMap.has(campaignId)) {
+    campaignMap.set(campaignId, campaignMap.size);
+  }
+  return CAMPAIGN_COLORS[campaignMap.get(campaignId)! % CAMPAIGN_COLORS.length];
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -102,6 +134,9 @@ function AdminCommunicationsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CommDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  // Stable campaign → color mapping (built from campaigns list)
+  const [campaignColorMap] = useState(() => new Map<string, number>());
 
   // Compute date range from preset
   const getDateRange = () => {
@@ -228,6 +263,35 @@ function AdminCommunicationsPage() {
         </div>
       </div>
 
+      {/* Campaign Color Legend */}
+      {(() => {
+        // Build legend from visible campaigns in current rows
+        const visibleCampaigns = new Map<string, string>();
+        rows.forEach(r => {
+          if (r.campaign_id && r.campaign_name && !visibleCampaigns.has(r.campaign_id)) {
+            visibleCampaigns.set(r.campaign_id, r.campaign_name);
+          }
+        });
+        if (visibleCampaigns.size === 0) return null;
+        return (
+          <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
+            <span className="small text-muted fw-medium me-1">Campaigns:</span>
+            {Array.from(visibleCampaigns.entries()).map(([cid, cname]) => (
+              <span key={cid} className="d-inline-flex align-items-center gap-1 small"
+                style={{ cursor: 'pointer', opacity: campaignFilter && campaignFilter !== cid ? 0.4 : 1 }}
+                onClick={() => { setCampaignFilter(campaignFilter === cid ? '' : cid); setPage(1); }}>
+                <span style={{
+                  width: 10, height: 10, borderRadius: 2,
+                  backgroundColor: getCampaignColor(cid, campaignColorMap),
+                  display: 'inline-block', flexShrink: 0,
+                }} />
+                {cname.length > 28 ? cname.substring(0, 26) + '...' : cname}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Table */}
       <div className="card border-0 shadow-sm">
         <div className="table-responsive">
@@ -250,7 +314,8 @@ function AdminCommunicationsPage() {
                 <tr><td colSpan={7} className="text-center py-4 text-muted">No communications found</td></tr>
               ) : rows.map(row => (
                 <React.Fragment key={row.id}>
-                  <tr style={{ cursor: 'pointer' }} onClick={() => toggleDetail(row.id)}
+                  <tr style={{ cursor: 'pointer', borderLeft: row.campaign_id ? `4px solid ${getCampaignColor(row.campaign_id, campaignColorMap)}` : undefined }}
+                    onClick={() => toggleDetail(row.id)}
                     className={expandedId === row.id ? 'table-active' : ''}>
                     <td className="small text-nowrap">{fmtTime(row.created_at)}</td>
                     <td className="small">
