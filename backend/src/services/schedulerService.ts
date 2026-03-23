@@ -1562,13 +1562,27 @@ export function startScheduler(): void {
 
   console.log('[Scheduler] Alumni: lifecycle processor daily at 6 AM CT (11 UTC)');
 
-  // ── Hot Lead Escalation (hourly during business hours, weekdays) ────────
-  // Detects leads with 2+ email opens or any click, triggers a one-off
-  // Cory voice call + marks lead_temperature = 'hot'. Does NOT change
-  // campaign enrollment (leads stay in Cold Outbound / Alumni Champion).
-  cron.schedule('30 14-22 * * 1-5', () => { // 9:30AM-5:30PM CT
+  // ── Hot Lead Escalation (every 15 min, weekdays 9AM-5PM CT) ─────────────
+  // Maya calls within ~15 min of interest. Max 50 calls/day. Newest first.
+  cron.schedule('3,18,33,48 14-22 * * 1-5', () => {
     instrumentCronJob('HotLeadEscalation', async () => {
-      // Find ALL hot leads with their active campaign, who haven't been called yet
+      // Daily cap: max 50 calls per day
+      const settingsSvc = require('./settingsService');
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const lastDate = await settingsSvc.getSetting('hot_lead_calls_date');
+      let callsToday = parseInt(await settingsSvc.getSetting('hot_lead_calls_today') || '0', 10);
+      if (lastDate !== todayStr) {
+        callsToday = 0;
+        await settingsSvc.setSetting('hot_lead_calls_date', todayStr);
+        await settingsSvc.setSetting('hot_lead_calls_today', '0');
+      }
+      if (callsToday >= 50) {
+        console.log(`[HotLead] Daily cap reached (${callsToday}/50)`);
+        return;
+      }
+      const remaining = 50 - callsToday;
+
+      // Find hot leads — prioritize newest engagement, cap by remaining
       const [hotLeads] = await sequelize.query(`
         SELECT DISTINCT sub.lead_id, l.name, l.email, l.phone,
           cl_camp.campaign_id as active_campaign_id, c.name as campaign_name
@@ -1589,11 +1603,13 @@ export function startScheduler(): void {
             AND comm.channel = 'voice'
             AND comm.metadata->>'trigger' = 'hot_lead_escalation'
           )
+        ORDER BY sub.lead_id DESC
+        LIMIT ${remaining}
       `);
 
       if ((hotLeads as any[]).length === 0) return;
 
-      console.log(`[HotLead] Found ${(hotLeads as any[]).length} hot leads for outreach`);
+      console.log(`[HotLead] Found ${(hotLeads as any[]).length} hot leads for outreach (${callsToday}/50 today)`);
 
       const { triggerVoiceCall } = require('./synthflowService');
       const { logCommunication } = require('./communicationLogService');
@@ -1673,6 +1689,8 @@ export function startScheduler(): void {
               },
             }).catch(() => {});
             console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
+            callsToday++;
+            await settingsSvc.setSetting('hot_lead_calls_today', String(callsToday));
           }
         } catch (err: any) {
           console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
@@ -1683,13 +1701,13 @@ export function startScheduler(): void {
       }
 
       if (called > 0) {
-        console.log(`[HotLead] Made ${called} outreach calls to hot leads`);
+        console.log(`[HotLead] Made ${called} calls (${callsToday}/50 today)`);
       }
     }).catch((err: any) => {
       console.error('[Scheduler] Hot lead escalation error:', err.message);
     });
   });
-  console.log('[Scheduler] Hot lead escalation: hourly during business hours (Cory voice call to engaged leads)');
+  console.log('[Scheduler] Hot lead escalation: every 15 min (50/day cap, newest first)');
 
   // ── Autonomous Ramp Evaluator (8 AM CT weekdays = 13:00 UTC Mon-Fri) ──
   const { runRampEvaluator } = require('./autonomousRampService');
