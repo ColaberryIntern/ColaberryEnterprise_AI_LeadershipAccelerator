@@ -36,6 +36,7 @@ export interface LessonContext {
   implementationTaskData?: ImplementationTaskData;
   workstationPrompt?: string;
   workstationTestMode?: boolean;
+  resolvedVariables?: Record<string, string>;
 }
 
 export interface LearnerProfile {
