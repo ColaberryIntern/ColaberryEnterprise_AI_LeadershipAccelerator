@@ -89,8 +89,10 @@ export async function runOpenclawContentResponseAgent(
           updated_at: new Date(),
         });
 
-        // Create post task if auto-approval is enabled (default: require approval)
-        if (!config.require_approval) {
+        // Auto-approve for platforms in auto_approve_platforms list, or globally if require_approval is off
+        const autoApprovePlatforms: string[] = config.auto_approve_platforms || [];
+        const shouldAutoApprove = !config.require_approval || autoApprovePlatforms.includes(signal.platform);
+        if (shouldAutoApprove) {
           await OpenclawTask.create({
             task_type: 'post_response',
             priority: task.priority,

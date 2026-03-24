@@ -18,7 +18,7 @@ export async function postToDevTo(
   if (!apiKey) throw new Error('DEVTO_API_KEY not configured');
 
   const resp = await axios.post(
-    'https://dev.to/api/comments',
+    'https://dev.to/api/v1/comments',
     {
       comment: {
         body_markdown: bodyMarkdown,
