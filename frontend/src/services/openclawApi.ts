@@ -11,6 +11,15 @@ export interface OpenclawDashboard {
     active_sessions: number;
     queue_depth: number;
     learnings: number;
+    active_agents: number;
+    content_pipeline: number;
+    replies_sent: number;
+    total_engagement_score: number;
+    total_clicks: number;
+    total_replies: number;
+    ctr: number;
+    reply_rate: number;
+    best_tone: string;
   };
   platforms: Array<{ platform: string; count: number }>;
   agents: Array<{
@@ -27,6 +36,32 @@ export interface OpenclawDashboard {
     error_count: number;
     avg_duration_ms: number | null;
   }>;
+  performance: {
+    top_responses: Array<{
+      id: string;
+      platform: string;
+      tone: string;
+      short_id: string;
+      posted_at: string;
+      content_preview: string;
+      engagement_score: number;
+      clicks: number;
+      replies: number;
+      reactions: number;
+      signal_title: string;
+    }>;
+    tone_breakdown: Array<{
+      tone: string;
+      avg_engagement: number;
+      sample_size: number;
+      confidence: number;
+    }>;
+    platform_breakdown: Array<{
+      platform: string;
+      avg_engagement: number;
+      sample_size: number;
+    }>;
+  };
 }
 
 export interface OpenclawSignalItem {

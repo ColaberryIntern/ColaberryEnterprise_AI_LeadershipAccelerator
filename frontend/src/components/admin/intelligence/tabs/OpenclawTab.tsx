@@ -310,17 +310,19 @@ export default function OpenclawTab() {
       {kpis && (
         <div className="row g-2 mb-4">
           {[
-            { label: 'Signals (24h)', value: kpis.signals_24h, color: 'var(--color-primary)' },
-            { label: 'Posted', value: kpis.responses_posted, color: 'var(--color-accent)' },
-            { label: 'Drafts', value: kpis.responses_draft, color: '#dd6b20' },
-            { label: 'Sessions', value: kpis.active_sessions, color: '#2b6cb0' },
-            { label: 'Queue', value: kpis.queue_depth, color: '#805ad5' },
-            { label: 'Learnings', value: kpis.learnings, color: '#319795' },
-          ].map((kpi) => (
-            <div key={kpi.label} className="col-4 col-md-2">
+            { label: 'Active Agents', value: kpis.active_agents, color: 'var(--color-primary)' },
+            { label: 'Replies Sent', value: kpis.replies_sent, color: 'var(--color-accent)' },
+            { label: 'Engagement Score', value: Math.round(kpis.total_engagement_score), color: '#dd6b20' },
+            { label: 'CTR', value: `${(kpis.ctr * 100).toFixed(1)}%`, color: '#2b6cb0' },
+            { label: 'Reply Rate', value: `${(kpis.reply_rate * 100).toFixed(1)}%`, color: '#805ad5' },
+            { label: 'Best Tone', value: kpis.best_tone, color: '#319795', isBadge: true },
+            { label: 'Content Pipeline', value: kpis.content_pipeline, color: '#d69e2e' },
+            { label: 'Signals (24h)', value: kpis.signals_24h, color: 'var(--color-primary-light)' },
+          ].map((kpi: any) => (
+            <div key={kpi.label} className="col-6 col-md-3">
               <div className="card border-0 shadow-sm text-center py-2 px-1">
-                <div className="fw-bold" style={{ fontSize: '1.3rem', color: kpi.color }}>
-                  {kpi.value}
+                <div className="fw-bold" style={{ fontSize: kpi.isBadge ? '0.85rem' : '1.3rem', color: kpi.color }}>
+                  {kpi.isBadge ? <span className="badge bg-info">{kpi.value}</span> : kpi.value}
                 </div>
                 <div className="text-muted" style={{ fontSize: '0.65rem' }}>{kpi.label}</div>
               </div>
@@ -344,6 +346,119 @@ export default function OpenclawTab() {
               {p.platform}: {p.count}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Content Performance */}
+      {dashboard?.performance && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div
+            className="card-header bg-white fw-semibold small d-flex justify-content-between align-items-center"
+            style={{ cursor: 'pointer' }}
+            onClick={() => {
+              const el = document.getElementById('perf-collapse');
+              if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+            }}
+          >
+            Content Performance
+            <span className="text-muted" style={{ fontSize: '0.65rem' }}>click to expand</span>
+          </div>
+          <div id="perf-collapse" style={{ display: 'none' }}>
+            {/* Top Responses Leaderboard */}
+            {dashboard.performance.top_responses.length > 0 && (
+              <div className="card-body p-0 border-bottom">
+                <div className="px-3 py-2 fw-medium small text-muted">Top Performing Content</div>
+                <div className="table-responsive">
+                  <table className="table table-hover mb-0 small">
+                    <thead className="table-light">
+                      <tr>
+                        <th>#</th>
+                        <th>Platform</th>
+                        <th>Tone</th>
+                        <th>Signal</th>
+                        <th>Eng. Score</th>
+                        <th>Clicks</th>
+                        <th>Replies</th>
+                        <th>Posted</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboard.performance.top_responses.map((r, i) => (
+                        <tr key={r.id}>
+                          <td className="fw-bold text-muted">{i + 1}</td>
+                          <td>
+                            <span className="badge" style={{ backgroundColor: PLATFORM_COLORS[r.platform] || '#718096', fontSize: '0.6rem' }}>
+                              {r.platform}
+                            </span>
+                          </td>
+                          <td><span className="badge bg-secondary" style={{ fontSize: '0.55rem' }}>{r.tone}</span></td>
+                          <td>
+                            <span className="text-truncate d-inline-block" style={{ maxWidth: 180, fontSize: '0.7rem' }} title={r.signal_title}>
+                              {r.signal_title || r.content_preview}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge bg-${(r.engagement_score || 0) > 5 ? 'success' : (r.engagement_score || 0) > 0 ? 'warning' : 'secondary'}`}>
+                              {r.engagement_score || 0}
+                            </span>
+                          </td>
+                          <td>{r.clicks || 0}</td>
+                          <td>{r.replies || 0}</td>
+                          <td className="text-muted text-nowrap">{timeAgo(r.posted_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tone & Platform Breakdown */}
+            <div className="card-body">
+              <div className="row">
+                {dashboard.performance.tone_breakdown.length > 0 && (
+                  <div className="col-md-6 mb-3">
+                    <div className="fw-medium small mb-2">Tone Effectiveness</div>
+                    {dashboard.performance.tone_breakdown.map((t) => {
+                      const maxEng = Math.max(...dashboard!.performance.tone_breakdown.map(x => x.avg_engagement), 1);
+                      const pct = (t.avg_engagement / maxEng) * 100;
+                      return (
+                        <div key={t.tone} className="mb-2">
+                          <div className="d-flex justify-content-between" style={{ fontSize: '0.7rem' }}>
+                            <span className="fw-medium">{t.tone}</span>
+                            <span className="text-muted">avg {t.avg_engagement.toFixed(1)} (n={t.sample_size})</span>
+                          </div>
+                          <div className="progress" style={{ height: 6 }}>
+                            <div className="progress-bar bg-primary" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {dashboard.performance.platform_breakdown.length > 0 && (
+                  <div className="col-md-6 mb-3">
+                    <div className="fw-medium small mb-2">Platform Engagement</div>
+                    {dashboard.performance.platform_breakdown.map((p) => {
+                      const maxEng = Math.max(...dashboard!.performance.platform_breakdown.map(x => x.avg_engagement), 1);
+                      const pct = (p.avg_engagement / maxEng) * 100;
+                      return (
+                        <div key={p.platform} className="mb-2">
+                          <div className="d-flex justify-content-between" style={{ fontSize: '0.7rem' }}>
+                            <span className="fw-medium">{p.platform}</span>
+                            <span className="text-muted">avg {p.avg_engagement.toFixed(1)} (n={p.sample_size})</span>
+                          </div>
+                          <div className="progress" style={{ height: 6 }}>
+                            <div className="progress-bar" style={{ width: `${pct}%`, backgroundColor: PLATFORM_COLORS[p.platform] || '#718096' }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -506,6 +621,7 @@ export default function OpenclawTab() {
                   <th>Signal</th>
                   <th>Tone</th>
                   <th>Content</th>
+                  <th>Eng.</th>
                   <th>Status</th>
                   <th>Time</th>
                   <th>Actions</th>
@@ -548,6 +664,13 @@ export default function OpenclawTab() {
                       >
                         {resp.content}
                       </span>
+                    </td>
+                    <td>
+                      {(() => {
+                        const score = resp.engagement_metrics?.engagement_score || 0;
+                        const variant = score > 5 ? 'success' : score > 0 ? 'warning' : 'secondary';
+                        return <span className={`badge bg-${variant}`} style={{ fontSize: '0.6rem' }}>{score}</span>;
+                      })()}
                     </td>
                     <td>
                       <span className={`badge bg-${STATUS_BADGES[resp.post_status] || 'secondary'}`}>

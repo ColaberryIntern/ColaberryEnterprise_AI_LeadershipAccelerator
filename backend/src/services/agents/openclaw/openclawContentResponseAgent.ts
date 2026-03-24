@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
-import { OpenclawSignal, OpenclawTask, OpenclawResponse } from '../../../models';
+import { OpenclawSignal, OpenclawTask, OpenclawResponse, OpenclawLearning } from '../../../models';
 import { getOpenAIClient } from '../../../intelligence/assistant/openaiHelper';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
@@ -64,10 +64,11 @@ export async function runOpenclawContentResponseAgent(
           utm_campaign: shortId,
         };
 
-        // Generate response content
-        const tone = selectTone(signal, defaultTone);
+        // Generate response content — learning-aware tone selection
+        const { tone, toneSource, learningId } = await selectToneFromLearnings(signal, defaultTone);
+        const topicHints = await getTopPerformingTopics();
         const includeLink = LINK_ALLOWED_PLATFORMS.has(signal.platform);
-        const content = await generateLLMResponse(signal, tone, maxLength, includeLink ? trackedUrl : null);
+        const content = await generateLLMResponse(signal, tone, maxLength, includeLink ? trackedUrl : null, topicHints);
 
         // Create draft response with unique tracking
         const response = await OpenclawResponse.create({
@@ -103,7 +104,7 @@ export async function runOpenclawContentResponseAgent(
 
         await task.update({
           status: 'completed',
-          output_data: { response_id: response.id, tone, content_length: content.length, short_id: shortId },
+          output_data: { response_id: response.id, tone, tone_source: toneSource, learning_id: learningId, content_length: content.length, short_id: shortId },
           completed_at: new Date(),
           updated_at: new Date(),
         });
@@ -143,23 +144,71 @@ export async function runOpenclawContentResponseAgent(
   };
 }
 
-function selectTone(signal: any, defaultTone: string): string {
+/**
+ * Learning-aware tone selection. Queries platform_tone_combo learnings first,
+ * falls back to keyword heuristic if no learnings exist.
+ */
+async function selectToneFromLearnings(
+  signal: any,
+  defaultTone: string,
+): Promise<{ tone: string; toneSource: 'learning' | 'heuristic'; learningId?: string }> {
+  try {
+    // Query learnings for best tone on this platform
+    const comboLearnings = await OpenclawLearning.findAll({
+      where: {
+        learning_type: 'platform_tone_combo',
+        platform: signal.platform,
+        confidence: { [Op.gte]: 0.5 },
+        sample_size: { [Op.gte]: 3 },
+      },
+      order: [['metric_value', 'DESC']],
+      limit: 1,
+    });
+
+    if (comboLearnings.length > 0) {
+      const best = comboLearnings[0];
+      const details = best.details || {};
+      const tone = details.tone || defaultTone;
+      return { tone, toneSource: 'learning', learningId: best.id };
+    }
+  } catch {
+    // Fall through to heuristic
+  }
+
+  // Fallback: keyword heuristic
   const platform = signal.platform;
   const text = ((signal.title || '') + ' ' + (signal.content_excerpt || '')).toLowerCase();
 
-  // Technical platforms prefer technical tone
   if (platform === 'hackernews' || platform === 'devto') {
     if (text.includes('code') || text.includes('implementation') || text.includes('architecture')) {
-      return 'technical';
+      return { tone: 'technical', toneSource: 'heuristic' };
     }
   }
 
-  // Questions and discussions prefer conversational tone
   if (text.includes('?') || text.includes('advice') || text.includes('thoughts')) {
-    return 'conversational';
+    return { tone: 'conversational', toneSource: 'heuristic' };
   }
 
-  return defaultTone;
+  return { tone: defaultTone, toneSource: 'heuristic' };
+}
+
+/**
+ * Fetch top-performing topic keywords from learnings to inject as hints.
+ */
+async function getTopPerformingTopics(): Promise<string[]> {
+  try {
+    const topTopics = await OpenclawLearning.findAll({
+      where: {
+        learning_type: 'topic_performance',
+        sample_size: { [Op.gte]: 3 },
+      },
+      order: [['metric_value', 'DESC']],
+      limit: 3,
+    });
+    return topTopics.map(t => t.metric_key);
+  } catch {
+    return [];
+  }
 }
 
 const SYSTEM_PROMPT = `You are Ali Moiz, founder of an enterprise AI leadership training program. You run a 6-week accelerator that helps business leaders and teams build practical AI skills — prompt engineering, AI strategy, RAG architectures, and hands-on implementation.
@@ -183,7 +232,7 @@ const SYSTEM_PROMPT_WITH_LINK = `${SYSTEM_PROMPT}
    - "I go deeper on the enterprise adoption side here: [URL]"
    Make it feel like a helpful resource share, not an ad. The URL MUST appear in your response.`;
 
-function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUrl: string | null): string {
+function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUrl: string | null, topicHints: string[] = []): string {
   const platform = signal.platform;
   const title = signal.title || '';
   const excerpt = signal.content_excerpt || '';
@@ -224,14 +273,14 @@ ${details.subreddit ? `Subreddit: r/${details.subreddit}` : ''}
 ${details.num_comments ? `Comments: ${details.num_comments}` : ''}
 --- END ---
 
-Write a response to this post. Remember: provide genuine value, no self-promotion.${linkInstruction}`;
+Write a response to this post. Remember: provide genuine value, no self-promotion.${topicHints.length > 0 ? `\n\nTopics that perform well with our audience: ${topicHints.join(', ')}. Weave these in if naturally relevant.` : ''}${linkInstruction}`;
 }
 
 // Use gpt-4o for outreach content — higher quality than gpt-4o-mini
 const OPENCLAW_MODEL = 'gpt-4o';
 
-async function generateLLMResponse(signal: any, tone: string, maxLength: number, trackedUrl: string | null): Promise<string> {
-  const userPrompt = buildUserPrompt(signal, tone, maxLength, trackedUrl);
+async function generateLLMResponse(signal: any, tone: string, maxLength: number, trackedUrl: string | null, topicHints: string[] = []): Promise<string> {
+  const userPrompt = buildUserPrompt(signal, tone, maxLength, trackedUrl, topicHints);
   const systemPrompt = trackedUrl ? SYSTEM_PROMPT_WITH_LINK : SYSTEM_PROMPT;
   const client = getOpenAIClient();
 

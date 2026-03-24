@@ -1,7 +1,8 @@
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import OpenclawResponse from '../../../models/OpenclawResponse';
 import AuthorityContent from '../../../models/AuthorityContent';
 import EngagementEvent from '../../../models/EngagementEvent';
+import { sequelize } from '../../../config/database';
 import { fetchEngagementsForUrl } from './openclawEngagementFetcher';
 import { generateContent } from './openclawAiHelper';
 import type { AgentExecutionResult, AgentAction } from '../types';
@@ -132,6 +133,101 @@ export async function runEngagementMonitorAgent(
       result: 'success',
       entity_type: 'engagement_event',
     });
+
+    // 5. Aggregate engagement metrics back to responses and authority content
+    let metricsUpdated = 0;
+    try {
+      // Get engagement counts grouped by response_id and engagement_type
+      const responseMetrics: any[] = await sequelize.query(`
+        SELECT
+          response_id,
+          COUNT(*) FILTER (WHERE engagement_type IN ('reply','comment')) as replies,
+          COUNT(*) FILTER (WHERE engagement_type = 'reaction') as reactions,
+          COUNT(*) FILTER (WHERE engagement_type = 'share') as shares,
+          COUNT(*) FILTER (WHERE engagement_type = 'mention') as mentions,
+          COUNT(*) FILTER (WHERE role_seniority IN ('director','vp','c_level')) as senior_engagements
+        FROM openclaw_engagement_events
+        WHERE response_id IS NOT NULL
+        GROUP BY response_id
+      `, { type: QueryTypes.SELECT });
+
+      for (const row of responseMetrics) {
+        const response = await OpenclawResponse.findByPk(row.response_id);
+        if (!response) continue;
+        const existing = response.engagement_metrics || {};
+        const clicks = Number(existing.clicks || 0);
+        const replies = Number(row.replies || 0);
+        const reactions = Number(row.reactions || 0);
+        const shares = Number(row.shares || 0);
+        const mentions = Number(row.mentions || 0);
+        const seniorEngagements = Number(row.senior_engagements || 0);
+
+        // Weighted score: clicks×3 + replies×2 + reactions×1 + shares×2 + seniority bonus (2 extra per senior)
+        const engagementScore = (clicks * 3) + (replies * 2) + (reactions * 1) + (shares * 2) + (seniorEngagements * 2);
+
+        await response.update({
+          engagement_metrics: {
+            ...existing,
+            replies, reactions, shares, mentions, senior_engagements: seniorEngagements,
+            engagement_score: engagementScore,
+            last_aggregated: new Date().toISOString(),
+          },
+          updated_at: new Date(),
+        });
+        metricsUpdated++;
+      }
+
+      // Same for authority content
+      const authorityMetrics: any[] = await sequelize.query(`
+        SELECT
+          authority_content_id,
+          COUNT(*) FILTER (WHERE engagement_type IN ('reply','comment')) as replies,
+          COUNT(*) FILTER (WHERE engagement_type = 'reaction') as reactions,
+          COUNT(*) FILTER (WHERE engagement_type = 'share') as shares,
+          COUNT(*) FILTER (WHERE role_seniority IN ('director','vp','c_level')) as senior_engagements
+        FROM openclaw_engagement_events
+        WHERE authority_content_id IS NOT NULL
+        GROUP BY authority_content_id
+      `, { type: QueryTypes.SELECT });
+
+      for (const row of authorityMetrics) {
+        const content = await AuthorityContent.findByPk(row.authority_content_id);
+        if (!content) continue;
+        const existing = content.performance_metrics || {};
+        const clicks = Number(existing.clicks || 0);
+        const replies = Number(row.replies || 0);
+        const reactions = Number(row.reactions || 0);
+        const shares = Number(row.shares || 0);
+        const seniorEngagements = Number(row.senior_engagements || 0);
+        const engagementScore = (clicks * 3) + (replies * 2) + (reactions * 1) + (shares * 2) + (seniorEngagements * 2);
+
+        await content.update({
+          performance_metrics: {
+            ...existing,
+            replies, reactions, shares, senior_engagements: seniorEngagements,
+            engagement_score: engagementScore,
+            last_aggregated: new Date().toISOString(),
+          },
+          updated_at: new Date(),
+        });
+        metricsUpdated++;
+      }
+
+      if (metricsUpdated > 0) {
+        actions.push({
+          campaign_id: null,
+          action: 'metrics_aggregation',
+          reason: `Aggregated engagement metrics for ${metricsUpdated} items`,
+          confidence: 1.0,
+          before_state: { response_groups: responseMetrics.length, authority_groups: authorityMetrics.length },
+          after_state: { items_updated: metricsUpdated },
+          result: 'success',
+          entity_type: 'engagement_event',
+        });
+      }
+    } catch (aggErr: any) {
+      errors.push(`Metrics aggregation failed: ${aggErr.message}`);
+    }
   } catch (err: any) {
     errors.push(err.message);
   }

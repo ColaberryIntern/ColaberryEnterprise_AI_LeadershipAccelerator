@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type OpenclawLearningType = 'tone_effectiveness' | 'platform_timing' | 'topic_resonance' | 'risk_pattern' | 'tech_update';
+export type OpenclawLearningType = 'tone_effectiveness' | 'platform_timing' | 'topic_resonance' | 'risk_pattern' | 'tech_update' | 'content_effectiveness' | 'topic_performance' | 'platform_tone_combo';
 
 interface OpenclawLearningAttributes {
   id?: string;

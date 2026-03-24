@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import axios from 'axios';
+import { sequelize } from '../../config/database';
 import {
   OpenclawSignal,
   OpenclawTask,
@@ -33,6 +34,10 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
       activeSessions,
       pendingTasks,
       learningsCount,
+      activeAgents,
+      contentPipeline,
+      repliesSent,
+      totalReplies,
     ] = await Promise.all([
       OpenclawSignal.count({ where: { created_at: { [Op.gte]: last24h } } }),
       OpenclawSignal.count(),
@@ -41,7 +46,42 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
       OpenclawSession.count({ where: { session_status: { [Op.in]: ['active', 'idle'] } } }),
       OpenclawTask.count({ where: { status: { [Op.in]: ['pending', 'assigned'] } } }),
       OpenclawLearning.count(),
+      AiAgent.count({ where: { category: 'openclaw', enabled: true } }),
+      OpenclawResponse.count({ where: { post_status: { [Op.in]: ['draft', 'approved', 'ready_to_post'] } } }),
+      ResponseQueue.count({ where: { status: 'posted' } }),
+      EngagementEvent.count({ where: { engagement_type: { [Op.in]: ['reply', 'comment'] } } }),
     ]);
+
+    // Engagement score aggregation via raw SQL
+    let totalEngagementScore = 0;
+    let totalClicks = 0;
+    try {
+      const engScoreResult: any[] = await sequelize.query(`
+        SELECT
+          COALESCE(SUM((engagement_metrics->>'engagement_score')::float), 0) as total_score,
+          COALESCE(SUM((engagement_metrics->>'clicks')::int), 0) as total_clicks
+        FROM openclaw_responses
+        WHERE post_status = 'posted' AND engagement_metrics IS NOT NULL
+      `, { type: QueryTypes.SELECT });
+      if (engScoreResult.length > 0) {
+        totalEngagementScore = Number(engScoreResult[0].total_score) || 0;
+        totalClicks = Number(engScoreResult[0].total_clicks) || 0;
+      }
+    } catch { /* table may not have data yet */ }
+
+    // Best tone from learnings
+    let bestTone = 'N/A';
+    try {
+      const topTone = await OpenclawLearning.findOne({
+        where: { learning_type: 'tone_effectiveness' },
+        order: [['metric_value', 'DESC']],
+      });
+      if (topTone) bestTone = topTone.metric_key;
+    } catch { /* no learnings yet */ }
+
+    // Computed rates
+    const ctr = responsesPosted > 0 ? Number((totalClicks / responsesPosted).toFixed(2)) : 0;
+    const replyRate = responsesPosted > 0 ? Number((totalReplies / responsesPosted).toFixed(2)) : 0;
 
     // Platform breakdown
     const platformStats = await OpenclawSignal.findAll({
@@ -61,6 +101,59 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
       order: [['agent_name', 'ASC']],
     });
 
+    // ── Performance Section ──
+    // Top responses by engagement score
+    let topResponses: any[] = [];
+    try {
+      topResponses = await sequelize.query(`
+        SELECT
+          r.id, r.platform, r.tone, r.short_id, r.posted_at,
+          LEFT(r.content, 120) as content_preview,
+          (r.engagement_metrics->>'engagement_score')::float as engagement_score,
+          (r.engagement_metrics->>'clicks')::int as clicks,
+          (r.engagement_metrics->>'replies')::int as replies,
+          (r.engagement_metrics->>'reactions')::int as reactions,
+          s.title as signal_title
+        FROM openclaw_responses r
+        LEFT JOIN openclaw_signals s ON s.id = r.signal_id
+        WHERE r.post_status = 'posted'
+          AND r.engagement_metrics->>'engagement_score' IS NOT NULL
+        ORDER BY (r.engagement_metrics->>'engagement_score')::float DESC
+        LIMIT 10
+      `, { type: QueryTypes.SELECT });
+    } catch { /* no data yet */ }
+
+    // Tone breakdown from learnings
+    let toneBreakdown: any[] = [];
+    try {
+      const toneLearnings = await OpenclawLearning.findAll({
+        where: { learning_type: 'tone_effectiveness' },
+        order: [['metric_value', 'DESC']],
+        raw: true,
+      });
+      toneBreakdown = toneLearnings.map((l: any) => ({
+        tone: l.metric_key,
+        avg_engagement: Number(l.metric_value),
+        sample_size: l.sample_size,
+        confidence: Number(l.confidence),
+      }));
+    } catch { /* no learnings */ }
+
+    // Platform breakdown from learnings
+    let platformBreakdown: any[] = [];
+    try {
+      const platLearnings = await OpenclawLearning.findAll({
+        where: { learning_type: 'platform_timing' },
+        order: [['metric_value', 'DESC']],
+        raw: true,
+      });
+      platformBreakdown = platLearnings.map((l: any) => ({
+        platform: l.metric_key,
+        avg_engagement: Number(l.metric_value),
+        sample_size: l.sample_size,
+      }));
+    } catch { /* no learnings */ }
+
     res.json({
       kpis: {
         signals_24h: signalsToday,
@@ -70,6 +163,15 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
         active_sessions: activeSessions,
         queue_depth: pendingTasks,
         learnings: learningsCount,
+        active_agents: activeAgents,
+        content_pipeline: contentPipeline,
+        replies_sent: repliesSent,
+        total_engagement_score: totalEngagementScore,
+        total_clicks: totalClicks,
+        total_replies: totalReplies,
+        ctr,
+        reply_rate: replyRate,
+        best_tone: bestTone,
       },
       platforms: platformStats,
       agents: agents.map((a: any) => ({
@@ -86,6 +188,11 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
         error_count: a.error_count,
         avg_duration_ms: a.avg_duration_ms,
       })),
+      performance: {
+        top_responses: topResponses,
+        tone_breakdown: toneBreakdown,
+        platform_breakdown: platformBreakdown,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
