@@ -479,19 +479,25 @@ async function processScheduledActions(): Promise<void> {
   try {
     const t = await sequelize.transaction();
     try {
+      // Round-robin across campaigns: pick up to 10 per campaign, 40 total
+      // This prevents one campaign from hogging the entire batch
       const claimed = await sequelize.query(`
         UPDATE scheduled_emails
         SET status = 'processing',
             processing_started_at = NOW(),
             processor_id = :processorId
         WHERE id IN (
-          SELECT id FROM scheduled_emails
-          WHERE status = 'pending'
-            AND scheduled_for <= NOW()
-            AND attempts_made < max_attempts
-          ORDER BY scheduled_for ASC
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY scheduled_for ASC) as rn
+            FROM scheduled_emails
+            WHERE status = 'pending'
+              AND scheduled_for <= NOW()
+              AND attempts_made < max_attempts
+            FOR UPDATE SKIP LOCKED
+          ) ranked
+          WHERE rn <= 10
+          ORDER BY rn, scheduled_for ASC
           LIMIT 40
-          FOR UPDATE SKIP LOCKED
         )
         RETURNING *
       `, {
