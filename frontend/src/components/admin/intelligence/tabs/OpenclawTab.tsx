@@ -14,6 +14,25 @@ import {
   OpenclawResponseItem,
   OpenclawAgentActivity,
 } from '../../../../services/openclawApi';
+import {
+  getAuthorityContent,
+  generateAuthorityContent,
+  approveAuthorityContent,
+  markAuthorityContentPosted,
+  getEngagements,
+  createEngagement,
+  getResponseQueue,
+  approveResponse,
+  rejectResponse,
+  markResponsePosted,
+  getLinkedInActions,
+  completeLinkedInAction,
+  skipLinkedInAction,
+  type AuthorityContentItem,
+  type EngagementEventItem,
+  type ResponseQueueItem,
+  type LinkedInActionItem,
+} from '../../../../services/openclawReputationApi';
 
 const PLATFORM_COLORS: Record<string, string> = {
   reddit: '#FF4500',
@@ -574,6 +593,12 @@ export default function OpenclawTab() {
         </div>
       </div>
 
+      {/* ══════ Reputation & Demand Engine Sections ══════ */}
+      <AuthorityContentSection />
+      <EngagementMonitorSection />
+      <ResponseQueueSection />
+      <LinkedInCommandCenter />
+
       {/* Response Detail Modal */}
       {selectedResponse && (
         <>
@@ -963,6 +988,505 @@ export default function OpenclawTab() {
             </div>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Reputation & Demand Engine Sub-Components
+// ══════════════════════════════════════════════════════════════════════════════
+
+const INTENT_COLOR = (score: number | null) => {
+  if (!score) return 'secondary';
+  if (score >= 0.7) return 'danger';
+  if (score >= 0.4) return 'warning';
+  return 'secondary';
+};
+
+const SENIORITY_LABEL: Record<string, string> = {
+  c_level: 'C-Level', vp: 'VP', director: 'Director', manager: 'Manager', ic: 'IC', unknown: '—',
+};
+
+function AuthorityContentSection() {
+  const [expanded, setExpanded] = useState(false);
+  const [items, setItems] = useState<AuthorityContentItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [topic, setTopic] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [postUrlInputs, setPostUrlInputs] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getAuthorityContent();
+      setItems(res.data.authority_content || []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { if (expanded) load(); }, [expanded, load]);
+
+  const handleGenerate = async () => {
+    if (!topic.trim()) return;
+    setGenerating(true);
+    try {
+      await generateAuthorityContent(topic);
+      setTopic('');
+      load();
+    } catch { /* ignore */ }
+    setGenerating(false);
+  };
+
+  const handleApprove = async (id: string) => {
+    await approveAuthorityContent(id);
+    load();
+  };
+
+  const handleMarkPosted = async (id: string) => {
+    const url = postUrlInputs[id];
+    if (!url) return;
+    await markAuthorityContentPosted(id, url);
+    setPostUrlInputs(p => ({ ...p, [id]: '' }));
+    load();
+  };
+
+  const copyContent = (item: AuthorityContentItem) => {
+    navigator.clipboard.writeText(item.content);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  return (
+    <div className="card border-0 shadow-sm mb-3">
+      <div
+        className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center"
+        style={{ cursor: 'pointer' }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span><i className="bi bi-megaphone me-2" />Authority Content Engine</span>
+        <i className={`bi bi-chevron-${expanded ? 'up' : 'down'}`} />
+      </div>
+      {expanded && (
+        <div className="card-body p-3">
+          {/* Generate bar */}
+          <div className="d-flex gap-2 mb-3">
+            <input
+              className="form-control form-control-sm"
+              placeholder="Enter topic for authority post..."
+              value={topic}
+              onChange={e => setTopic(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleGenerate()}
+            />
+            <button className="btn btn-sm btn-primary text-nowrap" onClick={handleGenerate} disabled={generating || !topic.trim()}>
+              {generating ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-magic me-1" />}
+              Generate
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-3"><span className="spinner-border spinner-border-sm text-primary" /></div>
+          ) : items.length === 0 ? (
+            <p className="text-muted small mb-0">No authority content yet — generate your first post above</p>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover mb-0" style={{ fontSize: '0.8rem' }}>
+                <thead className="table-light">
+                  <tr>
+                    <th>Title</th>
+                    <th>Platform</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th style={{ width: '220px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="fw-medium">{item.title || 'Untitled'}</div>
+                        <div className="text-muted" style={{ fontSize: '0.7rem', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.content.slice(0, 100)}...
+                        </div>
+                      </td>
+                      <td><span className="badge" style={{ backgroundColor: PLATFORM_COLORS[item.platform] || '#6c757d', fontSize: '0.65rem' }}>{item.platform}</span></td>
+                      <td><span className={`badge bg-${STATUS_BADGES[item.status] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>{item.status}</span></td>
+                      <td className="text-nowrap text-muted">{timeAgo(item.created_at)}</td>
+                      <td>
+                        <div className="d-flex gap-1 flex-wrap">
+                          <button className="btn btn-outline-secondary btn-sm py-0 px-1" style={{ fontSize: '0.65rem' }} onClick={() => copyContent(item)}>
+                            <i className={`bi ${copiedId === item.id ? 'bi-check' : 'bi-clipboard'} me-1`} />{copiedId === item.id ? 'Copied' : 'Copy'}
+                          </button>
+                          {item.status === 'draft' && (
+                            <button className="btn btn-outline-success btn-sm py-0 px-1" style={{ fontSize: '0.65rem' }} onClick={() => handleApprove(item.id)}>
+                              <i className="bi bi-check-circle me-1" />Approve
+                            </button>
+                          )}
+                          {item.status === 'approved' && (
+                            <div className="d-flex gap-1">
+                              <input
+                                className="form-control form-control-sm py-0"
+                                style={{ fontSize: '0.65rem', width: '120px' }}
+                                placeholder="Post URL..."
+                                value={postUrlInputs[item.id] || ''}
+                                onChange={e => setPostUrlInputs(p => ({ ...p, [item.id]: e.target.value }))}
+                              />
+                              <button className="btn btn-outline-primary btn-sm py-0 px-1" style={{ fontSize: '0.65rem' }} onClick={() => handleMarkPosted(item.id)} disabled={!postUrlInputs[item.id]}>
+                                Posted
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EngagementMonitorSection() {
+  const [expanded, setExpanded] = useState(false);
+  const [items, setItems] = useState<EngagementEventItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logForm, setLogForm] = useState({ platform: 'linkedin', engagement_type: 'comment', user_name: '', user_title: '', content: '', source_url: '' });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getEngagements();
+      setItems(res.data.engagements || []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { if (expanded) load(); }, [expanded, load]);
+
+  const handleLog = async () => {
+    try {
+      await createEngagement(logForm);
+      setShowLogModal(false);
+      setLogForm({ platform: 'linkedin', engagement_type: 'comment', user_name: '', user_title: '', content: '', source_url: '' });
+      load();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="card border-0 shadow-sm mb-3">
+      <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center" style={{ cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+        <span><i className="bi bi-people me-2" />Engagement Monitor</span>
+        <i className={`bi bi-chevron-${expanded ? 'up' : 'down'}`} />
+      </div>
+      {expanded && (
+        <div className="card-body p-3">
+          <div className="d-flex justify-content-end mb-2">
+            <button className="btn btn-sm btn-outline-primary" onClick={() => setShowLogModal(true)}>
+              <i className="bi bi-plus-circle me-1" />Log Engagement
+            </button>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-3"><span className="spinner-border spinner-border-sm text-primary" /></div>
+          ) : items.length === 0 ? (
+            <p className="text-muted small mb-0">No engagement events yet</p>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover mb-0" style={{ fontSize: '0.8rem' }}>
+                <thead className="table-light">
+                  <tr>
+                    <th>Platform</th>
+                    <th>User</th>
+                    <th>Type</th>
+                    <th>Content</th>
+                    <th>Intent</th>
+                    <th>Seniority</th>
+                    <th>Status</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => (
+                    <tr key={item.id}>
+                      <td><span className="badge" style={{ backgroundColor: PLATFORM_COLORS[item.platform] || '#6c757d', fontSize: '0.65rem' }}>{item.platform}</span></td>
+                      <td>
+                        <div className="fw-medium">{item.user_name || '—'}</div>
+                        {item.user_title && <div className="text-muted" style={{ fontSize: '0.65rem' }}>{item.user_title}</div>}
+                      </td>
+                      <td><span className="badge bg-light text-dark border" style={{ fontSize: '0.65rem' }}>{item.engagement_type}</span></td>
+                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.content || '—'}</td>
+                      <td><span className={`badge bg-${INTENT_COLOR(item.intent_score)}`} style={{ fontSize: '0.65rem' }}>{item.intent_score != null ? (Number(item.intent_score) * 100).toFixed(0) + '%' : '—'}</span></td>
+                      <td style={{ fontSize: '0.7rem' }}>{SENIORITY_LABEL[item.role_seniority] || '—'}</td>
+                      <td><span className={`badge bg-${item.status === 'new' ? 'primary' : item.status === 'converted' ? 'success' : 'secondary'}`} style={{ fontSize: '0.65rem' }}>{item.status}</span></td>
+                      <td className="text-nowrap text-muted">{timeAgo(item.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Log Engagement Modal */}
+          {showLogModal && (
+            <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={() => setShowLogModal(false)}>
+              <div className="modal-dialog" onClick={e => e.stopPropagation()}>
+                <div className="modal-content">
+                  <div className="modal-header py-2">
+                    <h6 className="modal-title mb-0">Log Engagement</h6>
+                    <button type="button" className="btn-close" onClick={() => setShowLogModal(false)} />
+                  </div>
+                  <div className="modal-body">
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">Platform</label>
+                      <select className="form-select form-select-sm" value={logForm.platform} onChange={e => setLogForm(f => ({ ...f, platform: e.target.value }))}>
+                        {['linkedin', 'reddit', 'quora', 'devto', 'hashnode', 'discourse'].map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">Type</label>
+                      <select className="form-select form-select-sm" value={logForm.engagement_type} onChange={e => setLogForm(f => ({ ...f, engagement_type: e.target.value }))}>
+                        {['comment', 'reply', 'mention', 'reaction', 'share'].map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">User Name</label>
+                      <input className="form-control form-control-sm" value={logForm.user_name} onChange={e => setLogForm(f => ({ ...f, user_name: e.target.value }))} />
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">User Title</label>
+                      <input className="form-control form-control-sm" value={logForm.user_title} onChange={e => setLogForm(f => ({ ...f, user_title: e.target.value }))} />
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">Content</label>
+                      <textarea className="form-control form-control-sm" rows={3} value={logForm.content} onChange={e => setLogForm(f => ({ ...f, content: e.target.value }))} />
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">Source URL</label>
+                      <input className="form-control form-control-sm" value={logForm.source_url} onChange={e => setLogForm(f => ({ ...f, source_url: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="modal-footer py-2">
+                    <button className="btn btn-sm btn-outline-secondary" onClick={() => setShowLogModal(false)}>Cancel</button>
+                    <button className="btn btn-sm btn-primary" onClick={handleLog}>Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResponseQueueSection() {
+  const [expanded, setExpanded] = useState(false);
+  const [items, setItems] = useState<ResponseQueueItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getResponseQueue();
+      setItems(res.data.responses || []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { if (expanded) load(); }, [expanded, load]);
+
+  const handleApprove = async (id: string) => { await approveResponse(id); load(); };
+  const handleReject = async (id: string) => { await rejectResponse(id); load(); };
+  const handleMarkPosted = async (id: string) => { await markResponsePosted(id); load(); };
+
+  const isExpired = (item: ResponseQueueItem) => item.expires_at && new Date(item.expires_at) < new Date();
+
+  return (
+    <div className="card border-0 shadow-sm mb-3">
+      <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center" style={{ cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+        <span><i className="bi bi-reply me-2" />Conversation Replies</span>
+        <i className={`bi bi-chevron-${expanded ? 'up' : 'down'}`} />
+      </div>
+      {expanded && (
+        <div className="card-body p-3">
+          {loading ? (
+            <div className="text-center py-3"><span className="spinner-border spinner-border-sm text-primary" /></div>
+          ) : items.length === 0 ? (
+            <p className="text-muted small mb-0">No conversation replies in queue</p>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover mb-0" style={{ fontSize: '0.8rem' }}>
+                <thead className="table-light">
+                  <tr>
+                    <th>Engagement</th>
+                    <th>Type</th>
+                    <th>Response Preview</th>
+                    <th>Status</th>
+                    <th>Expires</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => {
+                    const expired = isExpired(item);
+                    return (
+                      <tr key={item.id} style={expired ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>
+                        <td>
+                          <div className="fw-medium">{item.engagement?.user_name || '—'}</div>
+                          <span className="badge" style={{ backgroundColor: PLATFORM_COLORS[item.platform] || '#6c757d', fontSize: '0.6rem' }}>{item.platform}</span>
+                        </td>
+                        <td><span className={`badge bg-${item.response_type === 'follow_up' ? 'info' : 'primary'}`} style={{ fontSize: '0.65rem' }}>{item.response_type}</span></td>
+                        <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.response_text.slice(0, 120)}</td>
+                        <td><span className={`badge bg-${STATUS_BADGES[item.status] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>{item.status}</span></td>
+                        <td className="text-nowrap text-muted" style={{ fontSize: '0.7rem' }}>{item.expires_at ? timeAgo(item.expires_at) : '—'}</td>
+                        <td>
+                          <div className="d-flex gap-1">
+                            <button className="btn btn-outline-secondary btn-sm py-0 px-1" style={{ fontSize: '0.65rem' }} onClick={() => { navigator.clipboard.writeText(item.response_text); setCopiedId(item.id); setTimeout(() => setCopiedId(null), 2000); }}>
+                              <i className={`bi ${copiedId === item.id ? 'bi-check' : 'bi-clipboard'}`} />
+                            </button>
+                            {item.status === 'draft' && !expired && (
+                              <>
+                                <button className="btn btn-outline-success btn-sm py-0 px-1" style={{ fontSize: '0.65rem' }} onClick={() => handleApprove(item.id)}>
+                                  <i className="bi bi-check-circle" />
+                                </button>
+                                <button className="btn btn-outline-danger btn-sm py-0 px-1" style={{ fontSize: '0.65rem' }} onClick={() => handleReject(item.id)}>
+                                  <i className="bi bi-x-circle" />
+                                </button>
+                              </>
+                            )}
+                            {item.status === 'approved' && (
+                              <button className="btn btn-outline-primary btn-sm py-0 px-1" style={{ fontSize: '0.65rem' }} onClick={() => handleMarkPosted(item.id)}>
+                                Posted
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LinkedInCommandCenter() {
+  const [expanded, setExpanded] = useState(false);
+  const [items, setItems] = useState<LinkedInActionItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getLinkedInActions({ status: 'pending' });
+      setItems(res.data.actions || []);
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { if (expanded) load(); }, [expanded, load]);
+
+  const handleComplete = async (id: string) => { await completeLinkedInAction(id); load(); };
+  const handleSkip = async (id: string) => { await skipLinkedInAction(id); load(); };
+
+  const ACTION_ICONS: Record<string, string> = {
+    comment: 'bi-chat-left-text',
+    connection_request: 'bi-person-plus',
+    dm_followup: 'bi-envelope',
+    post_engagement: 'bi-hand-thumbs-up',
+  };
+
+  const ACTION_COLORS: Record<string, string> = {
+    comment: 'primary',
+    connection_request: 'success',
+    dm_followup: 'info',
+    post_engagement: 'warning',
+  };
+
+  return (
+    <div className="card border-0 shadow-sm mb-3">
+      <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center" style={{ cursor: 'pointer' }} onClick={() => setExpanded(!expanded)}>
+        <span>
+          <i className="bi bi-linkedin me-2" style={{ color: '#0A66C2' }} />
+          LinkedIn Command Center
+          <span className="badge bg-warning text-dark ms-2" style={{ fontSize: '0.6rem' }}>Manual Only</span>
+        </span>
+        <i className={`bi bi-chevron-${expanded ? 'up' : 'down'}`} />
+      </div>
+      {expanded && (
+        <div className="card-body p-3">
+          {/* Summary strip */}
+          {items.length > 0 && (
+            <div className="d-flex gap-2 mb-3 flex-wrap">
+              {Object.entries(
+                items.reduce<Record<string, number>>((acc, i) => { acc[i.action_type] = (acc[i.action_type] || 0) + 1; return acc; }, {})
+              ).map(([type, count]) => (
+                <span key={type} className={`badge bg-${ACTION_COLORS[type] || 'secondary'}`} style={{ fontSize: '0.7rem' }}>
+                  {type.replace(/_/g, ' ')}: {count}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center py-3"><span className="spinner-border spinner-border-sm text-primary" /></div>
+          ) : items.length === 0 ? (
+            <p className="text-muted small mb-0">No pending LinkedIn actions</p>
+          ) : (
+            <div className="row g-2">
+              {items.map(item => (
+                <div key={item.id} className="col-12 col-md-6">
+                  <div className="card border h-100">
+                    <div className="card-body p-2">
+                      <div className="d-flex justify-content-between align-items-start mb-1">
+                        <span className={`badge bg-${ACTION_COLORS[item.action_type] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>
+                          <i className={`bi ${ACTION_ICONS[item.action_type] || 'bi-lightning'} me-1`} />
+                          {item.action_type.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-muted" style={{ fontSize: '0.6rem' }}>P{item.priority}</span>
+                      </div>
+                      {item.target_user_name && (
+                        <div className="fw-medium small">{item.target_user_name}</div>
+                      )}
+                      {item.target_user_title && (
+                        <div className="text-muted" style={{ fontSize: '0.65rem' }}>{item.target_user_title}</div>
+                      )}
+                      <div className="mt-1 p-2 bg-light rounded small" style={{ whiteSpace: 'pre-wrap', fontSize: '0.75rem', maxHeight: '120px', overflowY: 'auto' }}>
+                        {item.suggested_text}
+                      </div>
+                      {item.context && (
+                        <div className="text-muted mt-1" style={{ fontSize: '0.6rem' }}>{item.context}</div>
+                      )}
+                      <div className="d-flex gap-1 mt-2">
+                        <button className="btn btn-outline-secondary btn-sm py-0 px-2" style={{ fontSize: '0.65rem' }} onClick={() => { navigator.clipboard.writeText(item.suggested_text); setCopiedId(item.id); setTimeout(() => setCopiedId(null), 2000); }}>
+                          <i className={`bi ${copiedId === item.id ? 'bi-check' : 'bi-clipboard'} me-1`} />{copiedId === item.id ? 'Copied' : 'Copy'}
+                        </button>
+                        <button className="btn btn-outline-success btn-sm py-0 px-2" style={{ fontSize: '0.65rem' }} onClick={() => handleComplete(item.id)}>
+                          <i className="bi bi-check-circle me-1" />Done
+                        </button>
+                        <button className="btn btn-outline-secondary btn-sm py-0 px-2" style={{ fontSize: '0.65rem' }} onClick={() => handleSkip(item.id)}>
+                          Skip
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

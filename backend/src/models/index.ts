@@ -132,6 +132,10 @@ import ProgressionLog from './ProgressionLog';
 import ProjectRisk from './ProjectRisk';
 import AnomalyLog from './AnomalyLog';
 import ProjectSystemContract from './ProjectSystemContract';
+import AuthorityContent from './AuthorityContent';
+import EngagementEvent from './EngagementEvent';
+import ResponseQueue from './ResponseQueue';
+import LinkedInActionQueue from './LinkedInActionQueue';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -629,6 +633,22 @@ OpenclawTask.belongsTo(OpenclawSession, { foreignKey: 'session_id', as: 'session
 Campaign.hasMany(OpenclawResponse, { foreignKey: 'campaign_id', as: 'openclawResponses' });
 OpenclawResponse.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaign' });
 
+// --- OpenClaw Reputation & Demand Engine associations ---
+OpenclawResponse.hasMany(EngagementEvent, { foreignKey: 'response_id', as: 'engagementEvents' });
+EngagementEvent.belongsTo(OpenclawResponse, { foreignKey: 'response_id', as: 'response' });
+
+AuthorityContent.hasMany(EngagementEvent, { foreignKey: 'authority_content_id', as: 'engagementEvents' });
+EngagementEvent.belongsTo(AuthorityContent, { foreignKey: 'authority_content_id', as: 'authorityContent' });
+
+EngagementEvent.hasMany(ResponseQueue, { foreignKey: 'engagement_id', as: 'responseQueue' });
+ResponseQueue.belongsTo(EngagementEvent, { foreignKey: 'engagement_id', as: 'engagement' });
+
+OpenclawSignal.hasMany(LinkedInActionQueue, { foreignKey: 'source_signal_id', as: 'linkedInActions' });
+LinkedInActionQueue.belongsTo(OpenclawSignal, { foreignKey: 'source_signal_id', as: 'sourceSignal' });
+
+EngagementEvent.hasMany(LinkedInActionQueue, { foreignKey: 'source_engagement_id', as: 'linkedInActions' });
+LinkedInActionQueue.belongsTo(EngagementEvent, { foreignKey: 'source_engagement_id', as: 'sourceEngagement' });
+
 // --- Cory Knowledge Graph associations ---
 KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'source_node_id', as: 'sourceNode' });
 KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'target_node_id', as: 'targetNode' });
@@ -785,4 +805,8 @@ export {
   ProjectRisk,
   AnomalyLog,
   ProjectSystemContract,
+  AuthorityContent,
+  EngagementEvent,
+  ResponseQueue,
+  LinkedInActionQueue,
 };

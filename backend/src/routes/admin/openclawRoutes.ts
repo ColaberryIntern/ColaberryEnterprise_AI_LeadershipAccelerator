@@ -9,6 +9,10 @@ import {
   OpenclawLearning,
   AiAgent,
   AiAgentActivityLog,
+  AuthorityContent,
+  EngagementEvent,
+  ResponseQueue,
+  LinkedInActionQueue,
 } from '../../models';
 
 const router = Router();
@@ -611,5 +615,288 @@ router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => 
     res.status(500).json({ error: err.message });
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Reputation & Demand Engine Endpoints
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Authority Content ────────────────────────────────────────────────────────
+
+router.get(`${BASE}/authority-content`, async (req: Request, res: Response) => {
+  try {
+    const { status, platform, page = '1', limit = '25' } = req.query;
+    const where: any = {};
+    if (status) where.status = status;
+    if (platform) where.platform = platform;
+    const offset = (Number(page) - 1) * Number(limit);
+    const { rows, count } = await AuthorityContent.findAndCountAll({
+      where,
+      order: [['created_at', 'DESC']],
+      limit: Number(limit),
+      offset,
+    });
+    res.json({ authority_content: rows, total: count, page: Number(page), limit: Number(limit) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/authority-content/generate`, async (req: Request, res: Response) => {
+  try {
+    const { topic } = req.body;
+    if (!topic) return res.status(400).json({ error: 'topic is required' });
+
+    const crypto = await import('crypto');
+    const shortId = `oc-auth-${crypto.randomBytes(4).toString('hex')}`;
+    const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
+    const trackedUrl = `${BASE_URL}/i/${shortId}`;
+
+    const { generateContent } = await import('../../services/agents/openclaw/openclawAiHelper');
+    const prompt = `Write a LinkedIn thought-leadership post (150-250 words) about: "${topic}"
+
+Requirements:
+- Open with a bold, counterintuitive take
+- Share specific insights from enterprise AI training experience
+- End with a question that invites executive-level discussion
+- Do NOT mention "Colaberry"
+- Do NOT include any URLs or links
+- Write in first person, professional tone`;
+
+    const result = await generateContent(prompt, 'gpt-4o');
+    const content = result.body.replace(/colaberry/gi, '[company]');
+
+    const post = await AuthorityContent.create({
+      source_type: 'manual',
+      platform: 'linkedin',
+      title: topic,
+      content,
+      tone: 'professional',
+      short_id: shortId,
+      tracked_url: trackedUrl,
+      utm_params: { utm_source: 'linkedin', utm_medium: 'organic', utm_campaign: 'openclaw_authority' },
+      status: 'draft',
+    });
+
+    res.json({ success: true, authority_content: post });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/authority-content/:id/approve`, async (req: Request, res: Response) => {
+  try {
+    const post = await AuthorityContent.findByPk(req.params.id as string);
+    if (!post) return res.status(404).json({ error: 'Not found' });
+    await post.update({ status: 'approved', updated_at: new Date() });
+    res.json({ success: true, authority_content: post });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/authority-content/:id/mark-posted`, async (req: Request, res: Response) => {
+  try {
+    const { post_url } = req.body;
+    if (!post_url) return res.status(400).json({ error: 'post_url is required' });
+    const post = await AuthorityContent.findByPk(req.params.id as string);
+    if (!post) return res.status(404).json({ error: 'Not found' });
+    await post.update({ status: 'posted', post_url, posted_at: new Date(), updated_at: new Date() });
+    res.json({ success: true, authority_content: post });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put(`${BASE}/authority-content/:id/metrics`, async (req: Request, res: Response) => {
+  try {
+    const { performance_metrics } = req.body;
+    const post = await AuthorityContent.findByPk(req.params.id as string);
+    if (!post) return res.status(404).json({ error: 'Not found' });
+    await post.update({
+      performance_metrics: { ...(post.performance_metrics || {}), ...performance_metrics },
+      updated_at: new Date(),
+    });
+    res.json({ success: true, authority_content: post });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Engagement Events ────────────────────────────────────────────────────────
+
+router.get(`${BASE}/engagements`, async (req: Request, res: Response) => {
+  try {
+    const { platform, status, min_intent, page = '1', limit = '25' } = req.query;
+    const where: any = {};
+    if (platform) where.platform = platform;
+    if (status) where.status = status;
+    if (min_intent) where.intent_score = { [Op.gte]: Number(min_intent) };
+    const offset = (Number(page) - 1) * Number(limit);
+    const { rows, count } = await EngagementEvent.findAndCountAll({
+      where,
+      order: [['created_at', 'DESC']],
+      limit: Number(limit),
+      offset,
+    });
+    res.json({ engagements: rows, total: count, page: Number(page), limit: Number(limit) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/engagements`, async (req: Request, res: Response) => {
+  try {
+    const { platform, engagement_type, user_name, user_title, user_company, content, source_url, response_id, authority_content_id } = req.body;
+    if (!platform || !engagement_type) return res.status(400).json({ error: 'platform and engagement_type are required' });
+
+    const event = await EngagementEvent.create({
+      platform,
+      engagement_type,
+      user_name: user_name || null,
+      user_title: user_title || null,
+      user_company: user_company || null,
+      content: content || null,
+      source_url: source_url || null,
+      response_id: response_id || null,
+      authority_content_id: authority_content_id || null,
+      intent_score: 0.5,
+      role_seniority: detectSeniorityFromTitle(user_title),
+      company_detected: user_company || null,
+      status: 'new',
+    });
+
+    res.json({ success: true, engagement: event });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put(`${BASE}/engagements/:id`, async (req: Request, res: Response) => {
+  try {
+    const event = await EngagementEvent.findByPk(req.params.id as string);
+    if (!event) return res.status(404).json({ error: 'Not found' });
+    const allowed = ['status', 'user_company', 'company_detected', 'role_seniority', 'intent_score'];
+    const updates: any = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+    updates.updated_at = new Date();
+    await event.update(updates);
+    res.json({ success: true, engagement: event });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Response Queue ───────────────────────────────────────────────────────────
+
+router.get(`${BASE}/response-queue`, async (req: Request, res: Response) => {
+  try {
+    const { status, platform, page = '1', limit = '25' } = req.query;
+    const where: any = {};
+    if (status) where.status = status;
+    if (platform) where.platform = platform;
+    const offset = (Number(page) - 1) * Number(limit);
+    const { rows, count } = await ResponseQueue.findAndCountAll({
+      where,
+      include: [{ model: EngagementEvent, as: 'engagement' }],
+      order: [['created_at', 'DESC']],
+      limit: Number(limit),
+      offset,
+    });
+    res.json({ responses: rows, total: count, page: Number(page), limit: Number(limit) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/response-queue/:id/approve`, async (req: Request, res: Response) => {
+  try {
+    const item = await ResponseQueue.findByPk(req.params.id as string);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    await item.update({ status: 'approved', updated_at: new Date() });
+    res.json({ success: true, response: item });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/response-queue/:id/reject`, async (req: Request, res: Response) => {
+  try {
+    const item = await ResponseQueue.findByPk(req.params.id as string);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    await item.update({ status: 'rejected', updated_at: new Date() });
+    res.json({ success: true, response: item });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/response-queue/:id/mark-posted`, async (req: Request, res: Response) => {
+  try {
+    const { post_url } = req.body;
+    const item = await ResponseQueue.findByPk(req.params.id as string);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    await item.update({ status: 'posted', post_url: post_url || null, posted_at: new Date(), updated_at: new Date() });
+    res.json({ success: true, response: item });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── LinkedIn Actions ─────────────────────────────────────────────────────────
+
+router.get(`${BASE}/linkedin-actions`, async (req: Request, res: Response) => {
+  try {
+    const { status, action_type, page = '1', limit = '25' } = req.query;
+    const where: any = {};
+    if (status) where.status = status;
+    if (action_type) where.action_type = action_type;
+    const offset = (Number(page) - 1) * Number(limit);
+    const { rows, count } = await LinkedInActionQueue.findAndCountAll({
+      where,
+      order: [['priority', 'DESC'], ['created_at', 'DESC']],
+      limit: Number(limit),
+      offset,
+    });
+    res.json({ actions: rows, total: count, page: Number(page), limit: Number(limit) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/linkedin-actions/:id/complete`, async (req: Request, res: Response) => {
+  try {
+    const item = await LinkedInActionQueue.findByPk(req.params.id as string);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    await item.update({ status: 'completed', completed_at: new Date(), updated_at: new Date() });
+    res.json({ success: true, action: item });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/linkedin-actions/:id/skip`, async (req: Request, res: Response) => {
+  try {
+    const item = await LinkedInActionQueue.findByPk(req.params.id as string);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    await item.update({ status: 'skipped', updated_at: new Date() });
+    res.json({ success: true, action: item });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Helper ───────────────────────────────────────────────────────────────────
+
+function detectSeniorityFromTitle(title?: string): 'unknown' | 'ic' | 'manager' | 'director' | 'vp' | 'c_level' {
+  if (!title) return 'unknown';
+  const t = title.toLowerCase();
+  if (/\b(ceo|cto|cio|cfo|coo|chief|founder|co-founder)\b/.test(t)) return 'c_level';
+  if (/\b(vp|vice president|svp|evp)\b/.test(t)) return 'vp';
+  if (/\b(director|head of)\b/.test(t)) return 'director';
+  if (/\b(manager|lead|principal)\b/.test(t)) return 'manager';
+  return 'ic';
+}
 
 export default router;

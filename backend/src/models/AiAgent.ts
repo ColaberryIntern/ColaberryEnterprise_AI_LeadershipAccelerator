@@ -138,6 +138,11 @@ export type AiAgentType =
   | 'openclaw_learning'
   | 'openclaw_infra_monitor'
   | 'openclaw_tech_research'
+  | 'openclaw_authority_content'
+  | 'openclaw_engagement_monitor'
+  | 'openclaw_response_orchestrator'
+  | 'openclaw_follow_up'
+  | 'openclaw_linkedin_flow'
   // Reporting department
   | 'reporting_intelligence'
   | 'insight_discovery'
