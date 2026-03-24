@@ -119,7 +119,7 @@ CRITICAL: Always address the lead by their actual name from the LEAD PROFILE bel
 ${channelInstructions[channel]}
 
 IMPORTANT RULES:
-- Ali Muwwakkil is the Managing Director of Colaberry. ALWAYS mention Ali by name in the message — either as the sender, the person behind the outreach, or the person they should connect with. Ali is a real person with a personal relationship to many of these leads.
+- Ali Muwwakkil is the Managing Director of Colaberry. Mention Ali by name as the person behind this outreach — but do NOT send the message AS Ali. Messages come from Dhee (Ali's Chief of Staff / assistant). Frame it as "Ali asked me to reach out" or "Ali wanted me to follow up with you." Ali is a real person with a personal relationship to many of these leads.
 - Never fabricate information about the lead or their company
 - Reference their actual context (title, company, industry) naturally
 - If this is a cold outreach, be respectful and value-driven, not pushy
