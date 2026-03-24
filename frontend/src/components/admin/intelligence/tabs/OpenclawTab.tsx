@@ -695,6 +695,21 @@ export default function OpenclawTab() {
                           </button>
                         </div>
                       )}
+                      {resp.post_status === 'ready_to_post' && (
+                        <button
+                          className="btn btn-sm btn-outline-primary py-0 px-2"
+                          style={{ fontSize: '0.65rem' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(resp.content);
+                            if (resp.signal?.source_url) window.open(resp.signal.source_url, '_blank');
+                            setCopiedId(resp.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                        >
+                          {copiedId === resp.id ? 'Copied!' : 'Copy & Open'}
+                        </button>
+                      )}
                       {resp.post_url && (
                         <a href={resp.post_url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary py-0 px-2" onClick={(e) => e.stopPropagation()}>
                           View
@@ -705,7 +720,7 @@ export default function OpenclawTab() {
                 ))}
                 {responses.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-muted text-center py-4">
+                    <td colSpan={8} className="text-muted text-center py-4">
                       No responses yet — signals will appear once the Market Signal agent runs
                     </td>
                   </tr>
