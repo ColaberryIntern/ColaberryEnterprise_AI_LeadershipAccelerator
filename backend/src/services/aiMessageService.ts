@@ -279,10 +279,18 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
     }
   }
 
-  // SMS: append opt-out; voice returns plain text
-  const smsBody = params.channel === 'sms'
-    ? `${content}\n\nReply STOP to opt out.`
-    : content;
+  // SMS: strip any AI-generated opt-out language (GHL adds compliance automatically)
+  let smsBody = content;
+  if (params.channel === 'sms') {
+    smsBody = smsBody
+      .replace(/\n*Reply STOP to opt[- ]?out\.?/gi, '')
+      .replace(/\n*Reply STOP to unsubscribe\.?/gi, '')
+      .replace(/\n*Text STOP to opt[- ]?out\.?/gi, '')
+      .replace(/\n*Thanks,?\s*Agent Cory AI\.?/gi, '')
+      .replace(/\n*-?\s*Agent Cory AI\.?/gi, '')
+      .replace(/\n*-?\s*Cory AI\.?/gi, '')
+      .trim();
+  }
 
   return {
     body: smsBody,
