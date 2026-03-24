@@ -34,6 +34,8 @@ const SUBTYPE_CONFIG: Record<string, { icon: string; color: string; label: strin
   website_signal: { icon: 'bi-globe2', color: '#6f42c1', label: 'Website Activity' },
   voice_call: { icon: 'bi-telephone-outbound', color: '#6f42c1', label: 'Maya Call' },
   strategy_call_booked: { icon: 'bi-calendar-check', color: '#198754', label: 'Strategy Call Booked' },
+  voicemail_fallback_sms: { icon: 'bi-chat-left-text', color: '#e67e22', label: 'Voicemail Follow-up SMS' },
+  post_call_sms: { icon: 'bi-chat-left-text', color: '#20c997', label: 'Post-Call SMS' },
 };
 
 function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
@@ -122,6 +124,8 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
     a.type === 'email_sent' || a.type === 'email_opened' || a.metadata?.activity_subtype === 'email_clicked';
   const isVoiceCall = (a: ActivityEntry) =>
     a.metadata?.activity_subtype === 'voice_call' || (a.type === 'call' && a.metadata?.call_id);
+  const isFollowUpSms = (a: ActivityEntry) =>
+    a.metadata?.activity_subtype === 'voicemail_fallback_sms' || a.metadata?.activity_subtype === 'post_call_sms';
 
   return (
     <>
@@ -230,6 +234,13 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
                       </button>
                     )}
                   </div>
+                  {/* Call summary — shown by default */}
+                  {activity.metadata?.call_summary && (
+                    <div className="mt-2 p-2 rounded small" style={{ backgroundColor: '#f8f9fa', borderLeft: '3px solid #6f42c1', fontSize: '0.8rem' }}>
+                      <i className="bi bi-chat-square-text me-1 text-muted" />
+                      {activity.metadata.call_summary}
+                    </div>
+                  )}
                   {transcriptExpanded && activity.body && (
                     <div
                       className="mt-2 p-2 bg-light rounded small"
@@ -274,8 +285,27 @@ function ActivityTimeline({ leadId, refreshKey }: ActivityTimelineProps) {
                 </div>
               )}
 
+              {/* Follow-up SMS body (expandable) */}
+              {isFollowUpSms(activity) && activity.body && (
+                <div className="mt-1">
+                  <button
+                    className="btn btn-outline-secondary btn-sm py-0 px-1"
+                    style={{ fontSize: '0.65rem' }}
+                    onClick={() => toggleTranscript(activity.id)}
+                  >
+                    <i className={`bi ${expandedTranscripts.has(activity.id) ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`} />
+                    View Message
+                  </button>
+                  {expandedTranscripts.has(activity.id) && (
+                    <div className="mt-1 p-2 bg-light rounded small" style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem' }}>
+                      {activity.body}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Generic body for non-special types */}
-              {activity.body && !isEmailClick && !isWebsiteSignal && !isCall && activity.metadata?.activity_subtype !== 'strategy_call_booked' && (
+              {activity.body && !isEmailClick && !isWebsiteSignal && !isCall && !isFollowUpSms(activity) && activity.metadata?.activity_subtype !== 'strategy_call_booked' && (
                 <div className="text-muted small mt-1" style={{ whiteSpace: 'pre-wrap' }}>
                   {activity.body}
                 </div>

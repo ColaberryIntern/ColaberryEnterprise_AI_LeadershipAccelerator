@@ -180,6 +180,27 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
     // Process transcript via AI to extract lead data
     if (transcript && commLog.lead_id) {
       processCallTranscript(commLog.lead_id, transcript, call_id).then(async () => {
+        // Update the voice call activity with AI-extracted call summary
+        try {
+          const updatedComm = await CommunicationLog.findByPk(commLog.id);
+          const callSummary = (updatedComm as any)?.metadata?.call_summary;
+          if (callSummary) {
+            const { Activity } = require('../models');
+            const callActivity = await Activity.findOne({
+              where: { lead_id: commLog.lead_id, type: 'call' },
+              order: [['created_at', 'DESC']],
+            });
+            if (callActivity) {
+              const existingMeta = (callActivity as any).metadata || {};
+              await callActivity.update({
+                metadata: { ...existingMeta, call_summary: callSummary },
+              });
+            }
+          }
+        } catch (sumErr: any) {
+          console.warn('[Synthflow Webhook] Call summary activity update failed:', sumErr.message);
+        }
+
         // If this was a hot lead escalation call and the lead showed interest,
         // move them from current campaign → Strategy Call Readiness
         if (commMeta.trigger === 'hot_lead_escalation') {
@@ -284,6 +305,21 @@ async function sendPostCallSms(leadId: number, transcript: string, callId: strin
   const result = await sendSmsViaGhl(ghlContactId, smsBody);
   if (result.success) {
     console.log(`[PostCallSMS] SMS sent to lead ${leadId} via GHL contact ${ghlContactId}`);
+
+    // Bridge to Activity timeline
+    const leadName = (lead as any).name || 'Lead';
+    const firstN = leadName.split(' ')[0];
+    await logActivity({
+      lead_id: leadId,
+      type: 'sms',
+      subject: `Post-call follow-up SMS sent to ${firstN}`,
+      body: smsBody,
+      metadata: {
+        activity_subtype: 'post_call_sms',
+        call_id: callId,
+        trigger: 'post_call_summary',
+      },
+    }).catch(() => {});
   } else {
     console.error(`[PostCallSMS] SMS failed for lead ${leadId}: ${result.error}`);
   }
@@ -380,4 +416,18 @@ async function sendVoicemailFallbackSms(leadId: number): Promise<void> {
     provider: 'ghl',
     metadata: { trigger: 'hot_lead_vm_fallback' },
   }).catch(() => {});
+
+  // Bridge to Activity timeline
+  if (result.success) {
+    await logActivity({
+      lead_id: leadId,
+      type: 'sms',
+      subject: `Voicemail follow-up SMS sent to ${firstName}`,
+      body: smsBody,
+      metadata: {
+        activity_subtype: 'voicemail_fallback_sms',
+        trigger: 'hot_lead_vm_fallback',
+      },
+    }).catch(() => {});
+  }
 }
