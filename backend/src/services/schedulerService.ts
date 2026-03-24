@@ -483,7 +483,7 @@ async function processScheduledActions(): Promise<void> {
       // Two-step: first identify IDs (with window function), then lock+update
       const candidates = await sequelize.query(`
         SELECT id FROM (
-          SELECT id, ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY scheduled_for ASC) as rn
+          SELECT id, scheduled_for, ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY scheduled_for ASC) as rn
           FROM scheduled_emails
           WHERE status = 'pending'
             AND scheduled_for <= NOW()
