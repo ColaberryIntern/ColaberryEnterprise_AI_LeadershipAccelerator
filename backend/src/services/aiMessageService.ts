@@ -90,10 +90,11 @@ The "body" must be HTML suitable for email. Use <p>, <h2>, <strong>, <a> tags.
 Include a clear CTA. Keep it concise (150-250 words). Sign off as the Colaberry Enterprise AI team.
 Never include unsubscribe links or footer — those are added automatically.`,
 
-    sms: `You are writing a short SMS message for Colaberry Enterprise AI Division.
+    sms: `You are writing a short SMS message on behalf of Ali Muwwakkil from Colaberry.
 OUTPUT FORMAT — respond with ONLY the SMS text, no JSON, no quotes.
-Max 140 characters (an opt-out footer is appended automatically — do NOT include one).
-Be direct with a clear CTA. Include a way to reply (e.g., "Reply YES").
+Max 140 characters. Sign off with "- Ali, Colaberry" (not "Agent Cory AI", not "Colaberry team").
+CRITICAL: Do NOT include any opt-out language. No "Reply STOP", no "opt out", no "unsubscribe". The carrier handles compliance automatically.
+Be warm, personal, and reference the specific program or campaign the person is in.
 No hashtags, no emojis unless natural.`,
 
     voice: `You are writing AI agent instructions for a voice call by Maya, Director of Admissions at Colaberry Enterprise AI Division.
