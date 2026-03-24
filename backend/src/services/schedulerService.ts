@@ -480,28 +480,36 @@ async function processScheduledActions(): Promise<void> {
     const t = await sequelize.transaction();
     try {
       // Round-robin across campaigns: pick up to 10 per campaign, 40 total
-      // This prevents one campaign from hogging the entire batch
+      // Two-step: first identify IDs (with window function), then lock+update
+      const candidates = await sequelize.query(`
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY scheduled_for ASC) as rn
+          FROM scheduled_emails
+          WHERE status = 'pending'
+            AND scheduled_for <= NOW()
+            AND attempts_made < max_attempts
+        ) ranked
+        WHERE rn <= 10
+        ORDER BY rn, scheduled_for ASC
+        LIMIT 40
+      `, { type: QueryTypes.SELECT, transaction: t });
+
+      const candidateIds = (candidates as any[]).map((r: any) => r.id);
+      if (candidateIds.length === 0) {
+        await t.commit();
+        return;
+      }
+
       const claimed = await sequelize.query(`
         UPDATE scheduled_emails
         SET status = 'processing',
             processing_started_at = NOW(),
             processor_id = :processorId
-        WHERE id IN (
-          SELECT id FROM (
-            SELECT id, ROW_NUMBER() OVER (PARTITION BY campaign_id ORDER BY scheduled_for ASC) as rn
-            FROM scheduled_emails
-            WHERE status = 'pending'
-              AND scheduled_for <= NOW()
-              AND attempts_made < max_attempts
-            FOR UPDATE SKIP LOCKED
-          ) ranked
-          WHERE rn <= 10
-          ORDER BY rn, scheduled_for ASC
-          LIMIT 40
-        )
+        WHERE id IN (:ids)
+          AND status = 'pending'
         RETURNING *
       `, {
-        replacements: { processorId },
+        replacements: { processorId, ids: candidateIds },
         type: QueryTypes.SELECT,
         transaction: t,
       });
