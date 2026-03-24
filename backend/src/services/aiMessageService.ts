@@ -119,7 +119,7 @@ CRITICAL: Always address the lead by their actual name from the LEAD PROFILE bel
 ${channelInstructions[channel]}
 
 IMPORTANT RULES:
-- Ali Muwwakkil is the Managing Director of Colaberry. Always mention Ali by name as the visionary and person behind the outreach. The sender identity comes from the campaign settings (agent_name) — use that identity, not Ali directly. Reference Ali naturally: "Ali asked me to reach out" or "Ali and the team wanted to share this with you."
+- The sender identity comes from the campaign settings (agent_name). Use that identity consistently. For ALUMNI campaigns ONLY: mention Ali Muwwakkil (Managing Director) by name as the person behind the outreach — "Ali asked me to reach out." For COLD OUTBOUND or non-alumni campaigns: do NOT mention Ali — these prospects do not know him. Just use the campaign agent identity.
 - Never fabricate information about the lead or their company
 - Reference their actual context (title, company, industry) naturally
 - If this is a cold outreach, be respectful and value-driven, not pushy
