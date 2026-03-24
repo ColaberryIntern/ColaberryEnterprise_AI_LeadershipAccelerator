@@ -315,7 +315,14 @@ export async function getLeadStats() {
     byStatus[status] = await Lead.count({ where: { status } });
   }
 
-  const conversionRate = total > 0 ? ((byStatus.enrolled || 0) / total * 100).toFixed(1) : '0.0';
+  // Conversion = leads who booked a strategy call / contacted leads
+  const contacted = await Lead.count({
+    where: { pipeline_stage: { [Op.in]: ['contacted', 'meeting_scheduled', 'enrolled'] } },
+  });
+  const bookedCalls = await Lead.count({
+    where: { pipeline_stage: { [Op.in]: ['meeting_scheduled', 'enrolled'] } },
+  });
+  const conversionRate = contacted > 0 ? ((bookedCalls / contacted) * 100).toFixed(1) : '0.0';
 
   // High-intent leads (score > 60)
   const highIntent = await Lead.count({
@@ -330,7 +337,7 @@ export async function getLeadStats() {
     where: { created_at: { [Op.gte]: startOfMonth } },
   });
 
-  return { total, byStatus, conversionRate, highIntent, thisMonth };
+  return { total, byStatus, conversionRate, highIntent, thisMonth, bookedCalls };
 }
 
 export async function generateLeadCsv() {

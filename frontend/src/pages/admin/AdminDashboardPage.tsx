@@ -321,8 +321,8 @@ function AdminDashboardPage() {
         {kpiLink('/admin/leads', 'Total Leads', leadStats?.total ?? '--', '#0dcaf0',
           leadStats ? `${leadStats.thisMonth} this month` : undefined
         )}
-        {kpiLink('/admin/leads', 'Conversion', leadStats ? `${leadStats.conversionRate}%` : '--', '#e53e3e',
-          leadStats ? `${leadStats.highIntent} high-intent` : undefined
+        {kpiLink('/admin/leads', 'Call Conversion', leadStats ? `${leadStats.conversionRate}%` : '--', '#e53e3e',
+          leadStats ? `${(leadStats as any).bookedCalls ?? 0} calls booked` : undefined
         )}
         {kpiLink('/admin/accelerator', 'Enrollments', stats?.totalEnrollments ?? '--', '#3182ce',
           stats && stats.pendingInvoice > 0 ? `${stats.pendingInvoice} pending` : undefined
