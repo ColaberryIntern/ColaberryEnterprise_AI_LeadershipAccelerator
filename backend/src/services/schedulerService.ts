@@ -19,7 +19,7 @@ import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
-import { sendSmsViaGhl, addContactNote } from './ghlService';
+import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
 import { logCommunication } from './communicationLogService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import {
@@ -1049,30 +1049,39 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
     return;
   }
 
-  // Send SMS via GHL if enabled, otherwise log as placeholder
+  // Send SMS via GHL — sync lead to GHL first if no contact ID
   const ghlEnabled = await getSetting('ghl_enabled');
   const lead = await Lead.findByPk(action.lead_id);
+  let ghlContactId = lead?.ghl_contact_id || null;
 
-  if (ghlEnabled && lead?.ghl_contact_id) {
-    const result = await sendSmsViaGhl(lead.ghl_contact_id, action.body || '');
+  if (ghlEnabled && lead && !ghlContactId) {
+    try {
+      const syncResult = await syncLeadToGhl(lead, 'campaign_sms', false, true);
+      ghlContactId = syncResult.contactId;
+    } catch (syncErr: any) {
+      console.warn(`[Scheduler] GHL sync failed for lead ${action.lead_id}: ${syncErr.message}`);
+    }
+  }
+
+  if (ghlEnabled && ghlContactId) {
+    const result = await sendSmsViaGhl(ghlContactId, action.body || '');
     if (!result.success) {
       console.warn(`[Scheduler] GHL SMS failed for lead ${action.lead_id}: ${result.error}`);
     }
-    // Add GHL note documenting the SMS
     await addContactNote(
-      lead.ghl_contact_id,
+      ghlContactId,
       `📱 SMS Sent: ${action.subject || 'Campaign message'}\n${(action.body || '').substring(0, 500)}`
     ).catch(() => {});
     console.log(`[Scheduler] SMS sent via GHL for lead ${action.lead_id}: ${action.subject}`);
   } else {
-    console.log(`[Scheduler] SMS to ${phone}: ${action.body?.substring(0, 160)} (no GHL — placeholder)`);
+    console.log(`[Scheduler] SMS to ${phone}: ${action.body?.substring(0, 160)} (GHL disabled or sync failed)`);
   }
 
   await action.update({
     status: 'sent',
     sent_at: new Date(),
     attempts_made: (action.attempts_made || 0) + 1,
-    metadata: { ...(action.metadata || {}), ghl_sent: !!(ghlEnabled && lead?.ghl_contact_id), ai_generated: action.ai_generated || false },
+    metadata: { ...(action.metadata || {}), ghl_sent: !!(ghlEnabled && ghlContactId), ai_generated: action.ai_generated || false },
   } as any);
 
   await logActivity({
@@ -1096,7 +1105,7 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
     lead_id: action.lead_id,
     campaign_id: action.campaign_id || null,
     channel: 'sms',
-    delivery_mode: (ghlEnabled && lead?.ghl_contact_id) ? 'live' : 'simulated',
+    delivery_mode: (ghlEnabled && ghlContactId) ? 'live' : 'simulated',
     status: 'sent',
     to_address: phone,
     body: action.body || null,
