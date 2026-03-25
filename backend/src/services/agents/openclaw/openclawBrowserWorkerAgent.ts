@@ -1,12 +1,13 @@
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from '../../../models';
 import { postToDevTo, postToHashnode, postToDiscourse, hasPlatformCredentials } from './openclawPlatformPostingService';
+import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
  * OpenClaw Posting Agent
- * Processes approved responses: auto-posts to platforms with API credentials (Dev.to),
- * queues everything else as 'ready_to_post' for manual posting by admin.
+ * Processes approved responses via: API → browser fallback → manual queue.
+ * Handles authentication, screenshots, and session health.
  */
 export async function runOpenclawBrowserWorkerAgent(
   _agentId: string,
@@ -88,8 +89,58 @@ export async function runOpenclawBrowserWorkerAgent(
               entity_id: response.id,
             });
           } catch (postErr: any) {
-            // API posting failed — fall back to manual queue
+            // API posting failed — try browser fallback before manual queue
             console.warn(`[OpenClaw Posting] API post failed for ${response.platform}: ${postErr.message}`);
+
+            if (hasBrowserSupport(response.platform) && signal?.source_url) {
+              try {
+                console.log(`[OpenClaw Posting] Attempting browser fallback for ${response.platform}...`);
+                const browserResult = await postViaBrowser(
+                  response.platform,
+                  signal.source_url,
+                  response.content,
+                  {
+                    headless: config.headless ?? true,
+                    screenshot_on_post: config.screenshot_on_post ?? true,
+                    min_delay_ms: minDelay,
+                    max_delay_ms: maxDelay,
+                  },
+                );
+
+                await response.update({
+                  post_status: 'posted',
+                  posted_at: new Date(),
+                  post_url: browserResult.post_url,
+                  updated_at: new Date(),
+                });
+
+                actions.push({
+                  campaign_id: '',
+                  action: 'browser_post_response',
+                  reason: `Posted to ${response.platform} via browser (session: ${browserResult.session_id})`,
+                  confidence: 0.85,
+                  before_state: { post_status: 'approved' },
+                  after_state: { post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
+                  result: 'success',
+                  entity_type: 'system',
+                  entity_id: response.id,
+                });
+
+                // Update task and signal, then skip to next task
+                await task.update({
+                  status: 'completed',
+                  output_data: { response_id: response.id, post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
+                  completed_at: new Date(),
+                  updated_at: new Date(),
+                });
+                if (signal) await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
+                continue;
+              } catch (browserErr: any) {
+                console.warn(`[OpenClaw Posting] Browser fallback also failed: ${browserErr.message}`);
+              }
+            }
+
+            // Final fallback: manual queue
             await response.update({
               post_status: 'ready_to_post',
               updated_at: new Date(),
@@ -98,7 +149,65 @@ export async function runOpenclawBrowserWorkerAgent(
             actions.push({
               campaign_id: '',
               action: 'queue_manual_post',
-              reason: `API post failed for ${response.platform}, queued for manual posting: ${postErr.message}`,
+              reason: `API + browser failed for ${response.platform}: ${postErr.message}`,
+              confidence: 0.7,
+              before_state: { post_status: 'approved' },
+              after_state: { post_status: 'ready_to_post' },
+              result: 'success',
+              entity_type: 'system',
+              entity_id: response.id,
+            });
+          }
+        } else if (hasBrowserSupport(response.platform) && signal?.source_url) {
+          // No API credentials but browser support available
+          try {
+            console.log(`[OpenClaw Posting] No API creds — using browser for ${response.platform}...`);
+            const browserResult = await postViaBrowser(
+              response.platform,
+              signal.source_url,
+              response.content,
+              {
+                headless: config.headless ?? true,
+                screenshot_on_post: config.screenshot_on_post ?? true,
+                min_delay_ms: minDelay,
+                max_delay_ms: maxDelay,
+              },
+            );
+
+            await response.update({
+              post_status: 'posted',
+              posted_at: new Date(),
+              post_url: browserResult.post_url,
+              updated_at: new Date(),
+            });
+
+            actions.push({
+              campaign_id: '',
+              action: 'browser_post_response',
+              reason: `Posted to ${response.platform} via browser (session: ${browserResult.session_id})`,
+              confidence: 0.85,
+              before_state: { post_status: 'approved' },
+              after_state: { post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
+              result: 'success',
+              entity_type: 'system',
+              entity_id: response.id,
+            });
+
+            await task.update({
+              status: 'completed',
+              output_data: { response_id: response.id, post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
+              completed_at: new Date(),
+              updated_at: new Date(),
+            });
+            if (signal) await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
+            continue;
+          } catch (browserErr: any) {
+            console.warn(`[OpenClaw Posting] Browser posting failed: ${browserErr.message}`);
+            await response.update({ post_status: 'ready_to_post', updated_at: new Date() });
+            actions.push({
+              campaign_id: '',
+              action: 'queue_manual_post',
+              reason: `Browser failed for ${response.platform}: ${browserErr.message}`,
               confidence: 0.7,
               before_state: { post_status: 'approved' },
               after_state: { post_status: 'ready_to_post' },
@@ -108,7 +217,7 @@ export async function runOpenclawBrowserWorkerAgent(
             });
           }
         } else {
-          // No API credentials — queue for manual posting
+          // No API credentials and no browser support — manual queue
           await response.update({
             post_status: 'ready_to_post',
             updated_at: new Date(),
@@ -117,7 +226,7 @@ export async function runOpenclawBrowserWorkerAgent(
           actions.push({
             campaign_id: '',
             action: 'queue_manual_post',
-            reason: `No API credentials for ${response.platform} — queued for manual posting`,
+            reason: `No API or browser support for ${response.platform} — queued for manual posting`,
             confidence: 0.9,
             before_state: { post_status: 'approved' },
             after_state: { post_status: 'ready_to_post' },
