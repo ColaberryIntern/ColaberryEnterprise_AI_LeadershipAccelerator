@@ -43,10 +43,6 @@ const PLATFORM_COLORS: Record<string, string> = {
   medium: '#00AB6C',
   hashnode: '#2962FF',
   discourse: '#FFC107',
-  twitter: '#1DA1F2',
-  bluesky: '#0085FF',
-  youtube: '#FF0000',
-  producthunt: '#DA552F',
 };
 
 const STATUS_BADGES: Record<string, string> = {
@@ -99,7 +95,7 @@ export default function OpenclawTab() {
   // Governance controls state
   const [requireApproval, setRequireApproval] = useState(true);
   const [autoPostDevto, setAutoPostDevto] = useState(false);
-  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt']);
+  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto', 'hashnode', 'discourse']);
   const [savingConfig, setSavingConfig] = useState<string | null>(null);
 
   // Manual URL submission state
@@ -550,13 +546,12 @@ export default function OpenclawTab() {
           <div>
             <div className="fw-medium small mb-2">Active Scanning Platforms</div>
             <div className="text-muted mb-2" style={{ fontSize: '0.65rem' }}>
-              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt &bull; Scan for Intel Only: Reddit, HN (no links — ban risk)
+              Scan + Auto-Post: Dev.to, Hashnode, Discourse &bull; Scan for Intel Only: Reddit, HN (no links — ban risk)
             </div>
             <div className="d-flex gap-3 flex-wrap">
-              {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt'].map(p => {
+              {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse'].map(p => {
                 const intelOnly = p === 'reddit' || p === 'hackernews';
-                const labelMap: Record<string, string> = { hackernews: 'Hacker News', devto: 'Dev.to', hashnode: 'Hashnode', discourse: 'Discourse Forums', twitter: 'Twitter/X', bluesky: 'Bluesky', youtube: 'YouTube', producthunt: 'Product Hunt' };
-                const label = labelMap[p] || p.charAt(0).toUpperCase() + p.slice(1);
+                const label = p === 'hackernews' ? 'Hacker News' : p === 'devto' ? 'Dev.to' : p === 'hashnode' ? 'Hashnode' : p === 'discourse' ? 'Discourse Forums' : p.charAt(0).toUpperCase() + p.slice(1);
                 return (
                   <div className="form-check" key={p}>
                     <input type="checkbox" className="form-check-input" id={`platform-${p}`} checked={activePlatforms.includes(p)} onChange={() => handleTogglePlatform(p)} disabled={savingConfig === `platform-${p}`} />

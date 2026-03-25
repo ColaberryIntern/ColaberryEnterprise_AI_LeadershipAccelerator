@@ -7,7 +7,7 @@ import type { AgentExecutionResult, AgentAction } from '../types';
 const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
 
 // All platforms get tracked links — admin posts manually so they control link placement
-const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin', 'reddit', 'hackernews', 'quora', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt']);
+const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin', 'reddit', 'hackernews', 'quora', 'hashnode', 'discourse']);
 
 /**
  * OpenClaw Content Response Agent
@@ -187,17 +187,6 @@ async function selectToneFromLearnings(
     }
   }
 
-  // New platform tone defaults
-  if (platform === 'twitter' || platform === 'bluesky') {
-    return { tone: 'conversational', toneSource: 'heuristic' };
-  }
-  if (platform === 'youtube') {
-    return { tone: 'educational', toneSource: 'heuristic' };
-  }
-  if (platform === 'producthunt') {
-    return { tone: 'professional', toneSource: 'heuristic' };
-  }
-
   if (text.includes('?') || text.includes('advice') || text.includes('thoughts')) {
     return { tone: 'conversational', toneSource: 'heuristic' };
   }
@@ -266,14 +255,6 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
     platformContext = `This is a Hashnode blog post. The audience is developers and tech enthusiasts. Be technical but accessible. Reference practical frameworks and real-world patterns.`;
   } else if (platform === 'discourse') {
     platformContext = `This is a Discourse forum discussion (${details.forum_name || 'community forum'}). Be helpful and thorough. Forum communities appreciate detailed, well-structured answers.`;
-  } else if (platform === 'twitter') {
-    platformContext = `This is a Twitter/X thread. STRICT 280-character limit for replies. Be punchy, insightful, and direct. No bullet points. One sharp insight per tweet. Use casual but knowledgeable tone.`;
-  } else if (platform === 'bluesky') {
-    platformContext = `This is a Bluesky post. 300-character limit. The audience is tech-forward early adopters. Be concise, authentic, and skip corporate speak. Similar vibe to early Twitter but more thoughtful.`;
-  } else if (platform === 'youtube') {
-    platformContext = `This is a YouTube video comment. Keep it under 500 characters. Reference specific points from the video title/description. Be enthusiastic but substantive. YouTube comments that add value get pinned.`;
-  } else if (platform === 'producthunt') {
-    platformContext = `This is a Product Hunt launch discussion. The audience is founders, PMs, and early adopters. Be encouraging but add genuine technical insight about the product's AI approach. Keep it under 500 characters. Product Hunt values constructive feedback.`;
   }
 
   let linkInstruction = '';
@@ -301,12 +282,6 @@ Write a SHORT, punchy response (under ${maxLength} characters). Lead with one sp
 const OPENCLAW_MODEL = 'gpt-4o';
 
 async function generateLLMResponse(signal: any, tone: string, maxLength: number, trackedUrl: string | null, topicHints: string[] = []): Promise<string> {
-  // Platform-specific character limits
-  if (signal.platform === 'twitter') maxLength = Math.min(maxLength, 270);
-  if (signal.platform === 'bluesky') maxLength = Math.min(maxLength, 290);
-  if (signal.platform === 'youtube') maxLength = Math.min(maxLength, 500);
-  if (signal.platform === 'producthunt') maxLength = Math.min(maxLength, 500);
-
   const userPrompt = buildUserPrompt(signal, tone, maxLength, trackedUrl, topicHints);
   const systemPrompt = trackedUrl ? SYSTEM_PROMPT_WITH_LINK : SYSTEM_PROMPT;
   const client = getOpenAIClient();

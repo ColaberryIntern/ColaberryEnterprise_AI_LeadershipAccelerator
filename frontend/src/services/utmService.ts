@@ -12,6 +12,7 @@ export interface UTMParams {
   utmSource: string;
   utmCampaign: string;
   utmMedium: string;
+  lid: string;
 }
 
 /**
@@ -26,7 +27,9 @@ export function captureUTMFromURL(): void {
     const campaign = params.get('utm_campaign');
     const medium = params.get('utm_medium');
 
-    if (source || campaign || medium) {
+    const lid = params.get('lid');
+
+    if (source || campaign || medium || lid) {
       const stored: StoredUTM = {
         utmSource: source || '',
         utmCampaign: campaign || '',
@@ -34,6 +37,7 @@ export function captureUTMFromURL(): void {
         storedAt: new Date().toISOString(),
       };
       localStorage.setItem(UTM_KEY, JSON.stringify(stored));
+      if (lid) localStorage.setItem('cb_lid', lid);
     }
   } catch {
     // localStorage unavailable (private browsing, etc.)
@@ -46,19 +50,20 @@ export function captureUTMFromURL(): void {
 export function getUTMParams(): UTMParams {
   try {
     const raw = localStorage.getItem(UTM_KEY);
-    if (!raw) return { utmSource: '', utmCampaign: '', utmMedium: '' };
+    if (!raw) return { utmSource: '', utmCampaign: '', utmMedium: '', lid: localStorage.getItem('cb_lid') || '' };
 
     const stored: StoredUTM = JSON.parse(raw);
     const age = Date.now() - new Date(stored.storedAt).getTime();
     if (age > UTM_MAX_AGE_MS) {
       localStorage.removeItem(UTM_KEY);
-      return { utmSource: '', utmCampaign: '', utmMedium: '' };
+      return { utmSource: '', utmCampaign: '', utmMedium: '', lid: localStorage.getItem('cb_lid') || '' };
     }
 
     return {
       utmSource: stored.utmSource || '',
       utmCampaign: stored.utmCampaign || '',
       utmMedium: stored.utmMedium || '',
+      lid: localStorage.getItem('cb_lid') || '',
     };
   } catch {
     return { utmSource: '', utmCampaign: '', utmMedium: '' };

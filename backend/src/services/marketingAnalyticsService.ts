@@ -31,28 +31,60 @@ export async function getCampaignMetrics(filters?: {
   const startTime = Date.now();
   const dateFilter = buildDateFilter(filters);
 
+  // Combine visitor tracking data with interaction outcome data for full picture
   const query = `
+    WITH campaign_engagement AS (
+      SELECT
+        io.campaign_id,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'sent')::int AS emails_sent,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'opened')::int AS unique_opens,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'clicked')::int AS unique_clicks,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'replied')::int AS replies,
+        COUNT(DISTINCT io.lead_id) FILTER (WHERE io.outcome = 'booked_meeting')::int AS meetings,
+        COUNT(*) FILTER (WHERE io.outcome = 'opened')::int AS total_opens,
+        COUNT(*) FILTER (WHERE io.outcome = 'clicked')::int AS total_clicks
+      FROM interaction_outcomes io
+      WHERE io.campaign_id IS NOT NULL
+      GROUP BY io.campaign_id
+    ),
+    visitor_data AS (
+      SELECT
+        v.campaign_id,
+        COUNT(DISTINCT v.id)::int AS visitors_count,
+        COUNT(DISTINCT CASE WHEN i.intent_level IN ('high', 'very_high') THEN v.id END)::int AS high_intent_count
+      FROM visitors v
+      LEFT JOIN intent_scores i ON i.visitor_id = v.id
+      WHERE v.campaign_id IS NOT NULL AND v.campaign_id != ''
+      GROUP BY v.campaign_id
+    )
     SELECT
-      v.campaign_id,
-      COALESCE(c.name, v.campaign_id) AS campaign_name,
-      COUNT(DISTINCT v.id)::int AS visitors_count,
-      COUNT(DISTINCT CASE WHEN i.intent_level IN ('high', 'very_high') THEN v.id END)::int AS high_intent_count,
-      COUNT(DISTINCT l.id)::int AS leads_count,
-      COUNT(DISTINCT CASE WHEN l.form_type = 'strategy_call' THEN l.id END)::int AS strategy_calls,
+      c.id AS campaign_id,
+      c.name AS campaign_name,
+      c.type AS campaign_type,
+      GREATEST(COALESCE(vd.visitors_count, 0), COALESCE(ce.unique_clicks, 0))::int AS visitors_count,
+      COALESCE(vd.high_intent_count, 0)::int AS high_intent_count,
+      COALESCE(ce.emails_sent, 0)::int AS leads_count,
+      COALESCE(ce.unique_opens, 0)::int AS opens_count,
+      COALESCE(ce.unique_clicks, 0)::int AS clicks_count,
+      COALESCE(ce.replies, 0)::int AS replies_count,
+      COALESCE(ce.meetings, 0)::int AS strategy_calls,
+      COALESCE(ce.total_opens, 0)::int AS total_opens,
+      COALESCE(ce.total_clicks, 0)::int AS total_clicks,
       COUNT(DISTINCT e.id)::int AS enrollments_count,
-      COALESCE(MAX(v.campaign_type), c.type) AS campaign_type,
-      MAX(v.platform) AS platform,
-      MAX(v.creative) AS creative
-    FROM visitors v
-    LEFT JOIN campaigns c ON c.id::text = v.campaign_id
-    LEFT JOIN intent_scores i ON i.visitor_id = v.id
-    LEFT JOIN leads l ON l.id = v.lead_id
-    LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email)
-    WHERE v.campaign_id IS NOT NULL
-      AND v.campaign_id != ''
-      ${dateFilter.clause}
-    GROUP BY v.campaign_id, c.name, c.type
-    ORDER BY visitors_count DESC
+      NULL AS platform,
+      NULL AS creative
+    FROM campaigns c
+    LEFT JOIN campaign_engagement ce ON ce.campaign_id = c.id
+    LEFT JOIN visitor_data vd ON vd.campaign_id = c.id::text
+    LEFT JOIN campaign_leads cl ON cl.campaign_id = c.id AND cl.status = 'active'
+    LEFT JOIN leads l ON l.id = cl.lead_id
+    LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email) AND e.status = 'active'
+    WHERE c.status = 'active'
+      AND (ce.emails_sent > 0 OR vd.visitors_count > 0)
+    GROUP BY c.id, c.name, c.type, vd.visitors_count, vd.high_intent_count,
+      ce.emails_sent, ce.unique_opens, ce.unique_clicks, ce.replies, ce.meetings,
+      ce.total_opens, ce.total_clicks
+    ORDER BY COALESCE(ce.emails_sent, 0) DESC
   `;
 
   const rows = await sequelize.query(query, {
@@ -64,6 +96,8 @@ export async function getCampaignMetrics(filters?: {
     const visitors = Number(row.visitors_count) || 0;
     const highIntent = Number(row.high_intent_count) || 0;
     const leads = Number(row.leads_count) || 0;
+    const opens = Number(row.opens_count) || 0;
+    const clicks = Number(row.clicks_count) || 0;
     const strategyCalls = Number(row.strategy_calls) || 0;
     const enrollments = Number(row.enrollments_count) || 0;
     const totalRevenue = enrollments * PRICE_PER_ENROLLMENT;
@@ -74,10 +108,17 @@ export async function getCampaignMetrics(filters?: {
       visitors_count: visitors,
       high_intent_count: highIntent,
       leads_count: leads,
+      opens_count: opens,
+      clicks_count: clicks,
+      replies_count: Number(row.replies_count) || 0,
+      total_opens: Number(row.total_opens) || 0,
+      total_clicks: Number(row.total_clicks) || 0,
       strategy_calls: strategyCalls,
       enrollments_count: enrollments,
+      open_rate: leads > 0 ? Math.round((opens / leads) * 10000) / 100 : 0,
+      click_rate: leads > 0 ? Math.round((clicks / leads) * 10000) / 100 : 0,
       high_intent_pct: visitors > 0 ? Math.round((highIntent / visitors) * 100) : 0,
-      conversion_rate: visitors > 0 ? Math.round((enrollments / visitors) * 10000) / 100 : 0,
+      conversion_rate: leads > 0 ? Math.round((enrollments / leads) * 10000) / 100 : 0,
       total_revenue: totalRevenue,
       revenue_per_visitor: visitors > 0 ? Math.round(totalRevenue / visitors) : 0,
       revenue_per_lead: leads > 0 ? Math.round(totalRevenue / leads) : 0,

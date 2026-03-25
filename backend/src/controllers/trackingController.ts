@@ -90,6 +90,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       utm_medium,
       campaign_id,
       email,
+      lid,
       timestamp,
     } = req.body;
 
@@ -114,7 +115,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       campaign_id,
     });
 
-    // Email-based identity resolution: link visitor to existing lead
+    // Identity resolution: link visitor to existing lead via email or lead ID
     if (email && typeof email === 'string') {
       try {
         const { Visitor, Lead } = require('../models');
@@ -128,6 +129,18 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
         }
       } catch (err: any) {
         console.warn('[Tracking] Identity resolution failed (non-blocking):', err.message);
+      }
+    } else if (lid && !isNaN(Number(lid))) {
+      // Lead ID from email click tracking (lid param in URL)
+      try {
+        const { Visitor } = require('../models');
+        const visitor = await Visitor.findByPk(visitorId);
+        if (visitor && !visitor.lead_id) {
+          await resolveIdentity(visitorId, Number(lid));
+          console.log(`[Tracking] Identity resolved via lid: visitor ${visitorId} → lead ${lid}`);
+        }
+      } catch (err: any) {
+        console.warn('[Tracking] lid resolution failed (non-blocking):', err.message);
       }
     }
 

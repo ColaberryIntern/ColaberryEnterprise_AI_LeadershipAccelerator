@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from '../../../models';
-import { postToDevTo, postToHashnode, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
+import { postToDevTo, postToHashnode, postToDiscourse, hasPlatformCredentials } from './openclawPlatformPostingService';
 import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
@@ -296,27 +296,6 @@ async function postToPlatform(
       if (!topicId || !forumUrl) throw new Error('No Discourse topic_id or forum_url in signal details');
       const forumEnvPrefix = signal?.details?.forum_env_prefix;
       return postToDiscourse(forumUrl, topicId, response.content, forumEnvPrefix);
-    }
-    case 'twitter': {
-      const tweetId = signal?.details?.tweet_id;
-      if (!tweetId) throw new Error('No tweet_id in signal details');
-      return postToTwitter(tweetId, response.content);
-    }
-    case 'bluesky': {
-      const uri = signal?.details?.uri;
-      const cid = signal?.details?.cid;
-      if (!uri) throw new Error('No Bluesky uri in signal details');
-      return postToBluesky(uri, response.content, cid);
-    }
-    case 'youtube': {
-      const videoId = signal?.details?.video_id;
-      if (!videoId) throw new Error('No video_id in signal details');
-      return postToYouTube(videoId, response.content);
-    }
-    case 'producthunt': {
-      const phId = signal?.details?.ph_id;
-      if (!phId) throw new Error('No Product Hunt post ID in signal details');
-      return postToProductHunt(phId, response.content);
     }
     default:
       throw new Error(`No API posting support for platform: ${response.platform}`);

@@ -833,6 +833,7 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
         action.campaign_id,
         campaign.channel || 'email',
         campaign.type || 'campaign',
+        action.lead_id,
       );
       // Use per-campaign sender if configured
       const settings = (campaign as any).settings || {};
@@ -1180,6 +1181,7 @@ function injectCampaignTracking(
   campaignId: string,
   channel: string,
   campaignType: string,
+  leadId?: number,
 ): string {
   const SITE_PATTERN = /href="(https?:\/\/enterprise\.colaberry\.ai[^"]*)"/gi;
 
@@ -1193,6 +1195,7 @@ function injectCampaignTracking(
       url.searchParams.set('utm_medium', campaignType || 'campaign');
       url.searchParams.set('utm_campaign', campaignId);
       url.searchParams.set('cid', campaignId);
+      if (leadId) url.searchParams.set('lid', String(leadId));
       return `href="${url.toString()}"`;
     } catch {
       return `href="${rawUrl}"`;
