@@ -1226,14 +1226,14 @@ function wrapEmailHtml(body: string): string {
   `.trim();
 }
 
-/** Detect no-show strategy calls (30+ min past scheduled time, still 'scheduled') */
+/** Detect no-show strategy calls (2+ hours past scheduled time, still 'scheduled') */
 async function detectNoShows(): Promise<void> {
-  const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
   const noShows = await StrategyCall.findAll({
     where: {
       status: 'scheduled',
-      scheduled_at: { [Op.lt]: thirtyMinAgo },
+      scheduled_at: { [Op.lt]: twoHoursAgo },
     },
   });
 
