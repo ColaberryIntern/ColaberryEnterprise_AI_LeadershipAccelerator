@@ -497,6 +497,11 @@ async function processScheduledActions(): Promise<void> {
       const candidateIds = (candidates as any[]).map((r: any) => r.id);
       if (candidateIds.length === 0) {
         await t.commit();
+        // Still write heartbeat even when nothing to process
+        try {
+          const { setSetting } = require('./settingsService');
+          await setSetting('scheduler_heartbeat', new Date().toISOString());
+        } catch { /* non-blocking */ }
         return;
       }
 
