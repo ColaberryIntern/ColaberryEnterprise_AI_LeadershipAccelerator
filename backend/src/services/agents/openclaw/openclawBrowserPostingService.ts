@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium, type BrowserContext, type Page } from 'playwright';
 import path from 'path';
 import OpenclawSession from '../../../models/OpenclawSession';
 
@@ -18,22 +18,6 @@ interface BrowserPostConfig {
   max_delay_ms: number;
 }
 
-// Singleton browser instance — stays alive between cron runs
-let browserInstance: Browser | null = null;
-
-async function getBrowser(headless: boolean): Promise<Browser> {
-  if (browserInstance && browserInstance.isConnected()) return browserInstance;
-  browserInstance = await chromium.launch({
-    headless,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
-  // Clean up on process exit
-  const cleanup = () => { browserInstance?.close().catch(() => {}); browserInstance = null; };
-  process.once('SIGTERM', cleanup);
-  process.once('SIGINT', cleanup);
-  return browserInstance;
-}
-
 function randomDelay(min: number, max: number): Promise<void> {
   const ms = Math.floor(Math.random() * (max - min)) + min;
   return new Promise(r => setTimeout(r, ms));
@@ -48,6 +32,7 @@ export function hasBrowserSupport(platform: string): boolean {
 
 /**
  * Post a comment via Playwright browser automation.
+ * Uses persistent browser profile with Google OAuth session cookies.
  * Falls back with a thrown error if anything fails.
  */
 export async function postViaBrowser(
@@ -63,16 +48,15 @@ export async function postViaBrowser(
 }
 
 // ── Dev.to Browser Strategy ────────────────────────────────────────
+// Auth: Google OAuth session saved in persistent browser profile at /data/browser-profiles/devto/
+// CSRF: Fetched from /async_info/base_data (CDN-cached page meta tags are stale)
+// Comments: POST /comments with CSRF token from authenticated session
 
 async function postToDevtoBrowser(
   articleUrl: string,
   commentBody: string,
   config: BrowserPostConfig,
 ): Promise<BrowserPostResult> {
-  const email = process.env.DEVTO_EMAIL;
-  const password = process.env.DEVTO_PASSWORD;
-  if (!email || !password) throw new Error('DEVTO_EMAIL and DEVTO_PASSWORD env vars required for browser posting');
-
   // Get or create session record
   let session = await OpenclawSession.findOne({
     where: { platform: 'devto', session_status: ['active', 'idle'] as any },
@@ -89,16 +73,15 @@ async function postToDevtoBrowser(
     });
   }
 
-  const browser = await getBrowser(config.headless);
   const profileDir = path.join(BROWSER_PROFILES_DIR, 'devto');
   let context: BrowserContext | null = null;
   let page: Page | null = null;
 
   try {
-    // Use persistent context for cookie reuse across runs
+    // Persistent context reuses Google OAuth session cookies across runs
     context = await chromium.launchPersistentContext(profileDir, {
       headless: config.headless,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'],
       viewport: { width: 1920, height: 1080 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       locale: 'en-US',
@@ -106,28 +89,85 @@ async function postToDevtoBrowser(
     });
     page = context.pages()[0] || await context.newPage();
 
+    // Hide automation fingerprint
+    await page.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
+
     await session.update({ session_status: 'active', updated_at: new Date() });
 
-    // 1. Navigate to article
+    // 1. Navigate to article page
     await page.goto(articleUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await randomDelay(1000, 2000);
 
-    // 2. Check if logged in
-    const isLoggedIn = await checkDevtoLoggedIn(page);
-    if (!isLoggedIn) {
-      await loginToDevto(page, email, password);
-      // Navigate back to article after login
-      await page.goto(articleUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await randomDelay(1000, 2000);
+    // 2. Check auth + get CSRF token via async_info (the real source of truth)
+    const authData = await page.evaluate(`(async () => {
+      const resp = await fetch('/async_info/base_data', { credentials: 'same-origin' });
+      const data = await resp.json();
+      return { user: data.user ? { id: data.user.id, name: data.user.name, username: data.user.username } : null, token: data.token || null };
+    })()`) as { user: { id: number; name: string; username: string } | null; token: string | null };
+
+    if (!authData.user) {
+      throw new Error('Dev.to session expired — browser profile not authenticated. Re-run Google OAuth login to re-establish session.');
+    }
+    if (!authData.token) {
+      throw new Error('Dev.to CSRF token missing from async_info despite valid session');
     }
 
-    // 3. Anti-detection delay
+    console.log(`[OpenClaw Browser] Authenticated as ${authData.user.name} (${authData.user.username})`);
+
+    // 3. Extract article ID from the page DOM
+    const articleId = await page.evaluate(`(() => {
+      const el = document.querySelector('[data-article-id]');
+      return el ? el.getAttribute('data-article-id') : null;
+    })()`) as string | null;
+
+    if (!articleId) throw new Error(`Could not extract article ID from ${articleUrl}`);
+
+    // 4. Anti-detection delay
     await randomDelay(config.min_delay_ms, config.max_delay_ms);
 
-    // 4. Post the comment
-    const postUrl = await submitDevtoComment(page, commentBody, articleUrl);
+    // 5. Post comment via fetch with async_info CSRF token
+    const postResult = await page.evaluate(`(async () => {
+      const resp = await fetch('/comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': ${JSON.stringify(authData.token)},
+        },
+        body: JSON.stringify({
+          comment: {
+            body_markdown: ${JSON.stringify(commentBody)},
+            commentable_id: ${parseInt(articleId, 10)},
+            commentable_type: 'Article',
+          },
+        }),
+        credentials: 'same-origin',
+      });
+      const text = await resp.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch {}
+      return { status: resp.status, ok: resp.ok, json, text: text.substring(0, 500) };
+    })()`) as { status: number; ok: boolean; json: any; text: string };
 
-    // 5. Screenshot
+    if (!postResult.ok) {
+      const errDetail = postResult.json?.error || postResult.text?.substring(0, 200) || `status ${postResult.status}`;
+      throw new Error(`Comment POST failed (${postResult.status}): ${errDetail}`);
+    }
+
+    // 6. Extract comment URL
+    let postUrl: string;
+    if (postResult.json?.url) {
+      postUrl = postResult.json.url.startsWith('http') ? postResult.json.url : `https://dev.to${postResult.json.url}`;
+    } else if (postResult.json?.id_code) {
+      postUrl = `https://dev.to/${authData.user.username}/comment/${postResult.json.id_code}`;
+    } else if (postResult.json?.id) {
+      postUrl = `${articleUrl.replace(/\/$/, '')}#comment-${postResult.json.id}`;
+    } else {
+      postUrl = `${articleUrl.replace(/\/$/, '')}#comment-posted-${Date.now()}`;
+    }
+
+    console.log(`[OpenClaw Browser] Comment posted: ${postUrl}`);
+
+    // 7. Screenshot
     let screenshotPath: string | null = null;
     if (config.screenshot_on_post) {
       const filename = `devto_${Date.now()}.png`;
@@ -135,7 +175,7 @@ async function postToDevtoBrowser(
       await page.screenshot({ path: screenshotPath, fullPage: false });
     }
 
-    // 6. Update session
+    // 8. Update session
     await session.update({
       session_status: 'idle',
       last_activity_at: new Date(),
@@ -145,8 +185,8 @@ async function postToDevtoBrowser(
       updated_at: new Date(),
     });
 
-    // Close page but keep context alive for next run
-    await page.close();
+    // Close context (saves cookies to persistent profile)
+    await context.close();
 
     return {
       post_url: postUrl,
@@ -167,6 +207,7 @@ async function postToDevtoBrowser(
     let status: 'captcha_blocked' | 'rate_limited' | 'crashed' = 'crashed';
     if (errMsg.includes('captcha') || errMsg.includes('CAPTCHA')) status = 'captcha_blocked';
     if (errMsg.includes('rate limit') || errMsg.includes('429')) status = 'rate_limited';
+    if (errMsg.includes('session expired')) status = 'crashed'; // Needs re-auth
 
     const errors = Array.isArray(session.errors) ? session.errors : [];
     errors.push({ message: errMsg.slice(0, 500), timestamp: new Date().toISOString(), status });
@@ -183,119 +224,4 @@ async function postToDevtoBrowser(
 
     throw err;
   }
-}
-
-async function checkDevtoLoggedIn(page: Page): Promise<boolean> {
-  try {
-    // Dev.to shows user menu when logged in
-    const userMenu = await page.locator('#user-menu-toggle, [data-testid="navbar-user-menu"], .crayons-avatar--l').first();
-    return await userMenu.isVisible({ timeout: 3000 });
-  } catch {
-    return false;
-  }
-}
-
-async function loginToDevto(page: Page, email: string, password: string): Promise<void> {
-  // Load login page to get session cookies + CSRF token
-  await page.goto('https://dev.to/enter', { waitUntil: 'networkidle', timeout: 30000 });
-  await randomDelay(1000, 2000);
-
-  // Extract CSRF token from the email login form
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
-  const csrfToken = await page.evaluate(`(() => {
-    const form = document.querySelector('input#user_email')?.closest('form');
-    if (!form) return null;
-    const token = form.querySelector('input[name="authenticity_token"]');
-    return token ? token.value : null;
-  })()`) as string | null;
-  if (!csrfToken) throw new Error('Could not extract CSRF token from Dev.to login page');
-
-  // Submit login via direct POST (bypasses Forem's client-side bot detection)
-  const loginScript = `(async () => {
-    const formData = new URLSearchParams();
-    formData.append('utf8', '✓');
-    formData.append('authenticity_token', ${JSON.stringify(csrfToken)});
-    formData.append('user[email]', ${JSON.stringify(email)});
-    formData.append('user[password]', ${JSON.stringify(password)});
-    formData.append('user[remember_me]', '1');
-    formData.append('commit', 'Log in');
-    const resp = await fetch('/users/sign_in', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData.toString(),
-      redirect: 'follow',
-      credentials: 'same-origin',
-    });
-    return { status: resp.status, url: resp.url, ok: resp.ok };
-  })()`;
-  const result = await page.evaluate(loginScript) as { status: number; url: string; ok: boolean };
-
-  if (!result.ok) throw new Error(`Dev.to login POST failed with status ${result.status}`);
-
-  // Reload to apply session cookies
-  await page.goto('https://dev.to', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await randomDelay(1000, 2000);
-
-  // Verify login succeeded
-  const loggedIn = await checkDevtoLoggedIn(page);
-  if (!loggedIn) {
-    throw new Error('Dev.to login failed — POST succeeded but session not established. Check DEVTO_EMAIL and DEVTO_PASSWORD');
-  }
-}
-
-async function submitDevtoComment(page: Page, commentBody: string, articleUrl: string): Promise<string> {
-  // Navigate to article to get its ID and CSRF token
-  await page.goto(articleUrl, { waitUntil: 'networkidle', timeout: 30000 });
-  await randomDelay(1000, 2000);
-
-  // Extract article ID and CSRF token from the page
-  const pageData = await page.evaluate(`(() => {
-    const articleEl = document.querySelector('[data-article-id]');
-    const articleId = articleEl?.getAttribute('data-article-id')
-      || document.querySelector('meta[name="article-id"]')?.getAttribute('content');
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    return { articleId, csrfToken };
-  })()`) as { articleId: string | null; csrfToken: string | null };
-
-  if (!pageData.articleId) throw new Error('Could not extract article ID from page');
-  if (!pageData.csrfToken) throw new Error('Could not extract CSRF token from article page');
-
-  // Submit comment via direct POST (bypasses client-side bot detection)
-  const commentScript = `(async () => {
-    const resp = await fetch('/comments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': ${JSON.stringify(pageData.csrfToken)},
-      },
-      body: JSON.stringify({
-        comment: {
-          body_markdown: ${JSON.stringify(commentBody)},
-          commentable_id: ${parseInt(pageData.articleId, 10)},
-          commentable_type: 'Article',
-        },
-      }),
-      credentials: 'same-origin',
-    });
-    const text = await resp.text();
-    let json = null;
-    try { json = JSON.parse(text); } catch {}
-    return { status: resp.status, ok: resp.ok, json, text: text.substring(0, 500) };
-  })()`;
-  const result = await page.evaluate(commentScript) as { status: number; ok: boolean; json: any; text: string };
-
-  if (!result.ok) {
-    const errDetail = result.json?.error || result.text?.substring(0, 200) || `status ${result.status}`;
-    throw new Error(`Comment POST failed: ${errDetail}`);
-  }
-
-  // Extract comment URL from response
-  if (result.json?.url) {
-    return result.json.url.startsWith('http') ? result.json.url : `https://dev.to${result.json.url}`;
-  }
-  if (result.json?.id) {
-    return `${articleUrl.replace(/\/$/, '')}#comment-${result.json.id}`;
-  }
-
-  return `${articleUrl.replace(/\/$/, '')}#comment-posted-${Date.now()}`;
 }
