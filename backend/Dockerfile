@@ -15,6 +15,7 @@ COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend/package.json ./
 COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN npx playwright install --with-deps chromium
 RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
 ENV NODE_ENV=production
