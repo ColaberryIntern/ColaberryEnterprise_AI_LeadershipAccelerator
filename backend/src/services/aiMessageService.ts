@@ -280,10 +280,15 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
     }
   }
 
-  // SMS: strip any AI-generated opt-out language (GHL adds compliance automatically)
-  let smsBody = content;
+  // Clean up AI-generated content
+  let cleanedBody = content;
+
+  // Strip emdashes from all channels (replace with comma, hyphen, or nothing)
+  cleanedBody = cleanedBody.replace(/\s*—\s*/g, ' - ').replace(/\s*–\s*/g, ' - ');
+
+  // SMS-specific: strip opt-out language and AI agent names
   if (params.channel === 'sms') {
-    smsBody = smsBody
+    cleanedBody = cleanedBody
       .replace(/\n*Reply STOP to opt[- ]?out\.?/gi, '')
       .replace(/\n*Reply STOP to unsubscribe\.?/gi, '')
       .replace(/\n*Text STOP to opt[- ]?out\.?/gi, '')
@@ -294,7 +299,7 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
   }
 
   return {
-    body: smsBody,
+    body: cleanedBody,
     tokens_used: tokensUsed,
     model,
   };
