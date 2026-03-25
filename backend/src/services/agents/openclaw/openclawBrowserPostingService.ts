@@ -215,8 +215,8 @@ async function loginToDevto(page: Page, email: string, password: string): Promis
 
   await randomDelay(500, 1000);
 
-  // Click login button
-  const loginBtn = page.getByRole('button', { name: /log in|sign in|continue/i }).or(page.locator('input[type="submit"], button[type="submit"]').first());
+  // Click the email/password "Log in" button (not social login buttons)
+  const loginBtn = page.locator('input[type="submit"][value="Log in"], input[name="commit"]').first();
   await loginBtn.click();
 
   // Wait for navigation
