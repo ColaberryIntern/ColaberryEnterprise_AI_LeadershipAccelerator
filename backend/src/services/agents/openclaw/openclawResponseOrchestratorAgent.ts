@@ -62,10 +62,10 @@ export async function runResponseOrchestratorAgent(
         const historyForStage: StrategyEngagementEvent[] = priorEngagements.map((e: any) => ({
           content: e.content,
           is_our_reply: e.is_our_reply || false,
-          created_at: e.created_at,
+          created_at: String(e.created_at),
         }));
         // Add the current engagement as their latest reply
-        historyForStage.push({ content: engagement.content, is_our_reply: false, created_at: engagement.created_at });
+        historyForStage.push({ content: engagement.content, is_our_reply: false, created_at: String(engagement.created_at) });
         const stage = detectConversationStage(historyForStage);
 
         // 4. Build strategy-aware + stage-aware prompt

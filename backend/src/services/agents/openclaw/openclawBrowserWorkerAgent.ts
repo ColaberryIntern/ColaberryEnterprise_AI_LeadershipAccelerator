@@ -58,7 +58,7 @@ export async function runOpenclawBrowserWorkerAgent(
         }
 
         // Platform strategy gate — block post creation on PASSIVE_SIGNAL platforms
-        if (task.task_type === 'create_post' && !isPostCreationAllowed(response.platform)) {
+        if ((task.task_type as string) === 'create_post' && !isPostCreationAllowed(response.platform)) {
           await task.update({
             status: 'failed',
             error_message: `Strategy ${getStrategy(response.platform)} blocks create_post on ${response.platform}`,
