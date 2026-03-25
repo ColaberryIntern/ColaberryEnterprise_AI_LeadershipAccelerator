@@ -178,19 +178,11 @@ async function checkSequenceProgression(checks: HealthCheck[]): Promise<void> {
           metric: gaps.length,
           autoFixed: `Recovered ${fixed}/${gaps.length} stuck sequences`,
         });
-      } else if (gaps.length >= 5) {
+      } else {
         checks.push({
           name: 'sequence_progression',
           severity: 'critical',
           detail: `${gaps.length} leads completed a campaign step but have no next step scheduled. The scheduleNextStep function may be failing silently. These leads are stalled and not receiving further campaign messages.`,
-          metric: gaps.length,
-        });
-      } else {
-        // Small number of gaps (under 5) — likely transient, will self-heal next cycle
-        checks.push({
-          name: 'sequence_progression',
-          severity: 'warning',
-          detail: `${gaps.length} lead(s) have a minor sequence gap. Auto-recovery will retry next cycle.`,
           metric: gaps.length,
         });
       }

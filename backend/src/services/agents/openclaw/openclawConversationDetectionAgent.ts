@@ -160,6 +160,27 @@ function scoreEngagement(signal: any): number {
   if (upvotes >= 10) score += 0.1;
   if (upvotes >= 50) score += 0.1;
 
+  // Social amplification signals (Twitter retweets/quotes, Bluesky reposts)
+  const amplification = (details.retweet_count || 0) + (details.quote_count || 0) + (details.repost_count || 0);
+  if (amplification >= 2) score += 0.1;
+  if (amplification >= 10) score += 0.1;
+
+  // Twitter/Bluesky likes (distinct from upvotes)
+  const likes = details.like_count || 0;
+  if (likes >= 3) score += 0.05;
+  if (likes >= 10) score += 0.1;
+
+  // YouTube view count signals high visibility
+  const views = details.view_count || 0;
+  if (views >= 100) score += 0.05;
+  if (views >= 1000) score += 0.1;
+  if (views >= 10000) score += 0.15;
+
+  // Product Hunt votes signal product community interest
+  const votes = details.votes_count || 0;
+  if (votes >= 5) score += 0.1;
+  if (votes >= 50) score += 0.15;
+
   // Recency boost (less than 24 hours old)
   const createdAt = details.created_utc
     ? new Date(details.created_utc * 1000)
@@ -199,5 +220,15 @@ function scoreRisk(signal: any): number {
   const comments = details.num_comments || details.comments_count || 0;
   if (comments === 0) risk += 0.05;
 
-  return Math.min(1, risk);
+  // Twitter pile-on detection: high quote-to-retweet ratio often means controversy
+  if (signal.platform === 'twitter') {
+    const quotes = details.quote_count || 0;
+    const retweets = details.retweet_count || 0;
+    if (quotes > 0 && retweets > 0 && quotes / retweets > 3) risk += 0.2;
+  }
+
+  // Product Hunt is a curated community — lower inherent risk
+  if (signal.platform === 'producthunt') risk -= 0.05;
+
+  return Math.min(1, Math.max(0, risk));
 }

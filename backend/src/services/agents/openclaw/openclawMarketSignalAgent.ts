@@ -23,7 +23,7 @@ export async function runOpenclawMarketSignalAgent(
   const actions: AgentAction[] = [];
   const errors: string[] = [];
   const keywords: string[] = config.keywords || ['AI training', 'enterprise AI', 'AI leadership'];
-  const platforms: string[] = config.platforms || ['reddit', 'hackernews', 'devto'];
+  const platforms: string[] = config.platforms || ['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt'];
   const maxSignals = config.max_signals_per_scan || 50;
   let totalCreated = 0;
 
@@ -319,6 +319,198 @@ async function scanPlatform(
         } catch (err: any) {
           console.warn(`[OpenClaw] Discourse scan failed for ${forum.name}:`, err?.message?.slice(0, 200));
         }
+      }
+      break;
+    }
+
+    case 'twitter': {
+      // Twitter/X Search API v2 — recent tweet search
+      const twitterBearer = process.env.TWITTER_BEARER_TOKEN;
+      if (!twitterBearer) break;
+      try {
+        const resp = await axios.get('https://api.twitter.com/2/tweets/search/recent', {
+          params: {
+            query: query + ' -is:retweet lang:en',
+            max_results: Math.min(maxResults, 25),
+            'tweet.fields': 'author_id,created_at,public_metrics,conversation_id',
+            expansions: 'author_id',
+            'user.fields': 'username',
+          },
+          headers: { Authorization: `Bearer ${twitterBearer}` },
+          timeout: 15000,
+        });
+        const tweets = resp.data?.data || [];
+        const users: Record<string, string> = {};
+        for (const u of resp.data?.includes?.users || []) {
+          users[u.id] = u.username;
+        }
+        for (const tweet of tweets) {
+          const metrics = tweet.public_metrics || {};
+          results.push({
+            platform: 'twitter',
+            source_url: `https://twitter.com/i/status/${tweet.id}`,
+            author: users[tweet.author_id] || '',
+            title: '',
+            content_excerpt: (tweet.text || '').slice(0, 500),
+            details: {
+              tweet_id: tweet.id,
+              conversation_id: tweet.conversation_id,
+              retweet_count: metrics.retweet_count || 0,
+              reply_count: metrics.reply_count || 0,
+              like_count: metrics.like_count || 0,
+              quote_count: metrics.quote_count || 0,
+              created_at: tweet.created_at,
+            },
+          });
+        }
+      } catch (err: any) {
+        console.warn('[OpenClaw] Twitter scan failed:', err?.message?.slice(0, 200));
+      }
+      break;
+    }
+
+    case 'bluesky': {
+      // Bluesky AT Protocol — public search (no auth needed)
+      try {
+        const resp = await axios.get('https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts', {
+          params: { q: query, limit: Math.min(maxResults, 25), sort: 'latest' },
+          timeout: 15000,
+        });
+        const posts = resp.data?.posts || [];
+        for (const post of posts) {
+          // Convert AT URI at://did/app.bsky.feed.post/rkey → web URL
+          const handle = post.author?.handle || '';
+          const rkey = post.uri?.split('/').pop() || '';
+          results.push({
+            platform: 'bluesky',
+            source_url: handle && rkey ? `https://bsky.app/profile/${handle}/post/${rkey}` : post.uri || '',
+            author: handle,
+            title: '',
+            content_excerpt: (post.record?.text || '').slice(0, 500),
+            details: {
+              uri: post.uri,
+              cid: post.cid,
+              reply_count: post.replyCount || 0,
+              repost_count: post.repostCount || 0,
+              like_count: post.likeCount || 0,
+              created_at: post.record?.createdAt,
+            },
+          });
+        }
+      } catch (err: any) {
+        console.warn('[OpenClaw] Bluesky scan failed:', err?.message?.slice(0, 200));
+      }
+      break;
+    }
+
+    case 'youtube': {
+      // YouTube Data API v3 — search for AI-related videos
+      const ytApiKey = process.env.YOUTUBE_API_KEY;
+      if (!ytApiKey) break;
+      try {
+        const publishedAfter = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const resp = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+          params: {
+            part: 'snippet',
+            q: query,
+            type: 'video',
+            order: 'date',
+            maxResults: Math.min(maxResults, 15),
+            publishedAfter,
+            key: ytApiKey,
+          },
+          timeout: 15000,
+        });
+        const items = resp.data?.items || [];
+        // Batch fetch video stats to save quota (1 call for all IDs = 1 unit vs N calls)
+        const videoIds = items.map((i: any) => i.id?.videoId).filter(Boolean).join(',');
+        let statsMap: Record<string, any> = {};
+        if (videoIds) {
+          try {
+            const statsResp = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+              params: { part: 'statistics', id: videoIds, key: ytApiKey },
+              timeout: 15000,
+            });
+            for (const v of statsResp.data?.items || []) {
+              statsMap[v.id] = v.statistics || {};
+            }
+          } catch { /* stats are optional — continue without them */ }
+        }
+        for (const item of items) {
+          const videoId = item.id?.videoId;
+          if (!videoId) continue;
+          const stats = statsMap[videoId] || {};
+          results.push({
+            platform: 'youtube',
+            source_url: `https://www.youtube.com/watch?v=${videoId}`,
+            author: item.snippet?.channelTitle || '',
+            title: item.snippet?.title || '',
+            content_excerpt: (item.snippet?.description || '').slice(0, 500),
+            details: {
+              video_id: videoId,
+              channel_id: item.snippet?.channelId,
+              published_at: item.snippet?.publishedAt,
+              view_count: parseInt(stats.viewCount || '0', 10),
+              comment_count: parseInt(stats.commentCount || '0', 10),
+            },
+          });
+        }
+      } catch (err: any) {
+        console.warn('[OpenClaw] YouTube scan failed:', err?.message?.slice(0, 200));
+      }
+      break;
+    }
+
+    case 'producthunt': {
+      // Product Hunt GraphQL API — recent AI product launches
+      const phToken = process.env.PRODUCTHUNT_ACCESS_TOKEN;
+      if (!phToken) break;
+      try {
+        const graphqlQuery = `query {
+          posts(first: ${Math.min(maxResults, 20)}, order: NEWEST, topic: "artificial-intelligence") {
+            edges {
+              node {
+                id name tagline description url
+                votesCount commentsCount
+                createdAt
+                makers { username }
+                topics { edges { node { name } } }
+              }
+            }
+          }
+        }`;
+        const resp = await axios.post('https://api.producthunt.com/v2/api/graphql',
+          { query: graphqlQuery },
+          {
+            headers: {
+              Authorization: `Bearer ${phToken}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+          },
+        );
+        const edges = resp.data?.data?.posts?.edges || [];
+        for (const edge of edges) {
+          const node = edge.node;
+          if (!node) continue;
+          const topics = (node.topics?.edges || []).map((e: any) => e.node?.name).filter(Boolean);
+          results.push({
+            platform: 'producthunt',
+            source_url: node.url || '',
+            author: node.makers?.[0]?.username || '',
+            title: node.name || '',
+            content_excerpt: ((node.tagline || '') + ' ' + (node.description || '')).trim().slice(0, 500),
+            details: {
+              ph_id: node.id,
+              votes_count: node.votesCount || 0,
+              comments_count: node.commentsCount || 0,
+              created_at: node.createdAt,
+              topics,
+            },
+          });
+        }
+      } catch (err: any) {
+        console.warn('[OpenClaw] Product Hunt scan failed:', err?.message?.slice(0, 200));
       }
       break;
     }
