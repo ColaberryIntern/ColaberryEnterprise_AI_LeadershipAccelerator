@@ -201,24 +201,24 @@ async function loginToDevto(page: Page, email: string, password: string): Promis
   await randomDelay(1000, 2000);
 
   // Extract CSRF token from the email login form
-  const csrfToken = await page.evaluate(() => {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const csrfToken = await page.evaluate(`(() => {
     const form = document.querySelector('input#user_email')?.closest('form');
     if (!form) return null;
-    const token = form.querySelector('input[name="authenticity_token"]') as HTMLInputElement;
+    const token = form.querySelector('input[name="authenticity_token"]');
     return token ? token.value : null;
-  });
+  })()`) as string | null;
   if (!csrfToken) throw new Error('Could not extract CSRF token from Dev.to login page');
 
   // Submit login via direct POST (bypasses Forem's client-side bot detection)
-  const result = await page.evaluate(async (data: { csrf: string; email: string; password: string }) => {
+  const loginScript = `(async () => {
     const formData = new URLSearchParams();
-    formData.append('utf8', '\u2713');
-    formData.append('authenticity_token', data.csrf);
-    formData.append('user[email]', data.email);
-    formData.append('user[password]', data.password);
+    formData.append('utf8', '✓');
+    formData.append('authenticity_token', ${JSON.stringify(csrfToken)});
+    formData.append('user[email]', ${JSON.stringify(email)});
+    formData.append('user[password]', ${JSON.stringify(password)});
     formData.append('user[remember_me]', '1');
     formData.append('commit', 'Log in');
-
     const resp = await fetch('/users/sign_in', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -227,7 +227,8 @@ async function loginToDevto(page: Page, email: string, password: string): Promis
       credentials: 'same-origin',
     });
     return { status: resp.status, url: resp.url, ok: resp.ok };
-  }, { csrf: csrfToken, email, password });
+  })()`;
+  const result = await page.evaluate(loginScript) as { status: number; url: string; ok: boolean };
 
   if (!result.ok) throw new Error(`Dev.to login POST failed with status ${result.status}`);
 
@@ -248,41 +249,40 @@ async function submitDevtoComment(page: Page, commentBody: string, articleUrl: s
   await randomDelay(1000, 2000);
 
   // Extract article ID and CSRF token from the page
-  const pageData = await page.evaluate(() => {
-    // Article ID from data attributes or meta tags
+  const pageData = await page.evaluate(`(() => {
     const articleEl = document.querySelector('[data-article-id]');
     const articleId = articleEl?.getAttribute('data-article-id')
       || document.querySelector('meta[name="article-id"]')?.getAttribute('content');
-    // CSRF token from meta tag
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
     return { articleId, csrfToken };
-  });
+  })()`) as { articleId: string | null; csrfToken: string | null };
 
   if (!pageData.articleId) throw new Error('Could not extract article ID from page');
   if (!pageData.csrfToken) throw new Error('Could not extract CSRF token from article page');
 
   // Submit comment via direct POST (bypasses client-side bot detection)
-  const result = await page.evaluate(async (data: { articleId: string; csrf: string; body: string }) => {
+  const commentScript = `(async () => {
     const resp = await fetch('/comments', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-Token': data.csrf,
+        'X-CSRF-Token': ${JSON.stringify(pageData.csrfToken)},
       },
       body: JSON.stringify({
         comment: {
-          body_markdown: data.body,
-          commentable_id: parseInt(data.articleId, 10),
+          body_markdown: ${JSON.stringify(commentBody)},
+          commentable_id: ${parseInt(pageData.articleId, 10)},
           commentable_type: 'Article',
         },
       }),
       credentials: 'same-origin',
     });
     const text = await resp.text();
-    let json: any = null;
-    try { json = JSON.parse(text); } catch { /* not JSON */ }
+    let json = null;
+    try { json = JSON.parse(text); } catch {}
     return { status: resp.status, ok: resp.ok, json, text: text.substring(0, 500) };
-  }, { articleId: pageData.articleId, csrf: pageData.csrfToken, body: commentBody });
+  })()`;
+  const result = await page.evaluate(commentScript) as { status: number; ok: boolean; json: any; text: string };
 
   if (!result.ok) {
     const errDetail = result.json?.error || result.text?.substring(0, 200) || `status ${result.status}`;
