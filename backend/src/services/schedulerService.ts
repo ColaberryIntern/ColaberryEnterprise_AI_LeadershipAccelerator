@@ -712,7 +712,8 @@ async function processScheduledActions(): Promise<void> {
           await processVoiceAction(action);
           break;
         case 'sms':
-          await processSmsAction(action);
+          // SMS paused — GHL restriction still active. Auto-pause until resolved.
+          await action.update({ status: 'paused', metadata: { ...(action.metadata || {}), paused_reason: 'ghl_sms_restriction' } } as any);
           break;
         default:
           console.warn(`[Scheduler] Unknown channel: ${channel} for action ${action.id}`);
