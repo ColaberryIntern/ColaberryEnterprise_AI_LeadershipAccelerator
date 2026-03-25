@@ -12,7 +12,7 @@ export interface UTMParams {
   utmSource: string;
   utmCampaign: string;
   utmMedium: string;
-  lid: string;
+  lid?: string;
 }
 
 /**
