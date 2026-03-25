@@ -84,6 +84,9 @@ type SelectedAgent = OpenclawDashboard['agents'][number];
 export default function OpenclawTab() {
   const [dashboard, setDashboard] = useState<OpenclawDashboard | null>(null);
   const [responses, setResponses] = useState<OpenclawResponseItem[]>([]);
+  const [responsesTotal, setResponsesTotal] = useState(0);
+  const [responsePage, setResponsePage] = useState(1);
+  const responsesPerPage = 25;
   const [loading, setLoading] = useState(true);
   const [responseFilter, setResponseFilter] = useState('');
   const [markPostedUrl, setMarkPostedUrl] = useState('');
@@ -117,17 +120,20 @@ export default function OpenclawTab() {
 
   const fetchData = useCallback(async () => {
     try {
+      const params: Record<string, string> = { page: String(responsePage), limit: String(responsesPerPage) };
+      if (responseFilter) params.post_status = responseFilter;
       const [dashRes, respRes] = await Promise.all([
         getOpenclawDashboard(),
-        getOpenclawResponses(responseFilter ? { post_status: responseFilter } : undefined),
+        getOpenclawResponses(params),
       ]);
       setDashboard(dashRes.data);
       setResponses(respRes.data.responses || []);
+      setResponsesTotal(respRes.data.total || 0);
     } catch {
       /* ignore */
     }
     setLoading(false);
-  }, [responseFilter]);
+  }, [responseFilter, responsePage]);
 
   useEffect(() => {
     setLoading(true);
@@ -602,7 +608,7 @@ export default function OpenclawTab() {
             className="form-select form-select-sm"
             style={{ width: 'auto', fontSize: '0.75rem' }}
             value={responseFilter}
-            onChange={(e) => setResponseFilter(e.target.value)}
+            onChange={(e) => { setResponseFilter(e.target.value); setResponsePage(1); }}
           >
             <option value="">All Statuses</option>
             <option value="draft">Draft</option>
@@ -728,6 +734,52 @@ export default function OpenclawTab() {
               </tbody>
             </table>
           </div>
+          {/* Pagination */}
+          {responsesTotal > responsesPerPage && (
+            <div className="card-footer bg-white d-flex justify-content-between align-items-center py-2">
+              <span className="text-muted small">
+                Showing {(responsePage - 1) * responsesPerPage + 1}–{Math.min(responsePage * responsesPerPage, responsesTotal)} of {responsesTotal}
+              </span>
+              <div className="d-flex gap-1">
+                <button
+                  className="btn btn-sm btn-outline-secondary py-0 px-2"
+                  disabled={responsePage <= 1}
+                  onClick={() => setResponsePage(p => p - 1)}
+                >
+                  Prev
+                </button>
+                {Array.from({ length: Math.min(Math.ceil(responsesTotal / responsesPerPage), 5) }, (_, i) => {
+                  const totalPages = Math.ceil(responsesTotal / responsesPerPage);
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (responsePage <= 3) {
+                    pageNum = i + 1;
+                  } else if (responsePage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = responsePage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`btn btn-sm py-0 px-2 ${pageNum === responsePage ? 'btn-primary' : 'btn-outline-secondary'}`}
+                      onClick={() => setResponsePage(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  className="btn btn-sm btn-outline-secondary py-0 px-2"
+                  disabled={responsePage >= Math.ceil(responsesTotal / responsesPerPage)}
+                  onClick={() => setResponsePage(p => p + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

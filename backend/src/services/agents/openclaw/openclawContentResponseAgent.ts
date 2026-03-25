@@ -24,7 +24,7 @@ export async function runOpenclawContentResponseAgent(
   const actions: AgentAction[] = [];
   const errors: string[] = [];
   const defaultTone = config.default_tone || 'educational';
-  const maxLength = config.max_response_length || 1800;
+  const maxLength = config.max_response_length || 700;
 
   try {
     // Fetch assigned generate_response tasks
@@ -259,23 +259,23 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
 
   let linkInstruction = '';
   if (trackedUrl) {
-    linkInstruction = `\n\nTracked URL (include once, naturally, at the end): ${trackedUrl}`;
+    linkInstruction = `\n\nIMPORTANT: End your response with this exact link on its own line, introduced naturally (e.g. "I wrote more about this here:" or "We break this down further here:"). The link MUST appear: ${trackedUrl}`;
   }
 
   return `Platform: ${platform}
 Tone: ${tone}
-Max length: ${maxLength} characters
+STRICT MAX: ${maxLength} characters total (including the link). Keep it SHORT — 2-3 concise paragraphs max. Do NOT ramble.
 
 ${platformContext}
 
 --- ORIGINAL POST ---
 Title: ${title}
-Content: ${excerpt.slice(0, 800)}
+Content: ${excerpt.slice(0, 500)}
 ${details.subreddit ? `Subreddit: r/${details.subreddit}` : ''}
 ${details.num_comments ? `Comments: ${details.num_comments}` : ''}
 --- END ---
 
-Write a response to this post. Remember: provide genuine value, no self-promotion.${topicHints.length > 0 ? `\n\nTopics that perform well with our audience: ${topicHints.join(', ')}. Weave these in if naturally relevant.` : ''}${linkInstruction}`;
+Write a SHORT, punchy response (under ${maxLength} characters). Lead with one specific insight, add brief context, done. No walls of text. No filler. Provide genuine value, no self-promotion.${topicHints.length > 0 ? `\n\nTopics that perform well with our audience: ${topicHints.join(', ')}. Weave these in if naturally relevant.` : ''}${linkInstruction}`;
 }
 
 // Use gpt-4o for outreach content — higher quality than gpt-4o-mini
@@ -295,7 +295,7 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        max_tokens: Math.min(Math.ceil(maxLength / 3), 1024),
+        max_tokens: Math.min(Math.ceil(maxLength / 3), 400),
         temperature: 0.7,
       });
       llmResult = response.choices[0]?.message?.content || null;
