@@ -2,12 +2,10 @@ import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { OpenclawSignal, OpenclawTask, OpenclawResponse, OpenclawLearning } from '../../../models';
 import { getOpenAIClient } from '../../../intelligence/assistant/openaiHelper';
+import { getStrategy, isLinkAllowed, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, validateContentForStrategy, shouldAutoApprove as shouldAutoApproveStrategy } from './openclawPlatformStrategy';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
-
-// All platforms get tracked links — admin posts manually so they control link placement
-const LINK_ALLOWED_PLATFORMS = new Set(['devto', 'linkedin', 'reddit', 'hackernews', 'quora', 'hashnode', 'discourse']);
 
 /**
  * OpenClaw Content Response Agent
@@ -67,8 +65,22 @@ export async function runOpenclawContentResponseAgent(
         // Generate response content — learning-aware tone selection
         const { tone, toneSource, learningId } = await selectToneFromLearnings(signal, defaultTone);
         const topicHints = await getTopPerformingTopics();
-        const includeLink = LINK_ALLOWED_PLATFORMS.has(signal.platform);
+        const includeLink = isLinkAllowed(signal.platform);
         const content = await generateLLMResponse(signal, tone, maxLength, includeLink ? trackedUrl : null, topicHints);
+
+        // Strategy validation gate — deterministic backstop catches LLM violations
+        const validation = validateContentForStrategy(content, signal.platform);
+        if (!validation.passed) {
+          console.warn(`[OpenClaw Content] Strategy validation failed for ${signal.platform}: ${validation.reason}`);
+          await task.update({
+            status: 'failed',
+            error_message: `Strategy validation: ${validation.reason}`,
+            completed_at: new Date(),
+            updated_at: new Date(),
+          });
+          errors.push(`Task ${task.id}: Strategy validation failed — ${validation.reason}`);
+          continue;
+        }
 
         // Create draft response with unique tracking
         const response = await OpenclawResponse.create({
@@ -89,10 +101,10 @@ export async function runOpenclawContentResponseAgent(
           updated_at: new Date(),
         });
 
-        // Auto-approve for platforms in auto_approve_platforms list, or globally if require_approval is off
+        // Auto-approve based on platform strategy (HYBRID=auto, PASSIVE/AUTHORITY=manual) + config overrides
         const autoApprovePlatforms: string[] = config.auto_approve_platforms || [];
-        const shouldAutoApprove = !config.require_approval || autoApprovePlatforms.includes(signal.platform);
-        if (shouldAutoApprove) {
+        const shouldApprove = shouldAutoApproveStrategy(signal.platform, autoApprovePlatforms);
+        if (shouldApprove) {
           await OpenclawTask.create({
             task_type: 'post_response',
             priority: task.priority,
@@ -187,6 +199,17 @@ async function selectToneFromLearnings(
     }
   }
 
+  // New platform tone defaults
+  if (platform === 'twitter' || platform === 'bluesky') {
+    return { tone: 'conversational', toneSource: 'heuristic' };
+  }
+  if (platform === 'youtube') {
+    return { tone: 'educational', toneSource: 'heuristic' };
+  }
+  if (platform === 'producthunt') {
+    return { tone: 'professional', toneSource: 'heuristic' };
+  }
+
   if (text.includes('?') || text.includes('advice') || text.includes('thoughts')) {
     return { tone: 'conversational', toneSource: 'heuristic' };
   }
@@ -255,7 +278,22 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
     platformContext = `This is a Hashnode blog post. The audience is developers and tech enthusiasts. Be technical but accessible. Reference practical frameworks and real-world patterns.`;
   } else if (platform === 'discourse') {
     platformContext = `This is a Discourse forum discussion (${details.forum_name || 'community forum'}). Be helpful and thorough. Forum communities appreciate detailed, well-structured answers.`;
+  } else if (platform === 'twitter') {
+    platformContext = `This is a Twitter/X thread. STRICT 280-character limit for replies. Be punchy, insightful, and direct. No bullet points. One sharp insight per tweet. Use casual but knowledgeable tone.`;
+  } else if (platform === 'bluesky') {
+    platformContext = `This is a Bluesky post. 300-character limit. The audience is tech-forward early adopters. Be concise, authentic, and skip corporate speak. Similar vibe to early Twitter but more thoughtful.`;
+  } else if (platform === 'youtube') {
+    platformContext = `This is a YouTube video comment. Keep it under 500 characters. Reference specific points from the video title/description. Be enthusiastic but substantive. YouTube comments that add value get pinned.`;
+  } else if (platform === 'producthunt') {
+    platformContext = `This is a Product Hunt launch discussion. The audience is founders, PMs, and early adopters. Be encouraging but add genuine technical insight about the product's AI approach. Keep it under 500 characters. Product Hunt values constructive feedback.`;
   }
+
+  // Strategy-level instructions (highest priority — enforced before platform style)
+  const strategy = getStrategy(platform);
+  const strategyContext = STRATEGY_PROMPT_INSTRUCTIONS[strategy];
+
+  // All initial responses are Stage 1 (insight only, no pitch)
+  const stageContext = CONVERSION_STAGE_PROMPTS[1];
 
   let linkInstruction = '';
   if (trackedUrl) {
@@ -265,6 +303,10 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
   return `Platform: ${platform}
 Tone: ${tone}
 STRICT MAX: ${maxLength} characters total (including the link). Keep it SHORT — 2-3 concise paragraphs max. Do NOT ramble.
+
+${strategyContext}
+
+${stageContext}
 
 ${platformContext}
 
@@ -282,6 +324,12 @@ Write a SHORT, punchy response (under ${maxLength} characters). Lead with one sp
 const OPENCLAW_MODEL = 'gpt-4o';
 
 async function generateLLMResponse(signal: any, tone: string, maxLength: number, trackedUrl: string | null, topicHints: string[] = []): Promise<string> {
+  // Platform-specific character limits
+  if (signal.platform === 'twitter') maxLength = Math.min(maxLength, 270);
+  if (signal.platform === 'bluesky') maxLength = Math.min(maxLength, 290);
+  if (signal.platform === 'youtube') maxLength = Math.min(maxLength, 500);
+  if (signal.platform === 'producthunt') maxLength = Math.min(maxLength, 500);
+
   const userPrompt = buildUserPrompt(signal, tone, maxLength, trackedUrl, topicHints);
   const systemPrompt = trackedUrl ? SYSTEM_PROMPT_WITH_LINK : SYSTEM_PROMPT;
   const client = getOpenAIClient();

@@ -4,6 +4,7 @@ import ResponseQueue from '../../../models/ResponseQueue';
 import OpenclawResponse from '../../../models/OpenclawResponse';
 import OpenclawSignal from '../../../models/OpenclawSignal';
 import { generateContent } from './openclawAiHelper';
+import { getStrategy, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, detectConversationStage, validateContentForStage, type EngagementEvent as StrategyEngagementEvent } from './openclawPlatformStrategy';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
@@ -53,15 +54,35 @@ export async function runResponseOrchestratorAgent(
 
         conversationContext += `Their reply (${engagement.user_name}${engagement.user_title ? `, ${engagement.user_title}` : ''}):\n${engagement.content}\n`;
 
-        // 3. Generate follow-up
+        // 3. Detect conversation stage from engagement history
+        const priorEngagements = await EngagementEvent.findAll({
+          where: { response_id: engagement.response_id, status: { [Op.ne]: 'new' } },
+          order: [['created_at', 'ASC']],
+        });
+        const historyForStage: StrategyEngagementEvent[] = priorEngagements.map((e: any) => ({
+          content: e.content,
+          is_our_reply: e.is_our_reply || false,
+          created_at: e.created_at,
+        }));
+        // Add the current engagement as their latest reply
+        historyForStage.push({ content: engagement.content, is_our_reply: false, created_at: engagement.created_at });
+        const stage = detectConversationStage(historyForStage);
+
+        // 4. Build strategy-aware + stage-aware prompt
+        const strategy = getStrategy(engagement.platform);
+        const strategyRules = STRATEGY_PROMPT_INSTRUCTIONS[strategy];
+        const stagePrompt = CONVERSION_STAGE_PROMPTS[stage] || CONVERSION_STAGE_PROMPTS[1];
+
         const prompt = `You are an AI thought leadership expert engaging in a genuine conversation on ${engagement.platform}. Generate a thoughtful follow-up reply.
+
+${strategyRules}
+
+${stagePrompt}
 
 Context:
 ${conversationContext}
 
 Rules:
-- No pitching, no links, no sales language
-- Advance the conversation with genuine value and expertise
 - Reference specific points from their reply
 - Keep it under 150 words
 - Be conversational and authentic
@@ -69,6 +90,15 @@ Rules:
 
         const result = await generateContent(prompt, 'gpt-4o');
         let responseText = result.body.replace(/colaberry/gi, '[company]');
+
+        // Stage-aware validation gate
+        const stageValidation = validateContentForStage(responseText, stage);
+        if (!stageValidation.passed) {
+          console.warn(`[ResponseOrchestrator] Stage ${stage} validation failed: ${stageValidation.reason}`);
+          errors.push(`Engagement ${engagement.id}: ${stageValidation.reason}`);
+          await engagement.update({ status: 'responded', updated_at: new Date() });
+          continue;
+        }
 
         const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 

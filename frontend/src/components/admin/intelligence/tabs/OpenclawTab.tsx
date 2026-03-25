@@ -43,6 +43,23 @@ const PLATFORM_COLORS: Record<string, string> = {
   medium: '#00AB6C',
   hashnode: '#2962FF',
   discourse: '#FFC107',
+  twitter: '#1DA1F2',
+  bluesky: '#0085FF',
+  youtube: '#FF0000',
+  producthunt: '#DA552F',
+};
+
+// Platform strategy classification
+const PLATFORM_STRATEGY: Record<string, string> = {
+  reddit: 'PASSIVE_SIGNAL', quora: 'PASSIVE_SIGNAL', hackernews: 'PASSIVE_SIGNAL',
+  twitter: 'HYBRID_ENGAGEMENT', bluesky: 'HYBRID_ENGAGEMENT', devto: 'HYBRID_ENGAGEMENT',
+  hashnode: 'HYBRID_ENGAGEMENT', discourse: 'HYBRID_ENGAGEMENT', producthunt: 'HYBRID_ENGAGEMENT',
+  linkedin: 'AUTHORITY_BROADCAST', medium: 'AUTHORITY_BROADCAST', youtube: 'AUTHORITY_BROADCAST',
+};
+const STRATEGY_BADGES: Record<string, { label: string; bg: string }> = {
+  PASSIVE_SIGNAL: { label: 'Passive', bg: '#6c757d' },
+  HYBRID_ENGAGEMENT: { label: 'Hybrid', bg: '#0d6efd' },
+  AUTHORITY_BROADCAST: { label: 'Authority', bg: '#198754' },
 };
 
 const STATUS_BADGES: Record<string, string> = {
@@ -95,7 +112,7 @@ export default function OpenclawTab() {
   // Governance controls state
   const [requireApproval, setRequireApproval] = useState(true);
   const [autoPostDevto, setAutoPostDevto] = useState(false);
-  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto', 'hashnode', 'discourse']);
+  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt']);
   const [savingConfig, setSavingConfig] = useState<string | null>(null);
 
   // Manual URL submission state
@@ -546,17 +563,19 @@ export default function OpenclawTab() {
           <div>
             <div className="fw-medium small mb-2">Active Scanning Platforms</div>
             <div className="text-muted mb-2" style={{ fontSize: '0.65rem' }}>
-              Scan + Auto-Post: Dev.to, Hashnode, Discourse &bull; Scan for Intel Only: Reddit, HN (no links — ban risk)
+              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt &bull; Scan for Intel Only: Reddit, HN (no links — ban risk)
             </div>
             <div className="d-flex gap-3 flex-wrap">
-              {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse'].map(p => {
+              {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt'].map(p => {
                 const intelOnly = p === 'reddit' || p === 'hackernews';
-                const label = p === 'hackernews' ? 'Hacker News' : p === 'devto' ? 'Dev.to' : p === 'hashnode' ? 'Hashnode' : p === 'discourse' ? 'Discourse Forums' : p.charAt(0).toUpperCase() + p.slice(1);
+                const labelMap: Record<string, string> = { hackernews: 'Hacker News', devto: 'Dev.to', hashnode: 'Hashnode', discourse: 'Discourse Forums', twitter: 'Twitter/X', bluesky: 'Bluesky', youtube: 'YouTube', producthunt: 'Product Hunt' };
+                const label = labelMap[p] || p.charAt(0).toUpperCase() + p.slice(1);
                 return (
                   <div className="form-check" key={p}>
                     <input type="checkbox" className="form-check-input" id={`platform-${p}`} checked={activePlatforms.includes(p)} onChange={() => handleTogglePlatform(p)} disabled={savingConfig === `platform-${p}`} />
                     <label className="form-check-label small" htmlFor={`platform-${p}`}>
                       {label}
+                      {(() => { const s = PLATFORM_STRATEGY[p]; const b = s ? STRATEGY_BADGES[s] : null; return b ? <span className="badge ms-1" style={{ fontSize: '0.5rem', verticalAlign: 'middle', backgroundColor: b.bg, color: '#fff' }}>{b.label}</span> : null; })()}
                       {intelOnly && <span className="badge bg-info ms-1" style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>Intel</span>}
                     </label>
                   </div>
