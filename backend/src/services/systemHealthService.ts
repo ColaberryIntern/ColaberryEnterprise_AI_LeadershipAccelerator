@@ -278,9 +278,10 @@ async function checkDatabaseHealth(checks: HealthCheck[]): Promise<void> {
 async function checkProcessHealth(checks: HealthCheck[]): Promise<void> {
   const uptimeSeconds = process.uptime();
   const mem = process.memoryUsage();
+  const v8 = require('v8');
   const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
-  const heapTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
-  const heapPercent = Math.round((mem.heapUsed / mem.heapTotal) * 100);
+  const heapLimitMB = Math.round(v8.getHeapStatistics().heap_size_limit / 1024 / 1024);
+  const heapPercent = Math.round((heapUsedMB / heapLimitMB) * 100);
   const rssMB = Math.round(mem.rss / 1024 / 1024);
 
   // Recent restart detection
@@ -298,11 +299,11 @@ async function checkProcessHealth(checks: HealthCheck[]): Promise<void> {
 
   // Memory pressure
   if (heapPercent > 90) {
-    checks.push({ name: 'memory_pressure', severity: 'critical', detail: `Heap usage at ${heapPercent}% (${heapUsedMB}/${heapTotalMB}MB). RSS: ${rssMB}MB. Out-of-memory crash risk.`, metric: heapPercent });
+    checks.push({ name: 'memory_pressure', severity: 'critical', detail: `Heap usage at ${heapPercent}% (${heapUsedMB}/${heapLimitMB}MB). RSS: ${rssMB}MB. Out-of-memory crash risk.`, metric: heapPercent });
   } else if (heapPercent > 75) {
-    checks.push({ name: 'memory_pressure', severity: 'warning', detail: `Heap usage at ${heapPercent}% (${heapUsedMB}/${heapTotalMB}MB). RSS: ${rssMB}MB.`, metric: heapPercent });
+    checks.push({ name: 'memory_pressure', severity: 'warning', detail: `Heap usage at ${heapPercent}% (${heapUsedMB}/${heapLimitMB}MB). RSS: ${rssMB}MB.`, metric: heapPercent });
   } else {
-    checks.push({ name: 'memory_pressure', severity: 'ok', detail: `Heap: ${heapPercent}% (${heapUsedMB}MB). RSS: ${rssMB}MB.`, metric: heapPercent });
+    checks.push({ name: 'memory_pressure', severity: 'ok', detail: `Heap: ${heapPercent}% (${heapUsedMB}/${heapLimitMB}MB). RSS: ${rssMB}MB.`, metric: heapPercent });
   }
 }
 
