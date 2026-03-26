@@ -13,14 +13,14 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'program',
     title: 'Program Overview',
-    content: 'The Enterprise AI Leadership Accelerator is a 5-session, 3-week intensive program where Directors and Technical Leaders build a working AI proof of capability for their organization. This is not a lecture series — participants leave with a production-architecture AI solution, an executive presentation deck, and a 90-day expansion roadmap. The program uses a hands-on "3-Agent Model": the enterprise leader (you), Claude Code as the execution engine, and your organization\'s approved LLM (ChatGPT, Claude, Gemini, or company-approved).',
+    content: 'The Enterprise AI Leadership Accelerator is a 5-session, 3-week intensive program where Directors and Technical Leaders build a working AI proof of capability for their organization. This is not a lecture series - participants leave with a production-architecture AI solution, an executive presentation deck, and a 90-day expansion roadmap. The program uses a hands-on "3-Agent Model": the enterprise leader (you), Claude Code as the execution engine, and your organization\'s approved LLM (ChatGPT, Claude, Gemini, or company-approved).',
     keywords: ['program', 'overview', 'accelerator', 'what is', 'about'],
     priority: 10,
   },
   {
     category: 'program',
     title: 'Program Format',
-    content: 'The program consists of 5 live virtual sessions over 3 weeks (Tuesdays and Thursdays). Each session is 2 hours. Between sessions, participants complete 2-4 hours of applied work building their actual AI initiative. The format is cohort-based with live instruction, hands-on exercises, and peer collaboration. Sessions are held on a consistent schedule: Week 1 (Tue/Thu), Week 2 (Tue/Thu), Week 3 (Thu — final presentations).',
+    content: 'The program consists of 5 live virtual sessions over 3 weeks (Tuesdays and Thursdays). Each session is 2 hours. Between sessions, participants complete 2-4 hours of applied work building their actual AI initiative. The format is cohort-based with live instruction, hands-on exercises, and peer collaboration. Sessions are held on a consistent schedule: Week 1 (Tue/Thu), Week 2 (Tue/Thu), Week 3 (Thu - final presentations).',
     keywords: ['format', 'structure', 'delivery', 'how', 'cohort', 'sessions', 'schedule', 'virtual', 'live'],
     priority: 9,
   },
@@ -49,21 +49,21 @@ const SEED_ENTRIES: SeedEntry[] = [
   // Curriculum / Sessions
   {
     category: 'curriculum',
-    title: 'Week 1 — Strategic Alignment & Architecture',
+    title: 'Week 1 - Strategic Alignment & Architecture',
     content: 'Week 1 covers the Define & Architect phase. Session 1 (Tuesday): Set up the 3-Agent Model, identify your highest-priority AI use case, and establish your AI architecture foundation. Session 2 (Thursday): Deep-dive into enterprise AI architecture patterns, governance frameworks, and risk assessment. By end of Week 1, you have a scoped use case and architectural blueprint.',
     keywords: ['week 1', 'strategy', 'architecture', 'session 1', 'session 2', 'define', 'use case'],
     priority: 8,
   },
   {
     category: 'curriculum',
-    title: 'Week 2 — Guided Build & Executive Positioning',
-    content: 'Week 2 covers the Build & Position phase. Session 3 (Tuesday): Build your working AI proof of capability with guided hands-on development using Claude Code and your chosen LLM. Session 4 (Thursday): Craft your executive presentation deck — board and C-suite ready for internal buy-in and budget approval. By end of Week 2, you have a working system and a polished executive pitch.',
+    title: 'Week 2 - Guided Build & Executive Positioning',
+    content: 'Week 2 covers the Build & Position phase. Session 3 (Tuesday): Build your working AI proof of capability with guided hands-on development using Claude Code and your chosen LLM. Session 4 (Thursday): Craft your executive presentation deck - board and C-suite ready for internal buy-in and budget approval. By end of Week 2, you have a working system and a polished executive pitch.',
     keywords: ['week 2', 'build', 'system', 'session 3', 'session 4', 'executive', 'presentation'],
     priority: 8,
   },
   {
     category: 'curriculum',
-    title: 'Week 3 — Executive Readiness & Expansion',
+    title: 'Week 3 - Executive Readiness & Expansion',
     content: 'Week 3 is the Operationalize & Present phase. Session 5 (Thursday): Final presentations to the cohort and advisors. Each participant presents their AI proof of capability, executive deck, and 90-day expansion roadmap. You receive peer feedback and advisory input to refine your approach before presenting internally.',
     keywords: ['week 3', 'presentation', 'session 5', 'final', 'roadmap', 'operationalize'],
     priority: 8,
@@ -71,7 +71,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'curriculum',
     title: 'The 3-Agent Model',
-    content: 'The program uses a unique "3-Agent Model" for AI development: (1) The Enterprise Leader — that\'s you, providing strategic direction and domain expertise; (2) Claude Code — the AI execution engine that writes production-quality code; (3) Your Custom LLM — ChatGPT, Claude, Gemini, or your company-approved model for reasoning and content. Participants bring their own LLM credentials. No company data is shared with Colaberry.',
+    content: 'The program uses a unique "3-Agent Model" for AI development: (1) The Enterprise Leader - that\'s you, providing strategic direction and domain expertise; (2) Claude Code - the AI execution engine that writes production-quality code; (3) Your Custom LLM - ChatGPT, Claude, Gemini, or your company-approved model for reasoning and content. Participants bring their own LLM credentials. No company data is shared with Colaberry.',
     keywords: ['3-agent', 'model', 'claude code', 'llm', 'chatgpt', 'tools', 'methodology'],
     priority: 8,
   },
@@ -80,7 +80,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'outcomes',
     title: 'What You Leave With',
-    content: 'By the end of the program, every participant leaves with 6 concrete deliverables: (1) A working AI Proof of Capability — production-architecture quality, scoped to your highest-priority use case; (2) An Executive AI Presentation Deck — board and C-suite ready for internal buy-in and budget approval; (3) A 90-Day AI Expansion Roadmap — prioritized, resourced, and governed for immediate execution; (4) Enterprise AI Architecture Templates — reusable patterns, governance frameworks, and risk assessment tools; (5) Governance & Risk Alignment — frameworks aligned to your regulatory environment and compliance posture; (6) Advisory Ecosystem Access — ongoing access to Colaberry\'s Enterprise AI Advisory Labs and peer network.',
+    content: 'By the end of the program, every participant leaves with 6 concrete deliverables: (1) A working AI Proof of Capability - production-architecture quality, scoped to your highest-priority use case; (2) An Executive AI Presentation Deck - board and C-suite ready for internal buy-in and budget approval; (3) A 90-Day AI Expansion Roadmap - prioritized, resourced, and governed for immediate execution; (4) Enterprise AI Architecture Templates - reusable patterns, governance frameworks, and risk assessment tools; (5) Governance & Risk Alignment - frameworks aligned to your regulatory environment and compliance posture; (6) Advisory Ecosystem Access - ongoing access to Colaberry\'s Enterprise AI Advisory Labs and peer network.',
     keywords: ['outcomes', 'results', 'deliverables', 'what will i get', 'leave with', 'proof of capability'],
     priority: 9,
   },
@@ -96,7 +96,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'pricing',
     title: 'ROI and Value',
-    content: 'The program pays for itself through reduced consulting spend, faster AI deployment, and avoided missteps. Participants leave with a production-ready AI proof of capability — Organizations typically take 6-12 months to move from AI strategy to production. The Accelerator compresses this to 3 weeks. The 90-day expansion roadmap alone saves months of strategic planning time.',
+    content: 'The program pays for itself through reduced consulting spend, faster AI deployment, and avoided missteps. Participants leave with a production-ready AI proof of capability - Organizations typically take 6-12 months to move from AI strategy to production. The Accelerator compresses this to 3 weeks. The 90-day expansion roadmap alone saves months of strategic planning time.',
     keywords: ['roi', 'value', 'return', 'worth', 'investment', 'benefit', 'consulting'],
     priority: 9,
   },
@@ -128,7 +128,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'faq',
     title: 'Technical Requirements',
-    content: 'Participants should be technical leaders comfortable with technology concepts, though no coding is required — Claude Code handles the execution. You will need a computer with internet access for live sessions, and access to at least one enterprise LLM (ChatGPT, Claude, Gemini, etc.). Participants bring their own LLM credentials; no company data is shared with Colaberry.',
+    content: 'Participants should be technical leaders comfortable with technology concepts, though no coding is required - Claude Code handles the execution. You will need a computer with internet access for live sessions, and access to at least one enterprise LLM (ChatGPT, Claude, Gemini, etc.). Participants bring their own LLM credentials; no company data is shared with Colaberry.',
     keywords: ['technical', 'requirements', 'coding', 'skills', 'need', 'prerequisite'],
     priority: 8,
   },
@@ -174,21 +174,21 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'champion',
     title: 'AI Champion Network',
-    content: 'The AI Champion Network is our alumni and referral program. There are two paths: Path 1 — Enroll yourself in the AI Leadership Accelerator (your company can sponsor you), and earn $250 if your company pays. Path 2 — Refer others (leaders, managers, teams, or departments) and earn $250 per enrolled participant with no cap. Alumni can activate their referral account at enterprise.colaberry.ai/referrals/login. Three referral types are available: Corporate Sponsor (introduce the program to company leadership), Introduced Referral (we reach out mentioning your name), or Anonymous Referral (your name is never mentioned).',
+    content: 'The AI Champion Network is our alumni and referral program. There are two paths: Path 1 - Enroll yourself in the AI Leadership Accelerator (your company can sponsor you), and earn $250 if your company pays. Path 2 - Refer others (leaders, managers, teams, or departments) and earn $250 per enrolled participant with no cap. Alumni can activate their referral account at enterprise.colaberry.ai/referrals/login. Three referral types are available: Corporate Sponsor (introduce the program to company leadership), Introduced Referral (we reach out mentioning your name), or Anonymous Referral (your name is never mentioned).',
     keywords: ['champion', 'alumni', 'referral', 'refer', 'network', 'commission', 'earn', '$250', 'sponsor'],
     priority: 8,
   },
   {
     category: 'champion',
     title: 'AI Champion Referral Commission',
-    content: 'AI Champions earn $250 per enrolled participant — no cap. Examples: 1 enrollment = $250, 4 enrollments = $1,000, 10 enrollments = $2,500, 20 enrollments = $5,000. You earn commission when you enroll and your company pays, or when any leader, manager, team, or department enrolls through your referral.',
+    content: 'AI Champions earn $250 per enrolled participant - no cap. Examples: 1 enrollment = $250, 4 enrollments = $1,000, 10 enrollments = $2,500, 20 enrollments = $5,000. You earn commission when you enroll and your company pays, or when any leader, manager, team, or department enrolls through your referral.',
     keywords: ['commission', 'earn', 'money', 'referral', 'champion', 'reward', 'incentive', 'payment'],
     priority: 7,
   },
 ];
 
 /**
- * Seed the admissions knowledge base. Upserts — updates content if title exists.
+ * Seed the admissions knowledge base. Upserts - updates content if title exists.
  */
 export async function seedAdmissionsKnowledge(): Promise<void> {
   let created = 0;

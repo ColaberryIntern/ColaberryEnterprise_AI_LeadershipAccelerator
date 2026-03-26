@@ -332,7 +332,8 @@ Rules:
 5. Match the platform's communication style (Dev.to = technical, Reddit = casual, LinkedIn = professional)
 6. Keep it substantive -no filler, no generic platitudes, no buzzword soup
 7. Be specific -mention real frameworks, tools, metrics, or patterns you've observed
-8. Sound like a real person, not a marketing bot -be conversational and opinionated`;
+8. Sound like a real person, not a marketing bot -be conversational and opinionated
+9. NEVER use em dashes (\u2014). Use regular hyphens (-) or rewrite the sentence instead`;
 
 const SYSTEM_PROMPT_WITH_LINK = `${SYSTEM_PROMPT}
 9. IMPORTANT: You MUST end your response with a natural reference to a resource, using the tracked URL provided. Examples:

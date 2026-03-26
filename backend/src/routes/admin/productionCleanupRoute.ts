@@ -43,8 +43,8 @@ function isTestCohortName(name: string): boolean {
 
 /** Check if a cohort needs renaming (any name that isn't already "Cohort — Month Year") */
 function needsRename(name: string): boolean {
-  // Already in target format: "Cohort — March 2026"
-  if (/^Cohort\s+\u2014\s+[A-Z][a-z]+\s+\d{4}$/.test(name)) return false;
+  // Already in target format: "Cohort - March 2026" (or legacy emdash variant)
+  if (/^Cohort\s+[-\u2014]\s+[A-Z][a-z]+\s+\d{4}$/.test(name)) return false;
   // Everything else (e.g. "Colaberry 2026-03 Cohort", "Cohort 1 — March 2026") needs rename
   return true;
 }
@@ -384,7 +384,7 @@ router.post('/api/admin/production-cleanup', async (req: Request, res: Response)
         const startDate = new Date(cohort.start_date);
         const monthName = startDate.toLocaleString('en-US', { month: 'long' });
         const year = startDate.getFullYear();
-        const newName = `Cohort \u2014 ${monthName} ${year}`;
+        const newName = `Cohort - ${monthName} ${year}`;
 
         if (isExecute) {
           await Cohort.update({ name: newName }, { where: { id: cohort.id } });

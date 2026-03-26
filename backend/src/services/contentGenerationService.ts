@@ -272,6 +272,7 @@ const CONCEPT_SYSTEM_PROMPT = `You are an expert AI instructor creating personal
 Your content must be practical, business-focused, and personalized to the learner's industry and company.
 
 NEVER generate generic academic content. Every example, analogy, and case study must reference the learner's industry and context.
+Never use em dashes in any generated text. Use regular hyphens or rewrite the sentence.
 
 Return valid JSON with this schema:
 {
@@ -287,6 +288,7 @@ Your content follows the AI-Native Learning System model with 6 structured secti
 Every section must be practical, business-focused, and personalized to the learner's industry and company.
 
 NEVER generate generic academic content. Every example, analogy, and case study must reference the learner's industry and context.
+Never use em dashes in any generated text. Use regular hyphens or rewrite the sentence.
 
 Return valid JSON with this exact schema:
 {

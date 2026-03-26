@@ -126,7 +126,7 @@ export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirm
     return;
   }
 
-  const r = await resolveEmailRecipient(data.to, 'Your Enrollment is Reserved — Complete Payment to Confirm');
+  const r = await resolveEmailRecipient(data.to, 'Your Enrollment is Reserved - Complete Payment to Confirm');
 
   const formattedDate = new Date(data.startDate + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
@@ -290,7 +290,7 @@ export async function sendSponsorshipKitEmail(data: SponsorshipKitEmailData): Pr
     return;
   }
 
-  const r = await resolveEmailRecipient(data.to, 'Your Corporate Sponsorship Kit — Building the Internal AI Execution Engine');
+  const r = await resolveEmailRecipient(data.to, 'Your Corporate Sponsorship Kit - Building the Internal AI Execution Engine');
   const info = await transporter.sendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
@@ -332,7 +332,7 @@ function buildSponsorshipKitHtml(data: SponsorshipKitEmailData): string {
 
   <p>Dear ${data.fullName},</p>
 
-  <p>Thank you for requesting the Corporate Sponsorship Kit for the Enterprise AI Leadership Accelerator. Attached below is your copy of <strong>"Building the Internal AI Execution Engine"</strong> — the executive framework for securing corporate sponsorship.</p>
+  <p>Thank you for requesting the Corporate Sponsorship Kit for the Enterprise AI Leadership Accelerator. Attached below is your copy of <strong>"Building the Internal AI Execution Engine"</strong> - the executive framework for securing corporate sponsorship.</p>
 
   <div class="highlight">
     <strong>Your Sponsorship Readiness:</strong> ${data.scoreTier}<br>
@@ -343,11 +343,11 @@ function buildSponsorshipKitHtml(data: SponsorshipKitEmailData): string {
 
   <h2>What's Inside the Kit</h2>
   <ul>
-    <li><strong>ROI Framework</strong> — Quantify the return on AI leadership development vs. traditional timelines</li>
-    <li><strong>Budget Justification Template</strong> — Ready-to-use language for procurement and finance approval</li>
-    <li><strong>Executive Summary Deck</strong> — One-page board-ready positioning of the investment</li>
-    <li><strong>Sponsor Alignment Guide</strong> — How to identify and engage the right internal champion</li>
-    <li><strong>Implementation Timeline</strong> — Phase-by-phase deployment roadmap</li>
+    <li><strong>ROI Framework</strong> - Quantify the return on AI leadership development vs. traditional timelines</li>
+    <li><strong>Budget Justification Template</strong> - Ready-to-use language for procurement and finance approval</li>
+    <li><strong>Executive Summary Deck</strong> - One-page board-ready positioning of the investment</li>
+    <li><strong>Sponsor Alignment Guide</strong> - How to identify and engage the right internal champion</li>
+    <li><strong>Implementation Timeline</strong> - Phase-by-phase deployment roadmap</li>
   </ul>
 
   <p><a href="${env.frontendUrl}/assets/The_AI_Execution_Engine.pdf" class="cta">Download the Sponsorship Kit (PDF)</a></p>
@@ -435,7 +435,7 @@ export function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmation
   <div class="highlight">
     <strong>Date & Time:</strong> ${formattedDate}<br>
     <strong>Duration:</strong> 30 minutes<br>
-    <strong>Format:</strong> ${data.meetLink ? 'Google Meet (video call)' : 'Video call — meeting link will be sent separately'}
+    <strong>Format:</strong> ${data.meetLink ? 'Google Meet (video call)' : 'Video call - meeting link will be sent separately'}
   </div>
 
   ${data.meetLink ? `<p><a href="${data.meetLink}" class="cta">Join Google Meet</a></p>` : ''}
@@ -489,7 +489,7 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
   }
 
   const alertTo = await getAdminRecipients();
-  const r = await resolveEmailRecipient(alertTo, `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) \u2014 Score: ${data.completionScore}%`);
+  const r = await resolveEmailRecipient(alertTo, `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) - Score: ${data.completionScore}%`);
 
   const html = buildIntelligenceBriefHtml(data);
   const info = await transporter.sendMail({
@@ -653,21 +653,21 @@ function buildExecutiveOverviewHtml(data: ExecutiveOverviewEmailData): string {
 
   <h2>Why Leaders Choose This Program</h2>
   <ul>
-    <li>Build a working AI Proof of Concept scoped to your organization — not toy demos</li>
+    <li>Build a working AI Proof of Concept scoped to your organization - not toy demos</li>
     <li>Leave with an executive-ready presentation for stakeholder buy-in</li>
     <li>Design a 90-Day AI expansion roadmap with measurable milestones</li>
     <li>Access ongoing Enterprise AI Advisory Labs post-program</li>
   </ul>
 
   <div class="urgency">
-    <strong>Next Cohort:</strong> Limited to 15 participants for personalized instruction. Seats are filling — secure your spot before enrollment closes.
+    <strong>Next Cohort:</strong> Limited to 15 participants for personalized instruction. Seats are filling - secure your spot before enrollment closes.
   </div>
 
   <p><a href="${contactUrl}" class="cta">Schedule a 15-Minute Strategy Call</a></p>
 
   <p>Want to enroll directly? <a href="${enrollUrl}">Enroll now</a> to reserve your seat.</p>
 
-  <p>Questions? Reply directly to this email — I read every response personally.</p>
+  <p>Questions? Reply directly to this email - I read every response personally.</p>
 
   <div class="footer">
     <p><strong>Ali Merchant</strong><br>
@@ -732,7 +732,7 @@ function buildHighIntentAlertHtml(data: HighIntentAlertData): string {
   </div>
 
   <div class="action">
-    <strong>Recommended Action:</strong> Reach out within 1 hour. This lead shows strong buying signals — corporate email, executive title, and/or active evaluation timeline.
+    <strong>Recommended Action:</strong> Reach out within 1 hour. This lead shows strong buying signals - corporate email, executive title, and/or active evaluation timeline.
   </div>
 </body>
 </html>
@@ -825,7 +825,7 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
 
   <p>Dear ${data.fullName},</p>
 
-  <p>Your enrollment has been confirmed — you're in! Here are your cohort details:</p>
+  <p>Your enrollment has been confirmed - you're in! Here are your cohort details:</p>
 
   <div class="highlight">
     <strong>Cohort:</strong> ${data.cohortName}<br>
@@ -840,7 +840,7 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
   <div style="margin: 16px 0;">
     <div class="step"><span class="step-num">1</span><span>Go to your <a href="${portalUrl}/portal/login" style="color:#2b6cb0;font-weight:600;">Participant Portal</a></span></div>
     <div class="step"><span class="step-num">2</span><span>Enter the email address you enrolled with (<strong>${data.to}</strong>)</span></div>
-    <div class="step"><span class="step-num">3</span><span>Check your inbox for a secure sign-in link — click it to access your dashboard</span></div>
+    <div class="step"><span class="step-num">3</span><span>Check your inbox for a secure sign-in link - click it to access your dashboard</span></div>
   </div>
 
   <div class="cta-box">
@@ -858,10 +858,10 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
     <li><strong>2-3 AI use cases</strong> relevant to your role and organization</li>
   </ul>
 
-  <p>Don't worry if you're still gathering these — you'll find detailed guidance in the portal once you're logged in.</p>
+  <p>Don't worry if you're still gathering these - you'll find detailed guidance in the portal once you're logged in.</p>
 
   <h2>What You'll Build</h2>
-  <p>Over the next 3 weeks, you will build a working AI Proof of Capability, create an executive presentation deck, and design a 90-Day AI expansion roadmap — all scoped to your organization's highest-priority use case. This is hands-on, outcome-driven work that you can take back to your team immediately.</p>
+  <p>Over the next 3 weeks, you will build a working AI Proof of Capability, create an executive presentation deck, and design a 90-Day AI expansion roadmap - all scoped to your organization's highest-priority use case. This is hands-on, outcome-driven work that you can take back to your team immediately.</p>
 
   <p>Questions? Reach out anytime at <a href="mailto:info@colaberry.com" style="color:#2b6cb0;">info@colaberry.com</a>.</p>
 
@@ -887,7 +887,7 @@ export async function sendDigestEmail(data: DigestData): Promise<void> {
   const alertTo = await getAdminRecipients();
   const periodLabel = data.period === 'weekly' ? 'Weekly' : 'Daily';
   const dateStr = data.generatedAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const subject = `${periodLabel} Admin Digest — ${dateStr}`;
+  const subject = `${periodLabel} Admin Digest - ${dateStr}`;
 
   const r = await resolveEmailRecipient(alertTo, subject);
   const html = buildDigestHtml(data);
@@ -1101,7 +1101,7 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
   const urgency = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
   const r = await resolveEmailRecipient(
     data.to,
-    `[Accelerator] ${urgency}: Session ${data.sessionNumber} — ${data.sessionTitle}`
+    `[Accelerator] ${urgency}: Session ${data.sessionNumber} - ${data.sessionTitle}`
   );
   const html = buildSessionReminderHtml(data);
   const info = await transporter.sendMail({
@@ -1148,7 +1148,7 @@ function buildSessionReminderHtml(data: SessionReminderData): string {
   <p>This is a reminder for your upcoming Accelerator session.</p>
 
   <div class="highlight">
-    <strong>Session:</strong> #${data.sessionNumber} — ${data.sessionTitle}<br>
+    <strong>Session:</strong> #${data.sessionNumber} - ${data.sessionTitle}<br>
     <strong>Date:</strong> ${data.sessionDate}<br>
     <strong>Time:</strong> ${data.startTime} ET
   </div>
@@ -1187,7 +1187,7 @@ export async function sendMissedSessionEmail(data: MissedSessionData): Promise<v
 
   const r = await resolveEmailRecipient(
     data.to,
-    `[Accelerator] Missed Session ${data.sessionNumber}: ${data.sessionTitle} — Catch Up`
+    `[Accelerator] Missed Session ${data.sessionNumber}: ${data.sessionTitle} - Catch Up`
   );
   const html = buildMissedSessionHtml(data);
   const info = await transporter.sendMail({
@@ -1270,7 +1270,7 @@ export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
   const alertTo = await getAdminRecipients();
   const r = await resolveEmailRecipient(
     alertTo,
-    `[Accelerator Alert] ${data.enrollmentName} — ${data.consecutiveMisses} Consecutive Absences`
+    `[Accelerator Alert] ${data.enrollmentName} - ${data.consecutiveMisses} Consecutive Absences`
   );
   const html = `
 <!DOCTYPE html>
@@ -1380,7 +1380,7 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
   };
 
   const title = documentTitles[params.documentType] || params.documentType;
-  const subject = `Your ${title} — Colaberry AI Leadership Accelerator`;
+  const subject = `Your ${title} - Colaberry AI Leadership Accelerator`;
 
   const r = await resolveEmailRecipient(params.to, subject);
 
@@ -1425,7 +1425,7 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
   `.trim();
 
   const info = await transporter.sendMail({
-    from: `"Maya — Colaberry Admissions" <${env.emailFrom}>`,
+    from: `"Maya - Colaberry Admissions" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
@@ -1469,7 +1469,7 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
   </style>
 </head>
 <body>
-  <div class="alert-bar">${label} — Severity ${alert.severity}/5</div>
+  <div class="alert-bar">${label} - Severity ${alert.severity}/5</div>
   <h1>${alert.title}</h1>
   ${alert.description ? `<div class="detail">${alert.description}</div>` : ''}
   <div class="meta">
@@ -1479,14 +1479,14 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
   </div>
   <p style="margin-top: 20px;">Review this alert in the <a href="http://95.216.199.47:8888/admin/intelligence" style="color: #2b6cb0; font-weight: 600;">Intelligence OS</a>.</p>
   <div class="footer">
-    <p>Colaberry AI Organization — Alert Intelligence Engine</p>
+    <p>Colaberry AI Organization - Alert Intelligence Engine</p>
   </div>
 </body>
 </html>
   `.trim();
 
   const info = await transporter.sendMail({
-    from: `"Cory — AI Operations" <${env.emailFrom}>`,
+    from: `"Cory - AI Operations" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
@@ -1509,7 +1509,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
 
   const periodLabel = data.type === 'weekly' ? 'Weekly Strategic' : 'Daily Executive';
   const dateStr = data.generatedAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const subject = `${periodLabel} Briefing — ${dateStr}`;
+  const subject = `${periodLabel} Briefing - ${dateStr}`;
 
   const r = await resolveEmailRecipient(to, subject);
 
@@ -1601,7 +1601,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
   <p style="margin-top: 20px;">View the full Intelligence OS dashboard at <a href="http://95.216.199.47:8888/admin/intelligence" style="color: #2b6cb0; font-weight: 600;">Intelligence OS</a>.</p>
 
   <div class="footer">
-    <p><strong>Colaberry AI Organization</strong> — ${periodLabel} Briefing<br>
+    <p><strong>Colaberry AI Organization</strong> - ${periodLabel} Briefing<br>
     <span style="font-size:11px;color:#a0aec0;">Generated by Cory, AI COO</span></p>
   </div>
 </body>
@@ -1609,7 +1609,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
   `.trim();
 
   const info = await transporter.sendMail({
-    from: `"Cory — AI COO" <${env.emailFrom}>`,
+    from: `"Cory - AI COO" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
     html,
