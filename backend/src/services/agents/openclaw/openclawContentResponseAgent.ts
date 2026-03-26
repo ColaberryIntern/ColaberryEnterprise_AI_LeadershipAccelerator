@@ -6,6 +6,7 @@ import { getStrategy, getExecutionType, isHumanExecution, isLinkAllowed, STRATEG
 import { captureLeadFromSignal } from './openclawLeadCaptureService';
 import { classifyAutomationRisk } from './openclawRiskClassifier';
 import { isRateLimited } from './openclawRateLimiter';
+import { evaluateResponseQuality } from './openclawQualityGateAgent';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
@@ -126,20 +127,16 @@ export async function runOpenclawContentResponseAgent(
           console.warn(`[OpenClaw Content] Lead capture failed: ${leadErr.message}`);
         }
 
-        // Route based on risk classification (Phase 4)
+        // Route based on execution type and quality gate
         if (!humanExecution) {
-          const riskResult = classifyAutomationRisk({
-            platform: signal.platform,
-            action_type: 'reply',
-            conversation_stage: 1, // new response starts at stage 1
-            lead_score: (response as any).priority_score || 0,
-            intent_level: 'low',
-          }, config.auto_approve_platforms || []);
+          // Quality gate: deterministic review of generated content
+          const quality = evaluateResponseQuality(content, signal.platform);
 
-          if (riskResult.auto_approve) {
-            // Check rate limit before auto-approving
+          if (quality.approved) {
+            // Check rate limit before approving
             const rateLimitResult = await isRateLimited(signal.platform);
             if (rateLimitResult.allowed) {
+              await response.update({ post_status: 'approved', updated_at: new Date() });
               await OpenclawTask.create({
                 task_type: 'post_response',
                 priority: task.priority,
@@ -148,11 +145,55 @@ export async function runOpenclawContentResponseAgent(
                 input_data: { response_id: response.id },
                 created_at: new Date(),
               });
-              await response.update({ post_status: 'approved', updated_at: new Date() });
+              actions.push({
+                campaign_id: '',
+                action: 'quality_gate_approved',
+                reason: `Quality gate passed (score: ${quality.score}/100) -approved for ${signal.platform} posting`,
+                confidence: quality.score / 100,
+                before_state: { post_status: 'draft' },
+                after_state: { post_status: 'approved' },
+                result: 'success',
+                entity_type: 'system',
+                entity_id: response.id,
+              });
             }
-            // Rate-limited: keep as draft -will be retried later
+            // Rate-limited: keep as draft -quality gate agent will pick up later
+          } else {
+            // Quality rejected -mark rejected and queue regeneration
+            await response.update({
+              post_status: 'rejected',
+              reasoning: `Quality gate rejected (score: ${quality.score}): ${quality.reasons.join('; ')}`,
+              updated_at: new Date(),
+            });
+            await signal.update({
+              response_id: undefined,
+              status: 'queued',
+              updated_at: new Date(),
+            } as any);
+            await OpenclawTask.create({
+              task_type: 'generate_response',
+              priority: (task.priority || 50) + 10,
+              status: 'pending',
+              signal_id: signal.id,
+              input_data: {
+                regeneration: true,
+                previous_response_id: response.id,
+                rejection_reasons: quality.reasons,
+              },
+              created_at: new Date(),
+            });
+            actions.push({
+              campaign_id: '',
+              action: 'quality_gate_rejected',
+              reason: `Quality gate rejected (score: ${quality.score}/100): ${quality.reasons.join('; ')} -queued for regeneration`,
+              confidence: quality.score / 100,
+              before_state: { post_status: 'draft' },
+              after_state: { post_status: 'rejected' },
+              result: 'success',
+              entity_type: 'system',
+              entity_id: response.id,
+            });
           }
-          // ASSISTED_AUTOMATION / HUMAN_REQUIRED: stay as draft for review
         }
         // HUMAN_EXECUTION: already set to 'ready_for_manual_post' -no post task created
 
