@@ -1220,6 +1220,32 @@ function detectSeniorityFromTitle(title?: string): 'unknown' | 'ic' | 'manager' 
   return 'ic';
 }
 
+// ── Phase 4: Circuit Breaker Status ─────────────────────────────────
+
+router.get(`${BASE}/circuit-status`, async (_req: Request, res: Response) => {
+  try {
+    const { getAllCircuitStatus } = await import('../../services/agents/openclaw/openclawCircuitBreaker');
+    const statuses = await getAllCircuitStatus();
+    res.json({ circuit_statuses: statuses });
+  } catch (err: any) {
+    console.error('[OpenClaw] Circuit status error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Phase 4: Rate Limit Status ──────────────────────────────────────
+
+router.get(`${BASE}/rate-limits`, async (_req: Request, res: Response) => {
+  try {
+    const { getAllRateCounts } = await import('../../services/agents/openclaw/openclawRateLimiter');
+    const rateLimits = await getAllRateCounts();
+    res.json({ rate_limits: rateLimits });
+  } catch (err: any) {
+    console.error('[OpenClaw] Rate limits error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Phase 3: Daily Action Queue ─────────────────────────────────────
 
 router.get(`${BASE}/actions/today`, async (req: Request, res: Response) => {

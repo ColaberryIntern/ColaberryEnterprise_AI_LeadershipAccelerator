@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { OpenclawSignal } from '../../../models';
+import { getOptimizedScanConfig } from './openclawSignalScaler';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 interface PlatformResult {
@@ -22,13 +23,30 @@ export async function runOpenclawMarketSignalAgent(
   const start = Date.now();
   const actions: AgentAction[] = [];
   const errors: string[] = [];
-  const keywords: string[] = config.keywords || ['AI training', 'enterprise AI', 'AI leadership'];
+  const baseKeywords: string[] = config.keywords || ['AI training', 'enterprise AI', 'AI leadership'];
   const platforms: string[] = config.platforms || ['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt', 'facebook_groups', 'linkedin_comments'];
-  const maxSignals = config.max_signals_per_scan || 50;
+  const baseMaxSignals = config.max_signals_per_scan || 50;
   let totalCreated = 0;
+
+  // Phase 4: Dynamic keyword + platform priority from learnings
+  let keywords = baseKeywords;
+  let platformMultipliers: Map<string, number> = new Map();
+  try {
+    const optimized = await getOptimizedScanConfig(baseKeywords, platforms);
+    // Merge primary (top-performing) + secondary (base) keywords, deduped
+    const allKeywords = [...optimized.keywords.primary, ...optimized.keywords.secondary];
+    keywords = [...new Set(allKeywords)];
+    for (const pp of optimized.platformPriorities) {
+      platformMultipliers.set(pp.platform, pp.scan_frequency_multiplier);
+    }
+  } catch {
+    // Non-fatal — fall back to base config
+  }
 
   for (const platform of platforms) {
     try {
+      const multiplier = platformMultipliers.get(platform) || 1.0;
+      const maxSignals = Math.round(baseMaxSignals * multiplier);
       const results = await scanPlatform(platform, keywords, maxSignals, config);
 
       for (const item of results) {

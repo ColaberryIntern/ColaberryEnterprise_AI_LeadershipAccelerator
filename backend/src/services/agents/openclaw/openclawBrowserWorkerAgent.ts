@@ -3,6 +3,8 @@ import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from 
 import { postToDevTo, postToHashnode, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
 import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
 import { getStrategy, isPostCreationAllowed, isHumanExecution } from './openclawPlatformStrategy';
+import { checkCircuitBreaker } from './openclawCircuitBreaker';
+import { isRateLimited } from './openclawRateLimiter';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
@@ -78,6 +80,33 @@ export async function runOpenclawBrowserWorkerAgent(
           });
           continue;
         }
+
+        // Circuit breaker gate — halt if error rate too high for this platform
+        try {
+          const circuitStatus = await checkCircuitBreaker(response.platform);
+          if (circuitStatus.state === 'OPEN') {
+            await task.update({
+              status: 'failed',
+              error_message: `Circuit breaker OPEN for ${response.platform} (error rate: ${circuitStatus.error_rate}%)`,
+              completed_at: new Date(),
+              updated_at: new Date(),
+            });
+            continue;
+          }
+        } catch { /* non-fatal — proceed if circuit check fails */ }
+
+        // Rate limit gate — defer if platform limit reached
+        try {
+          const rateLimitResult = await isRateLimited(response.platform);
+          if (!rateLimitResult.allowed) {
+            await task.update({
+              status: 'pending',
+              error_message: rateLimitResult.reason || 'Rate limited',
+              updated_at: new Date(),
+            });
+            continue;
+          }
+        } catch { /* non-fatal — proceed if rate check fails */ }
 
         const signal = response.signal_id
           ? await OpenclawSignal.findByPk(response.signal_id)

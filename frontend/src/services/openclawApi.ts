@@ -298,3 +298,29 @@ export interface ActionItem {
 
 export const getOpenclawActions = (params?: Record<string, string>) =>
   api.get<{ actions: ActionItem[]; total: number }>(`${BASE}/actions/today`, { params });
+
+// ── Phase 4: Circuit Breaker & Rate Limit Types & API ────────────────────────
+
+export interface CircuitStatus {
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  platform: string;
+  error_count: number;
+  total_count: number;
+  error_rate: number;
+  last_failure_at: string | null;
+  opened_at: string | null;
+}
+
+export interface RateLimitStatus {
+  platform: string;
+  hour: number;
+  day: number;
+  limit_hour: number;
+  limit_day: number;
+}
+
+export const getCircuitStatus = () =>
+  api.get<{ circuit_statuses: CircuitStatus[] }>(`${BASE}/circuit-status`);
+
+export const getRateLimits = () =>
+  api.get<{ rate_limits: RateLimitStatus[] }>(`${BASE}/rate-limits`);

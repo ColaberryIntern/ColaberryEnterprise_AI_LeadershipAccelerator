@@ -4,6 +4,8 @@ import { OpenclawSignal, OpenclawTask, OpenclawResponse, OpenclawLearning } from
 import { getOpenAIClient } from '../../../intelligence/assistant/openaiHelper';
 import { getStrategy, getExecutionType, isHumanExecution, isLinkAllowed, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, validateContentForStrategy, shouldAutoApprove as shouldAutoApproveStrategy } from './openclawPlatformStrategy';
 import { captureLeadFromSignal } from './openclawLeadCaptureService';
+import { classifyAutomationRisk } from './openclawRiskClassifier';
+import { isRateLimited } from './openclawRateLimiter';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
@@ -124,22 +126,33 @@ export async function runOpenclawContentResponseAgent(
           console.warn(`[OpenClaw Content] Lead capture failed: ${leadErr.message}`);
         }
 
-        // Route based on execution type
+        // Route based on risk classification (Phase 4)
         if (!humanExecution) {
-          // API_POSTING: auto-approve check
-          const autoApprovePlatforms: string[] = config.auto_approve_platforms || [];
-          const shouldApprove = shouldAutoApproveStrategy(signal.platform, autoApprovePlatforms);
-          if (shouldApprove) {
-            await OpenclawTask.create({
-              task_type: 'post_response',
-              priority: task.priority,
-              status: 'pending',
-              signal_id: signal.id,
-              input_data: { response_id: response.id },
-              created_at: new Date(),
-            });
-            await response.update({ post_status: 'approved', updated_at: new Date() });
+          const riskResult = classifyAutomationRisk({
+            platform: signal.platform,
+            action_type: 'reply',
+            conversation_stage: 1, // new response starts at stage 1
+            lead_score: (response as any).priority_score || 0,
+            intent_level: 'low',
+          }, config.auto_approve_platforms || []);
+
+          if (riskResult.auto_approve) {
+            // Check rate limit before auto-approving
+            const rateLimitResult = await isRateLimited(signal.platform);
+            if (rateLimitResult.allowed) {
+              await OpenclawTask.create({
+                task_type: 'post_response',
+                priority: task.priority,
+                status: 'pending',
+                signal_id: signal.id,
+                input_data: { response_id: response.id },
+                created_at: new Date(),
+              });
+              await response.update({ post_status: 'approved', updated_at: new Date() });
+            }
+            // Rate-limited: keep as draft — will be retried later
           }
+          // ASSISTED_AUTOMATION / HUMAN_REQUIRED: stay as draft for review
         }
         // HUMAN_EXECUTION: already set to 'ready_for_manual_post' — no post task created
 

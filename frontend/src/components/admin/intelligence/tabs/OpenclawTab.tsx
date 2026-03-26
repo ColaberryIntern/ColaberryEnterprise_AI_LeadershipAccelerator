@@ -11,10 +11,14 @@ import {
   generateLinkedInPost,
   getOpenclawAgentActivity,
   getOpenclawActions,
+  getCircuitStatus,
+  getRateLimits,
   OpenclawDashboard,
   OpenclawResponseItem,
   OpenclawAgentActivity,
   ActionItem,
+  CircuitStatus,
+  RateLimitStatus,
 } from '../../../../services/openclawApi';
 import {
   getAuthorityContent,
@@ -987,6 +991,7 @@ export default function OpenclawTab() {
       <AuthorityContentSection />
       <EngagementMonitorSection />
       <ResponseQueueSection />
+      <CircuitBreakerStatus />
       <LinkedInCommandCenter />
 
       {/* Response Detail Modal */}
@@ -1757,6 +1762,8 @@ function ResponseQueueSection() {
                   <tr>
                     <th>Engagement</th>
                     <th>Type</th>
+                    <th>Priority</th>
+                    <th>Urgency</th>
                     <th>Response Preview</th>
                     <th>Status</th>
                     <th>Expires</th>
@@ -1773,6 +1780,8 @@ function ResponseQueueSection() {
                           <span className="badge" style={{ backgroundColor: PLATFORM_COLORS[item.platform] || '#6c757d', fontSize: '0.6rem' }}>{item.platform}</span>
                         </td>
                         <td><span className={`badge bg-${item.response_type === 'follow_up' ? 'info' : 'primary'}`} style={{ fontSize: '0.65rem' }}>{item.response_type}</span></td>
+                        <td>{item.details?.priority_score != null ? <span className={`badge bg-${item.details.priority_score >= 70 ? 'danger' : item.details.priority_score >= 40 ? 'warning' : 'secondary'}`} style={{ fontSize: '0.65rem' }}>{Math.round(item.details.priority_score)}</span> : '—'}</td>
+                        <td>{item.details?.urgency_level ? <span className={`badge bg-${item.details.urgency_level === 'critical' ? 'danger' : item.details.urgency_level === 'high' ? 'warning' : item.details.urgency_level === 'medium' ? 'info' : 'secondary'}`} style={{ fontSize: '0.65rem' }}>{item.details.urgency_level}</span> : '—'}</td>
                         <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.response_text.slice(0, 120)}</td>
                         <td><span className={`badge bg-${STATUS_BADGES[item.status] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>{item.status}</span></td>
                         <td className="text-nowrap text-muted" style={{ fontSize: '0.7rem' }}>{item.expires_at ? timeAgo(item.expires_at) : '—'}</td>
@@ -1807,6 +1816,72 @@ function ResponseQueueSection() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function CircuitBreakerStatus() {
+  const [circuits, setCircuits] = useState<CircuitStatus[]>([]);
+  const [rateLimits, setRateLimits] = useState<RateLimitStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [circuitRes, rateRes] = await Promise.all([getCircuitStatus(), getRateLimits()]);
+        if (!mounted) return;
+        setCircuits(circuitRes.data.circuit_statuses || []);
+        setRateLimits(rateRes.data.rate_limits || []);
+      } catch { /* ignore */ }
+      if (mounted) setLoading(false);
+    };
+    load();
+    const interval = setInterval(load, 60000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
+
+  const nonClosed = circuits.filter(c => c.state !== 'CLOSED');
+  const nearLimit = rateLimits.filter(r => r.limit_hour > 0 && r.hour >= r.limit_hour * 0.8);
+
+  if (loading || (nonClosed.length === 0 && nearLimit.length === 0)) return null;
+
+  const circuitBadge = (state: string) => state === 'OPEN' ? 'danger' : state === 'HALF_OPEN' ? 'warning' : 'success';
+
+  return (
+    <div className="card border-0 shadow-sm mb-3">
+      <div className="card-header bg-white fw-semibold">
+        <i className="bi bi-shield-exclamation me-2" />Automation Safeguards
+      </div>
+      <div className="card-body p-3">
+        {nonClosed.length > 0 && (
+          <div className="mb-3">
+            <div className="small fw-medium text-muted mb-2">Circuit Breakers</div>
+            <div className="d-flex gap-2 flex-wrap">
+              {nonClosed.map(c => (
+                <div key={c.platform} className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-bg-alt)', fontSize: '0.75rem' }}>
+                  <span className={`badge bg-${circuitBadge(c.state)}`} style={{ fontSize: '0.6rem' }}>{c.state}</span>
+                  <span className="fw-medium">{c.platform}</span>
+                  <span className="text-muted">({c.error_rate}% errors, {c.total_count} tasks)</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {nearLimit.length > 0 && (
+          <div>
+            <div className="small fw-medium text-muted mb-2">Rate Limits (near capacity)</div>
+            <div className="d-flex gap-2 flex-wrap">
+              {nearLimit.map(r => (
+                <div key={r.platform} className="d-flex align-items-center gap-1 px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-bg-alt)', fontSize: '0.75rem' }}>
+                  <span className="fw-medium">{r.platform}</span>
+                  <span className="text-muted">{r.hour}/{r.limit_hour} hr, {r.day}/{r.limit_day} day</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

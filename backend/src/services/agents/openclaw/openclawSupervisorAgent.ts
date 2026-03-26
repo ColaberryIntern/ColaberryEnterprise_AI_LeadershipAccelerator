@@ -1,5 +1,7 @@
 import { Op } from 'sequelize';
-import { OpenclawTask, OpenclawSession } from '../../../models';
+import { OpenclawTask, OpenclawSession, OpenclawResponse } from '../../../models';
+import { checkCircuitBreaker, getAllCircuitStatus } from './openclawCircuitBreaker';
+import { isRateLimited } from './openclawRateLimiter';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
@@ -87,6 +89,55 @@ export async function runOpenclawSupervisorAgent(
       });
 
       for (const task of pendingTasks) {
+        // Phase 4: Gate post_response tasks on circuit breaker + rate limiter
+        if (task.task_type === 'post_response') {
+          const responseId = task.input_data?.response_id;
+          if (responseId) {
+            try {
+              const response = await OpenclawResponse.findByPk(responseId, { attributes: ['platform'] });
+              if (response?.platform) {
+                // Circuit breaker check
+                try {
+                  const circuit = await checkCircuitBreaker(response.platform);
+                  if (circuit.state === 'OPEN') {
+                    actions.push({
+                      campaign_id: '',
+                      action: 'block_task_circuit_open',
+                      reason: `Circuit OPEN for ${response.platform} (error rate: ${circuit.error_rate}%) — skipping task ${task.id}`,
+                      confidence: 1,
+                      before_state: { status: 'pending' },
+                      after_state: { status: 'pending' },
+                      result: 'skipped',
+                      entity_type: 'system',
+                      entity_id: task.id,
+                    });
+                    continue;
+                  }
+                } catch { /* non-fatal */ }
+
+                // Rate limit check
+                try {
+                  const rateResult = await isRateLimited(response.platform);
+                  if (!rateResult.allowed) {
+                    actions.push({
+                      campaign_id: '',
+                      action: 'defer_task_rate_limited',
+                      reason: `Rate limited on ${response.platform}: ${rateResult.reason} — deferring task ${task.id}`,
+                      confidence: 1,
+                      before_state: { status: 'pending' },
+                      after_state: { status: 'pending' },
+                      result: 'skipped',
+                      entity_type: 'system',
+                      entity_id: task.id,
+                    });
+                    continue;
+                  }
+                } catch { /* non-fatal */ }
+              }
+            } catch { /* non-fatal — proceed with assignment */ }
+          }
+        }
+
         await task.update({
           status: 'assigned',
           updated_at: new Date(),
@@ -124,7 +175,25 @@ export async function runOpenclawSupervisorAgent(
       });
     }
 
-    // 5. Check session health summary
+    // 5. Circuit breaker status summary
+    try {
+      const circuitStatuses = await getAllCircuitStatus();
+      const nonClosed = circuitStatuses.filter(s => s.state !== 'CLOSED');
+      if (nonClosed.length > 0) {
+        actions.push({
+          campaign_id: '',
+          action: 'circuit_breaker_summary',
+          reason: `${nonClosed.length} platform(s) with non-CLOSED circuits: ${nonClosed.map(s => `${s.platform}=${s.state}`).join(', ')}`,
+          confidence: 1,
+          before_state: null,
+          after_state: { circuits: nonClosed.map(s => ({ platform: s.platform, state: s.state, error_rate: s.error_rate })) },
+          result: 'flagged',
+          entity_type: 'system',
+        });
+      }
+    } catch { /* non-fatal */ }
+
+    // 6. Check session health summary
     const unhealthySessions = await OpenclawSession.count({
       where: {
         session_status: { [Op.in]: ['captcha_blocked', 'rate_limited', 'crashed'] },
