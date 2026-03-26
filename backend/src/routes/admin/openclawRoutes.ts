@@ -833,6 +833,107 @@ router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => 
   }
 });
 
+// ── LinkedIn Comment Reply Generator ─────────────────────────────────────────
+router.post(`${BASE}/linkedin/reply-to-comment`, async (req: Request, res: Response) => {
+  try {
+    const { post_url, post_content, commenter_name, commenter_title, comment_text, post_title } = req.body;
+
+    if (!post_content || !commenter_name || !comment_text) {
+      return res.status(400).json({ error: 'post_content, commenter_name, and comment_text are required' });
+    }
+
+    const crypto = await import('crypto');
+    const shortId = `oc-linkedin_comments-${crypto.randomBytes(4).toString('hex')}`;
+
+    // Create signal for tracking
+    const signal = await OpenclawSignal.create({
+      platform: 'linkedin_comments',
+      source_url: post_url || `linkedin:comment-reply:${shortId}`,
+      title: `Reply to ${commenter_name}${post_title ? ` on: ${post_title}` : ''}`,
+      content_excerpt: comment_text.slice(0, 500),
+      details: {
+        source: 'linkedin_comment_reply',
+        commenter_name,
+        commenter_title: commenter_title || null,
+        post_content: post_content.slice(0, 2000),
+        comment_text,
+        post_title: post_title || null,
+      },
+      relevance_score: 0.95,
+      engagement_score: 0.9,
+      risk_score: 0.0,
+      status: 'queued',
+      topic_tags: [],
+      created_at: new Date(),
+    });
+
+    // Generate reply with LLM
+    const { getOpenAIClient } = await import('../../intelligence/assistant/openaiHelper');
+    const client = getOpenAIClient();
+    let content = '';
+
+    const systemPrompt = `You are Ali Moiz, founder of an enterprise AI leadership accelerator. You built a system with 18 departments and 172 AI agents managed by an AI COO. You respond to comments on your LinkedIn posts as a practitioner who builds real AI systems daily.
+
+Rules:
+1. Address the commenter by first name
+2. Reply directly to their specific point - don't be generic
+3. If they asked a question, answer it with real details from your system
+4. If they affirmed your point, acknowledge their insight and build on it
+5. Be conversational and professional - like talking to a peer
+6. Never use em dashes - use hyphens or rewrite
+7. Never mention "Colaberry" - say "our system" or "the accelerator"
+8. Keep replies concise: 2-4 sentences for affirmations, 4-8 for questions
+9. Sound like a real founder, not a chatbot - be opinionated and specific
+10. Do NOT include any URLs or links in the reply`;
+
+    if (client) {
+      try {
+        const result = await client.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            {
+              role: 'user',
+              content: `My LinkedIn post:\n${post_content}\n\nComment from ${commenter_name}${commenter_title ? ` (${commenter_title})` : ''}:\n"${comment_text}"\n\nWrite a reply to this comment.`,
+            },
+          ],
+          max_tokens: 500,
+          temperature: 0.7,
+        });
+        content = result.choices[0]?.message?.content || '';
+      } catch (err: any) {
+        console.warn('[OpenClaw LinkedIn Reply] LLM failed:', err?.message?.slice(0, 200));
+      }
+    }
+
+    if (!content) {
+      content = `Great point ${commenter_name.split(' ')[0]}. This is exactly the kind of question that matters when building autonomous systems. Happy to go deeper on this.`;
+    }
+
+    // Clean up - remove "Colaberry" and em dashes
+    content = content.replace(/\b[Cc]olaberry\b(?![./])/g, '').replace(/\s+/g, ' ').trim();
+    content = content.replace(/\u2014/g, ' - ').replace(/\u2013/g, ' - ');
+
+    // Create response
+    const response = await OpenclawResponse.create({
+      signal_id: signal.id,
+      platform: 'linkedin_comments',
+      content,
+      tone: 'professional',
+      short_id: shortId,
+      execution_type: 'human_execution',
+      post_status: 'ready_for_manual_post',
+      created_at: new Date(),
+    });
+
+    await signal.update({ response_id: response.id, status: 'responded', updated_at: new Date() });
+
+    res.json({ success: true, signal, response, short_id: shortId });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Reputation & Demand Engine Endpoints
 // ══════════════════════════════════════════════════════════════════════════════

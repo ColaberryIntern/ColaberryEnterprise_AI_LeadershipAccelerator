@@ -10,6 +10,7 @@ import {
   postResponseViaBrowser,
   submitOpenclawSignal,
   generateLinkedInPost,
+  generateLinkedInCommentReply,
   getOpenclawAgentActivity,
   getOpenclawActions,
   getCircuitStatus,
@@ -139,6 +140,12 @@ export default function OpenclawTab() {
   const [generatingLinkedin, setGeneratingLinkedin] = useState(false);
   const [linkedinResult, setLinkedinResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // LinkedIn comment reply state
+  const [commentReplyPost, setCommentReplyPost] = useState({ url: '', title: '', content: '' });
+  const [commentReplyComment, setCommentReplyComment] = useState({ name: '', title: '', text: '' });
+  const [generatingReply, setGeneratingReply] = useState(false);
+  const [replyResult, setReplyResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Response detail drill-down state
   const [selectedResponse, setSelectedResponse] = useState<OpenclawResponseItem | null>(null);
 
@@ -251,6 +258,27 @@ export default function OpenclawTab() {
       setLinkedinResult({ success: false, message: err?.response?.data?.error || 'Failed to generate post' });
     }
     setGeneratingLinkedin(false);
+  };
+
+  const handleGenerateCommentReply = async () => {
+    setGeneratingReply(true);
+    setReplyResult(null);
+    try {
+      const res = await generateLinkedInCommentReply({
+        post_url: commentReplyPost.url.trim(),
+        post_content: commentReplyPost.content.trim(),
+        commenter_name: commentReplyComment.name.trim(),
+        commenter_title: commentReplyComment.title.trim() || undefined,
+        comment_text: commentReplyComment.text.trim(),
+        post_title: commentReplyPost.title.trim() || undefined,
+      });
+      setReplyResult({ success: true, message: `Reply to ${commentReplyComment.name} generated. Check Manual Action tab to copy & post.` });
+      setCommentReplyComment({ name: '', title: '', text: '' }); // keep post fields
+      setTimeout(fetchData, 2000);
+    } catch (err: any) {
+      setReplyResult({ success: false, message: err?.response?.data?.error || 'Failed to generate reply' });
+    }
+    setGeneratingReply(false);
   };
 
   const handleAgentClick = useCallback(async (agent: SelectedAgent) => {
@@ -811,6 +839,57 @@ export default function OpenclawTab() {
             <button className="btn btn-sm btn-primary text-nowrap" onClick={handleGenerateLinkedIn} disabled={!linkedinTopic.trim() || generatingLinkedin}>{generatingLinkedin ? 'Generating...' : 'Generate'}</button>
           </div>
           {linkedinResult && (<div className={`alert alert-${linkedinResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{linkedinResult.message}</div>)}
+        </div>
+      </div>
+
+      {/* LinkedIn Comment Reply Generator */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small d-flex justify-content-between align-items-center">
+          <span>
+            Reply to LinkedIn Comments
+            <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#0A66C2', color: '#fff' }}>LinkedIn</span>
+          </span>
+        </div>
+        <div className="card-body py-3 px-3">
+          <div className="text-muted mb-3" style={{ fontSize: '0.68rem' }}>
+            Paste your LinkedIn post details and a comment. AI generates a reply in your voice - appears in the Manual Action tab for copy & paste.
+          </div>
+          {/* Post context (persists across comments) */}
+          <div className="mb-2">
+            <label className="form-label small fw-medium mb-1">Post URL</label>
+            <input type="text" className="form-control form-control-sm" placeholder="https://linkedin.com/feed/update/..." value={commentReplyPost.url} onChange={e => setCommentReplyPost(p => ({ ...p, url: e.target.value }))} />
+          </div>
+          <div className="mb-2">
+            <label className="form-label small fw-medium mb-1">Post Title <span className="text-muted fw-normal">(optional)</span></label>
+            <input type="text" className="form-control form-control-sm" placeholder="e.g., AI COO Series Part 3" value={commentReplyPost.title} onChange={e => setCommentReplyPost(p => ({ ...p, title: e.target.value }))} />
+          </div>
+          <div className="mb-3">
+            <label className="form-label small fw-medium mb-1">Your Post Content</label>
+            <textarea className="form-control form-control-sm" rows={3} placeholder="Paste or summarize your post so the AI has context..." value={commentReplyPost.content} onChange={e => setCommentReplyPost(p => ({ ...p, content: e.target.value }))} />
+          </div>
+          {/* Comment details (reset after each generation) */}
+          <div className="border-top pt-3">
+            <div className="fw-semibold small mb-2"><i className="bi bi-chat-dots me-1" />Comment to Reply To</div>
+            <div className="row g-2 mb-2">
+              <div className="col-sm-6">
+                <input type="text" className="form-control form-control-sm" placeholder="Commenter name" value={commentReplyComment.name} onChange={e => setCommentReplyComment(c => ({ ...c, name: e.target.value }))} />
+              </div>
+              <div className="col-sm-6">
+                <input type="text" className="form-control form-control-sm" placeholder="Their title (optional)" value={commentReplyComment.title} onChange={e => setCommentReplyComment(c => ({ ...c, title: e.target.value }))} />
+              </div>
+            </div>
+            <div className="mb-2">
+              <textarea className="form-control form-control-sm" rows={2} placeholder="Paste their comment here..." value={commentReplyComment.text} onChange={e => setCommentReplyComment(c => ({ ...c, text: e.target.value }))} />
+            </div>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={handleGenerateCommentReply}
+              disabled={!commentReplyPost.content.trim() || !commentReplyComment.name.trim() || !commentReplyComment.text.trim() || generatingReply}
+            >
+              {generatingReply ? <><span className="spinner-border spinner-border-sm me-1" />Generating...</> : 'Generate Reply'}
+            </button>
+          </div>
+          {replyResult && (<div className={`alert alert-${replyResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{replyResult.message}</div>)}
         </div>
       </div>
 

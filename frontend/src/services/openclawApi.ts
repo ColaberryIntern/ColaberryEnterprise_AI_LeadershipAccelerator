@@ -209,6 +209,20 @@ export const submitOpenclawSignal = (url: string, platform?: string) =>
 export const generateLinkedInPost = (topic: string) =>
   api.post<{ success: boolean; signal: OpenclawSignalItem; response: any; short_id: string }>(`${BASE}/linkedin/generate`, { topic });
 
+export interface LinkedInCommentReplyPayload {
+  post_url: string;
+  post_content: string;
+  commenter_name: string;
+  commenter_title?: string;
+  comment_text: string;
+  post_title?: string;
+}
+
+export const generateLinkedInCommentReply = (data: LinkedInCommentReplyPayload) =>
+  api.post<{ success: boolean; signal: OpenclawSignalItem; response: OpenclawResponseItem; short_id: string }>(
+    `${BASE}/linkedin/reply-to-comment`, data
+  );
+
 // ── Phase 2: Revenue Pipeline Types & API ────────────────────────────────────
 
 export interface OpenclawConversationItem {
