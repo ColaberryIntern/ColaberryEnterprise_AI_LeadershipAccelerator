@@ -34,6 +34,10 @@ const TYPE_LABELS: Record<string, string> = {
   cold_outbound: 'Cold Outbound',
   re_engagement: 'Re-Engagement',
   behavioral_trigger: 'Behavioral Trigger',
+  alumni: 'Alumni',
+  alumni_re_engagement: 'Alumni Re-Engagement',
+  payment_readiness: 'Payment Readiness',
+  executive_outreach: 'Executive Outreach',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -48,6 +52,10 @@ const TYPE_BORDER_COLORS: Record<string, string> = {
   warm_nurture: '#fd7e14',
   re_engagement: '#6f42c1',
   behavioral_trigger: '#38a169',
+  alumni: '#e53e3e',
+  alumni_re_engagement: '#d69e2e',
+  payment_readiness: '#319795',
+  executive_outreach: '#1a365d',
 };
 
 type CampaignTab = 'intelligence' | 'campaigns';
@@ -210,8 +218,10 @@ function AdminCampaignsPage() {
             <div className="col-auto">
               <select className="form-select form-select-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
                 <option value="">All Types</option>
-                <option value="warm_nurture">Warm Nurture</option>
                 <option value="cold_outbound">Cold Outbound</option>
+                <option value="warm_nurture">Warm Nurture</option>
+                <option value="alumni">Alumni</option>
+                <option value="executive_outreach">Executive Outreach</option>
                 <option value="re_engagement">Re-Engagement</option>
               </select>
             </div>
@@ -334,6 +344,7 @@ function AdminCampaignsPage() {
                 <option value="warm_nurture">Warm Nurture</option>
                 <option value="re_engagement">Re-Engagement</option>
                 <option value="behavioral_trigger">Behavioral Trigger</option>
+                <option value="executive_outreach">Executive Outreach</option>
               </select>
             </div>
             <div className="col-md-6 mb-3">

@@ -2,6 +2,7 @@ import { FollowUpSequence, Campaign, AdminUser } from '../models';
 import { seedAlumniCampaigns } from '../services/alumniCampaignService';
 import { seedAlumniReferralCampaign } from '../services/alumniReferralCampaignService';
 import { seedClassReadinessCampaign } from './seedClassReadinessCampaign';
+import { seedAliOutreachCampaign } from './seedAliOutreachCampaign';
 
 /**
  * Idempotent seed for all core campaigns.
@@ -139,6 +140,13 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     await seedClassReadinessCampaign();
   } catch (err: any) {
     console.warn('[Seed] Class readiness campaign seed skipped:', err?.message);
+  }
+
+  // ─── 10. Ali Personal Outreach (executive_outreach — independent) ───
+  try {
+    await seedAliOutreachCampaign();
+  } catch (err: any) {
+    console.warn('[Seed] Ali outreach campaign seed skipped:', err?.message);
   }
 
   console.log('[Seed] All core campaigns seeded.');

@@ -63,7 +63,7 @@ export async function handleCreateCampaign(req: Request, res: Response, next: Ne
       return;
     }
 
-    const validTypes = ['warm_nurture', 'cold_outbound', 're_engagement'];
+    const validTypes = ['warm_nurture', 'cold_outbound', 're_engagement', 'behavioral_trigger', 'alumni', 'alumni_re_engagement', 'payment_readiness', 'executive_outreach'];
     if (!validTypes.includes(type)) {
       res.status(400).json({ error: 'Invalid campaign type' });
       return;

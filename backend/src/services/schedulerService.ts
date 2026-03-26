@@ -836,23 +836,38 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   let senderEmail = env.emailFrom;
   let senderName = 'Colaberry Enterprise AI';
   let emailBody = action.body;
+  let campaignType = '';
 
   if (action.campaign_id) {
     const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['channel', 'type', 'settings'] });
     if (campaign) {
+      campaignType = campaign.type || '';
       // Auto-inject campaign tracking into all site links
       emailBody = injectCampaignTracking(
         emailBody,
         action.campaign_id,
         campaign.channel || 'email',
-        campaign.type || 'campaign',
+        campaignType || 'campaign',
         action.lead_id,
       );
       // Use per-campaign sender if configured
       const settings = (campaign as any).settings || {};
       if (settings.sender_email) senderEmail = settings.sender_email;
       if (settings.sender_name) senderName = settings.sender_name;
+
+      // Append Ali's signature for executive_outreach campaigns
+      if (settings.ali_signature && campaignType === 'executive_outreach') {
+        const { ALI_SIGNATURE } = require('./aliPersonalOutreachService');
+        emailBody = `${emailBody}${ALI_SIGNATURE}`;
+      }
     }
+  }
+
+  // Build metadata for Mandrill headers
+  const mcMetadata: Record<string, any> = { scheduled_email_id: action.id };
+  if (campaignType === 'executive_outreach') {
+    mcMetadata.trigger = 'ali_personal_outreach';
+    mcMetadata.lead_id = action.lead_id;
   }
 
   const html = wrapEmailHtml(emailBody);
@@ -864,9 +879,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     html,
     text: stripHtml(html),
     headers: {
-      'X-MC-Metadata': JSON.stringify({ scheduled_email_id: action.id }),
+      'X-MC-Metadata': JSON.stringify(mcMetadata),
       'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
-      'X-MC-Tags': 'campaign-sequence',
+      'X-MC-Tags': action.campaign_id ? `campaign-sequence,${mcMetadata.trigger || 'campaign'}` : 'campaign-sequence',
     },
   });
 
@@ -908,7 +923,12 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     provider: 'mandrill',
     provider_message_id: info.messageId,
     provider_response: { accepted: info.accepted, rejected: info.rejected },
-    metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false },
+    metadata: {
+      scheduled_email_id: action.id,
+      step_index: action.step_index,
+      ai_generated: action.ai_generated || false,
+      ...(mcMetadata.trigger ? { trigger: mcMetadata.trigger } : {}),
+    },
   }).catch((err) => console.warn('[Scheduler] Comm log failed:', err.message));
 
   console.log(`[Scheduler] Email sent to ${action.to_email}: ${action.subject} (AI: ${action.ai_generated || false})`);
