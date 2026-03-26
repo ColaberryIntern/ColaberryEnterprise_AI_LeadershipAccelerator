@@ -334,4 +334,73 @@ describe('safety', () => {
     });
     expect(result.risk).not.toBe('SAFE_AUTOMATION');
   });
+
+  test('Medium is now API_POSTING, not HUMAN_EXECUTION', () => {
+    const result = classifyAutomationRisk({
+      platform: 'medium',
+      action_type: 'reply',
+      conversation_stage: 1,
+      lead_score: 10,
+      intent_level: 'low',
+    });
+    // Medium should NOT be HUMAN_REQUIRED just because of platform
+    // (it may be HUMAN_REQUIRED for other reasons like stage >= 5)
+    expect(result.risk).not.toBe('HUMAN_REQUIRED');
+  });
+});
+
+// ─── Quality Gate Agent ──────────────────────────────────────────────────────
+
+import { evaluateResponseQuality } from '../../services/agents/openclaw/openclawQualityGateAgent';
+
+describe('evaluateResponseQuality', () => {
+  const goodResponse = `It's surprising how often teams overlook the real challenge of AI integration: aligning AI capabilities with existing workflows. Tools can be powerful, but they're only effective when seamlessly embedded into day-to-day operations. This requires not just technical implementation but a strategic alignment with business objectives, often a missing piece in AI adoption. I explore this topic further here: https://enterprise.colaberry.ai/i/oc-medium-test123`;
+
+  test('approves well-formed educational response', () => {
+    const result = evaluateResponseQuality(goodResponse, 'medium');
+    expect(result.approved).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(70);
+    expect(result.reasons).toHaveLength(0);
+  });
+
+  test('rejects response that is too short', () => {
+    const result = evaluateResponseQuality('Great article!', 'medium');
+    expect(result.approved).toBe(false);
+    expect(result.reasons).toContainEqual(expect.stringContaining('Too short'));
+  });
+
+  test('rejects response with spam patterns', () => {
+    const spammy = `This is a great article about AI. Buy now and get a discount on our platform! Sign up today for a free trial. Visit https://example.com for more details about our amazing product.`;
+    const result = evaluateResponseQuality(spammy, 'medium');
+    expect(result.approved).toBe(false);
+    expect(result.reasons.some(r => r.includes('prohibited pattern'))).toBe(true);
+  });
+
+  test('rejects response with too many links', () => {
+    const linky = `Check out https://example.com/one and https://example.com/two and https://example.com/three for more. This is an interesting topic that deserves more exploration in the AI space.`;
+    const result = evaluateResponseQuality(linky, 'medium');
+    expect(result.approved).toBe(false);
+    expect(result.reasons).toContainEqual(expect.stringContaining('Too many links'));
+  });
+
+  test('rejects response with emdash', () => {
+    const withEmdash = `This is a great insight \u2014 teams often overlook the real challenge of AI integration. Aligning AI capabilities with existing workflows requires strategic thinking and careful implementation planning.`;
+    const result = evaluateResponseQuality(withEmdash, 'medium');
+    expect(result.approved).toBe(false);
+    expect(result.reasons).toContainEqual(expect.stringContaining('emdash'));
+  });
+
+  test('rejects response with insufficient substance', () => {
+    // Only one real sentence plus a link
+    const thin = `Nice post! https://enterprise.colaberry.ai/i/oc-medium-test`;
+    const result = evaluateResponseQuality(thin, 'medium');
+    expect(result.approved).toBe(false);
+  });
+
+  test('score is capped between 0 and 100', () => {
+    const terrible = `Buy now! $99 discount! Sign up today! Free trial! Don't miss out! Act fast! Limited time!`;
+    const result = evaluateResponseQuality(terrible, 'medium');
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.score).toBeLessThanOrEqual(100);
+  });
 });

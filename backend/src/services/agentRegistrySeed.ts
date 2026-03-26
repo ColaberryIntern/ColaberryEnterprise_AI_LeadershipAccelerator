@@ -1275,6 +1275,20 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     },
   },
   {
+    agent_name: 'OpenclawQualityGateAgent',
+    agent_type: 'openclaw_quality_gate',
+    module: 'openclaw',
+    source_file: 'backend/src/services/agents/openclaw/openclawQualityGateAgent.ts',
+    trigger_type: 'cron',
+    schedule: '5,20,35,50 * * * *',
+    category: 'openclaw',
+    description: 'AI-powered quality review for Medium responses. Approves high-quality drafts for automated browser posting, rejects low-quality ones and triggers regeneration.',
+    config: {
+      max_reviews_per_run: 10,
+      gated_platforms: ['medium'],
+    },
+  },
+  {
     agent_name: 'OpenclawBrowserWorkerAgent',
     agent_type: 'openclaw_browser',
     module: 'openclaw',

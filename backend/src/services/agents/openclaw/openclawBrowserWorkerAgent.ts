@@ -214,12 +214,14 @@ export async function runOpenclawBrowserWorkerAgent(
           // No API credentials but browser support available
           try {
             console.log(`[OpenClaw Posting] No API creds -using browser for ${response.platform}...`);
+            // Medium uses visible browser (not headless) with persistent credentials
+            const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
             const browserResult = await postViaBrowser(
               response.platform,
               signal.source_url,
               response.content,
               {
-                headless: config.headless ?? true,
+                headless: useHeadless,
                 screenshot_on_post: config.screenshot_on_post ?? true,
                 min_delay_ms: minDelay,
                 max_delay_ms: maxDelay,

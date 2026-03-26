@@ -56,6 +56,9 @@ export const PLATFORM_EXECUTION: Record<string, PlatformExecutionType> = {
   producthunt: 'API_POSTING',
   youtube: 'API_POSTING',
 
+  // API_POSTING (browser) -auto-post via browser with quality gate review
+  medium: 'API_POSTING',
+
   // HUMAN_EXECUTION -generate response, queue for manual posting, NEVER auto-post
   reddit: 'HUMAN_EXECUTION',
   quora: 'HUMAN_EXECUTION',

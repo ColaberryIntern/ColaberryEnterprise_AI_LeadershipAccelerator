@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type OpenclawPostStatus = 'draft' | 'approved' | 'ready_to_post' | 'ready_for_manual_post' | 'posted' | 'failed' | 'removed';
+export type OpenclawPostStatus = 'draft' | 'approved' | 'rejected' | 'pending_review' | 'ready_to_post' | 'ready_for_manual_post' | 'posted' | 'failed' | 'removed';
 export type OpenclawTone = 'educational' | 'conversational' | 'technical' | 'professional';
 
 interface OpenclawResponseAttributes {
