@@ -269,3 +269,32 @@ export const getOpenclawRevenue = () =>
 
 export const getOpenclawHotLeads = (limit?: number) =>
   api.get<{ hot_leads: OpenclawConversationItem[] }>(`${BASE}/hot-leads`, { params: limit ? { limit: String(limit) } : undefined });
+
+// ── Phase 3: Action Engine Types & API ────────────────────────────────────────
+
+export interface ActionUrgency {
+  level: 'critical' | 'high' | 'medium' | 'low';
+  hours_silent: number;
+  decay_rate: number;
+}
+
+export interface ActionItem {
+  conversation_id: string;
+  lead_name: string | null;
+  lead_email: string | null;
+  platform: string;
+  stage: number;
+  urgency: ActionUrgency;
+  action_type: 'follow_up_required' | 'conversion_ready' | 'respond_to_interest' | 'advance_stage' | 'close_opportunity';
+  description: string;
+  recommended_action: string;
+  priority_score: number;
+  lead_score: number;
+  hours_since_activity: number;
+  priority_tier: string;
+  conversion_signals: Array<{ signal: string; confidence: number }>;
+  thread_identifier: string;
+}
+
+export const getOpenclawActions = (params?: Record<string, string>) =>
+  api.get<{ actions: ActionItem[]; total: number }>(`${BASE}/actions/today`, { params });

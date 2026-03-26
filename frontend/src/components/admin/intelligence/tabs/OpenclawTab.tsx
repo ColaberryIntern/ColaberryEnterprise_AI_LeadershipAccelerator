@@ -10,9 +10,11 @@ import {
   submitOpenclawSignal,
   generateLinkedInPost,
   getOpenclawAgentActivity,
+  getOpenclawActions,
   OpenclawDashboard,
   OpenclawResponseItem,
   OpenclawAgentActivity,
+  ActionItem,
 } from '../../../../services/openclawApi';
 import {
   getAuthorityContent,
@@ -139,6 +141,10 @@ export default function OpenclawTab() {
   const [activityTotal, setActivityTotal] = useState(0);
   const [activityFilter, setActivityFilter] = useState('');
 
+  // Phase 3: Action queue state
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [actionsLoading, setActionsLoading] = useState(true);
+
   const fetchData = useCallback(async () => {
     try {
       const params: Record<string, string> = { page: String(responsePage), limit: String(responsesPerPage) };
@@ -159,7 +165,11 @@ export default function OpenclawTab() {
   useEffect(() => {
     setLoading(true);
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    getOpenclawActions().then(res => setActionItems(res.data.actions || [])).catch(() => {}).finally(() => setActionsLoading(false));
+    const interval = setInterval(() => {
+      fetchData();
+      getOpenclawActions().then(res => setActionItems(res.data.actions || [])).catch(() => {});
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -332,6 +342,74 @@ export default function OpenclawTab() {
   return (
     <div className="p-3">
       <h6 className="fw-semibold mb-3">OpenClaw Autonomous Outreach</h6>
+
+      {/* What To Do Now — Phase 3 Action Queue */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small d-flex align-items-center justify-content-between">
+          <span>What To Do Now</span>
+          {actionItems.length > 0 && (
+            <span className="badge bg-danger">{actionItems.length} action{actionItems.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+        <div className="card-body p-0">
+          {actionsLoading ? (
+            <div className="text-center py-3">
+              <div className="spinner-border spinner-border-sm text-primary" role="status">
+                <span className="visually-hidden">Loading actions...</span>
+              </div>
+            </div>
+          ) : actionItems.length === 0 ? (
+            <div className="text-center py-4">
+              <div className="text-success mb-1" style={{ fontSize: '1.5rem' }}>&#10003;</div>
+              <div className="text-muted small">All caught up! No urgent actions.</div>
+            </div>
+          ) : (
+            <div className="list-group list-group-flush">
+              {actionItems.map((item, idx) => {
+                const urgencyColors: Record<string, string> = { critical: '#dc3545', high: '#fd7e14', medium: '#ffc107', low: '#adb5bd' };
+                const urgencyBg: Record<string, string> = { critical: 'danger', high: 'warning', medium: 'info', low: 'secondary' };
+                const actionTypeLabels: Record<string, string> = {
+                  follow_up_required: 'Follow Up',
+                  conversion_ready: 'Conversion Ready',
+                  respond_to_interest: 'Interest Signal',
+                  advance_stage: 'Advance',
+                  close_opportunity: 'Close',
+                };
+                return (
+                  <div key={item.conversation_id + idx} className="list-group-item px-3 py-2">
+                    <div className="d-flex align-items-start gap-2">
+                      <div style={{ minWidth: 4, background: urgencyColors[item.urgency.level], borderRadius: 2, alignSelf: 'stretch' }} />
+                      <div className="flex-grow-1">
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <span className={`badge bg-${urgencyBg[item.urgency.level]} text-uppercase`} style={{ fontSize: '0.65rem' }}>{item.urgency.level}</span>
+                          <span className="badge bg-primary" style={{ fontSize: '0.65rem' }}>{actionTypeLabels[item.action_type] || item.action_type}</span>
+                          <span className="badge" style={{ background: PLATFORM_COLORS[item.platform] || '#6c757d', color: '#fff', fontSize: '0.65rem' }}>{item.platform}</span>
+                          <span className="text-muted small ms-auto">Stage {item.stage}</span>
+                          <span className="text-muted small">{Math.round(item.hours_since_activity)}h ago</span>
+                        </div>
+                        <div className="small fw-medium">{item.lead_name || 'Unknown lead'}</div>
+                        <div className="small text-muted">{item.description}</div>
+                        <div className="small mt-1" style={{ color: 'var(--color-primary-light)' }}>
+                          <strong>Action:</strong> {item.recommended_action}
+                        </div>
+                        <div className="d-flex align-items-center gap-2 mt-1">
+                          <span className="text-muted" style={{ fontSize: '0.7rem' }}>Score: {item.priority_score}</span>
+                          <span className="text-muted" style={{ fontSize: '0.7rem' }}>Lead: {item.lead_score}</span>
+                          {item.conversion_signals.length > 0 && (
+                            <span className="text-success" style={{ fontSize: '0.7rem' }}>
+                              {item.conversion_signals.length} signal{item.conversion_signals.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* KPI Row */}
       {kpis && (

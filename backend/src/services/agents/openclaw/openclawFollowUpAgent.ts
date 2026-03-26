@@ -65,8 +65,41 @@ export async function runFollowUpAgent(
       limit: maxFollowUps,
     });
 
+    // 2b. Enforcement: hot leads at stage >= 3 with no follow-up in 48h (even if not stalled)
+    const enforcementThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const hotEnforcement = await OpenclawConversation.findAll({
+      where: {
+        priority_tier: 'hot',
+        current_stage: { [Op.gte]: 3 },
+        status: { [Op.in]: ['active', 'stalled'] },
+        id: { [Op.notIn]: stalledConversations.map(c => c.id) }, // avoid duplicates
+      },
+      order: [['current_stage', 'DESC']],
+      limit: maxFollowUps,
+    });
+
+    // Filter to only those without a recent follow-up
+    const enforcedConversations: typeof hotEnforcement = [];
+    for (const conv of hotEnforcement) {
+      const recentFollowUp = await ResponseQueue.count({
+        where: {
+          response_type: 'follow_up',
+          status: { [Op.in]: ['draft', 'approved', 'posted'] },
+          created_at: { [Op.gte]: enforcementThreshold },
+          details: { conversation_id: conv.id },
+        },
+      });
+      if (recentFollowUp === 0) {
+        enforcedConversations.push(conv);
+      }
+    }
+
+    // Merge: stalled first, then enforced (deduplicated above)
+    const allConversations = [...stalledConversations, ...enforcedConversations].slice(0, maxFollowUps);
+
     let followUpsCreated = 0;
-    for (const conversation of stalledConversations) {
+    const enforcedIds = new Set(enforcedConversations.map(c => c.id));
+    for (const conversation of allConversations) {
       try {
         // Count existing follow-ups for this conversation at this stage
         const existingFollowUpCount = await ResponseQueue.count({
@@ -149,10 +182,14 @@ Generate a brief, natural follow-up (50-80 words) that:
           status: 'draft',
           expires_at: expiresAt,
           details: {
-            trigger: 'stalled_conversation',
+            trigger: enforcedIds.has(conversation.id) ? 'enforced_follow_up' : 'stalled_conversation',
             urgency_level: conversation.priority_tier,
             conversation_id: conversation.id,
             conversation_stage: conversation.current_stage,
+            ...(enforcedIds.has(conversation.id) && {
+              enforced: true,
+              enforcement_reason: 'high_score_no_followup',
+            }),
           },
         });
 

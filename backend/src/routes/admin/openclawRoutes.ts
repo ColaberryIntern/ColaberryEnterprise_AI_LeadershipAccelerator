@@ -1220,4 +1220,21 @@ function detectSeniorityFromTitle(title?: string): 'unknown' | 'ic' | 'manager' 
   return 'ic';
 }
 
+// ── Phase 3: Daily Action Queue ─────────────────────────────────────
+
+router.get(`${BASE}/actions/today`, async (req: Request, res: Response) => {
+  try {
+    const { buildDailyActionQueue } = await import('../../services/agents/openclaw/openclawActionEngineService');
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+    const urgency_filter = req.query.urgency as any;
+    const type_filter = req.query.type as any;
+
+    const actions = await buildDailyActionQueue({ limit, urgency_filter, type_filter });
+    res.json({ actions, total: actions.length });
+  } catch (err: any) {
+    console.error('[OpenClaw] Action queue error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

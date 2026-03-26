@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { OpenclawResponse, OpenclawLearning, OpenclawSignal } from '../../../models';
+import { OpenclawResponse, OpenclawLearning, OpenclawSignal, EngagementEvent, OpenclawConversation } from '../../../models';
 import { sequelize } from '../../../config/database';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
@@ -317,6 +317,154 @@ export async function runOpenclawLearningOptimizationAgent(
           confidence: 1.0,
           before_state: null,
           after_state: { responses_scored: effectivenessRecorded },
+          result: 'success',
+          entity_type: 'system',
+        });
+      }
+
+      // 6. Revenue attribution — track which tones/platforms lead to conversions
+      const convertedConversations = await OpenclawConversation.findAll({
+        where: { current_stage: { [Op.gte]: 5 } },
+        attributes: ['id', 'platform', 'current_stage', 'first_response_id'],
+        raw: true,
+      });
+
+      if (convertedConversations.length > 0) {
+        // Group by tone: find the response that started each conversion
+        const responseIds = convertedConversations
+          .map((c: any) => c.first_response_id)
+          .filter(Boolean);
+        const conversionResponses = responseIds.length > 0
+          ? await OpenclawResponse.findAll({
+              where: { id: { [Op.in]: responseIds } },
+              attributes: ['id', 'tone', 'platform'],
+              raw: true,
+            })
+          : [];
+
+        const toneConversions: Record<string, { conversions: number; total: number }> = {};
+        for (const resp of conversionResponses) {
+          const tone = (resp as any).tone || 'educational';
+          if (!toneConversions[tone]) toneConversions[tone] = { conversions: 0, total: 0 };
+          toneConversions[tone].conversions++;
+        }
+        // Get total responses per tone for rate calculation
+        for (const [tone, data] of Object.entries(toneGroups)) {
+          if (toneConversions[tone]) {
+            toneConversions[tone].total = data.count;
+          }
+        }
+
+        for (const [tone, data] of Object.entries(toneConversions)) {
+          if (data.total === 0) continue;
+          const conversionRate = data.conversions / data.total;
+          const confidence = Math.min(1, data.total / (minSampleSize * 2));
+
+          await OpenclawLearning.findOrCreate({
+            where: { learning_type: 'revenue_attribution', metric_key: `tone_to_revenue::${tone}` },
+            defaults: {
+              learning_type: 'revenue_attribution' as any,
+              metric_key: `tone_to_revenue::${tone}`,
+              metric_value: conversionRate,
+              sample_size: data.total,
+              confidence,
+              insight: `Tone "${tone}" converts at ${(conversionRate * 100).toFixed(1)}% (${data.conversions}/${data.total})`,
+              details: { tone, conversions: data.conversions, total: data.total },
+              created_at: new Date(),
+            },
+          }).then(([learning, created]) => {
+            if (!created) {
+              learning.update({
+                metric_value: conversionRate,
+                sample_size: data.total,
+                confidence,
+                insight: `Tone "${tone}" converts at ${(conversionRate * 100).toFixed(1)}% (${data.conversions}/${data.total})`,
+                details: { tone, conversions: data.conversions, total: data.total },
+                updated_at: new Date(),
+              });
+            }
+          });
+        }
+
+        if (Object.keys(toneConversions).length > 0) {
+          actions.push({
+            campaign_id: null,
+            action: 'revenue_attribution',
+            reason: `Tracked revenue attribution for ${Object.keys(toneConversions).length} tones across ${convertedConversations.length} converted conversations`,
+            confidence: 0.8,
+            before_state: null,
+            after_state: { tones_tracked: Object.keys(toneConversions).length, conversions: convertedConversations.length },
+            result: 'success',
+            entity_type: 'system',
+          });
+        }
+      }
+
+      // 7. Response outcome tracking — which responses led to replies
+      const responsesWithEngagement = await OpenclawResponse.findAll({
+        where: {
+          post_status: 'posted',
+        } as any,
+        attributes: ['id', 'tone', 'platform', 'signal_id'],
+        raw: true,
+      });
+
+      let outcomesRecorded = 0;
+      for (const resp of responsesWithEngagement) {
+        const replyCount = await EngagementEvent.count({
+          where: {
+            response_id: (resp as any).id,
+            engagement_type: { [Op.in]: ['reply', 'comment'] },
+          },
+        });
+
+        if (replyCount > 0) {
+          await OpenclawLearning.findOrCreate({
+            where: { learning_type: 'response_outcome', metric_key: (resp as any).id },
+            defaults: {
+              learning_type: 'response_outcome' as any,
+              platform: (resp as any).platform,
+              metric_key: (resp as any).id,
+              metric_value: replyCount,
+              sample_size: 1,
+              confidence: 1.0,
+              insight: `Response ${(resp as any).id} received ${replyCount} replies on ${(resp as any).platform} (tone: ${(resp as any).tone || 'unknown'})`,
+              details: {
+                response_id: (resp as any).id,
+                signal_id: (resp as any).signal_id,
+                tone: (resp as any).tone,
+                reply_count: replyCount,
+                outcome: replyCount >= 3 ? 'high_engagement' : replyCount >= 1 ? 'engaged' : 'no_response',
+              },
+              created_at: new Date(),
+            },
+          }).then(([learning, created]) => {
+            if (!created) {
+              learning.update({
+                metric_value: replyCount,
+                details: {
+                  response_id: (resp as any).id,
+                  signal_id: (resp as any).signal_id,
+                  tone: (resp as any).tone,
+                  reply_count: replyCount,
+                  outcome: replyCount >= 3 ? 'high_engagement' : replyCount >= 1 ? 'engaged' : 'no_response',
+                },
+                updated_at: new Date(),
+              });
+            }
+          });
+          outcomesRecorded++;
+        }
+      }
+
+      if (outcomesRecorded > 0) {
+        actions.push({
+          campaign_id: null,
+          action: 'response_outcome_tracking',
+          reason: `Tracked outcomes for ${outcomesRecorded} responses that received replies`,
+          confidence: 1.0,
+          before_state: null,
+          after_state: { outcomes_recorded: outcomesRecorded },
           result: 'success',
           entity_type: 'system',
         });
