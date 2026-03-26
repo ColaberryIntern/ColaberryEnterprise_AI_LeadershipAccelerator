@@ -346,6 +346,7 @@ export default function StrategyCallModal({
                     type="text"
                     className="form-control"
                     id="sc-name"
+                    placeholder="Your full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
@@ -360,6 +361,7 @@ export default function StrategyCallModal({
                     type="email"
                     className="form-control"
                     id="sc-email"
+                    placeholder="you@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -372,6 +374,7 @@ export default function StrategyCallModal({
                     type="text"
                     className="form-control"
                     id="sc-company"
+                    placeholder="Your company name"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     disabled={step === 'submitting'}

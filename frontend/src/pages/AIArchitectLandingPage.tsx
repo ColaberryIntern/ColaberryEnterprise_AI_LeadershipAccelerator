@@ -34,9 +34,21 @@ const btnStyle: React.CSSProperties = {
 function AIArchitectLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
   const [nextCohort, setNextCohort] = useState<{ name: string; start_date: string; seats_remaining: number } | null>(null);
+  const [prefill, setPrefill] = useState<{ name: string; email: string; company: string; phone: string }>({ name: '', email: '', company: '', phone: '' });
 
   useEffect(() => {
     captureUTMFromURL();
+    // Pre-fill booking form from lead ID in URL (from campaign email clicks)
+    const params = new URLSearchParams(window.location.search);
+    const lid = params.get('lid');
+    if (lid) {
+      fetch((process.env.REACT_APP_API_URL || '') + '/api/calendar/prefill/' + lid)
+        .then(r => r.json())
+        .then(data => {
+          if (data.name || data.email) setPrefill(data);
+        })
+        .catch(() => {});
+    }
     // Fetch next upcoming cohort for urgency section
     fetch((process.env.REACT_APP_API_URL || '') + '/api/cohorts')
       .then(r => r.json())
@@ -368,7 +380,15 @@ function AIArchitectLandingPage() {
         </footer>
       </div>
 
-      <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} pageOrigin="/ai-architect" />
+      <StrategyCallModal
+        show={showBooking}
+        onClose={() => setShowBooking(false)}
+        pageOrigin="/ai-architect"
+        initialName={prefill.name}
+        initialEmail={prefill.email}
+        initialCompany={prefill.company}
+        initialPhone={prefill.phone}
+      />
     </>
   );
 }
