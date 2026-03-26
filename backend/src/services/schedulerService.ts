@@ -1798,6 +1798,19 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Hot lead escalation: every 15 min (50/day cap, newest first)');
 
+  // ── Ali Personal Outreach (hourly during business hours, weekdays) ────────
+  // Sends personalized emails FROM ali@colaberry.com to high-intent leads.
+  // No auto-reply — Ali handles all responses personally.
+  cron.schedule('20 14-22 * * 1-5', () => { // :20 past each hour, 9AM-5PM CT
+    instrumentCronJob('AliPersonalOutreach', async () => {
+      const { runAliPersonalOutreach } = require('./aliPersonalOutreachService');
+      await runAliPersonalOutreach();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Ali personal outreach error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Ali personal outreach: hourly during business hours (max 10/day)');
+
   // ── Autonomous Ramp Evaluator (8 AM CT weekdays = 13:00 UTC Mon-Fri) ──
   const { runRampEvaluator } = require('./autonomousRampService');
 

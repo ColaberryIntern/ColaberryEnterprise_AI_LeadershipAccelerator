@@ -11,6 +11,7 @@ export interface CompositeContext {
   lead: {
     name: string;
     firstName: string;
+    email: string;
     company: string;
     title: string;
     industry: string;
@@ -214,6 +215,7 @@ export async function buildCompositeContext(
     lead: {
       name: lead.name || '',
       firstName: (lead.name || '').split(' ')[0],
+      email: lead.email || '',
       company: lead.company || '',
       title: lead.title || '',
       industry: lead.industry || '',
