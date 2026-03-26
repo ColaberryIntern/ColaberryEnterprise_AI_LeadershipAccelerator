@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import { chromium } from 'playwright';
 
 export interface LinkedInComment {
