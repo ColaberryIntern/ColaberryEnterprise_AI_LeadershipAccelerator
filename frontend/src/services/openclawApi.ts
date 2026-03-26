@@ -220,6 +220,18 @@ export const generateLinkedInCommentReplies = (data: LinkedInBatchReplyPayload) 
 
 // ── LinkedIn Session Management ──────────────────────────────────────────────
 
+export interface LinkedInLoginResult {
+  success: boolean;
+  message: string;
+  needs_verification?: boolean;
+}
+
+export const loginToLinkedIn = (email: string, password: string) =>
+  api.post<LinkedInLoginResult>(`${BASE}/linkedin/login`, { email, password });
+
+export const verifyLinkedInChallenge = (code: string) =>
+  api.post<LinkedInLoginResult>(`${BASE}/linkedin/verify`, { code });
+
 export const saveLinkedInSession = (li_at: string, JSESSIONID?: string) =>
   api.post<{ success: boolean; message: string }>(`${BASE}/linkedin/save-session`, { li_at, JSESSIONID });
 

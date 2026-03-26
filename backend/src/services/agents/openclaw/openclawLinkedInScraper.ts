@@ -176,7 +176,6 @@ export async function saveLinkedInCookies(li_at: string, jsessionId?: string): P
   const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
   await fs.mkdir(profileDir, { recursive: true });
 
-  // Launch a headless persistent context, inject cookies, then close to save
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: true,
     viewport: { width: 1280, height: 900 },
@@ -192,11 +191,148 @@ export async function saveLinkedInCookies(li_at: string, jsessionId?: string): P
 
   await context.addCookies(cookies);
 
-  // Navigate to LinkedIn to verify the session and let the browser save state
   const page = await context.newPage();
   await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForTimeout(2000);
-  await context.close(); // saves cookies to profileDir
+  await context.close();
+}
+
+export interface LinkedInLoginResult {
+  success: boolean;
+  message: string;
+  needs_verification?: boolean;
+}
+
+/**
+ * Log into LinkedIn using email/password via headless Playwright.
+ * Saves session cookies to persistent profile on success.
+ * Returns needs_verification if LinkedIn requires a security challenge.
+ */
+export async function loginToLinkedIn(email: string, password: string): Promise<LinkedInLoginResult> {
+  const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
+  await fs.mkdir(profileDir, { recursive: true });
+
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: true,
+    viewport: { width: 1280, height: 900 },
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'],
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    locale: 'en-US',
+  });
+
+  const page = context.pages()[0] || await context.newPage();
+
+  // Hide automation fingerprint
+  await page.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
+
+  try {
+    // Navigate to login page
+    await page.goto('https://www.linkedin.com/login', { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(1500);
+
+    // Fill credentials
+    await page.fill('#username', email);
+    await page.waitForTimeout(500);
+    await page.fill('#password', password);
+    await page.waitForTimeout(500);
+
+    // Click sign in
+    await page.click('[data-litms-control-urn="login-submit"]');
+
+    // Wait for navigation
+    await page.waitForTimeout(5000);
+
+    const currentUrl = page.url();
+
+    // Check for verification/challenge
+    if (currentUrl.includes('checkpoint') || currentUrl.includes('challenge')) {
+      await context.close(); // save partial state
+      return {
+        success: false,
+        needs_verification: true,
+        message: 'LinkedIn requires email or phone verification. Check your email/phone for a code, then use the verification endpoint.',
+      };
+    }
+
+    // Check for wrong password
+    if (currentUrl.includes('login') || currentUrl.includes('uas/login')) {
+      const errorText = await page.evaluate(() => {
+        const err = document.querySelector('#error-for-password, .form__label--error, [id*="error"]');
+        return err?.textContent?.trim() || '';
+      });
+      await context.close();
+      return { success: false, message: errorText || 'Login failed. Check your email and password.' };
+    }
+
+    // Check if we're on the feed (success)
+    if (currentUrl.includes('feed') || currentUrl.includes('mynetwork') || currentUrl.includes('in/')) {
+      // Verify we have the li_at cookie
+      const cookies = await context.cookies('https://www.linkedin.com');
+      const liAt = cookies.find(c => c.name === 'li_at');
+      await context.close(); // saves cookies
+      if (liAt) {
+        return { success: true, message: 'Successfully logged into LinkedIn. Session saved.' };
+      }
+      return { success: false, message: 'Login appeared to succeed but no session cookie was set.' };
+    }
+
+    // Unknown state - save what we have
+    await context.close();
+    return { success: false, message: `Login reached unexpected page: ${currentUrl}. Session may be partially saved.` };
+
+  } catch (err: any) {
+    try { await context.close(); } catch { /* ignore */ }
+    return { success: false, message: `Login error: ${err.message}` };
+  }
+}
+
+/**
+ * Complete LinkedIn verification after a login that triggered a security challenge.
+ */
+export async function verifyLinkedInChallenge(code: string): Promise<LinkedInLoginResult> {
+  const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
+
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: true,
+    viewport: { width: 1280, height: 900 },
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'],
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  });
+
+  const page = context.pages()[0] || await context.newPage();
+  await page.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
+
+  try {
+    // Navigate to checkpoint (should resume from saved state)
+    await page.goto('https://www.linkedin.com/checkpoint/challenge/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    // Try to fill the verification code
+    const codeInput = await page.$('input[name="pin"], input#input__email_verification_pin, input[name="verification_code"]');
+    if (codeInput) {
+      await codeInput.fill(code);
+      await page.waitForTimeout(500);
+      // Submit
+      const submitBtn = await page.$('button[type="submit"], #email-pin-submit-button');
+      if (submitBtn) await submitBtn.click();
+      await page.waitForTimeout(5000);
+    }
+
+    const currentUrl = page.url();
+    if (currentUrl.includes('feed') || currentUrl.includes('mynetwork') || currentUrl.includes('in/')) {
+      const cookies = await context.cookies('https://www.linkedin.com');
+      const liAt = cookies.find(c => c.name === 'li_at');
+      await context.close();
+      if (liAt) return { success: true, message: 'Verification complete. LinkedIn session saved.' };
+    }
+
+    await context.close();
+    return { success: false, message: 'Verification may not have completed. Try logging in again.' };
+
+  } catch (err: any) {
+    try { await context.close(); } catch { /* ignore */ }
+    return { success: false, message: `Verification error: ${err.message}` };
+  }
 }
 
 /**
