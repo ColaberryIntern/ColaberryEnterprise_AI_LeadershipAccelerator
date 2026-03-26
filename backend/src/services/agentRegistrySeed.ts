@@ -1282,10 +1282,9 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '5,20,35,50 * * * *',
     category: 'openclaw',
-    description: 'AI-powered quality review for Medium responses. Approves high-quality drafts for automated browser posting, rejects low-quality ones and triggers regeneration.',
+    description: 'Quality gate safety net for all automated platforms. Picks up rate-limited drafts, re-evaluates quality, and approves or rejects. Covers all API_POSTING platforms by default.',
     config: {
-      max_reviews_per_run: 10,
-      gated_platforms: ['medium'],
+      max_reviews_per_run: 20,
     },
   },
   {

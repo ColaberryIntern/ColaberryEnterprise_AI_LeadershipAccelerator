@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import { OpenclawResponse, OpenclawSignal, OpenclawTask } from '../../../models';
-import { validateContentForStrategy } from './openclawPlatformStrategy';
+import { validateContentForStrategy, PLATFORM_EXECUTION } from './openclawPlatformStrategy';
 import { isRateLimited } from './openclawRateLimiter';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
@@ -116,8 +116,11 @@ export async function runOpenclawQualityGateAgent(
   const errors: string[] = [];
   const maxPerRun = config.max_reviews_per_run || 10;
 
-  // Platforms that go through the quality gate instead of human review
-  const gatedPlatforms = config.gated_platforms || ['medium'];
+  // All API_POSTING platforms go through the quality gate (not just medium)
+  const gatedPlatforms = config.gated_platforms
+    || Object.entries(PLATFORM_EXECUTION)
+        .filter(([, exec]) => exec === 'API_POSTING')
+        .map(([platform]) => platform);
 
   try {
     // 1. Find responses pending review for gated platforms
