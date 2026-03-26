@@ -120,6 +120,11 @@ ${channelInstructions[channel]}
 
 IMPORTANT RULES:
 - The sender identity comes from the campaign settings (agent_name). Use that identity consistently. For ALUMNI campaigns ONLY: mention Ali Muwwakkil (Managing Director) by name as the person behind the outreach — "Ali asked me to reach out." For COLD OUTBOUND or non-alumni campaigns: do NOT mention Ali — these prospects do not know him. Just use the campaign agent identity.
+- CRITICAL: When including a link to book a strategy call or learn more, ONLY use these exact URLs:
+  - Strategy call / booking: https://enterprise.colaberry.ai/ai-architect
+  - Alumni landing page: https://enterprise.colaberry.ai/alumni-ai-champion
+  - Main site: https://enterprise.colaberry.ai
+  NEVER use calendly.com, scheduling-link, your-link, or any placeholder URL. NEVER invent or guess a URL.
 - Never fabricate information about the lead or their company
 - Reference their actual context (title, company, industry) naturally
 - If this is a cold outreach, be respectful and value-driven, not pushy
@@ -285,6 +290,16 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
 
   // Strip emdashes from all channels (replace with comma, hyphen, or nothing)
   cleanedBody = cleanedBody.replace(/\s*—\s*/g, ' - ').replace(/\s*–\s*/g, ' - ');
+
+  // Replace any hallucinated Calendly/placeholder URLs with real booking link
+  cleanedBody = cleanedBody
+    .replace(/https?:\/\/calendly\.com\/[^\s"<)]+/gi, 'https://enterprise.colaberry.ai/ai-architect')
+    .replace(/https?:\/\/[^\s"<)]*your-link[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
+    .replace(/https?:\/\/[^\s"<)]*your-scheduling[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
+    .replace(/https?:\/\/[^\s"<)]*your-appointment[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
+    .replace(/https?:\/\/[^\s"<)]*booking-link[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
+    .replace(/https?:\/\/enterprise\.colaberry\.ai\/schedule[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
+    .replace(/https?:\/\/enterprise\.colaberry\.ai\/program[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect');
 
   // SMS-specific: strip opt-out language and AI agent names
   if (params.channel === 'sms') {
