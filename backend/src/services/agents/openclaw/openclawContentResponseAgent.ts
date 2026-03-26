@@ -2,7 +2,8 @@ import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { OpenclawSignal, OpenclawTask, OpenclawResponse, OpenclawLearning } from '../../../models';
 import { getOpenAIClient } from '../../../intelligence/assistant/openaiHelper';
-import { getStrategy, isLinkAllowed, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, validateContentForStrategy, shouldAutoApprove as shouldAutoApproveStrategy } from './openclawPlatformStrategy';
+import { getStrategy, getExecutionType, isHumanExecution, isLinkAllowed, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, validateContentForStrategy, shouldAutoApprove as shouldAutoApproveStrategy } from './openclawPlatformStrategy';
+import { captureLeadFromSignal } from './openclawLeadCaptureService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const BASE_URL = process.env.BASE_URL || 'https://enterprise.colaberry.ai';
@@ -82,7 +83,13 @@ export async function runOpenclawContentResponseAgent(
           continue;
         }
 
-        // Create draft response with unique tracking
+        // Determine execution type and build metadata
+        const executionType = getExecutionType(signal.platform);
+        const humanExecution = isHumanExecution(signal.platform);
+        const priorityScore = Math.round((Number(signal.relevance_score) || 0) * 100);
+        const intentLevel = priorityScore >= 70 ? 'high' : priorityScore >= 50 ? 'medium' : 'low';
+
+        // Create response with routing metadata
         const response = await OpenclawResponse.create({
           signal_id: signal.id,
           platform: signal.platform,
@@ -91,7 +98,13 @@ export async function runOpenclawContentResponseAgent(
           short_id: shortId,
           tracked_url: trackedUrl,
           utm_params: utmParams,
-          post_status: 'draft',
+          post_status: humanExecution ? 'ready_for_manual_post' : 'draft',
+          execution_type: executionType === 'HUMAN_EXECUTION' ? 'human_execution' : 'api_posting',
+          reasoning: `${signal.platform} signal: "${(signal.title || '').slice(0, 100)}" — relevance ${signal.relevance_score}`,
+          priority_score: priorityScore,
+          intent_level: intentLevel,
+          recommended_action: buildRecommendedAction(signal),
+          follow_up_suggestion: 'If they respond positively, advance to Stage 2 qualification',
           created_at: new Date(),
         });
 
@@ -101,20 +114,34 @@ export async function runOpenclawContentResponseAgent(
           updated_at: new Date(),
         });
 
-        // Auto-approve based on platform strategy (HYBRID=auto, PASSIVE/AUTHORITY=manual) + config overrides
-        const autoApprovePlatforms: string[] = config.auto_approve_platforms || [];
-        const shouldApprove = shouldAutoApproveStrategy(signal.platform, autoApprovePlatforms);
-        if (shouldApprove) {
-          await OpenclawTask.create({
-            task_type: 'post_response',
-            priority: task.priority,
-            status: 'pending',
-            signal_id: signal.id,
-            input_data: { response_id: response.id },
-            created_at: new Date(),
-          });
-          await response.update({ post_status: 'approved', updated_at: new Date() });
+        // Lead capture — create/update lead from signal author
+        try {
+          const lead = await captureLeadFromSignal(signal, response);
+          if (lead) {
+            await response.update({ lead_id: lead.id, updated_at: new Date() });
+          }
+        } catch (leadErr: any) {
+          console.warn(`[OpenClaw Content] Lead capture failed: ${leadErr.message}`);
         }
+
+        // Route based on execution type
+        if (!humanExecution) {
+          // API_POSTING: auto-approve check
+          const autoApprovePlatforms: string[] = config.auto_approve_platforms || [];
+          const shouldApprove = shouldAutoApproveStrategy(signal.platform, autoApprovePlatforms);
+          if (shouldApprove) {
+            await OpenclawTask.create({
+              task_type: 'post_response',
+              priority: task.priority,
+              status: 'pending',
+              signal_id: signal.id,
+              input_data: { response_id: response.id },
+              created_at: new Date(),
+            });
+            await response.update({ post_status: 'approved', updated_at: new Date() });
+          }
+        }
+        // HUMAN_EXECUTION: already set to 'ready_for_manual_post' — no post task created
 
         await task.update({
           status: 'completed',
@@ -200,8 +227,11 @@ async function selectToneFromLearnings(
   }
 
   // New platform tone defaults
-  if (platform === 'twitter' || platform === 'bluesky') {
+  if (platform === 'twitter' || platform === 'bluesky' || platform === 'facebook_groups') {
     return { tone: 'conversational', toneSource: 'heuristic' };
+  }
+  if (platform === 'linkedin_comments') {
+    return { tone: 'professional', toneSource: 'heuristic' };
   }
   if (platform === 'youtube') {
     return { tone: 'educational', toneSource: 'heuristic' };
@@ -286,6 +316,10 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
     platformContext = `This is a YouTube video comment. Keep it under 500 characters. Reference specific points from the video title/description. Be enthusiastic but substantive. YouTube comments that add value get pinned.`;
   } else if (platform === 'producthunt') {
     platformContext = `This is a Product Hunt launch discussion. The audience is founders, PMs, and early adopters. Be encouraging but add genuine technical insight about the product's AI approach. Keep it under 500 characters. Product Hunt values constructive feedback.`;
+  } else if (platform === 'facebook_groups') {
+    platformContext = `This is a Facebook Group discussion about AI. Be conversational and approachable — Facebook groups are community spaces. Share practical experience, ask follow-up questions, and blend in naturally. No jargon walls. Keep it under 300 words.`;
+  } else if (platform === 'linkedin_comments') {
+    platformContext = `This is a LinkedIn post comment. Be professional but personable. Reference the original post's key point, add your perspective from experience, and keep it concise (2-3 short paragraphs max). LinkedIn comments that add real value get visibility.`;
   }
 
   // Strategy-level instructions (highest priority — enforced before platform style)
@@ -380,6 +414,41 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
 
   // Fallback to template if LLM unavailable
   return generateTemplateResponse(signal, tone, maxLength);
+}
+
+function buildRecommendedAction(signal: any): string {
+  const platform = signal.platform;
+  const title = (signal.title || '').slice(0, 80);
+  const details = signal.details || {};
+
+  switch (platform) {
+    case 'reddit':
+      return `Reply to Reddit thread${details.subreddit ? ` in r/${details.subreddit}` : ''}: "${title}"`;
+    case 'hackernews':
+      return `Comment on HN discussion: "${title}"`;
+    case 'quora':
+      return `Answer Quora question: "${title}"`;
+    case 'facebook_groups':
+      return `Comment in Facebook group: "${title}"`;
+    case 'linkedin_comments':
+      return `Comment on LinkedIn post: "${title}"`;
+    case 'devto':
+      return `Comment on Dev.to article: "${title}"`;
+    case 'hashnode':
+      return `Comment on Hashnode post: "${title}"`;
+    case 'discourse':
+      return `Reply in ${details.forum_name || 'Discourse'} thread: "${title}"`;
+    case 'twitter':
+      return `Reply to tweet: "${title}"`;
+    case 'bluesky':
+      return `Reply to Bluesky post: "${title}"`;
+    case 'youtube':
+      return `Comment on YouTube video: "${title}"`;
+    case 'producthunt':
+      return `Comment on Product Hunt launch: "${title}"`;
+    default:
+      return `Engage on ${platform}: "${title}"`;
+  }
 }
 
 function generateTemplateResponse(signal: any, tone: string, maxLength: number): string {

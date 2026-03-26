@@ -649,6 +649,13 @@ LinkedInActionQueue.belongsTo(OpenclawSignal, { foreignKey: 'source_signal_id', 
 EngagementEvent.hasMany(LinkedInActionQueue, { foreignKey: 'source_engagement_id', as: 'linkedInActions' });
 LinkedInActionQueue.belongsTo(EngagementEvent, { foreignKey: 'source_engagement_id', as: 'sourceEngagement' });
 
+// OpenClaw → Lead associations (social engagement lead capture)
+OpenclawResponse.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(OpenclawResponse, { foreignKey: 'lead_id', as: 'openclawResponses' });
+
+EngagementEvent.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(EngagementEvent, { foreignKey: 'lead_id', as: 'engagementEvents' });
+
 // --- Cory Knowledge Graph associations ---
 KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'source_node_id', as: 'sourceNode' });
 KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'target_node_id', as: 'targetNode' });

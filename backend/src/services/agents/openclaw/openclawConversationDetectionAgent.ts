@@ -147,7 +147,7 @@ function scoreRelevance(signal: any): number {
   // Strategy-aware adjustment: PASSIVE platforms need higher relevance (we can only comment)
   const strategy = getStrategy(signal.platform);
   if (strategy === 'PASSIVE_SIGNAL') {
-    score *= 0.85; // raises the bar — only engage on highly relevant threads
+    score *= 0.95; // slight bar raise — preserve opportunities on HUMAN_EXECUTION platforms
   } else if (strategy === 'AUTHORITY_BROADCAST') {
     score *= 1.1; // lower bar — capture more signals for content synthesis
   }

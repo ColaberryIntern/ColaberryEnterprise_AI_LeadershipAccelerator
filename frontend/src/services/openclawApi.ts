@@ -13,6 +13,7 @@ export interface OpenclawDashboard {
     learnings: number;
     active_agents: number;
     content_pipeline: number;
+    responses_manual_queue: number;
     replies_sent: number;
     total_engagement_score: number;
     total_clicks: number;
@@ -93,6 +94,13 @@ export interface OpenclawResponseItem {
   tracked_url: string | null;
   engagement_metrics: Record<string, any>;
   created_at: string;
+  reasoning: string | null;
+  priority_score: number | null;
+  intent_level: string | null;
+  recommended_action: string | null;
+  follow_up_suggestion: string | null;
+  execution_type: string | null;
+  lead_id: number | null;
   signal?: {
     title: string;
     source_url: string;
@@ -102,6 +110,14 @@ export interface OpenclawResponseItem {
     relevance_score: number | null;
     engagement_score: number | null;
     author: string | null;
+  };
+  lead?: {
+    id: number;
+    name: string;
+    email: string;
+    interest_level: string | null;
+    lead_score: number | null;
+    pipeline_stage: string | null;
   };
 }
 

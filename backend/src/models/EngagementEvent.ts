@@ -21,6 +21,7 @@ interface EngagementEventAttributes {
   role_seniority?: RoleSeniority;
   company_detected?: string;
   status?: EngagementEventStatus;
+  lead_id?: number;
   details?: Record<string, any>;
   created_at?: Date;
   updated_at?: Date;
@@ -42,6 +43,7 @@ class EngagementEvent extends Model<EngagementEventAttributes> implements Engage
   declare role_seniority: RoleSeniority;
   declare company_detected: string;
   declare status: EngagementEventStatus;
+  declare lead_id: number;
   declare details: Record<string, any>;
   declare created_at: Date;
   declare updated_at: Date;
@@ -114,6 +116,11 @@ EngagementEvent.init(
       allowNull: false,
       defaultValue: 'new',
     },
+    lead_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'leads', key: 'id' },
+    },
     details: {
       type: DataTypes.JSONB,
       allowNull: true,
@@ -138,6 +145,7 @@ EngagementEvent.init(
       { fields: ['platform'] },
       { fields: ['status'] },
       { fields: ['intent_score'] },
+      { fields: ['lead_id'] },
       { fields: ['created_at'] },
     ],
   }

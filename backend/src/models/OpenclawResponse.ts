@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type OpenclawPostStatus = 'draft' | 'approved' | 'ready_to_post' | 'posted' | 'failed' | 'removed';
+export type OpenclawPostStatus = 'draft' | 'approved' | 'ready_to_post' | 'ready_for_manual_post' | 'posted' | 'failed' | 'removed';
 export type OpenclawTone = 'educational' | 'conversational' | 'technical' | 'professional';
 
 interface OpenclawResponseAttributes {
@@ -21,6 +21,13 @@ interface OpenclawResponseAttributes {
   posted_at?: Date;
   engagement_metrics?: Record<string, any>;
   moderation_flag?: boolean;
+  reasoning?: string;
+  priority_score?: number;
+  intent_level?: string;
+  recommended_action?: string;
+  follow_up_suggestion?: string;
+  execution_type?: string;
+  lead_id?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -42,6 +49,13 @@ class OpenclawResponse extends Model<OpenclawResponseAttributes> implements Open
   declare posted_at: Date;
   declare engagement_metrics: Record<string, any>;
   declare moderation_flag: boolean;
+  declare reasoning: string;
+  declare priority_score: number;
+  declare intent_level: string;
+  declare recommended_action: string;
+  declare follow_up_suggestion: string;
+  declare execution_type: string;
+  declare lead_id: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -123,6 +137,35 @@ OpenclawResponse.init(
       allowNull: false,
       defaultValue: false,
     },
+    reasoning: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    priority_score: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+    },
+    intent_level: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
+    },
+    recommended_action: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+    },
+    follow_up_suggestion: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    execution_type: {
+      type: DataTypes.STRING(30),
+      allowNull: true,
+    },
+    lead_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'leads', key: 'id' },
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -143,6 +186,9 @@ OpenclawResponse.init(
       { fields: ['campaign_id'] },
       { fields: ['created_at'] },
       { fields: ['short_id'], unique: true, name: 'idx_openclaw_responses_short_id' },
+      { fields: ['execution_type'] },
+      { fields: ['lead_id'] },
+      { fields: ['intent_level'] },
     ],
   }
 );

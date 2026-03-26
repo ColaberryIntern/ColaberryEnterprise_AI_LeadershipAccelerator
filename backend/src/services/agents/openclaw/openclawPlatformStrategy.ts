@@ -4,13 +4,19 @@
  * Central source of truth for platform behavioral rules.
  * Every agent imports from here — no platform-specific logic lives elsewhere.
  *
- * 3 Strategy Types:
- *   PASSIVE_SIGNAL     — React only, no posts, no links, no promo (Reddit, Quora, HN)
- *   HYBRID_ENGAGEMENT  — Engage first, light posting after warmup (Twitter, Dev.to, etc.)
- *   AUTHORITY_BROADCAST — Content-first, CTAs OK, conversion-aware (LinkedIn, Medium, YouTube)
+ * Two orthogonal axes:
+ *
+ * Axis 1 — Content Strategy (controls LLM prompts, tone, link rules):
+ *   PASSIVE_SIGNAL     — React only, no posts, no links, no promo
+ *   HYBRID_ENGAGEMENT  — Engage first, light posting after warmup
+ *   AUTHORITY_BROADCAST — Content-first, CTAs OK, conversion-aware
+ *
+ * Axis 2 — Execution Type (controls posting behavior):
+ *   API_POSTING        — Auto-approve, auto-post via API, rate limited
+ *   HUMAN_EXECUTION    — Generate response, queue for manual copy-paste, NEVER auto-post
  */
 
-// ─── Strategy Types ──────────────────────────────────────────────────────────
+// ─── Strategy Types (Axis 1 — Content Strategy) ─────────────────────────────
 
 export type PlatformStrategyType = 'PASSIVE_SIGNAL' | 'HYBRID_ENGAGEMENT' | 'AUTHORITY_BROADCAST';
 
@@ -19,6 +25,8 @@ export const PLATFORM_STRATEGY: Record<string, PlatformStrategyType> = {
   reddit: 'PASSIVE_SIGNAL',
   quora: 'PASSIVE_SIGNAL',
   hackernews: 'PASSIVE_SIGNAL',
+  facebook_groups: 'PASSIVE_SIGNAL',
+  linkedin_comments: 'PASSIVE_SIGNAL',
 
   // HYBRID — engage first, light posting after warmup
   twitter: 'HYBRID_ENGAGEMENT',
@@ -33,6 +41,36 @@ export const PLATFORM_STRATEGY: Record<string, PlatformStrategyType> = {
   medium: 'AUTHORITY_BROADCAST',
   youtube: 'AUTHORITY_BROADCAST',
 };
+
+// ─── Execution Types (Axis 2 — Posting Behavior) ────────────────────────────
+
+export type PlatformExecutionType = 'API_POSTING' | 'HUMAN_EXECUTION';
+
+export const PLATFORM_EXECUTION: Record<string, PlatformExecutionType> = {
+  // API_POSTING — auto-approve, auto-post, rate limited
+  devto: 'API_POSTING',
+  hashnode: 'API_POSTING',
+  discourse: 'API_POSTING',
+  twitter: 'API_POSTING',
+  bluesky: 'API_POSTING',
+  producthunt: 'API_POSTING',
+  youtube: 'API_POSTING',
+
+  // HUMAN_EXECUTION — generate response, queue for manual posting, NEVER auto-post
+  reddit: 'HUMAN_EXECUTION',
+  quora: 'HUMAN_EXECUTION',
+  hackernews: 'HUMAN_EXECUTION',
+  facebook_groups: 'HUMAN_EXECUTION',
+  linkedin_comments: 'HUMAN_EXECUTION',
+};
+
+export function getExecutionType(platform: string): PlatformExecutionType {
+  return PLATFORM_EXECUTION[platform] || 'HUMAN_EXECUTION'; // default to safest
+}
+
+export function isHumanExecution(platform: string): boolean {
+  return getExecutionType(platform) === 'HUMAN_EXECUTION';
+}
 
 export function getStrategy(platform: string): PlatformStrategyType {
   return PLATFORM_STRATEGY[platform] || 'PASSIVE_SIGNAL'; // default to most restrictive
@@ -241,9 +279,12 @@ const STRATEGY_AUTO_APPROVE: Record<PlatformStrategyType, boolean> = {
 
 /**
  * Determine if a response should be auto-approved.
- * Config overrides (admin-set per-platform list) take priority.
+ * HARD RULE: HUMAN_EXECUTION platforms NEVER auto-approve (override-proof).
+ * Config overrides apply only to API_POSTING platforms.
  */
 export function shouldAutoApprove(platform: string, configOverrides: string[]): boolean {
+  // Safety gate: HUMAN_EXECUTION platforms NEVER auto-approve, regardless of config
+  if (isHumanExecution(platform)) return false;
   if (configOverrides.includes(platform)) return true;
   return STRATEGY_AUTO_APPROVE[getStrategy(platform)];
 }

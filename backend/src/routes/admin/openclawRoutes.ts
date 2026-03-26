@@ -14,6 +14,7 @@ import {
   EngagementEvent,
   ResponseQueue,
   LinkedInActionQueue,
+  Lead,
 } from '../../models';
 
 const router = Router();
@@ -36,6 +37,7 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
       learningsCount,
       activeAgents,
       contentPipeline,
+      responsesManualQueue,
       repliesSent,
       totalReplies,
     ] = await Promise.all([
@@ -48,6 +50,7 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
       OpenclawLearning.count(),
       AiAgent.count({ where: { category: 'openclaw', enabled: true } }),
       OpenclawResponse.count({ where: { post_status: { [Op.in]: ['draft', 'approved', 'ready_to_post'] } } }),
+      OpenclawResponse.count({ where: { post_status: 'ready_for_manual_post' } }),
       ResponseQueue.count({ where: { status: 'posted' } }),
       EngagementEvent.count({ where: { engagement_type: { [Op.in]: ['reply', 'comment'] } } }),
     ]);
@@ -165,6 +168,7 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
         learnings: learningsCount,
         active_agents: activeAgents,
         content_pipeline: contentPipeline,
+        responses_manual_queue: responsesManualQueue,
         replies_sent: repliesSent,
         total_engagement_score: totalEngagementScore,
         total_clicks: totalClicks,
@@ -243,11 +247,13 @@ router.get(`${BASE}/responses`, async (req: Request, res: Response) => {
   try {
     const post_status = req.query.post_status as string | undefined;
     const platform = req.query.platform as string | undefined;
+    const execution_type = req.query.execution_type as string | undefined;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 25;
     const where: Record<string, any> = {};
     if (post_status) where.post_status = post_status;
     if (platform) where.platform = platform;
+    if (execution_type) where.execution_type = execution_type;
 
     const offset = (page - 1) * limit;
     const { rows, count } = await OpenclawResponse.findAndCountAll({
@@ -255,7 +261,10 @@ router.get(`${BASE}/responses`, async (req: Request, res: Response) => {
       order: [['created_at', 'DESC']],
       limit,
       offset,
-      include: [{ model: OpenclawSignal, as: 'signal', attributes: ['title', 'source_url', 'platform', 'content_excerpt', 'details', 'relevance_score', 'engagement_score', 'author'] as any }],
+      include: [
+        { model: OpenclawSignal, as: 'signal', attributes: ['title', 'source_url', 'platform', 'content_excerpt', 'details', 'relevance_score', 'engagement_score', 'author'] as any },
+        { model: Lead, as: 'lead', attributes: ['id', 'name', 'email', 'interest_level', 'lead_score', 'pipeline_stage'] as any, required: false },
+      ],
     });
 
     res.json({ responses: rows, total: count, page, limit });
@@ -317,7 +326,7 @@ router.post(`${BASE}/responses/:id/mark-posted`, async (req: Request, res: Respo
   try {
     const response = await OpenclawResponse.findByPk(req.params.id as string);
     if (!response) return res.status(404).json({ error: 'Response not found' });
-    if (response.post_status !== 'ready_to_post' && response.post_status !== 'approved') {
+    if (response.post_status !== 'ready_to_post' && response.post_status !== 'approved' && response.post_status !== 'ready_for_manual_post') {
       return res.status(400).json({ error: `Cannot mark as posted — current status: ${response.post_status}` });
     }
 
@@ -479,7 +488,12 @@ function detectPlatform(url: string): string | null {
     if (host.includes('reddit.com')) return 'reddit';
     if (host === 'dev.to') return 'devto';
     if (host.includes('ycombinator.com')) return 'hackernews';
-    if (host.includes('linkedin.com')) return 'linkedin';
+    if (host.includes('linkedin.com')) {
+      // LinkedIn post comments vs general LinkedIn
+      if (url.includes('/feed/') || url.includes('/posts/')) return 'linkedin_comments';
+      return 'linkedin';
+    }
+    if (host.includes('facebook.com') && url.includes('/groups/')) return 'facebook_groups';
     if (host.includes('medium.com')) return 'medium';
     if (host.includes('hashnode.dev') || host.includes('hashnode.com')) return 'hashnode';
     // Common Discourse forums

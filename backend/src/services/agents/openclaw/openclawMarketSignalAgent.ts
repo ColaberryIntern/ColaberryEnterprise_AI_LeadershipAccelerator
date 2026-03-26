@@ -23,7 +23,7 @@ export async function runOpenclawMarketSignalAgent(
   const actions: AgentAction[] = [];
   const errors: string[] = [];
   const keywords: string[] = config.keywords || ['AI training', 'enterprise AI', 'AI leadership'];
-  const platforms: string[] = config.platforms || ['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt'];
+  const platforms: string[] = config.platforms || ['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt', 'facebook_groups', 'linkedin_comments'];
   const maxSignals = config.max_signals_per_scan || 50;
   let totalCreated = 0;
 
@@ -517,6 +517,14 @@ async function scanPlatform(
 
     case 'quora':
       // Quora has no public API — signals are submitted manually via admin UI
+      break;
+
+    case 'facebook_groups':
+      // Facebook Groups has no public API — signals are submitted manually via admin UI
+      break;
+
+    case 'linkedin_comments':
+      // LinkedIn comment opportunities have no public search API — signals are submitted manually via admin UI
       break;
 
     default:

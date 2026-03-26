@@ -47,11 +47,14 @@ const PLATFORM_COLORS: Record<string, string> = {
   bluesky: '#0085FF',
   youtube: '#FF0000',
   producthunt: '#DA552F',
+  facebook_groups: '#1877F2',
+  linkedin_comments: '#0A66C2',
 };
 
 // Platform strategy classification
 const PLATFORM_STRATEGY: Record<string, string> = {
   reddit: 'PASSIVE_SIGNAL', quora: 'PASSIVE_SIGNAL', hackernews: 'PASSIVE_SIGNAL',
+  facebook_groups: 'PASSIVE_SIGNAL', linkedin_comments: 'PASSIVE_SIGNAL',
   twitter: 'HYBRID_ENGAGEMENT', bluesky: 'HYBRID_ENGAGEMENT', devto: 'HYBRID_ENGAGEMENT',
   hashnode: 'HYBRID_ENGAGEMENT', discourse: 'HYBRID_ENGAGEMENT', producthunt: 'HYBRID_ENGAGEMENT',
   linkedin: 'AUTHORITY_BROADCAST', medium: 'AUTHORITY_BROADCAST', youtube: 'AUTHORITY_BROADCAST',
@@ -66,6 +69,7 @@ const STATUS_BADGES: Record<string, string> = {
   draft: 'warning',
   approved: 'info',
   ready_to_post: 'primary',
+  ready_for_manual_post: 'warning',
   posted: 'success',
   failed: 'danger',
   removed: 'secondary',
@@ -112,7 +116,7 @@ export default function OpenclawTab() {
   // Governance controls state
   const [requireApproval, setRequireApproval] = useState(true);
   const [autoPostDevto, setAutoPostDevto] = useState(false);
-  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt']);
+  const [activePlatforms, setActivePlatforms] = useState<string[]>(['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt', 'facebook_groups', 'linkedin_comments']);
   const [savingConfig, setSavingConfig] = useState<string | null>(null);
 
   // Manual URL submission state
@@ -340,6 +344,7 @@ export default function OpenclawTab() {
             { label: 'Reply Rate', value: `${(kpis.reply_rate * 100).toFixed(1)}%`, color: '#805ad5' },
             { label: 'Best Tone', value: kpis.best_tone, color: '#319795', isBadge: true },
             { label: 'Content Pipeline', value: kpis.content_pipeline, color: '#d69e2e' },
+            { label: 'Manual Queue', value: kpis.responses_manual_queue, color: '#e53e3e' },
             { label: 'Signals (24h)', value: kpis.signals_24h, color: 'var(--color-primary-light)' },
           ].map((kpi: any) => (
             <div key={kpi.label} className="col-6 col-md-3">
@@ -563,12 +568,12 @@ export default function OpenclawTab() {
           <div>
             <div className="fw-medium small mb-2">Active Scanning Platforms</div>
             <div className="text-muted mb-2" style={{ fontSize: '0.65rem' }}>
-              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt &bull; Scan for Intel Only: Reddit, HN (no links — ban risk)
+              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt &bull; Manual Only: Reddit, HN, Facebook Groups, LinkedIn Comments (no auto-posting)
             </div>
             <div className="d-flex gap-3 flex-wrap">
-              {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt'].map(p => {
-                const intelOnly = p === 'reddit' || p === 'hackernews';
-                const labelMap: Record<string, string> = { hackernews: 'Hacker News', devto: 'Dev.to', hashnode: 'Hashnode', discourse: 'Discourse Forums', twitter: 'Twitter/X', bluesky: 'Bluesky', youtube: 'YouTube', producthunt: 'Product Hunt' };
+              {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt', 'facebook_groups', 'linkedin_comments'].map(p => {
+                const humanExec = ['reddit', 'hackernews', 'facebook_groups', 'linkedin_comments', 'quora'].includes(p);
+                const labelMap: Record<string, string> = { hackernews: 'Hacker News', devto: 'Dev.to', hashnode: 'Hashnode', discourse: 'Discourse Forums', twitter: 'Twitter/X', bluesky: 'Bluesky', youtube: 'YouTube', producthunt: 'Product Hunt', facebook_groups: 'Facebook Groups', linkedin_comments: 'LinkedIn Comments' };
                 const label = labelMap[p] || p.charAt(0).toUpperCase() + p.slice(1);
                 return (
                   <div className="form-check" key={p}>
@@ -576,7 +581,7 @@ export default function OpenclawTab() {
                     <label className="form-check-label small" htmlFor={`platform-${p}`}>
                       {label}
                       {(() => { const s = PLATFORM_STRATEGY[p]; const b = s ? STRATEGY_BADGES[s] : null; return b ? <span className="badge ms-1" style={{ fontSize: '0.5rem', verticalAlign: 'middle', backgroundColor: b.bg, color: '#fff' }}>{b.label}</span> : null; })()}
-                      {intelOnly && <span className="badge bg-info ms-1" style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>Intel</span>}
+                      {humanExec && <span className="badge bg-warning text-dark ms-1" style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>Manual</span>}
                     </label>
                   </div>
                 );
@@ -633,6 +638,7 @@ export default function OpenclawTab() {
             <option value="draft">Draft</option>
             <option value="approved">Approved</option>
             <option value="ready_to_post">Ready to Post</option>
+            <option value="ready_for_manual_post">Manual Queue</option>
             <option value="posted">Posted</option>
             <option value="failed">Failed</option>
           </select>
@@ -643,6 +649,7 @@ export default function OpenclawTab() {
               <thead className="table-light">
                 <tr>
                   <th>Platform</th>
+                  <th>Type</th>
                   <th>Signal</th>
                   <th>Tone</th>
                   <th>Content</th>
@@ -665,6 +672,11 @@ export default function OpenclawTab() {
                         style={{ backgroundColor: PLATFORM_COLORS[resp.platform] || '#718096', fontSize: '0.65rem' }}
                       >
                         {resp.platform}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge bg-${resp.execution_type === 'human_execution' ? 'warning' : 'info'}`} style={{ fontSize: '0.55rem' }}>
+                        {resp.execution_type === 'human_execution' ? 'Manual' : 'Auto'}
                       </span>
                     </td>
                     <td>
@@ -699,7 +711,7 @@ export default function OpenclawTab() {
                     </td>
                     <td>
                       <span className={`badge bg-${STATUS_BADGES[resp.post_status] || 'secondary'}`}>
-                        {resp.post_status === 'ready_to_post' ? 'Ready' : resp.post_status}
+                        {resp.post_status === 'ready_to_post' ? 'Ready' : resp.post_status === 'ready_for_manual_post' ? 'Manual' : resp.post_status}
                       </span>
                     </td>
                     <td className="text-muted text-nowrap">{timeAgo(resp.created_at)}</td>
@@ -720,7 +732,7 @@ export default function OpenclawTab() {
                           </button>
                         </div>
                       )}
-                      {resp.post_status === 'ready_to_post' && (
+                      {(resp.post_status === 'ready_to_post' || resp.post_status === 'ready_for_manual_post') && (
                         <button
                           className="btn btn-sm btn-outline-primary py-0 px-2"
                           style={{ fontSize: '0.65rem' }}
@@ -745,7 +757,7 @@ export default function OpenclawTab() {
                 ))}
                 {responses.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-muted text-center py-4">
+                    <td colSpan={9} className="text-muted text-center py-4">
                       No responses yet — signals will appear once the Market Signal agent runs
                     </td>
                   </tr>
@@ -821,8 +833,13 @@ export default function OpenclawTab() {
                       {selectedResponse.platform}
                     </span>
                     <span className={`badge bg-${STATUS_BADGES[selectedResponse.post_status] || 'secondary'}`} style={{ fontSize: '0.7rem' }}>
-                      {selectedResponse.post_status === 'ready_to_post' ? 'Ready to Post' : selectedResponse.post_status}
+                      {selectedResponse.post_status === 'ready_to_post' ? 'Ready to Post' : selectedResponse.post_status === 'ready_for_manual_post' ? 'Manual Queue' : selectedResponse.post_status}
                     </span>
+                    {selectedResponse.execution_type && (
+                      <span className={`badge bg-${selectedResponse.execution_type === 'human_execution' ? 'warning' : 'info'}`} style={{ fontSize: '0.65rem' }}>
+                        {selectedResponse.execution_type === 'human_execution' ? 'Manual Execution' : 'Auto Execution'}
+                      </span>
+                    )}
                     <span className="badge bg-secondary" style={{ fontSize: '0.65rem' }}>{selectedResponse.tone}</span>
                   </h6>
                   <button type="button" className="btn-close btn-close-sm" onClick={() => setSelectedResponse(null)} aria-label="Close" />
@@ -880,6 +897,41 @@ export default function OpenclawTab() {
                             </pre>
                           </details>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Intelligence Fields */}
+                  {(selectedResponse.reasoning || selectedResponse.recommended_action || selectedResponse.follow_up_suggestion) && (
+                    <div className="card border-0 bg-light mb-3">
+                      <div className="card-body py-2 px-3">
+                        <div className="fw-semibold small mb-1">Intelligence</div>
+                        {selectedResponse.recommended_action && (
+                          <div className="mb-1" style={{ fontSize: '0.72rem' }}>
+                            <strong>Action:</strong> {selectedResponse.recommended_action}
+                          </div>
+                        )}
+                        {selectedResponse.reasoning && (
+                          <div className="mb-1 text-muted" style={{ fontSize: '0.68rem' }}>
+                            <strong>Reasoning:</strong> {selectedResponse.reasoning}
+                          </div>
+                        )}
+                        {selectedResponse.follow_up_suggestion && (
+                          <div className="text-muted" style={{ fontSize: '0.68rem' }}>
+                            <strong>Follow-up:</strong> {selectedResponse.follow_up_suggestion}
+                          </div>
+                        )}
+                        <div className="d-flex gap-3 mt-2" style={{ fontSize: '0.68rem' }}>
+                          {selectedResponse.intent_level && (
+                            <span>Intent: <span className={`badge bg-${selectedResponse.intent_level === 'high' ? 'danger' : selectedResponse.intent_level === 'medium' ? 'warning' : 'secondary'}`} style={{ fontSize: '0.6rem' }}>{selectedResponse.intent_level}</span></span>
+                          )}
+                          {selectedResponse.priority_score != null && (
+                            <span>Priority: <strong>{selectedResponse.priority_score}</strong></span>
+                          )}
+                          {selectedResponse.lead && (
+                            <span>Lead: <strong>{selectedResponse.lead.name}</strong> ({selectedResponse.lead.pipeline_stage || 'new'})</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -974,7 +1026,7 @@ export default function OpenclawTab() {
                   </div>
 
                   {/* Mark as Posted (for approved/ready_to_post) */}
-                  {(selectedResponse.post_status === 'approved' || selectedResponse.post_status === 'ready_to_post') && (
+                  {(selectedResponse.post_status === 'approved' || selectedResponse.post_status === 'ready_to_post' || selectedResponse.post_status === 'ready_for_manual_post') && (
                     <div className="border-top mt-3 pt-3">
                       <div className="fw-semibold small mb-2">Mark as Manually Posted</div>
                       <div className="d-flex align-items-center gap-2">

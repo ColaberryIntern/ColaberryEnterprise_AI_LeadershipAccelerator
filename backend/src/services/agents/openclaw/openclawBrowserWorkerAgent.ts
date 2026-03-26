@@ -2,7 +2,7 @@ import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from '../../../models';
 import { postToDevTo, postToHashnode, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
 import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
-import { getStrategy, isPostCreationAllowed } from './openclawPlatformStrategy';
+import { getStrategy, isPostCreationAllowed, isHumanExecution } from './openclawPlatformStrategy';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
@@ -51,6 +51,17 @@ export async function runOpenclawBrowserWorkerAgent(
           await task.update({
             status: 'failed',
             error_message: response ? 'Response not approved' : 'Response not found',
+            completed_at: new Date(),
+            updated_at: new Date(),
+          });
+          continue;
+        }
+
+        // Hard safety gate — NEVER auto-post on HUMAN_EXECUTION platforms
+        if (isHumanExecution(response.platform)) {
+          await task.update({
+            status: 'failed',
+            error_message: `HUMAN_EXECUTION: ${response.platform} requires manual posting — auto-post blocked`,
             completed_at: new Date(),
             updated_at: new Date(),
           });
