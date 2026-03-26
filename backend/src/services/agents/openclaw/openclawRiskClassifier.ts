@@ -1,10 +1,10 @@
 /**
- * OpenClaw Risk Classifier — Phase 4
+ * OpenClaw Risk Classifier -Phase 4
  *
  * Consolidates scattered auto-approve/human-execution/stage logic
  * into a single deterministic classifier.
  *
- * Pure function — no DB writes, no side effects.
+ * Pure function -no DB writes, no side effects.
  */
 
 import {
@@ -39,9 +39,9 @@ export interface RiskClassificationResult {
  * Classify the automation risk for a given action context.
  *
  * Priority order:
- * 1. HUMAN_REQUIRED — hard rules that cannot be overridden
- * 2. ASSISTED_AUTOMATION — needs human approval before execution
- * 3. SAFE_AUTOMATION — can execute automatically
+ * 1. HUMAN_REQUIRED -hard rules that cannot be overridden
+ * 2. ASSISTED_AUTOMATION -needs human approval before execution
+ * 3. SAFE_AUTOMATION -can execute automatically
  */
 export function classifyAutomationRisk(
   input: RiskClassificationInput,
@@ -53,7 +53,7 @@ export function classifyAutomationRisk(
 
   // Rule 1: HUMAN_EXECUTION platforms ALWAYS require human
   if (isHumanExecution(input.platform)) {
-    reasons.push(`Platform "${input.platform}" is HUMAN_EXECUTION — never automate`);
+    reasons.push(`Platform "${input.platform}" is HUMAN_EXECUTION -never automate`);
     return { risk: 'HUMAN_REQUIRED', reasons, auto_approve: false, requires_human_review: true };
   }
 
@@ -71,7 +71,7 @@ export function classifyAutomationRisk(
 
   // Rule 4: Conversion-stage interactions (stage >= 5) always require human
   if (input.conversation_stage >= 5) {
-    reasons.push(`Stage ${input.conversation_stage} is conversion territory — human review required`);
+    reasons.push(`Stage ${input.conversation_stage} is conversion territory -human review required`);
     return { risk: 'HUMAN_REQUIRED', reasons, auto_approve: false, requires_human_review: true };
   }
 
@@ -79,13 +79,13 @@ export function classifyAutomationRisk(
 
   // Rule 5: High-value leads get human eyes
   if (input.lead_score >= 70) {
-    reasons.push(`Lead score ${input.lead_score} is high-value — human review recommended`);
+    reasons.push(`Lead score ${input.lead_score} is high-value -human review recommended`);
     return { risk: 'ASSISTED_AUTOMATION', reasons, auto_approve: false, requires_human_review: true };
   }
 
   // Rule 6: High intent at stage 3+ needs human judgment
   if (input.intent_level === 'high' && input.conversation_stage >= 3) {
-    reasons.push(`High intent at stage ${input.conversation_stage} — human review recommended`);
+    reasons.push(`High intent at stage ${input.conversation_stage} -human review recommended`);
     return { risk: 'ASSISTED_AUTOMATION', reasons, auto_approve: false, requires_human_review: true };
   }
 

@@ -36,7 +36,7 @@ const PLATFORM_WEIGHTS: Record<string, number> = {
 
 /**
  * Compute a composite lead score from conversation history and engagement.
- * Pure function — no DB writes. Returns score 0-100 and priority tier.
+ * Pure function -no DB writes. Returns score 0-100 and priority tier.
  */
 export function computeLeadScore(
   conversations: Array<{ current_stage: number; platform: string }>,

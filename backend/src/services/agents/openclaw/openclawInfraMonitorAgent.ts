@@ -86,7 +86,7 @@ export async function runOpenclawInfraMonitorAgent(
           entity_id: session.id,
         });
       } else if (healthScore < healthThreshold) {
-        // Low health — close and recreate
+        // Low health -close and recreate
         await session.update({
           session_status: 'closed',
           updated_at: new Date(),

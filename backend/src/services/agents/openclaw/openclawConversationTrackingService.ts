@@ -80,7 +80,7 @@ export async function updateConversationFromEvent(event: EngagementEvent): Promi
     raw: true,
   });
 
-  // Build history for detectConversationStage — their replies are engagement events
+  // Build history for detectConversationStage -their replies are engagement events
   // Our replies would be tracked in ResponseQueue; for now, all EngagementEvents are "their" activity
   const engagementHistory = allEvents.map(e => ({
     content: (e as any).content || '',
@@ -148,7 +148,7 @@ export async function updateConversationFromEvent(event: EngagementEvent): Promi
         await conversation.update({ priority_tier: scoreResult.priority_tier });
       }
     } catch (err) {
-      // Non-fatal — log but don't fail the conversation update
+      // Non-fatal -log but don't fail the conversation update
       console.error(`[ConversationTracking] Failed to update lead score for lead ${leadId}:`, err);
     }
   }
@@ -157,7 +157,7 @@ export async function updateConversationFromEvent(event: EngagementEvent): Promi
 }
 
 /**
- * Detect stalled conversations — active conversations silent 48h+ at stage >= 2.
+ * Detect stalled conversations -active conversations silent 48h+ at stage >= 2.
  * Called by ConversationSyncAgent on a schedule.
  */
 export async function detectStalledConversations(): Promise<number> {

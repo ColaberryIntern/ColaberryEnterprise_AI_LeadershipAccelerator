@@ -200,6 +200,9 @@ export const getOpenclawAgentActivity = (agentId: string, params?: Record<string
 export const markOpenclawResponsePosted = (id: string, post_url: string) =>
   api.post(`${BASE}/responses/${id}/mark-posted`, { post_url });
 
+export const postResponseViaBrowser = (id: string) =>
+  api.post<{ success: boolean; post_url: string; method: string }>(`${BASE}/responses/${id}/post-via-browser`);
+
 export const submitOpenclawSignal = (url: string, platform?: string) =>
   api.post<{ success: boolean; signal: OpenclawSignalItem; task_id: string }>(`${BASE}/signals/submit`, { url, platform });
 

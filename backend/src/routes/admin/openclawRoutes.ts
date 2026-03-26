@@ -391,6 +391,65 @@ router.post(`${BASE}/responses/:id/mark-posted`, async (req: Request, res: Respo
   }
 });
 
+// ── Admin-Triggered Browser Posting (HUMAN_EXECUTION platforms) ──
+
+router.post(`${BASE}/responses/:id/post-via-browser`, async (req: Request, res: Response) => {
+  try {
+    const response = await OpenclawResponse.findByPk(req.params.id as string);
+    if (!response) return res.status(404).json({ error: 'Response not found' });
+    if (response.post_status !== 'approved') {
+      return res.status(400).json({ error: `Response must be approved first (current: ${response.post_status})` });
+    }
+
+    const signal = response.signal_id
+      ? await OpenclawSignal.findByPk(response.signal_id)
+      : null;
+
+    if (!signal?.source_url) {
+      return res.status(400).json({ error: 'No source URL on signal. Cannot post via browser without a target article.' });
+    }
+
+    const { hasBrowserSupport, postViaBrowser } = await import('../../services/agents/openclaw/openclawBrowserPostingService');
+    if (!hasBrowserSupport(response.platform)) {
+      return res.status(400).json({ error: `Browser posting not supported for ${response.platform}` });
+    }
+
+    const browserResult = await postViaBrowser(
+      response.platform,
+      signal.source_url,
+      response.content,
+      {
+        headless: true,
+        screenshot_on_post: true,
+        min_delay_ms: 2000,
+        max_delay_ms: 6000,
+      },
+    );
+
+    await response.update({
+      post_status: 'posted',
+      posted_at: new Date(),
+      post_url: browserResult.post_url,
+      updated_at: new Date(),
+    });
+
+    if (signal) {
+      await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
+    }
+
+    res.json({
+      success: true,
+      response,
+      post_url: browserResult.post_url,
+      screenshot_path: browserResult.screenshot_path,
+      method: 'browser',
+    });
+  } catch (err: any) {
+    console.error('[OpenClaw] Browser posting error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Sessions ─────────────────────────────────────────────────────
 
 router.get(`${BASE}/sessions`, async (_req: Request, res: Response) => {

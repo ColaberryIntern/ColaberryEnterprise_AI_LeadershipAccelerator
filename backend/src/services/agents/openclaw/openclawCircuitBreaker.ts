@@ -1,10 +1,10 @@
 /**
- * OpenClaw Circuit Breaker — Phase 4
+ * OpenClaw Circuit Breaker -Phase 4
  *
  * Auto-disables automation when error rates exceed threshold per platform.
  * States: CLOSED (normal) → OPEN (blocked) → HALF_OPEN (testing) → CLOSED
  *
- * No new model — counts OpenclawTask success/failed in last hour per platform.
+ * No new model -counts OpenclawTask success/failed in last hour per platform.
  */
 
 import { Op } from 'sequelize';
@@ -38,7 +38,7 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
   half_open_max_attempts: 2,
 };
 
-// In-memory circuit state (resets on server restart — conservative approach)
+// In-memory circuit state (resets on server restart -conservative approach)
 const circuitStates: Map<string, { state: CircuitState; opened_at: Date | null; half_open_successes: number }> = new Map();
 
 // ─── Pure Function ───────────────────────────────────────────────────────────
@@ -67,10 +67,10 @@ export function evaluateCircuit(
   if (openedAt) {
     const elapsed = Date.now() - new Date(openedAt).getTime();
     if (elapsed < cfg.cooldown_ms) {
-      // Still within cooldown — stay OPEN
+      // Still within cooldown -stay OPEN
       return 'OPEN';
     }
-    // Cooldown expired — transition to HALF_OPEN
+    // Cooldown expired -transition to HALF_OPEN
     return 'HALF_OPEN';
   }
 
@@ -153,7 +153,7 @@ export async function checkCircuitBreaker(platform: string): Promise<CircuitStat
     if (prev) {
       // In HALF_OPEN: check if recent tasks succeeded
       if (errorCount === 0 && totalCount >= (DEFAULT_CONFIG.half_open_max_attempts)) {
-        // Enough successes in HALF_OPEN — close circuit
+        // Enough successes in HALF_OPEN -close circuit
         circuitStates.set(platform, { state: 'CLOSED', opened_at: null, half_open_successes: 0 });
       } else {
         circuitStates.set(platform, { ...prev, state: 'HALF_OPEN' });

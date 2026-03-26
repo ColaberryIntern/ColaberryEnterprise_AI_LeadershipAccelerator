@@ -59,18 +59,18 @@ export async function runOpenclawBrowserWorkerAgent(
           continue;
         }
 
-        // Hard safety gate — NEVER auto-post on HUMAN_EXECUTION platforms
+        // Hard safety gate -NEVER auto-post on HUMAN_EXECUTION platforms
         if (isHumanExecution(response.platform)) {
           await task.update({
             status: 'failed',
-            error_message: `HUMAN_EXECUTION: ${response.platform} requires manual posting — auto-post blocked`,
+            error_message: `HUMAN_EXECUTION: ${response.platform} requires manual posting -auto-post blocked`,
             completed_at: new Date(),
             updated_at: new Date(),
           });
           continue;
         }
 
-        // Platform strategy gate — block post creation on PASSIVE_SIGNAL platforms
+        // Platform strategy gate -block post creation on PASSIVE_SIGNAL platforms
         if ((task.task_type as string) === 'create_post' && !isPostCreationAllowed(response.platform)) {
           await task.update({
             status: 'failed',
@@ -81,7 +81,7 @@ export async function runOpenclawBrowserWorkerAgent(
           continue;
         }
 
-        // Circuit breaker gate — halt if error rate too high for this platform
+        // Circuit breaker gate -halt if error rate too high for this platform
         try {
           const circuitStatus = await checkCircuitBreaker(response.platform);
           if (circuitStatus.state === 'OPEN') {
@@ -93,9 +93,9 @@ export async function runOpenclawBrowserWorkerAgent(
             });
             continue;
           }
-        } catch { /* non-fatal — proceed if circuit check fails */ }
+        } catch { /* non-fatal -proceed if circuit check fails */ }
 
-        // Rate limit gate — defer if platform limit reached
+        // Rate limit gate -defer if platform limit reached
         try {
           const rateLimitResult = await isRateLimited(response.platform);
           if (!rateLimitResult.allowed) {
@@ -106,7 +106,7 @@ export async function runOpenclawBrowserWorkerAgent(
             });
             continue;
           }
-        } catch { /* non-fatal — proceed if rate check fails */ }
+        } catch { /* non-fatal -proceed if rate check fails */ }
 
         const signal = response.signal_id
           ? await OpenclawSignal.findByPk(response.signal_id)
@@ -141,7 +141,7 @@ export async function runOpenclawBrowserWorkerAgent(
               entity_id: response.id,
             });
           } catch (postErr: any) {
-            // API posting failed — try browser fallback before manual queue
+            // API posting failed -try browser fallback before manual queue
             console.warn(`[OpenClaw Posting] API post failed for ${response.platform}: ${postErr.message}`);
 
             if (hasBrowserSupport(response.platform) && signal?.source_url) {
@@ -213,7 +213,7 @@ export async function runOpenclawBrowserWorkerAgent(
         } else if (hasBrowserSupport(response.platform) && signal?.source_url) {
           // No API credentials but browser support available
           try {
-            console.log(`[OpenClaw Posting] No API creds — using browser for ${response.platform}...`);
+            console.log(`[OpenClaw Posting] No API creds -using browser for ${response.platform}...`);
             const browserResult = await postViaBrowser(
               response.platform,
               signal.source_url,
@@ -269,7 +269,7 @@ export async function runOpenclawBrowserWorkerAgent(
             });
           }
         } else {
-          // No API credentials and no browser support — manual queue
+          // No API credentials and no browser support -manual queue
           await response.update({
             post_status: 'ready_to_post',
             updated_at: new Date(),
@@ -278,7 +278,7 @@ export async function runOpenclawBrowserWorkerAgent(
           actions.push({
             campaign_id: '',
             action: 'queue_manual_post',
-            reason: `No API or browser support for ${response.platform} — queued for manual posting`,
+            reason: `No API or browser support for ${response.platform} -queued for manual posting`,
             confidence: 0.9,
             before_state: { post_status: 'approved' },
             after_state: { post_status: 'ready_to_post' },

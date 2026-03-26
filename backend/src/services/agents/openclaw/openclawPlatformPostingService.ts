@@ -98,7 +98,7 @@ export async function postToHashnode(
   const commentId = resp.data?.data?.addComment?.comment?.id;
   if (!commentId) throw new Error('Hashnode comment creation returned no ID');
 
-  // Hashnode comments live on the article page — link to the article directly
+  // Hashnode comments live on the article page -link to the article directly
   const postUrl = articleUrl || `https://hashnode.com/comment/${commentId}`;
 
   return {
@@ -110,7 +110,7 @@ export async function postToHashnode(
 /**
  * Publish an article to Medium via their API.
  * Requires MEDIUM_INTEGRATION_TOKEN environment variable.
- * Medium publishes articles (not comments) — content is repurposed as a standalone piece.
+ * Medium publishes articles (not comments) -content is repurposed as a standalone piece.
  */
 export async function postToMedium(
   title: string,
@@ -267,7 +267,7 @@ export async function postToBluesky(
   const appPassword = process.env.BLUESKY_APP_PASSWORD;
   if (!handle || !appPassword) throw new Error('BLUESKY_HANDLE and BLUESKY_APP_PASSWORD not configured');
 
-  // Authenticate — get session token
+  // Authenticate -get session token
   const sessionResp = await axios.post('https://bsky.social/xrpc/com.atproto.server.createSession', {
     identifier: handle,
     password: appPassword,

@@ -189,7 +189,7 @@ export async function runOpenclawLearningOptimizationAgent(
         });
       }
 
-      // 4. Topic performance — extract keywords from signal titles via response.signal_id
+      // 4. Topic performance -extract keywords from signal titles via response.signal_id
       const topicGroups: Record<string, { total_engagement: number; count: number }> = {};
       for (const resp of responses) {
         const metrics = resp.engagement_metrics || {};
@@ -261,7 +261,7 @@ export async function runOpenclawLearningOptimizationAgent(
         });
       }
 
-      // 5. Content effectiveness — per-response scoring record
+      // 5. Content effectiveness -per-response scoring record
       let effectivenessRecorded = 0;
       for (const resp of responses) {
         const metrics = resp.engagement_metrics || {};
@@ -322,7 +322,7 @@ export async function runOpenclawLearningOptimizationAgent(
         });
       }
 
-      // 6. Revenue attribution — track which tones/platforms lead to conversions
+      // 6. Revenue attribution -track which tones/platforms lead to conversions
       const convertedConversations = await OpenclawConversation.findAll({
         where: { current_stage: { [Op.gte]: 5 } },
         attributes: ['id', 'platform', 'current_stage', 'first_response_id'],
@@ -400,7 +400,7 @@ export async function runOpenclawLearningOptimizationAgent(
         }
       }
 
-      // 7. Response outcome tracking — which responses led to replies
+      // 7. Response outcome tracking -which responses led to replies
       const responsesWithEngagement = await OpenclawResponse.findAll({
         where: {
           post_status: 'posted',

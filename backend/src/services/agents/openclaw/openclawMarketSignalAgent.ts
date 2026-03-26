@@ -40,7 +40,7 @@ export async function runOpenclawMarketSignalAgent(
       platformMultipliers.set(pp.platform, pp.scan_frequency_multiplier);
     }
   } catch {
-    // Non-fatal — fall back to base config
+    // Non-fatal -fall back to base config
   }
 
   for (const platform of platforms) {
@@ -194,7 +194,7 @@ async function scanPlatform(
     }
 
     case 'hashnode': {
-      // Hashnode GraphQL API — feed query with tag ObjectIDs
+      // Hashnode GraphQL API -feed query with tag ObjectIDs
       // Tag IDs: ai=56744721958ef13879b9488e, artificial-intelligence=56744721958ef13879b94927,
       //          machine-learning=56744722958ef13879b950a8, llm=635ad52efe8087002dee4707
       // Use only high-quality tags (artificial-intelligence, machine-learning, llm)
@@ -255,7 +255,7 @@ async function scanPlatform(
     }
 
     case 'medium': {
-      // Medium tag RSS feeds — parse XML for article discovery
+      // Medium tag RSS feeds -parse XML for article discovery
       const mediumTags = ['artificial-intelligence', 'machine-learning', 'ai-leadership'];
       for (const tag of mediumTags.slice(0, 2)) {
         try {
@@ -264,7 +264,7 @@ async function scanPlatform(
             timeout: 15000,
           });
           const xml: string = resp.data;
-          // Simple RSS item extraction — no XML parser dependency needed
+          // Simple RSS item extraction -no XML parser dependency needed
           const itemRegex = /<item>([\s\S]*?)<\/item>/g;
           let match;
           while ((match = itemRegex.exec(xml)) !== null && results.length < maxResults) {
@@ -342,7 +342,7 @@ async function scanPlatform(
     }
 
     case 'twitter': {
-      // Twitter/X Search API v2 — recent tweet search
+      // Twitter/X Search API v2 -recent tweet search
       const twitterBearer = process.env.TWITTER_BEARER_TOKEN;
       if (!twitterBearer) break;
       try {
@@ -388,7 +388,7 @@ async function scanPlatform(
     }
 
     case 'bluesky': {
-      // Bluesky AT Protocol — public search (no auth needed)
+      // Bluesky AT Protocol -public search (no auth needed)
       try {
         const resp = await axios.get('https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts', {
           params: { q: query, limit: Math.min(maxResults, 25), sort: 'latest' },
@@ -422,7 +422,7 @@ async function scanPlatform(
     }
 
     case 'youtube': {
-      // YouTube Data API v3 — search for AI-related videos
+      // YouTube Data API v3 -search for AI-related videos
       const ytApiKey = process.env.YOUTUBE_API_KEY;
       if (!ytApiKey) break;
       try {
@@ -452,7 +452,7 @@ async function scanPlatform(
             for (const v of statsResp.data?.items || []) {
               statsMap[v.id] = v.statistics || {};
             }
-          } catch { /* stats are optional — continue without them */ }
+          } catch { /* stats are optional -continue without them */ }
         }
         for (const item of items) {
           const videoId = item.id?.videoId;
@@ -480,7 +480,7 @@ async function scanPlatform(
     }
 
     case 'producthunt': {
-      // Product Hunt GraphQL API — recent AI product launches
+      // Product Hunt GraphQL API -recent AI product launches
       const phToken = process.env.PRODUCTHUNT_ACCESS_TOKEN;
       if (!phToken) break;
       try {
@@ -534,19 +534,19 @@ async function scanPlatform(
     }
 
     case 'quora':
-      // Quora has no public API — signals are submitted manually via admin UI
+      // Quora has no public API -signals are submitted manually via admin UI
       break;
 
     case 'facebook_groups':
-      // Facebook Groups has no public API — signals are submitted manually via admin UI
+      // Facebook Groups has no public API -signals are submitted manually via admin UI
       break;
 
     case 'linkedin_comments':
-      // LinkedIn comment opportunities have no public search API — signals are submitted manually via admin UI
+      // LinkedIn comment opportunities have no public search API -signals are submitted manually via admin UI
       break;
 
     default:
-      // Unsupported platform — skip silently
+      // Unsupported platform -skip silently
       break;
   }
 

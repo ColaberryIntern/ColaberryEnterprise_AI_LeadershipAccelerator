@@ -103,7 +103,7 @@ export async function runOpenclawSupervisorAgent(
                     actions.push({
                       campaign_id: '',
                       action: 'block_task_circuit_open',
-                      reason: `Circuit OPEN for ${response.platform} (error rate: ${circuit.error_rate}%) — skipping task ${task.id}`,
+                      reason: `Circuit OPEN for ${response.platform} (error rate: ${circuit.error_rate}%) -skipping task ${task.id}`,
                       confidence: 1,
                       before_state: { status: 'pending' },
                       after_state: { status: 'pending' },
@@ -122,7 +122,7 @@ export async function runOpenclawSupervisorAgent(
                     actions.push({
                       campaign_id: '',
                       action: 'defer_task_rate_limited',
-                      reason: `Rate limited on ${response.platform}: ${rateResult.reason} — deferring task ${task.id}`,
+                      reason: `Rate limited on ${response.platform}: ${rateResult.reason} -deferring task ${task.id}`,
                       confidence: 1,
                       before_state: { status: 'pending' },
                       after_state: { status: 'pending' },
@@ -134,7 +134,7 @@ export async function runOpenclawSupervisorAgent(
                   }
                 } catch { /* non-fatal */ }
               }
-            } catch { /* non-fatal — proceed with assignment */ }
+            } catch { /* non-fatal -proceed with assignment */ }
           }
         }
 

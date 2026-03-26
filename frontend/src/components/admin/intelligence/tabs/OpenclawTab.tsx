@@ -7,6 +7,7 @@ import {
   approveOpenclawResponse,
   rejectOpenclawResponse,
   markOpenclawResponsePosted,
+  postResponseViaBrowser,
   submitOpenclawSignal,
   generateLinkedInPost,
   getOpenclawAgentActivity,
@@ -329,6 +330,18 @@ export default function OpenclawTab() {
     } catch {
       /* ignore */
     }
+  };
+
+  const [browserPostingId, setBrowserPostingId] = useState<string | null>(null);
+  const handleBrowserPost = async (id: string) => {
+    setBrowserPostingId(id);
+    try {
+      await postResponseViaBrowser(id);
+      fetchData();
+    } catch {
+      /* ignore */
+    }
+    setBrowserPostingId(null);
   };
 
   if (loading && !dashboard) {
@@ -905,6 +918,16 @@ export default function OpenclawTab() {
                           </button>
                         </div>
                       )}
+                      {resp.post_status === 'approved' && ['medium', 'devto'].includes(resp.platform) && (
+                        <button
+                          className="btn btn-sm btn-outline-primary py-0 px-2"
+                          style={{ fontSize: '0.65rem' }}
+                          disabled={browserPostingId === resp.id}
+                          onClick={(e) => { e.stopPropagation(); handleBrowserPost(resp.id); }}
+                        >
+                          {browserPostingId === resp.id ? <span className="spinner-border spinner-border-sm" style={{ width: '0.7rem', height: '0.7rem' }} /> : 'Post via Browser'}
+                        </button>
+                      )}
                       {(resp.post_status === 'ready_to_post' || resp.post_status === 'ready_for_manual_post') && (
                         <button
                           className="btn btn-sm btn-outline-primary py-0 px-2"
@@ -1198,6 +1221,24 @@ export default function OpenclawTab() {
                     <span>Created: {new Date(selectedResponse.created_at).toLocaleString()}</span>
                     <span>ID: <code style={{ fontSize: '0.6rem' }}>{selectedResponse.id.slice(0, 8)}</code></span>
                   </div>
+
+                  {/* Post via Browser (for approved on browser-supported platforms) */}
+                  {selectedResponse.post_status === 'approved' && ['medium', 'devto'].includes(selectedResponse.platform) && (
+                    <div className="border-top mt-3 pt-3">
+                      <button
+                        className="btn btn-sm btn-primary"
+                        disabled={browserPostingId === selectedResponse.id}
+                        onClick={() => { handleBrowserPost(selectedResponse.id); setSelectedResponse(null); }}
+                      >
+                        {browserPostingId === selectedResponse.id
+                          ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: '0.7rem', height: '0.7rem' }} />Posting...</>
+                          : <><i className="bi bi-globe me-1" />Post via Browser</>}
+                      </button>
+                      <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
+                        Automates posting to {selectedResponse.platform} using a browser session
+                      </div>
+                    </div>
+                  )}
 
                   {/* Mark as Posted (for approved/ready_to_post) */}
                   {(selectedResponse.post_status === 'approved' || selectedResponse.post_status === 'ready_to_post' || selectedResponse.post_status === 'ready_for_manual_post') && (

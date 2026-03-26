@@ -8,7 +8,7 @@ import { getStrategy, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, de
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * ResponseOrchestratorAgent — generates conversation follow-up drafts
+ * ResponseOrchestratorAgent -generates conversation follow-up drafts
  * for new high-intent engagement events.
  *
  * Schedule: 10,25,40,55 * * * * (every 15 min)

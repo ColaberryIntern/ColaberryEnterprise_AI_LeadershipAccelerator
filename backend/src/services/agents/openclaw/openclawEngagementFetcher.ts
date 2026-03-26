@@ -286,7 +286,7 @@ export async function fetchProductHuntComments(postUrl: string): Promise<Fetched
 export async function fetchEngagementsForUrl(postUrl: string): Promise<FetchedEngagement[]> {
   if (postUrl.includes('dev.to')) return fetchDevtoComments(postUrl);
   if (postUrl.includes('hashnode.com')) return fetchHashnodeComments(postUrl);
-  // Discourse forums — check for /t/ pattern
+  // Discourse forums -check for /t/ pattern
   if (/\/t\/[^/]+\/\d+/.test(postUrl)) return fetchDiscourseReplies(postUrl);
   if (postUrl.includes('twitter.com') || postUrl.includes('x.com')) return fetchTwitterReplies(postUrl);
   if (postUrl.includes('bsky.app')) return fetchBlueskyReplies(postUrl);

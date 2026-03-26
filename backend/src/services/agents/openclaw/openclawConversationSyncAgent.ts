@@ -5,7 +5,7 @@ import { updateLeadAndOpportunityScore } from './openclawLeadScoringService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * ConversationSyncAgent — safety net for conversation integrity.
+ * ConversationSyncAgent -safety net for conversation integrity.
  *
  * 1. Link orphaned EngagementEvents (conversation_id IS NULL)
  * 2. Detect stalled conversations (48h+ silence at stage >= 2)

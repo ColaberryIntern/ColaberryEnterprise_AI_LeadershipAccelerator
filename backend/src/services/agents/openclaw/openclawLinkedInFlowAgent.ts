@@ -6,9 +6,9 @@ import { generateContent } from './openclawAiHelper';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * LinkedInFlowAgent — generates LinkedIn action suggestions:
+ * LinkedInFlowAgent -generates LinkedIn action suggestions:
  * comments, connection requests, DM follow-ups.
- * All actions created as 'pending' — NEVER auto-executed.
+ * All actions created as 'pending' -NEVER auto-executed.
  *
  * Schedule: 0 9,15 * * 1-5 (9am + 3pm UTC, weekdays)
  */
@@ -24,7 +24,7 @@ export async function runLinkedInFlowAgent(
   const maxDMs = config.max_dms || 2;
 
   try {
-    // 1. Comment suggestions — find LinkedIn signals worth engaging with
+    // 1. Comment suggestions -find LinkedIn signals worth engaging with
     const recentLinkedInSignals = await OpenclawSignal.findAll({
       where: {
         platform: 'linkedin',
@@ -87,7 +87,7 @@ Requirements:
       }
     }
 
-    // 2. Connection requests — high-intent LinkedIn engagers
+    // 2. Connection requests -high-intent LinkedIn engagers
     const highIntentLinkedIn = await EngagementEvent.findAll({
       where: {
         platform: { [Op.in]: ['linkedin', 'devto', 'hashnode'] },
@@ -131,7 +131,7 @@ Requirements:
           target_user_name: engagement.user_name,
           target_user_title: engagement.user_title || undefined,
           suggested_text: connectionMsg,
-          context: `High-intent engager (${engagement.intent_score}) — ${engagement.role_seniority}`,
+          context: `High-intent engager (${engagement.intent_score}) -${engagement.role_seniority}`,
           priority: 8,
           status: 'pending',
           source_engagement_id: engagement.id,
@@ -152,7 +152,7 @@ Requirements:
       }
     }
 
-    // 3. DM follow-ups — for connected high-intent leads
+    // 3. DM follow-ups -for connected high-intent leads
     const dmCandidates = await EngagementEvent.findAll({
       where: {
         platform: { [Op.in]: ['linkedin'] },

@@ -1,5 +1,5 @@
 /**
- * OpenClaw Signal Scaler — Phase 4
+ * OpenClaw Signal Scaler -Phase 4
  *
  * Feeds learning data back into signal scanning to dynamically
  * weight keywords and adjust scan frequency per platform.
@@ -77,7 +77,7 @@ export function computePlatformScanPriority(
     return platforms.map(p => ({
       platform: p,
       scan_frequency_multiplier: 1.0,
-      reason: 'No learning data available — default frequency',
+      reason: 'No learning data available -default frequency',
     }));
   }
 
@@ -95,7 +95,7 @@ export function computePlatformScanPriority(
       return {
         platform,
         scan_frequency_multiplier: 1.0,
-        reason: 'Insufficient data — default frequency',
+        reason: 'Insufficient data -default frequency',
       };
     }
 
@@ -107,11 +107,11 @@ export function computePlatformScanPriority(
 
     let reason: string;
     if (multiplier > 1.2) {
-      reason = `High engagement (${learning.metric_value.toFixed(1)} avg) — increased scan frequency`;
+      reason = `High engagement (${learning.metric_value.toFixed(1)} avg) -increased scan frequency`;
     } else if (multiplier < 0.8) {
-      reason = `Low engagement (${learning.metric_value.toFixed(1)} avg) — reduced scan frequency`;
+      reason = `Low engagement (${learning.metric_value.toFixed(1)} avg) -reduced scan frequency`;
     } else {
-      reason = `Average engagement (${learning.metric_value.toFixed(1)} avg) — standard frequency`;
+      reason = `Average engagement (${learning.metric_value.toFixed(1)} avg) -standard frequency`;
     }
 
     return { platform, scan_frequency_multiplier: multiplier, reason };

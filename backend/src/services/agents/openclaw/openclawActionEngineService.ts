@@ -1,5 +1,5 @@
 /**
- * OpenClaw Action Engine — Phase 3
+ * OpenClaw Action Engine -Phase 3
  *
  * Pure functions that compute "what should Ali do RIGHT NOW".
  * No DB writes, no side effects. All queries are read-only.
@@ -192,7 +192,7 @@ export function detectHesitation(
     if (conversation.current_stage <= 3) {
       recommendation = 'Share a relevant case study or framework to re-engage';
     } else {
-      recommendation = 'Offer a no-commitment resource — article, template, or short video';
+      recommendation = 'Offer a no-commitment resource -article, template, or short video';
     }
   }
 
@@ -273,8 +273,8 @@ export function classifyAction(
       type: 'close_opportunity',
       description: `Stage ${conversation.current_stage} conversation ready for manual close`,
       recommended_action: conversation.current_stage === 6
-        ? 'Follow up on the call/resource offer — confirm meeting or send reminder'
-        : 'Update conversation status — mark as won or lost',
+        ? 'Follow up on the call/resource offer -confirm meeting or send reminder'
+        : 'Update conversation status -mark as won or lost',
     };
   }
 
@@ -292,7 +292,7 @@ export function classifyAction(
     return {
       type: 'respond_to_interest',
       description: `Interest signal detected: "${highConfidence[0].signal}"`,
-      recommended_action: 'Respond to their interest — acknowledge and advance the conversation',
+      recommended_action: 'Respond to their interest -acknowledge and advance the conversation',
     };
   }
 
@@ -301,8 +301,8 @@ export function classifyAction(
     return {
       type: 'follow_up_required',
       description: hesitation.detected
-        ? `Stalled (${Math.round(urgency.hours_silent)}h silent) — hesitation detected`
-        : `Stalled for ${Math.round(urgency.hours_silent)}h — needs follow-up`,
+        ? `Stalled (${Math.round(urgency.hours_silent)}h silent) -hesitation detected`
+        : `Stalled for ${Math.round(urgency.hours_silent)}h -needs follow-up`,
       recommended_action: hesitation.detected
         ? hesitation.recommendation
         : `Send a gentle follow-up referencing a recent development on their topic`,
@@ -318,7 +318,7 @@ export function classifyAction(
     return {
       type: 'advance_stage',
       description: `Active conversation at stage ${conversation.current_stage} with ${conversation.their_reply_count} replies`,
-      recommended_action: 'Continue engagement — deepen the conversation with a framework or qualifying question',
+      recommended_action: 'Continue engagement -deepen the conversation with a framework or qualifying question',
     };
   }
 
@@ -326,14 +326,14 @@ export function classifyAction(
   return {
     type: 'follow_up_required',
     description: `Conversation at stage ${conversation.current_stage} needs attention (${Math.round(urgency.hours_silent)}h since last activity)`,
-    recommended_action: 'Check in with a value-add message — share insight or ask about their progress',
+    recommended_action: 'Check in with a value-add message -share insight or ask about their progress',
   };
 }
 
 // ─── Daily Action Queue ──────────────────────────────────────────────────────
 
 /**
- * Build the daily action queue — ranked list of what Ali should do right now.
+ * Build the daily action queue -ranked list of what Ali should do right now.
  * Queries active/stalled conversations at stage >= 2, scores them, returns top N.
  */
 export async function buildDailyActionQueue(

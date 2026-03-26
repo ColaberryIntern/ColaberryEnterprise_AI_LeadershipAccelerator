@@ -2,33 +2,33 @@
  * OpenClaw Platform Strategy Layer
  *
  * Central source of truth for platform behavioral rules.
- * Every agent imports from here — no platform-specific logic lives elsewhere.
+ * Every agent imports from here -no platform-specific logic lives elsewhere.
  *
  * Two orthogonal axes:
  *
- * Axis 1 — Content Strategy (controls LLM prompts, tone, link rules):
- *   PASSIVE_SIGNAL     — React only, no posts, no links, no promo
- *   HYBRID_ENGAGEMENT  — Engage first, light posting after warmup
- *   AUTHORITY_BROADCAST — Content-first, CTAs OK, conversion-aware
+ * Axis 1 -Content Strategy (controls LLM prompts, tone, link rules):
+ *   PASSIVE_SIGNAL     -React only, no posts, no links, no promo
+ *   HYBRID_ENGAGEMENT  -Engage first, light posting after warmup
+ *   AUTHORITY_BROADCAST -Content-first, CTAs OK, conversion-aware
  *
- * Axis 2 — Execution Type (controls posting behavior):
- *   API_POSTING        — Auto-approve, auto-post via API, rate limited
- *   HUMAN_EXECUTION    — Generate response, queue for manual copy-paste, NEVER auto-post
+ * Axis 2 -Execution Type (controls posting behavior):
+ *   API_POSTING        -Auto-approve, auto-post via API, rate limited
+ *   HUMAN_EXECUTION    -Generate response, queue for manual copy-paste, NEVER auto-post
  */
 
-// ─── Strategy Types (Axis 1 — Content Strategy) ─────────────────────────────
+// ─── Strategy Types (Axis 1 -Content Strategy) ─────────────────────────────
 
 export type PlatformStrategyType = 'PASSIVE_SIGNAL' | 'HYBRID_ENGAGEMENT' | 'AUTHORITY_BROADCAST';
 
 export const PLATFORM_STRATEGY: Record<string, PlatformStrategyType> = {
-  // PASSIVE — reactive only, no self-promotion, blend in
+  // PASSIVE -reactive only, no self-promotion, blend in
   reddit: 'PASSIVE_SIGNAL',
   quora: 'PASSIVE_SIGNAL',
   hackernews: 'PASSIVE_SIGNAL',
   facebook_groups: 'PASSIVE_SIGNAL',
   linkedin_comments: 'PASSIVE_SIGNAL',
 
-  // HYBRID — engage first, light posting after warmup
+  // HYBRID -engage first, light posting after warmup
   twitter: 'HYBRID_ENGAGEMENT',
   bluesky: 'HYBRID_ENGAGEMENT',
   devto: 'HYBRID_ENGAGEMENT',
@@ -36,18 +36,18 @@ export const PLATFORM_STRATEGY: Record<string, PlatformStrategyType> = {
   discourse: 'HYBRID_ENGAGEMENT',
   producthunt: 'HYBRID_ENGAGEMENT',
 
-  // AUTHORITY — you control the narrative, content-first
+  // AUTHORITY -you control the narrative, content-first
   linkedin: 'AUTHORITY_BROADCAST',
   medium: 'AUTHORITY_BROADCAST',
   youtube: 'AUTHORITY_BROADCAST',
 };
 
-// ─── Execution Types (Axis 2 — Posting Behavior) ────────────────────────────
+// ─── Execution Types (Axis 2 -Posting Behavior) ────────────────────────────
 
 export type PlatformExecutionType = 'API_POSTING' | 'HUMAN_EXECUTION';
 
 export const PLATFORM_EXECUTION: Record<string, PlatformExecutionType> = {
-  // API_POSTING — auto-approve, auto-post, rate limited
+  // API_POSTING -auto-approve, auto-post, rate limited
   devto: 'API_POSTING',
   hashnode: 'API_POSTING',
   discourse: 'API_POSTING',
@@ -56,7 +56,7 @@ export const PLATFORM_EXECUTION: Record<string, PlatformExecutionType> = {
   producthunt: 'API_POSTING',
   youtube: 'API_POSTING',
 
-  // HUMAN_EXECUTION — generate response, queue for manual posting, NEVER auto-post
+  // HUMAN_EXECUTION -generate response, queue for manual posting, NEVER auto-post
   reddit: 'HUMAN_EXECUTION',
   quora: 'HUMAN_EXECUTION',
   hackernews: 'HUMAN_EXECUTION',
@@ -85,9 +85,9 @@ export function isLinkAllowed(platform: string): boolean {
 // ─── LLM Prompt Instructions Per Strategy ────────────────────────────────────
 
 export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> = {
-  PASSIVE_SIGNAL: `CRITICAL PLATFORM RULES — PASSIVE ENGAGEMENT:
+  PASSIVE_SIGNAL: `CRITICAL PLATFORM RULES -PASSIVE ENGAGEMENT:
 - You are responding to an EXISTING conversation. Generate a reply/comment ONLY.
-- Do NOT include any URLs or links — not even helpful resource links.
+- Do NOT include any URLs or links -not even helpful resource links.
 - Do NOT use promotional language, CTAs, or calls to action.
 - Do NOT mention any company, product, program, or brand by name.
 - Do NOT say "our program", "our accelerator", "our team", "we offer", or similar.
@@ -95,16 +95,16 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 - Sound like a knowledgeable practitioner, not a marketer.
 - If in doubt, err on the side of being MORE subtle, not less.`,
 
-  HYBRID_ENGAGEMENT: `PLATFORM RULES — ENGAGEMENT-FIRST:
+  HYBRID_ENGAGEMENT: `PLATFORM RULES -ENGAGEMENT-FIRST:
 - Prioritize engagement: reply to the conversation with genuine value FIRST.
 - Lead with insight, NOT self-promotion.
 - A single, natural resource link at the very end is acceptable if it flows organically.
 - Light self-reference is OK ("in my experience with enterprise teams...") but keep it subtle.
 - Do NOT lead with or center your response around a link or CTA.`,
 
-  AUTHORITY_BROADCAST: `PLATFORM RULES — AUTHORITY CONTENT:
+  AUTHORITY_BROADCAST: `PLATFORM RULES -AUTHORITY CONTENT:
 - Create authoritative, original content. You are the thought leader.
-- Include a tracked link — conversion-aware messaging is appropriate here.
+- Include a tracked link -conversion-aware messaging is appropriate here.
 - Structured CTAs are acceptable (e.g., "Learn more about...", "Join our next cohort").
 - Be professional, data-driven, and opinionated. Take clear positions.
 - Link to resources that genuinely help the reader.`,
@@ -116,9 +116,9 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 // NEVER skip stages. NEVER pitch before Stage 5.
 //
 // Stages 1-5: Automated engagement (existing)
-// Stage 6: Conversion ready — interest confirmed, call/link offered
-// Stage 7: Call scheduled — booked or DM initiated
-// Stage 8: Closed — won or lost (terminal, manual admin update)
+// Stage 6: Conversion ready -interest confirmed, call/link offered
+// Stage 7: Call scheduled -booked or DM initiated
+// Stage 8: Closed -won or lost (terminal, manual admin update)
 
 export interface EngagementEvent {
   content?: string;
@@ -128,7 +128,7 @@ export interface EngagementEvent {
 
 /**
  * Detect which conversation stage we're at based on engagement history.
- * History should be chronological — their replies to our comments.
+ * History should be chronological -their replies to our comments.
  */
 export function detectConversationStage(history: EngagementEvent[]): number {
   if (!history || history.length === 0) return 1;
@@ -164,56 +164,56 @@ export function detectConversationStage(history: EngagementEvent[]): number {
 }
 
 export const CONVERSION_STAGE_PROMPTS: Record<number, string> = {
-  1: `CONVERSATION STAGE 1 — INITIAL ENGAGEMENT:
+  1: `CONVERSATION STAGE 1 -INITIAL ENGAGEMENT:
 Generate a reply that provides INSIGHT ONLY.
 - No pitch, no link, no self-reference, no company mention.
 - Trigger curiosity with a counter-intuitive or surprising observation.
 - Keep it under 3 sentences.
 - Sound like a knowledgeable peer, not a sales rep.
-Example: "Most teams don't struggle with the tools — they struggle because nothing actually gets wired into real workflows."`,
+Example: "Most teams don't struggle with the tools -they struggle because nothing actually gets wired into real workflows."`,
 
-  2: `CONVERSATION STAGE 2 — QUALIFICATION:
+  2: `CONVERSATION STAGE 2 -QUALIFICATION:
 The user has responded to our comment. Ask a qualifying question:
 - Determine if they are actively solving this problem or just exploring.
 - Keep it conversational, NOT salesy.
 - Mirror their language and tone.
 - One question, not a list of questions.
-Example: "Out of curiosity — is this something you're actively trying to fix right now or just exploring?"`,
+Example: "Out of curiosity -is this something you're actively trying to fix right now or just exploring?"`,
 
-  3: `CONVERSATION STAGE 3 — DEEPENING:
+  3: `CONVERSATION STAGE 3 -DEEPENING:
 The user is actively engaged. Provide structured thinking:
 - Share a framework or mental model (3 bullets max).
-- Ask about THEIR specific use case — keep THEM talking.
-- Do NOT solve everything yet — leave room for continued conversation.
+- Ask about THEIR specific use case -keep THEM talking.
+- Do NOT solve everything yet -leave room for continued conversation.
 - Still NO links, NO CTAs.
 Example: "What's usually missing is: (1) how signals are defined, (2) what decisions get made, (3) what actions actually run. What kind of use case are you working on?"`,
 
-  4: `CONVERSATION STAGE 4 — TRANSITION:
+  4: `CONVERSATION STAGE 4 -TRANSITION:
 Introduce that you help teams solve this, but do NOT push:
 - "This is actually something I've been helping teams structure internally..."
 - "If it's helpful, I can show you how I think about it based on your use case."
-- Wait for THEM to say "yes" — do NOT drop a link or call CTA yet.
+- Wait for THEM to say "yes" -do NOT drop a link or call CTA yet.
 - If they don't bite, gracefully continue providing value. Never force it.`,
 
-  5: `CONVERSATION STAGE 5 — CONVERSION (THEY EXPRESSED INTEREST):
+  5: `CONVERSATION STAGE 5 -CONVERSION (THEY EXPRESSED INTEREST):
 The user has explicitly asked for more. NOW you may offer ONE of these:
-- Option A (soft call): "Easiest way is probably to walk through it quickly — happy to jump on a quick call if that works."
+- Option A (soft call): "Easiest way is probably to walk through it quickly -happy to jump on a quick call if that works."
 - Option B (resource link): "I actually broke this down here if you want to take a look first: [link]"
 - Pick ONE option, not both.
 - Keep it casual, not transactional.
 - This is an invitation, not a close.`,
 
-  6: `CONVERSATION STAGE 6 — FOLLOW-UP (OFFERED, AWAITING RESPONSE):
+  6: `CONVERSATION STAGE 6 -FOLLOW-UP (OFFERED, AWAITING RESPONSE):
 You already offered a call or resource link. If they haven't responded:
 - Send ONE gentle follow-up after 48h.
 - Reference a recent development or new angle on their problem.
-- Do NOT repeat the call offer — they saw it.
+- Do NOT repeat the call offer -they saw it.
 - If they decline or ghost after this, gracefully close.
-Example: "Saw an interesting case study on exactly the challenge you described — thought of you. No pressure either way."`,
+Example: "Saw an interesting case study on exactly the challenge you described -thought of you. No pressure either way."`,
 };
 
 // ─── Post-Generation Validation Gate ─────────────────────────────────────────
-// Deterministic backstop — catches LLM violations regardless of prompt adherence.
+// Deterministic backstop -catches LLM violations regardless of prompt adherence.
 
 export interface ValidationResult {
   passed: boolean;
@@ -253,7 +253,7 @@ export function validateContentForStrategy(content: string, platform: string): V
     }
   }
 
-  // AUTHORITY_BROADCAST: no content rejection — most permissive
+  // AUTHORITY_BROADCAST: no content rejection -most permissive
   return { passed: true };
 }
 
@@ -279,9 +279,9 @@ export function validateContentForStage(content: string, stage: number): Validat
     }
   }
 
-  // Stages 7-8: terminal — no automated content should be generated
+  // Stages 7-8: terminal -no automated content should be generated
   if (stage >= 7) {
-    return { passed: false, reason: `Stage ${stage}: no automated content — human handles post-booking` };
+    return { passed: false, reason: `Stage ${stage}: no automated content -human handles post-booking` };
   }
 
   return { passed: true };
@@ -290,7 +290,7 @@ export function validateContentForStage(content: string, stage: number): Validat
 // ─── Conversion Signal Detection ─────────────────────────────────────────────
 
 const INTEREST_SIGNALS: Array<{ pattern: string; confidence: number }> = [
-  // High confidence — explicit ask
+  // High confidence -explicit ask
   { pattern: 'sign me up', confidence: 1.0 },
   { pattern: 'where can i', confidence: 0.95 },
   { pattern: 'send me', confidence: 0.95 },
@@ -299,7 +299,7 @@ const INTEREST_SIGNALS: Array<{ pattern: string; confidence: number }> = [
   { pattern: 'happy to chat', confidence: 0.9 },
   { pattern: "let's connect", confidence: 0.9 },
   { pattern: 'yes please', confidence: 0.9 },
-  // Medium-high — clear interest
+  // Medium-high -clear interest
   { pattern: 'show me', confidence: 0.85 },
   { pattern: 'can you show', confidence: 0.85 },
   { pattern: 'how do i', confidence: 0.8 },
@@ -308,7 +308,7 @@ const INTEREST_SIGNALS: Array<{ pattern: string; confidence: number }> = [
   { pattern: "i'd like to", confidence: 0.8 },
   { pattern: 'interested', confidence: 0.75 },
   { pattern: 'sounds great', confidence: 0.75 },
-  // Medium — implied interest
+  // Medium -implied interest
   { pattern: 'that would be', confidence: 0.7 },
   { pattern: "that'd be", confidence: 0.7 },
   { pattern: 'can we talk', confidence: 0.85 },
@@ -357,7 +357,7 @@ export function validateFollowUpContent(content: string, stage: number, followUp
 
   // Block aggressive language
   if (AGGRESSIVE_PATTERNS.test(content)) {
-    return { passed: false, reason: 'Follow-up contains aggressive/urgency language — blocked' };
+    return { passed: false, reason: 'Follow-up contains aggressive/urgency language -blocked' };
   }
 
   // Follow-ups must also pass stage validation
@@ -367,9 +367,9 @@ export function validateFollowUpContent(content: string, stage: number, followUp
 // ─── Auto-Approve Logic ─────────────────────────────────────────────────────
 
 const STRATEGY_AUTO_APPROVE: Record<PlatformStrategyType, boolean> = {
-  PASSIVE_SIGNAL: false,       // human review — these platforms ban mistakes
+  PASSIVE_SIGNAL: false,       // human review -these platforms ban mistakes
   HYBRID_ENGAGEMENT: true,     // auto-approve after validation passes
-  AUTHORITY_BROADCAST: false,   // human review — authority content must be high-quality
+  AUTHORITY_BROADCAST: false,   // human review -authority content must be high-quality
 };
 
 /**

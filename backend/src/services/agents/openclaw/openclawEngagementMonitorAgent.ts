@@ -9,7 +9,7 @@ import { updateConversationFromEvent } from './openclawConversationTrackingServi
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * EngagementMonitorAgent — scans posted responses and authority content
+ * EngagementMonitorAgent -scans posted responses and authority content
  * for new engagement (comments/replies) via platform APIs.
  *
  * Schedule: 0,30 * * * * (every 30 min)
@@ -84,7 +84,7 @@ export async function runEngagementMonitorAgent(
             status: 'new',
           });
 
-          // Wire conversation tracking — link event to conversation state machine
+          // Wire conversation tracking -link event to conversation state machine
           try {
             await updateConversationFromEvent(newEvent);
           } catch (convErr: any) {
@@ -124,7 +124,7 @@ export async function runEngagementMonitorAgent(
             status: 'new',
           });
 
-          // Wire conversation tracking — link event to conversation state machine
+          // Wire conversation tracking -link event to conversation state machine
           try {
             await updateConversationFromEvent(newEvent);
           } catch (convErr: any) {

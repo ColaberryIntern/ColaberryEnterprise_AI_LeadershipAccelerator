@@ -5,7 +5,7 @@ import ResponseQueue from '../../../models/ResponseQueue';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * ConversionDetectionAgent — detects conversations ready for conversion
+ * ConversionDetectionAgent -detects conversations ready for conversion
  * and creates RevenueOpportunity records for pipeline tracking.
  *
  * Logic:
@@ -47,7 +47,7 @@ export async function runConversionDetectionAgent(
           },
         });
 
-        // Check conversion signals — high confidence signals indicate positive response
+        // Check conversion signals -high confidence signals indicate positive response
         const signals = conversation.conversion_signals || [];
         const highConfidenceSignals = signals.filter(s => s.confidence >= 0.8);
 

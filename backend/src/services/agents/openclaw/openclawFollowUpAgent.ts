@@ -7,7 +7,7 @@ import { CONVERSION_STAGE_PROMPTS, validateFollowUpContent, validateContentForSt
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * FollowUpAgent — conversation-aware follow-up engine.
+ * FollowUpAgent -conversation-aware follow-up engine.
  * Targets stalled conversations (stall_detected_at IS NOT NULL) at stage >= 2
  * with priority_tier hot or warm.
  * Also expires stale ResponseQueue drafts.
@@ -50,7 +50,7 @@ export async function runFollowUpAgent(
       });
     }
 
-    // 2. Find stalled conversations — conversation-aware approach
+    // 2. Find stalled conversations -conversation-aware approach
     const stalledConversations = await OpenclawConversation.findAll({
       where: {
         status: 'stalled',

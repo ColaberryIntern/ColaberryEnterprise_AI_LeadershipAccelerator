@@ -65,13 +65,13 @@ export async function runOpenclawContentResponseAgent(
           utm_campaign: shortId,
         };
 
-        // Generate response content — learning-aware tone selection
+        // Generate response content -learning-aware tone selection
         const { tone, toneSource, learningId } = await selectToneFromLearnings(signal, defaultTone);
         const topicHints = await getTopPerformingTopics();
         const includeLink = isLinkAllowed(signal.platform);
         const content = await generateLLMResponse(signal, tone, maxLength, includeLink ? trackedUrl : null, topicHints);
 
-        // Strategy validation gate — deterministic backstop catches LLM violations
+        // Strategy validation gate -deterministic backstop catches LLM violations
         const validation = validateContentForStrategy(content, signal.platform);
         if (!validation.passed) {
           console.warn(`[OpenClaw Content] Strategy validation failed for ${signal.platform}: ${validation.reason}`);
@@ -81,7 +81,7 @@ export async function runOpenclawContentResponseAgent(
             completed_at: new Date(),
             updated_at: new Date(),
           });
-          errors.push(`Task ${task.id}: Strategy validation failed — ${validation.reason}`);
+          errors.push(`Task ${task.id}: Strategy validation failed -${validation.reason}`);
           continue;
         }
 
@@ -102,7 +102,7 @@ export async function runOpenclawContentResponseAgent(
           utm_params: utmParams,
           post_status: humanExecution ? 'ready_for_manual_post' : 'draft',
           execution_type: executionType === 'HUMAN_EXECUTION' ? 'human_execution' : 'api_posting',
-          reasoning: `${signal.platform} signal: "${(signal.title || '').slice(0, 100)}" — relevance ${signal.relevance_score}`,
+          reasoning: `${signal.platform} signal: "${(signal.title || '').slice(0, 100)}" -relevance ${signal.relevance_score}`,
           priority_score: priorityScore,
           intent_level: intentLevel,
           recommended_action: buildRecommendedAction(signal),
@@ -116,7 +116,7 @@ export async function runOpenclawContentResponseAgent(
           updated_at: new Date(),
         });
 
-        // Lead capture — create/update lead from signal author
+        // Lead capture -create/update lead from signal author
         try {
           const lead = await captureLeadFromSignal(signal, response);
           if (lead) {
@@ -150,11 +150,11 @@ export async function runOpenclawContentResponseAgent(
               });
               await response.update({ post_status: 'approved', updated_at: new Date() });
             }
-            // Rate-limited: keep as draft — will be retried later
+            // Rate-limited: keep as draft -will be retried later
           }
           // ASSISTED_AUTOMATION / HUMAN_REQUIRED: stay as draft for review
         }
-        // HUMAN_EXECUTION: already set to 'ready_for_manual_post' — no post task created
+        // HUMAN_EXECUTION: already set to 'ready_for_manual_post' -no post task created
 
         await task.update({
           status: 'completed',
@@ -279,19 +279,19 @@ async function getTopPerformingTopics(): Promise<string[]> {
   }
 }
 
-const SYSTEM_PROMPT = `You are Ali Moiz, founder of an enterprise AI leadership training program. You run a 6-week accelerator that helps business leaders and teams build practical AI skills — prompt engineering, AI strategy, RAG architectures, and hands-on implementation.
+const SYSTEM_PROMPT = `You are Ali Moiz, founder of an enterprise AI leadership training program. You run a 6-week accelerator that helps business leaders and teams build practical AI skills -prompt engineering, AI strategy, RAG architectures, and hands-on implementation.
 
 You write responses to online discussions about AI from the perspective of someone who BUILDS AI training programs and works with enterprise teams daily. Your insights come from real experience running cohorts and seeing what actually works in AI adoption.
 
 Rules:
 1. Lead with a genuinely useful insight, framework, or data point from your experience
-2. Write as a practitioner — "In our latest cohort, we saw..." or "One framework we use with enterprise teams..."
-3. NEVER use the word "Colaberry" — refer to "our program" or "the accelerator" if needed
+2. Write as a practitioner -"In our latest cohort, we saw..." or "One framework we use with enterprise teams..."
+3. NEVER use the word "Colaberry" -refer to "our program" or "the accelerator" if needed
 4. Answer the original question directly before adding your perspective
 5. Match the platform's communication style (Dev.to = technical, Reddit = casual, LinkedIn = professional)
-6. Keep it substantive — no filler, no generic platitudes, no buzzword soup
-7. Be specific — mention real frameworks, tools, metrics, or patterns you've observed
-8. Sound like a real person, not a marketing bot — be conversational and opinionated`;
+6. Keep it substantive -no filler, no generic platitudes, no buzzword soup
+7. Be specific -mention real frameworks, tools, metrics, or patterns you've observed
+8. Sound like a real person, not a marketing bot -be conversational and opinionated`;
 
 const SYSTEM_PROMPT_WITH_LINK = `${SYSTEM_PROMPT}
 9. IMPORTANT: You MUST end your response with a natural reference to a resource, using the tracked URL provided. Examples:
@@ -308,7 +308,7 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
 
   let platformContext = '';
   if (platform === 'reddit') {
-    platformContext = `This is a Reddit post in r/${details.subreddit || 'unknown'}. Write like a genuine Reddit commenter — casual but knowledgeable. Don't use bullet points or headers. Keep it to 2-3 paragraphs max.`;
+    platformContext = `This is a Reddit post in r/${details.subreddit || 'unknown'}. Write like a genuine Reddit commenter -casual but knowledgeable. Don't use bullet points or headers. Keep it to 2-3 paragraphs max.`;
   } else if (platform === 'hackernews') {
     platformContext = `This is a Hacker News discussion. HN values technical depth, contrarian thinking, and data-backed claims. Be concise and intellectually rigorous. Share from experience, not marketing.`;
   } else if (platform === 'devto') {
@@ -316,7 +316,7 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
   } else if (platform === 'linkedin') {
     platformContext = `This is a LinkedIn post. Professional tone but not stiff. Share insights from experience running AI training programs. Short paragraphs work well.`;
   } else if (platform === 'quora') {
-    platformContext = `This is a Quora question. Give a thorough, authoritative answer. Structure is okay here — numbered points or short sections work well.`;
+    platformContext = `This is a Quora question. Give a thorough, authoritative answer. Structure is okay here -numbered points or short sections work well.`;
   } else if (platform === 'hashnode') {
     platformContext = `This is a Hashnode blog post. The audience is developers and tech enthusiasts. Be technical but accessible. Reference practical frameworks and real-world patterns.`;
   } else if (platform === 'discourse') {
@@ -330,12 +330,12 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
   } else if (platform === 'producthunt') {
     platformContext = `This is a Product Hunt launch discussion. The audience is founders, PMs, and early adopters. Be encouraging but add genuine technical insight about the product's AI approach. Keep it under 500 characters. Product Hunt values constructive feedback.`;
   } else if (platform === 'facebook_groups') {
-    platformContext = `This is a Facebook Group discussion about AI. Be conversational and approachable — Facebook groups are community spaces. Share practical experience, ask follow-up questions, and blend in naturally. No jargon walls. Keep it under 300 words.`;
+    platformContext = `This is a Facebook Group discussion about AI. Be conversational and approachable -Facebook groups are community spaces. Share practical experience, ask follow-up questions, and blend in naturally. No jargon walls. Keep it under 300 words.`;
   } else if (platform === 'linkedin_comments') {
     platformContext = `This is a LinkedIn post comment. Be professional but personable. Reference the original post's key point, add your perspective from experience, and keep it concise (2-3 short paragraphs max). LinkedIn comments that add real value get visibility.`;
   }
 
-  // Strategy-level instructions (highest priority — enforced before platform style)
+  // Strategy-level instructions (highest priority -enforced before platform style)
   const strategy = getStrategy(platform);
   const strategyContext = STRATEGY_PROMPT_INSTRUCTIONS[strategy];
 
@@ -349,7 +349,7 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
 
   return `Platform: ${platform}
 Tone: ${tone}
-STRICT MAX: ${maxLength} characters total (including the link). Keep it SHORT — 2-3 concise paragraphs max. Do NOT ramble.
+STRICT MAX: ${maxLength} characters total (including the link). Keep it SHORT -2-3 concise paragraphs max. Do NOT ramble.
 
 ${strategyContext}
 
@@ -367,7 +367,7 @@ ${details.num_comments ? `Comments: ${details.num_comments}` : ''}
 Write a SHORT, punchy response (under ${maxLength} characters). Lead with one specific insight, add brief context, done. No walls of text. No filler. Provide genuine value, no self-promotion.${topicHints.length > 0 ? `\n\nTopics that perform well with our audience: ${topicHints.join(', ')}. Weave these in if naturally relevant.` : ''}${linkInstruction}`;
 }
 
-// Use gpt-4o for outreach content — higher quality than gpt-4o-mini
+// Use gpt-4o for outreach content -higher quality than gpt-4o-mini
 const OPENCLAW_MODEL = 'gpt-4o';
 
 async function generateLLMResponse(signal: any, tone: string, maxLength: number, trackedUrl: string | null, topicHints: string[] = []): Promise<string> {
@@ -470,11 +470,11 @@ function generateTemplateResponse(signal: any, tone: string, maxLength: number):
   const templates: Record<string, string[]> = {
     educational: [
       `Great question about ${title}. From what we've seen in enterprise AI adoption, the key factors are: (1) starting with a clear business problem, (2) investing in workforce AI literacy before tools, and (3) measuring outcomes not just deployment. Many organizations skip step 2 and wonder why adoption stalls.`,
-      `This is a really important topic. The research shows that organizations investing in structured AI training programs see 3-4x better adoption rates than those doing ad-hoc learning. The gap isn't in the technology — it's in the human capability to leverage it effectively.`,
+      `This is a really important topic. The research shows that organizations investing in structured AI training programs see 3-4x better adoption rates than those doing ad-hoc learning. The gap isn't in the technology -it's in the human capability to leverage it effectively.`,
     ],
     conversational: [
-      `Interesting perspective on ${title}! I've been following this space closely and one thing that keeps coming up is how much the "human side" of AI matters. The companies getting the most value aren't necessarily the ones with the best models — they're the ones whose teams actually know how to work with AI effectively.`,
-      `Really resonates with this. The biggest challenge I see isn't technical — it's organizational. Teams need practical, hands-on AI skills, not just awareness. Has anyone found programs that actually bridge that gap between theory and practice?`,
+      `Interesting perspective on ${title}! I've been following this space closely and one thing that keeps coming up is how much the "human side" of AI matters. The companies getting the most value aren't necessarily the ones with the best models -they're the ones whose teams actually know how to work with AI effectively.`,
+      `Really resonates with this. The biggest challenge I see isn't technical -it's organizational. Teams need practical, hands-on AI skills, not just awareness. Has anyone found programs that actually bridge that gap between theory and practice?`,
     ],
     technical: [
       `Good technical breakdown. One dimension worth adding: the pipeline from model selection to fine-tuning to deployment to monitoring benefits enormously from teams with hands-on AI engineering skills. A structured training approach covering prompt engineering, RAG architectures, and evaluation frameworks dramatically reduces iteration cycles.`,

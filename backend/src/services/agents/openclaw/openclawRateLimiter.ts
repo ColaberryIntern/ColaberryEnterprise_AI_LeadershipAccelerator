@@ -1,10 +1,10 @@
 /**
- * OpenClaw Rate Limiter — Phase 4
+ * OpenClaw Rate Limiter -Phase 4
  *
  * Enforces the STRATEGY_RATE_LIMITS constants from openclawPlatformStrategy.ts.
  * Counts posted responses per platform per hour/day and blocks when exceeded.
  *
- * No new model — counts OpenclawResponse rows with posted_at filters.
+ * No new model -counts OpenclawResponse rows with posted_at filters.
  */
 
 import { Op } from 'sequelize';

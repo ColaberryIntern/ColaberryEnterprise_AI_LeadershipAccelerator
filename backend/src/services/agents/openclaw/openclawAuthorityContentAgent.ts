@@ -7,7 +7,7 @@ import type { AgentExecutionResult, AgentAction } from '../types';
 import crypto from 'crypto';
 
 /**
- * AuthorityContentAgent — generates daily LinkedIn thought-leadership posts
+ * AuthorityContentAgent -generates daily LinkedIn thought-leadership posts
  * by synthesizing recent signals and top-performing learnings.
  *
  * Schedule: 0 8 * * * (daily 8am UTC)
@@ -39,7 +39,7 @@ export async function runAuthorityContentAgent(
       actions.push({
         campaign_id: null,
         action: 'skip',
-        reason: `Only ${recentSignals.length} recent signals — need at least 3 for synthesis`,
+        reason: `Only ${recentSignals.length} recent signals -need at least 3 for synthesis`,
         confidence: 1.0,
         before_state: {},
         after_state: {},
@@ -118,7 +118,7 @@ Requirements:
           source_type: 'signal_synthesis',
           source_signal_ids: signals.map((s: any) => s.id),
           platform: 'linkedin',
-          title: `${topic} — Authority Insight`,
+          title: `${topic} -Authority Insight`,
           content: safeContent,
           tone: recommendedTone,
           short_id: shortId,

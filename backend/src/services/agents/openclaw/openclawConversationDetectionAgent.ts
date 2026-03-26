@@ -134,7 +134,7 @@ function scoreRelevance(signal: any): number {
     if (text.includes(term)) score += 0.06;
   }
 
-  // General AI mention — signals discovered by MarketSignalAgent already passed keyword filters
+  // General AI mention -signals discovered by MarketSignalAgent already passed keyword filters
   if (text.includes(' ai ') || text.includes('ai:') || text.match(/\bai\b/)) {
     score += 0.1;
   }
@@ -147,9 +147,9 @@ function scoreRelevance(signal: any): number {
   // Strategy-aware adjustment: PASSIVE platforms need higher relevance (we can only comment)
   const strategy = getStrategy(signal.platform);
   if (strategy === 'PASSIVE_SIGNAL') {
-    score *= 0.95; // slight bar raise — preserve opportunities on HUMAN_EXECUTION platforms
+    score *= 0.95; // slight bar raise -preserve opportunities on HUMAN_EXECUTION platforms
   } else if (strategy === 'AUTHORITY_BROADCAST') {
-    score *= 1.1; // lower bar — capture more signals for content synthesis
+    score *= 1.1; // lower bar -capture more signals for content synthesis
   }
 
   return Math.min(1, score);
@@ -157,7 +157,7 @@ function scoreRelevance(signal: any): number {
 
 function scoreEngagement(signal: any): number {
   const details = signal.details || {};
-  let score = 0.3; // base — if the signal was discovered, it already has some engagement potential
+  let score = 0.3; // base -if the signal was discovered, it already has some engagement potential
 
   // Platform-specific engagement signals
   const comments = details.num_comments || details.comments_count || 0;
@@ -191,7 +191,7 @@ function scoreEngagement(signal: any): number {
   if (votes >= 5) score += 0.1;
   if (votes >= 50) score += 0.15;
 
-  // AUTHORITY_BROADCAST signals are used for content synthesis — always worth capturing
+  // AUTHORITY_BROADCAST signals are used for content synthesis -always worth capturing
   if (getStrategy(signal.platform) === 'AUTHORITY_BROADCAST') {
     score = Math.max(score, 0.4);
   }
@@ -242,7 +242,7 @@ function scoreRisk(signal: any): number {
     if (quotes > 0 && retweets > 0 && quotes / retweets > 3) risk += 0.2;
   }
 
-  // Product Hunt is a curated community — lower inherent risk
+  // Product Hunt is a curated community -lower inherent risk
   if (signal.platform === 'producthunt') risk -= 0.05;
 
   return Math.min(1, Math.max(0, risk));
