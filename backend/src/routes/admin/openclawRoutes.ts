@@ -397,10 +397,12 @@ router.post(`${BASE}/responses/:id/post-via-browser`, async (req: Request, res: 
   try {
     const response = await OpenclawResponse.findByPk(req.params.id as string);
     if (!response) return res.status(404).json({ error: 'Response not found' });
-    if (response.post_status === 'draft') {
+    const postable = ['draft', 'approved', 'ready_for_manual_post', 'ready_to_post'];
+    if (!postable.includes(response.post_status)) {
+      return res.status(400).json({ error: `Response already ${response.post_status}` });
+    }
+    if (response.post_status !== 'approved') {
       await response.update({ post_status: 'approved', updated_at: new Date() });
-    } else if (response.post_status !== 'approved') {
-      return res.status(400).json({ error: `Response must be draft or approved (current: ${response.post_status})` });
     }
 
     const signal = response.signal_id
