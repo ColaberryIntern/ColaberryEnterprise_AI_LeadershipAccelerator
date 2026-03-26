@@ -1222,8 +1222,8 @@ export default function OpenclawTab() {
                     <span>ID: <code style={{ fontSize: '0.6rem' }}>{selectedResponse.id.slice(0, 8)}</code></span>
                   </div>
 
-                  {/* Post via Browser (for approved/draft on browser-supported platforms) */}
-                  {['approved', 'draft', 'ready_for_manual_post', 'ready_to_post'].includes(selectedResponse.post_status) && ['medium', 'devto'].includes(selectedResponse.platform) && (
+                  {/* Post via Browser (only after approval on browser-supported platforms) */}
+                  {selectedResponse.post_status === 'approved' && ['medium', 'devto'].includes(selectedResponse.platform) && (
                     <div className="border-top mt-3 pt-3">
                       <button
                         className="btn btn-sm btn-primary"
