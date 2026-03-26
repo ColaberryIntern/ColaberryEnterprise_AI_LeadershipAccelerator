@@ -22,7 +22,7 @@ CONTEXT:
 - Prior interactions with this lead:
 {{conversation_history}}
 
-YOUR GOAL: Have a warm, consultative conversation. Identify their specific AI pain points (e.g., team experimented but nothing in production, need stakeholder buy-in, want to move from strategy to production quickly). If there's a fit, suggest booking a 15-minute strategy call with Ali Merchant.
+YOUR GOAL: Have a warm, consultative conversation. Identify their specific AI pain points (e.g., team experimented but nothing in production, need stakeholder buy-in, want to move from strategy to production quickly). If there's a fit, suggest booking a 15-minute strategy call with Ali Muwwakkil.
 
 TONE: Professional but conversational. You're a peer, not a salesperson. Ask open-ended questions. Listen more than you talk. Reference any prior interactions naturally so it feels like an ongoing relationship.
 
@@ -50,7 +50,7 @@ DO NOT: Read a script. Push hard for a sale. Make up information about the progr
 <p>Which of these resonates most with you? Just hit reply — I read every response.</p>
 
 <p>Best,<br>
-Ali Merchant<br>
+Ali Muwwakkil<br>
 Colaberry Enterprise AI Division</p>`,
       max_attempts: 1,
       fallback_channel: null,
@@ -75,7 +75,7 @@ Colaberry Enterprise AI Division</p>`,
 <p><strong>The next cohort is limited to 15 seats.</strong> Would a 15-minute call be helpful to see if the program fits your situation?</p>
 
 <p>Best,<br>
-Ali Merchant<br>
+Ali Muwwakkil<br>
 Colaberry Enterprise AI Division</p>`,
       max_attempts: 1,
       fallback_channel: null,
@@ -94,7 +94,7 @@ CONTEXT:
 - Prior interactions with this lead:
 {{conversation_history}}
 
-YOUR GOAL: Reference prior emails/calls naturally ("I sent you some information about our program..."). Check if they reviewed the materials. Share that recent graduates built AI proofs of concept that saved their organizations significant time and budget. Push gently for a 15-minute strategy call with Ali Merchant this week.
+YOUR GOAL: Reference prior emails/calls naturally ("I sent you some information about our program..."). Check if they reviewed the materials. Share that recent graduates built AI proofs of concept that saved their organizations significant time and budget. Push gently for a 15-minute strategy call with Ali Muwwakkil this week.
 
 KEY TALKING POINTS (use naturally, don't list them):
 - VP of Engineering at a Fortune 500 built an AI document analysis system (70% time reduction)
@@ -133,7 +133,7 @@ DO NOT: Be pushy. Read a script. Make up details. Ignore what they've already to
 <p>I'd love to walk you through the ROI framework in a quick call. <a href="https://colaberry.com/contact">Schedule 15 minutes here</a>.</p>
 
 <p>Best,<br>
-Ali Merchant<br>
+Ali Muwwakkil<br>
 Colaberry Enterprise AI Division</p>`,
       max_attempts: 1,
       fallback_channel: null,
@@ -165,7 +165,7 @@ Colaberry Enterprise AI Division</p>`,
 <p>Either way, I wish you the best on your AI leadership journey.</p>
 
 <p>Best,<br>
-Ali Merchant<br>
+Ali Muwwakkil<br>
 Colaberry Enterprise AI Division</p>`,
       max_attempts: 1,
       fallback_channel: null,

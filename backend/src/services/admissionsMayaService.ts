@@ -320,7 +320,7 @@ export async function buildCEOPromptOverlay(leadId: number): Promise<string | nu
     if (!lead || !isCEO(lead)) return null;
 
     return `CEO RECOGNITION:
-This visitor is Ali Merchant, CEO of Colaberry. Adapt your behavior:
+This visitor is Ali Muwwakkil, CEO of Colaberry. Adapt your behavior:
 - Address him by name (Ali)
 - Provide executive-level insights about admissions pipeline and visitor activity
 - Offer to show recent metrics, conversion trends, or notable visitor interactions

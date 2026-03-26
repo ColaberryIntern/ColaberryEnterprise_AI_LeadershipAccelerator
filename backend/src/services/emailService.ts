@@ -167,7 +167,7 @@ export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirm
 
         <p>If you'd prefer to pay immediately by credit card or ACH, visit <a href="https://enterprise.colaberry.ai/enroll" style="color:#2563eb;">our enrollment page</a> and select "Pay Now."</p>
 
-        <p style="margin-top:24px;">Best regards,<br/><strong>Ali Merchant</strong><br/>Colaberry Enterprise AI Division</p>
+        <p style="margin-top:24px;">Best regards,<br/><strong>Ali Muwwakkil</strong><br/>Colaberry Enterprise AI Division</p>
       </div>
       <div style="background:#f8f9fa;padding:16px;text-align:center;font-size:12px;color:#6c757d;">
         <p style="margin:0;">Colaberry Enterprise AI Division</p>
@@ -358,7 +358,7 @@ function buildSponsorshipKitHtml(data: SponsorshipKitEmailData): string {
   <p><a href="${env.frontendUrl}/executive-overview/thank-you" class="cta-green">Schedule an Alignment Call</a></p>
 
   <div class="footer">
-    <p><strong>Ali Merchant</strong><br>
+    <p><strong>Ali Muwwakkil</strong><br>
     Colaberry Enterprise AI Division<br>
     AI Leadership | Architecture | Implementation | Advisory</p>
   </div>
@@ -453,7 +453,7 @@ export function buildStrategyCallConfirmationHtml(data: StrategyCallConfirmation
   <p>If you need to reschedule, please reply to this email directly.</p>
 
   <div class="footer">
-    <p><strong>Ali Merchant</strong><br>
+    <p><strong>Ali Muwwakkil</strong><br>
     Colaberry Enterprise AI Division<br>
     AI Leadership | Architecture | Implementation | Advisory</p>
   </div>
@@ -670,7 +670,7 @@ function buildExecutiveOverviewHtml(data: ExecutiveOverviewEmailData): string {
   <p>Questions? Reply directly to this email - I read every response personally.</p>
 
   <div class="footer">
-    <p><strong>Ali Merchant</strong><br>
+    <p><strong>Ali Muwwakkil</strong><br>
     Colaberry Enterprise AI Division<br>
     AI Leadership | Architecture | Implementation | Advisory</p>
   </div>

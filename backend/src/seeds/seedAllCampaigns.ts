@@ -59,7 +59,7 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
       voice: { enabled: true },
       sms: { enabled: false },
     },
-    ai_system_prompt: `You are writing follow-up messages for Colaberry Enterprise AI Division. The recipient is an executive who recently downloaded the Executive Briefing on AI Leadership. They are evaluating AI training programs and internal capability building. Reference the briefing naturally — they have read it. Be consultative, not salesy. Focus on helping them understand how to act on the briefing insights. Ali Merchant is the sender.`,
+    ai_system_prompt: `You are writing follow-up messages for Colaberry Enterprise AI Division. The recipient is an executive who recently downloaded the Executive Briefing on AI Leadership. They are evaluating AI training programs and internal capability building. Reference the briefing naturally — they have read it. Be consultative, not salesy. Focus on helping them understand how to act on the briefing insights. Ali Muwwakkil is the sender.`,
     settings: {
       test_mode_enabled: false,
       delay_between_sends: 120,
@@ -111,7 +111,7 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
       voice: { enabled: false },
       sms: { enabled: true },
     },
-    ai_system_prompt: `You are writing follow-up messages for Colaberry Enterprise AI Division. The recipient is an executive who has booked a 30-minute strategy call. Your goal is to ensure they are prepared, excited, and show up ready to have a productive conversation. Never be salesy — they have already committed to the call. Focus on helping them get maximum value from their 30 minutes. Ali Merchant is the sender.`,
+    ai_system_prompt: `You are writing follow-up messages for Colaberry Enterprise AI Division. The recipient is an executive who has booked a 30-minute strategy call. Your goal is to ensure they are prepared, excited, and show up ready to have a productive conversation. Never be salesy — they have already committed to the call. Focus on helping them get maximum value from their 30 minutes. Ali Muwwakkil is the sender.`,
     settings: {
       test_mode_enabled: false,
       delay_between_sends: 60,

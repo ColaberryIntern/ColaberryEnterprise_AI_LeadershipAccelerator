@@ -64,7 +64,7 @@ export default function CampaignSimulatorPanel({
   const pollRef = useRef<number | null>(null);
 
   // Lead profile & template variable inputs
-  const [leadName, setLeadName] = useState('Ali Merchant');
+  const [leadName, setLeadName] = useState('Ali Muwwakkil');
   const [leadCompany, setLeadCompany] = useState('Colaberry');
   const [leadTitle, setLeadTitle] = useState('CEO');
   const [leadIndustry, setLeadIndustry] = useState('Technology');
