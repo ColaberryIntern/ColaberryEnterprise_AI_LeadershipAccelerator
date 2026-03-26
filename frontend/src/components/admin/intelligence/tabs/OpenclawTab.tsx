@@ -75,6 +75,8 @@ const STRATEGY_BADGES: Record<string, { label: string; bg: string }> = {
 const STATUS_BADGES: Record<string, string> = {
   draft: 'warning',
   approved: 'info',
+  rejected: 'danger',
+  pending_review: 'warning',
   ready_to_post: 'primary',
   ready_for_manual_post: 'warning',
   posted: 'success',
@@ -117,6 +119,7 @@ export default function OpenclawTab() {
   const responsesPerPage = 25;
   const [loading, setLoading] = useState(true);
   const [responseFilter, setResponseFilter] = useState('');
+  const [responseView, setResponseView] = useState<'automated' | 'manual'>('automated');
   const [markPostedUrl, setMarkPostedUrl] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -812,22 +815,56 @@ export default function OpenclawTab() {
 
       {/* Responses Table */}
       <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white d-flex justify-content-between align-items-center">
-          <span className="fw-semibold small">Recent Responses</span>
-          <select
-            className="form-select form-select-sm"
-            style={{ width: 'auto', fontSize: '0.75rem' }}
-            value={responseFilter}
-            onChange={(e) => { setResponseFilter(e.target.value); setResponsePage(1); }}
-          >
-            <option value="">All Statuses</option>
-            <option value="draft">Draft</option>
-            <option value="approved">Approved</option>
-            <option value="ready_to_post">Ready to Post</option>
-            <option value="ready_for_manual_post">Manual Queue</option>
-            <option value="posted">Posted</option>
-            <option value="failed">Failed</option>
-          </select>
+        <div className="card-header bg-white">
+          <div className="d-flex justify-content-between align-items-center">
+            <div className="d-flex gap-0">
+              <button
+                className={`btn btn-sm ${responseView === 'automated' ? 'btn-primary' : 'btn-outline-secondary'} rounded-end-0`}
+                onClick={() => { setResponseView('automated'); setResponsePage(1); }}
+              >
+                <i className="bi bi-robot me-1" />Automated
+                <span className="badge bg-light text-dark ms-1" style={{ fontSize: '0.6rem' }}>
+                  {responses.filter(r => r.execution_type !== 'human_execution').length}
+                </span>
+              </button>
+              <button
+                className={`btn btn-sm ${responseView === 'manual' ? 'btn-warning' : 'btn-outline-secondary'} rounded-start-0`}
+                onClick={() => { setResponseView('manual'); setResponsePage(1); }}
+              >
+                <i className="bi bi-person me-1" />Manual Action
+                <span className="badge bg-light text-dark ms-1" style={{ fontSize: '0.6rem' }}>
+                  {responses.filter(r => r.execution_type === 'human_execution').length}
+                </span>
+              </button>
+            </div>
+            <select
+              className="form-select form-select-sm"
+              style={{ width: 'auto', fontSize: '0.75rem' }}
+              value={responseFilter}
+              onChange={(e) => { setResponseFilter(e.target.value); setResponsePage(1); }}
+            >
+              <option value="">All Statuses</option>
+              {responseView === 'automated' ? (
+                <>
+                  <option value="approved">Approved (Queued)</option>
+                  <option value="posted">Posted</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="draft">Pending Review</option>
+                </>
+              ) : (
+                <>
+                  <option value="ready_for_manual_post">Needs Action</option>
+                  <option value="posted">Posted</option>
+                  <option value="ready_to_post">Ready to Post</option>
+                </>
+              )}
+            </select>
+          </div>
+          <div className="text-muted mt-1" style={{ fontSize: '0.68rem' }}>
+            {responseView === 'automated'
+              ? 'Medium, Dev.to, Hashnode - fully autonomous. Quality gate reviews, approves, and posts automatically.'
+              : 'LinkedIn, Reddit, Quora, HackerNews - copy the response and post manually.'}
+          </div>
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
@@ -846,7 +883,7 @@ export default function OpenclawTab() {
                 </tr>
               </thead>
               <tbody>
-                {responses.map((resp) => (
+                {responses.filter(r => responseView === 'manual' ? r.execution_type === 'human_execution' : r.execution_type !== 'human_execution').map((resp) => (
                   <tr
                     key={resp.id}
                     style={{ cursor: 'pointer' }}
@@ -951,10 +988,12 @@ export default function OpenclawTab() {
                     </td>
                   </tr>
                 ))}
-                {responses.length === 0 && (
+                {responses.filter(r => responseView === 'manual' ? r.execution_type === 'human_execution' : r.execution_type !== 'human_execution').length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-muted text-center py-4">
-                      No responses yet — signals will appear once the Market Signal agent runs
+                      {responseView === 'manual'
+                        ? 'No manual responses pending - all caught up!'
+                        : 'No automated responses yet - signals will appear once the Market Signal agent runs'}
                     </td>
                   </tr>
                 )}
