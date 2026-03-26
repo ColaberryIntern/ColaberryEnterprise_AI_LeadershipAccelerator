@@ -157,6 +157,7 @@ export default function OpenclawTab() {
     try {
       const params: Record<string, string> = { page: String(responsePage), limit: String(responsesPerPage) };
       if (responseFilter) params.post_status = responseFilter;
+      params.execution_type = responseView === 'manual' ? 'human_execution' : 'api_posting';
       const [dashRes, respRes] = await Promise.all([
         getOpenclawDashboard(),
         getOpenclawResponses(params),
@@ -168,7 +169,7 @@ export default function OpenclawTab() {
       /* ignore */
     }
     setLoading(false);
-  }, [responseFilter, responsePage]);
+  }, [responseFilter, responsePage, responseView]);
 
   useEffect(() => {
     setLoading(true);
@@ -824,7 +825,7 @@ export default function OpenclawTab() {
               >
                 <i className="bi bi-robot me-1" />Automated
                 <span className="badge bg-light text-dark ms-1" style={{ fontSize: '0.6rem' }}>
-                  {responses.filter(r => r.execution_type !== 'human_execution').length}
+                  {responseView === 'automated' ? responsesTotal : ''}
                 </span>
               </button>
               <button
@@ -833,7 +834,7 @@ export default function OpenclawTab() {
               >
                 <i className="bi bi-person me-1" />Manual Action
                 <span className="badge bg-light text-dark ms-1" style={{ fontSize: '0.6rem' }}>
-                  {responses.filter(r => r.execution_type === 'human_execution').length}
+                  {responseView === 'manual' ? responsesTotal : ''}
                 </span>
               </button>
             </div>
@@ -883,7 +884,7 @@ export default function OpenclawTab() {
                 </tr>
               </thead>
               <tbody>
-                {responses.filter(r => responseView === 'manual' ? r.execution_type === 'human_execution' : r.execution_type !== 'human_execution').map((resp) => (
+                {responses.map((resp) => (
                   <tr
                     key={resp.id}
                     style={{ cursor: 'pointer' }}
@@ -988,7 +989,7 @@ export default function OpenclawTab() {
                     </td>
                   </tr>
                 ))}
-                {responses.filter(r => responseView === 'manual' ? r.execution_type === 'human_execution' : r.execution_type !== 'human_execution').length === 0 && (
+                {responses.length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-muted text-center py-4">
                       {responseView === 'manual'
