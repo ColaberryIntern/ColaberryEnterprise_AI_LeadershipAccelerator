@@ -127,7 +127,7 @@ export default function OpenclawTab() {
   const [responsePage, setResponsePage] = useState(1);
   const responsesPerPage = 25;
   const [loading, setLoading] = useState(true);
-  const [responseFilter, setResponseFilter] = useState('');
+  const [responseFilter, setResponseFilter] = useState('needs_action');
   const [responseView, setResponseView] = useState<'automated' | 'manual'>('automated');
   const [markPostedUrl, setMarkPostedUrl] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -178,23 +178,26 @@ export default function OpenclawTab() {
       const params: Record<string, string> = { page: String(responsePage), limit: String(responsesPerPage) };
       if (responseFilter) params.post_status = responseFilter;
       params.execution_type = responseView === 'manual' ? 'human_execution' : 'api_posting';
-      // Also fetch count for the other tab (page=1, limit=1 to minimize payload)
-      const otherParams: Record<string, string> = { page: '1', limit: '1' };
+      // Also fetch needs_action counts for both tabs (badge counts)
+      const otherParams: Record<string, string> = { page: '1', limit: '1', post_status: 'needs_action' };
       otherParams.execution_type = responseView === 'manual' ? 'api_posting' : 'human_execution';
-      const [dashRes, respRes, otherRes] = await Promise.all([
+      const activeCountParams: Record<string, string> = { page: '1', limit: '1', post_status: 'needs_action' };
+      activeCountParams.execution_type = responseView === 'manual' ? 'human_execution' : 'api_posting';
+      const [dashRes, respRes, otherRes, activeCountRes] = await Promise.all([
         getOpenclawDashboard(),
         getOpenclawResponses(params),
         getOpenclawResponses(otherParams),
+        getOpenclawResponses(activeCountParams),
       ]);
       setDashboard(dashRes.data);
       setResponses(respRes.data.responses || []);
       setResponsesTotal(respRes.data.total || 0);
-      // Set both tab counts
+      // Badge counts always show needs_action totals
       if (responseView === 'automated') {
-        setAutomatedTotal(respRes.data.total || 0);
+        setAutomatedTotal(activeCountRes.data.total || 0);
         setManualTotal(otherRes.data.total || 0);
       } else {
-        setManualTotal(respRes.data.total || 0);
+        setManualTotal(activeCountRes.data.total || 0);
         setAutomatedTotal(otherRes.data.total || 0);
       }
       // Fetch tracked LinkedIn posts + session status
@@ -1094,19 +1097,19 @@ export default function OpenclawTab() {
               value={responseFilter}
               onChange={(e) => { setResponseFilter(e.target.value); setResponsePage(1); }}
             >
+              <option value="needs_action">Needs Action</option>
               <option value="">All Statuses</option>
               {responseView === 'automated' ? (
                 <>
+                  <option value="draft">Pending Review</option>
                   <option value="approved">Approved (Queued)</option>
                   <option value="posted">Posted</option>
                   <option value="rejected">Rejected</option>
-                  <option value="draft">Pending Review</option>
                 </>
               ) : (
                 <>
-                  <option value="ready_for_manual_post">Needs Action</option>
+                  <option value="ready_for_manual_post">Ready to Post</option>
                   <option value="posted">Posted</option>
-                  <option value="ready_to_post">Ready to Post</option>
                 </>
               )}
             </select>

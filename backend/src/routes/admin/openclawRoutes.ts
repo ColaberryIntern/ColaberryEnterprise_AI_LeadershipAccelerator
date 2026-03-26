@@ -288,7 +288,11 @@ router.get(`${BASE}/responses`, async (req: Request, res: Response) => {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 25;
     const where: Record<string, any> = {};
-    if (post_status) where.post_status = post_status;
+    if (post_status === 'needs_action') {
+      where.post_status = { [Op.notIn]: ['posted', 'rejected', 'removed'] };
+    } else if (post_status) {
+      where.post_status = post_status;
+    }
     if (platform) where.platform = platform;
     if (execution_type) where.execution_type = execution_type;
 
