@@ -724,7 +724,72 @@ router.post(`${BASE}/signals/submit`, async (req: Request, res: Response) => {
       created_at: new Date(),
     });
 
-    res.json({ success: true, signal, task_id: task.id });
+    // Immediately generate response inline for manual submissions
+    let responseGenerated = false;
+    try {
+      const { getOpenAIClient } = await import('../../intelligence/assistant/openaiHelper');
+      const { isHumanExecution, getExecutionType, STRATEGY_PROMPT_INSTRUCTIONS, getStrategy } = await import('../../services/agents/openclaw/openclawPlatformStrategy');
+      const crypto = await import('crypto');
+      const client = getOpenAIClient();
+
+      if (client) {
+        const strategyInstructions = STRATEGY_PROMPT_INSTRUCTIONS[getStrategy(platform)] || '';
+        const systemPrompt = `You are Ali Moiz, founder of an enterprise AI leadership training program. You built a system with 18 departments and 172 AI agents managed by an AI COO. You respond to posts as a practitioner who builds real AI systems daily.
+
+Rules:
+1. Lead with a useful insight or framework from your experience
+2. Never use the word "Colaberry" - say "our system" or "the accelerator"
+3. Answer the original question directly first
+4. Match the platform communication style
+5. Sound like a real person, not a marketing bot
+6. Never use em dashes
+7. Keep it concise but substantive
+${strategyInstructions}`;
+
+        const userPrompt = `Platform: ${platform}\nTitle: ${title}\nContent: ${content_excerpt || '(no content extracted)'}\n\nWrite a thoughtful, value-adding response to this post.`;
+
+        const result = await client.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          max_tokens: 1500,
+          temperature: 0.7,
+        });
+
+        const responseContent = result.choices[0]?.message?.content?.trim();
+        if (responseContent) {
+          const shortId = `oc-${platform}-${crypto.randomBytes(4).toString('hex')}`;
+          const humanExec = isHumanExecution(platform);
+          const execType = humanExec ? 'human_execution' : 'api_posting';
+
+          const response = await OpenclawResponse.create({
+            signal_id: signal.id,
+            platform,
+            content: responseContent.replace(/\b[Cc]olaberry\b(?![./])/g, '').replace(/\u2014/g, ' - ').replace(/\u2013/g, ' - '),
+            tone: 'professional',
+            short_id: shortId,
+            execution_type: execType,
+            post_status: humanExec ? 'ready_for_manual_post' : 'draft',
+            reasoning: `Manual submission: ${platform} - ${title.slice(0, 60)}`,
+            priority_score: 80,
+            intent_level: 'high',
+            recommended_action: humanExec ? 'Copy response and post manually' : 'Review and approve for auto-posting',
+            follow_up_suggestion: 'If they respond positively, advance to Stage 2 qualification',
+            created_at: new Date(),
+          });
+
+          await signal.update({ response_id: response.id, status: 'responded', updated_at: new Date() });
+          await task.update({ status: 'completed', output_data: { response_id: response.id, source: 'inline_generation' }, completed_at: new Date(), updated_at: new Date() });
+          responseGenerated = true;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[OpenClaw] Inline response generation failed, task remains pending:', err?.message?.slice(0, 200));
+    }
+
+    res.json({ success: true, signal, task_id: task.id, response_generated: responseGenerated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1084,10 +1149,29 @@ router.post(`${BASE}/linkedin/track-post`, async (req: Request, res: Response) =
     });
     if (existing) return res.json({ success: true, message: 'Already tracking this post', tracked_post: existing });
 
+    // Extract a readable title from the LinkedIn post
+    let postTitle = 'Tracking: LinkedIn Post';
+    try {
+      const ogResp = await axios.get(post_url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', Accept: 'text/html' },
+        timeout: 10000, maxRedirects: 5,
+      });
+      const html = ogResp.data as string;
+      const ogMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
+      if (ogMatch?.[1]) postTitle = ogMatch[1].replace(/ \| LinkedIn$/, '').trim();
+    } catch { /* fall through to slug extraction */ }
+    if (postTitle === 'Tracking: LinkedIn Post') {
+      // Fallback: extract hashtags from URL slug
+      const slugMatch = post_url.match(/\/posts\/[^/]+-([a-z][\w-]+)-share-/i);
+      if (slugMatch?.[1]) {
+        postTitle = slugMatch[1].replace(/[-_]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()).slice(0, 80);
+      }
+    }
+
     const tracked = await OpenclawSignal.create({
       platform: 'linkedin_post_tracking' as any,
       source_url: post_url,
-      title: 'Tracking: LinkedIn Post',
+      title: postTitle,
       content_excerpt: '',
       details: { tracked: true, last_scanned_at: null, known_commenters: [] },
       relevance_score: 1.0, engagement_score: 0, risk_score: 0,

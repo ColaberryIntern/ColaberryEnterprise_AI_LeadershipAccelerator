@@ -122,6 +122,8 @@ export default function OpenclawTab() {
   const [dashboard, setDashboard] = useState<OpenclawDashboard | null>(null);
   const [responses, setResponses] = useState<OpenclawResponseItem[]>([]);
   const [responsesTotal, setResponsesTotal] = useState(0);
+  const [automatedTotal, setAutomatedTotal] = useState(0);
+  const [manualTotal, setManualTotal] = useState(0);
   const [responsePage, setResponsePage] = useState(1);
   const responsesPerPage = 25;
   const [loading, setLoading] = useState(true);
@@ -176,13 +178,25 @@ export default function OpenclawTab() {
       const params: Record<string, string> = { page: String(responsePage), limit: String(responsesPerPage) };
       if (responseFilter) params.post_status = responseFilter;
       params.execution_type = responseView === 'manual' ? 'human_execution' : 'api_posting';
-      const [dashRes, respRes] = await Promise.all([
+      // Also fetch count for the other tab (page=1, limit=1 to minimize payload)
+      const otherParams: Record<string, string> = { page: '1', limit: '1' };
+      otherParams.execution_type = responseView === 'manual' ? 'api_posting' : 'human_execution';
+      const [dashRes, respRes, otherRes] = await Promise.all([
         getOpenclawDashboard(),
         getOpenclawResponses(params),
+        getOpenclawResponses(otherParams),
       ]);
       setDashboard(dashRes.data);
       setResponses(respRes.data.responses || []);
       setResponsesTotal(respRes.data.total || 0);
+      // Set both tab counts
+      if (responseView === 'automated') {
+        setAutomatedTotal(respRes.data.total || 0);
+        setManualTotal(otherRes.data.total || 0);
+      } else {
+        setManualTotal(respRes.data.total || 0);
+        setAutomatedTotal(otherRes.data.total || 0);
+      }
       // Fetch tracked LinkedIn posts + session status
       try {
         const [trackedRes, sessionRes] = await Promise.all([
@@ -1061,7 +1075,7 @@ export default function OpenclawTab() {
               >
                 <i className="bi bi-robot me-1" />Automated
                 <span className="badge bg-light text-dark ms-1" style={{ fontSize: '0.6rem' }}>
-                  {responseView === 'automated' ? responsesTotal : ''}
+                  {automatedTotal}
                 </span>
               </button>
               <button
@@ -1070,7 +1084,7 @@ export default function OpenclawTab() {
               >
                 <i className="bi bi-person me-1" />Manual Action
                 <span className="badge bg-light text-dark ms-1" style={{ fontSize: '0.6rem' }}>
-                  {responseView === 'manual' ? responsesTotal : ''}
+                  {manualTotal}
                 </span>
               </button>
             </div>
