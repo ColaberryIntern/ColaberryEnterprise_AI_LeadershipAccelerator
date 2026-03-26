@@ -17,8 +17,7 @@ import {
   getRateLimits,
   getTrackedLinkedInPosts,
   removeTrackedLinkedInPost,
-  loginToLinkedIn,
-  verifyLinkedInChallenge,
+  saveLinkedInSession,
   getLinkedInSessionStatus,
   OpenclawDashboard,
   OpenclawResponseItem,
@@ -152,10 +151,7 @@ export default function OpenclawTab() {
   const [replyResult, setReplyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [trackedPosts, setTrackedPosts] = useState<TrackedLinkedInPost[]>([]);
   const [linkedinSessionOk, setLinkedinSessionOk] = useState<boolean | null>(null);
-  const [liEmail, setLiEmail] = useState('');
-  const [liPassword, setLiPassword] = useState('');
-  const [liVerifyCode, setLiVerifyCode] = useState('');
-  const [liNeedsVerify, setLiNeedsVerify] = useState(false);
+  const [liAtCookie, setLiAtCookie] = useState('');
   const [liLoggingIn, setLiLoggingIn] = useState(false);
 
   // Response detail drill-down state
@@ -301,45 +297,20 @@ export default function OpenclawTab() {
     setGeneratingReply(false);
   };
 
-  const handleLinkedInLogin = async () => {
+  const handleSaveLiCookie = async () => {
     setLiLoggingIn(true);
     setReplyResult(null);
     try {
-      const res = await loginToLinkedIn(liEmail.trim(), liPassword);
-      const data = res.data;
-      if (data.success) {
-        setLinkedinSessionOk(true);
-        setLiEmail('');
-        setLiPassword('');
-        setReplyResult({ success: true, message: data.message });
-      } else if (data.needs_verification) {
-        setLiNeedsVerify(true);
-        setReplyResult({ success: false, message: data.message });
-      } else {
-        setReplyResult({ success: false, message: data.message });
-      }
-    } catch (err: any) {
-      setReplyResult({ success: false, message: err?.response?.data?.error || 'Login failed' });
-    }
-    setLiLoggingIn(false);
-  };
-
-  const handleLinkedInVerify = async () => {
-    setLiLoggingIn(true);
-    try {
-      const res = await verifyLinkedInChallenge(liVerifyCode.trim());
+      const res = await saveLinkedInSession(liAtCookie.trim());
       if (res.data.success) {
         setLinkedinSessionOk(true);
-        setLiNeedsVerify(false);
-        setLiVerifyCode('');
-        setLiEmail('');
-        setLiPassword('');
+        setLiAtCookie('');
         setReplyResult({ success: true, message: res.data.message });
       } else {
-        setReplyResult({ success: false, message: res.data.message });
+        setReplyResult({ success: false, message: res.data.message || 'Failed to save session' });
       }
     } catch (err: any) {
-      setReplyResult({ success: false, message: err?.response?.data?.error || 'Verification failed' });
+      setReplyResult({ success: false, message: err?.response?.data?.error || 'Failed to save LinkedIn session' });
     }
     setLiLoggingIn(false);
   };
@@ -929,31 +900,26 @@ export default function OpenclawTab() {
           <div className="text-muted mb-3" style={{ fontSize: '0.68rem' }}>
             Paste a LinkedIn post URL. The system reads the post and comments automatically, generates a reply for each commenter in your voice, and queues them in the Manual Action tab.
           </div>
-          {linkedinSessionOk === false && !liNeedsVerify && (
+          {linkedinSessionOk === false && (
             <div className="alert alert-warning py-2 px-3 mb-3" style={{ fontSize: '0.72rem' }}>
-              <strong>LinkedIn login required.</strong> Enter your LinkedIn credentials to connect.
-              <div className="row g-2 mt-1">
-                <div className="col-sm-5">
-                  <input type="email" className="form-control form-control-sm" placeholder="LinkedIn email" value={liEmail} onChange={e => setLiEmail(e.target.value)} />
-                </div>
-                <div className="col-sm-4">
-                  <input type="password" className="form-control form-control-sm" placeholder="Password" value={liPassword} onChange={e => setLiPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && liEmail && liPassword && !liLoggingIn && handleLinkedInLogin()} />
-                </div>
-                <div className="col-sm-3">
-                  <button className="btn btn-sm btn-warning w-100" onClick={handleLinkedInLogin} disabled={!liEmail.trim() || !liPassword || liLoggingIn}>
-                    {liLoggingIn ? <><span className="spinner-border spinner-border-sm me-1" />Logging in...</> : 'Connect'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          {liNeedsVerify && (
-            <div className="alert alert-info py-2 px-3 mb-3" style={{ fontSize: '0.72rem' }}>
-              <strong>Verification required.</strong> LinkedIn sent a code to your email or phone. Enter it below.
-              <div className="d-flex gap-2 mt-2">
-                <input type="text" className="form-control form-control-sm" placeholder="Enter verification code" value={liVerifyCode} onChange={e => setLiVerifyCode(e.target.value)} onKeyDown={e => e.key === 'Enter' && liVerifyCode && !liLoggingIn && handleLinkedInVerify()} />
-                <button className="btn btn-sm btn-info text-nowrap" onClick={handleLinkedInVerify} disabled={!liVerifyCode.trim() || liLoggingIn}>
-                  {liLoggingIn ? 'Verifying...' : 'Verify'}
+              <strong>Connect your LinkedIn session</strong> (one-time setup, lasts ~1 year)
+              <ol className="mb-2 mt-1 ps-3">
+                <li>Open <a href="https://www.linkedin.com" target="_blank" rel="noreferrer">linkedin.com</a> in your browser (make sure you're logged in)</li>
+                <li>Press <strong>F12</strong> to open DevTools</li>
+                <li>Click <strong>Application</strong> tab &gt; <strong>Cookies</strong> &gt; <strong>linkedin.com</strong></li>
+                <li>Find <code>li_at</code> and copy its <strong>Value</strong></li>
+                <li>Paste below and click Connect</li>
+              </ol>
+              <div className="d-flex gap-2">
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder="Paste li_at cookie value here"
+                  value={liAtCookie}
+                  onChange={e => setLiAtCookie(e.target.value)}
+                />
+                <button className="btn btn-sm btn-warning text-nowrap" onClick={handleSaveLiCookie} disabled={!liAtCookie.trim() || liLoggingIn}>
+                  {liLoggingIn ? <><span className="spinner-border spinner-border-sm me-1" />Saving...</> : 'Connect'}
                 </button>
               </div>
             </div>
