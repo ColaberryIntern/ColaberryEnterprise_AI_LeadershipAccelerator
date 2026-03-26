@@ -15,6 +15,8 @@ import {
   ResponseQueue,
   LinkedInActionQueue,
   Lead,
+  OpenclawConversation,
+  RevenueOpportunity,
 } from '../../models';
 
 const router = Router();
@@ -157,6 +159,37 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
       }));
     } catch { /* no learnings */ }
 
+    // Pipeline funnel and priority breakdown
+    let pipelineFunnel: Record<string, number> = {};
+    let priorityBreakdown: Record<string, number> = {};
+    let conversionRate = 0;
+    let revenuePipeline: Record<string, { count: number; value: number }> = {};
+    try {
+      for (let stage = 1; stage <= 8; stage++) {
+        pipelineFunnel[`stage_${stage}`] = await OpenclawConversation.count({ where: { current_stage: stage } });
+      }
+      priorityBreakdown = {
+        hot: await OpenclawConversation.count({ where: { priority_tier: 'hot' } }),
+        warm: await OpenclawConversation.count({ where: { priority_tier: 'warm' } }),
+        cold: await OpenclawConversation.count({ where: { priority_tier: 'cold' } }),
+      };
+      const totalConversations = await OpenclawConversation.count();
+      const stage6Plus = await OpenclawConversation.count({ where: { current_stage: { [Op.gte]: 6 } } });
+      conversionRate = totalConversations > 0 ? Number((stage6Plus / totalConversations).toFixed(4)) : 0;
+
+      for (const status of ['detected', 'validated', 'pursued', 'converted']) {
+        const opps = await RevenueOpportunity.findAll({
+          where: { source_channel: 'openclaw', status },
+          attributes: ['estimated_value'],
+          raw: true,
+        });
+        revenuePipeline[status] = {
+          count: opps.length,
+          value: opps.reduce((sum, o: any) => sum + (Number(o.estimated_value) || 0), 0),
+        };
+      }
+    } catch { /* tables may not exist yet */ }
+
     res.json({
       kpis: {
         signals_24h: signalsToday,
@@ -176,6 +209,10 @@ router.get(`${BASE}/dashboard`, async (_req: Request, res: Response) => {
         ctr,
         reply_rate: replyRate,
         best_tone: bestTone,
+        pipeline_funnel: pipelineFunnel,
+        priority_breakdown: priorityBreakdown,
+        conversion_rate: conversionRate,
+        revenue_pipeline: revenuePipeline,
       },
       platforms: platformStats,
       agents: agents.map((a: any) => ({
@@ -1003,6 +1040,169 @@ router.post(`${BASE}/linkedin-actions/:id/skip`, async (req: Request, res: Respo
     if (!item) return res.status(404).json({ error: 'Not found' });
     await item.update({ status: 'skipped', updated_at: new Date() });
     res.json({ success: true, action: item });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Revenue Pipeline & Conversation Tracking (Phase 2)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Conversations ────────────────────────────────────────────────────────────
+
+router.get(`${BASE}/conversations`, async (req: Request, res: Response) => {
+  try {
+    const { stage, priority_tier, status, platform, page = '1', limit = '25' } = req.query;
+    const where: any = {};
+    if (stage) where.current_stage = Number(stage);
+    if (priority_tier) where.priority_tier = priority_tier;
+    if (status) where.status = status;
+    if (platform) where.platform = platform;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    const { rows, count } = await OpenclawConversation.findAndCountAll({
+      where,
+      order: [['last_activity_at', 'DESC']],
+      limit: Number(limit),
+      offset,
+      include: [
+        { model: Lead, as: 'lead', attributes: ['id', 'name', 'email', 'interest_level', 'lead_score', 'pipeline_stage'] as any, required: false },
+        { model: OpenclawSignal, as: 'firstSignal', attributes: ['id', 'title', 'source_url', 'platform'] as any, required: false },
+      ],
+    });
+
+    res.json({ conversations: rows, total: count, page: Number(page), limit: Number(limit) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get(`${BASE}/conversations/:id`, async (req: Request, res: Response) => {
+  try {
+    const conversation = await OpenclawConversation.findByPk(req.params.id as string, {
+      include: [
+        { model: Lead, as: 'lead', required: false },
+        { model: OpenclawSignal, as: 'firstSignal', required: false },
+        { model: OpenclawResponse, as: 'firstResponse', required: false },
+        { model: EngagementEvent, as: 'engagementEvents', order: [['created_at', 'ASC']] },
+      ],
+    });
+    if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+    res.json(conversation);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put(`${BASE}/conversations/:id/stage`, async (req: Request, res: Response) => {
+  try {
+    const { stage } = req.body;
+    if (!stage || stage < 1 || stage > 8) return res.status(400).json({ error: 'stage must be 1-8' });
+
+    const conversation = await OpenclawConversation.findByPk(req.params.id as string);
+    if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+
+    const stageHistory = conversation.stage_history || [];
+    stageHistory.push({
+      stage,
+      timestamp: new Date().toISOString(),
+      trigger: 'admin_manual_override',
+    });
+
+    const updates: any = {
+      current_stage: stage,
+      stage_history: stageHistory,
+      updated_at: new Date(),
+    };
+
+    // Terminal stages update status
+    if (stage === 8) {
+      updates.status = req.body.outcome === 'won' ? 'converted' : 'lost';
+    } else if (stage === 7) {
+      updates.status = 'active';
+    }
+
+    await conversation.update(updates);
+    res.json({ success: true, conversation });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Pipeline ─────────────────────────────────────────────────────────────────
+
+router.get(`${BASE}/pipeline`, async (_req: Request, res: Response) => {
+  try {
+    const funnel: Record<string, number> = {};
+    for (let stage = 1; stage <= 8; stage++) {
+      funnel[`stage_${stage}`] = await OpenclawConversation.count({ where: { current_stage: stage } });
+    }
+
+    const priorityBreakdown = {
+      hot: await OpenclawConversation.count({ where: { priority_tier: 'hot' } }),
+      warm: await OpenclawConversation.count({ where: { priority_tier: 'warm' } }),
+      cold: await OpenclawConversation.count({ where: { priority_tier: 'cold' } }),
+    };
+
+    const totalConversations = await OpenclawConversation.count();
+    const stage6Plus = await OpenclawConversation.count({ where: { current_stage: { [Op.gte]: 6 } } });
+    const conversionRate = totalConversations > 0 ? Number((stage6Plus / totalConversations).toFixed(4)) : 0;
+
+    const statusBreakdown = {
+      active: await OpenclawConversation.count({ where: { status: 'active' } }),
+      stalled: await OpenclawConversation.count({ where: { status: 'stalled' } }),
+      converted: await OpenclawConversation.count({ where: { status: 'converted' } }),
+      lost: await OpenclawConversation.count({ where: { status: 'lost' } }),
+      closed: await OpenclawConversation.count({ where: { status: 'closed' } }),
+    };
+
+    res.json({ funnel, priority_breakdown: priorityBreakdown, conversion_rate: conversionRate, status_breakdown: statusBreakdown, total: totalConversations });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Revenue ──────────────────────────────────────────────────────────────────
+
+router.get(`${BASE}/revenue`, async (_req: Request, res: Response) => {
+  try {
+    const result: Record<string, { count: number; value: number }> = {};
+    for (const status of ['detected', 'validated', 'pursued', 'converted', 'dismissed']) {
+      const opps = await RevenueOpportunity.findAll({
+        where: { source_channel: 'openclaw', status },
+        attributes: ['estimated_value'],
+        raw: true,
+      });
+      result[status] = {
+        count: opps.length,
+        value: opps.reduce((sum, o: any) => sum + (Number(o.estimated_value) || 0), 0),
+      };
+    }
+
+    const total = await RevenueOpportunity.count({ where: { source_channel: 'openclaw' } });
+    res.json({ revenue_pipeline: result, total });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Hot Leads ────────────────────────────────────────────────────────────────
+
+router.get(`${BASE}/hot-leads`, async (req: Request, res: Response) => {
+  try {
+    const limit = Number(req.query.limit) || 20;
+
+    const conversations = await OpenclawConversation.findAll({
+      where: { priority_tier: 'hot', status: { [Op.in]: ['active', 'stalled'] } },
+      order: [['current_stage', 'DESC'], ['last_activity_at', 'DESC']],
+      limit,
+      include: [
+        { model: Lead, as: 'lead', attributes: ['id', 'name', 'email', 'interest_level', 'lead_score', 'pipeline_stage', 'lead_temperature'] as any, required: false },
+      ],
+    });
+
+    res.json({ hot_leads: conversations });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

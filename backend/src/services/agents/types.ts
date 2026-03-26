@@ -8,7 +8,7 @@ export interface AgentAction {
   result: 'success' | 'failed' | 'skipped' | 'flagged';
   details?: Record<string, any>;
   /** Target entity type for non-campaign actions */
-  entity_type?: 'campaign' | 'lead' | 'agent' | 'system' | 'config' | 'visitor' | 'authority_content' | 'engagement_event' | 'response_queue' | 'linkedin_action';
+  entity_type?: 'campaign' | 'lead' | 'agent' | 'system' | 'config' | 'visitor' | 'authority_content' | 'engagement_event' | 'response_queue' | 'linkedin_action' | 'openclaw_conversation';
   /** Target entity identifier */
   entity_id?: string;
 }

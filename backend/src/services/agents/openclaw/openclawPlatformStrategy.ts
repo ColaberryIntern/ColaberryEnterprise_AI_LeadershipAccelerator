@@ -110,10 +110,15 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 - Link to resources that genuinely help the reader.`,
 };
 
-// ─── Invitation-Based Conversion Engine (5-Stage Flow) ───────────────────────
+// ─── Invitation-Based Conversion Engine (8-Stage Flow) ───────────────────────
 //
-// They post → You comment → They engage → You guide → They pull → You convert
+// They post → You comment → They engage → You guide → They pull → You convert → You close
 // NEVER skip stages. NEVER pitch before Stage 5.
+//
+// Stages 1-5: Automated engagement (existing)
+// Stage 6: Conversion ready — interest confirmed, call/link offered
+// Stage 7: Call scheduled — booked or DM initiated
+// Stage 8: Closed — won or lost (terminal, manual admin update)
 
 export interface EngagementEvent {
   content?: string;
@@ -197,6 +202,14 @@ The user has explicitly asked for more. NOW you may offer ONE of these:
 - Pick ONE option, not both.
 - Keep it casual, not transactional.
 - This is an invitation, not a close.`,
+
+  6: `CONVERSATION STAGE 6 — FOLLOW-UP (OFFERED, AWAITING RESPONSE):
+You already offered a call or resource link. If they haven't responded:
+- Send ONE gentle follow-up after 48h.
+- Reference a recent development or new angle on their problem.
+- Do NOT repeat the call offer — they saw it.
+- If they decline or ghost after this, gracefully close.
+Example: "Saw an interesting case study on exactly the challenge you described — thought of you. No pressure either way."`,
 };
 
 // ─── Post-Generation Validation Gate ─────────────────────────────────────────
@@ -258,15 +271,97 @@ export function validateContentForStage(content: string, stage: number): Validat
     }
   }
 
-  if (stage === 5) {
+  if (stage === 5 || stage === 6) {
     // Allow one link OR one call reference, but not excessive
     const urlCount = (content.match(new RegExp(URL_REGEX.source, 'g')) || []).length;
     if (urlCount > 1) {
-      return { passed: false, reason: 'Stage 5: only one link allowed' };
+      return { passed: false, reason: `Stage ${stage}: only one link allowed` };
     }
   }
 
+  // Stages 7-8: terminal — no automated content should be generated
+  if (stage >= 7) {
+    return { passed: false, reason: `Stage ${stage}: no automated content — human handles post-booking` };
+  }
+
   return { passed: true };
+}
+
+// ─── Conversion Signal Detection ─────────────────────────────────────────────
+
+const INTEREST_SIGNALS: Array<{ pattern: string; confidence: number }> = [
+  // High confidence — explicit ask
+  { pattern: 'sign me up', confidence: 1.0 },
+  { pattern: 'where can i', confidence: 0.95 },
+  { pattern: 'send me', confidence: 0.95 },
+  { pattern: 'link me', confidence: 0.95 },
+  { pattern: 'jump on a call', confidence: 0.95 },
+  { pattern: 'happy to chat', confidence: 0.9 },
+  { pattern: "let's connect", confidence: 0.9 },
+  { pattern: 'yes please', confidence: 0.9 },
+  // Medium-high — clear interest
+  { pattern: 'show me', confidence: 0.85 },
+  { pattern: 'can you show', confidence: 0.85 },
+  { pattern: 'how do i', confidence: 0.8 },
+  { pattern: 'love to', confidence: 0.8 },
+  { pattern: 'tell me more', confidence: 0.8 },
+  { pattern: "i'd like to", confidence: 0.8 },
+  { pattern: 'interested', confidence: 0.75 },
+  { pattern: 'sounds great', confidence: 0.75 },
+  // Medium — implied interest
+  { pattern: 'that would be', confidence: 0.7 },
+  { pattern: "that'd be", confidence: 0.7 },
+  { pattern: 'can we talk', confidence: 0.85 },
+  { pattern: 'do you offer', confidence: 0.8 },
+  { pattern: 'how does this work', confidence: 0.75 },
+  { pattern: 'what does it cost', confidence: 0.9 },
+  { pattern: 'pricing', confidence: 0.85 },
+];
+
+/**
+ * Detect conversion signals in text content.
+ * Returns matched signals with confidence scores.
+ */
+export function detectConversionSignals(content: string): Array<{ signal: string; confidence: number }> {
+  if (!content) return [];
+  const lower = content.toLowerCase();
+  const matches: Array<{ signal: string; confidence: number }> = [];
+
+  for (const { pattern, confidence } of INTEREST_SIGNALS) {
+    if (lower.includes(pattern)) {
+      matches.push({ signal: pattern, confidence });
+    }
+  }
+
+  return matches.sort((a, b) => b.confidence - a.confidence);
+}
+
+// ─── Follow-Up Validation ────────────────────────────────────────────────────
+
+const AGGRESSIVE_PATTERNS = /\b(last chance|don't miss|act now|limited time|hurry|final reminder|closing soon|one time offer|expires|urgent)\b/i;
+
+/**
+ * Validate follow-up content for safety.
+ * Prevents aggressive follow-ups and enforces stage-based rules.
+ */
+export function validateFollowUpContent(content: string, stage: number, followUpCount: number): ValidationResult {
+  // Never follow up on a cold first-touch
+  if (stage <= 1) {
+    return { passed: false, reason: 'Stage 1: follow-ups are prohibited on cold first-touch' };
+  }
+
+  // Max 2 follow-ups per conversation per stage
+  if (followUpCount >= 2) {
+    return { passed: false, reason: `Max 2 follow-ups per stage reached (count: ${followUpCount})` };
+  }
+
+  // Block aggressive language
+  if (AGGRESSIVE_PATTERNS.test(content)) {
+    return { passed: false, reason: 'Follow-up contains aggressive/urgency language — blocked' };
+  }
+
+  // Follow-ups must also pass stage validation
+  return validateContentForStage(content, stage);
 }
 
 // ─── Auto-Approve Logic ─────────────────────────────────────────────────────

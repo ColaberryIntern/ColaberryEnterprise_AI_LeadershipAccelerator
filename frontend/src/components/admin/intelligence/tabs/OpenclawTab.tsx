@@ -490,6 +490,97 @@ export default function OpenclawTab() {
         </div>
       )}
 
+      {/* Revenue Pipeline */}
+      {kpis?.pipeline_funnel && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white fw-semibold small">Revenue Pipeline</div>
+          <div className="card-body">
+            <div className="row g-3">
+              {/* Funnel View */}
+              <div className="col-md-6">
+                <div className="fw-medium small mb-2">Conversation Funnel</div>
+                {[
+                  { stage: 1, label: 'Initial Engagement', color: '#e2e8f0' },
+                  { stage: 2, label: 'Qualification', color: '#bee3f8' },
+                  { stage: 3, label: 'Deepening', color: '#90cdf4' },
+                  { stage: 4, label: 'Transition', color: '#63b3ed' },
+                  { stage: 5, label: 'Interest Expressed', color: '#4299e1' },
+                  { stage: 6, label: 'Conversion Ready', color: '#3182ce' },
+                  { stage: 7, label: 'Call Scheduled', color: '#2b6cb0' },
+                  { stage: 8, label: 'Closed', color: '#1a365d' },
+                ].map(s => {
+                  const count = kpis.pipeline_funnel[`stage_${s.stage}`] || 0;
+                  const maxCount = Math.max(...Object.values(kpis.pipeline_funnel), 1);
+                  const pct = (count / maxCount) * 100;
+                  return (
+                    <div key={s.stage} className="mb-1">
+                      <div className="d-flex justify-content-between" style={{ fontSize: '0.7rem' }}>
+                        <span>Stage {s.stage}: {s.label}</span>
+                        <span className="fw-bold">{count}</span>
+                      </div>
+                      <div className="progress" style={{ height: 6 }}>
+                        <div className="progress-bar" style={{ width: `${pct}%`, backgroundColor: s.color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Priority + Revenue */}
+              <div className="col-md-6">
+                <div className="fw-medium small mb-2">Priority Breakdown</div>
+                <div className="d-flex gap-2 mb-3">
+                  {[
+                    { tier: 'hot', label: 'Hot', bg: 'danger' },
+                    { tier: 'warm', label: 'Warm', bg: 'warning' },
+                    { tier: 'cold', label: 'Cold', bg: 'secondary' },
+                  ].map(t => (
+                    <div key={t.tier} className="text-center flex-fill">
+                      <div className={`badge bg-${t.bg} fs-6 w-100 py-2`}>
+                        {kpis.priority_breakdown?.[t.tier as keyof typeof kpis.priority_breakdown] || 0}
+                      </div>
+                      <div className="text-muted" style={{ fontSize: '0.65rem' }}>{t.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="fw-medium small mb-2">Conversion Rate</div>
+                <div className="mb-3">
+                  <div className="progress" style={{ height: 20 }}>
+                    <div
+                      className="progress-bar bg-success"
+                      style={{ width: `${(kpis.conversion_rate || 0) * 100}%` }}
+                    >
+                      {((kpis.conversion_rate || 0) * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+
+                {kpis.revenue_pipeline && (
+                  <>
+                    <div className="fw-medium small mb-2">Revenue Pipeline</div>
+                    <div className="d-flex gap-2 flex-wrap">
+                      {['detected', 'validated', 'pursued', 'converted'].map(status => {
+                        const data = kpis.revenue_pipeline[status];
+                        const colors: Record<string, string> = { detected: 'info', validated: 'primary', pursued: 'warning', converted: 'success' };
+                        return data ? (
+                          <div key={status} className="text-center flex-fill">
+                            <div className={`badge bg-${colors[status]} w-100 py-2`} style={{ fontSize: '0.8rem' }}>
+                              {data.count} (${data.value.toLocaleString()})
+                            </div>
+                            <div className="text-muted text-capitalize" style={{ fontSize: '0.65rem' }}>{status}</div>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Agent Status */}
       {dashboard?.agents && dashboard.agents.length > 0 && (
         <div className="card border-0 shadow-sm mb-4">

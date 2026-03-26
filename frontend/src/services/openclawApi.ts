@@ -21,6 +21,10 @@ export interface OpenclawDashboard {
     ctr: number;
     reply_rate: number;
     best_tone: string;
+    pipeline_funnel: Record<string, number>;
+    priority_breakdown: { hot: number; warm: number; cold: number };
+    conversion_rate: number;
+    revenue_pipeline: Record<string, { count: number; value: number }>;
   };
   platforms: Array<{ platform: string; count: number }>;
   agents: Array<{
@@ -201,3 +205,67 @@ export const submitOpenclawSignal = (url: string, platform?: string) =>
 
 export const generateLinkedInPost = (topic: string) =>
   api.post<{ success: boolean; signal: OpenclawSignalItem; response: any; short_id: string }>(`${BASE}/linkedin/generate`, { topic });
+
+// ── Phase 2: Revenue Pipeline Types & API ────────────────────────────────────
+
+export interface OpenclawConversationItem {
+  id: string;
+  lead_id: number | null;
+  platform: string;
+  thread_identifier: string;
+  current_stage: number;
+  stage_history: Array<{ stage: number; timestamp: string; trigger: string }>;
+  first_signal_id: string | null;
+  first_response_id: string | null;
+  engagement_count: number;
+  their_reply_count: number;
+  our_reply_count: number;
+  last_activity_at: string;
+  last_their_activity_at: string | null;
+  stall_detected_at: string | null;
+  conversion_signals: Array<{ signal: string; confidence: number; detected_at: string }>;
+  priority_tier: 'hot' | 'warm' | 'cold';
+  status: 'active' | 'stalled' | 'converted' | 'lost' | 'closed';
+  created_at: string;
+  lead?: {
+    id: number;
+    name: string;
+    email: string;
+    interest_level: string | null;
+    lead_score: number | null;
+    pipeline_stage: string | null;
+    lead_temperature?: string | null;
+  };
+  firstSignal?: { id: string; title: string; source_url: string; platform: string };
+}
+
+export interface PipelineData {
+  funnel: Record<string, number>;
+  priority_breakdown: { hot: number; warm: number; cold: number };
+  conversion_rate: number;
+  status_breakdown: Record<string, number>;
+  total: number;
+}
+
+export interface RevenueData {
+  revenue_pipeline: Record<string, { count: number; value: number }>;
+  total: number;
+}
+
+export const getOpenclawConversations = (params?: Record<string, string>) =>
+  api.get<{ conversations: OpenclawConversationItem[]; total: number }>(`${BASE}/conversations`, { params });
+
+export const getOpenclawConversation = (id: string) =>
+  api.get<OpenclawConversationItem>(`${BASE}/conversations/${id}`);
+
+export const updateConversationStage = (id: string, stage: number, outcome?: string) =>
+  api.put(`${BASE}/conversations/${id}/stage`, { stage, outcome });
+
+export const getOpenclawPipeline = () =>
+  api.get<PipelineData>(`${BASE}/pipeline`);
+
+export const getOpenclawRevenue = () =>
+  api.get<RevenueData>(`${BASE}/revenue`);
+
+export const getOpenclawHotLeads = (limit?: number) =>
+  api.get<{ hot_leads: OpenclawConversationItem[] }>(`${BASE}/hot-leads`, { params: limit ? { limit: String(limit) } : undefined });

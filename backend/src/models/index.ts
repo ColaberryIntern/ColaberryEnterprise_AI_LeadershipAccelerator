@@ -136,6 +136,7 @@ import AuthorityContent from './AuthorityContent';
 import EngagementEvent from './EngagementEvent';
 import ResponseQueue from './ResponseQueue';
 import LinkedInActionQueue from './LinkedInActionQueue';
+import OpenclawConversation from './OpenclawConversation';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -656,6 +657,18 @@ Lead.hasMany(OpenclawResponse, { foreignKey: 'lead_id', as: 'openclawResponses' 
 EngagementEvent.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
 Lead.hasMany(EngagementEvent, { foreignKey: 'lead_id', as: 'engagementEvents' });
 
+// OpenClaw Conversation State Machine associations
+OpenclawConversation.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasMany(OpenclawConversation, { foreignKey: 'lead_id', as: 'openclawConversations' });
+
+OpenclawConversation.belongsTo(OpenclawSignal, { foreignKey: 'first_signal_id', as: 'firstSignal' });
+OpenclawConversation.belongsTo(OpenclawResponse, { foreignKey: 'first_response_id', as: 'firstResponse' });
+
+EngagementEvent.belongsTo(OpenclawConversation, { foreignKey: 'conversation_id', as: 'conversation' });
+OpenclawConversation.hasMany(EngagementEvent, { foreignKey: 'conversation_id', as: 'engagementEvents' });
+
+RevenueOpportunity.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+
 // --- Cory Knowledge Graph associations ---
 KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'source_node_id', as: 'sourceNode' });
 KnowledgeEdge.belongsTo(KnowledgeNode, { foreignKey: 'target_node_id', as: 'targetNode' });
@@ -816,4 +829,5 @@ export {
   EngagementEvent,
   ResponseQueue,
   LinkedInActionQueue,
+  OpenclawConversation,
 };

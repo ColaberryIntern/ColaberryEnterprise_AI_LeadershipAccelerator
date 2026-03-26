@@ -19,6 +19,10 @@ interface RevenueOpportunityAttributes {
   evidence?: Record<string, any>;
   recommended_actions?: Record<string, any>;
   status?: OpportunityStatus;
+  source_channel?: string;
+  attribution_chain?: Record<string, any>;
+  deal_closed_at?: Date;
+  lead_id?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -37,6 +41,10 @@ class RevenueOpportunity extends Model<RevenueOpportunityAttributes> implements 
   declare evidence: Record<string, any>;
   declare recommended_actions: Record<string, any>;
   declare status: OpportunityStatus;
+  declare source_channel: string;
+  declare attribution_chain: Record<string, any>;
+  declare deal_closed_at: Date;
+  declare lead_id: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -98,6 +106,23 @@ RevenueOpportunity.init(
       allowNull: false,
       defaultValue: 'detected',
     },
+    source_channel: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    attribution_chain: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    deal_closed_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    lead_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: 'leads', key: 'id' },
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -117,6 +142,8 @@ RevenueOpportunity.init(
       { fields: ['department'] },
       { fields: ['estimated_value'] },
       { fields: ['opportunity_type'] },
+      { fields: ['source_channel'] },
+      { fields: ['lead_id'] },
     ],
   }
 );

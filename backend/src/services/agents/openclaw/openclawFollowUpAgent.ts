@@ -1,12 +1,15 @@
 import { Op } from 'sequelize';
+import OpenclawConversation from '../../../models/OpenclawConversation';
 import EngagementEvent from '../../../models/EngagementEvent';
 import ResponseQueue from '../../../models/ResponseQueue';
 import { generateContent } from './openclawAiHelper';
+import { CONVERSION_STAGE_PROMPTS, validateFollowUpContent, validateContentForStage } from './openclawPlatformStrategy';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
- * FollowUpAgent — generates subtle follow-up drafts for high-intent
- * conversations that went silent after our reply (48h+ no activity).
+ * FollowUpAgent — conversation-aware follow-up engine.
+ * Targets stalled conversations (stall_detected_at IS NOT NULL) at stage >= 2
+ * with priority_tier hot or warm.
  * Also expires stale ResponseQueue drafts.
  *
  * Schedule: 0 10 * * * (daily 10am UTC)
@@ -18,9 +21,7 @@ export async function runFollowUpAgent(
   const start = Date.now();
   const actions: AgentAction[] = [];
   const errors: string[] = [];
-  const minIntentScore = config.min_intent_score || 0.6;
   const maxFollowUps = config.max_follow_ups_per_run || 3;
-  const staleHours = config.stale_hours || 48;
 
   try {
     // 1. Expire stale ResponseQueue drafts past expires_at
@@ -49,71 +50,131 @@ export async function runFollowUpAgent(
       });
     }
 
-    // 2. Find high-intent engagements that went silent
-    const staleThreshold = new Date(Date.now() - staleHours * 60 * 60 * 1000);
-    const staleEngagements = await EngagementEvent.findAll({
+    // 2. Find stalled conversations — conversation-aware approach
+    const stalledConversations = await OpenclawConversation.findAll({
       where: {
-        status: 'responded',
-        intent_score: { [Op.gte]: minIntentScore },
-        updated_at: { [Op.lt]: staleThreshold },
+        status: 'stalled',
+        stall_detected_at: { [Op.ne]: null as any },
+        current_stage: { [Op.gte]: 2 },
+        priority_tier: { [Op.in]: ['hot', 'warm'] },
       },
-      order: [['intent_score', 'DESC']],
+      order: [
+        ['priority_tier', 'ASC'], // hot first (alphabetical: cold, hot, warm → but we filter to hot/warm)
+        ['current_stage', 'DESC'], // highest stage first
+      ],
       limit: maxFollowUps,
     });
 
     let followUpsCreated = 0;
-    for (const engagement of staleEngagements) {
+    for (const conversation of stalledConversations) {
       try {
-        // Check if we already have a follow_up in queue for this engagement
-        const existingFollowUp = await ResponseQueue.findOne({
+        // Count existing follow-ups for this conversation at this stage
+        const existingFollowUpCount = await ResponseQueue.count({
           where: {
-            engagement_id: engagement.id,
+            details: { conversation_id: conversation.id },
             response_type: 'follow_up',
-            status: { [Op.in]: ['draft', 'approved'] },
+            status: { [Op.in]: ['draft', 'approved', 'posted'] },
           },
         });
-        if (existingFollowUp) continue;
 
-        const prompt = `Generate a subtle follow-up message for a ${engagement.platform} conversation that went quiet. The original engagement was from ${engagement.user_name}${engagement.user_title ? ` (${engagement.user_title})` : ''}.
+        // Get the latest engagement event for context
+        const latestEvent = await EngagementEvent.findOne({
+          where: { conversation_id: conversation.id },
+          order: [['created_at', 'DESC']],
+        });
 
-Their original comment: "${(engagement.content || '').slice(0, 300)}"
+        if (!latestEvent) continue;
+
+        // Get stage-appropriate prompt guidance
+        const stagePrompt = CONVERSION_STAGE_PROMPTS[conversation.current_stage] || CONVERSION_STAGE_PROMPTS[2];
+
+        const prompt = `Generate a subtle follow-up message for a ${conversation.platform} conversation at Stage ${conversation.current_stage}.
+
+Stage guidance:
+${stagePrompt}
+
+The conversation has been silent for 48+ hours. The last engagement was from ${latestEvent.user_name}${latestEvent.user_title ? ` (${latestEvent.user_title})` : ''}.
+
+Their last message: "${(latestEvent.content || '').slice(0, 300)}"
 
 Generate a brief, natural follow-up (50-80 words) that:
+- Is appropriate for conversation stage ${conversation.current_stage}
 - References a recent development on the topic
 - Does NOT feel like a chase or pushy
-- Example patterns: "Saw an update on this topic...", "Curious if you explored X further"
-- No pitching, no links
+- No pitching, no links (unless stage 5+)
 - Do NOT mention "Colaberry"`;
 
         const result = await generateContent(prompt, 'gpt-4o');
         let followUpText = result.body.replace(/colaberry/gi, '[company]');
 
+        // Validate follow-up content against safety rules
+        const followUpValidation = validateFollowUpContent(followUpText, conversation.current_stage, existingFollowUpCount);
+        if (!followUpValidation.passed) {
+          actions.push({
+            campaign_id: null,
+            action: 'follow_up_blocked',
+            reason: followUpValidation.reason || 'Validation failed',
+            confidence: 1.0,
+            before_state: { conversation_id: conversation.id, stage: conversation.current_stage },
+            after_state: { blocked: true },
+            result: 'skipped',
+            entity_type: 'response_queue',
+          });
+          continue;
+        }
+
+        // Also validate against stage content rules
+        const stageValidation = validateContentForStage(followUpText, conversation.current_stage);
+        if (!stageValidation.passed) {
+          actions.push({
+            campaign_id: null,
+            action: 'follow_up_blocked',
+            reason: stageValidation.reason || 'Stage validation failed',
+            confidence: 1.0,
+            before_state: { conversation_id: conversation.id, stage: conversation.current_stage },
+            after_state: { blocked: true },
+            result: 'skipped',
+            entity_type: 'response_queue',
+          });
+          continue;
+        }
+
         const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
         await ResponseQueue.create({
-          engagement_id: engagement.id,
+          engagement_id: latestEvent.id,
           response_type: 'follow_up',
           response_text: followUpText,
-          platform: engagement.platform,
+          platform: conversation.platform,
           status: 'draft',
           expires_at: expiresAt,
+          details: {
+            trigger: 'stalled_conversation',
+            urgency_level: conversation.priority_tier,
+            conversation_id: conversation.id,
+            conversation_stage: conversation.current_stage,
+          },
         });
 
-        await engagement.update({ status: 'following_up', updated_at: new Date() });
+        await latestEvent.update({ status: 'following_up', updated_at: new Date() });
 
         followUpsCreated++;
         actions.push({
           campaign_id: null,
           action: 'create_follow_up',
-          reason: `Follow-up for ${engagement.user_name} (intent: ${engagement.intent_score}, silent ${staleHours}h+)`,
+          reason: `Follow-up for stalled ${conversation.priority_tier} conversation at stage ${conversation.current_stage} on ${conversation.platform}`,
           confidence: 0.75,
-          before_state: { engagement_id: engagement.id, intent_score: engagement.intent_score },
+          before_state: {
+            conversation_id: conversation.id,
+            stage: conversation.current_stage,
+            priority_tier: conversation.priority_tier,
+          },
           after_state: { response_type: 'follow_up', status: 'draft' },
           result: 'success',
           entity_type: 'response_queue',
         });
       } catch (genErr: any) {
-        errors.push(`Failed to create follow-up for engagement ${engagement.id}: ${genErr.message}`);
+        errors.push(`Failed to create follow-up for conversation ${conversation.id}: ${genErr.message}`);
       }
     }
 
@@ -122,7 +183,7 @@ Generate a brief, natural follow-up (50-80 words) that:
       action: 'summary',
       reason: `Follow-up run complete`,
       confidence: 1.0,
-      before_state: { stale_engagements: staleEngagements.length, expired_drafts: expiredDrafts.length },
+      before_state: { stalled_conversations: stalledConversations.length, expired_drafts: expiredDrafts.length },
       after_state: { follow_ups_created: followUpsCreated },
       result: 'success',
       entity_type: 'response_queue',

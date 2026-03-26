@@ -22,6 +22,7 @@ interface EngagementEventAttributes {
   company_detected?: string;
   status?: EngagementEventStatus;
   lead_id?: number;
+  conversation_id?: string;
   details?: Record<string, any>;
   created_at?: Date;
   updated_at?: Date;
@@ -44,6 +45,7 @@ class EngagementEvent extends Model<EngagementEventAttributes> implements Engage
   declare company_detected: string;
   declare status: EngagementEventStatus;
   declare lead_id: number;
+  declare conversation_id: string;
   declare details: Record<string, any>;
   declare created_at: Date;
   declare updated_at: Date;
@@ -121,6 +123,11 @@ EngagementEvent.init(
       allowNull: true,
       references: { model: 'leads', key: 'id' },
     },
+    conversation_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'openclaw_conversations', key: 'id' },
+    },
     details: {
       type: DataTypes.JSONB,
       allowNull: true,
@@ -146,6 +153,7 @@ EngagementEvent.init(
       { fields: ['status'] },
       { fields: ['intent_score'] },
       { fields: ['lead_id'] },
+      { fields: ['conversation_id'] },
       { fields: ['created_at'] },
     ],
   }

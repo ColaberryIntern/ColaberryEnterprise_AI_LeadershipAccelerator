@@ -5,6 +5,7 @@ import EngagementEvent from '../../../models/EngagementEvent';
 import { sequelize } from '../../../config/database';
 import { fetchEngagementsForUrl } from './openclawEngagementFetcher';
 import { generateContent } from './openclawAiHelper';
+import { updateConversationFromEvent } from './openclawConversationTrackingService';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 /**
@@ -70,7 +71,7 @@ export async function runEngagementMonitorAgent(
             intentScore = Math.min(1, Math.max(0, intentScore));
           } catch { intentScore = 0.3; }
 
-          await EngagementEvent.create({
+          const newEvent = await EngagementEvent.create({
             response_id: response.id,
             platform: eng.platform,
             source_url: eng.source_url,
@@ -82,6 +83,13 @@ export async function runEngagementMonitorAgent(
             role_seniority: seniority,
             status: 'new',
           });
+
+          // Wire conversation tracking — link event to conversation state machine
+          try {
+            await updateConversationFromEvent(newEvent);
+          } catch (convErr: any) {
+            errors.push(`Conversation tracking failed for event ${newEvent.id}: ${convErr.message}`);
+          }
 
           newEngagements++;
         }
@@ -103,7 +111,7 @@ export async function runEngagementMonitorAgent(
           const seniority = detectSeniority(eng.user_title);
           let intentScore = 0.3; // Default for authority content engagement
 
-          await EngagementEvent.create({
+          const newEvent = await EngagementEvent.create({
             authority_content_id: content.id,
             platform: eng.platform,
             source_url: eng.source_url,
@@ -115,6 +123,13 @@ export async function runEngagementMonitorAgent(
             role_seniority: seniority,
             status: 'new',
           });
+
+          // Wire conversation tracking — link event to conversation state machine
+          try {
+            await updateConversationFromEvent(newEvent);
+          } catch (convErr: any) {
+            errors.push(`Conversation tracking failed for event ${newEvent.id}: ${convErr.message}`);
+          }
 
           newEngagements++;
         }
