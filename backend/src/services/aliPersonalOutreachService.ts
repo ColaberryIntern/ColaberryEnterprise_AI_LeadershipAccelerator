@@ -6,10 +6,10 @@
 
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import { Campaign, CampaignLead } from '../models';
+import { Campaign } from '../models';
 import { enrollLeadsInCampaign } from './campaignService';
 
-const MAX_ENROLL_PER_DAY = 10;
+const MAX_ENROLL_PER_DAY = 50;
 const CAMPAIGN_NAME = 'Ali Personal Outreach';
 
 /** Ali's HTML signature — appended by processEmailAction when campaign settings.ali_signature is true */
@@ -23,7 +23,7 @@ export const ALI_SIGNATURE = `
 
 /**
  * Find high-intent leads who haven't been enrolled in Ali Personal Outreach yet.
- * Criteria (any): 3+ clicks, clicked booking link, Maya conversation >30s, hot/qualified temp
+ * Criteria (any): 2+ clicks, clicked booking link, Maya conversation >30s, hot/qualified temp
  */
 export async function findHighIntentLeads(): Promise<any[]> {
   const leads = await sequelize.query(`
@@ -41,11 +41,17 @@ export async function findHighIntentLeads(): Promise<any[]> {
         ) as has_maya_convo
       FROM interaction_outcomes io
       GROUP BY io.lead_id
-      HAVING COUNT(*) FILTER (WHERE io.outcome = 'clicked') >= 3
+      HAVING COUNT(*) FILTER (WHERE io.outcome = 'clicked') >= 2
         OR COUNT(*) FILTER (WHERE io.outcome = 'clicked' AND io.metadata->>'url' LIKE '%ai-architect%') > 0
     ) sub
     JOIN leads l ON l.id = sub.lead_id
-    WHERE NOT EXISTS (
+    WHERE (
+      sub.click_count >= 2
+      OR sub.has_booking_click
+      OR sub.has_maya_convo
+      OR l.lead_temperature IN ('hot', 'qualified')
+    )
+    AND NOT EXISTS (
       SELECT 1 FROM campaign_leads cl2
       JOIN campaigns c ON c.id = cl2.campaign_id
       WHERE cl2.lead_id = sub.lead_id
@@ -89,7 +95,7 @@ export async function runAliPersonalOutreach(): Promise<void> {
   const [enrolledToday] = await sequelize.query(`
     SELECT COUNT(*) as cnt FROM campaign_leads
     WHERE campaign_id = :campaignId
-    AND created_at >= :today::date
+    AND enrolled_at >= :today::date
   `, { replacements: { campaignId: campaign.id, today: todayStr }, type: QueryTypes.SELECT }) as any[];
 
   const enrolledCount = parseInt(enrolledToday?.cnt || '0', 10);
