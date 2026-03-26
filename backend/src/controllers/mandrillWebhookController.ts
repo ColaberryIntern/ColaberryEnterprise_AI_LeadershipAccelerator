@@ -299,6 +299,38 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       }
 
       console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${lead.name})`);
+
+      // If this lead received a personal Ali email, call Ali immediately
+      try {
+        const aliOutreach = await CommunicationLog.findOne({
+          where: { lead_id: lead.id, metadata: { trigger: 'ali_personal_outreach' } } as any,
+        });
+        if (aliOutreach) {
+          const { triggerVoiceCall } = require('../services/synthflowService');
+          const leadName = (lead as any).name || 'a lead';
+          const leadCompany = (lead as any).company || '';
+          const replyPreview = body.substring(0, 150).replace(/\n/g, ' ');
+          await triggerVoiceCall({
+            name: 'Ali',
+            phone: env.adminAlertPhone || '+16825975784',
+            callType: 'interest',
+            prompt: [
+              'You are Cory, Ali\'s AI operations manager. You are calling Ali with urgent good news.',
+              `Say: "Hi Ali, this is Cory. ${leadName}${leadCompany ? ' from ' + leadCompany : ''} just replied to your personal email. Here is what they said: ${replyPreview}. You should respond right away while they are engaged. The reply is in your inbox at ali@colaberry.com."`,
+              'If Ali asks questions about the lead, share what you know. If he asks you to do something, say you will flag it for the team.',
+              'Keep it brief and urgent.',
+            ].join('\n'),
+            context: {
+              lead_name: leadName,
+              step_goal: 'Notify Ali of high-priority email reply',
+            },
+          });
+          console.log(`[MandrillInbound] Cory calling Ali — ${leadName} replied to personal email`);
+        }
+      } catch (callErr: any) {
+        console.warn(`[MandrillInbound] Cory notification call failed: ${callErr.message}`);
+      }
+
       processed++;
     }
 
