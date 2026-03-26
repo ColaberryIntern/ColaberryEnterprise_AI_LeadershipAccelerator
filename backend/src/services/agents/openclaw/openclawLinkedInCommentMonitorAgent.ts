@@ -31,8 +31,16 @@ export async function runLinkedInCommentMonitorAgent(
     });
 
     if (trackedPosts.length === 0) {
-      actions.push({ type: 'skip', target: 'linkedin_comment_monitor', reason: 'No tracked posts', result: 'skipped' });
-      return { actions, errors, duration_ms: Date.now() - start, metadata: { posts_scanned: 0, new_replies: 0 } };
+      actions.push({
+        campaign_id: null,
+        action: 'skip_linkedin_comment_monitor',
+        reason: 'No tracked posts',
+        confidence: 1.0,
+        before_state: null,
+        after_state: null,
+        result: 'skipped',
+      });
+      return { agent_name: 'OpenclawLinkedInCommentMonitorAgent', campaigns_processed: 0, actions_taken: actions, errors, duration_ms: Date.now() - start, entities_processed: 0 };
     }
 
     let totalNewReplies = 0;
@@ -46,7 +54,15 @@ export async function runLinkedInCommentMonitorAgent(
         const scraped = await scrapeLinkedInPost(postUrl);
 
         if (!scraped.comments || scraped.comments.length === 0) {
-          actions.push({ type: 'scan', target: postUrl, reason: 'No comments found (may need re-auth)', result: 'no_comments' });
+          actions.push({
+            campaign_id: null,
+            action: 'scan_linkedin_post',
+            reason: 'No comments found (may need re-auth)',
+            confidence: 0.5,
+            before_state: null,
+            after_state: { post_url: postUrl },
+            result: 'skipped',
+          });
           continue;
         }
 
@@ -55,11 +71,19 @@ export async function runLinkedInCommentMonitorAgent(
         const newComments = scraped.comments.filter(c => !knownSet.has(c.commenter_name));
 
         if (newComments.length === 0) {
-          actions.push({ type: 'scan', target: postUrl, reason: `All ${scraped.comments.length} commenters already known`, result: 'no_new' });
           // Update last_scanned_at even if no new comments
           await tracker.update({
             details: { ...(tracker as any).details, last_scanned_at: new Date().toISOString() },
             updated_at: new Date(),
+          });
+          actions.push({
+            campaign_id: null,
+            action: 'scan_linkedin_post',
+            reason: `All ${scraped.comments.length} commenters already known`,
+            confidence: 1.0,
+            before_state: null,
+            after_state: { post_url: postUrl, total_commenters: scraped.comments.length },
+            result: 'skipped',
           });
           continue;
         }
@@ -178,27 +202,42 @@ One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
         });
 
         actions.push({
-          type: 'generate',
-          target: postUrl,
+          campaign_id: null,
+          action: 'generate_linkedin_replies',
           reason: `Found ${newComments.length} new commenters, generated ${replies.length} replies`,
+          confidence: 0.9,
+          before_state: { known_commenters: knownCommenters.length },
+          after_state: { known_commenters: merged.length, new_replies: replies.length },
           result: 'success',
+          details: { post_url: postUrl },
         });
 
       } catch (err: any) {
         errors.push(`Failed to scan ${postUrl}: ${err?.message?.slice(0, 200)}`);
-        actions.push({ type: 'scan', target: postUrl, reason: err.message, result: 'error' });
+        actions.push({
+          campaign_id: null,
+          action: 'scan_linkedin_post',
+          reason: err.message,
+          confidence: 0,
+          before_state: null,
+          after_state: null,
+          result: 'failed',
+          details: { post_url: postUrl },
+        });
       }
     }
 
     return {
-      actions,
+      agent_name: 'OpenclawLinkedInCommentMonitorAgent',
+      campaigns_processed: 0,
+      actions_taken: actions,
       errors,
       duration_ms: Date.now() - start,
-      metadata: { posts_scanned: trackedPosts.length, new_replies: totalNewReplies },
+      entities_processed: trackedPosts.length,
     };
 
   } catch (err: any) {
     errors.push(err.message);
-    return { actions, errors, duration_ms: Date.now() - start, metadata: {} };
+    return { agent_name: 'OpenclawLinkedInCommentMonitorAgent', campaigns_processed: 0, actions_taken: actions, errors, duration_ms: Date.now() - start };
   }
 }

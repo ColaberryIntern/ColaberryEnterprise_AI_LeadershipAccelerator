@@ -1080,7 +1080,7 @@ router.post(`${BASE}/linkedin/track-post`, async (req: Request, res: Response) =
 
 router.delete(`${BASE}/linkedin/tracked-posts/:id`, async (req: Request, res: Response) => {
   try {
-    const signal = await OpenclawSignal.findByPk(req.params.id);
+    const signal = await OpenclawSignal.findByPk(req.params.id as string);
     if (!signal) return res.status(404).json({ error: 'Not found' });
     await signal.update({ status: 'expired' as any, updated_at: new Date() });
     res.json({ success: true });
