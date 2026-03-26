@@ -169,25 +169,61 @@ export async function scrapeLinkedInPost(postUrl: string): Promise<LinkedInPostD
 }
 
 /**
- * Open a visible browser for manual LinkedIn login.
- * Returns the browser context so the caller can close it after login completes.
+ * Save LinkedIn session cookies to the persistent browser profile.
+ * User provides li_at (and optionally JSESSIONID) from their browser DevTools.
  */
-export async function openLinkedInLoginBrowser(): Promise<{ close: () => Promise<void> }> {
+export async function saveLinkedInCookies(li_at: string, jsessionId?: string): Promise<void> {
   const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
   await fs.mkdir(profileDir, { recursive: true });
 
+  // Launch a headless persistent context, inject cookies, then close to save
   const context = await chromium.launchPersistentContext(profileDir, {
-    headless: false,
+    headless: true,
     viewport: { width: 1280, height: 900 },
     args: ['--disable-blink-features=AutomationControlled'],
   });
 
-  const page = await context.newPage();
-  await page.goto('https://www.linkedin.com/login');
+  const cookies = [
+    { name: 'li_at', value: li_at, domain: '.linkedin.com', path: '/', httpOnly: true, secure: true, sameSite: 'None' as const },
+  ];
+  if (jsessionId) {
+    cookies.push({ name: 'JSESSIONID', value: jsessionId, domain: '.linkedin.com', path: '/', httpOnly: false, secure: true, sameSite: 'None' as const });
+  }
 
-  return {
-    close: async () => {
-      await context.close(); // saves cookies
-    },
-  };
+  await context.addCookies(cookies);
+
+  // Navigate to LinkedIn to verify the session and let the browser save state
+  const page = await context.newPage();
+  await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.waitForTimeout(2000);
+  await context.close(); // saves cookies to profileDir
+}
+
+/**
+ * Check if LinkedIn session cookies exist and are likely valid.
+ */
+export async function checkLinkedInSession(): Promise<{ authenticated: boolean; message: string }> {
+  const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
+  try {
+    await fs.access(profileDir);
+  } catch {
+    return { authenticated: false, message: 'No LinkedIn browser profile found. Save your li_at cookie first.' };
+  }
+
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: true,
+    viewport: { width: 1280, height: 900 },
+    args: ['--disable-blink-features=AutomationControlled'],
+  });
+
+  try {
+    const cookies = await context.cookies('https://www.linkedin.com');
+    const liAt = cookies.find(c => c.name === 'li_at');
+    if (!liAt || !liAt.value) {
+      return { authenticated: false, message: 'No li_at cookie found in profile. Save your cookie first.' };
+    }
+    return { authenticated: true, message: `Session active. li_at cookie expires: ${liAt.expires > 0 ? new Date(liAt.expires * 1000).toISOString() : 'session'}` };
+  } finally {
+    await context.close();
+  }
 }

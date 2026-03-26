@@ -1008,30 +1008,29 @@ One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
   }
 });
 
-// ── LinkedIn Login Session Management ─────────────────────────────────────────
-let linkedinLoginContext: any = null;
+// ── LinkedIn Session Management ───────────────────────────────────────────────
 
-router.post(`${BASE}/linkedin/start-login`, async (_req: Request, res: Response) => {
+router.post(`${BASE}/linkedin/save-session`, async (req: Request, res: Response) => {
   try {
-    if (linkedinLoginContext) {
-      return res.status(400).json({ error: 'A login session is already active. Call /linkedin/confirm-login first.' });
+    const { li_at, JSESSIONID } = req.body;
+    if (!li_at) {
+      return res.status(400).json({ error: 'li_at cookie is required. Get it from browser DevTools > Application > Cookies > linkedin.com' });
     }
-    const { openLinkedInLoginBrowser } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
-    linkedinLoginContext = await openLinkedInLoginBrowser();
-    res.json({ success: true, message: 'Browser opened on server. Log into LinkedIn, then call POST /linkedin/confirm-login' });
+
+    const { saveLinkedInCookies } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
+    await saveLinkedInCookies(li_at, JSESSIONID || '');
+
+    res.json({ success: true, message: 'LinkedIn session cookies saved. The scraper will now use authenticated access.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post(`${BASE}/linkedin/confirm-login`, async (_req: Request, res: Response) => {
+router.get(`${BASE}/linkedin/session-status`, async (_req: Request, res: Response) => {
   try {
-    if (!linkedinLoginContext) {
-      return res.status(400).json({ error: 'No login session active. Call /linkedin/start-login first.' });
-    }
-    await linkedinLoginContext.close();
-    linkedinLoginContext = null;
-    res.json({ success: true, message: 'LinkedIn session saved to browser profile.' });
+    const { checkLinkedInSession } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
+    const status = await checkLinkedInSession();
+    res.json(status);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

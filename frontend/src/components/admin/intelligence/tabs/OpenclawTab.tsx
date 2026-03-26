@@ -17,6 +17,8 @@ import {
   getRateLimits,
   getTrackedLinkedInPosts,
   removeTrackedLinkedInPost,
+  saveLinkedInSession,
+  getLinkedInSessionStatus,
   OpenclawDashboard,
   OpenclawResponseItem,
   OpenclawAgentActivity,
@@ -148,6 +150,9 @@ export default function OpenclawTab() {
   const [generatingReply, setGeneratingReply] = useState(false);
   const [replyResult, setReplyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [trackedPosts, setTrackedPosts] = useState<TrackedLinkedInPost[]>([]);
+  const [linkedinSessionOk, setLinkedinSessionOk] = useState<boolean | null>(null);
+  const [liAtInput, setLiAtInput] = useState('');
+  const [savingSession, setSavingSession] = useState(false);
 
   // Response detail drill-down state
   const [selectedResponse, setSelectedResponse] = useState<OpenclawResponseItem | null>(null);
@@ -175,10 +180,14 @@ export default function OpenclawTab() {
       setDashboard(dashRes.data);
       setResponses(respRes.data.responses || []);
       setResponsesTotal(respRes.data.total || 0);
-      // Fetch tracked LinkedIn posts
+      // Fetch tracked LinkedIn posts + session status
       try {
-        const trackedRes = await getTrackedLinkedInPosts();
+        const [trackedRes, sessionRes] = await Promise.all([
+          getTrackedLinkedInPosts(),
+          getLinkedInSessionStatus(),
+        ]);
         setTrackedPosts(trackedRes.data.tracked_posts || []);
+        setLinkedinSessionOk(sessionRes.data.authenticated);
       } catch { /* ignore */ }
     } catch {
       /* ignore */
@@ -286,6 +295,19 @@ export default function OpenclawTab() {
       setReplyResult({ success: false, message: err?.response?.data?.error || 'Failed to generate replies' });
     }
     setGeneratingReply(false);
+  };
+
+  const handleSaveLinkedInSession = async () => {
+    setSavingSession(true);
+    try {
+      await saveLinkedInSession(liAtInput.trim());
+      setLinkedinSessionOk(true);
+      setLiAtInput('');
+      setReplyResult({ success: true, message: 'LinkedIn session saved. You can now scan posts for comments.' });
+    } catch (err: any) {
+      setReplyResult({ success: false, message: err?.response?.data?.error || 'Failed to save session' });
+    }
+    setSavingSession(false);
   };
 
   const handleRemoveTrackedPost = async (id: string) => {
@@ -862,12 +884,35 @@ export default function OpenclawTab() {
           <span>
             Reply to LinkedIn Comments
             <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#0A66C2', color: '#fff' }}>LinkedIn</span>
+            {linkedinSessionOk !== null && (
+              <span className={`badge ms-2 bg-${linkedinSessionOk ? 'success' : 'warning'}`} style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>
+                {linkedinSessionOk ? 'Session Active' : 'No Session'}
+              </span>
+            )}
           </span>
         </div>
         <div className="card-body py-3 px-3">
           <div className="text-muted mb-3" style={{ fontSize: '0.68rem' }}>
             Paste a LinkedIn post URL. The system reads the post and comments automatically, generates a reply for each commenter in your voice, and queues them in the Manual Action tab.
           </div>
+          {linkedinSessionOk === false && (
+            <div className="alert alert-warning py-2 px-3 mb-3" style={{ fontSize: '0.72rem' }}>
+              <strong>LinkedIn login required.</strong> Open LinkedIn in your browser, press F12 &gt; Application &gt; Cookies &gt; linkedin.com, copy the <code>li_at</code> value and paste below.
+              <div className="d-flex gap-2 mt-2">
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder="Paste li_at cookie value here..."
+                  value={liAtInput}
+                  onChange={e => setLiAtInput(e.target.value)}
+                />
+                <button className="btn btn-sm btn-warning text-nowrap" onClick={handleSaveLinkedInSession} disabled={!liAtInput.trim() || savingSession}>
+                  {savingSession ? 'Saving...' : 'Save Session'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="d-flex gap-2 align-items-end">
             <div className="flex-grow-1">
               <label className="form-label small fw-medium mb-1">LinkedIn Post URL</label>

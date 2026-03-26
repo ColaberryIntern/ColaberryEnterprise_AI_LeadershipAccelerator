@@ -218,6 +218,14 @@ export const generateLinkedInCommentReplies = (data: LinkedInBatchReplyPayload) 
     `${BASE}/linkedin/reply-to-comments`, data
   );
 
+// ── LinkedIn Session Management ──────────────────────────────────────────────
+
+export const saveLinkedInSession = (li_at: string, JSESSIONID?: string) =>
+  api.post<{ success: boolean; message: string }>(`${BASE}/linkedin/save-session`, { li_at, JSESSIONID });
+
+export const getLinkedInSessionStatus = () =>
+  api.get<{ authenticated: boolean; message: string }>(`${BASE}/linkedin/session-status`);
+
 // ── LinkedIn Tracked Posts ────────────────────────────────────────────────────
 
 export interface TrackedLinkedInPost {
