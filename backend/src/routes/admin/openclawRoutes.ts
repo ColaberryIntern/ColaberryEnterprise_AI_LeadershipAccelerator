@@ -760,7 +760,8 @@ ${strategyInstructions}`;
 
         const responseContent = result.choices[0]?.message?.content?.trim();
         if (responseContent) {
-          const shortId = `oc-${platform}-${crypto.randomBytes(4).toString('hex')}`;
+          const shortPlat = platform.slice(0, 6);
+          const shortId = `oc-${shortPlat}-${crypto.randomBytes(3).toString('hex')}`;
           const humanExec = isHumanExecution(platform);
           const execType = humanExec ? 'human_execution' : 'api_posting';
 
