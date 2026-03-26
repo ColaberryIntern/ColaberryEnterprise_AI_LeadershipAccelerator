@@ -15,6 +15,9 @@ export interface CampaignActivitySummary {
   bounce_rate: number;
   hot_leads_count: number;
   active_campaigns: number;
+  visitors_today: number;
+  visitors_week: number;
+  sessions_today: number;
 }
 
 export async function getCampaignActivitySummary(): Promise<CampaignActivitySummary> {
@@ -24,7 +27,7 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const [channelCounts, engagementRates, activeCampaigns, hotLeads] = await Promise.all([
+  const [channelCounts, engagementRates, activeCampaigns, hotLeads, visitorCounts] = await Promise.all([
     // Query 1: Email counts from scheduled_emails, SMS+voice from communication_logs
     sequelize.query(`
       SELECT
@@ -65,11 +68,23 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
         SELECT DISTINCT lead_id FROM interaction_outcomes WHERE outcome = 'clicked'
       ) sub
     `, { type: QueryTypes.SELECT }),
+
+    // Query 5: Visitor traffic counts
+    sequelize.query(`
+      SELECT
+        (SELECT COUNT(*) FROM visitors WHERE last_seen_at >= :today) as visitors_today,
+        (SELECT COUNT(*) FROM visitors WHERE last_seen_at >= :weekAgo) as visitors_week,
+        (SELECT COUNT(*) FROM visitor_sessions WHERE started_at >= :today) as sessions_today
+    `, {
+      replacements: { today: todayStart.toISOString(), weekAgo: weekAgo.toISOString() },
+      type: QueryTypes.SELECT,
+    }),
   ]);
 
   const ch = (channelCounts as any)[0] || {};
   const eng = (engagementRates as any)[0] || {};
   const hotCount = parseInt((hotLeads as any)[0]?.cnt || '0', 10);
+  const vc = (visitorCounts as any)[0] || {};
 
   const totalSent = parseInt(eng.total_sent || '0', 10);
   const totalOpened = parseInt(eng.total_opened || '0', 10);
@@ -88,5 +103,8 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
     bounce_rate: totalSent > 0 ? Math.round((totalBounced / totalSent) * 100 * 10) / 10 : 0,
     hot_leads_count: hotCount,
     active_campaigns: activeCampaigns,
+    visitors_today: parseInt(vc.visitors_today || '0', 10),
+    visitors_week: parseInt(vc.visitors_week || '0', 10),
+    sessions_today: parseInt(vc.sessions_today || '0', 10),
   };
 }

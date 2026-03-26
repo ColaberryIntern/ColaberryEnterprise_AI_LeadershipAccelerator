@@ -58,6 +58,9 @@ interface CampaignActivity {
   bounce_rate: number;
   hot_leads_count: number;
   active_campaigns: number;
+  visitors_today: number;
+  visitors_week: number;
+  sessions_today: number;
 }
 
 interface HealthReport {
@@ -93,6 +96,7 @@ interface CampaignRow {
   replies: number;
   bounces: number;
   meetings_booked: number;
+  visitors: number;
 }
 
 interface AppointmentRow {
@@ -347,8 +351,8 @@ function AdminDashboardPage() {
           campaignActivity ? `${campaignActivity.active_campaigns} active campaigns` : undefined
         )}
         {kpiLink('/admin/campaigns', 'Click Rate (7d)', campaignActivity ? `${campaignActivity.click_rate}%` : '--', '#0dcaf0')}
-        {kpiLink('/admin/leads?temperature=hot', 'Hot Leads', campaignActivity?.hot_leads_count ?? '--', '#e53e3e',
-          'Engaged 2+ times'
+        {kpiLink('/admin/visitors', 'Visitors Today', campaignActivity?.visitors_today ?? '--', '#dd6b20',
+          campaignActivity ? `${campaignActivity.visitors_week} this week` : undefined
         )}
       </div>
 
@@ -412,7 +416,8 @@ function AdminDashboardPage() {
           <div className="table-responsive">
             <table className="table table-hover mb-0" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col style={{ width: '24%' }} />
+                <col style={{ width: '20%' }} />
+                <col style={{ width: '7%' }} />
                 <col style={{ width: '7%' }} />
                 <col style={{ width: '7%' }} />
                 <col style={{ width: '7%' }} />
@@ -427,6 +432,7 @@ function AdminDashboardPage() {
                 <tr>
                   <th className="small fw-medium">Campaign</th>
                   <th className="small fw-medium text-end">Leads</th>
+                  <th className="small fw-medium text-end" title="Unique visitors">Visitors</th>
                   <th className="small fw-medium text-end" title="Emails sent">Emails</th>
                   <th className="small fw-medium text-end" title="SMS sent">SMS</th>
                   <th className="small fw-medium text-end" title="Voice calls">Voice</th>
@@ -439,7 +445,7 @@ function AdminDashboardPage() {
               </thead>
               <tbody>
                 {campaigns.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center text-muted small py-3">No active campaigns</td></tr>
+                  <tr><td colSpan={11} className="text-center text-muted small py-3">No active campaigns</td></tr>
                 ) : campaigns.map(c => {
                   const totalSent = c.channels.email + c.channels.sms + c.channels.voice;
                   return (
@@ -450,6 +456,7 @@ function AdminDashboardPage() {
                         </Link>
                       </td>
                       <td className="small text-end">{c.active_leads}</td>
+                      <td className="small text-end">{c.visitors || <span className="text-muted">-</span>}</td>
                       <td className="small text-end">{c.channels.email || <span className="text-muted">-</span>}</td>
                       <td className="small text-end">{c.channels.sms || <span className="text-muted">-</span>}</td>
                       <td className="small text-end">{c.channels.voice || <span className="text-muted">-</span>}</td>

@@ -367,7 +367,8 @@ router.get('/api/admin/dashboard/campaign-performance', requireAdmin, async (_re
         (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'clicked') as clicks,
         (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'replied') as replies,
         (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'bounced') as bounces,
-        (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'booked_meeting') as meetings_booked
+        (SELECT COUNT(*) FROM interaction_outcomes io WHERE io.campaign_id = c.id AND io.outcome = 'booked_meeting') as meetings_booked,
+        (SELECT COUNT(DISTINCT v.id) FROM visitors v WHERE v.campaign_id = c.id::text) as visitors
       FROM campaigns c
       WHERE c.status = 'active'
       ORDER BY (SELECT COUNT(*) FROM communication_logs cl2 WHERE cl2.campaign_id = c.id AND cl2.created_at > NOW() - INTERVAL '7 days') DESC
@@ -392,6 +393,7 @@ router.get('/api/admin/dashboard/campaign-performance', requireAdmin, async (_re
         replies: parseInt(c.replies) || 0,
         bounces: parseInt(c.bounces) || 0,
         meetings_booked: parseInt(c.meetings_booked) || 0,
+        visitors: parseInt(c.visitors) || 0,
       };
     });
 
