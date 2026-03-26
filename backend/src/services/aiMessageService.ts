@@ -59,6 +59,7 @@ export interface GenerateMessageParams {
     timezone: string;
     meet_link: string;
   };
+  compositeContext?: import('./contextGraphService').CompositeContext;
 }
 
 export interface GenerateMessageResult {
@@ -141,10 +142,58 @@ ALUMNI MESSAGING RULES:
 }
 
 function buildUserPrompt(params: GenerateMessageParams): string {
-  const { lead, conversationHistory, campaignContext, cohortContext, ai_instructions, tone, context_notes } = params;
+  const { lead, conversationHistory, campaignContext, cohortContext, ai_instructions, tone, context_notes, compositeContext } = params;
 
   const parts: string[] = [];
 
+  // If composite context is available, use grounded facts instead of scattered context
+  if (compositeContext) {
+    parts.push(`VERIFIED CONTEXT (use ONLY this data - do not invent any URLs, names, or facts):`);
+    parts.push(`Lead: ${compositeContext.lead.name} | ${compositeContext.lead.title || 'No title'} at ${compositeContext.lead.company || 'Unknown company'}`);
+    parts.push(`Campaign: ${compositeContext.campaign.name} | Step ${compositeContext.campaign.step + 1} of ${compositeContext.campaign.totalSteps}`);
+    parts.push(`You are: ${compositeContext.campaign.senderName}`);
+    parts.push(`Relationship: ${compositeContext.campaign.senderRelationship}`);
+    parts.push('');
+    parts.push('ENGAGEMENT DATA:');
+    parts.push(`- Emails sent: ${compositeContext.engagement.emailsSent} | Opened: ${compositeContext.engagement.emailsOpened} | Clicked: ${compositeContext.engagement.linksClicked}`);
+    if (compositeContext.engagement.bookingAttempts > 0) parts.push(`- BOOKING ATTEMPTS: ${compositeContext.engagement.bookingAttempts} (they tried to book a strategy call)`);
+    if (compositeContext.engagement.repliesReceived > 0) parts.push(`- Replies received: ${compositeContext.engagement.repliesReceived}`);
+    if (compositeContext.engagement.voiceCallsMade > 0) parts.push(`- Voice calls made: ${compositeContext.engagement.voiceCallsMade} | Last outcome: ${compositeContext.engagement.lastCallOutcome || 'unknown'}`);
+    parts.push(`- Temperature trend: ${compositeContext.engagement.temperatureTrend}`);
+    parts.push('');
+
+    if (compositeContext.previousMessages.length > 0) {
+      parts.push('PREVIOUS MESSAGES SENT (maintain tone continuity - do not repeat the same content):');
+      for (const m of compositeContext.previousMessages) {
+        parts.push(`- ${m.sentAt} [${m.channel}] "${m.subject}" - ${m.bodyPreview.substring(0, 200)}`);
+        parts.push(`  Outcome: ${m.outcome}`);
+      }
+      parts.push('');
+    }
+
+    parts.push('ALLOWED URLs (use ONLY these - NEVER invent a URL):');
+    parts.push(`- Booking/Strategy call: ${compositeContext.allowedUrls.booking}`);
+    parts.push(`- Landing page: ${compositeContext.allowedUrls.landingPage}`);
+    parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
+    parts.push('');
+
+    if (compositeContext.cohort) {
+      parts.push(`COHORT: ${compositeContext.cohort.name} | Starts ${compositeContext.cohort.startDate} (${compositeContext.cohort.daysUntilStart} days away) | ${compositeContext.cohort.seatsRemaining} seats remaining`);
+      parts.push('');
+    }
+
+    if (compositeContext.lead.notes) {
+      parts.push(`NOTES: ${compositeContext.lead.notes}`);
+      parts.push('');
+    }
+
+    parts.push(`STEP INSTRUCTIONS: ${ai_instructions}`);
+    if (tone) parts.push(`TONE: ${tone}`);
+
+    return parts.join('\n');
+  }
+
+  // Fallback: original prompt builder (for backward compatibility)
   parts.push(`STEP INSTRUCTIONS: ${ai_instructions}`);
 
   if (tone) parts.push(`TONE: ${tone}`);
@@ -268,17 +317,29 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
       // Try to parse JSON response for email
       const cleaned = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
       const parsed = JSON.parse(cleaned);
+      let emailBody = parsed.body || content;
+      // Run validator on email content too
+      if (params.compositeContext) {
+        const { validateGeneratedMessage } = require('./messageValidatorService');
+        const validation = validateGeneratedMessage(emailBody, params.compositeContext, 'email');
+        emailBody = validation.content;
+      }
       return {
         subject: parsed.subject || 'Colaberry Enterprise AI',
-        body: parsed.body || content,
+        body: emailBody,
         tokens_used: tokensUsed,
         model,
       };
     } catch {
-      // If JSON parse fails, use the raw content
+      let fallbackBody = content;
+      if (params.compositeContext) {
+        const { validateGeneratedMessage } = require('./messageValidatorService');
+        const validation = validateGeneratedMessage(fallbackBody, params.compositeContext, 'email');
+        fallbackBody = validation.content;
+      }
       return {
         subject: 'Colaberry Enterprise AI',
-        body: content,
+        body: fallbackBody,
         tokens_used: tokensUsed,
         model,
       };
@@ -311,6 +372,13 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
       .replace(/\n*-?\s*Agent Cory AI\.?/gi, '')
       .replace(/\n*-?\s*Cory AI\.?/gi, '')
       .trim();
+  }
+
+  // Run deterministic validator if composite context is available
+  if (params.compositeContext) {
+    const { validateGeneratedMessage } = require('./messageValidatorService');
+    const validation = validateGeneratedMessage(cleanedBody, params.compositeContext, params.channel);
+    cleanedBody = validation.content;
   }
 
   return {

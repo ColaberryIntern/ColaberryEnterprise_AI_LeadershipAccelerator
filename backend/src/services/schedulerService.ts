@@ -285,6 +285,18 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       }
     } catch { /* non-critical */ }
 
+    // Build Composite Context Graph for grounded AI generation
+    let compositeContext: any = undefined;
+    if (action.campaign_id) {
+      try {
+        const { buildCompositeContext } = require('./contextGraphService');
+        compositeContext = await buildCompositeContext(action.lead_id, action.campaign_id, action.step_index || 0);
+      } catch (ctxErr: any) {
+        console.warn(`[Scheduler] Context graph build failed for action ${action.id}: ${ctxErr.message}`);
+        // Non-critical — falls back to legacy prompt builder
+      }
+    }
+
     const result = await generateMessage({
       channel: channel as 'email' | 'sms' | 'voice',
       ai_instructions: action.ai_instructions,
@@ -299,6 +311,7 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
         seats_remaining: nextCohort.seats_remaining,
       } : undefined,
       appointmentContext,
+      compositeContext,
     });
 
     // Update the action with AI-generated content
