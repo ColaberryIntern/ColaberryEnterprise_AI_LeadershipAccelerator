@@ -833,49 +833,36 @@ router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => 
   }
 });
 
-// ── LinkedIn Comment Reply Generator ─────────────────────────────────────────
-router.post(`${BASE}/linkedin/reply-to-comment`, async (req: Request, res: Response) => {
+// ── LinkedIn Comment Reply Generator (Batch - auto-reads post via Playwright) ─
+router.post(`${BASE}/linkedin/reply-to-comments`, async (req: Request, res: Response) => {
   try {
-    const { post_url, post_content, commenter_name, commenter_title, comment_text, post_title } = req.body;
+    const { post_url } = req.body;
 
-    if (!post_content || !commenter_name || !comment_text) {
-      return res.status(400).json({ error: 'post_content, commenter_name, and comment_text are required' });
+    if (!post_url || typeof post_url !== 'string') {
+      return res.status(400).json({ error: 'post_url is required' });
     }
 
-    const crypto = await import('crypto');
-    const shortId = `oc-linkedin_comments-${crypto.randomBytes(4).toString('hex')}`;
+    // Step 1: Scrape the LinkedIn post + comments with Playwright
+    const { scrapeLinkedInPost } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
+    let scraped;
+    try {
+      scraped = await scrapeLinkedInPost(post_url);
+    } catch (scrapeErr: any) {
+      return res.status(422).json({ error: `Could not read LinkedIn post: ${scrapeErr.message}` });
+    }
 
-    // Create signal for tracking
-    const signal = await OpenclawSignal.create({
-      platform: 'linkedin_comments',
-      source_url: post_url || `linkedin:comment-reply:${shortId}`,
-      title: `Reply to ${commenter_name}${post_title ? ` on: ${post_title}` : ''}`,
-      content_excerpt: comment_text.slice(0, 500),
-      details: {
-        source: 'linkedin_comment_reply',
-        commenter_name,
-        commenter_title: commenter_title || null,
-        post_content: post_content.slice(0, 2000),
-        comment_text,
-        post_title: post_title || null,
-      },
-      relevance_score: 0.95,
-      engagement_score: 0.9,
-      risk_score: 0.0,
-      status: 'queued',
-      topic_tags: [],
-      created_at: new Date(),
-    });
+    if (!scraped.comments || scraped.comments.length === 0) {
+      return res.json({ success: true, replies_generated: 0, replies: [], message: 'No comments found on this post. The post may require login to view comments.' });
+    }
 
-    // Generate reply with LLM
+    // Step 2: Generate replies for all comments in one LLM call
     const { getOpenAIClient } = await import('../../intelligence/assistant/openaiHelper');
     const client = getOpenAIClient();
-    let content = '';
 
     const systemPrompt = `You are Ali Moiz, founder of an enterprise AI leadership accelerator. You built a system with 18 departments and 172 AI agents managed by an AI COO. You respond to comments on your LinkedIn posts as a practitioner who builds real AI systems daily.
 
 Rules:
-1. Address the commenter by first name
+1. Address each commenter by first name
 2. Reply directly to their specific point - don't be generic
 3. If they asked a question, answer it with real details from your system
 4. If they affirmed your point, acknowledge their insight and build on it
@@ -884,7 +871,16 @@ Rules:
 7. Never mention "Colaberry" - say "our system" or "the accelerator"
 8. Keep replies concise: 2-4 sentences for affirmations, 4-8 for questions
 9. Sound like a real founder, not a chatbot - be opinionated and specific
-10. Do NOT include any URLs or links in the reply`;
+10. Do NOT include any URLs or links in the reply
+
+Return a JSON array of objects with: { "commenter_name": string, "reply": string }
+One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
+
+    const commentList = scraped.comments.map((c, i) =>
+      `${i + 1}. ${c.commenter_name}${c.commenter_title ? ` (${c.commenter_title})` : ''}: "${c.comment_text}"`
+    ).join('\n');
+
+    let replies: Array<{ commenter_name: string; reply: string }> = [];
 
     if (client) {
       try {
@@ -894,41 +890,79 @@ Rules:
             { role: 'system', content: systemPrompt },
             {
               role: 'user',
-              content: `My LinkedIn post:\n${post_content}\n\nComment from ${commenter_name}${commenter_title ? ` (${commenter_title})` : ''}:\n"${comment_text}"\n\nWrite a reply to this comment.`,
+              content: `My LinkedIn post:\n${scraped.post_content.slice(0, 3000)}\n\nComments:\n${commentList}\n\nGenerate a reply for each comment.`,
             },
           ],
-          max_tokens: 500,
+          max_tokens: 2000,
           temperature: 0.7,
         });
-        content = result.choices[0]?.message?.content || '';
+        const raw = result.choices[0]?.message?.content || '[]';
+        replies = JSON.parse(raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
       } catch (err: any) {
-        console.warn('[OpenClaw LinkedIn Reply] LLM failed:', err?.message?.slice(0, 200));
+        console.warn('[OpenClaw LinkedIn Batch Reply] LLM failed:', err?.message?.slice(0, 200));
       }
     }
 
-    if (!content) {
-      content = `Great point ${commenter_name.split(' ')[0]}. This is exactly the kind of question that matters when building autonomous systems. Happy to go deeper on this.`;
+    // Fallback: generate simple replies if LLM failed
+    if (replies.length === 0) {
+      replies = scraped.comments.map(c => ({
+        commenter_name: c.commenter_name,
+        reply: `Great point ${c.commenter_name.split(' ')[0]}. This is exactly the kind of insight that matters when building autonomous systems. Happy to go deeper on this.`,
+      }));
     }
 
-    // Clean up - remove "Colaberry" and em dashes
-    content = content.replace(/\b[Cc]olaberry\b(?![./])/g, '').replace(/\s+/g, ' ').trim();
-    content = content.replace(/\u2014/g, ' - ').replace(/\u2013/g, ' - ');
+    // Step 3: Create signal + response for each reply
+    const crypto = await import('crypto');
+    const createdReplies: Array<{ commenter_name: string; reply_preview: string }> = [];
 
-    // Create response
-    const response = await OpenclawResponse.create({
-      signal_id: signal.id,
-      platform: 'linkedin_comments',
-      content,
-      tone: 'professional',
-      short_id: shortId,
-      execution_type: 'human_execution',
-      post_status: 'ready_for_manual_post',
-      created_at: new Date(),
-    });
+    for (const r of replies) {
+      const shortId = `oc-linkedin_comments-${crypto.randomBytes(4).toString('hex')}`;
 
-    await signal.update({ response_id: response.id, status: 'responded', updated_at: new Date() });
+      // Clean up content
+      let content = r.reply
+        .replace(/\b[Cc]olaberry\b(?![./])/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\u2014/g, ' - ')
+        .replace(/\u2013/g, ' - ');
 
-    res.json({ success: true, signal, response, short_id: shortId });
+      const signal = await OpenclawSignal.create({
+        platform: 'linkedin_comments',
+        source_url: post_url,
+        title: `Reply to ${r.commenter_name} on LinkedIn`,
+        content_excerpt: (scraped.comments.find(c => c.commenter_name === r.commenter_name)?.comment_text || '').slice(0, 500),
+        details: {
+          source: 'linkedin_comment_reply_batch',
+          commenter_name: r.commenter_name,
+          post_content: scraped.post_content.slice(0, 2000),
+          post_author: scraped.post_author,
+          comment_text: scraped.comments.find(c => c.commenter_name === r.commenter_name)?.comment_text || '',
+        },
+        relevance_score: 0.95,
+        engagement_score: 0.9,
+        risk_score: 0.0,
+        status: 'queued',
+        topic_tags: [],
+        created_at: new Date(),
+      });
+
+      const response = await OpenclawResponse.create({
+        signal_id: signal.id,
+        platform: 'linkedin_comments',
+        content,
+        tone: 'professional',
+        short_id: shortId,
+        execution_type: 'human_execution',
+        post_status: 'ready_for_manual_post',
+        created_at: new Date(),
+      });
+
+      await signal.update({ response_id: response.id, status: 'responded', updated_at: new Date() });
+
+      createdReplies.push({ commenter_name: r.commenter_name, reply_preview: content.slice(0, 120) });
+    }
+
+    res.json({ success: true, replies_generated: createdReplies.length, replies: createdReplies });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
