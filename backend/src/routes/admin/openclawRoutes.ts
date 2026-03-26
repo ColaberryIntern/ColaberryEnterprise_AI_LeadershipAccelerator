@@ -855,7 +855,21 @@ router.post(`${BASE}/linkedin/reply-to-comments`, async (req: Request, res: Resp
       return res.json({ success: true, replies_generated: 0, replies: [], message: 'No comments found on this post. The post may require login to view comments.' });
     }
 
-    // Step 2: Generate replies for all comments in one LLM call
+    // Dedup: filter out commenters we already replied to on this post
+    const existingSignals = await OpenclawSignal.findAll({
+      where: { platform: 'linkedin_comments', source_url: post_url },
+      attributes: ['details'],
+    });
+    const repliedCommenters = new Set(
+      existingSignals.map((s: any) => s.details?.commenter_name).filter(Boolean)
+    );
+    const newComments = scraped.comments.filter(c => !repliedCommenters.has(c.commenter_name));
+
+    if (newComments.length === 0) {
+      return res.json({ success: true, replies_generated: 0, replies: [], message: 'All commenters already have replies queued.' });
+    }
+
+    // Step 2: Generate replies for new comments in one LLM call
     const { getOpenAIClient } = await import('../../intelligence/assistant/openaiHelper');
     const client = getOpenAIClient();
 
@@ -876,7 +890,7 @@ Rules:
 Return a JSON array of objects with: { "commenter_name": string, "reply": string }
 One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
 
-    const commentList = scraped.comments.map((c, i) =>
+    const commentList = newComments.map((c, i) =>
       `${i + 1}. ${c.commenter_name}${c.commenter_title ? ` (${c.commenter_title})` : ''}: "${c.comment_text}"`
     ).join('\n');
 
@@ -905,7 +919,7 @@ One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
 
     // Fallback: generate simple replies if LLM failed
     if (replies.length === 0) {
-      replies = scraped.comments.map(c => ({
+      replies = newComments.map(c => ({
         commenter_name: c.commenter_name,
         reply: `Great point ${c.commenter_name.split(' ')[0]}. This is exactly the kind of insight that matters when building autonomous systems. Happy to go deeper on this.`,
       }));
@@ -930,13 +944,13 @@ One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
         platform: 'linkedin_comments',
         source_url: post_url,
         title: `Reply to ${r.commenter_name} on LinkedIn`,
-        content_excerpt: (scraped.comments.find(c => c.commenter_name === r.commenter_name)?.comment_text || '').slice(0, 500),
+        content_excerpt: (newComments.find(c => c.commenter_name === r.commenter_name)?.comment_text || '').slice(0, 500),
         details: {
           source: 'linkedin_comment_reply_batch',
           commenter_name: r.commenter_name,
           post_content: scraped.post_content.slice(0, 2000),
           post_author: scraped.post_author,
-          comment_text: scraped.comments.find(c => c.commenter_name === r.commenter_name)?.comment_text || '',
+          comment_text: newComments.find(c => c.commenter_name === r.commenter_name)?.comment_text || '',
         },
         relevance_score: 0.95,
         engagement_score: 0.9,
@@ -962,7 +976,114 @@ One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
       createdReplies.push({ commenter_name: r.commenter_name, reply_preview: content.slice(0, 120) });
     }
 
+    // Auto-track this post for ongoing monitoring
+    const allCommenters = scraped.comments.map(c => c.commenter_name);
+    const existingTracker = await OpenclawSignal.findOne({
+      where: { platform: 'linkedin_post_tracking', source_url: post_url },
+    });
+    if (!existingTracker) {
+      await OpenclawSignal.create({
+        platform: 'linkedin_post_tracking' as any,
+        source_url: post_url,
+        title: `Tracking: ${scraped.post_author || 'LinkedIn Post'}`,
+        content_excerpt: scraped.post_content.slice(0, 500),
+        details: { tracked: true, last_scanned_at: new Date().toISOString(), known_commenters: allCommenters },
+        relevance_score: 1.0, engagement_score: 0, risk_score: 0,
+        status: 'active' as any,
+        topic_tags: [],
+        created_at: new Date(),
+      });
+    } else {
+      const known = (existingTracker as any).details?.known_commenters || [];
+      const merged = [...new Set([...known, ...allCommenters])];
+      await existingTracker.update({
+        details: { ...(existingTracker as any).details, last_scanned_at: new Date().toISOString(), known_commenters: merged },
+        updated_at: new Date(),
+      });
+    }
+
     res.json({ success: true, replies_generated: createdReplies.length, replies: createdReplies });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── LinkedIn Login Session Management ─────────────────────────────────────────
+let linkedinLoginContext: any = null;
+
+router.post(`${BASE}/linkedin/start-login`, async (_req: Request, res: Response) => {
+  try {
+    if (linkedinLoginContext) {
+      return res.status(400).json({ error: 'A login session is already active. Call /linkedin/confirm-login first.' });
+    }
+    const { openLinkedInLoginBrowser } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
+    linkedinLoginContext = await openLinkedInLoginBrowser();
+    res.json({ success: true, message: 'Browser opened on server. Log into LinkedIn, then call POST /linkedin/confirm-login' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/linkedin/confirm-login`, async (_req: Request, res: Response) => {
+  try {
+    if (!linkedinLoginContext) {
+      return res.status(400).json({ error: 'No login session active. Call /linkedin/start-login first.' });
+    }
+    await linkedinLoginContext.close();
+    linkedinLoginContext = null;
+    res.json({ success: true, message: 'LinkedIn session saved to browser profile.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── LinkedIn Tracked Posts CRUD ───────────────────────────────────────────────
+
+router.get(`${BASE}/linkedin/tracked-posts`, async (_req: Request, res: Response) => {
+  try {
+    const posts = await OpenclawSignal.findAll({
+      where: { platform: 'linkedin_post_tracking' as any },
+      order: [['created_at', 'DESC']],
+    });
+    res.json({ tracked_posts: posts });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/linkedin/track-post`, async (req: Request, res: Response) => {
+  try {
+    const { post_url } = req.body;
+    if (!post_url) return res.status(400).json({ error: 'post_url is required' });
+
+    const existing = await OpenclawSignal.findOne({
+      where: { platform: 'linkedin_post_tracking' as any, source_url: post_url },
+    });
+    if (existing) return res.json({ success: true, message: 'Already tracking this post', tracked_post: existing });
+
+    const tracked = await OpenclawSignal.create({
+      platform: 'linkedin_post_tracking' as any,
+      source_url: post_url,
+      title: 'Tracking: LinkedIn Post',
+      content_excerpt: '',
+      details: { tracked: true, last_scanned_at: null, known_commenters: [] },
+      relevance_score: 1.0, engagement_score: 0, risk_score: 0,
+      status: 'active' as any,
+      topic_tags: [],
+      created_at: new Date(),
+    });
+    res.json({ success: true, tracked_post: tracked });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete(`${BASE}/linkedin/tracked-posts/:id`, async (req: Request, res: Response) => {
+  try {
+    const signal = await OpenclawSignal.findByPk(req.params.id);
+    if (!signal) return res.status(404).json({ error: 'Not found' });
+    await signal.update({ status: 'expired' as any, updated_at: new Date() });
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

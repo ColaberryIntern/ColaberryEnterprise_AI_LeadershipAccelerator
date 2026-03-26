@@ -1417,6 +1417,20 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     },
   },
 
+  {
+    agent_name: 'OpenclawLinkedInCommentMonitorAgent',
+    agent_type: 'openclaw_linkedin_comment_monitor',
+    module: 'openclaw',
+    source_file: 'backend/src/services/agents/openclaw/openclawLinkedInCommentMonitorAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 8,12,16 * * 1-5',
+    category: 'openclaw',
+    description: 'Periodically scans tracked LinkedIn posts for new comments. Generates reply drafts for new commenters and queues them for manual posting. Runs 3x/day on weekdays.',
+    config: {
+      max_posts_per_run: 10,
+    },
+  },
+
   // --- Reporting Department agents ---
   {
     agent_name: 'KnowledgeGraphBuilderAgent',

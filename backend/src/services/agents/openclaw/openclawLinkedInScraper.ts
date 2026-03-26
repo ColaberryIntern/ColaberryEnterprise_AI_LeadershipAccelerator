@@ -1,5 +1,9 @@
 /// <reference lib="dom" />
 import { chromium } from 'playwright';
+import path from 'path';
+import fs from 'fs/promises';
+
+const BROWSER_PROFILES_DIR = '/data/browser-profiles';
 
 export interface LinkedInComment {
   commenter_name: string;
@@ -14,14 +18,21 @@ export interface LinkedInPostData {
 }
 
 /**
- * Scrape a public LinkedIn post and its comments using headless Playwright.
- * Read-only - no login, no interactions, just viewing a public page.
+ * Scrape a LinkedIn post and its comments using headless Playwright.
+ * Uses persistent browser profile at /data/browser-profiles/linkedin/ for authenticated access.
+ * Read-only - no interactions beyond viewing the page.
  */
 export async function scrapeLinkedInPost(postUrl: string): Promise<LinkedInPostData> {
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
+
+  // Ensure profile directory exists
+  await fs.mkdir(profileDir, { recursive: true });
+
+  // Use persistent context to reuse LinkedIn session cookies
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: true,
     viewport: { width: 1280, height: 900 },
+    args: ['--disable-blink-features=AutomationControlled'],
   });
 
   const page = await context.newPage();
@@ -29,13 +40,12 @@ export async function scrapeLinkedInPost(postUrl: string): Promise<LinkedInPostD
   try {
     await page.goto(postUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
-    // Wait a bit for dynamic content to render
+    // Wait for dynamic content to render
     await page.waitForTimeout(3000);
 
     // Extract post + comments using page.evaluate for maximum flexibility
     const data = await page.evaluate(() => {
       // --- Post content extraction ---
-      // LinkedIn uses various selectors depending on the page type
       const postSelectors = [
         '.feed-shared-update-v2__description',
         '.update-components-text',
@@ -146,17 +156,38 @@ export async function scrapeLinkedInPost(postUrl: string): Promise<LinkedInPostD
     });
 
     // If Playwright couldn't find structured comments, try a text-based fallback
-    // by grabbing the full page text and letting the caller (LLM) parse it
     if (data.comments.length === 0 && data.post_content) {
-      // Get full visible text as fallback for LLM parsing
       const fullText = await page.evaluate(() => document.body.innerText);
-      data.post_content = fullText.slice(0, 8000); // cap for LLM context
-      // Mark that we're returning raw text, not structured comments
+      data.post_content = fullText.slice(0, 8000);
       (data as any).raw_text_fallback = true;
     }
 
     return data;
   } finally {
-    await browser.close();
+    await context.close(); // saves cookies back to profileDir
   }
+}
+
+/**
+ * Open a visible browser for manual LinkedIn login.
+ * Returns the browser context so the caller can close it after login completes.
+ */
+export async function openLinkedInLoginBrowser(): Promise<{ close: () => Promise<void> }> {
+  const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
+  await fs.mkdir(profileDir, { recursive: true });
+
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: false,
+    viewport: { width: 1280, height: 900 },
+    args: ['--disable-blink-features=AutomationControlled'],
+  });
+
+  const page = await context.newPage();
+  await page.goto('https://www.linkedin.com/login');
+
+  return {
+    close: async () => {
+      await context.close(); // saves cookies
+    },
+  };
 }

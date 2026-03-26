@@ -53,6 +53,7 @@ import { runConversionDetectionAgent } from './agents/openclaw/openclawConversio
 import { runConversationSyncAgent } from './agents/openclaw/openclawConversationSyncAgent';
 import { runFollowUpAgent } from './agents/openclaw/openclawFollowUpAgent';
 import { runOpenclawQualityGateAgent } from './agents/openclaw/openclawQualityGateAgent';
+import { runLinkedInCommentMonitorAgent } from './agents/openclaw/openclawLinkedInCommentMonitorAgent';
 import { runStrategyArchitectAgent } from './agents/strategy/strategyArchitectAgent';
 import { runSecurityDirectorAgent } from './agents/security/securityDirectorAgent';
 import { runSecretDetectionAgent } from './agents/security/secretDetectionAgent';
@@ -540,6 +541,10 @@ export async function runOpenclawFollowUp(): Promise<AgentExecutionResult | null
 
 export async function runOpenclawQualityGate(): Promise<AgentExecutionResult | null> {
   return runAgent('OpenclawQualityGateAgent', runOpenclawQualityGateAgent);
+}
+
+export async function runOpenclawLinkedInCommentMonitor(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawLinkedInCommentMonitorAgent', runLinkedInCommentMonitorAgent);
 }
 
 // ─── Strategy Architect Agents (16 departments) ──────────────────────────────

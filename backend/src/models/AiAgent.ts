@@ -144,6 +144,7 @@ export type AiAgentType =
   | 'openclaw_follow_up'
   | 'openclaw_quality_gate'
   | 'openclaw_linkedin_flow'
+  | 'openclaw_linkedin_comment_monitor'
   // Reporting department
   | 'reporting_intelligence'
   | 'insight_discovery'

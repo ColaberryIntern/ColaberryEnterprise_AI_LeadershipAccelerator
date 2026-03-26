@@ -15,12 +15,15 @@ import {
   getOpenclawActions,
   getCircuitStatus,
   getRateLimits,
+  getTrackedLinkedInPosts,
+  removeTrackedLinkedInPost,
   OpenclawDashboard,
   OpenclawResponseItem,
   OpenclawAgentActivity,
   ActionItem,
   CircuitStatus,
   RateLimitStatus,
+  TrackedLinkedInPost,
 } from '../../../../services/openclawApi';
 import {
   getAuthorityContent,
@@ -144,6 +147,7 @@ export default function OpenclawTab() {
   const [commentReplyUrl, setCommentReplyUrl] = useState('');
   const [generatingReply, setGeneratingReply] = useState(false);
   const [replyResult, setReplyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [trackedPosts, setTrackedPosts] = useState<TrackedLinkedInPost[]>([]);
 
   // Response detail drill-down state
   const [selectedResponse, setSelectedResponse] = useState<OpenclawResponseItem | null>(null);
@@ -171,6 +175,11 @@ export default function OpenclawTab() {
       setDashboard(dashRes.data);
       setResponses(respRes.data.responses || []);
       setResponsesTotal(respRes.data.total || 0);
+      // Fetch tracked LinkedIn posts
+      try {
+        const trackedRes = await getTrackedLinkedInPosts();
+        setTrackedPosts(trackedRes.data.tracked_posts || []);
+      } catch { /* ignore */ }
     } catch {
       /* ignore */
     }
@@ -277,6 +286,13 @@ export default function OpenclawTab() {
       setReplyResult({ success: false, message: err?.response?.data?.error || 'Failed to generate replies' });
     }
     setGeneratingReply(false);
+  };
+
+  const handleRemoveTrackedPost = async (id: string) => {
+    try {
+      await removeTrackedLinkedInPost(id);
+      setTrackedPosts(prev => prev.filter(p => p.id !== id));
+    } catch { /* ignore */ }
   };
 
   const handleAgentClick = useCallback(async (agent: SelectedAgent) => {
@@ -872,6 +888,32 @@ export default function OpenclawTab() {
             </button>
           </div>
           {replyResult && (<div className={`alert alert-${replyResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{replyResult.message}</div>)}
+
+          {/* Tracked Posts */}
+          {trackedPosts.length > 0 && (
+            <div className="mt-3 border-top pt-3">
+              <div className="fw-semibold small mb-2">
+                <i className="bi bi-eye me-1" />Monitored Posts
+                <span className="text-muted fw-normal ms-1" style={{ fontSize: '0.65rem' }}>(auto-scanned 3x/day for new comments)</span>
+              </div>
+              {trackedPosts.map(tp => (
+                <div key={tp.id} className="d-flex align-items-center justify-content-between py-1" style={{ fontSize: '0.72rem' }}>
+                  <div className="text-truncate me-2" style={{ maxWidth: '70%' }}>
+                    <a href={tp.source_url} target="_blank" rel="noreferrer" className="text-decoration-none">{tp.title || tp.source_url}</a>
+                    {tp.details?.last_scanned_at && (
+                      <span className="text-muted ms-2">Last scan: {new Date(tp.details.last_scanned_at).toLocaleDateString()}</span>
+                    )}
+                    {tp.details?.known_commenters?.length > 0 && (
+                      <span className="text-muted ms-1">({tp.details.known_commenters.length} commenters)</span>
+                    )}
+                  </div>
+                  <button className="btn btn-sm btn-outline-danger py-0 px-1" style={{ fontSize: '0.6rem' }} onClick={() => handleRemoveTrackedPost(tp.id)}>
+                    <i className="bi bi-x" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

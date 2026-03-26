@@ -218,6 +218,25 @@ export const generateLinkedInCommentReplies = (data: LinkedInBatchReplyPayload) 
     `${BASE}/linkedin/reply-to-comments`, data
   );
 
+// ── LinkedIn Tracked Posts ────────────────────────────────────────────────────
+
+export interface TrackedLinkedInPost {
+  id: string;
+  source_url: string;
+  title: string;
+  details: { tracked: boolean; last_scanned_at: string | null; known_commenters: string[] };
+  created_at: string;
+}
+
+export const getTrackedLinkedInPosts = () =>
+  api.get<{ tracked_posts: TrackedLinkedInPost[] }>(`${BASE}/linkedin/tracked-posts`);
+
+export const trackLinkedInPost = (post_url: string) =>
+  api.post<{ success: boolean; tracked_post: TrackedLinkedInPost }>(`${BASE}/linkedin/track-post`, { post_url });
+
+export const removeTrackedLinkedInPost = (id: string) =>
+  api.delete(`${BASE}/linkedin/tracked-posts/${id}`);
+
 // ── Phase 2: Revenue Pipeline Types & API ────────────────────────────────────
 
 export interface OpenclawConversationItem {
