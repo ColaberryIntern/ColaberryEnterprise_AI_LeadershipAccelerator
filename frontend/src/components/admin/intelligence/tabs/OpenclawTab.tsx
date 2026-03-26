@@ -1222,20 +1222,26 @@ export default function OpenclawTab() {
                     <span>ID: <code style={{ fontSize: '0.6rem' }}>{selectedResponse.id.slice(0, 8)}</code></span>
                   </div>
 
-                  {/* Post via Browser (for approved on browser-supported platforms) */}
-                  {selectedResponse.post_status === 'approved' && ['medium', 'devto'].includes(selectedResponse.platform) && (
+                  {/* Post via Browser (for approved/draft on browser-supported platforms) */}
+                  {['approved', 'draft'].includes(selectedResponse.post_status) && ['medium', 'devto'].includes(selectedResponse.platform) && (
                     <div className="border-top mt-3 pt-3">
                       <button
                         className="btn btn-sm btn-primary"
                         disabled={browserPostingId === selectedResponse.id}
-                        onClick={() => { handleBrowserPost(selectedResponse.id); setSelectedResponse(null); }}
+                        onClick={async () => {
+                          if (selectedResponse.post_status === 'draft') {
+                            await handleApprove(selectedResponse.id);
+                          }
+                          handleBrowserPost(selectedResponse.id);
+                          setSelectedResponse(null);
+                        }}
                       >
                         {browserPostingId === selectedResponse.id
                           ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: '0.7rem', height: '0.7rem' }} />Posting...</>
-                          : <><i className="bi bi-globe me-1" />Post via Browser</>}
+                          : <><i className="bi bi-globe me-1" />{selectedResponse.post_status === 'draft' ? 'Approve & Post via Browser' : 'Post via Browser'}</>}
                       </button>
                       <div className="text-muted mt-1" style={{ fontSize: '0.7rem' }}>
-                        Automates posting to {selectedResponse.platform} using a browser session
+                        {selectedResponse.post_status === 'draft' ? 'Approves the response and posts' : 'Automates posting'} to {selectedResponse.platform} using a browser session
                       </div>
                     </div>
                   )}
