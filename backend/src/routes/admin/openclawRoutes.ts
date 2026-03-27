@@ -903,26 +903,69 @@ router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => 
   }
 });
 
-// ── LinkedIn Comment Reply Generator (Batch - auto-reads post via Playwright) ─
+// ── LinkedIn Comment Reply Generator (Batch) ─────────────────────────────────
+// Accepts either:
+//   - comments_text: raw pasted text from LinkedIn (user copies comment section)
+//   - OR falls back to server-side scraping via Voyager API (needs LINKEDIN_PROXY_URL)
 router.post(`${BASE}/linkedin/reply-to-comments`, async (req: Request, res: Response) => {
   try {
-    const { post_url } = req.body;
+    const { post_url, comments_text, post_content: userPostContent } = req.body;
 
     if (!post_url || typeof post_url !== 'string') {
       return res.status(400).json({ error: 'post_url is required' });
     }
 
-    // Step 1: Scrape the LinkedIn post + comments with Playwright
-    const { scrapeLinkedInPost } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
-    let scraped;
-    try {
-      scraped = await scrapeLinkedInPost(post_url);
-    } catch (scrapeErr: any) {
-      return res.status(422).json({ error: `Could not read LinkedIn post: ${scrapeErr.message}` });
-    }
+    let scraped: { post_content: string; post_author: string; comments: Array<{ commenter_name: string; commenter_title: string; comment_text: string }> };
 
-    if (!scraped.comments || scraped.comments.length === 0) {
-      return res.json({ success: true, replies_generated: 0, replies: [], message: 'No comments found on this post. The post may require login to view comments.' });
+    if (comments_text && typeof comments_text === 'string' && comments_text.trim().length > 10) {
+      // User pasted raw comments text — use GPT to parse it into structured comments
+      const { getOpenAIClient } = await import('../../intelligence/assistant/openaiHelper');
+      const parseClient = getOpenAIClient();
+
+      let parsedComments: Array<{ commenter_name: string; commenter_title: string; comment_text: string }> = [];
+
+      if (parseClient) {
+        try {
+          const parseResult = await parseClient.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'system',
+                content: `Extract comments from this raw text copied from a LinkedIn post. Return a JSON array of objects with: { "commenter_name": string, "commenter_title": string, "comment_text": string }. Only include actual comments from real people (not the post author, not UI elements like "Like", "Reply", etc.). Return ONLY the JSON array, no markdown fencing.`,
+              },
+              { role: 'user', content: comments_text.slice(0, 8000) },
+            ],
+            max_tokens: 2000,
+            temperature: 0,
+          });
+          const raw = parseResult.choices[0]?.message?.content || '[]';
+          parsedComments = JSON.parse(raw.replace(/```json?\n?/g, '').replace(/```/g, '').trim());
+        } catch (err: any) {
+          console.warn('[OpenClaw LinkedIn] Failed to parse pasted comments:', err?.message?.slice(0, 200));
+        }
+      }
+
+      if (parsedComments.length === 0) {
+        return res.json({ success: true, replies_generated: 0, replies: [], message: 'Could not extract comments from the pasted text. Try copying just the comments section.' });
+      }
+
+      scraped = {
+        post_content: userPostContent || '',
+        post_author: '',
+        comments: parsedComments,
+      };
+    } else {
+      // No pasted text — try server-side scraping (works with LINKEDIN_PROXY_URL)
+      const { scrapeLinkedInPost } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
+      try {
+        scraped = await scrapeLinkedInPost(post_url);
+      } catch (scrapeErr: any) {
+        return res.status(422).json({ error: `Could not read LinkedIn post: ${scrapeErr.message}. Try copying the comments from your browser and pasting them instead.` });
+      }
+
+      if (!scraped.comments || scraped.comments.length === 0) {
+        return res.json({ success: true, replies_generated: 0, replies: [], message: 'No comments found. Try copying the comments from your browser and pasting them in the text box.' });
+      }
     }
 
     // Dedup: filter out commenters we already replied to on this post
@@ -1000,7 +1043,7 @@ One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
     const createdReplies: Array<{ commenter_name: string; reply_preview: string }> = [];
 
     for (const r of replies) {
-      const shortId = `oc-linkedin_comments-${crypto.randomBytes(4).toString('hex')}`;
+      const shortId = `oc-linke-${crypto.randomBytes(3).toString('hex')}`;
 
       // Clean up content
       let content = r.reply

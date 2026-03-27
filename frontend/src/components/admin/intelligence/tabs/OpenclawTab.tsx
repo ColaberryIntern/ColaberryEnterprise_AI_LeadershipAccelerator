@@ -150,6 +150,7 @@ export default function OpenclawTab() {
 
   // LinkedIn comment reply state
   const [commentReplyUrl, setCommentReplyUrl] = useState('');
+  const [commentsPastedText, setCommentsPastedText] = useState('');
   const [generatingReply, setGeneratingReply] = useState(false);
   const [replyResult, setReplyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [trackedPosts, setTrackedPosts] = useState<TrackedLinkedInPost[]>([]);
@@ -301,14 +302,19 @@ export default function OpenclawTab() {
     setGeneratingReply(true);
     setReplyResult(null);
     try {
-      const res = await generateLinkedInCommentReplies({ post_url: commentReplyUrl.trim() });
+      const payload: { post_url: string; comments_text?: string } = { post_url: commentReplyUrl.trim() };
+      if (commentsPastedText.trim().length > 10) {
+        payload.comments_text = commentsPastedText.trim();
+      }
+      const res = await generateLinkedInCommentReplies(payload);
       const data = res.data;
       if (data.replies_generated === 0) {
-        setReplyResult({ success: true, message: data.message || 'No comments found on this post.' });
+        setReplyResult({ success: true, message: data.message || 'No comments found. Try pasting the comments text.' });
       } else {
         const names = data.replies.map(r => r.commenter_name).join(', ');
         setReplyResult({ success: true, message: `Generated ${data.replies_generated} replies for ${names}. Check Manual Action tab to copy & post.` });
         setCommentReplyUrl('');
+        setCommentsPastedText('');
       }
       setTimeout(fetchData, 2000);
     } catch (err: any) {
@@ -1042,27 +1048,39 @@ export default function OpenclawTab() {
         </div>
         <div className="card-body py-3 px-3">
           <div className="text-muted mb-3" style={{ fontSize: '0.68rem' }}>
-            Paste a LinkedIn post URL to immediately read all comments and generate replies. For ongoing monitoring, use the card above instead.
+            Open your LinkedIn post, select and copy the comments section, then paste below. The system will parse commenters and generate personalized replies.
           </div>
-          <div className="d-flex gap-2 align-items-end">
-            <div className="flex-grow-1">
-              <label className="form-label small fw-medium mb-1">LinkedIn Post URL</label>
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="https://linkedin.com/feed/update/urn:li:activity:..."
-                value={commentReplyUrl}
-                onChange={e => setCommentReplyUrl(e.target.value)}
-              />
+          <div className="mb-2">
+            <label className="form-label small fw-medium mb-1">LinkedIn Post URL</label>
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              placeholder="https://linkedin.com/posts/... or https://linkedin.com/feed/update/urn:li:activity:..."
+              value={commentReplyUrl}
+              onChange={e => setCommentReplyUrl(e.target.value)}
+            />
+          </div>
+          <div className="mb-2">
+            <label className="form-label small fw-medium mb-1">Paste Comments</label>
+            <textarea
+              className="form-control form-control-sm"
+              rows={4}
+              placeholder={'Copy the comments section from your LinkedIn post and paste here.\nExample:\n\nBrad Wolfe\nCFO/COO & CFO.ai\nGreat point about system thinking...'}
+              value={commentsPastedText}
+              onChange={e => setCommentsPastedText(e.target.value)}
+              style={{ fontSize: '0.75rem' }}
+            />
+            <div className="text-muted mt-1" style={{ fontSize: '0.6rem' }}>
+              Tip: On the LinkedIn post page, select from the first commenter name down to the last comment text, then Ctrl+C.
             </div>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={handleGenerateCommentReplies}
-              disabled={!commentReplyUrl.trim() || generatingReply}
-            >
-              {generatingReply ? <><span className="spinner-border spinner-border-sm me-1" />Reading post &amp; generating replies...</> : 'Generate Replies'}
-            </button>
           </div>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={handleGenerateCommentReplies}
+            disabled={!commentReplyUrl.trim() || !commentsPastedText.trim() || generatingReply}
+          >
+            {generatingReply ? <><span className="spinner-border spinner-border-sm me-1" />Parsing comments &amp; generating replies...</> : 'Generate Replies'}
+          </button>
           {replyResult && (<div className={`alert alert-${replyResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{replyResult.message}</div>)}
         </div>
       </div>

@@ -211,6 +211,8 @@ export const generateLinkedInPost = (topic: string) =>
 
 export interface LinkedInBatchReplyPayload {
   post_url: string;
+  comments_text?: string;
+  post_content?: string;
 }
 
 export const generateLinkedInCommentReplies = (data: LinkedInBatchReplyPayload) =>
