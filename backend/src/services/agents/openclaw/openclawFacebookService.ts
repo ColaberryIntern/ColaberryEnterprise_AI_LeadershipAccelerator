@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import fs from 'fs/promises';
 import path from 'path';
+// Note: axios + cheerio used only by listFacebookGroups(), not session check
 
 const FACEBOOK_COOKIES_FILE = '/data/browser-profiles/facebook-cookies.json';
 
@@ -65,32 +66,18 @@ function buildCookieHeader(cookies: FacebookCookies): string {
 export async function checkFacebookSession(): Promise<{ authenticated: boolean; message: string }> {
   try {
     const cookies = await getFacebookCookies();
-    const resp = await axios.get('https://m.facebook.com/me', {
-      headers: {
-        Cookie: buildCookieHeader(cookies),
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      maxRedirects: 0,
-      validateStatus: (s) => s < 400,
-      timeout: 10000,
-    });
-
-    // If we get redirected to login, session is invalid
-    const location = resp.headers.location || '';
-    if (location.includes('/login') || location.includes('checkpoint')) {
-      return { authenticated: false, message: 'Facebook session expired or blocked. Re-paste your cookies.' };
+    // Validate that cookies look reasonable (c_user is numeric, xs is non-empty)
+    if (!/^\d+$/.test(cookies.c_user)) {
+      return { authenticated: false, message: 'Invalid c_user cookie — should be a numeric user ID (e.g. 100012345678901).' };
     }
-
-    // Check if response contains user profile indicators
-    const html = typeof resp.data === 'string' ? resp.data : '';
-    if (html.includes('c_user') || html.includes('/me') || resp.status === 200) {
-      return { authenticated: true, message: 'Facebook session is active.' };
+    if (cookies.xs.length < 10) {
+      return { authenticated: false, message: 'Invalid xs cookie — looks too short. Copy the full value from DevTools.' };
     }
-
-    return { authenticated: false, message: 'Could not verify Facebook session. Try re-pasting cookies.' };
+    // We trust the cookies format — actual auth is verified when the browser posts.
+    // HTTP checks from datacenter IPs are unreliable (Facebook blocks/redirects).
+    return { authenticated: true, message: 'Facebook session cookies saved. Auth will be verified on first browser post.' };
   } catch (err: any) {
-    if (err.code === 'ENOENT') {
+    if (err.code === 'ENOENT' || err.message?.includes('No Facebook cookies')) {
       return { authenticated: false, message: 'No Facebook cookies saved. Paste your c_user and xs cookies.' };
     }
     return { authenticated: false, message: `Session check failed: ${err.message}` };
