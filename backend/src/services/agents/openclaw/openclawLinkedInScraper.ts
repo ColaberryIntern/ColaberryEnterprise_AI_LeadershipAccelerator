@@ -198,26 +198,26 @@ export async function saveLinkedInCookies(li_at: string, jsessionId?: string): P
     cookies.push({ name: 'JSESSIONID', value: jsessionId, domain: '.linkedin.com', path: '/', httpOnly: false, secure: true, sameSite: 'None' as const });
   }
 
+  // Add cookies, navigate to establish them, then re-add li_at (LinkedIn's
+  // response headers overwrite injected cookies during navigation)
   await context.addCookies(cookies);
+  console.log(`[LinkedIn] Injected ${cookies.length} cookies`);
 
-  // Verify cookies were added
-  const addedCookies = await context.cookies('https://www.linkedin.com');
-  const liAtCheck = addedCookies.find(c => c.name === 'li_at');
-  console.log(`[LinkedIn] Cookies added: li_at=${liAtCheck ? 'yes' : 'NO'} (${addedCookies.length} total)`);
-
-  // Navigate to LinkedIn to establish the session in the persistent profile
   const page = await context.newPage();
   try {
     await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(2000);
   } catch (err: any) {
-    console.log(`[LinkedIn] Navigation during cookie save failed (non-fatal): ${err.message?.slice(0, 100)}`);
+    console.log(`[LinkedIn] Navigation during cookie save (non-fatal): ${err.message?.slice(0, 100)}`);
   }
 
-  // Verify cookie survived navigation
-  const postNavCookies = await context.cookies('https://www.linkedin.com');
-  const liAtPost = postNavCookies.find(c => c.name === 'li_at');
-  console.log(`[LinkedIn] Post-navigation: li_at=${liAtPost ? 'yes' : 'NO'} (${postNavCookies.length} total)`);
+  // Re-inject li_at after navigation since LinkedIn's response may have cleared it
+  await context.addCookies(cookies);
+
+  // Verify before closing
+  const finalCookies = await context.cookies('https://www.linkedin.com');
+  const liAtFinal = finalCookies.find(c => c.name === 'li_at');
+  console.log(`[LinkedIn] Final check: li_at=${liAtFinal ? `yes (${liAtFinal.value.length} chars)` : 'NO'} (${finalCookies.length} total)`);
 
   await context.close();
 }
