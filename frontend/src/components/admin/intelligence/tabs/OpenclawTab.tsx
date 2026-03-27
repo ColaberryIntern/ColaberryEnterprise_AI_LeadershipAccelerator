@@ -289,7 +289,7 @@ export default function OpenclawTab() {
     setLinkedinResult(null);
     try {
       const res = await generateLinkedInPost(linkedinTopic.trim());
-      setLinkedinResult({ success: true, message: `LinkedIn post generated (${res.data.short_id}). Check the response queue to review and copy.` });
+      setLinkedinResult({ success: true, message: `LinkedIn post generated (${res.data.short_id}). Find it in the Manual Queue tab — copy the content and post it on LinkedIn.` });
       setLinkedinTopic('');
       setTimeout(fetchData, 2000);
     } catch (err: any) {
@@ -901,19 +901,6 @@ export default function OpenclawTab() {
         </div>
       </div>
 
-      {/* Manual URL Submission */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold small">Submit Question URL <span className="badge bg-secondary ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>Any Platform</span></div>
-        <div className="card-body py-3 px-3">
-          <div className="text-muted mb-2" style={{ fontSize: '0.68rem' }}>Paste a question URL from any platform. The system will extract the content and generate a response for your review.</div>
-          <div className="d-flex gap-2">
-            <input type="text" className="form-control form-control-sm" placeholder="https://www.quora.com/What-is-..." value={submitUrl} onChange={e => setSubmitUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitUrl.trim() && !submitting && handleSubmitUrl()} />
-            <button className="btn btn-sm btn-primary text-nowrap" onClick={handleSubmitUrl} disabled={!submitUrl.trim() || submitting}>{submitting ? 'Submitting...' : 'Submit'}</button>
-          </div>
-          {submitResult && (<div className={`alert alert-${submitResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{submitResult.message}</div>)}
-        </div>
-      </div>
-
       {/* LinkedIn Post Generator */}
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold small">
@@ -927,6 +914,19 @@ export default function OpenclawTab() {
             <button className="btn btn-sm btn-primary text-nowrap" onClick={handleGenerateLinkedIn} disabled={!linkedinTopic.trim() || generatingLinkedin}>{generatingLinkedin ? 'Generating...' : 'Generate'}</button>
           </div>
           {linkedinResult && (<div className={`alert alert-${linkedinResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{linkedinResult.message}</div>)}
+        </div>
+      </div>
+
+      {/* Manual URL Submission */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small">Submit Question URL <span className="badge bg-secondary ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>Any Platform</span></div>
+        <div className="card-body py-3 px-3">
+          <div className="text-muted mb-2" style={{ fontSize: '0.68rem' }}>Paste a question URL from any platform. The system will extract the content and generate a response for your review.</div>
+          <div className="d-flex gap-2">
+            <input type="text" className="form-control form-control-sm" placeholder="https://www.quora.com/What-is-..." value={submitUrl} onChange={e => setSubmitUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitUrl.trim() && !submitting && handleSubmitUrl()} />
+            <button className="btn btn-sm btn-primary text-nowrap" onClick={handleSubmitUrl} disabled={!submitUrl.trim() || submitting}>{submitting ? 'Submitting...' : 'Submit'}</button>
+          </div>
+          {submitResult && (<div className={`alert alert-${submitResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{submitResult.message}</div>)}
         </div>
       </div>
 

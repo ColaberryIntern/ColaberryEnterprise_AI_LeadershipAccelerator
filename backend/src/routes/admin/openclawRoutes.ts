@@ -882,7 +882,7 @@ router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => 
       content += `\n\nIf your team wants to go from AI strategy to deployed system in 3 weeks, book a call: ${trackedUrl}`;
     }
 
-    // Create response
+    // Create response (manual execution — user copies and posts to LinkedIn)
     const response = await OpenclawResponse.create({
       signal_id: signal.id,
       platform: 'linkedin',
@@ -892,10 +892,21 @@ router.post(`${BASE}/linkedin/generate`, async (req: Request, res: Response) => 
       tracked_url: trackedUrl,
       utm_params: { utm_source: 'linkedin', utm_medium: 'organic_post', utm_campaign: shortId },
       post_status: 'draft',
+      execution_type: 'human_execution',
       created_at: new Date(),
     });
 
     await signal.update({ response_id: response.id, updated_at: new Date() });
+
+    // Create manual task so it shows in the task queue
+    await OpenclawTask.create({
+      task_type: 'post_response',
+      priority: 8,
+      status: 'pending',
+      signal_id: signal.id,
+      input_data: { response_id: response.id, platform: 'linkedin', action: 'Copy post content and publish on LinkedIn' },
+      created_at: new Date(),
+    });
 
     res.json({ success: true, signal, response, short_id: shortId });
   } catch (err: any) {
