@@ -127,7 +127,7 @@ export default function OpenclawTab() {
   const [responsePage, setResponsePage] = useState(1);
   const responsesPerPage = 25;
   const [loading, setLoading] = useState(true);
-  const [responseFilter, setResponseFilter] = useState('needs_action');
+  const [responseFilter, setResponseFilter] = useState('');
   const [responseView, setResponseView] = useState<'automated' | 'manual'>('automated');
   const [markPostedUrl, setMarkPostedUrl] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -179,27 +179,27 @@ export default function OpenclawTab() {
       const params: Record<string, string> = { page: String(responsePage), limit: String(responsesPerPage) };
       if (responseFilter) params.post_status = responseFilter;
       params.execution_type = responseView === 'manual' ? 'human_execution' : 'api_posting';
-      // Also fetch needs_action counts for both tabs (badge counts)
-      const otherParams: Record<string, string> = { page: '1', limit: '1', post_status: 'needs_action' };
-      otherParams.execution_type = responseView === 'manual' ? 'api_posting' : 'human_execution';
-      const activeCountParams: Record<string, string> = { page: '1', limit: '1', post_status: 'needs_action' };
-      activeCountParams.execution_type = responseView === 'manual' ? 'human_execution' : 'api_posting';
-      const [dashRes, respRes, otherRes, activeCountRes] = await Promise.all([
+      // Fetch total counts for both tabs (no status filter — show all items)
+      const otherCountParams: Record<string, string> = { page: '1', limit: '1' };
+      otherCountParams.execution_type = responseView === 'manual' ? 'api_posting' : 'human_execution';
+      const currentCountParams: Record<string, string> = { page: '1', limit: '1' };
+      currentCountParams.execution_type = responseView === 'manual' ? 'human_execution' : 'api_posting';
+      const [dashRes, respRes, otherCountRes, currentCountRes] = await Promise.all([
         getOpenclawDashboard(),
         getOpenclawResponses(params),
-        getOpenclawResponses(otherParams),
-        getOpenclawResponses(activeCountParams),
+        getOpenclawResponses(otherCountParams),
+        getOpenclawResponses(currentCountParams),
       ]);
       setDashboard(dashRes.data);
       setResponses(respRes.data.responses || []);
       setResponsesTotal(respRes.data.total || 0);
-      // Badge counts always show needs_action totals
+      // Badge counts show total items per tab
       if (responseView === 'automated') {
-        setAutomatedTotal(activeCountRes.data.total || 0);
-        setManualTotal(otherRes.data.total || 0);
+        setAutomatedTotal(currentCountRes.data.total || 0);
+        setManualTotal(otherCountRes.data.total || 0);
       } else {
-        setManualTotal(activeCountRes.data.total || 0);
-        setAutomatedTotal(otherRes.data.total || 0);
+        setManualTotal(currentCountRes.data.total || 0);
+        setAutomatedTotal(otherCountRes.data.total || 0);
       }
       // Fetch tracked LinkedIn posts + session status
       try {
@@ -1089,18 +1089,21 @@ export default function OpenclawTab() {
               value={responseFilter}
               onChange={(e) => { setResponseFilter(e.target.value); setResponsePage(1); }}
             >
-              <option value="needs_action">Needs Action</option>
               <option value="">All Statuses</option>
+              <option value="needs_action">Needs Action</option>
               {responseView === 'automated' ? (
                 <>
                   <option value="draft">Pending Review</option>
                   <option value="approved">Approved (Queued)</option>
+                  <option value="ready_to_post">Ready to Post</option>
                   <option value="posted">Posted</option>
                   <option value="rejected">Rejected</option>
                 </>
               ) : (
                 <>
-                  <option value="ready_for_manual_post">Ready to Post</option>
+                  <option value="draft">Draft</option>
+                  <option value="ready_to_post">Ready to Post</option>
+                  <option value="ready_for_manual_post">Ready to Post (Manual)</option>
                   <option value="posted">Posted</option>
                 </>
               )}
