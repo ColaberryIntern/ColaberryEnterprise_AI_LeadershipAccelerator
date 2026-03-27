@@ -1434,19 +1434,21 @@ export default function OpenclawTab() {
                     </pre>
                     {/* Post to LinkedIn button */}
                     {selectedResponse.platform === 'linkedin' && selectedResponse.post_status !== 'posted' && (
-                      <div className="mt-2">
+                      <div className="mt-2 d-flex align-items-center gap-2">
                         <button
                           className="btn btn-sm text-white fw-medium"
                           style={{ backgroundColor: '#0A66C2' }}
-                          onClick={() => {
-                            const url = `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(selectedResponse.content)}`;
-                            window.open(url, '_blank');
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(selectedResponse.content);
+                            setCopiedId(selectedResponse.id);
+                            setTimeout(() => setCopiedId(null), 3000);
+                            window.open('https://www.linkedin.com/feed/?shareActive=true', '_blank');
                           }}
                         >
                           <i className="bi bi-linkedin me-1" />
-                          Open in LinkedIn
+                          {copiedId === selectedResponse.id ? 'Copied! Paste in LinkedIn' : 'Copy & Open LinkedIn'}
                         </button>
-                        <span className="text-muted ms-2" style={{ fontSize: '0.65rem' }}>Opens LinkedIn with post pre-filled — just click Post</span>
+                        <span className="text-muted" style={{ fontSize: '0.65rem' }}>Copies post to clipboard, then opens LinkedIn — just Ctrl+V and Post</span>
                       </div>
                     )}
                   </div>
