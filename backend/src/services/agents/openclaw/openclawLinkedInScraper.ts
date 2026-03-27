@@ -1,9 +1,34 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import * as cheerio from 'cheerio';
 import path from 'path';
 import fs from 'fs/promises';
 
 const LINKEDIN_COOKIES_FILE = '/data/browser-profiles/linkedin-cookies.json';
+
+/**
+ * Get proxy config for LinkedIn requests.
+ * Set LINKEDIN_PROXY_URL env var to route through a proxy (e.g. residential IP).
+ * Supports HTTP/HTTPS/SOCKS5 proxies: http://user:pass@host:port
+ */
+function getProxyConfig(): AxiosRequestConfig | undefined {
+  const proxyUrl = process.env.LINKEDIN_PROXY_URL;
+  if (!proxyUrl) return undefined;
+
+  try {
+    const url = new URL(proxyUrl);
+    return {
+      proxy: {
+        host: url.hostname,
+        port: parseInt(url.port, 10),
+        protocol: url.protocol.replace(':', ''),
+        ...(url.username ? { auth: { username: decodeURIComponent(url.username), password: decodeURIComponent(url.password) } } : {}),
+      },
+    };
+  } catch {
+    console.warn(`[LinkedIn] Invalid LINKEDIN_PROXY_URL: ${proxyUrl}`);
+    return undefined;
+  }
+}
 
 // ── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -55,6 +80,7 @@ async function ensureJsessionId(li_at: string): Promise<string> {
       maxRedirects: 3,
       timeout: 10000,
       validateStatus: () => true,
+      ...getProxyConfig(),
     });
 
     const setCookie = res.headers['set-cookie'] || [];
@@ -143,6 +169,7 @@ async function fetchVoyagerComments(
         headers,
         timeout: 15000,
         params: { q: 'comments', updateId: updateUrn, count: 50, start: 0 },
+        ...getProxyConfig(),
       });
 
       const included = res.data?.included || [];
@@ -216,7 +243,7 @@ async function scrapeViaVoyagerApi(
   try {
     const postRes = await axios.get(
       `https://www.linkedin.com/voyager/api/feed/updates/${encodeURIComponent(activityUrn)}`,
-      { headers, timeout: 15000 },
+      { headers, timeout: 15000, ...getProxyConfig() },
     );
     post_content = extractPostText(postRes.data);
     post_author = extractAuthorName(postRes.data);
@@ -245,6 +272,7 @@ async function scrapeLinkedInPostViaHtml(
     timeout: 15000,
     maxRedirects: 3,
     validateStatus: (status) => status < 400,
+    ...getProxyConfig(),
   });
 
   const $ = cheerio.load(res.data);
