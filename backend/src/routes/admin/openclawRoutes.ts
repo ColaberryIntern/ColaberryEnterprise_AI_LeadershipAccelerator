@@ -294,7 +294,18 @@ router.get(`${BASE}/responses`, async (req: Request, res: Response) => {
       where.post_status = post_status;
     }
     if (platform) where.platform = platform;
-    if (execution_type) where.execution_type = execution_type;
+    if (execution_type === 'human_execution') {
+      where.execution_type = 'human_execution';
+    } else if (execution_type === 'api_posting') {
+      // Automated tab: show everything that's NOT human_execution (includes null, empty, api_posting)
+      where[Op.or as any] = [
+        { execution_type: null },
+        { execution_type: '' },
+        { execution_type: 'api_posting' },
+      ];
+    } else if (execution_type) {
+      where.execution_type = execution_type;
+    }
 
     const offset = (page - 1) * limit;
     const { rows, count } = await OpenclawResponse.findAndCountAll({
