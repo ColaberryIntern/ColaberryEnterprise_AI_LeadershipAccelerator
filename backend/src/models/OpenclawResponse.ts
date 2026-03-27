@@ -96,7 +96,7 @@ OpenclawResponse.init(
       defaultValue: 'educational',
     },
     short_id: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(40),
       allowNull: true,
       unique: true,
     },
