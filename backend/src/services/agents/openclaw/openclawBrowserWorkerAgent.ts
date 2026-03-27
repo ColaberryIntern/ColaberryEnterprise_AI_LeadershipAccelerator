@@ -257,7 +257,9 @@ async function attemptPosting(
       // Try browser fallback if available
       if (hasBrowserSupport(response.platform) && signal?.source_url) {
         try {
-          const useHeadless = config.headless ?? true;
+          // Medium requires non-headless (Cloudflare blocks headless) — use Xvfb virtual display
+          const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
+          if (!useHeadless) process.env.DISPLAY = process.env.DISPLAY || ':99';
           const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
             headless: useHeadless,
             screenshot_on_post: config.screenshot_on_post ?? true,
@@ -277,7 +279,9 @@ async function attemptPosting(
   // No API credentials — try browser directly
   if (hasBrowserSupport(response.platform) && signal?.source_url) {
     try {
+      // Medium requires non-headless (Cloudflare blocks headless) — use Xvfb virtual display
       const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
+      if (!useHeadless) process.env.DISPLAY = process.env.DISPLAY || ':99';
       const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
         headless: useHeadless,
         screenshot_on_post: config.screenshot_on_post ?? true,

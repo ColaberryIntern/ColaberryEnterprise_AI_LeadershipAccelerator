@@ -18,6 +18,8 @@ COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN npx playwright install --with-deps chromium
 RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
+ENV DISPLAY=:99
 EXPOSE 3001
-CMD ["node", "dist/server.js"]
+CMD ["bash", "-c", "Xvfb :99 -screen 0 1920x1080x24 &>/dev/null & exec node dist/server.js"]
