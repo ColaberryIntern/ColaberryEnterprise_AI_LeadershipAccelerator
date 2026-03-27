@@ -20,6 +20,13 @@ import {
   removeTrackedLinkedInPost,
   saveLinkedInSession,
   getLinkedInSessionStatus,
+  saveFacebookSession,
+  getFacebookSessionStatus,
+  getFacebookGroups,
+  configureFacebookGroups,
+  getConfiguredFacebookGroups,
+  FacebookGroup,
+  FacebookGroupConfig,
   OpenclawDashboard,
   OpenclawResponseItem,
   OpenclawAgentActivity,
@@ -160,6 +167,17 @@ export default function OpenclawTab() {
   const [trackUrl, setTrackUrl] = useState('');
   const [trackingPost, setTrackingPost] = useState(false);
 
+  // Facebook Groups state
+  const [fbCUser, setFbCUser] = useState('');
+  const [fbXs, setFbXs] = useState('');
+  const [fbSessionOk, setFbSessionOk] = useState<boolean | null>(null);
+  const [fbSaving, setFbSaving] = useState(false);
+  const [fbResult, setFbResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [fbGroups, setFbGroups] = useState<FacebookGroup[]>([]);
+  const [fbConfiguredGroups, setFbConfiguredGroups] = useState<FacebookGroupConfig>({ target_groups: [], enabled: false });
+  const [fbSelectedGroupIds, setFbSelectedGroupIds] = useState<Set<string>>(new Set());
+  const [fbLoadingGroups, setFbLoadingGroups] = useState(false);
+
   // Response detail drill-down state
   const [selectedResponse, setSelectedResponse] = useState<OpenclawResponseItem | null>(null);
 
@@ -201,14 +219,19 @@ export default function OpenclawTab() {
         setManualTotal(currentCountRes.data.total || 0);
         setAutomatedTotal(otherCountRes.data.total || 0);
       }
-      // Fetch tracked LinkedIn posts + session status
+      // Fetch tracked LinkedIn posts + session status + Facebook session
       try {
-        const [trackedRes, sessionRes] = await Promise.all([
+        const [trackedRes, sessionRes, fbSessionRes, fbConfigRes] = await Promise.all([
           getTrackedLinkedInPosts(),
           getLinkedInSessionStatus(),
+          getFacebookSessionStatus().catch(() => ({ data: { authenticated: false } })),
+          getConfiguredFacebookGroups().catch(() => ({ data: { target_groups: [], enabled: false } })),
         ]);
         setTrackedPosts(trackedRes.data.tracked_posts || []);
         setLinkedinSessionOk(sessionRes.data.authenticated);
+        setFbSessionOk(fbSessionRes.data.authenticated);
+        setFbConfiguredGroups(fbConfigRes.data);
+        setFbSelectedGroupIds(new Set(fbConfigRes.data.target_groups?.map((g: any) => g.id) || []));
       } catch { /* ignore */ }
     } catch {
       /* ignore */
@@ -874,11 +897,11 @@ export default function OpenclawTab() {
           <div>
             <div className="fw-medium small mb-2">Active Scanning Platforms</div>
             <div className="text-muted mb-2" style={{ fontSize: '0.65rem' }}>
-              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt &bull; Manual Only: Reddit, HN, Facebook Groups, LinkedIn Comments (no auto-posting)
+              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt, Facebook Groups &bull; Manual Only: Reddit, HN, LinkedIn Comments (no auto-posting)
             </div>
             <div className="d-flex gap-3 flex-wrap">
               {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt', 'facebook_groups', 'linkedin_comments'].map(p => {
-                const humanExec = ['reddit', 'hackernews', 'facebook_groups', 'linkedin_comments', 'quora'].includes(p);
+                const humanExec = ['reddit', 'hackernews', 'linkedin_comments', 'quora'].includes(p);
                 const labelMap: Record<string, string> = { hackernews: 'Hacker News', devto: 'Dev.to', hashnode: 'Hashnode', discourse: 'Discourse Forums', twitter: 'Twitter/X', bluesky: 'Bluesky', youtube: 'YouTube', producthunt: 'Product Hunt', facebook_groups: 'Facebook Groups', linkedin_comments: 'LinkedIn Comments' };
                 const label = labelMap[p] || p.charAt(0).toUpperCase() + p.slice(1);
                 return (
@@ -927,6 +950,126 @@ export default function OpenclawTab() {
             <button className="btn btn-sm btn-primary text-nowrap" onClick={handleSubmitUrl} disabled={!submitUrl.trim() || submitting}>{submitting ? 'Submitting...' : 'Submit'}</button>
           </div>
           {submitResult && (<div className={`alert alert-${submitResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{submitResult.message}</div>)}
+        </div>
+      </div>
+
+      {/* Facebook Groups Session & Config */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small">
+          Facebook Groups
+          <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#1877F2', color: '#fff' }}>Browser Auto-Post</span>
+          {fbSessionOk !== null && (
+            <span className={`badge ms-2 bg-${fbSessionOk ? 'success' : 'danger'}`} style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>
+              {fbSessionOk ? 'Connected' : 'Not Connected'}
+            </span>
+          )}
+        </div>
+        <div className="card-body py-3 px-3">
+          <div className="text-muted mb-2" style={{ fontSize: '0.68rem' }}>
+            Paste your Facebook cookies to enable browser auto-posting to your groups. Open Facebook in Chrome &rarr; DevTools (F12) &rarr; Application &rarr; Cookies &rarr; facebook.com &rarr; copy <code>c_user</code> and <code>xs</code> values.
+          </div>
+          <div className="d-flex gap-2 mb-2">
+            <div className="flex-grow-1">
+              <label className="form-label small fw-medium mb-1">c_user</label>
+              <input type="text" className="form-control form-control-sm" placeholder="e.g. 100012345678901" value={fbCUser} onChange={e => setFbCUser(e.target.value)} />
+            </div>
+            <div className="flex-grow-1">
+              <label className="form-label small fw-medium mb-1">xs</label>
+              <input type="text" className="form-control form-control-sm" placeholder="e.g. 28:aB3cDe..." value={fbXs} onChange={e => setFbXs(e.target.value)} />
+            </div>
+            <div className="d-flex align-items-end">
+              <button
+                className="btn btn-sm btn-primary text-nowrap"
+                disabled={!fbCUser.trim() || !fbXs.trim() || fbSaving}
+                onClick={async () => {
+                  setFbSaving(true);
+                  setFbResult(null);
+                  try {
+                    const res = await saveFacebookSession(fbCUser.trim(), fbXs.trim());
+                    setFbResult({ success: res.data.success, message: res.data.message });
+                    if (res.data.success) { setFbSessionOk(true); setFbCUser(''); setFbXs(''); }
+                  } catch (err: any) {
+                    setFbResult({ success: false, message: err?.response?.data?.error || 'Failed to save session' });
+                  }
+                  setFbSaving(false);
+                }}
+              >
+                {fbSaving ? 'Saving...' : 'Save Session'}
+              </button>
+            </div>
+          </div>
+          {fbResult && (<div className={`alert alert-${fbResult.success ? 'success' : 'danger'} py-1 px-2 small mb-2`}>{fbResult.message}</div>)}
+
+          {/* Group Selection */}
+          {fbSessionOk && (
+            <>
+              <hr className="my-2" />
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="fw-medium small">Target Groups</div>
+                <button
+                  className="btn btn-sm btn-outline-primary py-0 px-2"
+                  style={{ fontSize: '0.7rem' }}
+                  disabled={fbLoadingGroups}
+                  onClick={async () => {
+                    setFbLoadingGroups(true);
+                    try {
+                      const res = await getFacebookGroups();
+                      setFbGroups(res.data.groups || []);
+                    } catch { /* ignore */ }
+                    setFbLoadingGroups(false);
+                  }}
+                >
+                  {fbLoadingGroups ? 'Loading...' : 'Load My Groups'}
+                </button>
+              </div>
+              {fbConfiguredGroups.target_groups.length > 0 && fbGroups.length === 0 && (
+                <div className="text-muted small mb-2" style={{ fontSize: '0.68rem' }}>
+                  {fbConfiguredGroups.target_groups.length} group(s) configured. Click "Load My Groups" to modify.
+                </div>
+              )}
+              {fbGroups.length > 0 && (
+                <>
+                  <div className="border rounded p-2 mb-2" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                    {fbGroups.map(g => (
+                      <div key={g.id} className="form-check small">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id={`fb-group-${g.id}`}
+                          checked={fbSelectedGroupIds.has(g.id)}
+                          onChange={() => {
+                            setFbSelectedGroupIds(prev => {
+                              const next = new Set(prev);
+                              if (next.has(g.id)) next.delete(g.id); else next.add(g.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <label className="form-check-label" htmlFor={`fb-group-${g.id}`}>
+                          {g.name} {g.member_count && <span className="text-muted">({g.member_count} members)</span>}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className="btn btn-sm btn-success"
+                    onClick={async () => {
+                      const selectedGroups = fbGroups.filter(g => fbSelectedGroupIds.has(g.id)).map(g => ({ id: g.id, name: g.name, url: g.url }));
+                      try {
+                        await configureFacebookGroups(selectedGroups, true);
+                        setFbConfiguredGroups({ target_groups: selectedGroups, enabled: true });
+                        setFbResult({ success: true, message: `Saved ${selectedGroups.length} groups for auto-posting.` });
+                      } catch (err: any) {
+                        setFbResult({ success: false, message: err?.response?.data?.error || 'Failed to save configuration' });
+                      }
+                    }}
+                  >
+                    Save Group Selection ({fbSelectedGroupIds.size})
+                  </button>
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 

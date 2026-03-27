@@ -377,3 +377,32 @@ export const getCircuitStatus = () =>
 
 export const getRateLimits = () =>
   api.get<{ rate_limits: RateLimitStatus[] }>(`${BASE}/rate-limits`);
+
+// ── Facebook Groups Session & Config ─────────────────────────────────────────
+
+export interface FacebookGroup {
+  id: string;
+  name: string;
+  url: string;
+  member_count: string | null;
+}
+
+export interface FacebookGroupConfig {
+  target_groups: Array<{ id: string; name: string; url: string }>;
+  enabled: boolean;
+}
+
+export const saveFacebookSession = (c_user: string, xs: string, datr?: string) =>
+  api.post<{ success: boolean; message: string }>(`${BASE}/facebook/save-session`, { c_user, xs, datr });
+
+export const getFacebookSessionStatus = () =>
+  api.get<{ authenticated: boolean; message: string }>(`${BASE}/facebook/session-status`);
+
+export const getFacebookGroups = () =>
+  api.get<{ groups: FacebookGroup[] }>(`${BASE}/facebook/groups`);
+
+export const configureFacebookGroups = (target_groups: Array<{ id: string; name: string; url: string }>, enabled: boolean) =>
+  api.post<{ success: boolean; message: string }>(`${BASE}/facebook/groups/configure`, { target_groups, enabled });
+
+export const getConfiguredFacebookGroups = () =>
+  api.get<FacebookGroupConfig>(`${BASE}/facebook/groups/configured`);

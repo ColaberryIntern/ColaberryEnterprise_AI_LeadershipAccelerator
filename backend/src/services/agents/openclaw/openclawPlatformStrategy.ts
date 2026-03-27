@@ -58,12 +58,12 @@ export const PLATFORM_EXECUTION: Record<string, PlatformExecutionType> = {
 
   // API_POSTING (browser) -auto-post via browser with quality gate review
   medium: 'API_POSTING',
+  facebook_groups: 'API_POSTING',
 
   // HUMAN_EXECUTION -generate response, queue for manual posting, NEVER auto-post
   reddit: 'HUMAN_EXECUTION',
   quora: 'HUMAN_EXECUTION',
   hackernews: 'HUMAN_EXECUTION',
-  facebook_groups: 'HUMAN_EXECUTION',
   linkedin_comments: 'HUMAN_EXECUTION',
 };
 

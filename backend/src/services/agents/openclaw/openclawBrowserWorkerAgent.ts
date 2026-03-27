@@ -258,7 +258,7 @@ async function attemptPosting(
       if (hasBrowserSupport(response.platform) && signal?.source_url) {
         try {
           // Medium requires non-headless (Cloudflare blocks headless) — use Xvfb virtual display
-          const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
+          const useHeadless = ['medium', 'facebook_groups'].includes(response.platform) ? false : (config.headless ?? true);
           if (!useHeadless) process.env.DISPLAY = process.env.DISPLAY || ':99';
           const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
             headless: useHeadless,
@@ -280,7 +280,7 @@ async function attemptPosting(
   if (hasBrowserSupport(response.platform) && signal?.source_url) {
     try {
       // Medium requires non-headless (Cloudflare blocks headless) — use Xvfb virtual display
-      const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
+      const useHeadless = ['medium', 'facebook_groups'].includes(response.platform) ? false : (config.headless ?? true);
       if (!useHeadless) process.env.DISPLAY = process.env.DISPLAY || ':99';
       const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
         headless: useHeadless,
@@ -312,7 +312,7 @@ async function recoverOrphanedResponses(actions: AgentAction[]): Promise<void> {
           { execution_type: null } as any,
           { execution_type: '' } as any,
         ],
-        platform: { [Op.notIn]: ['reddit', 'hackernews', 'facebook_groups', 'linkedin_comments', 'quora', 'linkedin'] },
+        platform: { [Op.notIn]: ['reddit', 'hackernews', 'linkedin_comments', 'quora', 'linkedin'] },
       },
       limit: 10,
       order: [['created_at', 'ASC']],

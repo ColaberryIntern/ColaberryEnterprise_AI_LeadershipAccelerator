@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Op, QueryTypes } from 'sequelize';
 import axios from 'axios';
 import { sequelize } from '../../config/database';
+import { saveFacebookCookies, checkFacebookSession, listFacebookGroups, getConfiguredGroups, saveConfiguredGroups } from '../../services/agents/openclaw/openclawFacebookService';
 import {
   OpenclawSignal,
   OpenclawTask,
@@ -1243,6 +1244,58 @@ router.delete(`${BASE}/linkedin/tracked-posts/:id`, async (req: Request, res: Re
     if (!signal) return res.status(404).json({ error: 'Not found' });
     await signal.update({ status: 'expired' as any, updated_at: new Date() });
     res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Facebook Groups Session & Config ─────────────────────────────────────────
+
+router.post(`${BASE}/facebook/save-session`, async (req: Request, res: Response) => {
+  try {
+    const { c_user, xs, datr } = req.body;
+    if (!c_user || !xs) return res.status(400).json({ error: 'c_user and xs cookies are required' });
+    await saveFacebookCookies(c_user, xs, datr);
+    const status = await checkFacebookSession();
+    res.json({ success: true, message: status.authenticated ? 'Facebook session saved and verified.' : 'Cookies saved but session could not be verified. They may still work for browser posting.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get(`${BASE}/facebook/session-status`, async (_req: Request, res: Response) => {
+  try {
+    const status = await checkFacebookSession();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get(`${BASE}/facebook/groups`, async (_req: Request, res: Response) => {
+  try {
+    const groups = await listFacebookGroups();
+    res.json({ groups });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/facebook/groups/configure`, async (req: Request, res: Response) => {
+  try {
+    const { target_groups, enabled } = req.body;
+    if (!Array.isArray(target_groups)) return res.status(400).json({ error: 'target_groups must be an array' });
+    await saveConfiguredGroups({ target_groups, enabled: enabled !== false });
+    res.json({ success: true, message: `Configured ${target_groups.length} Facebook groups.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get(`${BASE}/facebook/groups/configured`, async (_req: Request, res: Response) => {
+  try {
+    const config = await getConfiguredGroups();
+    res.json(config);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
