@@ -257,7 +257,7 @@ async function attemptPosting(
       // Try browser fallback if available
       if (hasBrowserSupport(response.platform) && signal?.source_url) {
         try {
-          const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
+          const useHeadless = config.headless ?? true;
           const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
             headless: useHeadless,
             screenshot_on_post: config.screenshot_on_post ?? true,
