@@ -1816,4 +1816,34 @@ router.get(`${BASE}/actions/today`, async (req: Request, res: Response) => {
   }
 });
 
+// ── Manual Scan Trigger ─────────────────────────────────────────────
+
+router.post(`${BASE}/scan`, async (req: Request, res: Response) => {
+  try {
+    const { platforms } = req.body || {};
+    const { runOpenclawMarketSignalAgent } = await import('../../services/agents/openclaw/openclawMarketSignalAgent');
+    const result = await runOpenclawMarketSignalAgent('manual-scan', {
+      ...(platforms ? { platforms } : {}),
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[OpenClaw] Manual scan error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Manual Response Generation Trigger ──────────────────────────────
+
+router.post(`${BASE}/generate-responses`, async (req: Request, res: Response) => {
+  try {
+    const { limit = 10 } = req.body || {};
+    const { runOpenclawContentResponseAgent } = await import('../../services/agents/openclaw/openclawContentResponseAgent');
+    const result = await runOpenclawContentResponseAgent('manual-generate', { max_responses: limit });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[OpenClaw] Manual response generation error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
