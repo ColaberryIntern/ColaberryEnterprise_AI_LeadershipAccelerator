@@ -5,6 +5,13 @@ import fs from 'fs/promises';
 
 const BROWSER_PROFILES_DIR = '/data/browser-profiles';
 
+async function clearStaleLocks(profileDir: string): Promise<void> {
+  const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+  for (const f of lockFiles) {
+    try { await fs.unlink(path.join(profileDir, f)); } catch { /* doesn't exist */ }
+  }
+}
+
 export interface LinkedInComment {
   commenter_name: string;
   commenter_title: string;
@@ -27,6 +34,7 @@ export async function scrapeLinkedInPost(postUrl: string): Promise<LinkedInPostD
 
   // Ensure profile directory exists
   await fs.mkdir(profileDir, { recursive: true });
+  await clearStaleLocks(profileDir);
 
   // Use persistent context to reuse LinkedIn session cookies
   const context = await chromium.launchPersistentContext(profileDir, {
@@ -175,6 +183,7 @@ export async function scrapeLinkedInPost(postUrl: string): Promise<LinkedInPostD
 export async function saveLinkedInCookies(li_at: string, jsessionId?: string): Promise<void> {
   const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
   await fs.mkdir(profileDir, { recursive: true });
+  await clearStaleLocks(profileDir);
 
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: true,
@@ -211,6 +220,7 @@ export interface LinkedInLoginResult {
 export async function loginToLinkedIn(email: string, password: string): Promise<LinkedInLoginResult> {
   const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
   await fs.mkdir(profileDir, { recursive: true });
+  await clearStaleLocks(profileDir);
 
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: true,
@@ -291,6 +301,7 @@ export async function loginToLinkedIn(email: string, password: string): Promise<
  */
 export async function verifyLinkedInChallenge(code: string): Promise<LinkedInLoginResult> {
   const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
+  await clearStaleLocks(profileDir);
 
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: true,
@@ -346,6 +357,7 @@ export async function checkLinkedInSession(): Promise<{ authenticated: boolean; 
     return { authenticated: false, message: 'No LinkedIn browser profile found. Save your li_at cookie first.' };
   }
 
+  await clearStaleLocks(profileDir);
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: true,
     viewport: { width: 1280, height: 900 },

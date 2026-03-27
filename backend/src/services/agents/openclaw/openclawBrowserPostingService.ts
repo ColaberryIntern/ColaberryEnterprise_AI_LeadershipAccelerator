@@ -1,9 +1,22 @@
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import path from 'path';
+import fs from 'fs/promises';
 import OpenclawSession from '../../../models/OpenclawSession';
 
 const BROWSER_PROFILES_DIR = '/data/browser-profiles';
 const SCREENSHOTS_DIR = '/data/screenshots';
+
+/**
+ * Clear stale Chromium lock files from a persistent browser profile.
+ * These files survive container restarts and crashed processes, causing
+ * "profile appears to be in use by another Chromium process" errors.
+ */
+async function clearStaleLocks(profileDir: string): Promise<void> {
+  const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+  for (const f of lockFiles) {
+    try { await fs.unlink(path.join(profileDir, f)); } catch { /* doesn't exist */ }
+  }
+}
 
 interface BrowserPostResult {
   post_url: string;
@@ -81,6 +94,9 @@ async function postToDevtoBrowser(
   let page: Page | null = null;
 
   try {
+    // Clear stale lock files from previous crashes/container restarts
+    await clearStaleLocks(profileDir);
+
     // Persistent context reuses Google OAuth session cookies across runs
     context = await chromium.launchPersistentContext(profileDir, {
       headless: config.headless,
@@ -258,6 +274,9 @@ async function postToMediumBrowser(
   let page: Page | null = null;
 
   try {
+    // Clear stale lock files from previous crashes/container restarts
+    await clearStaleLocks(profileDir);
+
     context = await chromium.launchPersistentContext(profileDir, {
       headless: config.headless,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'],
