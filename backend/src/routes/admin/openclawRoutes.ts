@@ -1080,30 +1080,12 @@ One entry per comment. Return ONLY the JSON array, no markdown fencing.`;
 
 // ── LinkedIn Session Management ───────────────────────────────────────────────
 
-router.post(`${BASE}/linkedin/login`, async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'email and password are required' });
-    }
-    const { loginToLinkedIn } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
-    const result = await loginToLinkedIn(email, password);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+router.post(`${BASE}/linkedin/login`, async (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Browser-based login is deprecated. Use POST /linkedin/save-session with your li_at cookie instead.' });
 });
 
-router.post(`${BASE}/linkedin/verify`, async (req: Request, res: Response) => {
-  try {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ error: 'verification code is required' });
-    const { verifyLinkedInChallenge } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
-    const result = await verifyLinkedInChallenge(code);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+router.post(`${BASE}/linkedin/verify`, async (_req: Request, res: Response) => {
+  res.status(410).json({ error: 'Browser-based verification is deprecated. Use POST /linkedin/save-session with your li_at cookie instead.' });
 });
 
 router.post(`${BASE}/linkedin/save-session`, async (req: Request, res: Response) => {
