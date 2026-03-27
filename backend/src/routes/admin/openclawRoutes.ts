@@ -3,7 +3,7 @@ import { Op, QueryTypes } from 'sequelize';
 import axios from 'axios';
 import { sequelize } from '../../config/database';
 import { saveFacebookCookies, checkFacebookSession, listFacebookGroups, getConfiguredGroups, saveConfiguredGroups } from '../../services/agents/openclaw/openclawFacebookService';
-import { validateRedditCredentials } from '../../services/agents/openclaw/openclawPlatformPostingService';
+import { saveRedditCookies, checkRedditSession } from '../../services/agents/openclaw/openclawRedditService';
 import {
   OpenclawSignal,
   OpenclawTask,
@@ -1302,29 +1302,17 @@ router.get(`${BASE}/facebook/groups/configured`, async (_req: Request, res: Resp
   }
 });
 
-// ── Reddit Credential Management ─────────────────────────────────────────────
+// ── Reddit Session Management (Cookie-based) ─────────────────────────────────
 
-router.post(`${BASE}/reddit/save-credentials`, async (req: Request, res: Response) => {
+router.post(`${BASE}/reddit/save-session`, async (req: Request, res: Response) => {
   try {
-    const { client_id, client_secret, username, password } = req.body;
-    if (!client_id || !client_secret || !username || !password) {
-      return res.status(400).json({ error: 'All fields required: client_id, client_secret, username, password' });
+    const { reddit_session, token_v2 } = req.body;
+    if (!reddit_session) {
+      return res.status(400).json({ error: 'reddit_session cookie is required' });
     }
-    // Save to environment (runtime) — these persist until container restart
-    process.env.REDDIT_CLIENT_ID = client_id;
-    process.env.REDDIT_CLIENT_SECRET = client_secret;
-    process.env.REDDIT_USERNAME = username;
-    process.env.REDDIT_PASSWORD = password;
-
-    // Also save to file for persistence across restarts
-    const fs = await import('fs/promises');
-    const credPath = '/data/browser-profiles/reddit-credentials.json';
-    await fs.mkdir('/data/browser-profiles', { recursive: true });
-    await fs.writeFile(credPath, JSON.stringify({ client_id, client_secret, username, password }, null, 2));
-
-    // Validate by fetching a token
-    const result = await validateRedditCredentials();
-    res.json({ success: result.authenticated, message: result.message, reddit_username: result.username });
+    await saveRedditCookies(reddit_session, token_v2);
+    const result = await checkRedditSession();
+    res.json({ success: result.authenticated, message: result.message });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1332,19 +1320,7 @@ router.post(`${BASE}/reddit/save-credentials`, async (req: Request, res: Respons
 
 router.get(`${BASE}/reddit/session-status`, async (_req: Request, res: Response) => {
   try {
-    // Try to load credentials from file if not in env
-    if (!process.env.REDDIT_CLIENT_ID) {
-      try {
-        const fs = await import('fs/promises');
-        const raw = await fs.readFile('/data/browser-profiles/reddit-credentials.json', 'utf-8');
-        const creds = JSON.parse(raw);
-        process.env.REDDIT_CLIENT_ID = creds.client_id;
-        process.env.REDDIT_CLIENT_SECRET = creds.client_secret;
-        process.env.REDDIT_USERNAME = creds.username;
-        process.env.REDDIT_PASSWORD = creds.password;
-      } catch { /* no saved credentials */ }
-    }
-    const result = await validateRedditCredentials();
+    const result = await checkRedditSession();
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });

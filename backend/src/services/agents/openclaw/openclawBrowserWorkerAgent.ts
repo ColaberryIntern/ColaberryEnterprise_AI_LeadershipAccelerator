@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSignal } from '../../../models';
-import { postToDevTo, postToHashnode, postToMedium, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, postToReddit, hasPlatformCredentials } from './openclawPlatformPostingService';
+import { postToDevTo, postToHashnode, postToMedium, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
 import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
 import { getStrategy, isPostCreationAllowed, isHumanExecution } from './openclawPlatformStrategy';
 import { checkCircuitBreaker } from './openclawCircuitBreaker';
@@ -407,11 +407,7 @@ async function postToPlatform(
       if (!phId) throw new Error('No Product Hunt post ID in signal details');
       return postToProductHunt(phId, response.content);
     }
-    case 'reddit': {
-      const thingId = signal?.details?.name || (signal?.details?.id ? `t3_${signal.details.id}` : null);
-      if (!thingId) throw new Error('No Reddit post fullname (thing_id) in signal details');
-      return postToReddit(thingId, response.content, signal?.source_url);
-    }
+    // Reddit uses browser-based posting (cookie auth) — handled by attemptPosting() → postViaBrowser()
     default:
       throw new Error(`No API posting support for platform: ${response.platform}`);
   }

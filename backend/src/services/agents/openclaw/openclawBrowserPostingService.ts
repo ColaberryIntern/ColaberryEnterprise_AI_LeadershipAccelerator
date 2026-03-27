@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import OpenclawSession from '../../../models/OpenclawSession';
 import { getFacebookCookiesForBrowser } from './openclawFacebookService';
+import { getRedditCookiesForBrowser } from './openclawRedditService';
 
 const BROWSER_PROFILES_DIR = '/data/browser-profiles';
 const SCREENSHOTS_DIR = '/data/screenshots';
@@ -41,7 +42,7 @@ function randomDelay(min: number, max: number): Promise<void> {
  * Check which platforms support browser-based posting.
  */
 export function hasBrowserSupport(platform: string): boolean {
-  return ['devto', 'medium', 'facebook_groups'].includes(platform);
+  return ['devto', 'medium', 'facebook_groups', 'reddit'].includes(platform);
 }
 
 /**
@@ -63,6 +64,9 @@ export async function postViaBrowser(
   }
   if (platform === 'facebook_groups') {
     return postToFacebookGroupBrowser(articleUrl, commentBody, config);
+  }
+  if (platform === 'reddit') {
+    return postToRedditBrowser(articleUrl, commentBody, config);
   }
   throw new Error(`Browser posting not implemented for platform: ${platform}`);
 }
@@ -760,4 +764,189 @@ async function facebookCreateGroupPost(page: Page, content: string, config: Brow
   // Return the group URL with timestamp (extracting exact post URL from FB is unreliable)
   const currentUrl = page.url();
   return `${currentUrl.split('?')[0]}#post-${Date.now()}`;
+}
+
+// ── Reddit Browser Strategy ──────────────────────────────────────────────────
+// Auth: Cookie-based (reddit_session + optional token_v2) injected into browser
+// Mode: Comment on existing Reddit post/thread via old.reddit.com (simpler DOM)
+// Uses headless browser (Reddit doesn't block headless like Facebook does)
+
+async function postToRedditBrowser(
+  targetUrl: string,
+  content: string,
+  config: BrowserPostConfig,
+): Promise<BrowserPostResult> {
+  let session = await OpenclawSession.findOne({
+    where: { platform: 'reddit', session_status: ['active', 'idle'] as any },
+    order: [['last_activity_at', 'DESC']],
+  });
+  if (!session) {
+    session = await OpenclawSession.create({
+      platform: 'reddit',
+      session_status: 'active',
+      health_score: 1.0,
+      pages_visited: 0,
+      actions_performed: 0,
+      errors: [],
+    });
+  }
+
+  const profileDir = path.join(BROWSER_PROFILES_DIR, 'reddit');
+  let context: BrowserContext | null = null;
+  let page: Page | null = null;
+
+  try {
+    await clearStaleLocks(profileDir);
+    await fs.mkdir(profileDir, { recursive: true });
+
+    context = await chromium.launchPersistentContext(profileDir, {
+      headless: config.headless,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'],
+      viewport: { width: 1920, height: 1080 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+    });
+
+    // Inject saved Reddit cookies
+    try {
+      const redditCookies = await getRedditCookiesForBrowser();
+      await context.addCookies(redditCookies);
+    } catch (err: any) {
+      throw new Error(`Reddit cookies not found: ${err.message}. Save your session cookies first.`);
+    }
+
+    page = context.pages()[0] || await context.newPage();
+    await page.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
+    await session.update({ session_status: 'active', updated_at: new Date() });
+
+    // Use old.reddit.com for simpler, more stable DOM
+    const oldRedditUrl = targetUrl.replace('www.reddit.com', 'old.reddit.com').replace('reddit.com', 'old.reddit.com');
+    await page.goto(oldRedditUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await randomDelay(2000, 4000);
+
+    // Check if authenticated — old Reddit shows username in top-right
+    const isLoggedIn = await page.evaluate(`(() => {
+      // old.reddit.com: logged-in user shown in span.user
+      const userEl = document.querySelector('span.user a');
+      if (userEl && userEl.textContent && userEl.textContent !== 'login') return true;
+      // new reddit fallback
+      const loginBtn = document.querySelector('a[href*="/login"]');
+      if (loginBtn && document.querySelector('#USER_DROPDOWN_ID')) return true;
+      return false;
+    })()`) as boolean;
+
+    if (!isLoggedIn) {
+      throw new Error('Reddit session expired. Re-paste your reddit_session cookie from DevTools.');
+    }
+
+    console.log('[OpenClaw Browser] Reddit session authenticated, posting comment');
+
+    // Find and click the comment textarea on old.reddit.com
+    const commentBoxFound = await page.evaluate(`(() => {
+      // Old Reddit: find the comment form textarea
+      const textarea = document.querySelector('form.cloneable textarea[name="text"]')
+        || document.querySelector('.commentarea textarea[name="text"]')
+        || document.querySelector('textarea.c-form-control');
+      if (textarea) { (textarea as HTMLElement).click(); (textarea as HTMLElement).focus(); return true; }
+      return false;
+    })()`) as boolean;
+
+    if (!commentBoxFound) {
+      // Fallback: try Playwright locator
+      try {
+        await page.locator('textarea[name="text"]').first().click({ timeout: 5000 });
+      } catch {
+        throw new Error('Could not find Reddit comment box. You may need to re-login or the DOM changed.');
+      }
+    }
+
+    await randomDelay(500, 1000);
+
+    // Type the comment
+    await page.keyboard.type(content, { delay: 15 + Math.random() * 25 });
+    await randomDelay(config.min_delay_ms, config.max_delay_ms);
+
+    // Click the submit/save button
+    const submitted = await page.evaluate(`(() => {
+      // Old Reddit: button with text "save" or class "save"
+      const btns = document.querySelectorAll('button[type="submit"], .save-form button, button.btn');
+      for (const btn of btns) {
+        const text = (btn as HTMLElement).textContent?.trim().toLowerCase() || '';
+        if (text === 'save' || text === 'comment' || text === 'submit') {
+          (btn as HTMLElement).click();
+          return true;
+        }
+      }
+      // Direct form submit fallback
+      const form = document.querySelector('form.cloneable') || document.querySelector('.commentarea form');
+      if (form) {
+        const saveBtn = form.querySelector('button[type="submit"]');
+        if (saveBtn) { (saveBtn as HTMLElement).click(); return true; }
+      }
+      return false;
+    })()`) as boolean;
+
+    if (!submitted) {
+      try {
+        await page.getByRole('button', { name: /save|comment|submit/i }).first().click({ timeout: 5000 });
+      } catch {
+        throw new Error('Could not find Reddit submit button. DOM structure may have changed.');
+      }
+    }
+
+    // Wait for comment to be posted
+    await randomDelay(3000, 5000);
+
+    // Try to get the permalink of the new comment
+    const postUrl = page.url();
+
+    console.log(`[OpenClaw Browser] Reddit comment posted on: ${postUrl}`);
+
+    // Screenshot
+    let screenshotPath: string | null = null;
+    if (config.screenshot_on_post) {
+      const filename = `reddit_${Date.now()}.png`;
+      screenshotPath = path.join(SCREENSHOTS_DIR, filename);
+      await page.screenshot({ path: screenshotPath, fullPage: false });
+    }
+
+    await session.update({
+      session_status: 'idle',
+      last_activity_at: new Date(),
+      pages_visited: (session.pages_visited || 0) + 1,
+      actions_performed: (session.actions_performed || 0) + 1,
+      screenshot_path: screenshotPath || session.screenshot_path,
+      updated_at: new Date(),
+    });
+
+    await context.close();
+    return { post_url: `${postUrl}#comment-${Date.now()}`, screenshot_path: screenshotPath, session_id: session.id };
+  } catch (err: any) {
+    if (page && !page.isClosed()) {
+      try {
+        const errFile = path.join(SCREENSHOTS_DIR, `reddit_error_${Date.now()}.png`);
+        await page.screenshot({ path: errFile });
+      } catch { /* ignore */ }
+    }
+
+    const errMsg = err.message || '';
+    let status: 'captcha_blocked' | 'rate_limited' | 'crashed' = 'crashed';
+    if (errMsg.includes('captcha') || errMsg.includes('CAPTCHA')) status = 'captcha_blocked';
+    if (errMsg.includes('rate limit') || errMsg.includes('429') || errMsg.includes('try again later')) status = 'rate_limited';
+    if (errMsg.includes('session expired')) status = 'crashed';
+
+    const errors = Array.isArray(session.errors) ? session.errors : [];
+    errors.push({ message: errMsg.slice(0, 500), timestamp: new Date().toISOString(), status });
+
+    await session.update({
+      session_status: status,
+      health_score: Math.max(0, (Number(session.health_score) || 1) - 0.2),
+      errors,
+      updated_at: new Date(),
+    });
+
+    if (context) await context.close().catch(() => {});
+    throw err;
+  }
 }

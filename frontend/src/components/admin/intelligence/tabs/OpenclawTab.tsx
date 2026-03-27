@@ -25,7 +25,7 @@ import {
   getFacebookGroups,
   configureFacebookGroups,
   getConfiguredFacebookGroups,
-  saveRedditCredentials,
+  saveRedditSession,
   getRedditSessionStatus,
   FacebookGroup,
   FacebookGroupConfig,
@@ -181,12 +181,9 @@ export default function OpenclawTab() {
   const [fbLoadingGroups, setFbLoadingGroups] = useState(false);
 
   // Reddit state
-  const [redditClientId, setRedditClientId] = useState('');
-  const [redditClientSecret, setRedditClientSecret] = useState('');
-  const [redditUsername, setRedditUsername] = useState('');
-  const [redditPassword, setRedditPassword] = useState('');
+  const [redditSessionCookie, setRedditSessionCookie] = useState('');
+  const [redditTokenV2, setRedditTokenV2] = useState('');
   const [redditSessionOk, setRedditSessionOk] = useState<boolean | null>(null);
-  const [redditConnectedUser, setRedditConnectedUser] = useState('');
   const [redditSaving, setRedditSaving] = useState(false);
   const [redditResult, setRedditResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -246,7 +243,6 @@ export default function OpenclawTab() {
         setFbConfiguredGroups(fbConfigRes.data);
         setFbSelectedGroupIds(new Set(fbConfigRes.data.target_groups?.map((g: any) => g.id) || []));
         setRedditSessionOk(redditRes.data.authenticated);
-        if (redditRes.data.username) setRedditConnectedUser(redditRes.data.username);
       } catch { /* ignore */ }
     } catch {
       /* ignore */
@@ -1092,56 +1088,47 @@ export default function OpenclawTab() {
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold small">
           Reddit
-          <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#FF4500', color: '#fff' }}>API Auto-Post</span>
+          <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#FF4500', color: '#fff' }}>Browser Auto-Post</span>
           {redditSessionOk !== null && (
             <span className={`badge ms-2 bg-${redditSessionOk ? 'success' : 'danger'}`} style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>
-              {redditSessionOk ? `Connected (u/${redditConnectedUser})` : 'Not Connected'}
+              {redditSessionOk ? 'Session Saved' : 'Not Connected'}
             </span>
           )}
         </div>
         <div className="card-body py-3 px-3">
           <div className="text-muted mb-2" style={{ fontSize: '0.68rem' }}>
-            Connect your Reddit account for automated comment posting. Go to <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noreferrer">reddit.com/prefs/apps</a> &rarr; "create another app" &rarr; select <strong>script</strong> &rarr; redirect URI: <code>http://localhost</code> &rarr; copy Client ID and Secret.
+            Paste your Reddit session cookie for browser-based comment posting. Open <a href="https://www.reddit.com" target="_blank" rel="noreferrer">reddit.com</a> while logged in &rarr; DevTools (F12) &rarr; Application &rarr; Cookies &rarr; <code>reddit.com</code> &rarr; copy the <code>reddit_session</code> value. Optionally copy <code>token_v2</code> as well.
           </div>
           <div className="row g-2 mb-2">
-            <div className="col-md-6">
-              <label className="form-label small fw-medium mb-1">Client ID</label>
-              <input type="text" className="form-control form-control-sm" placeholder="Under app name (short string)" value={redditClientId} onChange={e => setRedditClientId(e.target.value)} />
+            <div className="col-md-8">
+              <label className="form-label small fw-medium mb-1">reddit_session <span className="text-danger">*</span></label>
+              <input type="password" className="form-control form-control-sm" placeholder="Paste reddit_session cookie value" value={redditSessionCookie} onChange={e => setRedditSessionCookie(e.target.value)} />
             </div>
-            <div className="col-md-6">
-              <label className="form-label small fw-medium mb-1">Client Secret</label>
-              <input type="password" className="form-control form-control-sm" placeholder="Secret key" value={redditClientSecret} onChange={e => setRedditClientSecret(e.target.value)} />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label small fw-medium mb-1">Reddit Username</label>
-              <input type="text" className="form-control form-control-sm" placeholder="u/yourname" value={redditUsername} onChange={e => setRedditUsername(e.target.value)} />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label small fw-medium mb-1">Reddit Password</label>
-              <input type="password" className="form-control form-control-sm" placeholder="Account password" value={redditPassword} onChange={e => setRedditPassword(e.target.value)} />
+            <div className="col-md-4">
+              <label className="form-label small fw-medium mb-1">token_v2 <span className="text-muted">(optional)</span></label>
+              <input type="password" className="form-control form-control-sm" placeholder="Paste token_v2 value" value={redditTokenV2} onChange={e => setRedditTokenV2(e.target.value)} />
             </div>
           </div>
           <button
             className="btn btn-sm btn-primary"
-            disabled={!redditClientId.trim() || !redditClientSecret.trim() || !redditUsername.trim() || !redditPassword.trim() || redditSaving}
+            disabled={!redditSessionCookie.trim() || redditSaving}
             onClick={async () => {
               setRedditSaving(true);
               setRedditResult(null);
               try {
-                const res = await saveRedditCredentials(redditClientId.trim(), redditClientSecret.trim(), redditUsername.trim(), redditPassword.trim());
+                const res = await saveRedditSession(redditSessionCookie.trim(), redditTokenV2.trim() || undefined);
                 setRedditResult({ success: res.data.success, message: res.data.message });
                 if (res.data.success) {
                   setRedditSessionOk(true);
-                  setRedditConnectedUser(res.data.reddit_username);
-                  setRedditClientId(''); setRedditClientSecret(''); setRedditUsername(''); setRedditPassword('');
+                  setRedditSessionCookie(''); setRedditTokenV2('');
                 }
               } catch (err: any) {
-                setRedditResult({ success: false, message: err?.response?.data?.error || 'Failed to save credentials' });
+                setRedditResult({ success: false, message: err?.response?.data?.error || 'Failed to save session' });
               }
               setRedditSaving(false);
             }}
           >
-            {redditSaving ? 'Connecting...' : 'Save & Connect'}
+            {redditSaving ? 'Saving...' : 'Save Session'}
           </button>
           {redditResult && (<div className={`alert alert-${redditResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{redditResult.message}</div>)}
         </div>

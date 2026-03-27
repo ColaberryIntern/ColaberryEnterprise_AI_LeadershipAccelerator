@@ -407,10 +407,10 @@ export const configureFacebookGroups = (target_groups: Array<{ id: string; name:
 export const getConfiguredFacebookGroups = () =>
   api.get<FacebookGroupConfig>(`${BASE}/facebook/groups/configured`);
 
-// ── Reddit Credential Management ─────────────────────────────────────────────
+// ── Reddit Session Management (Cookie-based) ─────────────────────────────────
 
-export const saveRedditCredentials = (client_id: string, client_secret: string, username: string, password: string) =>
-  api.post<{ success: boolean; message: string; reddit_username: string }>(`${BASE}/reddit/save-credentials`, { client_id, client_secret, username, password });
+export const saveRedditSession = (reddit_session: string, token_v2?: string) =>
+  api.post<{ success: boolean; message: string }>(`${BASE}/reddit/save-session`, { reddit_session, token_v2 });
 
 export const getRedditSessionStatus = () =>
   api.get<{ authenticated: boolean; username: string; message: string }>(`${BASE}/reddit/session-status`);
