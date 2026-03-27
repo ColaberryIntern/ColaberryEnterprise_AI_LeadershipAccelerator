@@ -4,12 +4,30 @@ import path from 'path';
 import fs from 'fs/promises';
 
 const BROWSER_PROFILES_DIR = '/data/browser-profiles';
+const LINKEDIN_COOKIES_FILE = '/data/browser-profiles/linkedin-cookies.json';
 
 async function clearStaleLocks(profileDir: string): Promise<void> {
   const lockFiles = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
   for (const f of lockFiles) {
     try { await fs.unlink(path.join(profileDir, f)); } catch { /* doesn't exist */ }
   }
+}
+
+/**
+ * Load saved LinkedIn cookies from JSON file and inject into context.
+ * Chromium's persistent context doesn't reliably persist programmatically-added cookies,
+ * so we maintain our own cookie store as a JSON file.
+ */
+async function injectSavedCookies(context: import('playwright').BrowserContext): Promise<boolean> {
+  try {
+    const raw = await fs.readFile(LINKEDIN_COOKIES_FILE, 'utf-8');
+    const cookies = JSON.parse(raw);
+    if (cookies.length > 0) {
+      await context.addCookies(cookies);
+      return true;
+    }
+  } catch { /* file doesn't exist yet */ }
+  return false;
 }
 
 export interface LinkedInComment {
@@ -42,6 +60,9 @@ export async function scrapeLinkedInPost(postUrl: string): Promise<LinkedInPostD
     viewport: { width: 1280, height: 900 },
     args: ['--disable-blink-features=AutomationControlled'],
   });
+
+  // Inject saved cookies from JSON store
+  await injectSavedCookies(context);
 
   const page = await context.newPage();
 
@@ -198,27 +219,13 @@ export async function saveLinkedInCookies(li_at: string, jsessionId?: string): P
     cookies.push({ name: 'JSESSIONID', value: jsessionId, domain: '.linkedin.com', path: '/', httpOnly: false, secure: true, sameSite: 'None' as const });
   }
 
-  // Add cookies, navigate to establish them, then re-add li_at (LinkedIn's
-  // response headers overwrite injected cookies during navigation)
+  // Save cookies to JSON file (Chromium persistent context doesn't reliably
+  // persist programmatically-added cookies across sessions)
+  await fs.writeFile(LINKEDIN_COOKIES_FILE, JSON.stringify(cookies, null, 2));
+  console.log(`[LinkedIn] Saved ${cookies.length} cookies to ${LINKEDIN_COOKIES_FILE}`);
+
+  // Also inject into current context for immediate use
   await context.addCookies(cookies);
-  console.log(`[LinkedIn] Injected ${cookies.length} cookies`);
-
-  const page = await context.newPage();
-  try {
-    await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await page.waitForTimeout(2000);
-  } catch (err: any) {
-    console.log(`[LinkedIn] Navigation during cookie save (non-fatal): ${err.message?.slice(0, 100)}`);
-  }
-
-  // Re-inject li_at after navigation since LinkedIn's response may have cleared it
-  await context.addCookies(cookies);
-
-  // Verify before closing
-  const finalCookies = await context.cookies('https://www.linkedin.com');
-  const liAtFinal = finalCookies.find(c => c.name === 'li_at');
-  console.log(`[LinkedIn] Final check: li_at=${liAtFinal ? `yes (${liAtFinal.value.length} chars)` : 'NO'} (${finalCookies.length} total)`);
-
   await context.close();
 }
 
@@ -364,30 +371,18 @@ export async function verifyLinkedInChallenge(code: string): Promise<LinkedInLog
 
 /**
  * Check if LinkedIn session cookies exist and are likely valid.
+ * Reads from JSON cookie store (no browser launch needed).
  */
 export async function checkLinkedInSession(): Promise<{ authenticated: boolean; message: string }> {
-  const profileDir = path.join(BROWSER_PROFILES_DIR, 'linkedin');
   try {
-    await fs.access(profileDir);
-  } catch {
-    return { authenticated: false, message: 'No LinkedIn browser profile found. Save your li_at cookie first.' };
-  }
-
-  await clearStaleLocks(profileDir);
-  const context = await chromium.launchPersistentContext(profileDir, {
-    headless: true,
-    viewport: { width: 1280, height: 900 },
-    args: ['--disable-blink-features=AutomationControlled'],
-  });
-
-  try {
-    const cookies = await context.cookies('https://www.linkedin.com');
-    const liAt = cookies.find(c => c.name === 'li_at');
+    const raw = await fs.readFile(LINKEDIN_COOKIES_FILE, 'utf-8');
+    const cookies = JSON.parse(raw);
+    const liAt = cookies.find((c: any) => c.name === 'li_at');
     if (!liAt || !liAt.value) {
-      return { authenticated: false, message: 'No li_at cookie found in profile. Save your cookie first.' };
+      return { authenticated: false, message: 'No li_at cookie found. Save your cookie first.' };
     }
-    return { authenticated: true, message: `Session active. li_at cookie expires: ${liAt.expires > 0 ? new Date(liAt.expires * 1000).toISOString() : 'session'}` };
-  } finally {
-    await context.close();
+    return { authenticated: true, message: `Session active. Cookie saved (${liAt.value.length} chars).` };
+  } catch {
+    return { authenticated: false, message: 'No LinkedIn session saved. Save your li_at cookie first.' };
   }
 }
