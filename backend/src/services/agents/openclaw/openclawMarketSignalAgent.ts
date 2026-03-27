@@ -121,7 +121,10 @@ async function scanPlatform(
     case 'reddit': {
       const resp = await axios.get('https://www.reddit.com/search.json', {
         params: { q: query, sort: 'new', limit: Math.min(maxResults, 25), t: 'day' },
-        headers: { 'User-Agent': 'OpenclawBot/1.0' },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+        },
         timeout: 15000,
       });
       const posts = resp.data?.data?.children || [];
@@ -394,6 +397,10 @@ async function scanPlatform(
       try {
         const resp = await axios.get('https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts', {
           params: { q: query, limit: Math.min(maxResults, 25), sort: 'latest' },
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+          },
           timeout: 15000,
         });
         const posts = resp.data?.posts || [];
