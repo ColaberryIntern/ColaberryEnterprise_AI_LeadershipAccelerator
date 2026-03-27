@@ -119,11 +119,12 @@ async function scanPlatform(
 
   switch (platform) {
     case 'reddit': {
-      const resp = await axios.get('https://www.reddit.com/search.json', {
+      // old.reddit.com is less aggressive with datacenter IP blocking than www.reddit.com
+      const resp = await axios.get('https://old.reddit.com/search.json', {
         params: { q: query, sort: 'new', limit: Math.min(maxResults, 25), t: 'day' },
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          'Accept': 'application/json',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
         timeout: 15000,
       });

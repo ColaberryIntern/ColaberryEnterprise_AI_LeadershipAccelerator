@@ -1846,4 +1846,25 @@ router.post(`${BASE}/generate-responses`, async (req: Request, res: Response) =>
   }
 });
 
+// ── Full Pipeline Trigger (score → queue → generate) ────────────────
+
+router.post(`${BASE}/run-pipeline`, async (req: Request, res: Response) => {
+  try {
+    const results: Record<string, any> = {};
+
+    // Step 1: Score & queue signals via conversation detection agent
+    const { runOpenclawConversationDetectionAgent } = await import('../../services/agents/openclaw/openclawConversationDetectionAgent');
+    results.detection = await runOpenclawConversationDetectionAgent('manual-pipeline', {});
+
+    // Step 2: Generate responses for queued signals
+    const { runOpenclawContentResponseAgent } = await import('../../services/agents/openclaw/openclawContentResponseAgent');
+    results.content = await runOpenclawContentResponseAgent('manual-pipeline', { max_responses: req.body?.limit || 10 });
+
+    res.json({ success: true, pipeline: results });
+  } catch (err: any) {
+    console.error('[OpenClaw] Pipeline trigger error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
