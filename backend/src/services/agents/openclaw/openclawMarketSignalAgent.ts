@@ -138,6 +138,8 @@ async function scanPlatform(
             score: d.score,
             num_comments: d.num_comments,
             created_utc: d.created_utc,
+            name: d.name,
+            id: d.id,
           },
         });
       }

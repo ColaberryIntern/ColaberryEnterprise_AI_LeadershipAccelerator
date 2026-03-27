@@ -409,6 +409,123 @@ export async function postToProductHunt(
   };
 }
 
+// ── Reddit OAuth API ────────────────────────────────────────────────────────
+
+let redditTokenCache: { token: string; expiresAt: number } | null = null;
+
+/**
+ * Get a Reddit OAuth access token using "script" app credentials.
+ * Caches the token in memory (expires after ~1 hour).
+ */
+async function getRedditAccessToken(): Promise<string> {
+  // Return cached token if still valid (with 60s buffer)
+  if (redditTokenCache && Date.now() < redditTokenCache.expiresAt - 60000) {
+    return redditTokenCache.token;
+  }
+
+  const clientId = process.env.REDDIT_CLIENT_ID;
+  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
+  const username = process.env.REDDIT_USERNAME;
+  const password = process.env.REDDIT_PASSWORD;
+
+  if (!clientId || !clientSecret || !username || !password) {
+    throw new Error('Reddit credentials not configured (REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD)');
+  }
+
+  const resp = await axios.post(
+    'https://www.reddit.com/api/v1/access_token',
+    new URLSearchParams({ grant_type: 'password', username, password }),
+    {
+      auth: { username: clientId, password: clientSecret },
+      headers: { 'User-Agent': 'OpenclawBot/1.0 (by /u/' + username + ')' },
+      timeout: 15000,
+    },
+  );
+
+  if (!resp.data?.access_token) {
+    throw new Error(`Reddit OAuth failed: ${resp.data?.error || 'no access_token'}`);
+  }
+
+  redditTokenCache = {
+    token: resp.data.access_token,
+    expiresAt: Date.now() + (resp.data.expires_in || 3600) * 1000,
+  };
+
+  return redditTokenCache.token;
+}
+
+/**
+ * Post a comment on a Reddit post/comment via the OAuth API.
+ * Requires REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD.
+ * @param thingId Reddit "fullname" of the parent (e.g. "t3_abc123" for post, "t1_xyz" for comment)
+ * @param commentBody The comment text (markdown supported)
+ * @param postUrl Optional URL for constructing the comment permalink
+ */
+export async function postToReddit(
+  thingId: string,
+  commentBody: string,
+  postUrl?: string,
+): Promise<PostResult> {
+  const accessToken = await getRedditAccessToken();
+  const username = process.env.REDDIT_USERNAME;
+
+  const resp = await axios.post(
+    'https://oauth.reddit.com/api/comment',
+    new URLSearchParams({ thing_id: thingId, text: commentBody }),
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': `OpenclawBot/1.0 (by /u/${username})`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeout: 15000,
+    },
+  );
+
+  // Reddit returns { json: { errors: [], data: { things: [{ data: { id, name, permalink } }] } } }
+  const errors = resp.data?.json?.errors;
+  if (errors && errors.length > 0) {
+    throw new Error(`Reddit API error: ${errors.map((e: any) => e[1] || e).join(', ')}`);
+  }
+
+  const things = resp.data?.json?.data?.things;
+  const comment = things?.[0]?.data;
+
+  let commentUrl: string;
+  if (comment?.permalink) {
+    commentUrl = `https://www.reddit.com${comment.permalink}`;
+  } else if (postUrl) {
+    commentUrl = `${postUrl.replace(/\/$/, '')}#comment-${comment?.id || Date.now()}`;
+  } else {
+    commentUrl = `https://www.reddit.com/r/all/comments/${thingId.replace('t3_', '')}`;
+  }
+
+  return {
+    post_url: commentUrl,
+    platform_post_id: comment?.name || comment?.id || thingId,
+  };
+}
+
+/**
+ * Validate Reddit credentials by fetching an access token and checking identity.
+ */
+export async function validateRedditCredentials(): Promise<{ authenticated: boolean; username: string; message: string }> {
+  try {
+    const accessToken = await getRedditAccessToken();
+    const resp = await axios.get('https://oauth.reddit.com/api/v1/me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': `OpenclawBot/1.0 (by /u/${process.env.REDDIT_USERNAME})`,
+      },
+      timeout: 10000,
+    });
+    return { authenticated: true, username: resp.data?.name || process.env.REDDIT_USERNAME || '', message: 'Reddit connected.' };
+  } catch (err: any) {
+    redditTokenCache = null; // Clear cached token on failure
+    return { authenticated: false, username: '', message: `Reddit auth failed: ${err.message}` };
+  }
+}
+
 /**
  * Check if a platform has API credentials configured for automated posting.
  */
@@ -430,6 +547,9 @@ export function hasPlatformCredentials(platform: string): boolean {
       return !!process.env.YOUTUBE_API_KEY && !!process.env.YOUTUBE_REFRESH_TOKEN;
     case 'producthunt':
       return !!process.env.PRODUCTHUNT_ACCESS_TOKEN;
+    case 'reddit':
+      return !!process.env.REDDIT_CLIENT_ID && !!process.env.REDDIT_CLIENT_SECRET
+        && !!process.env.REDDIT_USERNAME && !!process.env.REDDIT_PASSWORD;
     default:
       return false;
   }

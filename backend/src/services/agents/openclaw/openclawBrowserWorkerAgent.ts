@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import { OpenclawTask, OpenclawResponse, OpenclawSignal } from '../../../models';
-import { postToDevTo, postToHashnode, postToMedium, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
+import { postToDevTo, postToHashnode, postToMedium, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, postToReddit, hasPlatformCredentials } from './openclawPlatformPostingService';
 import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
 import { getStrategy, isPostCreationAllowed, isHumanExecution } from './openclawPlatformStrategy';
 import { checkCircuitBreaker } from './openclawCircuitBreaker';
@@ -312,7 +312,7 @@ async function recoverOrphanedResponses(actions: AgentAction[]): Promise<void> {
           { execution_type: null } as any,
           { execution_type: '' } as any,
         ],
-        platform: { [Op.notIn]: ['reddit', 'hackernews', 'linkedin_comments', 'quora', 'linkedin'] },
+        platform: { [Op.notIn]: ['hackernews', 'linkedin_comments', 'quora', 'linkedin'] },
       },
       limit: 10,
       order: [['created_at', 'ASC']],
@@ -406,6 +406,11 @@ async function postToPlatform(
       const phId = signal?.details?.ph_id;
       if (!phId) throw new Error('No Product Hunt post ID in signal details');
       return postToProductHunt(phId, response.content);
+    }
+    case 'reddit': {
+      const thingId = signal?.details?.name || (signal?.details?.id ? `t3_${signal.details.id}` : null);
+      if (!thingId) throw new Error('No Reddit post fullname (thing_id) in signal details');
+      return postToReddit(thingId, response.content, signal?.source_url);
     }
     default:
       throw new Error(`No API posting support for platform: ${response.platform}`);

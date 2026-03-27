@@ -25,6 +25,8 @@ import {
   getFacebookGroups,
   configureFacebookGroups,
   getConfiguredFacebookGroups,
+  saveRedditCredentials,
+  getRedditSessionStatus,
   FacebookGroup,
   FacebookGroupConfig,
   OpenclawDashboard,
@@ -178,6 +180,16 @@ export default function OpenclawTab() {
   const [fbSelectedGroupIds, setFbSelectedGroupIds] = useState<Set<string>>(new Set());
   const [fbLoadingGroups, setFbLoadingGroups] = useState(false);
 
+  // Reddit state
+  const [redditClientId, setRedditClientId] = useState('');
+  const [redditClientSecret, setRedditClientSecret] = useState('');
+  const [redditUsername, setRedditUsername] = useState('');
+  const [redditPassword, setRedditPassword] = useState('');
+  const [redditSessionOk, setRedditSessionOk] = useState<boolean | null>(null);
+  const [redditConnectedUser, setRedditConnectedUser] = useState('');
+  const [redditSaving, setRedditSaving] = useState(false);
+  const [redditResult, setRedditResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Response detail drill-down state
   const [selectedResponse, setSelectedResponse] = useState<OpenclawResponseItem | null>(null);
 
@@ -219,19 +231,22 @@ export default function OpenclawTab() {
         setManualTotal(currentCountRes.data.total || 0);
         setAutomatedTotal(otherCountRes.data.total || 0);
       }
-      // Fetch tracked LinkedIn posts + session status + Facebook session
+      // Fetch tracked LinkedIn posts + session status + Facebook session + Reddit session
       try {
-        const [trackedRes, sessionRes, fbSessionRes, fbConfigRes] = await Promise.all([
+        const [trackedRes, sessionRes, fbSessionRes, fbConfigRes, redditRes] = await Promise.all([
           getTrackedLinkedInPosts(),
           getLinkedInSessionStatus(),
           getFacebookSessionStatus().catch(() => ({ data: { authenticated: false } })),
           getConfiguredFacebookGroups().catch(() => ({ data: { target_groups: [], enabled: false } })),
+          getRedditSessionStatus().catch(() => ({ data: { authenticated: false, username: '', message: '' } })),
         ]);
         setTrackedPosts(trackedRes.data.tracked_posts || []);
         setLinkedinSessionOk(sessionRes.data.authenticated);
         setFbSessionOk(fbSessionRes.data.authenticated);
         setFbConfiguredGroups(fbConfigRes.data);
         setFbSelectedGroupIds(new Set(fbConfigRes.data.target_groups?.map((g: any) => g.id) || []));
+        setRedditSessionOk(redditRes.data.authenticated);
+        if (redditRes.data.username) setRedditConnectedUser(redditRes.data.username);
       } catch { /* ignore */ }
     } catch {
       /* ignore */
@@ -897,11 +912,11 @@ export default function OpenclawTab() {
           <div>
             <div className="fw-medium small mb-2">Active Scanning Platforms</div>
             <div className="text-muted mb-2" style={{ fontSize: '0.65rem' }}>
-              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt, Facebook Groups &bull; Manual Only: Reddit, HN, LinkedIn Comments (no auto-posting)
+              Scan + Auto-Post: Dev.to, Hashnode, Discourse, Twitter, Bluesky, YouTube, Product Hunt, Facebook Groups, Reddit &bull; Manual Only: HN, LinkedIn Comments (no auto-posting)
             </div>
             <div className="d-flex gap-3 flex-wrap">
               {['reddit', 'hackernews', 'devto', 'hashnode', 'discourse', 'twitter', 'bluesky', 'youtube', 'producthunt', 'facebook_groups', 'linkedin_comments'].map(p => {
-                const humanExec = ['reddit', 'hackernews', 'linkedin_comments', 'quora'].includes(p);
+                const humanExec = ['hackernews', 'linkedin_comments', 'quora'].includes(p);
                 const labelMap: Record<string, string> = { hackernews: 'Hacker News', devto: 'Dev.to', hashnode: 'Hashnode', discourse: 'Discourse Forums', twitter: 'Twitter/X', bluesky: 'Bluesky', youtube: 'YouTube', producthunt: 'Product Hunt', facebook_groups: 'Facebook Groups', linkedin_comments: 'LinkedIn Comments' };
                 const label = labelMap[p] || p.charAt(0).toUpperCase() + p.slice(1);
                 return (
@@ -1070,6 +1085,65 @@ export default function OpenclawTab() {
               )}
             </>
           )}
+        </div>
+      </div>
+
+      {/* Reddit API Credentials */}
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-header bg-white fw-semibold small">
+          Reddit
+          <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#FF4500', color: '#fff' }}>API Auto-Post</span>
+          {redditSessionOk !== null && (
+            <span className={`badge ms-2 bg-${redditSessionOk ? 'success' : 'danger'}`} style={{ fontSize: '0.55rem', verticalAlign: 'middle' }}>
+              {redditSessionOk ? `Connected (u/${redditConnectedUser})` : 'Not Connected'}
+            </span>
+          )}
+        </div>
+        <div className="card-body py-3 px-3">
+          <div className="text-muted mb-2" style={{ fontSize: '0.68rem' }}>
+            Connect your Reddit account for automated comment posting. Go to <a href="https://www.reddit.com/prefs/apps" target="_blank" rel="noreferrer">reddit.com/prefs/apps</a> &rarr; "create another app" &rarr; select <strong>script</strong> &rarr; redirect URI: <code>http://localhost</code> &rarr; copy Client ID and Secret.
+          </div>
+          <div className="row g-2 mb-2">
+            <div className="col-md-6">
+              <label className="form-label small fw-medium mb-1">Client ID</label>
+              <input type="text" className="form-control form-control-sm" placeholder="Under app name (short string)" value={redditClientId} onChange={e => setRedditClientId(e.target.value)} />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label small fw-medium mb-1">Client Secret</label>
+              <input type="password" className="form-control form-control-sm" placeholder="Secret key" value={redditClientSecret} onChange={e => setRedditClientSecret(e.target.value)} />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label small fw-medium mb-1">Reddit Username</label>
+              <input type="text" className="form-control form-control-sm" placeholder="u/yourname" value={redditUsername} onChange={e => setRedditUsername(e.target.value)} />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label small fw-medium mb-1">Reddit Password</label>
+              <input type="password" className="form-control form-control-sm" placeholder="Account password" value={redditPassword} onChange={e => setRedditPassword(e.target.value)} />
+            </div>
+          </div>
+          <button
+            className="btn btn-sm btn-primary"
+            disabled={!redditClientId.trim() || !redditClientSecret.trim() || !redditUsername.trim() || !redditPassword.trim() || redditSaving}
+            onClick={async () => {
+              setRedditSaving(true);
+              setRedditResult(null);
+              try {
+                const res = await saveRedditCredentials(redditClientId.trim(), redditClientSecret.trim(), redditUsername.trim(), redditPassword.trim());
+                setRedditResult({ success: res.data.success, message: res.data.message });
+                if (res.data.success) {
+                  setRedditSessionOk(true);
+                  setRedditConnectedUser(res.data.reddit_username);
+                  setRedditClientId(''); setRedditClientSecret(''); setRedditUsername(''); setRedditPassword('');
+                }
+              } catch (err: any) {
+                setRedditResult({ success: false, message: err?.response?.data?.error || 'Failed to save credentials' });
+              }
+              setRedditSaving(false);
+            }}
+          >
+            {redditSaving ? 'Connecting...' : 'Save & Connect'}
+          </button>
+          {redditResult && (<div className={`alert alert-${redditResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{redditResult.message}</div>)}
         </div>
       </div>
 
