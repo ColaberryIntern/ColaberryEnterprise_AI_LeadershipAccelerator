@@ -1,16 +1,19 @@
 import { Op } from 'sequelize';
-import { OpenclawTask, OpenclawResponse, OpenclawSession, OpenclawSignal } from '../../../models';
-import { postToDevTo, postToHashnode, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
+import { OpenclawTask, OpenclawResponse, OpenclawSignal } from '../../../models';
+import { postToDevTo, postToHashnode, postToMedium, postToDiscourse, postToTwitter, postToBluesky, postToYouTube, postToProductHunt, hasPlatformCredentials } from './openclawPlatformPostingService';
 import { postViaBrowser, hasBrowserSupport } from './openclawBrowserPostingService';
 import { getStrategy, isPostCreationAllowed, isHumanExecution } from './openclawPlatformStrategy';
 import { checkCircuitBreaker } from './openclawCircuitBreaker';
 import { isRateLimited } from './openclawRateLimiter';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
+const MAX_RETRIES = 3;
+
 /**
  * OpenClaw Posting Agent
- * Processes approved responses via: API → browser fallback → manual queue.
+ * Processes approved responses via: API → browser fallback → retry → manual queue.
  * Handles authentication, screenshots, and session health.
+ * Includes recovery sweep for orphaned responses stuck in ready_to_post.
  */
 export async function runOpenclawBrowserWorkerAgent(
   _agentId: string,
@@ -23,6 +26,9 @@ export async function runOpenclawBrowserWorkerAgent(
   const maxDelay = config.max_delay_ms || 8000;
 
   try {
+    // ── Recovery sweep: re-queue orphaned ready_to_post responses on auto platforms ──
+    await recoverOrphanedResponses(actions);
+
     // Fetch post_response tasks that are assigned/pending
     const tasks = await OpenclawTask.findAll({
       where: {
@@ -49,28 +55,28 @@ export async function runOpenclawBrowserWorkerAgent(
         }
 
         const response = await OpenclawResponse.findByPk(responseId);
-        if (!response || response.post_status !== 'approved') {
+        if (!response || !['approved', 'ready_to_post'].includes(response.post_status)) {
           await task.update({
             status: 'failed',
-            error_message: response ? 'Response not approved' : 'Response not found',
+            error_message: response ? `Response status is ${response.post_status}, expected approved` : 'Response not found',
             completed_at: new Date(),
             updated_at: new Date(),
           });
           continue;
         }
 
-        // Hard safety gate -NEVER auto-post on HUMAN_EXECUTION platforms
+        // Hard safety gate — NEVER auto-post on HUMAN_EXECUTION platforms
         if (isHumanExecution(response.platform)) {
           await task.update({
             status: 'failed',
-            error_message: `HUMAN_EXECUTION: ${response.platform} requires manual posting -auto-post blocked`,
+            error_message: `HUMAN_EXECUTION: ${response.platform} requires manual posting — auto-post blocked`,
             completed_at: new Date(),
             updated_at: new Date(),
           });
           continue;
         }
 
-        // Platform strategy gate -block post creation on PASSIVE_SIGNAL platforms
+        // Platform strategy gate — block post creation on PASSIVE_SIGNAL platforms
         if ((task.task_type as string) === 'create_post' && !isPostCreationAllowed(response.platform)) {
           await task.update({
             status: 'failed',
@@ -81,21 +87,20 @@ export async function runOpenclawBrowserWorkerAgent(
           continue;
         }
 
-        // Circuit breaker gate -halt if error rate too high for this platform
+        // Circuit breaker gate — halt if error rate too high for this platform
         try {
           const circuitStatus = await checkCircuitBreaker(response.platform);
           if (circuitStatus.state === 'OPEN') {
             await task.update({
-              status: 'failed',
+              status: 'pending',
               error_message: `Circuit breaker OPEN for ${response.platform} (error rate: ${circuitStatus.error_rate}%)`,
-              completed_at: new Date(),
               updated_at: new Date(),
             });
             continue;
           }
-        } catch { /* non-fatal -proceed if circuit check fails */ }
+        } catch { /* non-fatal — proceed if circuit check fails */ }
 
-        // Rate limit gate -defer if platform limit reached
+        // Rate limit gate — defer if platform limit reached
         try {
           const rateLimitResult = await isRateLimited(response.platform);
           if (!rateLimitResult.allowed) {
@@ -106,7 +111,7 @@ export async function runOpenclawBrowserWorkerAgent(
             });
             continue;
           }
-        } catch { /* non-fatal -proceed if rate check fails */ }
+        } catch { /* non-fatal — proceed if rate check fails */ }
 
         const signal = response.signal_id
           ? await OpenclawSignal.findByPk(response.signal_id)
@@ -116,195 +121,96 @@ export async function runOpenclawBrowserWorkerAgent(
         const delay = Math.floor(Math.random() * (maxDelay - minDelay)) + minDelay;
         await new Promise((resolve) => setTimeout(resolve, delay));
 
-        // Check if platform supports API posting
-        if (hasPlatformCredentials(response.platform)) {
-          // Auto-post via API
-          try {
-            const postResult = await postToPlatform(response, signal);
+        const retryCount = task.input_data?.retry_count || 0;
 
-            await response.update({
-              post_status: 'posted',
-              posted_at: new Date(),
-              post_url: postResult.post_url,
-              updated_at: new Date(),
-            });
+        // Attempt posting: API → browser fallback
+        const postResult = await attemptPosting(response, signal, config, minDelay, maxDelay);
 
-            actions.push({
-              campaign_id: '',
-              action: 'auto_post_response',
-              reason: `Auto-posted to ${response.platform} via API (delay: ${delay}ms)`,
-              confidence: 0.9,
-              before_state: { post_status: 'approved' },
-              after_state: { post_status: 'posted', post_url: postResult.post_url },
-              result: 'success',
-              entity_type: 'system',
-              entity_id: response.id,
-            });
-          } catch (postErr: any) {
-            // API posting failed -try browser fallback before manual queue
-            console.warn(`[OpenClaw Posting] API post failed for ${response.platform}: ${postErr.message}`);
-
-            if (hasBrowserSupport(response.platform) && signal?.source_url) {
-              try {
-                console.log(`[OpenClaw Posting] Attempting browser fallback for ${response.platform}...`);
-                const browserResult = await postViaBrowser(
-                  response.platform,
-                  signal.source_url,
-                  response.content,
-                  {
-                    headless: config.headless ?? true,
-                    screenshot_on_post: config.screenshot_on_post ?? true,
-                    min_delay_ms: minDelay,
-                    max_delay_ms: maxDelay,
-                  },
-                );
-
-                await response.update({
-                  post_status: 'posted',
-                  posted_at: new Date(),
-                  post_url: browserResult.post_url,
-                  updated_at: new Date(),
-                });
-
-                actions.push({
-                  campaign_id: '',
-                  action: 'browser_post_response',
-                  reason: `Posted to ${response.platform} via browser (session: ${browserResult.session_id})`,
-                  confidence: 0.85,
-                  before_state: { post_status: 'approved' },
-                  after_state: { post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
-                  result: 'success',
-                  entity_type: 'system',
-                  entity_id: response.id,
-                });
-
-                // Update task and signal, then skip to next task
-                await task.update({
-                  status: 'completed',
-                  output_data: { response_id: response.id, post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
-                  completed_at: new Date(),
-                  updated_at: new Date(),
-                });
-                if (signal) await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
-                continue;
-              } catch (browserErr: any) {
-                console.warn(`[OpenClaw Posting] Browser fallback also failed: ${browserErr.message}`);
-              }
-            }
-
-            // Final fallback: manual queue
-            await response.update({
-              post_status: 'ready_to_post',
-              updated_at: new Date(),
-            });
-
-            actions.push({
-              campaign_id: '',
-              action: 'queue_manual_post',
-              reason: `API + browser failed for ${response.platform}: ${postErr.message}`,
-              confidence: 0.7,
-              before_state: { post_status: 'approved' },
-              after_state: { post_status: 'ready_to_post' },
-              result: 'success',
-              entity_type: 'system',
-              entity_id: response.id,
-            });
-          }
-        } else if (hasBrowserSupport(response.platform) && signal?.source_url) {
-          // No API credentials but browser support available
-          try {
-            console.log(`[OpenClaw Posting] No API creds -using browser for ${response.platform}...`);
-            // Medium uses visible browser (not headless) with persistent credentials
-            const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
-            const browserResult = await postViaBrowser(
-              response.platform,
-              signal.source_url,
-              response.content,
-              {
-                headless: useHeadless,
-                screenshot_on_post: config.screenshot_on_post ?? true,
-                min_delay_ms: minDelay,
-                max_delay_ms: maxDelay,
-              },
-            );
-
-            await response.update({
-              post_status: 'posted',
-              posted_at: new Date(),
-              post_url: browserResult.post_url,
-              updated_at: new Date(),
-            });
-
-            actions.push({
-              campaign_id: '',
-              action: 'browser_post_response',
-              reason: `Posted to ${response.platform} via browser (session: ${browserResult.session_id})`,
-              confidence: 0.85,
-              before_state: { post_status: 'approved' },
-              after_state: { post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
-              result: 'success',
-              entity_type: 'system',
-              entity_id: response.id,
-            });
-
-            await task.update({
-              status: 'completed',
-              output_data: { response_id: response.id, post_status: 'posted', post_url: browserResult.post_url, method: 'browser' },
-              completed_at: new Date(),
-              updated_at: new Date(),
-            });
-            if (signal) await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
-            continue;
-          } catch (browserErr: any) {
-            console.warn(`[OpenClaw Posting] Browser posting failed: ${browserErr.message}`);
-            await response.update({ post_status: 'ready_to_post', updated_at: new Date() });
-            actions.push({
-              campaign_id: '',
-              action: 'queue_manual_post',
-              reason: `Browser failed for ${response.platform}: ${browserErr.message}`,
-              confidence: 0.7,
-              before_state: { post_status: 'approved' },
-              after_state: { post_status: 'ready_to_post' },
-              result: 'success',
-              entity_type: 'system',
-              entity_id: response.id,
-            });
-          }
-        } else {
-          // No API credentials and no browser support -manual queue
+        if (postResult.success) {
+          // Successfully posted
           await response.update({
-            post_status: 'ready_to_post',
+            post_status: 'posted',
+            posted_at: new Date(),
+            post_url: postResult.post_url,
             updated_at: new Date(),
           });
 
           actions.push({
             campaign_id: '',
-            action: 'queue_manual_post',
-            reason: `No API or browser support for ${response.platform} -queued for manual posting`,
+            action: postResult.method === 'browser' ? 'browser_post_response' : 'auto_post_response',
+            reason: `Posted to ${response.platform} via ${postResult.method} (delay: ${delay}ms)`,
             confidence: 0.9,
+            before_state: { post_status: response.post_status },
+            after_state: { post_status: 'posted', post_url: postResult.post_url },
+            result: 'success',
+            entity_type: 'system',
+            entity_id: response.id,
+          });
+
+          await task.update({
+            status: 'completed',
+            output_data: { response_id: response.id, post_status: 'posted', post_url: postResult.post_url, method: postResult.method },
+            completed_at: new Date(),
+            updated_at: new Date(),
+          });
+
+          if (signal) await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
+        } else if (retryCount < MAX_RETRIES) {
+          // Posting failed but retries remaining — keep task pending for next cycle
+          console.warn(`[OpenClaw Posting] Failed attempt ${retryCount + 1}/${MAX_RETRIES} for ${response.platform}: ${postResult.error}`);
+
+          await response.update({ post_status: 'approved', updated_at: new Date() });
+
+          await task.update({
+            status: 'pending',
+            error_message: `Attempt ${retryCount + 1}/${MAX_RETRIES}: ${postResult.error}`,
+            input_data: { ...task.input_data, retry_count: retryCount + 1 },
+            updated_at: new Date(),
+          });
+
+          actions.push({
+            campaign_id: '',
+            action: 'retry_post',
+            reason: `Posting failed (attempt ${retryCount + 1}/${MAX_RETRIES}): ${postResult.error}`,
+            confidence: 0.6,
+            before_state: { post_status: response.post_status, retry_count: retryCount },
+            after_state: { post_status: 'approved', retry_count: retryCount + 1 },
+            result: 'retrying',
+            entity_type: 'system',
+            entity_id: response.id,
+          });
+        } else {
+          // Retries exhausted — move to manual queue
+          console.warn(`[OpenClaw Posting] Max retries (${MAX_RETRIES}) exhausted for ${response.platform}, moving to manual queue`);
+
+          await response.update({
+            post_status: 'ready_to_post',
+            execution_type: 'human_execution',
+            updated_at: new Date(),
+          });
+
+          await task.update({
+            status: 'completed',
+            error_message: `Max retries exhausted: ${postResult.error}`,
+            output_data: { response_id: response.id, post_status: 'ready_to_post', moved_to_manual: true },
+            completed_at: new Date(),
+            updated_at: new Date(),
+          });
+
+          if (signal) await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
+
+          actions.push({
+            campaign_id: '',
+            action: 'queue_manual_post',
+            reason: `All ${MAX_RETRIES} attempts failed for ${response.platform}: ${postResult.error}`,
+            confidence: 0.7,
             before_state: { post_status: 'approved' },
-            after_state: { post_status: 'ready_to_post' },
+            after_state: { post_status: 'ready_to_post', execution_type: 'human_execution' },
             result: 'success',
             entity_type: 'system',
             entity_id: response.id,
           });
         }
-
-        // Update signal status
-        if (signal) {
-          await signal.update({
-            status: 'responded',
-            responded_at: new Date(),
-            updated_at: new Date(),
-          });
-        }
-
-        await task.update({
-          status: 'completed',
-          output_data: { response_id: response.id, post_status: response.post_status, post_url: response.post_url },
-          completed_at: new Date(),
-          updated_at: new Date(),
-        });
       } catch (err: any) {
         await task.update({
           status: 'failed',
@@ -329,6 +235,126 @@ export async function runOpenclawBrowserWorkerAgent(
   };
 }
 
+/**
+ * Attempt to post a response via API then browser fallback.
+ * Returns a result object instead of throwing.
+ */
+async function attemptPosting(
+  response: InstanceType<typeof OpenclawResponse>,
+  signal: InstanceType<typeof OpenclawSignal> | null,
+  config: Record<string, any>,
+  minDelay: number,
+  maxDelay: number,
+): Promise<{ success: true; post_url: string; method: string } | { success: false; error: string }> {
+  // Try API posting first
+  if (hasPlatformCredentials(response.platform)) {
+    try {
+      const result = await postToPlatform(response, signal);
+      return { success: true, post_url: result.post_url, method: 'api' };
+    } catch (apiErr: any) {
+      console.warn(`[OpenClaw Posting] API post failed for ${response.platform}: ${apiErr.message}`);
+
+      // Try browser fallback if available
+      if (hasBrowserSupport(response.platform) && signal?.source_url) {
+        try {
+          const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
+          const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
+            headless: useHeadless,
+            screenshot_on_post: config.screenshot_on_post ?? true,
+            min_delay_ms: minDelay,
+            max_delay_ms: maxDelay,
+          });
+          return { success: true, post_url: browserResult.post_url, method: 'browser' };
+        } catch (browserErr: any) {
+          return { success: false, error: `API: ${apiErr.message}; Browser: ${browserErr.message}` };
+        }
+      }
+
+      return { success: false, error: `API: ${apiErr.message}; No browser fallback` };
+    }
+  }
+
+  // No API credentials — try browser directly
+  if (hasBrowserSupport(response.platform) && signal?.source_url) {
+    try {
+      const useHeadless = response.platform === 'medium' ? false : (config.headless ?? true);
+      const browserResult = await postViaBrowser(response.platform, signal.source_url, response.content, {
+        headless: useHeadless,
+        screenshot_on_post: config.screenshot_on_post ?? true,
+        min_delay_ms: minDelay,
+        max_delay_ms: maxDelay,
+      });
+      return { success: true, post_url: browserResult.post_url, method: 'browser' };
+    } catch (browserErr: any) {
+      return { success: false, error: `Browser: ${browserErr.message}` };
+    }
+  }
+
+  return { success: false, error: `No API credentials or browser support for ${response.platform}` };
+}
+
+/**
+ * Recovery sweep: find responses stuck in ready_to_post on auto platforms
+ * that have no pending/running task, and re-queue them.
+ */
+async function recoverOrphanedResponses(actions: AgentAction[]): Promise<void> {
+  try {
+    // Only recover responses on auto platforms (not human_execution)
+    const orphaned = await OpenclawResponse.findAll({
+      where: {
+        post_status: 'ready_to_post',
+        [Op.or]: [
+          { execution_type: 'api_posting' },
+          { execution_type: null },
+          { execution_type: '' },
+        ],
+        platform: { [Op.notIn]: ['reddit', 'hackernews', 'facebook_groups', 'linkedin_comments', 'quora', 'linkedin'] },
+      },
+      limit: 10,
+      order: [['created_at', 'ASC']],
+    });
+
+    for (const resp of orphaned) {
+      // Check if there's already a pending/running task for this response
+      const existingTask = await OpenclawTask.findOne({
+        where: {
+          task_type: 'post_response',
+          status: { [Op.in]: ['pending', 'assigned', 'running'] },
+          signal_id: resp.signal_id,
+        },
+      });
+
+      if (existingTask) continue;
+
+      // Re-queue: set response back to approved and create a new task
+      await resp.update({ post_status: 'approved', updated_at: new Date() });
+
+      await OpenclawTask.create({
+        task_type: 'post_response',
+        priority: 6,
+        status: 'pending',
+        signal_id: resp.signal_id,
+        input_data: { response_id: resp.id, recovered: true, retry_count: 0 },
+        created_at: new Date(),
+      });
+
+      actions.push({
+        campaign_id: '',
+        action: 'recover_orphaned_response',
+        reason: `Re-queued orphaned ${resp.platform} response for auto-posting`,
+        confidence: 0.8,
+        before_state: { post_status: 'ready_to_post' },
+        after_state: { post_status: 'approved', new_task: true },
+        result: 'success',
+        entity_type: 'system',
+        entity_id: resp.id,
+      });
+    }
+  } catch (err: any) {
+    console.warn(`[OpenClaw Posting] Recovery sweep failed: ${err.message}`);
+  }
+}
+
 async function postToPlatform(
   response: InstanceType<typeof OpenclawResponse>,
   signal: InstanceType<typeof OpenclawSignal> | null,
@@ -343,6 +369,11 @@ async function postToPlatform(
       const postId = signal?.details?.id;
       if (!postId) throw new Error('No Hashnode post ID in signal details');
       return postToHashnode(postId, response.content, signal?.source_url);
+    }
+    case 'medium': {
+      const title = signal?.title || 'AI Insight';
+      const tags = signal?.topic_tags?.slice(0, 5) || ['artificial-intelligence', 'ai'];
+      return postToMedium(title, response.content, tags);
     }
     case 'discourse': {
       const topicId = signal?.details?.topic_id;
