@@ -200,9 +200,25 @@ export async function saveLinkedInCookies(li_at: string, jsessionId?: string): P
 
   await context.addCookies(cookies);
 
+  // Verify cookies were added
+  const addedCookies = await context.cookies('https://www.linkedin.com');
+  const liAtCheck = addedCookies.find(c => c.name === 'li_at');
+  console.log(`[LinkedIn] Cookies added: li_at=${liAtCheck ? 'yes' : 'NO'} (${addedCookies.length} total)`);
+
+  // Navigate to LinkedIn to establish the session in the persistent profile
   const page = await context.newPage();
-  await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await page.waitForTimeout(2000);
+  try {
+    await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForTimeout(2000);
+  } catch (err: any) {
+    console.log(`[LinkedIn] Navigation during cookie save failed (non-fatal): ${err.message?.slice(0, 100)}`);
+  }
+
+  // Verify cookie survived navigation
+  const postNavCookies = await context.cookies('https://www.linkedin.com');
+  const liAtPost = postNavCookies.find(c => c.name === 'li_at');
+  console.log(`[LinkedIn] Post-navigation: li_at=${liAtPost ? 'yes' : 'NO'} (${postNavCookies.length} total)`);
+
   await context.close();
 }
 
