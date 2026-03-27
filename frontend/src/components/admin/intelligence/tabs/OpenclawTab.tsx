@@ -930,53 +930,20 @@ export default function OpenclawTab() {
         </div>
       </div>
 
-      {/* Monitor LinkedIn Posts */}
+      {/* My LinkedIn Posts */}
       <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold small d-flex justify-content-between align-items-center">
-          <span>
-            Monitor LinkedIn Posts
-            <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#0A66C2', color: '#fff' }}>LinkedIn</span>
-            {linkedinSessionOk !== null && (
-              <span className={`badge ms-2 bg-${linkedinSessionOk ? 'success' : 'warning'}`} style={{ fontSize: '0.5rem', verticalAlign: 'middle' }}>
-                {linkedinSessionOk ? 'Session Active' : 'No Session'}
-              </span>
-            )}
-          </span>
+        <div className="card-header bg-white fw-semibold small">
+          My LinkedIn Posts
+          <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#0A66C2', color: '#fff' }}>LinkedIn</span>
         </div>
         <div className="card-body py-3 px-3">
           <div className="text-muted mb-3" style={{ fontSize: '0.68rem' }}>
-            Add your LinkedIn posts for automatic comment monitoring. The system scans 3x/day and generates personalized replies for each new commenter in your voice.
+            Save your LinkedIn posts here for quick access. To reply to comments, click "Reply" to pre-fill the form below, then paste the comments from your browser.
           </div>
-
-          {linkedinSessionOk === false && (
-            <div className="alert alert-warning py-2 px-3 mb-3" style={{ fontSize: '0.72rem' }}>
-              <strong>Connect your LinkedIn session</strong> (one-time setup, lasts ~1 year)
-              <ol className="mb-2 mt-1 ps-3">
-                <li>Open <a href="https://www.linkedin.com" target="_blank" rel="noreferrer">linkedin.com</a> in your browser (make sure you're logged in)</li>
-                <li>Press <strong>F12</strong> to open DevTools</li>
-                <li>Click <strong>Application</strong> tab &gt; <strong>Cookies</strong> &gt; <strong>linkedin.com</strong></li>
-                <li>Find <code>li_at</code> and copy its <strong>Value</strong> (long alphanumeric string starting with AQE...)</li>
-                <li>Paste below and click Connect</li>
-              </ol>
-              <div className="d-flex gap-2">
-                <input
-                  type="text"
-                  className="form-control form-control-sm font-monospace"
-                  placeholder="AQEDAx... (paste cookie value, NOT a URL)"
-                  value={liAtCookie}
-                  onChange={e => setLiAtCookie(e.target.value)}
-                />
-                <button className="btn btn-sm btn-warning text-nowrap" onClick={handleSaveLiCookie} disabled={!liAtCookie.trim() || liLoggingIn}>
-                  {liLoggingIn ? <><span className="spinner-border spinner-border-sm me-1" />Saving...</> : 'Connect'}
-                </button>
-              </div>
-              {cookieResult && (<div className={`alert alert-${cookieResult.success ? 'success' : 'danger'} mt-2 py-1 px-2 small mb-0`}>{cookieResult.message}</div>)}
-            </div>
-          )}
 
           <div className="d-flex gap-2 align-items-end mb-3">
             <div className="flex-grow-1">
-              <label className="form-label small fw-medium mb-1">LinkedIn Post URL</label>
+              <label className="form-label small fw-medium mb-1">Add LinkedIn Post URL</label>
               <input
                 type="text"
                 className="form-control form-control-sm"
@@ -991,22 +958,21 @@ export default function OpenclawTab() {
               onClick={handleTrackPost}
               disabled={!trackUrl.trim() || trackingPost}
             >
-              {trackingPost ? <><span className="spinner-border spinner-border-sm me-1" />Adding...</> : '+ Track Post'}
+              {trackingPost ? <><span className="spinner-border spinner-border-sm me-1" />Adding...</> : '+ Add Post'}
             </button>
           </div>
 
-          {/* Tracked Posts List */}
+          {/* Posts List */}
           <div className="border-top pt-3">
             <div className="fw-semibold small mb-2 d-flex align-items-center">
-              Tracked Posts
+              Saved Posts
               {trackedPosts.length > 0 && (
                 <span className="badge bg-primary ms-2" style={{ fontSize: '0.6rem' }}>{trackedPosts.length}</span>
               )}
-              <span className="text-muted fw-normal ms-2" style={{ fontSize: '0.65rem' }}>Auto-scanned 3x/day for new comments</span>
             </div>
             {trackedPosts.length === 0 ? (
               <div className="text-muted text-center py-3" style={{ fontSize: '0.72rem' }}>
-                No posts being monitored yet. Paste a LinkedIn post URL above to start tracking.
+                No posts saved yet. Paste a LinkedIn post URL above to add one.
               </div>
             ) : (
               trackedPosts.map(tp => (
@@ -1018,21 +984,29 @@ export default function OpenclawTab() {
                       </a>
                     </div>
                     <div className="text-muted mt-1" style={{ fontSize: '0.65rem' }}>
-                      {tp.details?.last_scanned_at ? (
-                        <>Last scan: {new Date(tp.details.last_scanned_at).toLocaleDateString()}</>
-                      ) : (
-                        <span className="text-warning">Pending first scan</span>
-                      )}
                       {tp.details?.known_commenters?.length > 0 ? (
-                        <span className="ms-2">{tp.details.known_commenters.length} commenters tracked</span>
+                        <span>{tp.details.known_commenters.length} replies generated</span>
                       ) : (
-                        <span className="ms-2">No comments yet</span>
+                        <span>No replies yet</span>
                       )}
                     </div>
                   </div>
-                  <button className="btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0" style={{ fontSize: '0.6rem' }} onClick={() => handleRemoveTrackedPost(tp.id)} title="Stop tracking">
-                    <i className="bi bi-x" />
-                  </button>
+                  <div className="d-flex gap-1 flex-shrink-0">
+                    <a href={tp.source_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline-secondary py-0 px-1" style={{ fontSize: '0.6rem' }} title="Open on LinkedIn">
+                      Open
+                    </a>
+                    <button
+                      className="btn btn-sm btn-outline-primary py-0 px-1"
+                      style={{ fontSize: '0.6rem' }}
+                      title="Pre-fill reply form below"
+                      onClick={() => { setCommentReplyUrl(tp.source_url); document.getElementById('linkedin-reply-card')?.scrollIntoView({ behavior: 'smooth' }); }}
+                    >
+                      Reply
+                    </button>
+                    <button className="btn btn-sm btn-outline-danger py-0 px-1" style={{ fontSize: '0.6rem' }} onClick={() => handleRemoveTrackedPost(tp.id)} title="Remove">
+                      <i className="bi bi-x" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -1041,7 +1015,7 @@ export default function OpenclawTab() {
       </div>
 
       {/* LinkedIn Comment Reply Generator (on-demand) */}
-      <div className="card border-0 shadow-sm mb-4">
+      <div id="linkedin-reply-card" className="card border-0 shadow-sm mb-4">
         <div className="card-header bg-white fw-semibold small">
           Reply to LinkedIn Comments
           <span className="badge ms-2" style={{ fontSize: '0.55rem', verticalAlign: 'middle', backgroundColor: '#0A66C2', color: '#fff' }}>LinkedIn</span>
