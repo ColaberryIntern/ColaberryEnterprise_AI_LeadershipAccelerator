@@ -175,7 +175,7 @@ export async function runOpenclawBrowserWorkerAgent(
             confidence: 0.6,
             before_state: { post_status: response.post_status, retry_count: retryCount },
             after_state: { post_status: 'approved', retry_count: retryCount + 1 },
-            result: 'retrying',
+            result: 'skipped',
             entity_type: 'system',
             entity_id: response.id,
           });
@@ -304,9 +304,9 @@ async function recoverOrphanedResponses(actions: AgentAction[]): Promise<void> {
       where: {
         post_status: 'ready_to_post',
         [Op.or]: [
-          { execution_type: 'api_posting' },
-          { execution_type: null },
-          { execution_type: '' },
+          { execution_type: 'api_posting' } as any,
+          { execution_type: null } as any,
+          { execution_type: '' } as any,
         ],
         platform: { [Op.notIn]: ['reddit', 'hackernews', 'facebook_groups', 'linkedin_comments', 'quora', 'linkedin'] },
       },
