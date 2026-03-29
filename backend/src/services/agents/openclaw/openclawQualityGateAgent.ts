@@ -107,6 +107,70 @@ export function evaluateResponseQuality(
   };
 }
 
+/**
+ * Evaluate article quality (Tier 2 content: Dev.to, Medium, Hashnode articles).
+ * Stricter than comment quality - requires minimum word count, markdown structure, and sign-off.
+ */
+export function evaluateArticleQuality(content: string, platform: string): QualityResult {
+  let score = 100;
+  const reasons: string[] = [];
+
+  const wordCount = content.split(/\s+/).filter(Boolean).length;
+
+  // Minimum word count for articles
+  if (wordCount < 400) {
+    reasons.push(`Article too short (${wordCount} words, min 400)`);
+    score -= 40;
+  }
+
+  // Maximum word count
+  if (wordCount > 2000) {
+    reasons.push(`Article too long (${wordCount} words, max 2000)`);
+    score -= 10;
+  }
+
+  // Must have markdown headers
+  const headerCount = (content.match(/^#{1,3}\s/gm) || []).length;
+  if (headerCount < 2) {
+    reasons.push(`Needs more structure (${headerCount} headers, min 2)`);
+    score -= 20;
+  }
+
+  // Sign-off check
+  if (!content.includes('ali-muwwakkil on LinkedIn') && !content.includes('LinkedIn: ali-muwwakkil')) {
+    reasons.push('Missing LinkedIn sign-off');
+    score -= 15;
+  }
+
+  // Spam patterns
+  for (const pattern of QUALITY_CRITERIA.spam_patterns) {
+    if (pattern.test(content)) {
+      reasons.push(`Contains spam pattern: ${pattern.source}`);
+      score -= 25;
+    }
+  }
+
+  // Emdash check
+  if (content.includes('\u2014')) {
+    reasons.push('Contains emdash character');
+    score -= 10;
+  }
+
+  // Brand safety
+  if (/colaberry/i.test(content)) {
+    reasons.push('Contains brand name "Colaberry"');
+    score -= 30;
+  }
+
+  score = Math.max(0, Math.min(100, score));
+
+  return {
+    approved: score >= 70 && reasons.length === 0,
+    score,
+    reasons,
+  };
+}
+
 export async function runOpenclawQualityGateAgent(
   _agentId: string,
   config: Record<string, any>,

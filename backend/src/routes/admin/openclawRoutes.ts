@@ -1626,6 +1626,91 @@ router.put(`${BASE}/authority-content/:id/metrics`, async (req: Request, res: Re
   }
 });
 
+// ── Article Generation & Publishing ─────────────────────────────────────────
+
+router.post(`${BASE}/authority-content/generate-articles`, async (req: Request, res: Response) => {
+  try {
+    const { topic, platforms } = req.body;
+    const targetPlatforms = platforms || ['devto', 'medium', 'hashnode', 'linkedin'];
+
+    const { runAuthorityContentAgent } = require('../../services/agents/openclaw/openclawAuthorityContentAgent');
+    const result = await runAuthorityContentAgent('manual-trigger', {
+      max_posts_per_run: 1,
+      target_platforms: targetPlatforms,
+      max_articles_per_platform_per_run: 1,
+      signal_window_hours: 72,
+    });
+
+    // Fetch created drafts
+    const created = await AuthorityContent.findAll({
+      where: { status: 'draft' },
+      order: [['created_at', 'DESC']],
+      limit: targetPlatforms.length,
+    });
+
+    res.json({
+      success: true,
+      agent_result: {
+        actions: result.actions_taken?.length || 0,
+        errors: result.errors || [],
+        duration_ms: result.duration_ms,
+      },
+      drafts: created,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/authority-content/:id/publish`, async (req: Request, res: Response) => {
+  try {
+    const post = await AuthorityContent.findByPk(req.params.id as string);
+    if (!post) return res.status(404).json({ error: 'Not found' });
+    if (post.status !== 'draft' && post.status !== 'approved') {
+      return res.status(400).json({ error: `Cannot publish - current status: ${post.status}` });
+    }
+
+    const platform = post.platform;
+    let postResult: { post_url: string; platform_post_id: string };
+
+    if (platform === 'devto') {
+      const { publishArticleToDevTo } = require('../../services/agents/openclaw/openclawPlatformPostingService');
+      postResult = await publishArticleToDevTo(
+        post.title.replace(/ - Article$/, ''),
+        post.content,
+        ['ai', 'machinelearning', 'leadership', 'programming'],
+      );
+    } else if (platform === 'hashnode') {
+      const { publishArticleToHashnode } = require('../../services/agents/openclaw/openclawPlatformPostingService');
+      postResult = await publishArticleToHashnode(
+        post.title.replace(/ - Article$/, ''),
+        post.content,
+        ['artificial-intelligence', 'machine-learning'],
+      );
+    } else if (platform === 'medium') {
+      const { postToMedium } = require('../../services/agents/openclaw/openclawPlatformPostingService');
+      postResult = await postToMedium(
+        post.title.replace(/ - Article$/, ''),
+        post.content,
+        ['artificial-intelligence', 'ai', 'machine-learning', 'leadership'],
+      );
+    } else {
+      return res.status(400).json({ error: `Platform "${platform}" does not support auto-publish. Use mark-posted for manual platforms.` });
+    }
+
+    await post.update({
+      status: 'posted',
+      post_url: postResult.post_url,
+      posted_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    res.json({ success: true, authority_content: post, publish_result: postResult });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Engagement Events ────────────────────────────────────────────────────────
 
 router.get(`${BASE}/engagements`, async (req: Request, res: Response) => {

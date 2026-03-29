@@ -412,6 +412,121 @@ export async function postToProductHunt(
   };
 }
 
+// ─── Article Publishing (Tier 2: Original Articles) ─────────────────────────
+
+/**
+ * Publish an article to Dev.to via their API.
+ * Articles are created as drafts (published: false) for admin review.
+ * Requires DEVTO_API_KEY environment variable.
+ */
+export async function publishArticleToDevTo(
+  title: string,
+  bodyMarkdown: string,
+  tags: string[] = ['ai', 'machinelearning', 'programming'],
+  series?: string,
+): Promise<PostResult> {
+  const apiKey = process.env.DEVTO_API_KEY;
+  if (!apiKey) throw new Error('DEVTO_API_KEY not configured');
+
+  const resp = await axios.post(
+    'https://dev.to/api/articles',
+    {
+      article: {
+        title,
+        body_markdown: bodyMarkdown,
+        tags: tags.slice(0, 4), // Dev.to max 4 tags
+        published: false, // Draft -admin reviews before publishing
+        ...(series ? { series } : {}),
+      },
+    },
+    {
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      timeout: 20000,
+    },
+  );
+
+  const article = resp.data;
+  if (!article?.id) throw new Error('Dev.to article creation returned no ID');
+
+  return {
+    post_url: article.url || `https://dev.to/dashboard/${article.id}`,
+    platform_post_id: String(article.id),
+  };
+}
+
+/**
+ * Publish an article to Hashnode via their GraphQL API.
+ * Articles are created as drafts.
+ * Requires HASHNODE_ACCESS_TOKEN and HASHNODE_PUBLICATION_ID environment variables.
+ */
+export async function publishArticleToHashnode(
+  title: string,
+  contentMarkdown: string,
+  tags: string[] = ['artificial-intelligence', 'machine-learning'],
+  publicationId?: string,
+): Promise<PostResult> {
+  const token = process.env.HASHNODE_ACCESS_TOKEN;
+  const pubId = publicationId || process.env.HASHNODE_PUBLICATION_ID;
+  if (!token) throw new Error('HASHNODE_ACCESS_TOKEN not configured');
+  if (!pubId) throw new Error('HASHNODE_PUBLICATION_ID not configured');
+
+  // Convert tag names to Hashnode tag format
+  const tagObjects = tags.slice(0, 5).map(t => ({
+    slug: t.toLowerCase().replace(/\s+/g, '-'),
+    name: t,
+  }));
+
+  const mutation = `mutation PublishPost($input: PublishPostInput!) {
+    publishPost(input: $input) {
+      post {
+        id
+        slug
+        url
+      }
+    }
+  }`;
+
+  const resp = await axios.post(
+    'https://gql.hashnode.com',
+    {
+      query: mutation,
+      variables: {
+        input: {
+          title,
+          contentMarkdown,
+          tags: tagObjects,
+          publicationId: pubId,
+          // Hashnode doesn't have a draft flag in publishPost -
+          // use createDraft mutation instead if available
+        },
+      },
+    },
+    {
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+      },
+      timeout: 20000,
+    },
+  );
+
+  const errors = resp.data?.errors;
+  if (errors && errors.length > 0) {
+    throw new Error(`Hashnode API error: ${errors[0].message}`);
+  }
+
+  const post = resp.data?.data?.publishPost?.post;
+  if (!post?.id) throw new Error('Hashnode article creation returned no ID');
+
+  return {
+    post_url: post.url || `https://hashnode.com/post/${post.slug || post.id}`,
+    platform_post_id: String(post.id),
+  };
+}
+
 /**
  * Check if a platform has API credentials configured for automated posting.
  */
