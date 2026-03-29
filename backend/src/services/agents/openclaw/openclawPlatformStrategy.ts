@@ -84,7 +84,10 @@ export function getStrategy(platform: string): PlatformStrategyType {
 // ─── Link Control ────────────────────────────────────────────────────────────
 
 export function isLinkAllowed(platform: string): boolean {
-  return getStrategy(platform) !== 'PASSIVE_SIGNAL';
+  // Only allow links on AUTHORITY_BROADCAST platforms (LinkedIn, Medium, YouTube)
+  // where we publish our own content. Comment-based platforms (HYBRID + PASSIVE)
+  // hide or spam-filter comments with promotional links from new accounts.
+  return getStrategy(platform) === 'AUTHORITY_BROADCAST';
 }
 
 // ─── LLM Prompt Instructions Per Strategy ────────────────────────────────────
@@ -103,9 +106,11 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
   HYBRID_ENGAGEMENT: `PLATFORM RULES -ENGAGEMENT-FIRST:
 - Prioritize engagement: reply to the conversation with genuine value FIRST.
 - Lead with insight, NOT self-promotion.
-- A single, natural resource link at the very end is acceptable if it flows organically.
+- Do NOT include any URLs or links. Links trigger spam filters on these platforms.
 - Light self-reference is OK ("in my experience with enterprise teams...") but keep it subtle.
-- Do NOT lead with or center your response around a link or CTA.`,
+- Do NOT lead with or center your response around a link or CTA.
+- Do NOT mention any company, product, program, or brand by name.
+- Sound like a knowledgeable practitioner sharing genuine insight, not a marketer.`,
 
   AUTHORITY_BROADCAST: `PLATFORM RULES -AUTHORITY CONTENT:
 - Create authoritative, original content. You are the thought leader.
@@ -249,12 +254,15 @@ export function validateContentForStrategy(content: string, platform: string): V
   }
 
   if (strategy === 'HYBRID_ENGAGEMENT') {
-    let promoScore = 0;
-    if (CTA_PATTERNS.test(content)) promoScore++;
-    if ((content.match(new RegExp(PROMO_PATTERNS.source, 'gi')) || []).length > 1) promoScore++;
-    if ((content.match(new RegExp(URL_REGEX.source, 'g')) || []).length > 1) promoScore++;
-    if (promoScore >= 2) {
-      return { passed: false, reason: 'HYBRID_ENGAGEMENT: content is too promotional (multiple CTAs/links/promo)' };
+    // Hard block: no URLs allowed — triggers spam filters on comment platforms
+    if (URL_REGEX.test(content)) {
+      return { passed: false, reason: 'HYBRID_ENGAGEMENT: content must not contain URLs (spam filter risk)' };
+    }
+    if (CTA_PATTERNS.test(content)) {
+      return { passed: false, reason: 'HYBRID_ENGAGEMENT: content must not contain CTAs' };
+    }
+    if (PROMO_PATTERNS.test(content)) {
+      return { passed: false, reason: 'HYBRID_ENGAGEMENT: content must not contain promotional language' };
     }
   }
 
