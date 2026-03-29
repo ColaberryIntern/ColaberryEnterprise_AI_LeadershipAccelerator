@@ -110,7 +110,11 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 - Light self-reference is OK ("in my experience with enterprise teams...") but keep it subtle.
 - Do NOT lead with or center your response around a link or CTA.
 - Do NOT mention any company, product, program, or brand by name.
-- Sound like a knowledgeable practitioner sharing genuine insight, not a marketer.`,
+- Sound like a knowledgeable practitioner sharing genuine insight, not a marketer.
+- SIGN-OFF: End your comment with a brief, natural sign-off that includes your name and LinkedIn handle. Examples:
+  "— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
+  "— Ali Muwwakkil | ali-muwwakkil on LinkedIn"
+  This is NOT a CTA. It is an attribution line so readers can verify your credibility.`,
 
   AUTHORITY_BROADCAST: `PLATFORM RULES -AUTHORITY CONTENT:
 - Create authoritative, original content. You are the thought leader.
@@ -176,11 +180,12 @@ export function detectConversationStage(history: EngagementEvent[]): number {
 export const CONVERSION_STAGE_PROMPTS: Record<number, string> = {
   1: `CONVERSATION STAGE 1 -INITIAL ENGAGEMENT:
 Generate a reply that provides INSIGHT ONLY.
-- No pitch, no link, no self-reference, no company mention.
+- No pitch, no link, no company mention.
 - Trigger curiosity with a counter-intuitive or surprising observation.
-- Keep it under 3 sentences.
+- Keep the insight portion under 3 sentences.
 - Sound like a knowledgeable peer, not a sales rep.
-Example: "Most teams don't struggle with the tools -they struggle because nothing actually gets wired into real workflows."`,
+- End with a brief sign-off: "— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
+Example: "Most teams don't struggle with the tools -they struggle because nothing actually gets wired into real workflows.\n\n— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 
   2: `CONVERSATION STAGE 2 -QUALIFICATION:
 The user has responded to our comment. Ask a qualifying question:
