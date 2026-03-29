@@ -194,6 +194,17 @@ export const getOpenclawConfig = () =>
 export const updateOpenclawConfig = (data: { agent_name: string; config?: Record<string, any>; enabled?: boolean }) =>
   api.post(`${BASE}/config`, data);
 
+export interface PlatformStatus {
+  ready: boolean;
+  method: 'api' | 'browser' | 'manual';
+  strategy: string;
+  details: string;
+  active: boolean;
+}
+
+export const getPlatformStatus = () =>
+  api.get<{ platforms: Record<string, PlatformStatus> }>(`${BASE}/platform-status`);
+
 export const getOpenclawAgentActivity = (agentId: string, params?: Record<string, string>) =>
   api.get<{ activities: OpenclawAgentActivity[]; total: number }>(`${BASE}/agents/${agentId}/activity`, { params });
 

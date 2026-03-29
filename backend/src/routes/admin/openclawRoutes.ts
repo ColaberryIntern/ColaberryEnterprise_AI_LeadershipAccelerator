@@ -786,6 +786,73 @@ router.post(`${BASE}/config`, async (req: Request, res: Response) => {
   }
 });
 
+// ── Platform Readiness Status ─────────────────────────────────
+
+router.get(`${BASE}/platform-status`, async (_req: Request, res: Response) => {
+  try {
+    const { hasPlatformCredentials } = require('../../services/agents/openclaw/openclawPlatformPostingService');
+    const { getExecutionType, getStrategy } = require('../../services/agents/openclaw/openclawPlatformStrategy');
+    const { checkLinkedInSession } = await import('../../services/agents/openclaw/openclawLinkedInScraper');
+
+    // Get active scanning platforms from agent config
+    const scannerAgent = await AiAgent.findOne({ where: { agent_name: 'OpenclawMarketSignalAgent' } });
+    const activePlatforms: string[] = (scannerAgent as any)?.config?.platforms || [];
+
+    // Check browser sessions in parallel
+    const [linkedinStatus, fbStatus, redditStatus] = await Promise.all([
+      checkLinkedInSession(),
+      checkFacebookSession(),
+      checkRedditSession(),
+    ]);
+
+    const ALL_PLATFORMS = [
+      'devto', 'hashnode', 'medium', 'discourse', 'twitter', 'bluesky',
+      'youtube', 'producthunt', 'reddit', 'facebook_groups',
+      'linkedin', 'linkedin_comments', 'hackernews', 'quora',
+    ];
+
+    const platforms: Record<string, any> = {};
+
+    for (const p of ALL_PLATFORMS) {
+      const execType = getExecutionType(p);
+      const strategy = getStrategy(p);
+      const active = activePlatforms.includes(p);
+
+      let ready = false;
+      let method: string = 'manual';
+      let details = '';
+
+      if (execType === 'HUMAN_EXECUTION') {
+        method = 'manual';
+        ready = true;
+        details = 'Content auto-generated, manual posting';
+      } else if (p === 'reddit') {
+        method = 'browser';
+        ready = redditStatus.authenticated;
+        details = redditStatus.message;
+      } else if (p === 'facebook_groups') {
+        method = 'browser';
+        ready = fbStatus.authenticated;
+        details = fbStatus.message;
+      } else if (p === 'linkedin') {
+        method = 'browser';
+        ready = linkedinStatus.authenticated;
+        details = linkedinStatus.message;
+      } else {
+        method = 'api';
+        ready = hasPlatformCredentials(p);
+        details = ready ? 'API credentials configured' : 'API credentials not configured — set env vars on server';
+      }
+
+      platforms[p] = { ready, method, strategy, details, active };
+    }
+
+    res.json({ platforms });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Manual Signal Submission ────────────────────────────────────
 
 function detectPlatform(url: string): string | null {
