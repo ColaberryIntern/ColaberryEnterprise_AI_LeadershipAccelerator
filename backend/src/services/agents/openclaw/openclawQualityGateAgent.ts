@@ -90,6 +90,12 @@ export function evaluateResponseQuality(
     score -= 20;
   }
 
+  // Sign-off check: all comment-platform responses must have LinkedIn sign-off
+  if (!content.includes('ali-muwwakkil on LinkedIn') && !content.includes('LinkedIn: ali-muwwakkil')) {
+    reasons.push('Missing LinkedIn sign-off');
+    score -= 30;
+  }
+
   // Value check: response should have substance beyond just a tracked link
   const contentWithoutUrls = content.replace(/https?:\/\/\S+/g, '').trim();
   const sentences = contentWithoutUrls.split(/[.!?]+/).filter(s => s.trim().length > 10);

@@ -550,6 +550,7 @@ router.post(`${BASE}/responses/flush-all`, async (_req: Request, res: Response) 
       FROM openclaw_responses r
       WHERE r.post_status IN ('approved', 'ready_to_post')
         AND r.execution_type = 'api_posting'
+        AND r.content LIKE '%ali-muwwakkil%'
         AND NOT EXISTS (
           SELECT 1 FROM openclaw_tasks t
           WHERE t.input_data->>'response_id' = r.id::text
