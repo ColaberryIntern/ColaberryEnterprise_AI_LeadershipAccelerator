@@ -143,7 +143,7 @@ export function evaluateArticleQuality(content: string, platform: string): Quali
   }
 
   // Spam patterns
-  for (const pattern of QUALITY_CRITERIA.spam_patterns) {
+  for (const pattern of QUALITY_CRITERIA.must_not_contain) {
     if (pattern.test(content)) {
       reasons.push(`Contains spam pattern: ${pattern.source}`);
       score -= 25;
