@@ -180,17 +180,11 @@ async function postToDevtoBrowser(
       throw new Error(`Comment POST failed (${postResult.status}): ${errDetail}`);
     }
 
-    // 6. Extract comment URL
-    let postUrl: string;
-    if (postResult.json?.url) {
-      postUrl = postResult.json.url.startsWith('http') ? postResult.json.url : `https://dev.to${postResult.json.url}`;
-    } else if (postResult.json?.id_code) {
-      postUrl = `https://dev.to/${authData.user.username}/comment/${postResult.json.id_code}`;
-    } else if (postResult.json?.id) {
-      postUrl = `${articleUrl.replace(/\/$/, '')}#comment-${postResult.json.id}`;
-    } else {
-      postUrl = `${articleUrl.replace(/\/$/, '')}#comment-posted-${Date.now()}`;
-    }
+    // 6. Extract comment URL — always anchor to the article page
+    const commentId = postResult.json?.id_code || postResult.json?.id;
+    const postUrl = commentId
+      ? `${articleUrl.replace(/\/$/, '')}#comment-${commentId}`
+      : `${articleUrl.replace(/\/$/, '')}#comment-posted-${Date.now()}`;
 
     console.log(`[OpenClaw Browser] Comment posted: ${postUrl}`);
 
