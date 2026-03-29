@@ -822,7 +822,12 @@ router.get(`${BASE}/platform-status`, async (_req: Request, res: Response) => {
       let method: string = 'manual';
       let details = '';
 
-      if (execType === 'HUMAN_EXECUTION') {
+      if (p === 'linkedin') {
+        // LinkedIn posts are manual (copy from Authority Content tab) but need session for scraping
+        method = 'browser';
+        ready = linkedinStatus.authenticated;
+        details = linkedinStatus.authenticated ? 'Session connected — scraping & reply generation enabled' : linkedinStatus.message;
+      } else if (execType === 'HUMAN_EXECUTION') {
         method = 'manual';
         ready = true;
         details = 'Content auto-generated, manual posting';
