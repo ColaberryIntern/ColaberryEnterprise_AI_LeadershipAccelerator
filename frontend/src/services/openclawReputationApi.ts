@@ -92,6 +92,26 @@ export const markAuthorityContentPosted = (id: string, post_url: string) =>
 export const updateAuthorityMetrics = (id: string, performance_metrics: Record<string, any>) =>
   api.put<{ success: boolean; authority_content: AuthorityContentItem }>(`${BASE}/authority-content/${id}/metrics`, { performance_metrics });
 
+export const generateArticles = (platforms?: string[]) =>
+  api.post<{ success: boolean; drafts: AuthorityContentItem[]; agent_result: any }>(`${BASE}/authority-content/generate-articles`, { platforms });
+
+export const publishAuthorityContent = (id: string) =>
+  api.post<{ success: boolean; authority_content: AuthorityContentItem; publish_result: any }>(`${BASE}/authority-content/${id}/publish`);
+
+// ── Response Operations ──────────────────────────────────────────────────────
+
+export const flushAllResponses = () =>
+  api.post<{ success: boolean; queued: number; skipped_manual: number; message: string }>(`${BASE}/responses/flush-all`);
+
+export const auditResponseUrls = () =>
+  api.post<{ success: boolean; audited: number; fixed: number; unfixable: number }>(`${BASE}/responses/audit-urls`);
+
+export const verifyAllPosted = () =>
+  api.post<{ success: boolean; total: number; verified: number; filtered: number; errored: number }>(`${BASE}/responses/verify-all-posted`);
+
+export const verifyResponse = (id: string) =>
+  api.get<{ success: boolean; verification: { visible: boolean; checked_at: string; details: string } }>(`${BASE}/responses/${id}/verify`);
+
 // ── Engagement Events ────────────────────────────────────────────────────────
 
 export const getEngagements = (params?: Record<string, string>) =>

@@ -15,6 +15,11 @@ import {
   generateAuthorityContent,
   approveAuthorityContent,
   markAuthorityContentPosted,
+  generateArticles,
+  publishAuthorityContent,
+  flushAllResponses,
+  auditResponseUrls,
+  verifyAllPosted,
   type AuthorityContentItem,
 } from '../../../../../services/openclawReputationApi';
 
@@ -447,19 +452,25 @@ function AuthorityContentSection() {
   const [loading, setLoading] = useState(false);
   const [topic, setTopic] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [generatingArticles, setGeneratingArticles] = useState(false);
+  const [publishing, setPublishing] = useState<string | null>(null);
   const [postUrlInputs, setPostUrlInputs] = useState<Record<string, string>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState('');
+  const [filterPlatform, setFilterPlatform] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getAuthorityContent();
+      const params: Record<string, string> = {};
+      if (filterPlatform) params.platform = filterPlatform;
+      const res = await getAuthorityContent(params);
       setItems(res.data.authority_content || []);
     } catch {
       /* ignore */
     }
     setLoading(false);
-  }, []);
+  }, [filterPlatform]);
 
   useEffect(() => {
     if (expanded) load();
@@ -476,6 +487,34 @@ function AuthorityContentSection() {
       /* ignore */
     }
     setGenerating(false);
+  };
+
+  const handleGenerateArticles = async () => {
+    setGeneratingArticles(true);
+    setStatusMsg('Generating articles across all platforms...');
+    try {
+      const res = await generateArticles();
+      const count = res.data.drafts?.length || 0;
+      setStatusMsg(`Generated ${count} article draft(s)`);
+      load();
+    } catch (e: any) {
+      setStatusMsg(`Error: ${e.message}`);
+    }
+    setGeneratingArticles(false);
+    setTimeout(() => setStatusMsg(''), 5000);
+  };
+
+  const handlePublish = async (id: string) => {
+    setPublishing(id);
+    try {
+      const res = await publishAuthorityContent(id);
+      setStatusMsg(`Published to ${res.data.authority_content?.platform || 'platform'}`);
+      load();
+    } catch (e: any) {
+      setStatusMsg(`Publish error: ${e.message}`);
+    }
+    setPublishing(null);
+    setTimeout(() => setStatusMsg(''), 5000);
   };
 
   const handleApprove = async (id: string) => {
@@ -497,6 +536,10 @@ function AuthorityContentSection() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const canPublish = (item: AuthorityContentItem) =>
+    (item.status === 'draft' || item.status === 'approved') &&
+    ['devto', 'medium', 'hashnode'].includes(item.platform);
+
   return (
     <div className="card border-0 shadow-sm mb-3">
       <div
@@ -513,9 +556,10 @@ function AuthorityContentSection() {
       {expanded && (
         <div className="card-body p-3">
           {/* Generate bar */}
-          <div className="d-flex gap-2 mb-3">
+          <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
             <input
               className="form-control form-control-sm"
+              style={{ maxWidth: '320px' }}
               placeholder="Enter topic for authority post..."
               value={topic}
               onChange={e => setTopic(e.target.value)}
@@ -531,9 +575,37 @@ function AuthorityContentSection() {
               ) : (
                 <i className="bi bi-magic me-1" />
               )}
-              Generate
+              LinkedIn Post
             </button>
+            <button
+              className="btn btn-sm btn-outline-primary text-nowrap"
+              onClick={handleGenerateArticles}
+              disabled={generatingArticles}
+            >
+              {generatingArticles ? (
+                <span className="spinner-border spinner-border-sm me-1" />
+              ) : (
+                <i className="bi bi-journal-text me-1" />
+              )}
+              Generate Articles
+            </button>
+            <select
+              className="form-select form-select-sm"
+              style={{ maxWidth: '140px' }}
+              value={filterPlatform}
+              onChange={e => setFilterPlatform(e.target.value)}
+            >
+              <option value="">All Platforms</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="devto">Dev.to</option>
+              <option value="medium">Medium</option>
+              <option value="hashnode">Hashnode</option>
+            </select>
           </div>
+
+          {statusMsg && (
+            <div className="alert alert-info py-1 px-2 small mb-3">{statusMsg}</div>
+          )}
 
           {loading ? (
             <div className="text-center py-3">
@@ -549,93 +621,125 @@ function AuthorityContentSection() {
                     <th>Title</th>
                     <th>Platform</th>
                     <th>Status</th>
+                    <th>Words</th>
                     <th>Created</th>
-                    <th style={{ width: '220px' }}>Actions</th>
+                    <th style={{ width: '260px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(item => (
-                    <tr key={item.id}>
-                      <td>
-                        <div className="fw-medium">{item.title || 'Untitled'}</div>
-                        <div
-                          className="text-muted"
-                          style={{
-                            fontSize: '0.7rem',
-                            maxWidth: '300px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {item.content.slice(0, 100)}...
-                        </div>
-                      </td>
-                      <td>
-                        <span
-                          className="badge"
-                          style={{
-                            backgroundColor: PLATFORM_COLORS[item.platform] || '#6c757d',
-                            fontSize: '0.65rem',
-                          }}
-                        >
-                          {item.platform}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          className={`badge bg-${STATUS_BADGES[item.status] || 'secondary'}`}
-                          style={{ fontSize: '0.65rem' }}
-                        >
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="text-nowrap text-muted">{timeAgo(item.created_at)}</td>
-                      <td>
-                        <div className="d-flex gap-1 flex-wrap">
-                          <button
-                            className="btn btn-outline-secondary btn-sm py-0 px-1"
-                            style={{ fontSize: '0.65rem' }}
-                            onClick={() => copyContent(item)}
+                  {items.map(item => {
+                    const wordCount = item.content.split(/\s+/).filter(Boolean).length;
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <div className="fw-medium">{item.title || 'Untitled'}</div>
+                          <div
+                            className="text-muted"
+                            style={{
+                              fontSize: '0.7rem',
+                              maxWidth: '300px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
                           >
-                            <i className={`bi ${copiedId === item.id ? 'bi-check' : 'bi-clipboard'} me-1`} />
-                            {copiedId === item.id ? 'Copied' : 'Copy'}
-                          </button>
-                          {item.status === 'draft' && (
+                            {item.content.slice(0, 100)}...
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className="badge"
+                            style={{
+                              backgroundColor: PLATFORM_COLORS[item.platform] || '#6c757d',
+                              fontSize: '0.65rem',
+                            }}
+                          >
+                            {item.platform}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`badge bg-${STATUS_BADGES[item.status] || 'secondary'}`}
+                            style={{ fontSize: '0.65rem' }}
+                          >
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="text-muted text-nowrap">{wordCount}</td>
+                        <td className="text-nowrap text-muted">{timeAgo(item.created_at)}</td>
+                        <td>
+                          <div className="d-flex gap-1 flex-wrap">
                             <button
-                              className="btn btn-outline-success btn-sm py-0 px-1"
+                              className="btn btn-outline-secondary btn-sm py-0 px-1"
                               style={{ fontSize: '0.65rem' }}
-                              onClick={() => handleApprove(item.id)}
+                              onClick={() => copyContent(item)}
                             >
-                              <i className="bi bi-check-circle me-1" />
-                              Approve
+                              <i className={`bi ${copiedId === item.id ? 'bi-check' : 'bi-clipboard'} me-1`} />
+                              {copiedId === item.id ? 'Copied' : 'Copy'}
                             </button>
-                          )}
-                          {item.status === 'approved' && (
-                            <div className="d-flex gap-1">
-                              <input
-                                className="form-control form-control-sm py-0"
-                                style={{ fontSize: '0.65rem', width: '120px' }}
-                                placeholder="Post URL..."
-                                value={postUrlInputs[item.id] || ''}
-                                onChange={e =>
-                                  setPostUrlInputs(p => ({ ...p, [item.id]: e.target.value }))
-                                }
-                              />
+                            {item.status === 'draft' && (
+                              <button
+                                className="btn btn-outline-success btn-sm py-0 px-1"
+                                style={{ fontSize: '0.65rem' }}
+                                onClick={() => handleApprove(item.id)}
+                              >
+                                <i className="bi bi-check-circle me-1" />
+                                Approve
+                              </button>
+                            )}
+                            {canPublish(item) && (
                               <button
                                 className="btn btn-outline-primary btn-sm py-0 px-1"
                                 style={{ fontSize: '0.65rem' }}
-                                onClick={() => handleMarkPosted(item.id)}
-                                disabled={!postUrlInputs[item.id]}
+                                onClick={() => handlePublish(item.id)}
+                                disabled={publishing === item.id}
                               >
-                                Posted
+                                {publishing === item.id ? (
+                                  <span className="spinner-border spinner-border-sm me-1" style={{ width: '0.6rem', height: '0.6rem' }} />
+                                ) : (
+                                  <i className="bi bi-send me-1" />
+                                )}
+                                Publish
                               </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            )}
+                            {item.status === 'approved' && item.platform === 'linkedin' && (
+                              <div className="d-flex gap-1">
+                                <input
+                                  className="form-control form-control-sm py-0"
+                                  style={{ fontSize: '0.65rem', width: '120px' }}
+                                  placeholder="Post URL..."
+                                  value={postUrlInputs[item.id] || ''}
+                                  onChange={e =>
+                                    setPostUrlInputs(p => ({ ...p, [item.id]: e.target.value }))
+                                  }
+                                />
+                                <button
+                                  className="btn btn-outline-primary btn-sm py-0 px-1"
+                                  style={{ fontSize: '0.65rem' }}
+                                  onClick={() => handleMarkPosted(item.id)}
+                                  disabled={!postUrlInputs[item.id]}
+                                >
+                                  Posted
+                                </button>
+                              </div>
+                            )}
+                            {item.post_url && (
+                              <a
+                                href={item.post_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-outline-secondary btn-sm py-0 px-1"
+                                style={{ fontSize: '0.65rem' }}
+                              >
+                                <i className="bi bi-box-arrow-up-right me-1" />
+                                View
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
