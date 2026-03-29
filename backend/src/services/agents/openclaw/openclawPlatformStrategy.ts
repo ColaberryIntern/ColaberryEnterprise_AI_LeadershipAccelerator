@@ -111,10 +111,9 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 - Do NOT lead with or center your response around a link or CTA.
 - Do NOT mention any company, product, program, or brand by name.
 - Sound like a knowledgeable practitioner sharing genuine insight, not a marketer.
-- SIGN-OFF: End your comment with a brief, natural sign-off that includes your name and LinkedIn handle. Examples:
+- SIGN-OFF: You MUST end your comment with EXACTLY this line (copy verbatim):
   "— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
-  "— Ali Muwwakkil | ali-muwwakkil on LinkedIn"
-  This is NOT a CTA. It is an attribution line so readers can verify your credibility.`,
+  Do NOT change the name or handle. Do NOT use "Ali Moiz" or any other variation. The exact LinkedIn handle is ali-muwwakkil.`,
 
   AUTHORITY_BROADCAST: `PLATFORM RULES -AUTHORITY CONTENT:
 - Create authoritative, original content. You are the thought leader.
@@ -184,7 +183,7 @@ Generate a reply that provides INSIGHT ONLY.
 - Trigger curiosity with a counter-intuitive or surprising observation.
 - Keep the insight portion under 3 sentences.
 - Sound like a knowledgeable peer, not a sales rep.
-- End with a brief sign-off: "— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
+- You MUST end with EXACTLY this sign-off (copy verbatim): "— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
 Example: "Most teams don't struggle with the tools -they struggle because nothing actually gets wired into real workflows.\n\n— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 
   2: `CONVERSATION STAGE 2 -QUALIFICATION:
