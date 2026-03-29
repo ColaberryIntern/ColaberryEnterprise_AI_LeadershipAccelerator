@@ -180,11 +180,9 @@ async function postToDevtoBrowser(
       throw new Error(`Comment POST failed (${postResult.status}): ${errDetail}`);
     }
 
-    // 6. Extract comment URL — always anchor to the article page
-    const commentId = postResult.json?.id_code || postResult.json?.id;
-    const postUrl = commentId
-      ? `${articleUrl.replace(/\/$/, '')}#comment-${commentId}`
-      : `${articleUrl.replace(/\/$/, '')}#comment-posted-${Date.now()}`;
+    // 6. Comment URL — link to article page (Dev.to renders comments client-side,
+    //    fragment anchors cause refresh loops in their SPA)
+    const postUrl = articleUrl.replace(/\/$/, '');
 
     console.log(`[OpenClaw Browser] Comment posted: ${postUrl}`);
 

@@ -39,13 +39,11 @@ export async function postToDevTo(
   const comment = resp.data;
   const commentId = comment.id_code || comment.id;
 
-  // Dev.to comment URLs: article page with #comment-{id_code} anchor
-  // The standalone /comment/ URL format is unreliable — always prefer article anchor
+  // Dev.to renders comments client-side — fragment anchors cause refresh loops.
+  // Link to the article page directly; comment is visible in the comments section.
   const postUrl = articleUrl
-    ? `${articleUrl.replace(/\/$/, '')}#comment-${commentId}`
-    : comment.path
-      ? `https://dev.to${comment.path}`
-      : `https://dev.to/comment/${commentId}`;
+    ? articleUrl.replace(/\/$/, '')
+    : `https://dev.to/comment/${commentId}`;
 
   return {
     post_url: postUrl,
@@ -101,9 +99,9 @@ export async function postToHashnode(
   const commentId = resp.data?.data?.addComment?.comment?.id;
   if (!commentId) throw new Error('Hashnode comment creation returned no ID');
 
-  // Hashnode comments live on the article page — link to the article with comment anchor
+  // Hashnode comments live on the article page — link to the article directly
   const postUrl = articleUrl
-    ? `${articleUrl.replace(/\/$/, '')}#comment-${commentId}`
+    ? articleUrl.replace(/\/$/, '')
     : `https://hashnode.com/comment/${commentId}`;
 
   return {
