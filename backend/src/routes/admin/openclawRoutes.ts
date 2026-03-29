@@ -408,6 +408,199 @@ router.post(`${BASE}/responses/:id/mark-posted`, async (req: Request, res: Respo
   }
 });
 
+// ── Audit & Repair Broken post_url Values ───────────────────────
+
+router.post(`${BASE}/responses/audit-urls`, async (_req: Request, res: Response) => {
+  try {
+    // Fix broken Dev.to/Hashnode URLs that used /comment/{id} pattern (404s)
+    // Replace with the article/signal source_url which is the correct page
+    const [, fixedCount] = await sequelize.query(`
+      UPDATE openclaw_responses r
+      SET post_url = s.source_url, updated_at = NOW()
+      FROM openclaw_signals s
+      WHERE r.signal_id = s.id
+        AND r.post_status = 'posted'
+        AND r.post_url IS NOT NULL
+        AND (r.post_url LIKE '%/comment/%' OR r.post_url LIKE '%#comment-%')
+        AND s.source_url IS NOT NULL
+    `) as [any, number];
+
+    // Count total posted responses for reference
+    const [totalResult] = await sequelize.query(
+      `SELECT COUNT(*) as total FROM openclaw_responses WHERE post_status = 'posted' AND post_url IS NOT NULL`,
+      { type: QueryTypes.SELECT },
+    ) as any[];
+
+    // Count remaining unfixable (no signal source_url)
+    const [unfixableResult] = await sequelize.query(
+      `SELECT COUNT(*) as total FROM openclaw_responses r
+       LEFT JOIN openclaw_signals s ON r.signal_id = s.id
+       WHERE r.post_status = 'posted'
+         AND r.post_url IS NOT NULL
+         AND (r.post_url LIKE '%/comment/%' OR r.post_url LIKE '%#comment-%')
+         AND (s.source_url IS NULL OR s.id IS NULL)`,
+      { type: QueryTypes.SELECT },
+    ) as any[];
+
+    res.json({
+      success: true,
+      audited: parseInt(totalResult?.total || '0', 10),
+      fixed: typeof fixedCount === 'number' ? fixedCount : 0,
+      unfixable: parseInt(unfixableResult?.total || '0', 10),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Verify Posted Comments Are Visible ──────────────────────────
+
+router.get(`${BASE}/responses/:id/verify`, async (req: Request, res: Response) => {
+  try {
+    const response = await OpenclawResponse.findByPk(req.params.id as string);
+    if (!response) return res.status(404).json({ error: 'Response not found' });
+    if (response.post_status !== 'posted') return res.status(400).json({ error: 'Response not posted yet' });
+
+    const signal = response.signal_id ? await OpenclawSignal.findByPk(response.signal_id) : null;
+    const { verifyComment } = require('../../services/agents/openclaw/openclawCommentVerificationService');
+    const result = await verifyComment(
+      response.platform,
+      response.post_url || signal?.source_url || '',
+      response.engagement_metrics?.platform_post_id || '',
+      signal?.details || {},
+    );
+
+    // Store verification result in engagement_metrics
+    await response.update({
+      engagement_metrics: {
+        ...(response.engagement_metrics || {}),
+        verification_status: result.visible ? 'verified' : 'filtered',
+        last_verified_at: result.checked_at.toISOString(),
+        verification_details: result.details,
+      },
+      updated_at: new Date(),
+    });
+
+    res.json({ success: true, verification: result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(`${BASE}/responses/verify-all-posted`, async (_req: Request, res: Response) => {
+  try {
+    const posted = await sequelize.query(`
+      SELECT r.id, r.platform, r.post_url, r.engagement_metrics,
+             s.source_url, s.details as signal_details
+      FROM openclaw_responses r
+      LEFT JOIN openclaw_signals s ON r.signal_id = s.id
+      WHERE r.post_status = 'posted'
+        AND r.platform IN ('devto', 'hashnode')
+      ORDER BY r.posted_at DESC
+      LIMIT 100
+    `, { type: QueryTypes.SELECT }) as any[];
+
+    const { verifyComment } = require('../../services/agents/openclaw/openclawCommentVerificationService');
+    let verified = 0, filtered = 0, errored = 0;
+
+    for (const r of posted) {
+      try {
+        const platformPostId = r.engagement_metrics?.platform_post_id || '';
+        const result = await verifyComment(
+          r.platform,
+          r.post_url || r.source_url || '',
+          platformPostId,
+          r.signal_details || {},
+        );
+
+        await OpenclawResponse.update({
+          engagement_metrics: sequelize.literal(`
+            engagement_metrics || '${JSON.stringify({
+              verification_status: result.visible ? 'verified' : 'filtered',
+              last_verified_at: result.checked_at.toISOString(),
+              verification_details: result.details,
+            }).replace(/'/g, "''")}'::jsonb
+          `),
+          updated_at: new Date(),
+        } as any, { where: { id: r.id } });
+
+        if (result.visible) verified++;
+        else filtered++;
+
+        // Rate limit: 200ms between API calls to avoid being blocked
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch {
+        errored++;
+      }
+    }
+
+    res.json({ success: true, total: posted.length, verified, filtered, errored });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Flush All Queued Responses ──────────────────────────────────
+
+router.post(`${BASE}/responses/flush-all`, async (_req: Request, res: Response) => {
+  try {
+    // Find all approved/ready_to_post responses that don't have pending post tasks
+    const flushable = await sequelize.query(`
+      SELECT r.id, r.platform, r.execution_type
+      FROM openclaw_responses r
+      WHERE r.post_status IN ('approved', 'ready_to_post')
+        AND r.execution_type = 'api_posting'
+        AND NOT EXISTS (
+          SELECT 1 FROM openclaw_tasks t
+          WHERE t.input_data->>'response_id' = r.id::text
+            AND t.task_type = 'post_response'
+            AND t.status IN ('pending', 'assigned', 'running')
+        )
+    `, { type: QueryTypes.SELECT }) as any[];
+
+    let queued = 0;
+    for (const r of flushable) {
+      await OpenclawTask.create({
+        task_type: 'post_response',
+        priority: 8,
+        status: 'pending',
+        input_data: { response_id: r.id },
+        max_retries: 3,
+        retry_count: 0,
+      } as any);
+      queued++;
+    }
+
+    // Count manual/skipped
+    const [manualResult] = await sequelize.query(
+      `SELECT COUNT(*) as total FROM openclaw_responses
+       WHERE post_status IN ('approved', 'ready_to_post', 'ready_for_manual_post')
+         AND execution_type != 'api_posting'`,
+      { type: QueryTypes.SELECT },
+    ) as any[];
+
+    // Trigger the browser worker agent to process the new tasks immediately
+    if (queued > 0) {
+      const { runOpenclawBrowserWorker } = require('../../services/aiOrchestrator');
+      // Fire and forget -don't block the HTTP response
+      runOpenclawBrowserWorker().catch((e: any) =>
+        console.error('[OpenClaw Flush] Browser worker error:', e.message),
+      );
+    }
+
+    res.json({
+      success: true,
+      queued,
+      skipped_manual: parseInt(manualResult?.total || '0', 10),
+      message: queued > 0
+        ? `Queued ${queued} responses for posting. Browser worker triggered.`
+        : 'No responses to flush.',
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Admin-Triggered Browser Posting (HUMAN_EXECUTION platforms) ──
 
 router.post(`${BASE}/responses/:id/post-via-browser`, async (req: Request, res: Response) => {
