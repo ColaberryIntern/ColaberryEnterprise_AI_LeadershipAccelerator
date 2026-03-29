@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { OpenclawSignal, OpenclawTask, OpenclawResponse, OpenclawLearning } from '../../../models';
 import { getOpenAIClient } from '../../../intelligence/assistant/openaiHelper';
-import { getStrategy, getExecutionType, isHumanExecution, isLinkAllowed, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, validateContentForStrategy, shouldAutoApprove as shouldAutoApproveStrategy } from './openclawPlatformStrategy';
+import { getStrategy, getExecutionType, isHumanExecution, isLinkAllowed, STRATEGY_PROMPT_INSTRUCTIONS, CONVERSION_STAGE_PROMPTS, validateContentForStrategy, shouldAutoApprove as shouldAutoApproveStrategy, enforceSignOff } from './openclawPlatformStrategy';
 import { captureLeadFromSignal } from './openclawLeadCaptureService';
 import { classifyAutomationRisk } from './openclawRiskClassifier';
 import { isRateLimited } from './openclawRateLimiter';
@@ -70,7 +70,10 @@ export async function runOpenclawContentResponseAgent(
         const { tone, toneSource, learningId } = await selectToneFromLearnings(signal, defaultTone);
         const topicHints = await getTopPerformingTopics();
         const includeLink = isLinkAllowed(signal.platform);
-        const content = await generateLLMResponse(signal, tone, maxLength, includeLink ? trackedUrl : null, topicHints);
+        const rawContent = await generateLLMResponse(signal, tone, maxLength, includeLink ? trackedUrl : null, topicHints);
+
+        // Deterministic sign-off enforcement -append if LLM omitted it
+        const content = enforceSignOff(rawContent, signal.platform);
 
         // Strategy validation gate -deterministic backstop catches LLM violations
         const validation = validateContentForStrategy(content, signal.platform);

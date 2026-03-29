@@ -101,7 +101,11 @@ export const STRATEGY_PROMPT_INSTRUCTIONS: Record<PlatformStrategyType, string> 
 - Do NOT say "our program", "our accelerator", "our team", "we offer", or similar.
 - Be genuinely helpful and insightful. Share experience and frameworks, nothing else.
 - Sound like a knowledgeable practitioner, not a marketer.
-- If in doubt, err on the side of being MORE subtle, not less.`,
+- If in doubt, err on the side of being MORE subtle, not less.
+- SIGN-OFF: You MUST end your comment with EXACTLY this line (copy verbatim):
+  "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
+  Do NOT change the name or handle. Do NOT use "Ali Moiz" or any other variation. The exact LinkedIn handle is ali-muwwakkil.
+  IMPORTANT: Use a regular hyphen/dash (-), NOT an emdash. Do NOT use the character anywhere in your response.`,
 
   HYBRID_ENGAGEMENT: `PLATFORM RULES -ENGAGEMENT-FIRST:
 - Prioritize engagement: reply to the conversation with genuine value FIRST.
@@ -185,7 +189,7 @@ Generate a reply that provides INSIGHT ONLY.
 - Keep the insight portion under 3 sentences.
 - Sound like a knowledgeable peer, not a sales rep.
 - You MUST end with EXACTLY this sign-off (copy verbatim): "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
-Example: "Most teams don't struggle with the tools -they struggle because nothing actually gets wired into real workflows.\n\n— Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
+Example: "Most teams don't struggle with the tools -they struggle because nothing actually gets wired into real workflows.\n\n- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 
   2: `CONVERSATION STAGE 2 -QUALIFICATION:
 The user has responded to our comment. Ask a qualifying question:
@@ -193,7 +197,8 @@ The user has responded to our comment. Ask a qualifying question:
 - Keep it conversational, NOT salesy.
 - Mirror their language and tone.
 - One question, not a list of questions.
-Example: "Out of curiosity -is this something you're actively trying to fix right now or just exploring?"`,
+- You MUST end with EXACTLY this sign-off (copy verbatim): "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
+Example: "Out of curiosity -is this something you're actively trying to fix right now or just exploring?\n\n- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 
   3: `CONVERSATION STAGE 3 -DEEPENING:
 The user is actively engaged. Provide structured thinking:
@@ -201,14 +206,16 @@ The user is actively engaged. Provide structured thinking:
 - Ask about THEIR specific use case -keep THEM talking.
 - Do NOT solve everything yet -leave room for continued conversation.
 - Still NO links, NO CTAs.
-Example: "What's usually missing is: (1) how signals are defined, (2) what decisions get made, (3) what actions actually run. What kind of use case are you working on?"`,
+- You MUST end with EXACTLY this sign-off (copy verbatim): "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
+Example: "What's usually missing is: (1) how signals are defined, (2) what decisions get made, (3) what actions actually run. What kind of use case are you working on?\n\n- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 
   4: `CONVERSATION STAGE 4 -TRANSITION:
 Introduce that you help teams solve this, but do NOT push:
 - "This is actually something I've been helping teams structure internally..."
 - "If it's helpful, I can show you how I think about it based on your use case."
 - Wait for THEM to say "yes" -do NOT drop a link or call CTA yet.
-- If they don't bite, gracefully continue providing value. Never force it.`,
+- If they don't bite, gracefully continue providing value. Never force it.
+- You MUST end with EXACTLY this sign-off (copy verbatim): "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 
   5: `CONVERSATION STAGE 5 -CONVERSION (THEY EXPRESSED INTEREST):
 The user has explicitly asked for more. NOW you may offer ONE of these:
@@ -216,7 +223,8 @@ The user has explicitly asked for more. NOW you may offer ONE of these:
 - Option B (resource link): "I actually broke this down here if you want to take a look first: [link]"
 - Pick ONE option, not both.
 - Keep it casual, not transactional.
-- This is an invitation, not a close.`,
+- This is an invitation, not a close.
+- You MUST end with EXACTLY this sign-off (copy verbatim): "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 
   6: `CONVERSATION STAGE 6 -FOLLOW-UP (OFFERED, AWAITING RESPONSE):
 You already offered a call or resource link. If they haven't responded:
@@ -224,7 +232,8 @@ You already offered a call or resource link. If they haven't responded:
 - Reference a recent development or new angle on their problem.
 - Do NOT repeat the call offer -they saw it.
 - If they decline or ghost after this, gracefully close.
-Example: "Saw an interesting case study on exactly the challenge you described -thought of you. No pressure either way."`,
+- You MUST end with EXACTLY this sign-off (copy verbatim): "- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"
+Example: "Saw an interesting case study on exactly the challenge you described -thought of you. No pressure either way.\n\n- Ali Muwwakkil (ali-muwwakkil on LinkedIn)"`,
 };
 
 // ─── Post-Generation Validation Gate ─────────────────────────────────────────
@@ -414,4 +423,100 @@ export const STRATEGY_RATE_LIMITS: Record<PlatformStrategyType, { max_per_hour: 
 
 export function isPostCreationAllowed(platform: string): boolean {
   return getStrategy(platform) !== 'PASSIVE_SIGNAL';
+}
+
+// ─── Content Tier System ──────────────────────────────────────────────────────
+// Three tiers drive everything to LinkedIn:
+//   Tier 1 (COMMENT)       → Authority/curiosity → Profile click → LinkedIn
+//   Tier 2 (ARTICLE)       → Deep expertise → Sign-off → LinkedIn search
+//   Tier 3 (LINKEDIN_POST) → Direct conversion → Tracked links → enterprise.colaberry.ai
+
+export type ContentTier = 'COMMENT' | 'ARTICLE' | 'LINKEDIN_POST';
+
+export const PLATFORM_CONTENT_TIERS: Record<string, ContentTier[]> = {
+  devto: ['COMMENT', 'ARTICLE'],
+  hashnode: ['COMMENT', 'ARTICLE'],
+  medium: ['ARTICLE'],
+  linkedin: ['LINKEDIN_POST'],
+  twitter: ['COMMENT'],
+  bluesky: ['COMMENT'],
+  youtube: ['COMMENT'],
+  producthunt: ['COMMENT'],
+  discourse: ['COMMENT'],
+  reddit: ['COMMENT'],
+  hackernews: ['COMMENT'],
+  quora: ['COMMENT'],
+  facebook_groups: ['COMMENT'],
+  linkedin_comments: ['COMMENT'],
+};
+
+export function supportsArticles(platform: string): boolean {
+  return (PLATFORM_CONTENT_TIERS[platform] || []).includes('ARTICLE');
+}
+
+// ─── Article Prompt Instructions ──────────────────────────────────────────────
+
+const SIGN_OFF = '- Ali Muwwakkil (ali-muwwakkil on LinkedIn)';
+
+export const ARTICLE_PROMPT_INSTRUCTIONS: Record<string, string> = {
+  devto: `Write a Dev.to technical article (600-1200 words).
+- Use markdown with ## headers for structure.
+- Include 1-2 practical code snippets or architecture examples if relevant.
+- Write for developers and tech leads. Be practical, not theoretical.
+- Take a clear, opinionated position. Avoid hedging language.
+- Share insights from real experience building AI systems.
+- Do NOT mention any company, product, or program by name.
+- Do NOT use the emdash character anywhere.
+- End the article with EXACTLY this sign-off: "${SIGN_OFF}"`,
+
+  medium: `Write a Medium article (600-1200 words) for business and technology leaders.
+- Narrative-driven. Less code, more frameworks, mental models, and strategic insight.
+- Use short paragraphs (2-3 sentences max). Medium readers skim.
+- Start with a counterintuitive hook that challenges conventional wisdom.
+- Share insights from real experience helping enterprise teams adopt AI.
+- Do NOT mention any company, product, or program by name.
+- Do NOT use the emdash character anywhere.
+- End the article with EXACTLY this sign-off: "${SIGN_OFF}"`,
+
+  hashnode: `Write a Hashnode technical article (600-1200 words).
+- Developer-focused. Include code examples, architecture patterns, or system design insights.
+- Use markdown with ## headers, code blocks, and bullet points.
+- Write as a practitioner who builds real systems, not a tutorial author.
+- Take a clear position and back it with experience.
+- Do NOT mention any company, product, or program by name.
+- Do NOT use the emdash character anywhere.
+- End the article with EXACTLY this sign-off: "${SIGN_OFF}"`,
+};
+
+// ─── Sign-Off Helpers ─────────────────────────────────────────────────────────
+
+export const STANDARD_SIGN_OFF = SIGN_OFF;
+export const SHORT_SIGN_OFF = '- Ali M. (LinkedIn: ali-muwwakkil)';
+
+/**
+ * Get the appropriate sign-off for a platform based on character limits.
+ * Short-form for Twitter/Bluesky (tight limits), standard for everything else.
+ * No sign-off for AUTHORITY_BROADCAST (author identity is inherent).
+ */
+export function getSignOff(platform: string): string | null {
+  if (getStrategy(platform) === 'AUTHORITY_BROADCAST') return null;
+  if (platform === 'twitter' || platform === 'bluesky') return SHORT_SIGN_OFF;
+  return STANDARD_SIGN_OFF;
+}
+
+/**
+ * Ensure content ends with the correct sign-off.
+ * Appends if missing. Returns content unchanged if sign-off already present
+ * or if platform is AUTHORITY_BROADCAST.
+ */
+export function enforceSignOff(content: string, platform: string): string {
+  const signOff = getSignOff(platform);
+  if (!signOff) return content; // AUTHORITY_BROADCAST -no sign-off needed
+
+  // Check if any form of sign-off is already present
+  if (content.includes('ali-muwwakkil on LinkedIn') || content.includes('LinkedIn: ali-muwwakkil')) {
+    return content;
+  }
+
+  return content.trimEnd() + '\n\n' + signOff;
 }
