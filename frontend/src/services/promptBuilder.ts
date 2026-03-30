@@ -190,8 +190,5 @@ export function buildFinalPrompt(input: PromptBuilderInput): string {
     parts.push(`TEST MODE INSTRUCTIONS:\nI am in test mode. Walk me through the experience exactly as a real student would see it, but when you ask me to do work or submit something, instead of waiting for my submission, you should generate a realistic example yourself and continue as if I had submitted it. Keep the flow moving automatically — show me the full student journey from start to finish.`);
   }
 
-  // 11. Claude Code environment constraint
-  parts.push(CLAUDE_CODE_CONSTRAINT);
-
   return parts.join('\n\n');
 }
