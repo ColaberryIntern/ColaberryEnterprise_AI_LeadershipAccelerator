@@ -319,7 +319,7 @@ function UtilityCoopLandingPage() {
         style={{ background: 'linear-gradient(135deg, #0f1b2d 0%, #1a365d 50%, #1e3a5f 100%)', padding: '5rem 1.5rem' }}
       >
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
-          <h2 className="fw-bold mb-3" style={{ fontSize: 28 }}>Ready to Bring AI to Your Cooperative?</h2>
+          <h2 className="text-white fw-bold mb-3" style={{ fontSize: 28 }}>Ready to Bring AI to Your Cooperative?</h2>
           <p className="mb-4" style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15 }}>
             Schedule a 30-minute strategy call. We'll walk through your specific operations and show you what's possible.
           </p>
