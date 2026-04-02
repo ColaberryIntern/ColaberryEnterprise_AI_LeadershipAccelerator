@@ -12,6 +12,7 @@ import ProjectNextActionPanel from '../../components/project/ProjectNextActionPa
 import WarRoomTab from '../../components/project/WarRoomTab';
 import ProjectLockInScreen from '../../components/project/ProjectLockInScreen';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
+import WorkstationLauncher from '../../components/project/WorkstationLauncher';
 
 interface ProjectData {
   id: string;
@@ -583,6 +584,9 @@ function ProjectDashboard() {
 
       {activeTab === 'overview' && (
         <>
+          <div className="mb-4">
+            <WorkstationLauncher />
+          </div>
           <ProjectWorkflowPanel />
           <ProjectIntelligencePanel
             maturityScore={project.maturity_score}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import portalApi from '../../utils/portalApi';
+import WorkstationLauncher from './WorkstationLauncher';
 
 interface WarRoomData {
   progress: {
@@ -142,6 +143,11 @@ function WarRoomTab() {
           </div>
         </div>
       )}
+
+      {/* AI Workstation */}
+      <div className="mb-4">
+        <WorkstationLauncher />
+      </div>
 
       {/* Header Stats */}
       <div className="row g-3 mb-4">
