@@ -9,6 +9,7 @@ import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
 import AlumniChampionPage from './pages/AlumniChampionPage';
+import UtilityCoopLandingPage from './pages/UtilityCoopLandingPage';
 import GlobalCoryWidget from './components/GlobalCoryWidget';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
       <ScrollToTop />
       <Routes>
         <Route path="/alumni-ai-champion" element={<AlumniChampionPage />} />
+        <Route path="/utility-ai" element={<UtilityCoopLandingPage />} />
         {adminRoutes}
         {portalRoutes}
         {referralRoutes}
