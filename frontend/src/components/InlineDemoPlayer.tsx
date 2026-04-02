@@ -44,13 +44,14 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     setState('playing');
     localStorage.setItem('cb_last_demo', scenario.id);
     try { (window as any).trackBookingEvent?.('demo_start', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
-    runDemo();
+    // Defer so React renders the playing DOM before we manipulate it
+    setTimeout(() => runDemo(), 150);
   }
 
   function skip() {
     cleanup();
     setState('done');
-    try { (window as any).trackBookingEvent?.('demo_skip', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
+    try { (window as any).trackBookingEvent?.('demo_skip', { scenario: scenarioRef.current?.id, industry: scenarioRef.current?.industry, context: trackContext }); } catch {}
   }
 
   function pickNew(id: string) {
@@ -60,7 +61,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     setState('playing');
     localStorage.setItem('cb_last_demo', id);
     try { (window as any).trackBookingEvent?.('demo_start', { scenario: id, industry: found?.industry, context: trackContext }); } catch {}
-    setTimeout(() => runDemo(), 100);
+    setTimeout(() => runDemo(), 150);
   }
 
   function sleep(ms: number): Promise<boolean> {
@@ -176,19 +177,29 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
   async function runDemo() {
     const data = scenarioRef.current;
     const gen = cancelRef.current;
+    const cancelled = () => gen !== cancelRef.current;
 
-    // Step 1: Idea typing
+    // Wait for DOM to be ready (React render may not be complete)
+    let ideaEl = document.getElementById('ep-step-idea');
+    let retries = 0;
+    while (!ideaEl && retries < 20) {
+      await sleep(50);
+      if (cancelled()) return;
+      ideaEl = document.getElementById('ep-step-idea');
+      retries++;
+    }
+    if (!ideaEl) { console.warn('[Demo] ep-step-idea not found after retries'); return; }
+
+    // Step 1: Idea typing — the business problem description
     narr(data.narr.idea);
-    const ideaHTML = '<div class="card border-0 shadow-sm"><div class="card-body p-3"><label class="form-label fw-semibold small">Describe your business challenge:</label><textarea class="form-control" id="ep-ta" rows="3" readonly style="resize:none;font-size:.85rem;border-radius:8px;"></textarea></div></div>';
-    const ideaEl = document.getElementById('ep-step-idea');
-    if (ideaEl) ideaEl.innerHTML = ideaHTML;
+    ideaEl.innerHTML = '<div class="card border-0 shadow-sm"><div class="card-body p-3"><label class="form-label fw-semibold small">Describe your business challenge:</label><textarea class="form-control" id="ep-ta" rows="5" readonly style="resize:none;font-size:.85rem;border-radius:8px;"></textarea></div></div>';
     showStep('idea');
-    await sleep(600);
-    if (gen !== cancelRef.current) return;
+    await sleep(400);
+    if (cancelled()) return;
     const ta = document.getElementById('ep-ta') as HTMLTextAreaElement;
-    if (ta) await typeText(ta, data.idea, 20);
-    if (gen !== cancelRef.current) return;
-    await sleep(800);
+    if (ta) await typeText(ta, data.idea, 18);
+    if (cancelled()) return;
+    await sleep(1000);
 
     // Step 2: Questions
     if (gen !== cancelRef.current) return;
