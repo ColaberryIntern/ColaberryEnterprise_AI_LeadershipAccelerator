@@ -1,69 +1,87 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { getAdvisoryUrl, getDemoWalkthroughUrl } from '../services/utmService';
 import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 export default function LiveDemoStrip() {
-  const url = getAdvisoryUrl();
+  const [showDemo, setShowDemo] = useState(false);
+  const advisoryUrl = getAdvisoryUrl();
 
-  const agents = [
-    { icon: '\u{1F9E0}', name: 'Cory', action: 'Analyzed 47 leads', color: '#3b82f6' },
-    { icon: '\u{1F4DE}', name: 'Maya', action: 'Made 12 calls today', color: '#10b981' },
-    { icon: '\u{2709}\uFE0F', name: 'Dhee', action: 'Sent 156 emails', color: '#8b5cf6' },
-    { icon: '\u{1F4CA}', name: 'Strategy', action: '3 meetings booked', color: '#f59e0b' },
-  ];
+  // Pick a random industry on mount
+  const demo = useMemo(() => {
+    const idx = Math.floor(Math.random() * INDUSTRY_DEMOS.length);
+    return INDUSTRY_DEMOS[idx];
+  }, []);
+
+  const demoUrl = getDemoWalkthroughUrl(demo.scenario);
 
   return (
     <div className="py-4" style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
-      <div className="container">
-        <p className="text-center text-muted small mb-3 fw-semibold" style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 11 }}>
-          See AI Run Your Business
-        </p>
-        <div className="d-flex flex-wrap justify-content-center gap-3 mb-3">
-          {agents.map((a, i) => (
+      <div className="container" style={{ maxWidth: 900 }}>
+        {!showDemo ? (
+          <div className="text-center">
+            <p className="text-muted mb-2" style={{ fontSize: 14 }}>
+              See a <strong>{demo.label}</strong> AI Organization Get Configured in Seconds
+            </p>
+            <button
+              className="btn btn-dark rounded-pill px-4 py-2"
+              data-track={`demo_inline_play_${demo.scenario}`}
+              onClick={() => setShowDemo(true)}
+              style={{ fontSize: 14 }}
+            >
+              <i className="bi bi-play-fill me-1" />Watch It Build
+            </button>
+          </div>
+        ) : (
+          <div>
             <div
-              key={i}
-              className="d-flex align-items-center gap-2 px-3 py-2"
-              style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13, minWidth: 180 }}
+              style={{
+                position: 'relative',
+                width: '100%',
+                paddingBottom: '65%',
+                borderRadius: 12,
+                overflow: 'hidden',
+                border: '1px solid #e2e8f0',
+                background: '#0f172a',
+              }}
             >
-              <span style={{ fontSize: 20 }}>{a.icon}</span>
-              <div>
-                <div className="fw-semibold" style={{ color: a.color, fontSize: 12 }}>{a.name}</div>
-                <div style={{ color: '#475569' }}>{a.action}</div>
-              </div>
+              <iframe
+                src={demoUrl}
+                title={`AI Workforce Designer Demo - ${demo.label}`}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                }}
+                allow="autoplay"
+              />
             </div>
-          ))}
-        </div>
-        {/* Industry demo pills */}
-        <p className="text-center text-muted small mt-4 mb-2 fw-semibold" style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 10 }}>
-          Watch a Demo for Your Industry
-        </p>
-        <div className="d-flex flex-wrap justify-content-center gap-2 mb-3">
-          {INDUSTRY_DEMOS.map(d => (
-            <a
-              key={d.scenario}
-              href={getDemoWalkthroughUrl(d.scenario)}
-              className="btn btn-sm"
-              data-track={`demo_strip_${d.scenario}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, fontSize: 12, color: '#475569', padding: '5px 14px' }}
-            >
-              <i className={`bi ${d.icon} me-1`} />{d.label}
-            </a>
-          ))}
-        </div>
-        <div className="text-center">
-          <a
-            href={url}
-            className="btn btn-outline-primary btn-sm"
-            data-track="demo_strip_try_it"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ borderRadius: 20, padding: '6px 20px', fontSize: 13 }}
-          >
-            Try It With Your Business &rarr;
-          </a>
-        </div>
+            <div className="text-center mt-3">
+              <p className="text-muted mb-2" style={{ fontSize: 14 }}>
+                Now design one for <strong>your</strong> business
+              </p>
+              <a
+                href={advisoryUrl}
+                className="btn btn-primary rounded-pill px-4 py-2"
+                data-track="demo_inline_start_own"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 14 }}
+              >
+                Design My AI Organization &rarr;
+              </a>
+              <button
+                className="btn btn-link btn-sm text-muted ms-3"
+                onClick={() => setShowDemo(false)}
+                style={{ fontSize: 12 }}
+              >
+                Close demo
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

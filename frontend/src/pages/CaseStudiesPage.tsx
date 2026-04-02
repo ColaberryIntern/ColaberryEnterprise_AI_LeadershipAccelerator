@@ -8,7 +8,7 @@ import SEOHead from '../components/SEOHead';
 import { STANDARD_CTAS } from '../config/programSchedule';
 import StrategyCallModal from '../components/StrategyCallModal';
 import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
-import IndustryDemoCard from '../components/IndustryDemoCard';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
 import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 interface CaseStudy {
@@ -172,9 +172,9 @@ function CaseStudiesPage() {
               </div>
               {(() => {
                 const demoMap: Record<string, string> = { 'Financial Services': 'saas', 'Healthcare': 'healthcare', 'Manufacturing': 'logistics' };
-                const matched = INDUSTRY_DEMOS.find(d => d.scenario === demoMap[cs.industry]);
-                return matched ? (
-                  <IndustryDemoCard demo={matched} compact trackContext="case_study" />
+                const matched = INDUSTRY_DEMOS.filter(d => d.scenario === demoMap[cs.industry]);
+                return matched.length > 0 ? (
+                  <IndustryDemoGrid demos={matched} trackContext="case_study" />
                 ) : (
                   <AdvisoryCTABlock headline="Could your team achieve similar results?" buttonText="Try It For Your Company" trackLabel="case_study_try_it" variant="compact" />
                 );
