@@ -6,9 +6,13 @@ interface InlineDemoPlayerProps {
   /** Restrict to specific scenario IDs (e.g. ['saas','logistics']). Defaults to all 10. */
   allowedScenarios?: string[];
   trackContext?: string;
+  /** Called when demo finishes. If provided, hides default done state. */
+  onDemoComplete?: (scenarioId: string) => void;
+  /** Force replay a specific scenario (change this value to trigger) */
+  replayScenario?: string;
 }
 
-export default function InlineDemoPlayer({ allowedScenarios, trackContext }: InlineDemoPlayerProps) {
+export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDemoComplete, replayScenario }: InlineDemoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'initial' | 'playing' | 'done'>('initial');
   const advisoryUrl = getAdvisoryUrl();
@@ -39,6 +43,23 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
   }
 
   useEffect(() => { return () => stopAll(); }, []);
+
+  // External replay trigger — parent can force a new scenario
+  useEffect(() => {
+    if (replayScenario) {
+      const found = (scenarios as any[]).find(s => s.id === replayScenario);
+      if (found) {
+        stopAll();
+        scenarioRef.current = found;
+        ++runIdRef.current;
+        localStorage.setItem('cb_last_demo', replayScenario);
+        try { (window as any).trackBookingEvent?.('demo_start', { scenario: replayScenario, industry: found.industry, context: trackContext }); } catch {}
+        // Reset to initial then playing to force remount
+        setState('initial');
+        setTimeout(() => setState('playing'), 50);
+      }
+    }
+  }, [replayScenario]);
 
   // Callback ref: fires when the playing container div mounts
   const playingRef = React.useCallback((node: HTMLDivElement | null) => {
@@ -306,6 +327,9 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     narr("See what AI could look like for your business.");
     try { (window as any).trackBookingEvent?.('demo_complete', { scenario: data.id, industry: data.industry, context: trackContext }); } catch {}
     if (!ok(await delay(1500, rid))) return;
+    if (onDemoComplete) {
+      onDemoComplete(data.id);
+    }
     setState('done');
   }
 
@@ -379,7 +403,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
         </div>
       )}
 
-      {state === 'done' && (
+      {state === 'done' && !onDemoComplete && (
         <div className="text-center py-4 px-3" style={{ background: 'var(--color-bg-alt, #f7fafc)', borderRadius: 12, border: '1px solid var(--color-border, #e2e8f0)' }}>
           <p className="fw-bold mb-2" style={{ color: 'var(--color-primary, #1a365d)', fontSize: 16 }}>
             Now design one for <strong>your</strong> business
@@ -397,7 +421,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
           <div className="mt-3">
             <small className="text-muted d-block mb-2">Or watch another industry:</small>
             <div className="d-flex flex-wrap justify-content-center gap-2">
-              {(scenarios as any[]).filter(s => s.id !== scenarioRef.current.id).slice(0, 5).map(s => (
+              {pool.filter(s => s.id !== scenarioRef.current.id).slice(0, 5).map((s: any) => (
                 <button
                   key={s.id}
                   className="btn btn-sm btn-outline-primary rounded-pill px-3"
