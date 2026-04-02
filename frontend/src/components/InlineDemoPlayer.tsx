@@ -1,0 +1,414 @@
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { getAdvisoryUrl } from '../services/utmService';
+import scenarios from '../config/demoScenarios.json';
+
+interface InlineDemoPlayerProps {
+  /** Restrict to specific scenario IDs (e.g. ['saas','logistics']). Defaults to all 10. */
+  allowedScenarios?: string[];
+  trackContext?: string;
+}
+
+export default function InlineDemoPlayer({ allowedScenarios, trackContext }: InlineDemoPlayerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<'initial' | 'playing' | 'done'>('initial');
+  const advisoryUrl = getAdvisoryUrl();
+
+  const pool = useMemo(() => {
+    if (!allowedScenarios) return scenarios as any[];
+    return (scenarios as any[]).filter(s => allowedScenarios.includes(s.id));
+  }, [allowedScenarios]);
+
+  const scenarioRef = useRef<any>(null);
+  if (!scenarioRef.current) {
+    const last = localStorage.getItem('cb_last_demo') || '';
+    const avail = pool.filter(s => s.id !== last);
+    const list = avail.length ? avail : pool;
+    scenarioRef.current = list[Math.floor(Math.random() * list.length)];
+  }
+  const scenario = scenarioRef.current;
+
+  const cancelRef = useRef(0);
+  const timersRef = useRef<number[]>([]);
+  const graphRef = useRef<any>(null);
+
+  function cleanup() {
+    cancelRef.current++;
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
+  }
+
+  useEffect(() => { return () => cleanup(); }, []);
+
+  function start() {
+    setState('playing');
+    localStorage.setItem('cb_last_demo', scenario.id);
+    try { (window as any).trackBookingEvent?.('demo_start', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
+    runDemo();
+  }
+
+  function skip() {
+    cleanup();
+    setState('done');
+    try { (window as any).trackBookingEvent?.('demo_skip', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
+  }
+
+  function pickNew(id: string) {
+    cleanup();
+    const found = (scenarios as any[]).find(s => s.id === id);
+    if (found) scenarioRef.current = found;
+    setState('playing');
+    localStorage.setItem('cb_last_demo', id);
+    try { (window as any).trackBookingEvent?.('demo_start', { scenario: id, industry: found?.industry, context: trackContext }); } catch {}
+    setTimeout(() => runDemo(), 100);
+  }
+
+  function sleep(ms: number): Promise<boolean> {
+    const gen = cancelRef.current;
+    return new Promise(r => {
+      const id = window.setTimeout(() => {
+        timersRef.current = timersRef.current.filter(t => t !== id);
+        r(gen === cancelRef.current);
+      }, ms);
+      timersRef.current.push(id);
+    });
+  }
+
+  function alive() { return true; }
+  function narr(t: string) { const el = document.getElementById('ep-narr'); if (el) el.textContent = t; }
+  function showStep(id: string) {
+    document.querySelectorAll('.ep-step').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('ep-step-' + id);
+    if (el) el.classList.add('active');
+  }
+
+  async function typeText(el: HTMLTextAreaElement, text: string, speed = 25) {
+    el.value = '';
+    const gen = cancelRef.current;
+    for (let i = 0; i < text.length; i++) {
+      if (cancelRef.current !== gen) return;
+      el.value += text[i];
+      el.scrollTop = el.scrollHeight;
+      await sleep(speed);
+    }
+  }
+
+  function botBubble(cont: HTMLElement, html: string) {
+    const d = document.createElement('div');
+    d.className = 'ep-bubble ep-bubble-bot';
+    d.innerHTML = '<div class="ep-av bg-primary-subtle text-primary"><i class="bi bi-cpu"></i></div><div class="bbl"><strong>' + html + '</strong></div>';
+    cont.appendChild(d);
+    cont.scrollTop = cont.scrollHeight;
+  }
+
+  function userBubble(cont: HTMLElement, text: string) {
+    const d = document.createElement('div');
+    d.className = 'ep-bubble ep-bubble-user';
+    d.innerHTML = '<div class="bbl">' + text + '</div><div class="ep-av bg-primary text-white"><i class="bi bi-person"></i></div>';
+    cont.appendChild(d);
+    cont.scrollTop = cont.scrollHeight;
+  }
+
+  function countUp(el: HTMLElement, target: number, pre = '', suf = '', dur = 1200) {
+    let st: number | null = null;
+    function step(ts: number) {
+      if (!st) st = ts;
+      const p = Math.min((ts - st) / dur, 1), e = 1 - Math.pow(1 - p, 3), c = Math.floor(e * target);
+      el.textContent = pre + c.toLocaleString() + suf;
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function buildGraph(contId: string, agents: any[]) {
+    const cont = document.getElementById(contId);
+    if (!cont || !(window as any).d3) return { highlight: () => {}, destroy: () => {} };
+    cont.innerHTML = '';
+    const w = cont.clientWidth || 500, h = 320;
+    const d3 = (window as any).d3;
+    const colors: any = { Executive: '#1a1a2e', Operations: '#f59e0b', 'Customer Support': '#6f42c1', Sales: '#4361ee', Finance: '#dc3545', Marketing: '#198754', HR: '#0dcaf0', Compliance: '#198754' };
+    const nodes: any[] = [], links: any[] = [], deptMap: any = {};
+    agents.forEach(a => {
+      nodes.push({ id: a.name, name: a.name, dept: a.dept, r: a.cory ? 24 : a.primary ? 14 : 10, color: colors[a.dept] || '#64748b', isCory: !!a.cory });
+      if (!a.cory) { if (!deptMap[a.dept]) deptMap[a.dept] = []; deptMap[a.dept].push(a.name); }
+    });
+    const cory = nodes.find(n => n.isCory);
+    if (cory) nodes.forEach(n => { if (!n.isCory) links.push({ source: cory.id, target: n.id }); });
+    Object.values(deptMap).forEach((arr: any) => { for (let i = 0; i < arr.length - 1; i++) links.push({ source: arr[i], target: arr[i + 1] }); });
+    const svg = d3.select('#' + contId).append('svg').attr('width', w).attr('height', h);
+    const defs = svg.append('defs');
+    const f = defs.append('filter').attr('id', 'epglow');
+    f.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'b');
+    const m = f.append('feMerge'); m.append('feMergeNode').attr('in', 'b'); m.append('feMergeNode').attr('in', 'SourceGraphic');
+    const sim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(70))
+      .force('charge', d3.forceManyBody().strength(-200))
+      .force('center', d3.forceCenter(w / 2, h / 2))
+      .force('collision', d3.forceCollide(20));
+    const link = svg.append('g').selectAll('line').data(links).enter().append('line')
+      .attr('stroke', '#cbd5e1').attr('stroke-width', 1.5).attr('stroke-dasharray', '4,3');
+    const node = svg.append('g').selectAll('g').data(nodes).enter().append('g');
+    node.append('circle').attr('r', (d: any) => d.r).attr('fill', (d: any) => d.color)
+      .attr('stroke', 'white').attr('stroke-width', 2).attr('filter', (d: any) => d.isCory ? 'url(#epglow)' : null);
+    node.append('text').text((d: any) => d.name.substring(0, 2).toUpperCase())
+      .attr('text-anchor', 'middle').attr('dy', '.35em').attr('fill', 'white').attr('font-size', '8px').attr('font-weight', '700').style('pointer-events', 'none');
+    sim.on('tick', () => {
+      link.attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y)
+        .attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y);
+      node.attr('transform', (d: any) => { d.x = Math.max(25, Math.min(w - 25, d.x)); d.y = Math.max(25, Math.min(h - 25, d.y)); return 'translate(' + d.x + ',' + d.y + ')'; });
+    });
+    function hl(name: string) {
+      node.select('circle').transition().duration(200)
+        .attr('r', (d: any) => d.name === name ? d.r + 7 : d.r)
+        .attr('stroke', (d: any) => d.name === name ? '#facc15' : 'white')
+        .attr('stroke-width', (d: any) => d.name === name ? 3 : 2);
+      link.transition().duration(200)
+        .attr('stroke', (d: any) => (d.source.name === name || d.target.name === name) ? '#facc15' : '#cbd5e1')
+        .attr('stroke-width', (d: any) => (d.source.name === name || d.target.name === name) ? 3 : 1.5);
+      setTimeout(() => {
+        node.select('circle').transition().duration(400).attr('r', (d: any) => d.r).attr('stroke', 'white').attr('stroke-width', 2);
+        link.transition().duration(400).attr('stroke', '#cbd5e1').attr('stroke-width', 1.5);
+      }, 1200);
+    }
+    return { highlight: hl, destroy: () => { sim.stop(); svg.remove(); } };
+  }
+
+  async function runDemo() {
+    const data = scenarioRef.current;
+    const gen = cancelRef.current;
+
+    // Step 1: Idea typing
+    narr(data.narr.idea);
+    const ideaHTML = '<div class="card border-0 shadow-sm"><div class="card-body p-3"><label class="form-label fw-semibold small">Describe your business challenge:</label><textarea class="form-control" id="ep-ta" rows="3" readonly style="resize:none;font-size:.85rem;border-radius:8px;"></textarea></div></div>';
+    const ideaEl = document.getElementById('ep-step-idea');
+    if (ideaEl) ideaEl.innerHTML = ideaHTML;
+    showStep('idea');
+    await sleep(600);
+    if (gen !== cancelRef.current) return;
+    const ta = document.getElementById('ep-ta') as HTMLTextAreaElement;
+    if (ta) await typeText(ta, data.idea, 20);
+    if (gen !== cancelRef.current) return;
+    await sleep(800);
+
+    // Step 2: Questions
+    if (gen !== cancelRef.current) return;
+    narr(data.narr.questions);
+    const qEl = document.getElementById('ep-step-questions');
+    if (qEl) qEl.innerHTML = '<div id="ep-chat" style="max-height:280px;overflow-y:auto;"></div>';
+    showStep('questions');
+    const chat = document.getElementById('ep-chat')!;
+    for (const q of data.questions) {
+      if (gen !== cancelRef.current) return;
+      const dots = document.createElement('div');
+      dots.className = 'ep-bubble ep-bubble-bot';
+      dots.innerHTML = '<div class="ep-av bg-primary-subtle text-primary"><i class="bi bi-cpu"></i></div><div class="bbl"><span class="ep-tdots"><span></span><span></span><span></span></span></div>';
+      chat.appendChild(dots);
+      chat.scrollTop = chat.scrollHeight;
+      await sleep(600);
+      if (gen !== cancelRef.current) return;
+      dots.querySelector('.bbl')!.innerHTML = '<strong style="font-size:.85rem;">' + q.q + '</strong>';
+      if (q.chips && q.method === 'chip') {
+        const cr = document.createElement('div');
+        cr.className = 'd-flex flex-wrap gap-1 ms-4 mb-2';
+        q.chips.forEach((c: string) => { cr.innerHTML += '<span class="badge rounded-pill bg-white text-dark border px-2 py-1" style="font-size:.75rem;">' + c + '</span>'; });
+        chat.appendChild(cr);
+        chat.scrollTop = chat.scrollHeight;
+        await sleep(400);
+        if (gen !== cancelRef.current) return;
+        const answers = q.a.split(', ');
+        cr.querySelectorAll('.badge').forEach((b: any) => { if (answers.includes(b.textContent)) { b.classList.remove('bg-white', 'text-dark', 'border'); b.classList.add('bg-primary', 'text-white'); } });
+      }
+      await sleep(300);
+      if (gen !== cancelRef.current) return;
+      userBubble(chat, q.a);
+      await sleep(500);
+    }
+    await sleep(600);
+
+    // Step 3: Design
+    if (gen !== cancelRef.current) return;
+    narr(data.narr.design);
+    let dHTML = '<div class="row g-3"><div class="col-md-6"><h6 class="fw-semibold small mb-2"><i class="bi bi-bullseye me-1"></i>Outcomes</h6>';
+    data.design.outcomes.forEach((o: any) => { dHTML += '<div class="ep-card mb-2 d-flex align-items-center gap-2" id="epc-' + o.id + '"><i class="bi ' + o.icon + ' text-primary"></i><span style="font-size:.85rem;">' + o.label + '</span></div>'; });
+    dHTML += '</div><div class="col-md-6"><h6 class="fw-semibold small mb-2"><i class="bi bi-cpu me-1"></i>AI Systems</h6>';
+    data.design.systems.forEach((s: any) => { dHTML += '<div class="ep-card mb-2 d-flex align-items-center gap-2" id="epc-s-' + s.id + '"><i class="bi ' + s.icon + ' text-' + s.color + '"></i><span style="font-size:.85rem;">' + s.label + '</span></div>'; });
+    dHTML += '</div></div>';
+    const dEl = document.getElementById('ep-step-design');
+    if (dEl) dEl.innerHTML = dHTML;
+    showStep('design');
+    await sleep(600);
+    for (const o of data.design.outcomes) { if (gen !== cancelRef.current) return; if (o.sel) { const el = document.getElementById('epc-' + o.id); if (el) el.classList.add('sel'); await sleep(500); } }
+    for (const s of data.design.systems) { if (gen !== cancelRef.current) return; if (s.sel) { const el = document.getElementById('epc-s-' + s.id); if (el) el.classList.add('sel'); await sleep(500); } }
+    await sleep(800);
+
+    // Step 4: Results
+    if (gen !== cancelRef.current) return;
+    narr(data.narr.results);
+    const kp = data.kpis;
+    const rHTML = '<div class="row g-2 mb-3"><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-success" id="ek1">$0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Savings</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-primary" id="ek2">$0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Revenue</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-warning" id="ek3">0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">ROI</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-info" id="ek4">0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Agents</div></div></div></div><div class="row g-2"><div class="col-lg-7"><div class="ep-graph" id="ep-graph-res"></div></div><div class="col-lg-5"><div class="small text-muted mb-2"><i class="bi bi-robot me-1"></i>Agent Details</div><div id="ep-agent-card"></div></div></div>';
+    const rEl = document.getElementById('ep-step-results');
+    if (rEl) rEl.innerHTML = rHTML;
+    showStep('results');
+    await sleep(300);
+    countUp(document.getElementById('ek1')!, kp.savings, '$', kp.savings_suf || 'K');
+    countUp(document.getElementById('ek2')!, kp.revenue, '$', kp.revenue_suf || 'M');
+    countUp(document.getElementById('ek3')!, kp.roi, '', '%');
+    countUp(document.getElementById('ek4')!, kp.agents, '', '');
+    await sleep(1500);
+    if (gen !== cancelRef.current) return;
+    if (graphRef.current) graphRef.current.destroy();
+    graphRef.current = buildGraph('ep-graph-res', data.agents);
+    await sleep(2000);
+    if (gen !== cancelRef.current) return;
+
+    const deptColors: any = { Executive: 'dark', Operations: 'warning', 'Customer Support': 'info', Sales: 'primary', Finance: 'danger', Marketing: 'success', HR: 'info', Compliance: 'success' };
+    const agentCard = document.getElementById('ep-agent-card');
+    for (const ag of data.agents) {
+      if (gen !== cancelRef.current) return;
+      graphRef.current?.highlight(ag.name);
+      const dc = deptColors[ag.dept] || 'secondary';
+      if (agentCard) {
+        agentCard.innerHTML = '<div class="ep-agent-card highlight"><div class="d-flex align-items-center gap-2 mb-2"><i class="bi ' + (ag.cory ? 'bi-cpu' : 'bi-robot') + ' fs-5 text-' + dc + '"></i><div><strong style="font-size:.9rem;">' + ag.name + '</strong><span class="ep-agent-dept bg-' + dc + '-subtle text-' + dc + ' ms-2">' + ag.dept + '</span></div></div><div class="ep-agent-role">' + (ag.role || ag.name + ' agent') + '</div></div>';
+      }
+      narr(ag.name + ': ' + (ag.role || ''));
+      await sleep(1800);
+    }
+    await sleep(800);
+
+    // Step 5: Simulation
+    if (gen !== cancelRef.current) return;
+    narr(data.narr.sim);
+    const simHTML = '<div class="row g-2"><div class="col-lg-7"><div class="ep-graph" id="ep-graph-sim"></div></div><div class="col-lg-5"><div class="card border-0 shadow-sm"><div class="card-header py-2 small fw-semibold"><i class="bi bi-activity me-1"></i>Live Activity</div><div class="card-body p-2" id="ep-feed" style="max-height:280px;overflow-y:auto;"></div></div></div></div>';
+    const sEl = document.getElementById('ep-step-sim');
+    if (sEl) sEl.innerHTML = simHTML;
+    showStep('sim');
+    await sleep(400);
+    if (graphRef.current) graphRef.current.destroy();
+    graphRef.current = buildGraph('ep-graph-sim', data.agents);
+    await sleep(1200);
+    const feed = document.getElementById('ep-feed')!;
+    for (const ev of data.sim) {
+      if (gen !== cancelRef.current) return;
+      narr(ev.narr);
+      graphRef.current?.highlight(ev.agent);
+      const fi = document.createElement('div');
+      fi.className = 'ep-feed-item' + (ev.agent === 'AI Control Tower' ? ' cory' : '');
+      fi.innerHTML = '<strong style="font-size:.75rem;">' + ev.agent + '</strong><div style="font-size:.7rem;">' + ev.action + '</div>';
+      feed.insertBefore(fi, feed.firstChild);
+      await sleep(2000);
+    }
+    await sleep(1000);
+
+    // Done
+    if (gen !== cancelRef.current) return;
+    narr("See what AI could look like for your business.");
+    try { (window as any).trackBookingEvent?.('demo_complete', { scenario: data.id, industry: data.industry, context: trackContext }); } catch {}
+    await sleep(1500);
+    setState('done');
+  }
+
+  const icons: Record<string, string> = { logistics: 'bi-truck', healthcare: 'bi-heart-pulse', saas: 'bi-cloud', ecommerce: 'bi-cart3', consulting: 'bi-briefcase', utility: 'bi-lightning-charge', manufacturing: 'bi-gear-wide-connected', realestate: 'bi-building', insurance: 'bi-shield-check', education: 'bi-mortarboard' };
+
+  return (
+    <div ref={containerRef}>
+      <style>{`
+        .ep-step { display: none; animation: epFade .35s ease; }
+        .ep-step.active { display: block; }
+        @keyframes epFade { from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);} }
+        .ep-bubble { animation: epFade .3s ease; margin-bottom: 10px; }
+        .ep-bubble-bot { display:flex; gap:8px; }
+        .ep-bubble-bot .bbl { background:#f0f4ff; border-radius:12px 12px 12px 0; padding:10px 14px; max-width:80%; }
+        .ep-bubble-user { display:flex; gap:8px; justify-content:flex-end; }
+        .ep-bubble-user .bbl { background:#4361ee; color:white; border-radius:12px 12px 0 12px; padding:10px 14px; max-width:80%; }
+        .ep-av { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+        .ep-tdots span { display:inline-block; width:5px; height:5px; border-radius:50%; background:#4361ee; animation:epDot 1.2s infinite; }
+        .ep-tdots span:nth-child(2){animation-delay:.2s;} .ep-tdots span:nth-child(3){animation-delay:.4s;}
+        @keyframes epDot { 0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);} }
+        .ep-card { border:2px solid #e2e8f0; border-radius:10px; padding:12px; transition:all .3s; }
+        .ep-card.sel { border-color:#4361ee; background:#eff6ff; }
+        .ep-kpi { font-size:1.6rem; font-weight:800; line-height:1; }
+        .ep-graph { min-height:320px; background:#fafbfe; border-radius:10px; }
+        .ep-feed-item { animation:epFade .3s ease; border-left:3px solid #dee2e6; padding:5px 10px; margin-bottom:5px; border-radius:0 6px 6px 0; background:#f8fafc; font-size:.8rem; }
+        .ep-feed-item.cory { border-left-color:#1a1a2e; background:#f0f4ff; }
+        .ep-agent-card { border-radius:10px; border:2px solid #e2e8f0; padding:14px; animation:epFade .3s ease; transition:border-color .3s; }
+        .ep-agent-card.highlight { border-color:#facc15; background:#fffbeb; }
+        .ep-agent-dept { display:inline-block; font-size:.65rem; padding:2px 8px; border-radius:10px; font-weight:600; }
+        .ep-agent-role { font-size:.8rem; color:#475569; line-height:1.4; }
+        .ep-narr-bar { background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%); color:white; border-radius:8px; font-size:.9rem; }
+        .ep-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e; animation:epPulse 1.2s infinite; }
+        @keyframes epPulse { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(1.4);} }
+      `}</style>
+
+      {state === 'initial' && (
+        <div className="text-center py-4 px-3" style={{ background: 'var(--color-bg-alt, #f7fafc)', borderRadius: 12, border: '1px solid var(--color-border, #e2e8f0)' }}>
+          <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary, #1a365d)', fontSize: 18 }}>
+            See a <span style={{ color: 'var(--color-primary-light, #2b6cb0)' }}>{scenario.industry}</span> AI Organization Get Configured in Seconds
+          </h5>
+          <button
+            className="btn btn-dark rounded-pill px-4 py-2"
+            data-track={`demo_play_${scenario.id}_${trackContext || 'page'}`}
+            onClick={start}
+            style={{ fontSize: 14 }}
+          >
+            <i className="bi bi-play-circle me-2" />Watch It Build
+          </button>
+        </div>
+      )}
+
+      {state === 'playing' && (
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <small className="text-muted fw-semibold" style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>
+              <i className={`bi ${icons[scenario.id] || 'bi-building'} me-1`} />{scenario.industry} Demo
+            </small>
+            <button className="btn btn-outline-secondary btn-sm rounded-pill px-3" onClick={skip} style={{ fontSize: 12 }}>
+              <i className="bi bi-skip-forward-fill me-1" />Skip
+            </button>
+          </div>
+          <div className="ep-narr-bar p-3 mb-3 d-flex align-items-center gap-2">
+            <span className="ep-dot" />
+            <span id="ep-narr" className="flex-grow-1" />
+          </div>
+          <div id="ep-step-idea" className="ep-step" />
+          <div id="ep-step-questions" className="ep-step" />
+          <div id="ep-step-design" className="ep-step" />
+          <div id="ep-step-results" className="ep-step" />
+          <div id="ep-step-sim" className="ep-step" />
+        </div>
+      )}
+
+      {state === 'done' && (
+        <div className="text-center py-4 px-3" style={{ background: 'var(--color-bg-alt, #f7fafc)', borderRadius: 12, border: '1px solid var(--color-border, #e2e8f0)' }}>
+          <p className="fw-bold mb-2" style={{ color: 'var(--color-primary, #1a365d)', fontSize: 16 }}>
+            Now design one for <strong>your</strong> business
+          </p>
+          <a
+            href={advisoryUrl}
+            className="btn btn-primary rounded-pill px-4 py-2"
+            data-track={`demo_start_own_${trackContext || 'page'}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: 14 }}
+          >
+            Design My AI Organization &rarr;
+          </a>
+          <div className="mt-3">
+            <small className="text-muted d-block mb-2">Or watch another industry:</small>
+            <div className="d-flex flex-wrap justify-content-center gap-2">
+              {(scenarios as any[]).filter(s => s.id !== scenarioRef.current.id).slice(0, 5).map(s => (
+                <button
+                  key={s.id}
+                  className="btn btn-sm btn-outline-primary rounded-pill px-3"
+                  onClick={() => pickNew(s.id)}
+                  style={{ fontSize: 12 }}
+                >
+                  <i className={`bi ${icons[s.id] || 'bi-building'} me-1`} />{s.industry}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
