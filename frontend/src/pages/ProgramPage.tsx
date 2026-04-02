@@ -520,7 +520,6 @@ function ProgramPage() {
           demos={INDUSTRY_DEMOS.filter(d => ['saas', 'healthcare', 'consulting'].includes(d.scenario))}
           headline="Watch It Happen First"
           trackContext="program"
-          columns={3}
         />
       </div>
 

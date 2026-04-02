@@ -47,7 +47,6 @@ function PricingPage() {
           demos={INDUSTRY_DEMOS.filter(d => ['saas', 'healthcare', 'consulting'].includes(d.scenario))}
           headline="See What Your AI Organization Could Look Like"
           trackContext="pricing"
-          columns={3}
         />
       </div>
 

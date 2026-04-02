@@ -148,7 +148,6 @@ function AIArchitectLandingPage() {
               headline="Or Watch a Demo First"
               subtext="See a complete AI organization designed for a real business in seconds."
               trackContext="ai_architect"
-              columns={3}
             />
           </div>
         </div>

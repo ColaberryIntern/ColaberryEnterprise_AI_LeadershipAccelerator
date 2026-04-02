@@ -269,7 +269,6 @@ function HomePage() {
           headline="Watch It Happen for Your Industry"
           subtext="See a complete AI organization designed for a real business scenario in seconds."
           trackContext="homepage"
-          columns={3}
         />
       </div>
 
