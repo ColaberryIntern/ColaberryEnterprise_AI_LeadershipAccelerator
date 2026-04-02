@@ -217,9 +217,9 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     showStep('idea');
     if (!ok(await delay(400, rid))) return;
     const ta = document.getElementById('ep-ta') as HTMLTextAreaElement;
-    if (ta) await typeText(ta, data.idea, rid, 18);
+    if (ta) await typeText(ta, data.idea, rid, 35);
     if (runIdRef.current !== rid) return;
-    if (!ok(await delay(1000, rid))) return;
+    if (!ok(await delay(2500, rid))) return;
 
     // Step 2: Questions
     narr(data.narr.questions);
