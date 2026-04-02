@@ -29,49 +29,51 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
 
   const timersRef = useRef<number[]>([]);
   const graphRef = useRef<any>(null);
-
-  useEffect(() => {
-    return () => {
-      runIdRef.current++;
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current = [];
-      if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
-    };
-  }, []);
-
   const runIdRef = useRef(0);
+  // Incremented to trigger demo start via useEffect
+  const [playTrigger, setPlayTrigger] = useState(0);
 
-  function start() {
-    const rid = ++runIdRef.current;
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-    if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
-    setState('playing');
-    localStorage.setItem('cb_last_demo', scenario.id);
-    try { (window as any).trackBookingEvent?.('demo_start', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
-    setTimeout(() => { if (runIdRef.current === rid) runDemo(rid); }, 250);
-  }
-
-  function skip() {
+  function stopAll() {
     runIdRef.current++;
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
     if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
+  }
+
+  useEffect(() => { return () => stopAll(); }, []);
+
+  // This effect fires AFTER React renders the 'playing' state DOM
+  useEffect(() => {
+    if (state === 'playing' && playTrigger > 0) {
+      const rid = runIdRef.current;
+      runDemo(rid);
+    }
+  }, [playTrigger]); // only re-run when playTrigger changes
+
+  function start() {
+    stopAll();
+    const rid = ++runIdRef.current;
+    localStorage.setItem('cb_last_demo', scenario.id);
+    try { (window as any).trackBookingEvent?.('demo_start', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
+    setState('playing');
+    setPlayTrigger(rid); // triggers useEffect after render
+  }
+
+  function skip() {
+    stopAll();
     setState('done');
     try { (window as any).trackBookingEvent?.('demo_skip', { scenario: scenarioRef.current?.id, industry: scenarioRef.current?.industry, context: trackContext }); } catch {}
   }
 
   function pickNew(id: string) {
-    const rid = ++runIdRef.current;
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-    if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
+    stopAll();
     const found = (scenarios as any[]).find(s => s.id === id);
     if (found) scenarioRef.current = found;
-    setState('playing');
+    const rid = ++runIdRef.current;
     localStorage.setItem('cb_last_demo', id);
     try { (window as any).trackBookingEvent?.('demo_start', { scenario: id, industry: found?.industry, context: trackContext }); } catch {}
-    setTimeout(() => { if (runIdRef.current === rid) runDemo(rid); }, 250);
+    setState('playing');
+    setPlayTrigger(rid); // triggers useEffect after render
   }
 
   function delay(ms: number, rid: number): Promise<boolean> {
@@ -185,14 +187,9 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     const data = scenarioRef.current;
     const ok = (v: boolean) => v && runIdRef.current === rid;
 
-    // Wait for DOM to be ready
-    let ideaEl: HTMLElement | null = null;
-    for (let i = 0; i < 30; i++) {
-      ideaEl = document.getElementById('ep-step-idea');
-      if (ideaEl) break;
-      if (!(await delay(50, rid))) return;
-    }
-    if (!ideaEl) return;
+    // DOM is guaranteed ready because useEffect fires after render
+    const ideaEl = document.getElementById('ep-step-idea');
+    if (!ideaEl) { console.warn('[Demo] DOM not ready'); return; }
 
     // Step 1: Idea typing — the business problem
     narr(data.narr.idea);
