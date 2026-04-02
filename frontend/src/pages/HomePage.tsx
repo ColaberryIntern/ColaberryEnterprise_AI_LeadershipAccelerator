@@ -314,8 +314,6 @@ function HomePage() {
         presetValues={{ employees: 25, hours: 5 }}
       />
 
-      <AdvisoryCTABlock />
-
       {/* Why Enterprise Leaders Choose Colaberry */}
       <section className="section-alt" aria-label="Why Colaberry">
         <div className="container">
