@@ -292,12 +292,17 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
 
       console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${lead.name})`);
 
-      // Auto-detect unsubscribe keywords
+      // Auto-detect unsubscribe keywords — broad matching anywhere in message body
       const bodyLower = body.toLowerCase().trim();
-      const unsubKeywords = ['unsubscribe', 'stop', 'remove me', 'opt out', 'opt-out', 'take me off', 'no more emails'];
-      if (unsubKeywords.some(kw => bodyLower === kw || bodyLower.startsWith(kw + '\n') || bodyLower.startsWith(kw + ' '))) {
-        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${(lead as any).name}): "${bodyLower.substring(0, 30)}"`);
-        await processOptOut(lead.id, 'email', `Inbound email opt-out: "${bodyLower.substring(0, 50)}"`, 'inbound_reply');
+      const unsubExactKeywords = ['unsubscribe', 'stop', 'remove me', 'opt out', 'opt-out', 'take me off', 'no more emails', 'stop emailing', 'don\'t email', 'dont email', 'don\'t contact', 'dont contact'];
+      const isUnsubscribe = unsubExactKeywords.some(kw => bodyLower.includes(kw));
+      if (isUnsubscribe) {
+        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${(lead as any).name}): "${bodyLower.substring(0, 80)}"`);
+        await processOptOut(lead.id, 'email', `Inbound email opt-out: "${bodyLower.substring(0, 100)}"`, 'inbound_reply');
+        // Do NOT auto-reply to someone who asked to unsubscribe
+        console.log(`[MandrillInbound] Skipping auto-reply — lead requested unsubscribe`);
+        res.status(200).json({ status: 'unsubscribed' });
+        return;
       }
 
       // Auto-reply: generate an AI response and send it back

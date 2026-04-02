@@ -8,6 +8,7 @@ import type { CompositeContext } from './contextGraphService';
 export interface ValidationResult {
   valid: boolean;
   content: string;
+  subject?: string;
   issues: string[];
   autoFixed: string[];
 }
@@ -155,4 +156,70 @@ export function validateGeneratedMessage(
   }
 
   return { valid, content: cleaned, issues, autoFixed };
+}
+
+// ─── Subject Line Validator ────────────────────────────────────────────
+// Blocks subjects that imply a prior relationship when none exists.
+// Called separately since the subject is generated alongside the body.
+
+const FALSE_FAMILIARITY_PATTERNS = [
+  /continu(e|ing)\s+(our|the)\s+(conversation|discussion|chat)/i,
+  /following\s+up\s+on\s+(our|your)\s+(conversation|discussion|chat|call|meeting)/i,
+  /as\s+(we|I)\s+(discussed|talked|mentioned|spoke)/i,
+  /great\s+(speaking|talking|chatting)\s+with\s+you/i,
+  /per\s+our\s+(conversation|discussion|call)/i,
+  /after\s+our\s+(conversation|discussion|call|meeting)/i,
+  /since\s+we\s+(last\s+)?(spoke|talked|met|chatted)/i,
+  /picking\s+up\s+where\s+we\s+left/i,
+  /circling\s+back\s+on\s+our/i,
+  /as\s+promised/i,
+  /as\s+I\s+mentioned/i,
+];
+
+export function validateSubjectLine(
+  subject: string,
+  context: CompositeContext,
+): { subject: string; issues: string[]; autoFixed: string[] } {
+  const issues: string[] = [];
+  const autoFixed: string[] = [];
+  let cleaned = subject;
+
+  // Only flag false familiarity on first contact (0 emails sent, 0 replies)
+  const isFirstContact = context.engagement.emailsSent <= 1 && context.engagement.repliesReceived === 0;
+
+  if (isFirstContact) {
+    for (const pattern of FALSE_FAMILIARITY_PATTERNS) {
+      if (pattern.test(cleaned)) {
+        issues.push(`Subject implies prior conversation on first contact: "${cleaned}"`);
+        // Auto-fix: strip the false-familiarity prefix and use the rest
+        cleaned = cleaned
+          .replace(/^(Re:\s*)?/i, '')
+          .replace(pattern, '')
+          .replace(/^[\s:,\-–—]+/, '')
+          .trim();
+        // If nothing useful remains, generate a generic subject
+        if (cleaned.length < 10) {
+          const company = context.lead.company || 'Your Organization';
+          cleaned = `AI Transformation Opportunities for ${company}`;
+        }
+        autoFixed.push(`Rewrote false-familiarity subject for first contact`);
+        break;
+      }
+    }
+  }
+
+  // Emdash strip in subject
+  if (/[\u2014\u2013]/.test(cleaned)) {
+    cleaned = cleaned.replace(/\s*\u2014\s*/g, ' - ').replace(/\s*\u2013\s*/g, ' - ');
+    autoFixed.push('Replaced em/en dashes in subject');
+  }
+
+  if (autoFixed.length > 0) {
+    console.log(`[Validator] Subject auto-fixed: ${autoFixed.join(', ')}`);
+  }
+  if (issues.length > 0) {
+    console.warn(`[Validator] Subject issues: ${issues.join(', ')}`);
+  }
+
+  return { subject: cleaned, issues, autoFixed };
 }

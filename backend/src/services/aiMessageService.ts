@@ -130,6 +130,7 @@ IMPORTANT RULES:
 - Reference their actual context (title, company, industry) naturally
 - If this is a cold outreach, be respectful and value-driven, not pushy
 - If there's conversation history, reference prior interactions naturally
+- CRITICAL: NEVER write a subject line that implies a prior conversation, meeting, or relationship that did not happen. Do NOT use phrases like "Continuing our conversation", "Following up on our discussion", "As we discussed", "Great speaking with you", "As promised", "Since we last spoke", "Picking up where we left off" — UNLESS the conversation history explicitly shows a prior exchange. For first-contact emails, use a fresh subject that references their company or role, not a fabricated relationship.
 - Adapt tone to the lead's seniority level${params.campaignContext?.type === 'alumni' || params.campaignContext?.type === 'alumni_re_engagement' ? `
 
 ALUMNI MESSAGING RULES:
@@ -329,14 +330,17 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
       const cleaned = content.replace(/^```json\s*/, '').replace(/\s*```$/, '');
       const parsed = JSON.parse(cleaned);
       let emailBody = parsed.body || content;
-      // Run validator on email content too
+      let emailSubject = parsed.subject || 'Colaberry Enterprise AI';
+      // Run validator on email content + subject
       if (params.compositeContext) {
-        const { validateGeneratedMessage } = require('./messageValidatorService');
+        const { validateGeneratedMessage, validateSubjectLine } = require('./messageValidatorService');
         const validation = validateGeneratedMessage(emailBody, params.compositeContext, 'email');
         emailBody = validation.content;
+        const subjectValidation = validateSubjectLine(emailSubject, params.compositeContext);
+        emailSubject = subjectValidation.subject;
       }
       return {
-        subject: parsed.subject || 'Colaberry Enterprise AI',
+        subject: emailSubject,
         body: emailBody,
         tokens_used: tokensUsed,
         model,
