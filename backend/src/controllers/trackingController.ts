@@ -209,6 +209,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       utm_campaign,
       utm_medium,
       campaign_id,
+      lead_id,
     } = req.body;
 
     if (!fingerprint || typeof fingerprint !== 'string' || fingerprint.length > 64) {
@@ -234,6 +235,20 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       referrer_domain,
       campaign_id,
     });
+
+    // Identity resolution via lead_id (from lid= URL param in email links)
+    if (lead_id && !isNaN(Number(lead_id))) {
+      try {
+        const { Visitor } = require('../models');
+        const visitor = await Visitor.findByPk(visitorId);
+        if (visitor && !visitor.lead_id) {
+          await resolveIdentity(visitorId, Number(lead_id));
+          console.log(`[Tracking] Batch identity resolved via lead_id: visitor ${visitorId} → lead ${lead_id}`);
+        }
+      } catch (err: any) {
+        console.warn('[Tracking] Batch lid resolution failed (non-blocking):', err.message);
+      }
+    }
 
     const firstEvent = events[0];
     const sessionId = await getOrCreateSession(visitorId, {
