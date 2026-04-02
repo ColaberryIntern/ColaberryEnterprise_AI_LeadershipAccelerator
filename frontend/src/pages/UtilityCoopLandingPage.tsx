@@ -36,6 +36,9 @@ function UtilityCoopLandingPage() {
 
   const openBooking = () => setShowBooking(true);
 
+  // Find the currently selected scenario's display info
+  const activeScenario = UTILITY_SCENARIOS.find(s => s.demoId === selectedScenario);
+
   const onDemoComplete = useCallback((scenarioId: string) => {
     setCompletedScenarios(prev => new Set(prev).add(scenarioId));
     setShowPicker(true);
@@ -45,7 +48,9 @@ function UtilityCoopLandingPage() {
     setSelectedScenario(scenarioId);
     setShowPicker(false);
     setDemoKey(prev => prev + 1);
-    document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const painPoints = [
@@ -112,53 +117,15 @@ function UtilityCoopLandingPage() {
         </div>
       </section>
 
-      {/* ── Stats Bar ── */}
-      <section style={{ background: 'var(--color-bg-alt)', padding: '2.5rem 1.5rem', borderBottom: '1px solid var(--color-border)' }}>
-        <div className="container" style={{ maxWidth: 800 }}>
-          <div className="row g-3 text-center">
-            {[
-              { value: '$620K', label: 'Annual savings per co-op', color: 'var(--color-accent)' },
-              { value: '290%', label: 'Average ROI in first year', color: 'var(--color-primary)' },
-              { value: '10', label: 'AI agents running 24/7', color: 'var(--color-primary-light)' },
-            ].map((s, i) => (
-              <div key={i} className="col-md-4">
-                <div style={{ fontSize: 36, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                <div className="text-muted mt-1" style={{ fontSize: 13 }}>{s.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Pain Points ── */}
-      <section style={{ padding: '4rem 1.5rem' }}>
-        <div className="container" style={{ maxWidth: 960 }}>
-          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>The Co-Op AI Challenge</h2>
-          <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>Every co-op we talk to faces the same barriers. Here's how we solve them.</p>
-          <div className="row g-3">
-            {painPoints.map((p, i) => (
-              <div key={i} className="col-md-6">
-                <div className="card border-0 shadow-sm h-100" style={{ borderRadius: 12 }}>
-                  <div className="card-body p-4">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <i className={`bi ${p.icon} fs-5`} style={{ color: 'var(--color-secondary)' }} />
-                      <h5 className="fw-bold mb-0" style={{ fontSize: 16, color: 'var(--color-primary)' }}>{p.title}</h5>
-                    </div>
-                    <p className="text-muted mb-2" style={{ fontSize: 13 }}>{p.problem}</p>
-                    <p className="mb-0" style={{ fontSize: 13, color: 'var(--color-accent)' }}><i className="bi bi-check-circle-fill me-1" />{p.solution}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Live Demo + 8 Scenario Picker ── */}
+      {/* ── Live Demo — THE MAIN ATTRACTION ── */}
       <section id="demo" style={{ background: 'var(--color-bg-alt)', padding: '4rem 1.5rem' }}>
         <div className="container" style={{ maxWidth: 900 }}>
-          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>See AI Run a 380,000-Member Co-Op</h2>
-          <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>Watch 10 AI agents predict outages, dispatch crews, and handle 42,000 storm calls — in seconds.</p>
+          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>
+            {activeScenario ? `See AI ${activeScenario.title} in Action` : 'See AI Run a 380,000-Member Co-Op'}
+          </h2>
+          <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>
+            {activeScenario ? activeScenario.description : 'Watch AI agents predict outages, dispatch crews, and handle 42,000 storm calls — in seconds.'}
+          </p>
 
           <InlineDemoPlayer
             key={demoKey}
@@ -206,6 +173,48 @@ function UtilityCoopLandingPage() {
               </div>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ── Stats Bar ── */}
+      <section style={{ background: 'var(--color-bg-alt)', padding: '2.5rem 1.5rem', borderBottom: '1px solid var(--color-border)' }}>
+        <div className="container" style={{ maxWidth: 800 }}>
+          <div className="row g-3 text-center">
+            {[
+              { value: '$620K', label: 'Annual savings per co-op', color: 'var(--color-accent)' },
+              { value: '290%', label: 'Average ROI in first year', color: 'var(--color-primary)' },
+              { value: '10', label: 'AI agents running 24/7', color: 'var(--color-primary-light)' },
+            ].map((st, i) => (
+              <div key={i} className="col-md-4">
+                <div style={{ fontSize: 36, fontWeight: 800, color: st.color, lineHeight: 1 }}>{st.value}</div>
+                <div className="text-muted mt-1" style={{ fontSize: 13 }}>{st.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pain Points ── */}
+      <section style={{ padding: '4rem 1.5rem' }}>
+        <div className="container" style={{ maxWidth: 960 }}>
+          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>The Co-Op AI Challenge</h2>
+          <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>Every co-op we talk to faces the same barriers. Here's how we solve them.</p>
+          <div className="row g-3">
+            {painPoints.map((p, i) => (
+              <div key={i} className="col-md-6">
+                <div className="card border-0 shadow-sm h-100" style={{ borderRadius: 12 }}>
+                  <div className="card-body p-4">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <i className={`bi ${p.icon} fs-5`} style={{ color: 'var(--color-secondary)' }} />
+                      <h5 className="fw-bold mb-0" style={{ fontSize: 16, color: 'var(--color-primary)' }}>{p.title}</h5>
+                    </div>
+                    <p className="text-muted mb-2" style={{ fontSize: 13 }}>{p.problem}</p>
+                    <p className="mb-0" style={{ fontSize: 13, color: 'var(--color-accent)' }}><i className="bi bi-check-circle-fill me-1" />{p.solution}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
