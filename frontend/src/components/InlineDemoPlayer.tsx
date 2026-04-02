@@ -27,55 +27,63 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
   }
   const scenario = scenarioRef.current;
 
-  const cancelRef = useRef(0);
   const timersRef = useRef<number[]>([]);
   const graphRef = useRef<any>(null);
 
-  function cleanup() {
-    cancelRef.current++;
+  useEffect(() => {
+    return () => {
+      runIdRef.current++;
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+      if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
+    };
+  }, []);
+
+  const runIdRef = useRef(0);
+
+  function start() {
+    const rid = ++runIdRef.current;
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
     if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
-  }
-
-  useEffect(() => { return () => cleanup(); }, []);
-
-  function start() {
     setState('playing');
     localStorage.setItem('cb_last_demo', scenario.id);
     try { (window as any).trackBookingEvent?.('demo_start', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
-    // Defer so React renders the playing DOM before we manipulate it
-    setTimeout(() => runDemo(), 150);
+    setTimeout(() => { if (runIdRef.current === rid) runDemo(rid); }, 250);
   }
 
   function skip() {
-    cleanup();
+    runIdRef.current++;
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
     setState('done');
     try { (window as any).trackBookingEvent?.('demo_skip', { scenario: scenarioRef.current?.id, industry: scenarioRef.current?.industry, context: trackContext }); } catch {}
   }
 
   function pickNew(id: string) {
-    cleanup();
+    const rid = ++runIdRef.current;
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
     const found = (scenarios as any[]).find(s => s.id === id);
     if (found) scenarioRef.current = found;
     setState('playing');
     localStorage.setItem('cb_last_demo', id);
     try { (window as any).trackBookingEvent?.('demo_start', { scenario: id, industry: found?.industry, context: trackContext }); } catch {}
-    setTimeout(() => runDemo(), 150);
+    setTimeout(() => { if (runIdRef.current === rid) runDemo(rid); }, 250);
   }
 
-  function sleep(ms: number): Promise<boolean> {
-    const gen = cancelRef.current;
+  function delay(ms: number, rid: number): Promise<boolean> {
     return new Promise(r => {
       const id = window.setTimeout(() => {
         timersRef.current = timersRef.current.filter(t => t !== id);
-        r(gen === cancelRef.current);
+        r(runIdRef.current === rid);
       }, ms);
       timersRef.current.push(id);
     });
   }
 
-  function alive() { return true; }
   function narr(t: string) { const el = document.getElementById('ep-narr'); if (el) el.textContent = t; }
   function showStep(id: string) {
     document.querySelectorAll('.ep-step').forEach(s => s.classList.remove('active'));
@@ -83,14 +91,13 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     if (el) el.classList.add('active');
   }
 
-  async function typeText(el: HTMLTextAreaElement, text: string, speed = 25) {
+  async function typeText(el: HTMLTextAreaElement, text: string, rid: number, speed = 25) {
     el.value = '';
-    const gen = cancelRef.current;
     for (let i = 0; i < text.length; i++) {
-      if (cancelRef.current !== gen) return;
+      if (runIdRef.current !== rid) return;
       el.value += text[i];
       el.scrollTop = el.scrollHeight;
-      await sleep(speed);
+      if (!(await delay(speed, rid))) return;
     }
   }
 
@@ -174,49 +181,44 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     return { highlight: hl, destroy: () => { sim.stop(); svg.remove(); } };
   }
 
-  async function runDemo() {
+  async function runDemo(rid: number) {
     const data = scenarioRef.current;
-    const gen = cancelRef.current;
-    const cancelled = () => gen !== cancelRef.current;
+    const ok = (v: boolean) => v && runIdRef.current === rid;
 
-    // Wait for DOM to be ready (React render may not be complete)
-    let ideaEl = document.getElementById('ep-step-idea');
-    let retries = 0;
-    while (!ideaEl && retries < 20) {
-      await sleep(50);
-      if (cancelled()) return;
+    // Wait for DOM to be ready
+    let ideaEl: HTMLElement | null = null;
+    for (let i = 0; i < 30; i++) {
       ideaEl = document.getElementById('ep-step-idea');
-      retries++;
+      if (ideaEl) break;
+      if (!(await delay(50, rid))) return;
     }
-    if (!ideaEl) { console.warn('[Demo] ep-step-idea not found after retries'); return; }
+    if (!ideaEl) return;
 
-    // Step 1: Idea typing — the business problem description
+    // Step 1: Idea typing — the business problem
     narr(data.narr.idea);
     ideaEl.innerHTML = '<div class="card border-0 shadow-sm"><div class="card-body p-3"><label class="form-label fw-semibold small">Describe your business challenge:</label><textarea class="form-control" id="ep-ta" rows="5" readonly style="resize:none;font-size:.85rem;border-radius:8px;"></textarea></div></div>';
     showStep('idea');
-    await sleep(400);
-    if (cancelled()) return;
+    if (!ok(await delay(400, rid))) return;
     const ta = document.getElementById('ep-ta') as HTMLTextAreaElement;
-    if (ta) await typeText(ta, data.idea, 18);
-    if (cancelled()) return;
-    await sleep(1000);
+    if (ta) await typeText(ta, data.idea, rid, 18);
+    if (runIdRef.current !== rid) return;
+    if (!ok(await delay(1000, rid))) return;
 
     // Step 2: Questions
-    if (gen !== cancelRef.current) return;
     narr(data.narr.questions);
     const qEl = document.getElementById('ep-step-questions');
     if (qEl) qEl.innerHTML = '<div id="ep-chat" style="max-height:280px;overflow-y:auto;"></div>';
     showStep('questions');
-    const chat = document.getElementById('ep-chat')!;
+    const chat = document.getElementById('ep-chat');
+    if (!chat) return;
     for (const q of data.questions) {
-      if (gen !== cancelRef.current) return;
+      if (runIdRef.current !== rid) return;
       const dots = document.createElement('div');
       dots.className = 'ep-bubble ep-bubble-bot';
       dots.innerHTML = '<div class="ep-av bg-primary-subtle text-primary"><i class="bi bi-cpu"></i></div><div class="bbl"><span class="ep-tdots"><span></span><span></span><span></span></span></div>';
       chat.appendChild(dots);
       chat.scrollTop = chat.scrollHeight;
-      await sleep(600);
-      if (gen !== cancelRef.current) return;
+      if (!ok(await delay(600, rid))) return;
       dots.querySelector('.bbl')!.innerHTML = '<strong style="font-size:.85rem;">' + q.q + '</strong>';
       if (q.chips && q.method === 'chip') {
         const cr = document.createElement('div');
@@ -224,20 +226,17 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
         q.chips.forEach((c: string) => { cr.innerHTML += '<span class="badge rounded-pill bg-white text-dark border px-2 py-1" style="font-size:.75rem;">' + c + '</span>'; });
         chat.appendChild(cr);
         chat.scrollTop = chat.scrollHeight;
-        await sleep(400);
-        if (gen !== cancelRef.current) return;
+        if (!ok(await delay(400, rid))) return;
         const answers = q.a.split(', ');
         cr.querySelectorAll('.badge').forEach((b: any) => { if (answers.includes(b.textContent)) { b.classList.remove('bg-white', 'text-dark', 'border'); b.classList.add('bg-primary', 'text-white'); } });
       }
-      await sleep(300);
-      if (gen !== cancelRef.current) return;
+      if (!ok(await delay(300, rid))) return;
       userBubble(chat, q.a);
-      await sleep(500);
+      if (!ok(await delay(500, rid))) return;
     }
-    await sleep(600);
+    if (!ok(await delay(600, rid))) return;
 
     // Step 3: Design
-    if (gen !== cancelRef.current) return;
     narr(data.narr.design);
     let dHTML = '<div class="row g-3"><div class="col-md-6"><h6 class="fw-semibold small mb-2"><i class="bi bi-bullseye me-1"></i>Outcomes</h6>';
     data.design.outcomes.forEach((o: any) => { dHTML += '<div class="ep-card mb-2 d-flex align-items-center gap-2" id="epc-' + o.id + '"><i class="bi ' + o.icon + ' text-primary"></i><span style="font-size:.85rem;">' + o.label + '</span></div>'; });
@@ -247,74 +246,70 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     const dEl = document.getElementById('ep-step-design');
     if (dEl) dEl.innerHTML = dHTML;
     showStep('design');
-    await sleep(600);
-    for (const o of data.design.outcomes) { if (gen !== cancelRef.current) return; if (o.sel) { const el = document.getElementById('epc-' + o.id); if (el) el.classList.add('sel'); await sleep(500); } }
-    for (const s of data.design.systems) { if (gen !== cancelRef.current) return; if (s.sel) { const el = document.getElementById('epc-s-' + s.id); if (el) el.classList.add('sel'); await sleep(500); } }
-    await sleep(800);
+    if (!ok(await delay(600, rid))) return;
+    for (const o of data.design.outcomes) { if (runIdRef.current !== rid) return; if (o.sel) { const el = document.getElementById('epc-' + o.id); if (el) el.classList.add('sel'); if (!ok(await delay(500, rid))) return; } }
+    for (const s of data.design.systems) { if (runIdRef.current !== rid) return; if (s.sel) { const el = document.getElementById('epc-s-' + s.id); if (el) el.classList.add('sel'); if (!ok(await delay(500, rid))) return; } }
+    if (!ok(await delay(800, rid))) return;
 
     // Step 4: Results
-    if (gen !== cancelRef.current) return;
     narr(data.narr.results);
     const kp = data.kpis;
     const rHTML = '<div class="row g-2 mb-3"><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-success" id="ek1">$0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Savings</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-primary" id="ek2">$0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Revenue</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-warning" id="ek3">0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">ROI</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-info" id="ek4">0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Agents</div></div></div></div><div class="row g-2"><div class="col-lg-7"><div class="ep-graph" id="ep-graph-res"></div></div><div class="col-lg-5"><div class="small text-muted mb-2"><i class="bi bi-robot me-1"></i>Agent Details</div><div id="ep-agent-card"></div></div></div>';
     const rEl = document.getElementById('ep-step-results');
     if (rEl) rEl.innerHTML = rHTML;
     showStep('results');
-    await sleep(300);
+    if (!ok(await delay(300, rid))) return;
     countUp(document.getElementById('ek1')!, kp.savings, '$', kp.savings_suf || 'K');
     countUp(document.getElementById('ek2')!, kp.revenue, '$', kp.revenue_suf || 'M');
     countUp(document.getElementById('ek3')!, kp.roi, '', '%');
     countUp(document.getElementById('ek4')!, kp.agents, '', '');
-    await sleep(1500);
-    if (gen !== cancelRef.current) return;
+    if (!ok(await delay(1500, rid))) return;
     if (graphRef.current) graphRef.current.destroy();
     graphRef.current = buildGraph('ep-graph-res', data.agents);
-    await sleep(2000);
-    if (gen !== cancelRef.current) return;
+    if (!ok(await delay(2000, rid))) return;
 
     const deptColors: any = { Executive: 'dark', Operations: 'warning', 'Customer Support': 'info', Sales: 'primary', Finance: 'danger', Marketing: 'success', HR: 'info', Compliance: 'success' };
     const agentCard = document.getElementById('ep-agent-card');
     for (const ag of data.agents) {
-      if (gen !== cancelRef.current) return;
+      if (runIdRef.current !== rid) return;
       graphRef.current?.highlight(ag.name);
       const dc = deptColors[ag.dept] || 'secondary';
       if (agentCard) {
         agentCard.innerHTML = '<div class="ep-agent-card highlight"><div class="d-flex align-items-center gap-2 mb-2"><i class="bi ' + (ag.cory ? 'bi-cpu' : 'bi-robot') + ' fs-5 text-' + dc + '"></i><div><strong style="font-size:.9rem;">' + ag.name + '</strong><span class="ep-agent-dept bg-' + dc + '-subtle text-' + dc + ' ms-2">' + ag.dept + '</span></div></div><div class="ep-agent-role">' + (ag.role || ag.name + ' agent') + '</div></div>';
       }
       narr(ag.name + ': ' + (ag.role || ''));
-      await sleep(1800);
+      if (!ok(await delay(1800, rid))) return;
     }
-    await sleep(800);
+    if (!ok(await delay(800, rid))) return;
 
     // Step 5: Simulation
-    if (gen !== cancelRef.current) return;
     narr(data.narr.sim);
     const simHTML = '<div class="row g-2"><div class="col-lg-7"><div class="ep-graph" id="ep-graph-sim"></div></div><div class="col-lg-5"><div class="card border-0 shadow-sm"><div class="card-header py-2 small fw-semibold"><i class="bi bi-activity me-1"></i>Live Activity</div><div class="card-body p-2" id="ep-feed" style="max-height:280px;overflow-y:auto;"></div></div></div></div>';
     const sEl = document.getElementById('ep-step-sim');
     if (sEl) sEl.innerHTML = simHTML;
     showStep('sim');
-    await sleep(400);
+    if (!ok(await delay(400, rid))) return;
     if (graphRef.current) graphRef.current.destroy();
     graphRef.current = buildGraph('ep-graph-sim', data.agents);
-    await sleep(1200);
-    const feed = document.getElementById('ep-feed')!;
+    if (!ok(await delay(1200, rid))) return;
+    const feed = document.getElementById('ep-feed');
+    if (!feed) return;
     for (const ev of data.sim) {
-      if (gen !== cancelRef.current) return;
+      if (runIdRef.current !== rid) return;
       narr(ev.narr);
       graphRef.current?.highlight(ev.agent);
       const fi = document.createElement('div');
       fi.className = 'ep-feed-item' + (ev.agent === 'AI Control Tower' ? ' cory' : '');
       fi.innerHTML = '<strong style="font-size:.75rem;">' + ev.agent + '</strong><div style="font-size:.7rem;">' + ev.action + '</div>';
       feed.insertBefore(fi, feed.firstChild);
-      await sleep(2000);
+      if (!ok(await delay(2000, rid))) return;
     }
-    await sleep(1000);
+    if (!ok(await delay(1000, rid))) return;
 
     // Done
-    if (gen !== cancelRef.current) return;
     narr("See what AI could look like for your business.");
     try { (window as any).trackBookingEvent?.('demo_complete', { scenario: data.id, industry: data.industry, context: trackContext }); } catch {}
-    await sleep(1500);
+    if (!ok(await delay(1500, rid))) return;
     setState('done');
   }
 
