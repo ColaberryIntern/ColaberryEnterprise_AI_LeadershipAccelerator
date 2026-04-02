@@ -124,9 +124,9 @@ const TIMELINE_LABELS: Record<string, string> = {
 
 const BUDGET_LABELS: Record<string, string> = {
   under_10k: 'Under $10K',
-  '10k-50k': '$10K\u2013$50K',
-  '50k-150k': '$50K\u2013$150K',
-  '150k-500k': '$150K\u2013$500K',
+  '10k-50k': '$10K-$50K',
+  '50k-150k': '$50K-$150K',
+  '150k-500k': '$150K-$500K',
   '500k+': '$500K+',
   not_defined: 'Not yet defined',
 };
@@ -348,7 +348,7 @@ function DynamicPrepForm({ token }: { token: string }) {
           </h1>
           {callInfo && (
             <p className="mb-2" style={{ opacity: 0.85 }}>
-              {callInfo.name} &mdash;{' '}
+              {callInfo.name} -{' '}
               {new Date(callInfo.scheduled_at).toLocaleDateString('en-US', {
                 weekday: 'long',
                 month: 'long',
@@ -358,7 +358,7 @@ function DynamicPrepForm({ token }: { token: string }) {
             </p>
           )}
           <p className="small mb-0" style={{ opacity: 0.7 }}>
-            Complete in 5 minutes &mdash; save 15 minutes during your call
+            Complete in 5 minutes - save 15 minutes during your call
           </p>
         </div>
       </section>
@@ -532,7 +532,7 @@ function DynamicPrepForm({ token }: { token: string }) {
             <div className="card border-0 shadow-sm mb-4">
               <div className="card-body p-4">
                 <h5 className="fw-semibold mb-1">Budget Context</h5>
-                <p className="text-muted small mb-3">Optional &mdash; helps us tailor recommendations</p>
+                <p className="text-muted small mb-3">Optional - helps us tailor recommendations</p>
                 <div className="row g-3">
                   <div className="col-md-6">
                     <label className="form-label small fw-medium">Budget Range</label>
@@ -619,7 +619,7 @@ function DynamicPrepForm({ token }: { token: string }) {
               <div className="card-body p-4">
                 <h5 className="fw-semibold mb-1">Upload Materials</h5>
                 <p className="text-muted small mb-3">
-                  Optional &mdash; upload AI roadmaps, org charts, or strategic documents (PDF, PPT). Max 20MB.
+                  Optional - upload AI roadmaps, org charts, or strategic documents (PDF, PPT). Max 20MB.
                 </p>
 
                 {hasFile && fileName ? (

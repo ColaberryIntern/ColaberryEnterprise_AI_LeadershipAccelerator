@@ -46,6 +46,7 @@ export const env = {
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
   mandrillWebhookUrl: process.env.MANDRILL_WEBHOOK_URL || '',
   mandrillApiKey: process.env.MANDRILL_API_KEY || '',
+  mandrillInboundDomain: process.env.MANDRILL_INBOUND_DOMAIN || 'reply.colaberry.ai',
 
   // Google Calendar
   googleCalendarId: process.env.GOOGLE_CALENDAR_ID || '',

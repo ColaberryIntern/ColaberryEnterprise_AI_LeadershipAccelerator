@@ -460,8 +460,8 @@ function buildEvolutionPrompt(
   const isAlumni = ['alumni', 'alumni_re_engagement'].includes(campaignType || '');
 
   const alumniRules = isAlumni ? `
-7. You MUST retain references to the Colaberry alumni community and alumni connection.
-8. You MUST preserve the relationship framing (shared history, alumni bond).
+7. You MUST retain references to the Colaberry alumni community and their Data Analytics/BI bootcamp background.
+8. You MUST preserve the relationship framing (bootcamp graduate, career transformation through Colaberry). Do NOT imply they took the AI Leadership Accelerator before — it is a new program for them.
 9. Do NOT remove alumni discount or referral commission mentions.
 10. You MAY reference: ClassName, years_since_registration, career_stage, engagement_status, Mentor.
 11. You MUST NOT fabricate: job title, salary, company name, employment status.

@@ -150,8 +150,9 @@ function buildUserPrompt(params: GenerateMessageParams): string {
   if (compositeContext) {
     parts.push(`VERIFIED CONTEXT (use ONLY this data - do not invent any URLs, names, or facts):`);
     parts.push(`Lead: ${compositeContext.lead.name} | ${compositeContext.lead.title || 'No title'} at ${compositeContext.lead.company || 'Unknown company'}`);
-    parts.push(`Campaign: ${compositeContext.campaign.name} | Step ${compositeContext.campaign.step + 1} of ${compositeContext.campaign.totalSteps}`);
+    parts.push(`Campaign: ${compositeContext.campaign.name} | Type: ${compositeContext.campaign.type} | Step ${compositeContext.campaign.step + 1} of ${compositeContext.campaign.totalSteps}`);
     parts.push(`You are: ${compositeContext.campaign.senderName}`);
+    parts.push(`LEAD ORIGINAL CAMPAIGN TYPE: ${compositeContext.campaign.type}`);
     parts.push(`Relationship: ${compositeContext.campaign.senderRelationship}`);
     parts.push('');
     parts.push('ENGAGEMENT DATA:');
@@ -160,6 +161,13 @@ function buildUserPrompt(params: GenerateMessageParams): string {
     if (compositeContext.engagement.repliesReceived > 0) parts.push(`- Replies received: ${compositeContext.engagement.repliesReceived}`);
     if (compositeContext.engagement.voiceCallsMade > 0) parts.push(`- Voice calls made: ${compositeContext.engagement.voiceCallsMade} | Last outcome: ${compositeContext.engagement.lastCallOutcome || 'unknown'}`);
     parts.push(`- Temperature trend: ${compositeContext.engagement.temperatureTrend}`);
+    if (compositeContext.engagement.recentClickedUrls?.length > 0) {
+      parts.push('');
+      parts.push('RECENT CLICKS (what this lead is actively looking at - reference these naturally):');
+      for (const url of compositeContext.engagement.recentClickedUrls) {
+        parts.push(`- ${url}`);
+      }
+    }
     parts.push('');
 
     if (compositeContext.previousMessages.length > 0) {
@@ -175,6 +183,9 @@ function buildUserPrompt(params: GenerateMessageParams): string {
     parts.push(`- Booking/Strategy call: ${compositeContext.allowedUrls.booking}`);
     parts.push(`- Landing page: ${compositeContext.allowedUrls.landingPage}`);
     parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
+    if (compositeContext.allowedUrls.advisoryTool) {
+      parts.push(`- AI Workforce Designer: ${compositeContext.allowedUrls.advisoryTool} (free 5-minute AI org design tool - use as low-friction alternative when booking feels too aggressive)`);
+    }
     parts.push('');
 
     if (compositeContext.cohort) {
@@ -353,14 +364,28 @@ export async function generateMessage(params: GenerateMessageParams): Promise<Ge
   cleanedBody = cleanedBody.replace(/\s*—\s*/g, ' - ').replace(/\s*–\s*/g, ' - ');
 
   // Replace any hallucinated Calendly/placeholder URLs with real booking link
+  const BOOKING_URL = 'https://enterprise.colaberry.ai/ai-architect';
   cleanedBody = cleanedBody
-    .replace(/https?:\/\/calendly\.com\/[^\s"<)]+/gi, 'https://enterprise.colaberry.ai/ai-architect')
-    .replace(/https?:\/\/[^\s"<)]*your-link[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
-    .replace(/https?:\/\/[^\s"<)]*your-scheduling[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
-    .replace(/https?:\/\/[^\s"<)]*your-appointment[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
-    .replace(/https?:\/\/[^\s"<)]*booking-link[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
-    .replace(/https?:\/\/enterprise\.colaberry\.ai\/schedule[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect')
-    .replace(/https?:\/\/enterprise\.colaberry\.ai\/program[^\s"<)]*/gi, 'https://enterprise.colaberry.ai/ai-architect');
+    .replace(/https?:\/\/calendly\.com\/[^\s"'<)]+/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*your[-_]?link[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*your[-_]?scheduling[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*your[-_]?appointment[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*booking[-_]?link[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*schedule[-_]?link[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*calendar[-_]?link[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/calendar[-.](?:url|link|com)[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*link[-_]?here[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*link[-_]?to[-_]?schedule[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/[^\s"'<)]*yourlinkhere[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/enterprise\.colaberry\.ai\/schedule[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/enterprise\.colaberry\.ai\/program[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/colaberry\.com\/contact[^\s"'<)]*/gi, BOOKING_URL)
+    .replace(/https?:\/\/colaberry\.com\/enroll[^\s"'<)]*/gi, 'https://enterprise.colaberry.ai/enroll');
+  // Nuclear option: replace ANY non-enterprise.colaberry.ai URL that looks like a booking/scheduling link
+  cleanedBody = cleanedBody.replace(
+    /https?:\/\/(?!enterprise\.colaberry\.ai)[^\s"'<)]*(?:book|schedule|appointment|calendar|strategy[-_]?call)[^\s"'<)]*/gi,
+    BOOKING_URL,
+  );
 
   // SMS-specific: strip opt-out language and AI agent names
   if (params.channel === 'sms') {

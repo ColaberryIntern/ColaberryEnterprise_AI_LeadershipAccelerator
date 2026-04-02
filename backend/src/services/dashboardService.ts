@@ -21,36 +21,33 @@ export interface CampaignActivitySummary {
 }
 
 export async function getCampaignActivitySummary(): Promise<CampaignActivitySummary> {
-  const nowCT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-  const todayStart = new Date(nowCT);
-  todayStart.setHours(0, 0, 0, 0);
-
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }); // YYYY-MM-DD in CT
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const todayStart = new Date(); // fallback for non-date queries
+  todayStart.setHours(todayStart.getHours() - 18); // rough CT midnight
 
   const [channelCounts, engagementRates, activeCampaigns, hotLeads, visitorCounts] = await Promise.all([
     // Query 1: Email counts from scheduled_emails, SMS+voice from communication_logs
     sequelize.query(`
       SELECT
-        (SELECT COUNT(*) FROM scheduled_emails WHERE channel = 'email' AND status = 'sent' AND sent_at >= :today) as emails_today,
-        (SELECT COUNT(*) FROM scheduled_emails WHERE channel = 'email' AND status = 'sent' AND sent_at >= :weekAgo) as emails_week,
-        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND status IN ('sent','delivered') AND created_at >= :today) as sms_today,
-        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND status IN ('sent','delivered') AND created_at >= :weekAgo) as sms_week,
-        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'voice' AND direction = 'outbound' AND created_at >= :today) as voice_today,
+        (SELECT COUNT(*) FROM scheduled_emails WHERE status = 'sent' AND sent_at::date = :todayStr::date) as emails_today,
+        (SELECT COUNT(*) FROM scheduled_emails WHERE status = 'sent' AND sent_at >= :weekAgo) as emails_week,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND created_at::date = :todayStr::date) as sms_today,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND created_at >= :weekAgo) as sms_week,
+        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'voice' AND direction = 'outbound' AND created_at::date = :todayStr::date) as voice_today,
         (SELECT COUNT(*) FROM communication_logs WHERE channel = 'voice' AND direction = 'outbound' AND created_at >= :weekAgo) as voice_week
     `, {
-      replacements: { today: todayStart.toISOString(), weekAgo: weekAgo.toISOString() },
+      replacements: { todayStr, weekAgo: weekAgo.toISOString() },
       type: QueryTypes.SELECT,
     }),
 
-    // Query 2: Engagement rates — emails sent from communication_logs, engagement from interaction_outcomes
+    // Query 2: Engagement rates — unique leads only, denominator = unique leads communicated to
     sequelize.query(`
       SELECT
-        (SELECT COUNT(*) FROM communication_logs WHERE channel = 'email' AND created_at >= :weekAgo) as total_sent,
-        COUNT(*) FILTER (WHERE outcome = 'opened') as total_opened,
-        COUNT(*) FILTER (WHERE outcome = 'clicked') as total_clicked,
-        COUNT(*) FILTER (WHERE outcome = 'bounced') as total_bounced
-      FROM interaction_outcomes
-      WHERE created_at >= :weekAgo
+        (SELECT COUNT(DISTINCT lead_id) FROM scheduled_emails WHERE status = 'sent' AND sent_at >= :weekAgo) as total_sent,
+        (SELECT COUNT(DISTINCT lead_id) FROM interaction_outcomes WHERE outcome = 'opened' AND created_at >= :weekAgo) as total_opened,
+        (SELECT COUNT(DISTINCT lead_id) FROM interaction_outcomes WHERE outcome = 'clicked' AND created_at >= :weekAgo) as total_clicked,
+        (SELECT COUNT(DISTINCT lead_id) FROM interaction_outcomes WHERE outcome = 'bounced' AND created_at >= :weekAgo) as total_bounced
     `, {
       replacements: { weekAgo: weekAgo.toISOString() },
       type: QueryTypes.SELECT,
@@ -72,11 +69,11 @@ export async function getCampaignActivitySummary(): Promise<CampaignActivitySumm
     // Query 5: Visitor traffic counts
     sequelize.query(`
       SELECT
-        (SELECT COUNT(*) FROM visitors WHERE last_seen_at >= :today) as visitors_today,
+        (SELECT COUNT(*) FROM visitors WHERE last_seen_at::date = :todayStr::date) as visitors_today,
         (SELECT COUNT(*) FROM visitors WHERE last_seen_at >= :weekAgo) as visitors_week,
-        (SELECT COUNT(*) FROM visitor_sessions WHERE started_at >= :today) as sessions_today
+        (SELECT COUNT(*) FROM visitor_sessions WHERE started_at::date = :todayStr::date) as sessions_today
     `, {
-      replacements: { today: todayStart.toISOString(), weekAgo: weekAgo.toISOString() },
+      replacements: { todayStr, weekAgo: weekAgo.toISOString() },
       type: QueryTypes.SELECT,
     }),
   ]);

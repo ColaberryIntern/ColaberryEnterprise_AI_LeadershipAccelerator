@@ -14,6 +14,7 @@ import {
   runCampaignQA,
   runSelfHealing,
   runLeadIntelligence,
+  runWeeklyLeadEnrollment,
   runAdmissionsVisitorActivity,
   runAdmissionsConversationMemory,
   runAdmissionsIntentDetection,
@@ -61,6 +62,7 @@ import {
   runAiSafetyMonitor,
   runAgentBehaviorMonitor,
   runAdmissionsKnowledgeSync,
+  runOfferRouting,
   // Super agents
   runCampaignOpsSuperAgent,
   runLeadIntelligenceSuperAgent,
@@ -108,6 +110,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runCoryStrategicCycle, label: 'Cory Brain strategic cycle' },
   { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
+  { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1', runner: runWeeklyLeadEnrollment, label: 'Weekly cold lead enrollment (Monday 9 AM CT)' },
 
   // Admissions intelligence
   { agentName: 'AdmissionsVisitorActivity', hardcodedSchedule: '*/10 * * * *', runner: runAdmissionsVisitorActivity, label: 'Admissions visitor activity' },
@@ -165,6 +168,9 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Admissions knowledge
   { agentName: 'AdmissionsKnowledgeSyncAgent', hardcodedSchedule: '0 3 * * *', runner: runAdmissionsKnowledgeSync, label: 'Admissions knowledge sync' },
+
+  // Offer routing
+  { agentName: 'OfferRoutingAgent', hardcodedSchedule: '30 */6 * * *', runner: runOfferRouting, label: 'Offer routing and classification' },
 
   // Governance cleanup
   { agentName: 'ProposalCleanupService', hardcodedSchedule: '0 2 * * *', runner: async () => { await expireStaleProposals(); return null as any; }, label: 'Proposal expiration cleanup' },

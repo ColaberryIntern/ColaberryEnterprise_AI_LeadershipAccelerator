@@ -120,9 +120,9 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
   const calendar = getCalendarClient();
 
   const now = new Date();
-  // Start from tomorrow to avoid same-day bookings
+  // Allow same-day bookings with 4-hour buffer
+  const MIN_BOOKING_LEAD_MS = 4 * 60 * 60 * 1000; // 4 hours from now
   const startDate = new Date(now);
-  startDate.setDate(startDate.getDate() + 1);
   startDate.setHours(0, 0, 0, 0);
 
   const endDate = new Date(startDate);
@@ -142,9 +142,10 @@ export async function getAvailableSlots(days: number = 21): Promise<Availability
     if (isWeekday(current)) {
       const allSlots = generateBusinessSlots(current);
 
+      const earliest = new Date(now.getTime() + MIN_BOOKING_LEAD_MS);
       const available = allSlots.filter((slot) => {
         const slotDateObj = new Date(slot.start);
-        if (slotDateObj <= now) return false;
+        if (slotDateObj <= earliest) return false;
 
         return !busyBlocks.some((busy) =>
           slotsOverlap(slot, busy.start, busy.end)

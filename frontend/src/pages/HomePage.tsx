@@ -1,13 +1,15 @@
 import React, { useState, Suspense } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
 import { EnterpriseLead, toLeadPayload } from '../models/EnterpriseLead';
 import { validateForm } from '../utils/formValidation';
-import { getUTMParams } from '../services/utmService';
+import { getUTMParams, getAdvisoryUrl } from '../services/utmService';
+import TrustBadges from '../components/TrustBadges';
+import LiveDemoStrip from '../components/LiveDemoStrip';
+import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
-import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 import DreamBigSection from '../components/DreamBigSection';
 import HomeLearningMediaSection from '../components/HomeLearningMediaSection';
@@ -117,36 +119,49 @@ function HomePage() {
       />
 
       {/* Hero Section */}
-      <section
-        className="hero-bg text-light py-5"
-        aria-label="Hero"
-        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=1920&q=80)' }}
+      <div
+        className="text-center py-5"
+        style={{
+          background: 'linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.88)), url("/hero-bg-team.jpg") center/cover no-repeat',
+          color: '#fff',
+          minHeight: 480,
+          display: 'flex',
+          alignItems: 'center',
+        }}
       >
-        <div className="container py-5 text-center">
-          <img
-            src="/colaberry-icon.png"
-            alt="Colaberry"
-            width="56"
-            height="56"
-            className="mb-4 logo-hero"
-          />
-          <CohortUrgencyBadge className="mb-3" />
-          <h1 className="display-4 fw-bold text-light mb-4">
-            From AI Strategy to a Live System in 3 Weeks
+        <div className="container" style={{ maxWidth: 800 }}>
+          <span className="badge bg-success mb-3" style={{ fontSize: 12, padding: '6px 14px' }}>Free - No signup required</span>
+          <h1 className="fw-bold mb-3 text-white" style={{ fontSize: 'clamp(28px, 5vw, 48px)', lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
+            Design Your AI-Powered Organization in 5 Minutes
           </h1>
-          <p className="lead mb-4" style={{ maxWidth: '750px', margin: '0 auto' }}>
-            A three-week immersive program where your team builds and ships a production AI system — combining expert guidance with hands-on implementation. For Business, Product, and Technical Leaders and Teams.
+          <p className="mb-4" style={{ fontSize: 18, color: '#e2e8f0', maxWidth: 600, margin: '0 auto', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
+            See your AI workforce, watch it operate, and understand the impact before you build anything.
           </p>
-          <div className="d-flex justify-content-center gap-3 flex-wrap">
-            <a href="#download-overview" className="btn btn-lg btn-hero-primary">
-              {STANDARD_CTAS.primary}
+          <div className="d-flex flex-wrap justify-content-center gap-3">
+            <a
+              href={getAdvisoryUrl()}
+              className="btn btn-lg text-white fw-semibold"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', border: 'none', borderRadius: 8, padding: '14px 36px', fontSize: 17, boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)' }}
+              data-track="hero_design_ai_org"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Design My AI Organization
             </a>
-            <Link to="/sponsorship" className="btn btn-lg btn-outline-light">
-              🤝 Request Corporate Sponsorship Kit
-            </Link>
+            <button
+              className="btn btn-lg btn-outline-light fw-semibold"
+              style={{ borderRadius: 8, padding: '14px 28px', fontSize: 17 }}
+              onClick={() => setShowBooking(true)}
+              data-track="hero_book_strategy_call"
+            >
+              Book a Strategy Call
+            </button>
           </div>
+          <TrustBadges />
         </div>
-      </section>
+      </div>
+
+      <LiveDemoStrip />
 
       {/* Cory AI Intelligence Demo */}
       <Suspense
@@ -211,6 +226,43 @@ function HomePage() {
         </div>
       </section>
 
+      {/* AI Organization Preview */}
+      <div className="container py-5">
+        <div className="text-center mb-4">
+          <h2 className="fw-bold" style={{ color: 'var(--color-primary, #1a365d)' }}>
+            What Your AI Organization Will Look Like
+          </h2>
+          <p className="text-muted">Three intelligent agents working together, 24/7</p>
+        </div>
+        <div className="row g-4 justify-content-center mb-4">
+          {[
+            { icon: '\u{1F9E0}', name: 'Strategy Agent', desc: 'Analyzes your market, identifies opportunities, and recommends actions' },
+            { icon: '\u2699\uFE0F', name: 'Operations Agent', desc: 'Automates workflows, monitors systems, and optimizes processes' },
+            { icon: '\u{1F91D}', name: 'Customer Agent', desc: 'Handles outreach, nurtures leads, and books meetings autonomously' },
+          ].map((agent, i) => (
+            <div key={i} className="col-md-4">
+              <div className="card border-0 shadow-sm h-100 text-center p-4">
+                <div style={{ fontSize: 40 }}>{agent.icon}</div>
+                <h5 className="fw-bold mt-2">{agent.name}</h5>
+                <p className="text-muted small">{agent.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="text-center">
+          <a
+            href={getAdvisoryUrl()}
+            className="btn btn-primary"
+            data-track="section_cta_design_ai_org"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ borderRadius: 8, padding: '10px 28px' }}
+          >
+            See yours in 5 minutes &rarr;
+          </a>
+        </div>
+      </div>
+
       {/* Enterprise Solution Section */}
       <section className="section" aria-label="The Solution">
         <div className="container">
@@ -252,6 +304,8 @@ function HomePage() {
         subtext="Small workflow automation gains compound into enterprise-level financial results."
         presetValues={{ employees: 25, hours: 5 }}
       />
+
+      <AdvisoryCTABlock />
 
       {/* Why Enterprise Leaders Choose Colaberry */}
       <section className="section-alt" aria-label="Why Colaberry">
@@ -303,6 +357,8 @@ function HomePage() {
           </div>
         </div>
       </section>
+
+      <AdvisoryCTABlock />
 
       {/* Target Industries */}
       <section

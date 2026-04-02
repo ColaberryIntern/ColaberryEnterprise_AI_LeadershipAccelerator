@@ -25,7 +25,7 @@ function ExecutiveTestimonial({ quote, name, title, industry, companySize }: Exe
         </blockquote>
         <div className="d-flex flex-wrap align-items-center gap-2 ps-4">
           <span className="fw-bold">{name}</span>
-          <span className="text-muted">&mdash; {title}</span>
+          <span className="text-muted">- {title}</span>
           <span className="badge rounded-pill bg-light text-dark border px-3 py-1">{industry}</span>
           {companySize && (
             <span className="badge rounded-pill bg-light text-dark border px-3 py-1">{companySize}</span>

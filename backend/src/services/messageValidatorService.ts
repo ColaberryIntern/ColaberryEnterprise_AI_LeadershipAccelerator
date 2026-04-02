@@ -12,17 +12,21 @@ export interface ValidationResult {
   autoFixed: string[];
 }
 
-const ALLOWED_DOMAINS = ['enterprise.colaberry.ai'];
+const ALLOWED_DOMAINS = ['enterprise.colaberry.ai', 'advisor.colaberry.ai'];
 
 const BANNED_PATTERNS = [
   /calendly\.com/gi,
-  /your-link/gi,
-  /your-scheduling/gi,
-  /your-appointment/gi,
-  /booking-link/gi,
+  /your[-_]?link/gi,
+  /your[-_]?scheduling/gi,
+  /your[-_]?appointment/gi,
+  /booking[-_]?link/gi,
+  /schedule[-_]?link/gi,
+  /calendar[-_]?link/gi,
+  /calendar[-.](?:url|com)/gi,
   /yourlinkhere/gi,
-  /link-to-schedule/gi,
-  /link-here/gi,
+  /link[-_]?to[-_]?schedule/gi,
+  /link[-_]?here/gi,
+  /colaberry\.com\/(?:contact|enroll)/gi,
 ];
 
 const BANNED_SIGNOFFS = [

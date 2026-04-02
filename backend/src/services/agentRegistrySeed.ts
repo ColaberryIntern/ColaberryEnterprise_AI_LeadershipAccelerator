@@ -313,6 +313,21 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     },
   },
   {
+    agent_name: 'ApolloWeeklyEnrollmentAgent',
+    agent_type: 'lead_intelligence',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/apolloLeadIntelligenceAgent.ts',
+    trigger_type: 'cron',
+    schedule: '0 14 * * 1',
+    category: 'outbound',
+    description:
+      'Weekly auto-enrollment: approves high-scoring Apollo recommendations (fit >= 50) and enrolls up to 300 into Cold Outbound Phase 1 every Monday at 9 AM CT.',
+    config: {
+      max_weekly_enrollment: 300,
+      min_fit_score: 50,
+    },
+  },
+  {
     agent_name: 'CampaignSelfHealingAgent',
     agent_type: 'self_healing',
     module: 'aiOpsScheduler',
@@ -1961,6 +1976,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'dept_super',
     description: 'Aggregates signals from budget, ROI, and cost optimization agents. Produces department report for Finance.',
   },
+  {
+    agent_name: 'OfferRoutingAgent',
+    agent_type: 'lead_intelligence',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/agents/offerRoutingAgent.ts',
+    trigger_type: 'cron',
+    schedule: '30 */6 * * *',
+    category: 'outbound',
+    description: 'Classifies unrouted leads into offer pipelines (accelerator/advisory/custom_build/enterprise). Runs every 6 hours.',
+    config: {},
+  },
 ];
 
 /**
@@ -2013,8 +2039,9 @@ const AGENT_GROUP_MAP: Record<string, string[]> = {
     'CampaignSelfHealingAgent', 'ContentOptimizationAgent', 'ConversationOptimizationAgent',
   ],
   lead_intelligence: [
-    'ApolloLeadIntelligenceAgent', 'BehavioralSignalDetector', 'IntentScoreRecomputer',
-    'BehavioralTriggerEvaluator', 'OpportunityScoreRecomputer', 'ICPInsightComputer',
+    'ApolloLeadIntelligenceAgent', 'ApolloWeeklyEnrollmentAgent', 'BehavioralSignalDetector',
+    'IntentScoreRecomputer', 'BehavioralTriggerEvaluator', 'OpportunityScoreRecomputer',
+    'ICPInsightComputer',
   ],
   content_engine: [
     'ContentOptimizationAgent', 'ConversationOptimizationAgent',

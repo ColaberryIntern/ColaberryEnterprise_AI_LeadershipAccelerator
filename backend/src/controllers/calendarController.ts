@@ -109,6 +109,18 @@ export async function handleBookCall(
       leadId = lead.id;
       await call.update({ lead_id: leadId });
 
+      // If lead has advisory_session_id, log the offer event
+      if (lead && (lead as any).advisory_session_id) {
+        try {
+          const { logOfferEvent } = require('../services/offerEventService');
+          await logOfferEvent('strategy_call.booked', 'lead', lead.id, {
+            advisory_session_id: (lead as any).advisory_session_id,
+            recommended_offer: (lead as any).recommended_offer,
+            scheduled_at: booking.startTime || booking.eventId,
+          });
+        } catch { /* non-blocking */ }
+      }
+
       // Log activity for the strategy call booking
       const callDate = new Date(booking.startTime).toLocaleString('en-US', {
         timeZone: 'America/Chicago',

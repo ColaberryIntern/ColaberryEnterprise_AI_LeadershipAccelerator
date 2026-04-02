@@ -130,7 +130,7 @@ DO NOT: Be pushy. Read a script. Make up details. Ignore what they've already to
 
 <p>The program pays for itself with the first project your team deploys. Everything after that is pure upside.</p>
 
-<p>I'd love to walk you through the ROI framework in a quick call. <a href="https://colaberry.com/contact">Schedule 15 minutes here</a>.</p>
+<p>I'd love to walk you through the ROI framework in a quick call. <a href="https://enterprise.colaberry.ai/ai-architect">Schedule 15 minutes here</a>.</p>
 
 <p>Best,<br>
 Ali Muwwakkil<br>
@@ -157,8 +157,8 @@ Colaberry Enterprise AI Division</p>`,
 
 <p>If and when you're ready:</p>
 <ul>
-  <li><a href="https://colaberry.com/enroll"><strong>Enroll directly</strong></a> ($4,500)</li>
-  <li><a href="https://colaberry.com/contact"><strong>Schedule a call</strong></a> to discuss fit</li>
+  <li><a href="https://enterprise.colaberry.ai/enroll"><strong>Enroll directly</strong></a> ($4,500)</li>
+  <li><a href="https://enterprise.colaberry.ai/ai-architect"><strong>Schedule a call</strong></a> to discuss fit</li>
   <li>Reply to this email with any questions</li>
 </ul>
 

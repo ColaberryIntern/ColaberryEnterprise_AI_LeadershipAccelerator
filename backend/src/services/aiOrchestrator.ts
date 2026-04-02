@@ -10,7 +10,7 @@ import { runPromptMonitorAgent } from './agents/promptMonitorAgent';
 import { runOrchestrationAutoRepairAgent } from './agents/orchestrationAutoRepairAgent';
 import { runCampaignQAAgent } from './agents/campaignQAAgent';
 import { runCampaignSelfHealingAgent } from './agents/campaignSelfHealingAgent';
-import { runApolloLeadIntelligenceAgent } from './agents/apolloLeadIntelligenceAgent';
+import { runApolloLeadIntelligenceAgent, runWeeklyLeadEnrollmentAgent } from './agents/apolloLeadIntelligenceAgent';
 import { runWebsiteUIVisibilityAgent } from './agents/websiteUIVisibilityAgent';
 import { runWebsiteBrokenLinkAgent } from './agents/websiteBrokenLinkAgent';
 import { runWebsiteConversionFlowAgent } from './agents/websiteConversionFlowAgent';
@@ -64,6 +64,7 @@ import { runAccessControlGuardianAgent } from './agents/security/accessControlGu
 import { runAiSafetyMonitorAgent } from './agents/security/aiSafetyMonitorAgent';
 import { runAgentBehaviorMonitorAgent } from './agents/security/agentBehaviorMonitorAgent';
 import { runAdmissionsKnowledgeSyncAgent } from './agents/admissions/admissionsKnowledgeSyncAgent';
+import { runOfferRoutingAgent } from './agents/offerRoutingAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult } from './agents/types';
@@ -331,6 +332,13 @@ export async function runSelfHealing(): Promise<AgentExecutionResult | null> {
  */
 export async function runLeadIntelligence(): Promise<AgentExecutionResult | null> {
   return runAgent('ApolloLeadIntelligenceAgent', runApolloLeadIntelligenceAgent);
+}
+
+/**
+ * Run the Weekly Lead Enrollment Agent.
+ */
+export async function runWeeklyLeadEnrollment(): Promise<AgentExecutionResult | null> {
+  return runAgent('ApolloWeeklyEnrollmentAgent', runWeeklyLeadEnrollmentAgent);
 }
 
 /* ── Website Intelligence Agents ─────────────────────────────────── */
@@ -683,4 +691,8 @@ export async function runPartnershipSuperAgent(): Promise<AgentExecutionResult |
 
 export async function runFinanceSuperAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('FinanceSuperAgent', executeFinanceSuperAgent);
+}
+
+export async function runOfferRouting(): Promise<AgentExecutionResult | null> {
+  return runAgent('OfferRoutingAgent', runOfferRoutingAgent);
 }

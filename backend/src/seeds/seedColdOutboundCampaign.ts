@@ -156,6 +156,8 @@ Key messaging points:
 - $4,500 investment delivers production-ready AI systems in 3 weeks
 - Recent graduates achieved: 70% time savings, $2M budget approvals, 89% accuracy ML models
 
+You may also reference the AI Workforce Designer (https://advisor.colaberry.ai/advisory/) as a free, no-commitment tool they can try. Use it as a softer CTA when a direct booking ask feels too aggressive. Example: "If you are curious what AI could look like at [Company], we built a quick tool that lets you design your AI organization in about 5 minutes - no signup needed."
+
 Tone: Professional, peer-level, consultative. Never sound like marketing. Always reference the lead's specific context.`,
       created_by: admin.id,
     } as any);

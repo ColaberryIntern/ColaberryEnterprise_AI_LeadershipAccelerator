@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Modal from './ui/Modal';
 import { useCalendarAvailability } from '../hooks/useCalendarAvailability';
 import { downloadICS } from '../utils/ics';
@@ -79,6 +79,21 @@ export default function StrategyCallModal({
   pageOrigin,
 }: StrategyCallModalProps) {
   const { dates, loading, error: availError, refetch } = useCalendarAvailability();
+  const trackedRef = useRef(false);
+
+  useEffect(() => {
+    if (show && !loading && !trackedRef.current) {
+      trackedRef.current = true;
+      trackEvent('booking_modal_opened', {
+        dates_available: dates.length,
+        first_date: dates[0]?.date || 'none',
+        total_slots: dates.reduce((s: number, d: any) => s + d.slots.length, 0),
+        has_prefill: !!(initialName && initialEmail),
+      });
+    }
+    if (!show) trackedRef.current = false;
+  }, [show, loading, dates, initialName, initialEmail]);
+
   const [step, setStep] = useState<Step>('date');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
@@ -119,12 +134,14 @@ export default function StrategyCallModal({
   };
 
   const handleDateSelect = (date: string) => {
+    trackEvent('booking_date_selected', { date, dates_available: dates.length });
     setSelectedDate(date);
     setSelectedSlot(null);
     setStep('time');
   };
 
   const handleSlotSelect = (slot: { start: string; end: string }) => {
+    trackEvent('booking_time_selected', { slot_start: slot.start, date: selectedDate });
     setSelectedSlot(slot);
     setStep('details');
   };
@@ -287,7 +304,7 @@ export default function StrategyCallModal({
           <div className="alert alert-light border mb-3">
             <strong>{formatConfirmationDate(selectedSlot.start, timezone)}</strong>
             <br />
-            {formatTime(selectedSlot.start, timezone)} &ndash; {formatTime(selectedSlot.end, timezone)}
+            {formatTime(selectedSlot.start, timezone)} - {formatTime(selectedSlot.end, timezone)}
             <span className="text-muted ms-2 small">({timezone.replace(/_/g, ' ')})</span>
           </div>
 
@@ -447,7 +464,7 @@ export default function StrategyCallModal({
             <h6 className="fw-semibold mb-2">What to Expect</h6>
             <ul className="list-unstyled mb-0">
               <li className="mb-1">&#10003; 30-minute focused architecture session</li>
-              <li className="mb-1">&#10003; Identify 1&ndash;2 high-impact AI deployment opportunities</li>
+              <li className="mb-1">&#10003; Identify 1-2 high-impact AI deployment opportunities</li>
               <li>&#10003; Clear internal roadmap recommendation</li>
             </ul>
           </div>

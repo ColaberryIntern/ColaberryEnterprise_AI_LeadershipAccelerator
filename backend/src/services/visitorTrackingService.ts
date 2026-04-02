@@ -142,7 +142,7 @@ export async function getOrCreateSession(
     const urlObj = new URL(data.page_url);
     pagePath = urlObj.pathname;
   } catch {
-    pagePath = data.page_url.split('?')[0] || '/';
+    pagePath = (data.page_url || '/').split('?')[0] || '/';
   }
 
   const landingCategory = categorizePagePath(pagePath);

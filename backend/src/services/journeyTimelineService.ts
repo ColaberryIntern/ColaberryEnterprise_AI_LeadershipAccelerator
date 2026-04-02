@@ -126,30 +126,62 @@ async function fetchSessionEvents(visitorId: string): Promise<JourneyTimelineEve
   }));
 }
 
-async function fetchPageEvents(visitorId: string): Promise<JourneyTimelineEvent[]> {
+async function fetchPageEvents(visitorId: string, leadId?: number): Promise<JourneyTimelineEvent[]> {
+  // Fetch by visitor_id OR lead_id so email click-throughs with lid= are included
+  const where: any = {
+    [Op.or]: [
+      ...(visitorId ? [{ visitor_id: visitorId }] : []),
+      ...(leadId ? [{ visitor_id: String(leadId) }] : []),
+    ],
+  };
+  if (!visitorId && !leadId) return [];
+
   const events = await PageEvent.findAll({
-    where: {
-      visitor_id: visitorId,
-      event_type: { [Op.in]: ['form_submit', 'form_start', 'video_start', 'cta_click'] },
-    },
+    where,
     order: [['timestamp', 'ASC']],
     limit: 200,
   });
 
-  return events.map((e: any) => ({
-    id: e.id,
-    timestamp: e.timestamp?.toISOString?.() || e.timestamp,
-    category: 'website' as const,
-    event_type: e.event_type === 'form_submit' ? 'form_submitted' : e.event_type === 'form_start' ? 'form_started' : e.event_type,
-    title: e.event_type === 'form_submit' ? `Form submitted on ${e.page_category || e.page_path}`
-         : e.event_type === 'cta_click' ? `CTA clicked: ${e.event_data?.element_text || e.page_category || 'action'}`
-         : `${e.event_type} on ${e.page_category || e.page_path}`,
-    detail: e.page_title || e.page_path,
-    metadata: { page_category: e.page_category, event_data: e.event_data },
-    journey_stage: 'awareness' as const,
-    source_table: 'page_events',
-    source_id: e.id,
-  }));
+  const titleMap: Record<string, (e: any) => string> = {
+    form_submit: (e) => `Form submitted on ${e.page_category || e.page_path}`,
+    form_start: (e) => `Form started on ${e.page_category || e.page_path}`,
+    cta_click: (e) => `CTA clicked: ${e.event_data?.element_text || e.event_data?.cta_name || 'action'}`,
+    pageview: (e) => `Visited ${e.page_path || e.page_title || 'page'}`,
+    scroll: (e) => `Scrolled to ${e.event_data?.depth || '?'}% on ${e.page_path || 'page'}`,
+    booking_modal_opened: (e) => `Opened booking modal (${e.event_data?.dates_available || 0} dates, ${e.event_data?.total_slots || 0} slots${e.event_data?.has_prefill ? ', pre-filled' : ''})`,
+    booking_date_selected: (e) => `Selected date: ${e.event_data?.date || 'unknown'}`,
+    booking_time_selected: (e) => `Selected time slot: ${e.event_data?.slot_start || 'unknown'}`,
+    book_strategy_call_click: () => 'Submitted booking form',
+    time_on_page: (e) => `Spent ${e.event_data?.seconds || '?'}s on page`,
+    heartbeat: () => 'Still on page',
+    media_play: (e) => `Played ${e.event_data?.element_tag || 'media'}: ${e.event_data?.element_text || 'content'}`,
+    embed_click: (e) => `Interacted with embed: ${e.event_data?.element_text || 'content'}`,
+    click: (e) => `Clicked ${e.event_data?.element_tag || 'element'}: ${(e.event_data?.element_text || '').slice(0, 60)}`,
+  };
+
+  return events.map((e: any) => {
+    const type = e.event_type;
+    const titleFn = titleMap[type];
+    const title = titleFn ? titleFn(e) : `${type} on ${e.page_category || e.page_path}`;
+    const stage = ['booking_modal_opened', 'booking_date_selected', 'booking_time_selected', 'book_strategy_call_click'].includes(type)
+      ? 'decision' as const
+      : ['cta_click', 'form_start', 'form_submit'].includes(type)
+      ? 'consideration' as const
+      : 'awareness' as const;
+
+    return {
+      id: e.id,
+      timestamp: e.timestamp?.toISOString?.() || e.timestamp,
+      category: 'website' as const,
+      event_type: type === 'form_submit' ? 'form_submitted' : type === 'form_start' ? 'form_started' : type,
+      title,
+      detail: e.page_title || e.page_path,
+      metadata: { page_category: e.page_category, event_data: e.event_data },
+      journey_stage: stage,
+      source_table: 'page_events',
+      source_id: e.id,
+    };
+  });
 }
 
 async function fetchSignals(visitorId: string, leadId?: number): Promise<JourneyTimelineEvent[]> {
@@ -392,7 +424,7 @@ export async function getLeadJourney(leadId: number): Promise<JourneyTimeline | 
   // Fetch all data sources in parallel
   const [sessions, pageEvents, signals, campaigns, interactions, conversations, activities, appointments, tempHistory] = await Promise.all([
     visitorId ? fetchSessionEvents(visitorId) : Promise.resolve([]),
-    visitorId ? fetchPageEvents(visitorId) : Promise.resolve([]),
+    fetchPageEvents(visitorId, leadId),
     visitorId ? fetchSignals(visitorId, leadId) : Promise.resolve([]),
     fetchCampaignEvents(leadId),
     fetchInteractions(leadId),

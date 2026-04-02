@@ -3,8 +3,8 @@ import SEOHead from '../components/SEOHead';
 import StrategyCallModal from '../components/StrategyCallModal';
 
 const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
-import { captureUTMFromURL } from '../services/utmService';
-import { trackEvent } from '../utils/tracker';
+import { captureUTMFromURL, getAdvisoryUrl } from '../services/utmService';
+import { initTracker, trackEvent } from '../utils/tracker';
 
 const BG = '#F8FAFC';
 const BG_ALT = '#F1F5F9';
@@ -33,14 +33,26 @@ const btnStyle: React.CSSProperties = {
 
 function AIArchitectLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
+  const [showStickyCta, setShowStickyCta] = useState(false);
   const [nextCohort, setNextCohort] = useState<{ name: string; start_date: string; seats_remaining: number } | null>(null);
   const [prefill, setPrefill] = useState<{ name: string; email: string; company: string; phone: string }>({ name: '', email: '', company: '', phone: '' });
 
+  // Show sticky CTA after scrolling past the hero section
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowStickyCta(window.scrollY > 500 && !showBooking);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [showBooking]);
+
   useEffect(() => {
     captureUTMFromURL();
-    // Pre-fill booking form from lead ID in URL (from campaign email clicks)
+    initTracker();
+    // Bridge lid → lead_id so tracker can identify the visitor
     const params = new URLSearchParams(window.location.search);
     const lid = params.get('lid');
+    if (lid) { try { localStorage.setItem('cb_lead_id', lid); } catch {} }
     if (lid) {
       fetch((process.env.REACT_APP_API_URL || '') + '/api/calendar/prefill/' + lid)
         .then(r => r.json())
@@ -114,6 +126,21 @@ function AIArchitectLandingPage() {
             </button>
           </div>
         </section>
+
+        {/* Design AI Org CTA */}
+        <div className="text-center py-4" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 8 }}>Not ready to book? Design your AI organization first.</p>
+          <a
+            href={getAdvisoryUrl()}
+            className="btn btn-sm text-white"
+            style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '6px 20px', fontSize: 13 }}
+            data-track="ai_architect_design_first"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Design AI Org - Free &rarr;
+          </a>
+        </div>
 
         {/* SYSTEM FRAMEWORK */}
         <section style={{ background: WHITE, padding: '70px 20px' }}>
@@ -202,6 +229,19 @@ function AIArchitectLandingPage() {
                   <span style={{ fontSize: 15, lineHeight: 1.6, color: TEXT2 }}>{point}</span>
                 </div>
               ))}
+            </div>
+            <div className="text-center mt-4">
+              <p style={{ color: '#94a3b8', fontSize: 14 }}>Start by seeing what your AI organization looks like</p>
+              <a
+                href={getAdvisoryUrl()}
+                className="btn btn-outline-light btn-sm"
+                data-track="ai_architect_see_org"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ borderRadius: 20, fontSize: 13 }}
+              >
+                Design Your AI Organization &rarr;
+              </a>
             </div>
           </div>
         </section>

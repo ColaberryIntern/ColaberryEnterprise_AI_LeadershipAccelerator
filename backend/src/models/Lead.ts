@@ -45,6 +45,18 @@ interface LeadAttributes {
   sponsorship_readiness_score?: number | null;
   sponsorship_stage?: string | null;
   alumni_context?: Record<string, any> | null;
+  recommended_offer?: string | null;
+  secondary_offers?: any | null;
+  qualification_level?: string | null;
+  advisory_session_id?: string | null;
+  advisory_source?: string | null;
+  advisory_status?: string | null;
+  idea_input?: string | null;
+  maturity_score?: number | null;
+  estimated_roi?: number | null;
+  departments_impacted?: any | null;
+  selected_systems?: any | null;
+  advisory_report_url?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -93,6 +105,18 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare sponsorship_readiness_score: number | null;
   declare sponsorship_stage: string | null;
   declare alumni_context: Record<string, any> | null;
+  declare recommended_offer: string | null;
+  declare secondary_offers: any | null;
+  declare qualification_level: string | null;
+  declare advisory_session_id: string | null;
+  declare advisory_source: string | null;
+  declare advisory_status: string | null;
+  declare idea_input: string | null;
+  declare maturity_score: number | null;
+  declare estimated_roi: number | null;
+  declare departments_impacted: any | null;
+  declare selected_systems: any | null;
+  declare advisory_report_url: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -282,6 +306,54 @@ Lead.init(
     },
     alumni_context: {
       type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    recommended_offer: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    secondary_offers: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    qualification_level: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    advisory_session_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    advisory_source: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    advisory_status: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    idea_input: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    maturity_score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    estimated_roi: {
+      type: DataTypes.DECIMAL,
+      allowNull: true,
+    },
+    departments_impacted: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    selected_systems: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    advisory_report_url: {
+      type: DataTypes.STRING,
       allowNull: true,
     },
     created_at: {

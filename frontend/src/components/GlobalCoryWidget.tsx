@@ -302,7 +302,7 @@ export default function GlobalCoryWidget() {
             />
             <div>
               <span className="fw-semibold" style={{ fontSize: isFullscreen ? '1rem' : '0.85rem' }}>
-                Cory &mdash; AI COO
+                Cory - AI COO
               </span>
               {isFullscreen && (
                 <div style={{ fontSize: '0.7rem', opacity: 0.75 }}>Full analysis mode</div>

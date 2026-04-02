@@ -3,6 +3,8 @@ import { seedAlumniCampaigns } from '../services/alumniCampaignService';
 import { seedAlumniReferralCampaign } from '../services/alumniReferralCampaignService';
 import { seedClassReadinessCampaign } from './seedClassReadinessCampaign';
 import { seedAliOutreachCampaign } from './seedAliOutreachCampaign';
+import { seedColdOutboundPhases } from './seedColdOutboundPhases';
+import { seedOfferCampaigns } from './seedOfferCampaigns';
 
 /**
  * Idempotent seed for all core campaigns.
@@ -20,7 +22,7 @@ export async function seedAllCampaigns() {
     sequenceName: 'Cold Outbound AI Leadership Sequence',
     description: 'Cold outbound campaign targeting AI-interested executives sourced from Apollo. All messages AI-generated at send time.',
     type: 'cold_outbound',
-    status: 'draft',
+    status: 'active',
     targeting_criteria: {
       industries: ['SaaS', 'Technology', 'Financial Services', 'Healthcare', 'Manufacturing'],
       title_patterns: ['CTO', 'VP Engineering', 'Director AI', 'Chief Data', 'Head of AI'],
@@ -147,6 +149,20 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     await seedAliOutreachCampaign();
   } catch (err: any) {
     console.warn('[Seed] Ali outreach campaign seed skipped:', err?.message);
+  }
+
+  // ─── 11 & 12. Cold Outbound Phase 2 & Phase 3 ────────────────────────
+  try {
+    await seedColdOutboundPhases();
+  } catch (err: any) {
+    console.warn('[Seed] Cold outbound phases 2 & 3 seed skipped:', err?.message);
+  }
+
+  // ─── 13-16. Offer Pipeline Campaigns ────────────────────────────────
+  try {
+    await seedOfferCampaigns();
+  } catch (err: any) {
+    console.warn('[Seed] Offer pipeline campaigns seed skipped:', err?.message);
   }
 
   console.log('[Seed] All core campaigns seeded.');

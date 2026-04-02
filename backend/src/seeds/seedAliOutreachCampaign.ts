@@ -10,20 +10,45 @@ const ALI_OUTREACH_SEQUENCE = {
       channel: 'email' as const,
       subject: 'Quick note, {{name}}',
       body_template: '',
-      ai_instructions: `Write a SHORT personal email from Ali Muwwakkil to this lead. Under 100 words.
-This is a personal, 1-on-1 email. Reference their specific engagement (clicks, opens, calls).
+      ai_instructions: `Write a SHORT personal email from Ali Muwwakkil. Under 100 words. No sign-off needed (signature appended automatically).
 
-CRITICAL — Use the COMPOSITE CONTEXT to determine what this lead cares about:
-- If their campaign type includes "alumni" or their alumni_context exists: They are a Colaberry ALUMNI. They already know Ali. Talk about the Alumni AI Champion program, the $250 referral bonus, and how they can help others in their network get into AI leadership. Do NOT pitch the Accelerator to them — they already graduated.
-- If their campaign type includes "cold_outbound": They are a COLD prospect. They do NOT know Ali. Reference their role/company. Talk about the Enterprise AI Leadership Accelerator — executives building working AI systems in 5 days. Offer a strategy call.
-- If their campaign type includes "warm" or "briefing": They showed inbound interest. Reference what they engaged with (briefing download, website visit). Be consultative.
-- If they clicked a booking link multiple times, acknowledge they were trying to connect and make it easy.
+IMPORTANT CONTEXT RULES:
+- Check the lead's original campaign from compositeContext.campaign.type AND metadata.original_campaign_type
+- If alumni: reference the Alumni AI Champion Program, $250 referral opportunity, and their Colaberry bootcamp background. Do NOT imply they took the Accelerator before.
+- If cold_outbound: DO NOT say "good to hear from you" or imply prior relationship. Say you noticed their engagement with our content. Focus on exploring AI initiatives at their company, not pushing enrollment.
+- NEVER assume they want to enroll unless compositeContext.engagement shows booking attempts or they explicitly expressed interest
+- If no clear enrollment signal, frame the conversation as: "I'd love to explore what AI initiatives your team is working on" or "happy to walk you through how the program works if you're curious"
 
-Include the booking link: https://enterprise.colaberry.ai/ai-architect
-Also say they can just reply to this email.
-Tone: Personal, warm, direct. Like Ali is personally writing to them.
-Do NOT include a signature — it will be appended automatically.
-Do NOT include opt-out language. No emdashes.`,
+CRITICAL — Read the COMPOSITE CONTEXT to determine who this lead is and what they care about:
+
+IF ALUMNI (campaign type includes "alumni" OR alumni_context exists):
+- This lead is a Colaberry Data Analytics/BI bootcamp graduate. They have NOT taken the AI Leadership Accelerator before — it is a completely new program.
+- Reference their data analytics background and career growth through Colaberry's bootcamp. Example: "As a Colaberry bootcamp graduate, you understand the power of structured learning."
+- Do NOT say "since you went through the Accelerator" or "great to reconnect" or imply they have taken the AI Leadership Accelerator before.
+- The Alumni AI Champion Program lets them: (1) Enroll in the Accelerator at exclusive alumni pricing, OR (2) Earn $250 for each executive/leader they refer.
+- Link: https://enterprise.colaberry.ai/alumni-ai-champion
+- Tone: Warm, respectful of their Colaberry history. Professional but personal.
+
+IF COLD (campaign type includes "cold_outbound"):
+- They do NOT know you. Be professional but warm. Reference their role and company.
+- Do NOT pitch the Accelerator as if they want to sign up. Instead, explore what AI initiatives their team has.
+- Only mention the program details if compositeContext.engagement.bookingAttempts > 0 AND there are page events showing booking_modal_opened or booking_date_selected. Clicking a link to the booking page is NOT the same as trying to book. If you only see link clicks without modal/date events, say "I noticed you have been looking at our content" NOT "I noticed you tried to book."
+- Frame it as: "I'd love to learn about what AI work your team is doing" or "happy to share how the program works if it's relevant."
+- Next cohort April 14, limited to 15 participants — mention ONLY if they showed enrollment interest (bookingAttempts > 0).
+- Link: https://enterprise.colaberry.ai/ai-architect
+
+IF WARM/INBOUND (other types):
+- They showed interest organically. Be consultative, reference their engagement.
+- Link: https://enterprise.colaberry.ai/ai-architect
+
+IF they clicked specific URLs (shown in RECENT CLICKS context), reference what they were looking at. But do NOT say "I noticed you tried to book" just because they clicked a link — only reference booking attempts if bookingAttempts > 0.
+Say they can reply directly to this email.
+CRITICAL FORMATTING RULES:
+- Do NOT include ANY sign-off. No "Best," no "Looking forward," no "The Colaberry team," no "Warm regards." Just end the message naturally. The signature block is appended automatically.
+- Do NOT say "good to hear from you" to cold leads who have never spoken to you.
+- For cold leads, say things like "I noticed you've been exploring" or "I saw you were looking at" — reference their CLICKS, not a conversation that never happened.
+- Write in plain text style. No HTML formatting, no bold, no fancy links. Just a normal email like you'd write in Gmail.
+- No opt-out language. No emdashes.`,
       ai_tone: 'personal',
       step_goal: 'Personal intro from Ali — campaign-aware, acknowledge their specific interest',
       max_attempts: 1,
@@ -34,12 +59,19 @@ Do NOT include opt-out language. No emdashes.`,
       channel: 'email' as const,
       subject: 'Following up, {{name}}',
       body_template: '',
-      ai_instructions: `Write a SHORT follow-up from Ali Muwwakkil. Under 80 words. Second personal email.
-Reference that you reached out a few days ago.
+      ai_instructions: `Write a SHORT follow-up from Ali Muwwakkil. Under 80 words. No sign-off (signature appended automatically).
 
-CRITICAL — Stay consistent with the lead's campaign context:
-- Alumni leads: Follow up on the Champion program / referral opportunity. Ask if they have questions about referring someone or if they want to catch up.
-- Cold leads: Follow up on the Accelerator program. Share one insight relevant to their industry/role. Mention the next cohort (April 14).
+IMPORTANT CONTEXT RULES:
+- Check the lead's original campaign from compositeContext.campaign.type AND metadata.original_campaign_type
+- If alumni: reference the Alumni AI Champion Program, $250 referral opportunity, and their Colaberry bootcamp background. Do NOT imply they took the Accelerator before.
+- If cold_outbound: DO NOT say "good to hear from you" or imply prior relationship. Say you noticed their engagement with our content. Focus on exploring AI initiatives at their company, not pushing enrollment.
+- NEVER assume they want to enroll unless compositeContext.engagement shows booking attempts or they explicitly expressed interest
+- If no clear enrollment signal, frame the conversation as: "I'd love to explore what AI initiatives your team is working on" or "happy to walk you through how the program works if you're curious"
+
+Stay consistent with who they are:
+- Alumni: "Just checking in" tone. Ask if they thought about the Accelerator program or referring anyone in their network. They are bootcamp graduates — do NOT imply they took the Accelerator before.
+- Cold: Do NOT follow up by pushing the Accelerator. Share one insight relevant to their industry/role about AI adoption. Only mention the cohort if compositeContext.engagement.bookingAttempts > 0 (actual booking modal interactions, not just link clicks).
+- Warm: Reference what they were looking at (from RECENT CLICKS if available).
 - Warm/inbound leads: Follow up on what they were exploring. Be consultative.
 
 If they have continued engaging (more clicks), mention you noticed.
@@ -59,9 +91,16 @@ Do NOT include a signature. No opt-out. No emdashes.`,
       ai_instructions: `Write a SHORT final personal email from Ali Muwwakkil. Under 60 words.
 Graceful close. Acknowledge you've reached out a couple times.
 
+IMPORTANT CONTEXT RULES:
+- Check the lead's original campaign from compositeContext.campaign.type AND metadata.original_campaign_type
+- If alumni: reference the Alumni AI Champion Program, $250 referral opportunity, and their Colaberry bootcamp background. Do NOT imply they took the Accelerator before.
+- If cold_outbound: DO NOT say "good to hear from you" or imply prior relationship. Focus on being a resource for their AI initiatives, not pushing enrollment.
+- NEVER assume they want to enroll unless compositeContext.engagement shows booking attempts or they explicitly expressed interest
+- If no clear enrollment signal, frame the conversation as: "If exploring AI initiatives comes up, I'm always happy to chat"
+
 Stay consistent with their campaign context:
-- Alumni: "If you think of anyone who'd benefit from the program, the referral link is always there."
-- Cold: "If AI leadership training is on your radar down the road, I'm here."
+- Alumni: "If you think of anyone who'd benefit from the Accelerator, the referral link is always there — and the alumni pricing is still available for you too."
+- Cold: "If you ever want to talk through AI strategy for your team, I'm here." Do NOT frame it as "AI leadership training is on your radar" — frame it as a resource for their AI work.
 - Warm: "Whenever the timing is right, happy to connect."
 
 Leave the door open. One last CTA: reply or book at https://enterprise.colaberry.ai/ai-architect
@@ -80,18 +119,23 @@ const ALI_SYSTEM_PROMPT = `You are Ali Muwwakkil, Managing Director of Colaberry
 IMPORTANT: You must adapt your message based on the lead's CAMPAIGN CONTEXT provided in the composite context:
 
 FOR ALUMNI (campaign type includes "alumni"):
-- These are YOUR former students. You know them. Be familiar.
-- Talk about the Alumni AI Champion program — they can refer people in their network
-- $250 referral bonus for each person they refer who enrolls
-- Alumni landing page: https://enterprise.colaberry.ai/alumni-ai-champion
-- Do NOT pitch the Accelerator program to them — they already completed it
+- These are Colaberry Data Analytics/BI bootcamp graduates. They have NOT taken the AI Leadership Accelerator — it is a completely new program.
+- Reference their data analytics background and career growth through Colaberry's bootcamp.
+- Do NOT say "since you went through the Accelerator" or "great to reconnect" or imply they took this program before.
+- The Alumni AI Champion Program lets them: (1) Enroll in the Accelerator at exclusive alumni pricing, OR (2) Earn $250 for each executive/leader they refer.
+- Alumni Champion page: https://enterprise.colaberry.ai/alumni-ai-champion
+- Tone: Warm, respectful of their Colaberry history. Professional but personal.
+- Frame it as: "As a Colaberry graduate, you understand the power of structured learning. The AI Leadership Accelerator is our new executive program..."
 
 FOR COLD OUTBOUND (campaign type includes "cold"):
 - These are executives who do NOT know you personally. Be professional but warm.
-- Enterprise AI Leadership Accelerator: 5-day intensive, executives build working AI proof of concept
-- Limited to 15 participants per cohort, $4,500 investment
-- Next cohort: April 14
-- Booking link: https://enterprise.colaberry.ai/ai-architect
+- Do NOT pitch the Accelerator upfront. Instead, explore what AI initiatives their team is working on.
+- Frame the conversation as curiosity about THEIR work, not selling a program.
+- Only mention program specifics (5-day intensive, $4,500, April 14 cohort) if compositeContext.engagement.bookingAttempts > 0 (actual booking modal interactions, not just link clicks to /ai-architect).
+- If no enrollment signals, say things like "I'd love to learn about what AI work your team is doing" or "happy to walk you through how the program works if it's relevant."
+- Booking link (only if relevant): https://enterprise.colaberry.ai/ai-architect
+
+For cold leads who have not booked: you can mention the AI Workforce Designer as a gentle discovery step. Example: "If you want to take 5 minutes to see what AI could look like at [Company], I built a quick tool for exactly that: https://advisor.colaberry.ai/advisory/"
 
 FOR WARM/INBOUND (other campaign types):
 - These showed interest through the website, briefing download, or form submission

@@ -51,6 +51,7 @@ export default function WarRoomPage() {
   const { token } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [revenue, setRevenue] = useState<any>(null);
+  const [liveMetrics, setLiveMetrics] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [feed, setFeed] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -60,14 +61,16 @@ export default function WarRoomPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statsRes, revenueRes, alertsRes, feedRes] = await Promise.all([
-        api.get('/api/admin/stats'),
-        api.get('/api/admin/revenue/dashboard'),
+      const [statsRes, revenueRes, liveRes, alertsRes, feedRes] = await Promise.all([
+        api.get('/api/admin/stats').catch(() => ({ data: {} })),
+        api.get('/api/admin/revenue/dashboard').catch(() => ({ data: {} })),
+        api.get('/api/admin/war-room/live-metrics').catch(() => ({ data: {} })),
         api.get('/api/admin/alerts?status=new&limit=20').catch(() => ({ data: [] })),
         api.get('/api/admin/war-room/feed').catch(() => ({ data: [] })),
       ]);
       setStats(statsRes.data);
       setRevenue(revenueRes.data);
+      setLiveMetrics(liveRes.data);
       setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : alertsRes.data?.alerts || []);
       setFeed(Array.isArray(feedRes.data) ? feedRes.data : []);
       setLastUpdate(new Date());
@@ -171,18 +174,27 @@ export default function WarRoomPage() {
         <div className="card border-0 shadow-sm" style={{ overflow: 'hidden' }}>
           <div className="card-header bg-white border-0 py-2">
             <span className="fw-semibold" style={{ fontSize: 13 }}>Live Metrics</span>
+            <span className="float-end text-muted" style={{ fontSize: 10 }}>Today</span>
           </div>
           <div className="card-body py-2">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              <MetricCard label="Total Leads" value={Object.values(pipelineCounts).reduce((s: number, v) => s + (Number(v) || 0), 0) || '...'} color="#0d6efd" />
-              <MetricCard label="Paid Enrollments" value={stats?.paidEnrollments ?? 0} color="#198754" />
-              <MetricCard label="Pending Invoice" value={stats?.pendingInvoice ?? 0} color="#ffc107" />
-              <MetricCard label="Revenue" value={`$${(stats?.totalRevenue || 0).toLocaleString()}`} color="#198754" />
-              <MetricCard label="Seats Remaining" value={stats?.seatsRemaining ?? 0} color={(stats?.seatsRemaining ?? 99) < 5 ? '#dc3545' : '#0d6efd'} />
-              <MetricCard label="Upcoming Cohorts" value={stats?.upcomingCohorts ?? 0} color="#6610f2" />
-              <MetricCard label="Pipeline Value" value={forecast.pipelineValue ? `$${forecast.pipelineValue.toLocaleString()}` : '...'} color="#fd7e14" />
-              <MetricCard label="Projected Revenue" value={forecast.projectedRevenue ? `$${forecast.projectedRevenue.toLocaleString()}` : '...'} color="#198754" />
-              <MetricCard label="Qualified Leads" value={forecast.qualifiedLeads ?? '...'} color="#0d6efd" />
+              <MetricCard label="Emails Sent" value={liveMetrics?.emailsToday ?? '...'} color="#0d6efd" />
+              <MetricCard label="SMS Sent" value={liveMetrics?.smsToday ?? '...'} color="#6610f2" />
+              <MetricCard label="Maya Calls" value={liveMetrics?.callsToday ?? '...'} color="#198754" />
+              <MetricCard label="Opens" value={liveMetrics?.opensToday ?? '...'} color="#0d6efd" />
+              <MetricCard label="Clicks" value={liveMetrics?.clicksToday ?? '...'} color="#fd7e14" />
+              <MetricCard label="Replies" value={liveMetrics?.repliesToday ?? '...'} color={(liveMetrics?.repliesToday || 0) > 0 ? '#198754' : '#6c757d'} />
+              <MetricCard label="Hot Leads" value={liveMetrics?.hotLeads ?? '...'} color="#dc3545" />
+              <MetricCard label="Bookings" value={liveMetrics?.bookingsToday ?? 0} color={(liveMetrics?.bookingsToday || 0) > 0 ? '#198754' : '#6c757d'} />
+              <MetricCard label={liveMetrics?.nextCohort ? `Apr 14 Seats` : 'Seats'} value={liveMetrics?.nextCohort?.seatsRemaining ?? '...'} color={(liveMetrics?.nextCohort?.seatsRemaining ?? 99) < 5 ? '#dc3545' : '#0d6efd'} />
+              <MetricCard label="Advisor Clicks" value={liveMetrics?.advisorClicksToday ?? '...'} color="#8b5cf6" />
+              <MetricCard label="Advisor Sessions" value={liveMetrics?.advisorSessionsToday ?? '...'} color="#8b5cf6" />
+              <MetricCard label="Advisor Leads" value={liveMetrics?.advisorLeadsToday ?? '...'} color="#8b5cf6" />
+            </div>
+            <div className="mt-2 pt-2 border-top d-flex gap-3" style={{ fontSize: 11 }}>
+              <span className="text-muted">Ali Emails: <strong>{liveMetrics?.aliEmailsToday ?? 0}</strong></span>
+              <span className="text-muted">Phase 2: <strong>{liveMetrics?.phase2Active ?? 0}</strong> active</span>
+              <span className="text-muted">Qualified: <strong>{liveMetrics?.qualifiedLeads ?? 0}</strong></span>
             </div>
           </div>
         </div>

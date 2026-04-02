@@ -74,6 +74,22 @@ export function getUTMParams(): UTMParams {
  * Return backend-compatible UTM fields for form payloads.
  * Matches the toLeadPayload pattern: utm_medium is piped into utm_source.
  */
+/**
+ * Build the advisor.colaberry.ai URL preserving UTM params from current page.
+ */
+export function getAdvisoryUrl(path: string = '/advisory/'): string {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const utm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+      .filter(k => params.get(k))
+      .map(k => `${k}=${encodeURIComponent(params.get(k) || '')}`)
+      .join('&');
+    return `https://advisor.colaberry.ai${path}${utm ? '?' + utm : ''}`;
+  } catch {
+    return `https://advisor.colaberry.ai${path}`;
+  }
+}
+
 export function getUTMPayloadFields(): {
   utm_source?: string;
   utm_campaign?: string;

@@ -5,6 +5,7 @@ import { handleMandrillWebhook, handleMandrillWebhookHead, handleMandrillInbound
 import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
 import { handleApolloPhoneReveal } from '../controllers/apolloWebhookController';
+import { handleAdvisoryWebhook, handleAdvisoryWebhookHead } from '../controllers/advisorySyncController';
 
 const router = Router();
 
@@ -27,5 +28,9 @@ router.post('/api/webhook/synthflow/call-complete', express.json(), handleSynthf
 
 // Apollo phone number reveal webhook — async phone enrichment callback
 router.post('/api/webhook/apollo/phone-reveal', express.json(), handleApolloPhoneReveal);
+
+// Advisory sync webhook — Agent Foundry (AI Workforce Designer) events
+router.head('/api/webhooks/advisory', handleAdvisoryWebhookHead);
+router.post('/api/webhooks/advisory', express.json(), handleAdvisoryWebhook);
 
 export default router;

@@ -35,6 +35,13 @@ const VALID_EVENT_TYPES = [
   'form_start',
   'form_submit',
   'time_on_page',
+  'heartbeat',
+  'media_play',
+  'embed_click',
+  'booking_modal_opened',
+  'booking_date_selected',
+  'booking_time_selected',
+  'book_strategy_call_click',
 ] as const;
 
 function extractReferrerDomain(referrerUrl?: string): string | undefined {
@@ -272,6 +279,105 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
   } catch (err) {
     console.error('[Tracking]', err);
     res.status(204).end();
+  }
+}
+
+/**
+ * POST /api/t/identify — link anonymous visitor to a known lead.
+ * Called when the visitor provides their email (booking form, gate form, etc.)
+ * Creates or finds the lead, links the visitor fingerprint, backfills sessions.
+ */
+export async function handleIdentify(req: Request, res: Response): Promise<void> {
+  try {
+    if (!env.enableVisitorTracking) {
+      res.status(204).end();
+      return;
+    }
+
+    const { fingerprint, email, name, company, phone, metadata } = req.body;
+
+    if (!fingerprint || typeof fingerprint !== 'string') {
+      res.status(400).json({ error: 'fingerprint is required' });
+      return;
+    }
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      res.status(400).json({ error: 'valid email is required' });
+      return;
+    }
+
+    const { Lead, Visitor } = require('../models');
+    const emailLower = email.trim().toLowerCase();
+
+    // Find or create visitor by fingerprint
+    const visitorId = await findOrCreateVisitor(fingerprint, {
+      ip_address: (req.headers['x-forwarded-for'] as string || req.ip || '').split(',')[0].trim(),
+      user_agent: req.headers['user-agent'] || '',
+    });
+
+    // Find or create lead by email
+    const [lead, created] = await Lead.findOrCreate({
+      where: { email: emailLower },
+      defaults: {
+        name: name || emailLower.split('@')[0],
+        email: emailLower,
+        company: company || null,
+        phone: phone || null,
+        source: 'advisory',
+        lead_source_type: 'warm',
+        lead_temperature: 'warm',
+        pipeline_stage: 'new_lead',
+        status: 'active',
+      },
+    });
+
+    // Update lead with any new info provided
+    const updates: Record<string, any> = {};
+    if (name && !lead.name) updates.name = name;
+    if (company && !lead.company) updates.company = company;
+    if (phone && !lead.phone) updates.phone = phone;
+    if (metadata) {
+      if (metadata.title && !lead.title) updates.title = metadata.title;
+      if (metadata.industry && !lead.industry) updates.industry = metadata.industry;
+      if (metadata.idea_input) updates.idea_input = metadata.idea_input;
+      if (metadata.maturity_score) updates.maturity_score = metadata.maturity_score;
+      if (metadata.advisory_session_id) updates.advisory_session_id = metadata.advisory_session_id;
+    }
+    if (Object.keys(updates).length > 0) {
+      await lead.update(updates);
+    }
+
+    // Link visitor to lead (backfills all sessions + page events)
+    await resolveIdentity(visitorId, lead.id);
+
+    // Backfill campaign attribution from visitor session
+    try {
+      const { VisitorSession } = require('../models');
+      const latestSession = await VisitorSession.findOne({
+        where: { visitor_id: visitorId },
+        order: [['created_at', 'DESC']],
+      });
+      if (latestSession) {
+        const utmUpdates: Record<string, any> = {};
+        if ((latestSession as any).utm_source && !lead.utm_source) utmUpdates.utm_source = (latestSession as any).utm_source;
+        if ((latestSession as any).utm_campaign && !lead.utm_campaign) utmUpdates.utm_campaign = (latestSession as any).utm_campaign;
+        if ((latestSession as any).utm_medium && !lead.utm_medium) utmUpdates.utm_medium = (latestSession as any).utm_medium;
+        if (Object.keys(utmUpdates).length > 0) {
+          await lead.update(utmUpdates);
+          console.log(`[Tracking] Backfilled UTM for lead ${lead.id}: ${JSON.stringify(utmUpdates)}`);
+        }
+      }
+    } catch { /* non-blocking */ }
+
+    console.log(`[Tracking] Identified visitor ${fingerprint.substring(0, 12)} as lead ${lead.id} (${lead.name}, ${emailLower})${created ? ' [NEW]' : ''}`);
+
+    res.json({
+      lead_id: lead.id,
+      visitor_id: visitorId,
+      created,
+    });
+  } catch (err: any) {
+    console.error('[Tracking] Identify error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 }
 

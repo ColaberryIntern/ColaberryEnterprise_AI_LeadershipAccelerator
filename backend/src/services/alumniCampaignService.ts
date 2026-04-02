@@ -13,29 +13,46 @@ const LANDING_PAGE = 'https://enterprise.colaberry.ai/alumni-ai-champion';
 const AI_CHAMPION_SYSTEM_PROMPT = `You are Cory, an AI assistant writing on behalf of Ali Kursun, CEO of Colaberry.
 You are reaching out to Colaberry alumni about the Alumni AI Champion Program.
 
+CRITICAL ALUMNI CONTEXT:
+- These leads are graduates of Colaberry's Data Analytics and BI Developer bootcamp — NOT the AI Leadership Accelerator.
+- Most alumni did NOT work in data/tech before taking the bootcamp. The average graduate doubled their income after completing the program.
+- They are now working professionals in data analytics, BI, and related roles.
+- The AI Leadership Accelerator is a COMPLETELY NEW program — alumni have never taken it before.
+- Do NOT say "since you went through the Accelerator" or imply they have taken this program before.
+- Reference their data analytics background and career growth through Colaberry's bootcamp.
+
 Key messaging pillars:
-- Colaberry alumni community — reference their shared history
-- AI Agents Training — special alumni pricing available
-- Referral Commission — $250 per successful company referral
+- Colaberry bootcamp alumni community — reference their data analytics journey and career transformation
+- AI Leadership Accelerator — exclusive alumni pricing available (this is a NEW program for them)
+- Referral Commission — $250 per executive/leader they refer who enrolls
 - Landing page: ${LANDING_PAGE}
 
 Tone: Personal, warm, professional. Write as if Ali is personally reaching out.
 Never hardcode email content — generate fresh, personalized content each time.
 Use the lead's name, company, title, and industry when available.
-Keep emails concise (under 200 words). Keep SMS under 160 characters.`;
+Keep emails concise (under 200 words). Keep SMS under 160 characters.
+
+You can also mention the AI Workforce Designer for alumni who want to explore what AI could look like at their current organization: https://advisor.colaberry.ai/advisory/`;
 
 const RE_ENGAGEMENT_SYSTEM_PROMPT = `You are Cory, an AI assistant writing on behalf of Ali Kursun, CEO of Colaberry.
-You are re-engaging a Colaberry alumni who has gone quiet after a previous outreach.
+You are re-engaging a Colaberry bootcamp graduate who has gone quiet after a previous outreach.
+
+CRITICAL ALUMNI CONTEXT:
+- This lead is a Colaberry Data Analytics/BI bootcamp graduate. They have NOT taken the AI Leadership Accelerator — it is a new program.
+- Reference their data analytics background and career growth through Colaberry's bootcamp.
+- Do NOT say "since you went through the Accelerator" or imply they have taken this program before.
 
 Key messaging pillars:
 - Acknowledge it's been a while — no pressure
-- Share something new or valuable (AI industry update, new cohort, feature)
-- Alumni discount still available
-- Referral commission: $250 per company referral
+- Share something new or valuable (AI industry update, new Accelerator cohort, feature)
+- Exclusive alumni pricing for the Accelerator still available
+- Referral commission: $250 per executive/leader referral
 - Landing page: ${LANDING_PAGE}
 
 Tone: Warm, understanding, value-forward. Not pushy.
-Never hardcode content — generate fresh, personalized messages each time.`;
+Never hardcode content — generate fresh, personalized messages each time.
+
+You can also mention the AI Workforce Designer for alumni who want to explore what AI could look like at their current organization: https://advisor.colaberry.ai/advisory/`;
 
 // ── AI Champion Sequence Steps ───────────────────────────────────────────
 
@@ -48,13 +65,14 @@ const AI_CHAMPION_STEPS: SequenceStep[] = [
     body_template: '',
     step_goal: 'Introduce Alumni AI Champion program, drive landing page visit',
     ai_tone: 'warm, personal, excited',
-    ai_instructions: `Write a welcome email from Ali to a Colaberry alumni.
+    ai_instructions: `Write a welcome email from Ali to a Colaberry bootcamp graduate.
+This person graduated from Colaberry's Data Analytics/BI bootcamp — they have NOT taken the AI Leadership Accelerator before. It is a new program.
+Reference their data analytics background and career growth. Do NOT imply they took the Accelerator.
 Introduce the Alumni AI Champion Program — two paths:
-1. Enroll in AI Agents Training at a special alumni discount
-2. Refer your company and earn $250 per successful referral
+1. Enroll in the AI Leadership Accelerator at exclusive alumni pricing
+2. Refer executives/leaders and earn $250 per enrolled referral
 Include link: ${LANDING_PAGE}
-Make it personal — reference their Colaberry journey. Keep under 200 words.
-Subject should feel personal, not marketing-y.`,
+Keep under 200 words. Subject should feel personal, not marketing-y.`,
   },
   // Day 0 — Follow-up SMS
   {
@@ -65,8 +83,8 @@ Subject should feel personal, not marketing-y.`,
     sms_template: '',
     step_goal: 'Drive inbox check for welcome email',
     ai_tone: 'casual, friendly',
-    ai_instructions: `Write a short SMS (under 160 chars) from Ali to a Colaberry alumni.
-Mention you just sent them something exciting via email about Colaberry alumni + AI.
+    ai_instructions: `Write a short SMS (under 160 chars) from Ali to a Colaberry bootcamp graduate.
+Mention you just sent them something exciting via email about a new AI program for Colaberry alumni.
 Keep it casual and personal.`,
   },
   // Day 2 — Value-add email
@@ -77,10 +95,10 @@ Keep it casual and personal.`,
     body_template: '',
     step_goal: 'Provide value, share alumni discount details, soft CTA for strategy call',
     ai_tone: 'informative, generous',
-    ai_instructions: `Write a value-add email from Ali.
+    ai_instructions: `Write a value-add email from Ali to a Colaberry bootcamp graduate.
 Share a relevant AI trend or insight (pick something timely for their industry if known).
-Mention the alumni discount details for AI Agents Training.
-Soft CTA: offer a quick strategy call to explore if the program is a fit.
+Mention the exclusive alumni pricing for the AI Leadership Accelerator — this is a new program they have not taken before.
+Soft CTA: offer a quick strategy call to explore if the Accelerator is a fit.
 Keep under 200 words. Make it feel like advice from a mentor, not a sales pitch.`,
   },
   // Day 4 — Direct SMS
@@ -93,8 +111,8 @@ Keep under 200 words. Make it feel like advice from a mentor, not a sales pitch.
     step_goal: 'Get direct engagement — reply YES for interest',
     ai_tone: 'direct, friendly',
     ai_instructions: `Write a short SMS (under 160 chars) from Ali.
-Ask directly if they're interested in AI agents training.
-Mention alumni get special pricing. Ask them to reply YES if interested.`,
+Ask directly if they're interested in the AI Leadership Accelerator.
+Mention alumni get exclusive pricing. Ask them to reply YES if interested.`,
   },
   // Day 7 — Social proof email
   {
@@ -104,10 +122,10 @@ Mention alumni get special pricing. Ask them to reply YES if interested.`,
     body_template: '',
     step_goal: 'Social proof + referral details, CTA: join or refer',
     ai_tone: 'inspiring, community-focused',
-    ai_instructions: `Write an email from Ali sharing alumni success stories with AI.
-Reference how other Colaberry alumni are adopting AI in their companies.
-Detail the referral program: $250 per successful company referral.
-Two CTAs: 1) Join the training yourself 2) Refer your company.
+    ai_instructions: `Write an email from Ali sharing how Colaberry bootcamp graduates are stepping into AI leadership.
+Reference how other alumni are adopting AI in their companies.
+Detail the referral program: $250 per executive/leader referral who enrolls.
+Two CTAs: 1) Enroll in the Accelerator at alumni pricing 2) Refer leaders in your network.
 Link: ${LANDING_PAGE}
 Keep under 200 words.`,
   },
@@ -121,7 +139,7 @@ Keep under 200 words.`,
     step_goal: 'Final touchpoint — urgency + landing page link',
     ai_tone: 'friendly, slight urgency',
     ai_instructions: `Write a final SMS (under 160 chars) from Ali.
-Last note about the alumni AI training + $250/referral opportunity.
+Last note about the AI Leadership Accelerator alumni pricing + $250/referral opportunity.
 Include the landing page link: ${LANDING_PAGE}`,
   },
 ];
@@ -137,12 +155,14 @@ const RE_ENGAGEMENT_STEPS: SequenceStep[] = [
     body_template: '',
     step_goal: 'Re-engage: acknowledge absence, share new update, alumni discount still available',
     ai_tone: 'warm, understanding, no pressure',
-    ai_instructions: `Write a re-engagement email from Ali to a Colaberry alumni who went quiet.
-Acknowledge it's been a while — no guilt, just genuine reconnection.
-Share a new update (new cohort, new AI trend, new feature).
-Mention the alumni discount is still available.
+    ai_instructions: `Write a re-engagement email from Ali to a Colaberry bootcamp graduate who went quiet.
+This person graduated from Colaberry's Data Analytics/BI bootcamp — they have NOT taken the AI Leadership Accelerator before.
+Acknowledge it's been a while — no guilt, just a friendly check-in.
+Share a new update (new Accelerator cohort, AI trend, new feature).
+Mention the exclusive alumni pricing for the Accelerator is still available.
+Do NOT imply they took the Accelerator or say "since you went through the program."
 Link: ${LANDING_PAGE}
-Keep under 200 words. Make it feel like an old friend reaching out.`,
+Keep under 200 words.`,
   },
   // Day 1 — SMS nudge
   {

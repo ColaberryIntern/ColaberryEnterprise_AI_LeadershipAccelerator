@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { handleTrackEvent, handleTrackBatch, handleHeartbeat } from '../controllers/trackingController';
+import { handleTrackEvent, handleTrackBatch, handleHeartbeat, handleIdentify } from '../controllers/trackingController';
 import {
   handleChatStart,
   handleChatMessage,
@@ -45,6 +45,7 @@ const router = Router();
 router.post('/api/t/event', eventLimiter, handleTrackEvent);
 router.post('/api/t/batch', batchLimiter, handleTrackBatch);
 router.post('/api/t/heartbeat', heartbeatLimiter, handleHeartbeat);
+router.post('/api/t/identify', eventLimiter, handleIdentify);
 
 // Chat endpoints (public, rate-limited)
 const chatStartLimiter = rateLimit({

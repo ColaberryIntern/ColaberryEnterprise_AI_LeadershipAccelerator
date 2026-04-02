@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { NAV_LINKS, NavItem } from '../../constants';
+import { getAdvisoryUrl } from '../../services/utmService';
 
 function PublicNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -97,6 +98,18 @@ function PublicNavbar() {
                 </li>
               )
             )}
+            <li className="nav-item">
+              <a
+                className="nav-link fw-semibold"
+                href={getAdvisoryUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-track="nav_ai_workforce_designer"
+                style={{ color: '#a78bfa' }}
+              >
+                AI Workforce Designer
+              </a>
+            </li>
           </ul>
           <Link
             className="btn btn-outline-light btn-sm ms-lg-3 mt-2 mt-lg-0"
@@ -105,6 +118,33 @@ function PublicNavbar() {
           >
             Participant Login
           </Link>
+          <a
+            href={getAdvisoryUrl()}
+            className="btn btn-sm text-white fw-semibold ms-2 d-none d-lg-inline-block"
+            style={{
+              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+              border: 'none',
+              borderRadius: 20,
+              padding: '6px 16px',
+              fontSize: 13,
+              whiteSpace: 'nowrap',
+            }}
+            data-track="nav_design_ai_org"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Design AI Org
+          </a>
+          <a
+            href={getAdvisoryUrl()}
+            className="btn btn-primary btn-sm w-100 mt-2 d-lg-none"
+            data-track="nav_design_ai_org_mobile"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', border: 'none', borderRadius: 8 }}
+          >
+            Design AI Org
+          </a>
         </div>
       </div>
     </nav>

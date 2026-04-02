@@ -12,14 +12,14 @@ import { enrollLeadsInCampaign } from './campaignService';
 const MAX_ENROLL_PER_DAY = 50;
 const CAMPAIGN_NAME = 'Ali Personal Outreach';
 
-/** Ali's HTML signature — appended by processEmailAction when campaign settings.ali_signature is true */
+/** Ali's signature — plain text style like Gmail, not a styled corporate block */
 export const ALI_SIGNATURE = `
-<div style="margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 14px; color: #4a5568; font-family: Arial, sans-serif;">
-  <strong>Ali Muwwakkil</strong><br>
-  Managing Director<br>
-  Data Scientist | AI Systems Architect<br>
-  200 Chisholm Place, Suite 200 Plano, TX 75075
-</div>`;
+<br><br>
+--<br>
+Ali Muwwakkil<br>
+Managing Director<br>
+Data Scientist | AI Systems Architect<br>
+200 Chisholm Place, Suite 200 Plano, TX 75075`;
 
 /**
  * Find high-intent leads who haven't been enrolled in Ali Personal Outreach yet.
@@ -114,8 +114,44 @@ export async function runAliPersonalOutreach(): Promise<void> {
 
   console.log(`[AliOutreach] Found ${leads.length} high-intent leads, enrolling up to ${remaining}`);
 
-  const leadIds = leads.slice(0, remaining).map((l: any) => l.lead_id);
+  const toEnroll = leads.slice(0, remaining);
+  const leadIds = toEnroll.map((l: any) => l.lead_id);
   const results = await enrollLeadsInCampaign(campaign.id, leadIds);
+
+  // Stamp original_campaign_type on scheduled_email metadata so the AI prompt
+  // knows whether this lead is alumni vs cold_outbound without relying solely
+  // on the composite context graph (belt-and-suspenders).
+  for (const lead of toEnroll) {
+    try {
+      const [origCampaign] = await sequelize.query(`
+        SELECT c.type FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        WHERE cl.lead_id = :leadId AND c.type IN ('alumni', 'cold_outbound')
+        LIMIT 1
+      `, { replacements: { leadId: lead.lead_id }, type: QueryTypes.SELECT }) as any[];
+
+      const originalCampaignType = origCampaign?.type || 'unknown';
+
+      await sequelize.query(`
+        UPDATE scheduled_emails
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('original_campaign_type', :origType)
+        WHERE lead_id = :leadId AND campaign_id = :campaignId AND status = 'pending'
+      `, {
+        replacements: {
+          origType: originalCampaignType,
+          leadId: lead.lead_id,
+          campaignId: campaign.id,
+        },
+        type: QueryTypes.UPDATE,
+      });
+
+      if (originalCampaignType !== 'unknown') {
+        console.log(`[AliOutreach] Stamped original_campaign_type=${originalCampaignType} on lead ${lead.lead_id} (${lead.email})`);
+      }
+    } catch (err: any) {
+      console.warn(`[AliOutreach] Failed to stamp campaign type for lead ${lead.lead_id}: ${err.message}`);
+    }
+  }
 
   const enrolled = results.filter(r => r.status === 'enrolled' || r.status === 'active_enrolled').length;
   const skipped = results.filter(r => r.status === 'already_enrolled').length;

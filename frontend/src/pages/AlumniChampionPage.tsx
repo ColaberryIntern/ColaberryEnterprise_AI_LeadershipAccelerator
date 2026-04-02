@@ -42,7 +42,7 @@ function AlumniChampionPage() {
     <>
       <SEOHead
         title="Alumni AI Champion Program | Enroll or Earn $250 Per Participant"
-        description="Enroll in the AI Leadership Accelerator or refer leaders and teams. Earn $250 per enrolled participant — including yourself if sponsored."
+        description="Enroll in the AI Leadership Accelerator or refer leaders and teams. Earn $250 per enrolled participant - including yourself if sponsored."
       />
 
       <div style={{ background: DARK.bg, color: DARK.text, minHeight: '100vh' }}>
@@ -79,11 +79,11 @@ function AlumniChampionPage() {
               <span className="fw-bold" style={{ color: '#fff', fontSize: '1.5rem' }}>Colaberry Enterprise AI</span>
             </div>
             <h1 className="display-4 fw-bold mb-3" style={{ color: '#fff' }}>
-              Become the AI Champion &mdash; Or Introduce One Inside Your Company
+              Become the AI Champion - Or Introduce One Inside Your Company
             </h1>
             <p className="lead mb-4" style={{ color: DARK.textMuted, fontSize: '1.25rem' }}>
               Enroll yourself, get sponsored by your company, or refer leaders and teams.
-              Earn $250 for every participant who enrolls &mdash; including yourself if your company pays.
+              Earn $250 for every participant who enrolls - including yourself if your company pays.
             </p>
             <div className="d-flex justify-content-center gap-3 flex-wrap">
               <a
@@ -125,7 +125,7 @@ function AlumniChampionPage() {
                   className="h-100 p-4 rounded-3"
                   style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
                 >
-                  <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 1 &mdash; Enroll Yourself</h3>
+                  <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 1 - Enroll Yourself</h3>
                   <div className="mb-3" style={{ background: 'rgba(59,130,246,0.08)', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(59,130,246,0.15)' }}>
                     <span style={{ color: DARK.accent, fontWeight: 700, fontSize: '1.1rem' }}>$4,500</span>
                     <span style={{ color: DARK.textMuted, fontSize: '0.85rem', marginLeft: 8 }}>per participant</span>
@@ -150,7 +150,7 @@ function AlumniChampionPage() {
                   className="h-100 p-4 rounded-3"
                   style={{ background: DARK.bgCard, border: `1px solid ${DARK.border}` }}
                 >
-                  <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 2 &mdash; Refer Others</h3>
+                  <h3 className="h5 fw-bold mb-3" style={{ color: DARK.accent }}>Path 2 - Refer Others</h3>
                   {[
                     'Refer your boss',
                     'Refer a leader or manager',
@@ -177,7 +177,7 @@ function AlumniChampionPage() {
           <div className="container" style={{ maxWidth: '800px' }}>
             <h2 className="text-center fw-bold mb-2" style={{ color: '#fff' }}>Your Commission Multiplies With Every Enrollment</h2>
             <p className="text-center mb-4" style={{ color: DARK.textMuted }}>
-              You earn <strong style={{ color: DARK.green }}>$250 per enrolled participant</strong> &mdash; no cap.
+              You earn <strong style={{ color: DARK.green }}>$250 per enrolled participant</strong> - no cap.
             </p>
 
             {/* Commission table */}

@@ -24,7 +24,7 @@ router.get('/api/admin/war-room/feed', requireAdmin, async (_req, res) => {
 
     const feed = await sequelize.query(`
       (
-        SELECT a.created_at, a.type AS event_type, a.subject AS detail, 'activity' AS source,
+        SELECT a.created_at, a.type::text AS event_type, a.subject AS detail, 'activity' AS source,
                a.lead_id,
                l.name AS lead_name, l.email AS lead_email, l.lead_score,
                l.lead_source_type, l.pipeline_stage AS lead_pipeline_stage,
@@ -79,6 +79,54 @@ router.get('/api/admin/war-room/feed', requireAdmin, async (_req, res) => {
     res.json(feed);
   } catch (err: any) {
     console.error('[WarRoom] Feed error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// War Room live metrics — real-time activity counters
+router.get('/api/admin/war-room/live-metrics', requireAdmin, async (_req, res) => {
+  try {
+    const { sequelize } = require('../../config/database');
+    const { QueryTypes } = require('sequelize');
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [[emailsToday], [smsToday], [callsToday], [opensToday], [clicksToday], [repliesToday], [bookingsToday], [hotLeads], [qualifiedLeads], [nextCohort], [phase2Today], [aliToday], [advisorClicks], [advisorSessions], [advisorLeads]] = await Promise.all([
+      sequelize.query("SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status='sent' AND sent_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM communication_logs WHERE channel='sms' AND direction='outbound' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM communication_logs WHERE channel='voice' AND direction='outbound' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM interaction_outcomes WHERE outcome='opened' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM interaction_outcomes WHERE outcome='clicked' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM interaction_outcomes WHERE outcome='replied' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM strategy_calls WHERE created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM leads WHERE lead_temperature = 'hot'", { type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM leads WHERE lead_temperature = 'qualified'", { type: QueryTypes.SELECT }),
+      sequelize.query("SELECT name, start_date, max_seats - seats_taken as seats_remaining FROM cohorts WHERE start_date > NOW() ORDER BY start_date LIMIT 1", { type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM campaign_leads cl JOIN campaigns c ON c.id = cl.campaign_id WHERE c.type = 'cold_outbound_phase2' AND cl.status = 'active'", { type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM scheduled_emails se JOIN campaigns c ON c.id = se.campaign_id WHERE c.type = 'executive_outreach' AND se.status = 'sent' AND se.sent_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM interaction_outcomes WHERE outcome='clicked' AND created_at::date = :today AND metadata->>'url' LIKE '%advisor.colaberry.ai%'", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_events WHERE created_at::date = :today AND page_url LIKE '%advisor.colaberry.ai%'", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM leads WHERE source = 'advisory' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+    ]);
+
+    res.json({
+      emailsToday: parseInt(emailsToday.cnt),
+      smsToday: parseInt(smsToday.cnt),
+      callsToday: parseInt(callsToday.cnt),
+      opensToday: parseInt(opensToday.cnt),
+      clicksToday: parseInt(clicksToday.cnt),
+      repliesToday: parseInt(repliesToday.cnt),
+      bookingsToday: parseInt(bookingsToday.cnt),
+      hotLeads: parseInt(hotLeads.cnt),
+      qualifiedLeads: parseInt(qualifiedLeads.cnt),
+      phase2Active: parseInt(phase2Today.cnt),
+      aliEmailsToday: parseInt(aliToday.cnt),
+      nextCohort: nextCohort ? { name: nextCohort.name, startDate: nextCohort.start_date, seatsRemaining: parseInt(nextCohort.seats_remaining) } : null,
+      advisorClicksToday: parseInt(advisorClicks.cnt),
+      advisorSessionsToday: parseInt(advisorSessions.cnt),
+      advisorLeadsToday: parseInt(advisorLeads.cnt),
+    });
+  } catch (err: any) {
+    console.error('[WarRoom] Live metrics error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

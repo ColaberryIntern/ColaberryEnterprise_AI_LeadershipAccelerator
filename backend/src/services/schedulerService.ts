@@ -297,11 +297,35 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       }
     }
 
+    // If scheduled_email metadata carries original_campaign_type (stamped by Ali outreach
+    // enrollment), inject it into the composite context as a fallback so AI instructions
+    // that reference metadata.original_campaign_type see it even if context graph missed it.
+    const metaOrigType = action.metadata?.original_campaign_type;
+    if (metaOrigType && compositeContext && compositeContext.campaign) {
+      // Only override if context graph returned the generic 'executive_outreach'
+      if (compositeContext.campaign.type === 'executive_outreach') {
+        compositeContext.campaign.type = metaOrigType;
+        const isAlumni = metaOrigType.includes('alumni');
+        const isCold = metaOrigType.includes('cold');
+        compositeContext.campaign.senderRelationship = isAlumni
+          ? 'This lead is a Colaberry Data Analytics/BI bootcamp graduate. They have NOT taken the AI Leadership Accelerator — it is a completely new program. Reference their data analytics background and career growth through Colaberry. Be warm but do NOT say they went through the Accelerator or imply prior familiarity with this program.'
+          : isCold
+          ? 'This is a COLD prospect. They do NOT know Ali or Colaberry. Do not presume familiarity. Be professional and reference their role/company.'
+          : compositeContext.campaign.senderRelationship;
+      }
+    }
+
+    // Build context_notes with original_campaign_type for AI instruction references
+    let contextNotes = action.metadata?.ai_context_notes || '';
+    if (metaOrigType) {
+      contextNotes = `${contextNotes ? contextNotes + '\n' : ''}ORIGINAL CAMPAIGN TYPE: ${metaOrigType}`;
+    }
+
     const result = await generateMessage({
       channel: channel as 'email' | 'sms' | 'voice',
       ai_instructions: action.ai_instructions,
       tone: action.metadata?.ai_tone || undefined,
-      context_notes: action.metadata?.ai_context_notes || undefined,
+      context_notes: contextNotes || undefined,
       lead: leadData as any,
       conversationHistory,
       campaignContext,
@@ -721,6 +745,26 @@ async function processScheduledActions(): Promise<void> {
         console.log(`[Scheduler] TEST MODE: action ${action.id} redirected (${safetyDecision.deliveryMode})`);
       }
 
+      // Cross-campaign daily cap: max 1 outbound communication per lead per 24h (all channels)
+      // Exception: if the lead REPLIED today, we can continue the conversation
+      {
+        const [capCheck] = await sequelize.query(
+          `SELECT
+            (SELECT COUNT(*) FROM communication_logs WHERE lead_id = :leadId AND direction = 'outbound' AND created_at::date = CURRENT_DATE) as outbound_today,
+            (SELECT COUNT(*) FROM communication_logs WHERE lead_id = :leadId AND direction = 'inbound' AND created_at::date = CURRENT_DATE) as inbound_today`,
+          { replacements: { leadId: action.lead_id }, type: QueryTypes.SELECT }
+        ) as any[];
+        const outboundToday = parseInt(capCheck?.outbound_today || '0', 10);
+        const inboundToday = parseInt(capCheck?.inbound_today || '0', 10);
+        if (outboundToday >= 1 && inboundToday === 0) {
+          const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          tomorrow.setHours(14, 0, 0, 0);
+          await action.update({ status: 'pending', scheduled_for: tomorrow, processing_started_at: null, processor_id: null } as any);
+          console.log(`[Scheduler] Daily cap: lead ${action.lead_id} already got ${outboundToday} touch(es) today (no reply), deferred`);
+          continue;
+        }
+      }
+
             // Step 3: Send via appropriate channel
       switch (channel) {
         case 'email':
@@ -730,8 +774,53 @@ async function processScheduledActions(): Promise<void> {
           await processVoiceAction(action);
           break;
         case 'sms':
-          // SMS paused — GHL restriction still active. Auto-pause until resolved.
-          await action.update({ status: 'paused', metadata: { ...(action.metadata || {}), paused_reason: 'ghl_sms_restriction' } } as any);
+          // GHL SMS ramp: enforce daily limit by level
+          try {
+            const SMS_LIMITS: Record<number, number> = { 1: 100, 2: 250, 3: 500, 4: 750, 5: 1500, 6: 2250, 7: 3000, 8: 3000 };
+            const settingsSvc = require('./settingsService');
+            let ghlSmsLevel = parseInt(await settingsSvc.getSetting('ghl_sms_level') || '2', 10);
+
+            // Auto-promote: check if we sent enough yesterday to unlock next level
+            const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+            const [yesterdaySent] = await sequelize.query(
+              "SELECT COUNT(*) as cnt FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND created_at::date = :yesterday",
+              { replacements: { yesterday: yesterdayStr }, type: QueryTypes.SELECT },
+            ) as any[];
+            const yesterdayCount = parseInt(yesterdaySent?.cnt || '0', 10);
+            const currentLimit = SMS_LIMITS[ghlSmsLevel] || 250;
+            if (yesterdayCount >= currentLimit && ghlSmsLevel < 8) {
+              ghlSmsLevel++;
+              await settingsSvc.setSetting('ghl_sms_level', String(ghlSmsLevel));
+              console.log(`[Scheduler] GHL SMS auto-promoted to Level ${ghlSmsLevel} (${SMS_LIMITS[ghlSmsLevel]}/day) — sent ${yesterdayCount} yesterday`);
+            }
+
+            const smsLimit = SMS_LIMITS[ghlSmsLevel] || 250;
+            const todayDateStr = new Date().toISOString().slice(0, 10);
+            const [smsSentToday] = await sequelize.query(
+              "SELECT COUNT(*) as cnt FROM communication_logs WHERE channel = 'sms' AND direction = 'outbound' AND created_at::date = :today",
+              { replacements: { today: todayDateStr }, type: QueryTypes.SELECT },
+            ) as any[];
+            const sentCount = parseInt(smsSentToday?.cnt || '0', 10);
+            if (sentCount >= smsLimit) {
+              console.log(`[Scheduler] SMS daily ramp cap reached (${sentCount}/${smsLimit}, GHL level ${ghlSmsLevel})`);
+              await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
+              break;
+            }
+
+            // Ensure body is populated before sending
+            await action.reload();
+            if (!action.body || action.body.trim().length === 0) {
+              console.warn(`[Scheduler] SMS action ${action.id} has no body after AI generation — skipping`);
+              await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
+              break;
+            }
+
+            console.log(`[Scheduler] SMS action ${action.id} sending (body: ${action.body?.length} chars, level ${ghlSmsLevel}, ${sentCount}/${smsLimit})`);
+            await processSmsAction(action);
+          } catch (smsErr: any) {
+            console.error(`[Scheduler] SMS processing error for ${action.id}: ${smsErr.message}`);
+            await action.update({ status: 'failed', metadata: { ...(action.metadata || {}), error: smsErr.message } } as any);
+          }
           break;
         default:
           console.warn(`[Scheduler] Unknown channel: ${channel} for action ${action.id}`);
@@ -870,10 +959,35 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     mcMetadata.lead_id = action.lead_id;
   }
 
-  const html = wrapEmailHtml(emailBody);
-  const info = await mailer.sendMail({
+  // Executive outreach: minimal wrapper (personal email feel, no corporate footer)
+  let html = campaignType === 'executive_outreach'
+    ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id })
+    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id });
+
+  // Deterministic validator for Ali personal emails — ensure no corporate artifacts
+  if (campaignType === 'executive_outreach') {
+    html = html
+      .replace(/<p[^>]*>\s*Best,?\s*<\/p>/gi, '')
+      .replace(/<p[^>]*>\s*Warm regards,?\s*<\/p>/gi, '')
+      .replace(/<p[^>]*>\s*Sincerely,?\s*<\/p>/gi, '')
+      .replace(/<p[^>]*>\s*Best regards,?\s*<\/p>/gi, '')
+      .replace(/<p[^>]*>\s*The Colaberry[^<]*<\/p>/gi, '')
+      .replace(/<p[^>]*>\s*Colaberry Enterprise[^<]*Team\s*<\/p>/gi, '')
+      .replace(/Colaberry Enterprise AI Division[^<]*/gi, '')
+      .replace(/AI Leadership \| Architecture \| Implementation \| Advisory/gi, '')
+      .replace(/If you no longer wish to receive[^<]*/gi, '')
+      .replace(/click here to opt out/gi, '')
+      .replace(/<p>\s*<\/p>/g, '');
+  }
+  // Reply-To: use reply subdomain so Mandrill catches inbound replies
+  // For Ali personal outreach, reply goes to ali@colaberry.com directly (he handles personally)
+  const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
+  const replyToAddr = campaignType === 'executive_outreach'
+    ? 'ali@colaberry.com'
+    : senderEmail.replace(/@[^@]+$/, '@' + replyDomain);
+  const mailOptions: any = {
     from: `"${senderName}" <${senderEmail}>`,
-    replyTo: `"${senderName}" <${senderEmail}>`,
+    replyTo: `"${senderName}" <${replyToAddr}>`,
     to: action.to_email,
     subject: action.subject,
     html,
@@ -883,7 +997,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
       'X-MC-Tags': action.campaign_id ? `campaign-sequence,${mcMetadata.trigger || 'campaign'}` : 'campaign-sequence',
     },
-  });
+  };
+
+  const info = await mailer.sendMail(mailOptions);
 
   console.log(`[Scheduler] Email sent to: ${action.to_email} from: ${senderEmail} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 
@@ -1216,7 +1332,7 @@ function injectCampaignTracking(
   campaignType: string,
   leadId?: number,
 ): string {
-  const SITE_PATTERN = /href="(https?:\/\/enterprise\.colaberry\.ai[^"]*)"/gi;
+  const SITE_PATTERN = /href="(https?:\/\/(enterprise|advisor)\.colaberry\.ai[^"]*)"/gi;
 
   return html.replace(SITE_PATTERN, (_match, rawUrl: string) => {
     try {
@@ -1236,7 +1352,57 @@ function injectCampaignTracking(
   });
 }
 
-function wrapEmailHtml(body: string): string {
+/** Minimal wrapper for personal emails — no corporate footer, no unsubscribe, looks like Gmail/Outlook */
+function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number }): string {
+  // Aggressively strip ANY team/company sign-offs the AI generates
+  let cleaned = body
+    // Strip "The Colaberry Enterprise AI team" and all variants (with or without HTML tags)
+    .replace(/The Colaberry[^<\n]*(team|division|group)[^<\n]*/gi, '')
+    .replace(/Colaberry Enterprise AI[^<\n]*(team|division)[^<\n]*/gi, '')
+    // Strip common generic sign-offs that precede the team name
+    .replace(/(Looking forward to connecting!?\s*)/gi, '')
+    .replace(/(Best,?\s*\n?\s*$)/gim, '')
+    .replace(/(Best regards,?\s*\n?\s*$)/gim, '')
+    .replace(/(Warm regards,?\s*\n?\s*$)/gim, '')
+    .replace(/(Sincerely,?\s*\n?\s*$)/gim, '')
+    // Strip in HTML paragraph tags
+    .replace(/<p>\s*(Best,?|Warm regards,?|Sincerely,?|Looking forward[^<]*)\s*<\/p>/gi, '')
+    .replace(/<p>\s*The Colaberry[^<]*<\/p>/gi, '')
+    .replace(/<p>\s*Colaberry Enterprise[^<]*<\/p>/gi, '')
+    // Clean up empty paragraphs left behind
+    .replace(/<p>\s*<\/p>/g, '')
+    .replace(/\n{3,}/g, '\n\n');
+  // Build tracked advisor URL for PS line
+  const advisorParams: string[] = [];
+  if (tracking?.campaignType) { advisorParams.push('utm_source=email', `utm_medium=${tracking.campaignType}`); }
+  if (tracking?.campaignId) { advisorParams.push(`utm_campaign=${tracking.campaignId}`); }
+  if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
+  const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
+
+  // Gmail-style plain email: Arial 14px, #222 text, no special formatting
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body style="font-family: Arial, sans-serif; font-size: 14px; color: #222222; line-height: 1.5; margin: 0; padding: 0;">
+  <div style="max-width: 600px; padding: 12px 0;">
+    ${cleaned}
+    <p style="font-size: 12px; color: #a0aec0; margin-top: 16px;">PS - Curious what AI could look like at your company? <a href="${advisorUrl}" style="color: #3b82f6;">Try our 5-minute AI org designer</a></p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number }): string {
+  const advisorParams: string[] = [];
+  if (tracking?.campaignType) { advisorParams.push('utm_source=email', `utm_medium=${tracking.campaignType}`); }
+  if (tracking?.campaignId) { advisorParams.push(`utm_campaign=${tracking.campaignId}`); }
+  if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
+  const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
+
   return `
 <!DOCTYPE html>
 <html>
@@ -1253,6 +1419,7 @@ function wrapEmailHtml(body: string): string {
 <body>
   ${body}
   <div class="footer">
+    <p style="font-size: 13px; margin-top: 12px;"><a href="${advisorUrl}" style="color: #3b82f6; text-decoration: none; font-weight: 600;">Design Your AI Organization in 5 Minutes &rarr;</a></p>
     <p>Colaberry Enterprise AI Division<br>
     AI Leadership | Architecture | Implementation | Advisory</p>
     <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
@@ -1309,6 +1476,128 @@ async function detectNoShows(): Promise<void> {
     } catch (err: any) {
       console.error(`[Scheduler] No-show processing failed for call ${call.id}:`, err.message);
     }
+  }
+}
+
+// ─── Cold Outbound Phase Graduation ──────────────────────────────────────────
+// Checks leads who completed a phase sequence and graduates them to the next phase
+// based on engagement (opens/clicks). Leads with zero engagement are dropped.
+
+async function checkPhaseGraduation(): Promise<void> {
+  const { enrollLeadInSequence } = require('./sequenceService');
+
+  // Phase transitions: Phase 1 → Phase 2, Phase 2 → Phase 3
+  const transitions = [
+    {
+      from_type: 'cold_outbound',
+      to_type: 'cold_outbound_phase2',
+      label: 'Phase 1 → Phase 2',
+      min_opens: 2,
+      min_clicks: 1,
+      operator: 'OR' as const,
+    },
+    {
+      from_type: 'cold_outbound_phase2',
+      to_type: 'cold_outbound_phase3',
+      label: 'Phase 2 → Phase 3',
+      min_opens: 1,
+      min_clicks: 0,
+      operator: 'OR' as const,
+    },
+  ];
+
+  let totalGraduated = 0;
+  let totalDropped = 0;
+
+  for (const transition of transitions) {
+    try {
+      // Find the destination campaign
+      const destCampaign = await Campaign.findOne({ where: { type: transition.to_type, status: 'active' } });
+      if (!destCampaign) {
+        console.log(`[PhaseGrad] No active campaign for ${transition.to_type} — skipping ${transition.label}`);
+        continue;
+      }
+
+      // Find leads who completed the source phase (all steps sent, no pending actions)
+      // and are not already enrolled in the destination campaign
+      const [completedLeads] = await sequelize.query(`
+        SELECT DISTINCT cl.lead_id, cl.campaign_id as source_campaign_id,
+          COALESCE(opens.open_count, 0) as open_count,
+          COALESCE(clicks.click_count, 0) as click_count
+        FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        WHERE c.type = :fromType
+          AND cl.status = 'completed'
+          -- Not already graduated to destination
+          AND NOT EXISTS (
+            SELECT 1 FROM campaign_leads cl2
+            JOIN campaigns c2 ON c2.id = cl2.campaign_id
+            WHERE cl2.lead_id = cl.lead_id AND c2.type = :toType
+          )
+          -- Completed within last 7 days (don't graduate ancient leads)
+          AND cl.updated_at > NOW() - interval '7 days'
+        -- Count opens for this lead in the source campaign
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) as open_count FROM interaction_outcomes io
+          WHERE io.lead_id = cl.lead_id AND io.campaign_id = cl.campaign_id AND io.outcome = 'opened'
+        ) opens ON true
+        -- Count clicks for this lead in the source campaign
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) as click_count FROM interaction_outcomes io
+          WHERE io.lead_id = cl.lead_id AND io.campaign_id = cl.campaign_id AND io.outcome = 'clicked'
+        ) clicks ON true
+        LIMIT 50
+      `, {
+        replacements: { fromType: transition.from_type, toType: transition.to_type },
+        type: QueryTypes.SELECT,
+      }) as any[];
+
+      if (completedLeads.length === 0) continue;
+
+      let graduated = 0;
+      let dropped = 0;
+
+      for (const lead of completedLeads) {
+        const opens = parseInt(lead.open_count || '0', 10);
+        const clicks = parseInt(lead.click_count || '0', 10);
+
+        // Check engagement criteria
+        let meetsThreshold = false;
+        if (transition.operator === 'OR') {
+          meetsThreshold = opens >= transition.min_opens || clicks >= transition.min_clicks;
+        } else {
+          meetsThreshold = opens >= transition.min_opens && clicks >= transition.min_clicks;
+        }
+
+        if (meetsThreshold) {
+          // Graduate: enroll in next phase
+          try {
+            await enrollLeadInSequence(lead.lead_id, destCampaign.sequence_id, destCampaign.id);
+            graduated++;
+            console.log(`[PhaseGrad] ${transition.label}: graduated lead ${lead.lead_id} (opens: ${opens}, clicks: ${clicks})`);
+          } catch (err: any) {
+            console.warn(`[PhaseGrad] Failed to graduate lead ${lead.lead_id}: ${err.message}`);
+          }
+        } else {
+          // Drop: zero or insufficient engagement
+          dropped++;
+          console.log(`[PhaseGrad] ${transition.label}: dropped lead ${lead.lead_id} (opens: ${opens}, clicks: ${clicks} — below threshold)`);
+        }
+      }
+
+      totalGraduated += graduated;
+      totalDropped += dropped;
+
+      if (graduated > 0 || dropped > 0) {
+        console.log(`[PhaseGrad] ${transition.label}: ${graduated} graduated, ${dropped} dropped`);
+      }
+    } catch (err: any) {
+      console.error(`[PhaseGrad] ${transition.label} error: ${err.message}`);
+    }
+  }
+
+  if (totalGraduated > 0 || totalDropped > 0) {
+    console.log(`[PhaseGrad] Total: ${totalGraduated} graduated, ${totalDropped} dropped`);
   }
 }
 
@@ -1670,6 +1959,13 @@ export function startScheduler(): void {
             AND comm.channel = 'voice'
             AND comm.metadata->>'trigger' = 'hot_lead_escalation'
           )
+          AND NOT EXISTS (
+            SELECT 1 FROM campaign_leads cl_ali
+            JOIN campaigns c_ali ON c_ali.id = cl_ali.campaign_id
+            WHERE cl_ali.lead_id = sub.lead_id
+            AND c_ali.type = 'executive_outreach'
+            AND cl_ali.enrolled_at > NOW() - interval '48 hours'
+          )
         ORDER BY sub.lead_id DESC
         LIMIT ${Math.min(perCycle, remaining)}
       `);
@@ -1700,15 +1996,44 @@ export function startScheduler(): void {
             continue;
           }
 
+          // Skip if Ali emailed this lead in the last 48 hours (Maya/Ali coordination)
+          try {
+            const [recentAliEmail] = await sequelize.query(`
+              SELECT 1 FROM scheduled_emails se
+              JOIN campaigns c ON c.id = se.campaign_id
+              WHERE c.type = 'executive_outreach'
+                AND se.lead_id = :leadId
+                AND se.status = 'sent'
+                AND se.sent_at > NOW() - interval '48 hours'
+              LIMIT 1
+            `, { replacements: { leadId: lead.lead_id }, type: QueryTypes.SELECT }) as any[];
+            if (recentAliEmail) {
+              console.log(`[HotLead] Skipping ${lead.name} — Ali emailed in last 48h (Maya/Ali coordination)`);
+              continue;
+            }
+          } catch { /* non-critical — proceed with call if check fails */ }
+
           // Build campaign-aware prompt for Maya
           const firstName = (lead.name || '').split(' ')[0];
           const isAlumni = (lead.campaign_name || '').includes('Alumni');
           const isCold = (lead.campaign_name || '').includes('Cold Outbound');
 
+          // Check if Ali personally emailed this lead (executive_outreach campaign)
+          let aliEmailedThisLead = false;
+          try {
+            const [aliCheck] = await sequelize.query(`
+              SELECT 1 FROM campaign_leads cl JOIN campaigns c ON c.id = cl.campaign_id
+              WHERE cl.lead_id = :leadId AND c.type = 'executive_outreach' LIMIT 1
+            `, { replacements: { leadId: lead.lead_id }, type: QueryTypes.SELECT }) as any[];
+            aliEmailedThisLead = !!aliCheck;
+          } catch { /* non-critical */ }
+
           const companyInfo = lead.lead_company ? ` at ${lead.lead_company}` : '';
           const titleInfo = lead.lead_title ? ` (${lead.lead_title})` : '';
 
-          const campaignContext = isAlumni
+          const campaignContext = aliEmailedThisLead
+            ? `${lead.name}${titleInfo} works${companyInfo}. Ali Muwwakkil, our Managing Director, personally emailed them a few days ago because they showed strong interest in the program. They have not replied to Ali's email yet. You are following up on Ali's behalf.`
+            : isAlumni
             ? `${lead.name} is a Colaberry alumni who is part of the Alumni AI Champion program. They were reached out to about helping others in their network get into AI leadership training through the referral program. They have been opening and engaging with emails about the Alumni AI Champion program.`
             : isCold
             ? `${lead.name}${titleInfo} works${companyInfo}. They received cold outreach emails about the Enterprise AI Leadership Accelerator — a 3-week program to build and deploy real AI systems. They opened multiple emails showing strong interest in AI systems and leadership.`
@@ -1718,7 +2043,11 @@ export function startScheduler(): void {
             ? `Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I noticed that someone from ${lead.lead_company} has been engaging with our content about building AI systems and I wanted to reach out personally to see how we can help your team.`
             : `Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I saw that you showed some interest in our content about building AI systems and I wanted to reach out personally to see if I can answer any questions.`;
 
-          const openingLine = isAlumni
+          const aliOpening = `Hi ${firstName}, this is Maya from Colaberry Enterprise AI. I'm calling because Ali Muwwakkil, our Managing Director, personally reached out to you recently about our AI Leadership program. He asked me to follow up and see if you had any questions or if there's a good time to connect.`;
+
+          const openingLine = aliEmailedThisLead
+            ? aliOpening
+            : isAlumni
             ? `Hi ${firstName}, this is Maya from Colaberry. I noticed you have been engaging with our Alumni AI Champion program and I wanted to reach out personally to see if you had any questions about the referral program or how you can help others in your network get into AI leadership.`
             : coldOpening;
 
@@ -1831,6 +2160,18 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Ali personal outreach: hourly during business hours (max 10/day)');
 
+  // ── Cold Outbound Phase Graduation (daily at 7 AM CT = 12:00 UTC) ─────────
+  // Checks leads who completed Phase 1 or Phase 2 and auto-enrolls them in the next phase
+  // based on engagement criteria (opens, clicks).
+  cron.schedule('0 12 * * *', () => {
+    instrumentCronJob('ColdOutboundPhaseGraduation', async () => {
+      await checkPhaseGraduation();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Phase graduation error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Cold outbound phase graduation: daily at 7 AM CT (12:00 UTC)');
+
   // ── Autonomous Ramp Evaluator (8 AM CT weekdays = 13:00 UTC Mon-Fri) ──
   const { runRampEvaluator } = require('./autonomousRampService');
 
@@ -1913,8 +2254,11 @@ export function startScheduler(): void {
         'At the end of the call, let Ali know you are also sending a summary email with all the details to ali@colaberry.com.',
       ].join('\n');
 
-      // Voice call
-      if (env.adminAlertPhone) {
+      // Check if Synthflow itself is one of the critical issues — if so, skip voice call
+      const synthflowDown = criticals.some((c: any) => c.name === 'synthflow_api');
+
+      // Voice call (skip if Synthflow is the problem — can't call about being unable to call)
+      if (env.adminAlertPhone && !synthflowDown) {
         try {
           const { triggerVoiceCall } = require('./synthflowService');
           const result = await triggerVoiceCall({
@@ -1935,9 +2279,11 @@ export function startScheduler(): void {
         } catch (callErr: any) {
           console.error(`[SystemHealth] Failed to initiate alert call: ${callErr.message}`);
         }
+      } else if (synthflowDown) {
+        console.warn(`[SystemHealth] ⚠️ Synthflow is down — cannot call Ali. Email-only alert.`);
       }
 
-      // Email (always — written record + fallback if call not answered)
+      // Email (always — written record + critical fallback when voice is down)
       try {
         const { sendAlertEmail } = require('./emailService');
         const emailSubject = criticals.length > 0

@@ -4,6 +4,7 @@ import SEOHead from '../components/SEOHead';
 import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ROIHighlightSection from '../components/ROIHighlightSection';
+import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 
 /** Intersection Observer hook for fade-in-on-scroll */
 function useFadeIn() {
@@ -504,6 +505,13 @@ function ProgramPage() {
           </div>
         </div>
       </section>
+
+      <AdvisoryCTABlock
+        headline="Before you enroll, see what AI can do for YOUR organization"
+        subtext="Design your AI-powered organization in 5 minutes - free, no commitment."
+        buttonText="Design It First"
+        trackLabel="program_design_first"
+      />
 
       <ROIHighlightSection
         headline="Before Sponsoring a Leader, Model the ROI."

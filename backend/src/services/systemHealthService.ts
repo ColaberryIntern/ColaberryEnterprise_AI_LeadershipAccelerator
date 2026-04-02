@@ -357,7 +357,7 @@ async function checkEmailDelivery(checks: HealthCheck[]): Promise<void> {
 async function checkExternalAPIs(checks: HealthCheck[]): Promise<void> {
   const { env } = require('../config/env');
 
-  // Synthflow API check
+  // Synthflow API check — reachability + auth + recent call success rate
   if (env.synthflowApiKey) {
     try {
       const controller = new AbortController();
@@ -368,15 +368,96 @@ async function checkExternalAPIs(checks: HealthCheck[]): Promise<void> {
         signal: controller.signal,
       });
       clearTimeout(timeout);
-      // Any response (even 4xx) means the API is reachable
-      checks.push({ name: 'synthflow_api', severity: 'ok', detail: `Synthflow API reachable (HTTP ${resp.status}).`, metric: resp.status });
+
+      if (resp.status === 401) {
+        // 401 = genuine auth failure
+        checks.push({
+          name: 'synthflow_api',
+          severity: 'critical',
+          detail: `Synthflow API auth failed (HTTP 401). API key may be revoked. ALL voice calls will fail.`,
+          metric: resp.status,
+        });
+      } else if (resp.status === 403) {
+        // 403 can mean auth failure OR missing model_id — check response body
+        const body = await resp.text().catch(() => '');
+        const isModelIdError = body.includes('model_id');
+        if (isModelIdError) {
+          // API key works, just missing model_id in the test request — this is OK
+          checks.push({ name: 'synthflow_api', severity: 'ok', detail: 'Synthflow API authenticated successfully.', metric: 200 });
+        } else {
+          checks.push({
+            name: 'synthflow_api',
+            severity: 'critical',
+            detail: `Synthflow API auth failed (HTTP 403). Account may be suspended or payment failed. ALL voice calls will fail.`,
+            metric: resp.status,
+          });
+        }
+      } else {
+        checks.push({ name: 'synthflow_api', severity: 'ok', detail: `Synthflow API reachable (HTTP ${resp.status}).`, metric: resp.status });
+      }
     } catch (err: any) {
+      // API completely unreachable — critical because Cory can't call Ali
       checks.push({
         name: 'synthflow_api',
-        severity: 'warning',
-        detail: `Synthflow API unreachable: ${err.message}. Voice calls and Cory alerts will fail.`,
+        severity: 'critical',
+        detail: `Synthflow API unreachable: ${err.message}. ALL voice calls including Cory alerts will fail.`,
       });
     }
+
+    // Check recent call success rate (last 2 hours)
+    try {
+      const { sequelize: db } = require('../config/database');
+      const { QueryTypes: QT } = require('sequelize');
+      const [callStats] = await db.query(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE provider_response->>'end_call_reason' = 'voicemail' OR status = 'failed') as failed_or_vm,
+          COUNT(*) FILTER (WHERE provider_response->>'call_duration' IS NOT NULL AND CAST(provider_response->>'call_duration' AS int) > 30) as connected
+        FROM communication_logs
+        WHERE channel = 'voice' AND direction = 'outbound'
+        AND created_at > NOW() - interval '2 hours'
+      `, { type: QT.SELECT });
+
+      const total = parseInt(callStats?.total || '0', 10);
+      const connected = parseInt(callStats?.connected || '0', 10);
+      const failedOrVm = parseInt(callStats?.failed_or_vm || '0', 10);
+
+      // Check for actual failures (not voicemail) separately
+      const [failOnlyStats] = await db.query(`
+        SELECT COUNT(*) as actual_failures
+        FROM communication_logs
+        WHERE channel = 'voice' AND direction = 'outbound'
+        AND created_at > NOW() - interval '2 hours'
+        AND status = 'failed'
+        AND (provider_response->>'end_call_reason' IS NULL OR provider_response->>'end_call_reason' != 'voicemail')
+      `, { type: QT.SELECT });
+      const actualFailures = parseInt((failOnlyStats as any)?.actual_failures || '0', 10);
+
+      if (total >= 5 && connected === 0 && actualFailures > 0) {
+        // Real failures (not just voicemail) — warn
+        checks.push({
+          name: 'synthflow_call_success',
+          severity: 'warning',
+          detail: `0/${total} voice calls connected in last 2h (${actualFailures} actual failures, ${failedOrVm - actualFailures} voicemail). Phone system may have issues.`,
+          metric: 0,
+        });
+      } else if (total >= 5 && connected === 0) {
+        // All voicemail, no real failures — this is normal, not a system issue
+        checks.push({
+          name: 'synthflow_call_success',
+          severity: 'ok',
+          detail: `0/${total} calls connected in last 2h — all went to voicemail (no system failures).`,
+          metric: 0,
+        });
+      } else if (total > 0) {
+        checks.push({
+          name: 'synthflow_call_success',
+          severity: 'ok',
+          detail: `${connected}/${total} calls connected in last 2h.`,
+          metric: connected,
+        });
+      }
+    } catch { /* non-critical */ }
   }
 
   // Mandrill SMTP check (via test connection)

@@ -610,7 +610,7 @@ function buildIntelligenceBriefHtml(data: IntelligenceBriefData): string {
 
 function buildExecutiveOverviewHtml(data: ExecutiveOverviewEmailData): string {
   const enrollUrl = env.frontendUrl + '/enroll';
-  const contactUrl = env.frontendUrl + '/contact';
+  const contactUrl = env.frontendUrl + '/ai-architect';
   return `
 <!DOCTYPE html>
 <html>
@@ -1477,7 +1477,7 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
     ${alert.urgency ? `<strong>Urgency:</strong> ${alert.urgency}<br>` : ''}
     <strong>Source:</strong> ${alert.source_type || 'system'}
   </div>
-  <p style="margin-top: 20px;">Review this alert in the <a href="http://95.216.199.47:8888/admin/intelligence" style="color: #2b6cb0; font-weight: 600;">Intelligence OS</a>.</p>
+  <p style="margin-top: 20px;">Review this alert in the <a href="https://enterprise.colaberry.ai/admin/intelligence" style="color: #2b6cb0; font-weight: 600;">Intelligence OS</a>.</p>
   <div class="footer">
     <p>Colaberry AI Organization - Alert Intelligence Engine</p>
   </div>
@@ -1507,15 +1507,46 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
     return;
   }
 
-  const periodLabel = data.type === 'weekly' ? 'Weekly Strategic' : 'Daily Executive';
+  const isWeekly = data.type === 'weekly';
   const dateStr = data.generatedAt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const subject = `${periodLabel} Briefing - ${dateStr}`;
+  const subject = isWeekly
+    ? `Ali, here's your week in review`
+    : `Ali, here's what happened today`;
 
   const r = await resolveEmailRecipient(to, subject);
 
   const fleet = data.agentFleet;
   const alerts = data.alertSummary;
   const tickets = data.ticketSummary;
+  const insights = data.strategicInsights;
+
+  // Build conversational assessment
+  const healthyPct = fleet.total > 0 ? Math.round((fleet.healthy / fleet.total) * 100) : 100;
+  const fleetAssessment = fleet.errored > 0
+    ? `${fleet.errored} agent${fleet.errored > 1 ? 's are' : ' is'} errored out of ${fleet.total} total -- I'm keeping an eye on ${fleet.errored === 1 ? 'it' : 'them'}.`
+    : `All ${fleet.total} agents are running healthy.`;
+
+  const alertAssessment = alerts.criticalOpen > 0
+    ? `We have ${alerts.criticalOpen} critical alert${alerts.criticalOpen > 1 ? 's' : ''} that need${alerts.criticalOpen === 1 ? 's' : ''} your attention.`
+    : alerts.openCount > 0
+    ? `${alerts.openCount} open alert${alerts.openCount > 1 ? 's' : ''}, nothing critical.`
+    : 'No open alerts -- everything is clean.';
+
+  const ticketAssessment = tickets.criticalOpen > 0
+    ? `${tickets.criticalOpen} critical ticket${tickets.criticalOpen > 1 ? 's' : ''} still open. ${tickets.resolvedLast24h > 0 ? `We resolved ${tickets.resolvedLast24h} in the last 24 hours.` : ''}`
+    : tickets.openCount > 0
+    ? `${tickets.openCount} open ticket${tickets.openCount > 1 ? 's' : ''}, ${tickets.resolvedLast24h} resolved in the last 24h. Nothing critical.`
+    : 'Ticket queue is clear.';
+
+  const insightSection = insights && insights.items.length > 0
+    ? `<p style="margin-top:16px;"><strong>Things I noticed:</strong></p><ul style="margin-top:4px;">${insights.items.slice(0, 3).map(i => `<li>${i.problem}${i.risk_tier === 'critical' ? ' <span style="color:#e53e3e;">(critical)</span>' : ''}</li>`).join('')}</ul>`
+    : '';
+
+  const overallTone = alerts.criticalOpen > 0 || fleet.errored > 2
+    ? 'A few things need your attention today.'
+    : fleet.errored > 0
+    ? 'Mostly smooth, a couple things to flag.'
+    : 'Everything is running smoothly.';
 
   const html = `
 <!DOCTYPE html>
@@ -1523,86 +1554,37 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 650px; margin: 0 auto; padding: 20px; }
-    h1 { color: #1a365d; font-size: 22px; margin-bottom: 4px; }
-    h2 { color: #1a365d; font-size: 16px; margin-top: 24px; margin-bottom: 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
-    .subtitle { color: #718096; font-size: 13px; margin-bottom: 20px; }
-    .kpi-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
-    .kpi-box { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 130px; }
-    .kpi-label { font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
-    .kpi-value { font-size: 20px; font-weight: 700; color: #1a365d; }
-    .kpi-sub { font-size: 11px; color: #718096; }
-    .alert-box { background: #fff5f5; border: 1px solid #fc8181; border-radius: 8px; padding: 12px 16px; margin-top: 8px; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #718096; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.7; max-width: 600px; margin: 0 auto; padding: 20px; }
+    .date { color: #718096; font-size: 13px; margin-bottom: 16px; }
+    p { margin: 8px 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; font-size: 14px; }
+    .critical { background: #fff5f5; border-left-color: #e53e3e; }
+    a { color: #2b6cb0; }
+    .sig { margin-top: 28px; color: #718096; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
   </style>
 </head>
 <body>
-  <h1>${periodLabel} Briefing</h1>
-  <div class="subtitle">${dateStr}</div>
+  <div class="date">${dateStr}</div>
 
-  <h2>Agent Fleet</h2>
-  <div class="kpi-grid">
-    <div class="kpi-box">
-      <div class="kpi-label">Total Agents</div>
-      <div class="kpi-value">${fleet.total}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Healthy</div>
-      <div class="kpi-value" style="color:#38a169;">${fleet.healthy}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Errored</div>
-      <div class="kpi-value" style="color:#e53e3e;">${fleet.errored}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Paused</div>
-      <div class="kpi-value" style="color:#d69e2e;">${fleet.paused}</div>
-    </div>
+  <p>Hey Ali,</p>
+
+  <p>${overallTone} Here's where things stand:</p>
+
+  <div class="${alerts.criticalOpen > 0 ? 'highlight critical' : 'highlight'}">
+    <strong>System Health:</strong> ${fleetAssessment}<br>
+    <strong>Alerts:</strong> ${alertAssessment}<br>
+    <strong>Tickets:</strong> ${ticketAssessment}
   </div>
 
-  <h2>Alert Summary</h2>
-  <div class="kpi-grid">
-    <div class="kpi-box">
-      <div class="kpi-label">Open Alerts</div>
-      <div class="kpi-value">${alerts.openCount}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Critical</div>
-      <div class="kpi-value" style="color:#e53e3e;">${alerts.criticalOpen}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Last 24h</div>
-      <div class="kpi-value">${alerts.last24h}</div>
-    </div>
-  </div>
+  ${insightSection}
 
-  <h2>Tickets</h2>
-  <div class="kpi-grid">
-    <div class="kpi-box">
-      <div class="kpi-label">Open</div>
-      <div class="kpi-value">${tickets.openCount}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Resolved (24h)</div>
-      <div class="kpi-value" style="color:#38a169;">${tickets.resolvedLast24h}</div>
-    </div>
-    <div class="kpi-box">
-      <div class="kpi-label">Critical Open</div>
-      <div class="kpi-value" style="color:#e53e3e;">${tickets.criticalOpen}</div>
-    </div>
-  </div>
+  ${alerts.criticalOpen > 0 ? `<p>I'd recommend checking the <a href="https://enterprise.colaberry.ai/admin/intelligence">Intelligence dashboard</a> when you get a chance -- the critical items are flagged there.</p>` : `<p>Nothing urgent -- you can check the <a href="https://enterprise.colaberry.ai/admin/dashboard">dashboard</a> for the full picture whenever you have a minute.</p>`}
 
-  ${alerts.criticalOpen > 0 ? `
-  <div class="alert-box">
-    <strong>Attention:</strong> ${alerts.criticalOpen} critical alert${alerts.criticalOpen > 1 ? 's' : ''} require${alerts.criticalOpen === 1 ? 's' : ''} immediate review.
-  </div>
-  ` : ''}
-
-  <p style="margin-top: 20px;">View the full Intelligence OS dashboard at <a href="http://95.216.199.47:8888/admin/intelligence" style="color: #2b6cb0; font-weight: 600;">Intelligence OS</a>.</p>
-
-  <div class="footer">
-    <p><strong>Colaberry AI Organization</strong> - ${periodLabel} Briefing<br>
-    <span style="font-size:11px;color:#a0aec0;">Generated by Cory, AI COO</span></p>
+  <div class="sig">
+    Cory<br>
+    AI Chief of Staff, Colaberry
   </div>
 </body>
 </html>
@@ -1617,7 +1599,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
     headers: emailHeaders('executive-briefing'),
   });
 
-  console.log(`[Email] ${periodLabel} briefing sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] ${isWeekly ? 'Weekly' : 'Daily'} briefing sent to: ${r.to} | msgId: ${info.messageId}`);
 }
 
 function buildPortalMagicLinkHtml(data: PortalMagicLinkData, magicLink: string): string {

@@ -93,7 +93,7 @@ function flush(useBeacon = false) {
     if (e && e.includes('@')) email = e;
   } catch { /* silent */ }
   try {
-    const storedLead = localStorage.getItem(LEAD_KEY);
+    const storedLead = localStorage.getItem(LEAD_KEY) || localStorage.getItem('cb_lid');
     if (storedLead) lead_id = storedLead;
   } catch { /* silent */ }
   try {
@@ -143,19 +143,52 @@ function onScroll() {
   }
 }
 
-// --- CTA click tracking -----------------------------------------------------
+// --- Click tracking (all interactive elements) ------------------------------
 function onCtaClick(e: MouseEvent) {
   const target = e.target as HTMLElement | null;
   if (!target) return;
-  const selectors = '.btn-primary, .cta, [data-track-cta]';
-  // Check clicked element and up to 3 parent levels
+
+  // CTA buttons and marked elements (high priority)
+  const ctaSelectors = '.btn-primary, .btn-secondary, .btn-outline-primary, .cta, [data-track-cta], [data-track]';
+  // All interactive elements (lower priority)
+  const interactiveSelectors = 'a[href], button, [role="button"]';
+
   let el: HTMLElement | null = target;
   for (let i = 0; i < 4 && el; i++) {
-    if (el.matches(selectors)) {
+    // Video/audio play detection
+    if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO' || el.closest('video, audio, [data-track="media"]')) {
+      push('media_play', {
+        element_tag: el.tagName.toLowerCase(),
+        element_text: el.getAttribute('title') || el.getAttribute('aria-label') || el.closest('[data-track-label]')?.getAttribute('data-track-label') || 'media',
+        url: (el as HTMLMediaElement).src || (el as HTMLMediaElement).currentSrc || location.href,
+      });
+      return;
+    }
+    // Iframe embeds (podcast players, embedded videos)
+    if (el.tagName === 'IFRAME' || el.closest('iframe')) {
+      push('embed_click', {
+        element_text: el.getAttribute('title') || 'embedded content',
+        src: (el as HTMLIFrameElement).src || '',
+      });
+      return;
+    }
+    // CTA buttons
+    if (el.matches(ctaSelectors)) {
       push('cta_click', {
         element_text: (el.textContent || '').trim().slice(0, 120),
         href: (el as HTMLAnchorElement).href || el.closest('a')?.href || null,
+        data_track: el.getAttribute('data-track') || el.getAttribute('data-track-cta') || null,
         is_cta: true,
+      });
+      return;
+    }
+    // Regular links and buttons
+    if (el.matches(interactiveSelectors)) {
+      push('click', {
+        element_text: (el.textContent || '').trim().slice(0, 120),
+        element_tag: el.tagName.toLowerCase(),
+        href: (el as HTMLAnchorElement).href || null,
+        data_track: el.getAttribute('data-track') || null,
       });
       return;
     }

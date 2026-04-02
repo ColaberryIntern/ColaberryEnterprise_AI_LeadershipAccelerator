@@ -40,6 +40,7 @@ export interface CompositeContext {
     lastCallOutcome: string | null;
     temperatureTrend: string;
     bookingAttempts: number;
+    recentClickedUrls: string[];
   };
   previousMessages: Array<{
     channel: string;
@@ -52,6 +53,7 @@ export interface CompositeContext {
     booking: string;
     landingPage: string;
     mainSite: string;
+    advisoryTool?: string;
   };
   cohort: {
     name: string;
@@ -128,11 +130,12 @@ export async function buildCompositeContext(
       ORDER BY start_date ASC LIMIT 1
     `, { type: QueryTypes.SELECT }),
 
-    // 7. Booking link clicks (how many times they tried to book)
+    // 7. Actual booking attempts — only count real booking modal interactions from page_events,
+    // NOT email link clicks to /ai-architect (clicking a link ≠ trying to book)
     sequelize.query(`
-      SELECT COUNT(*) as cnt FROM interaction_outcomes
-      WHERE lead_id = :leadId AND outcome = 'clicked'
-      AND (metadata->>'url' LIKE '%ai-architect%' OR metadata->>'url' LIKE '%calendly%' OR metadata->>'url' LIKE '%strategy%' OR metadata->>'url' LIKE '%book%')
+      SELECT COUNT(*) as cnt FROM page_events
+      WHERE lead_id = :leadId
+      AND event_type IN ('booking_modal_opened', 'booking_date_selected', 'booking_submitted', 'calendly_opened')
     `, { replacements: { leadId }, type: QueryTypes.SELECT }),
   ]);
 
@@ -156,12 +159,25 @@ export async function buildCompositeContext(
   }
 
   // Build sender relationship string
-  const isAlumni = (campaign.type || '').includes('alumni');
-  const isCold = (campaign.type || '').includes('cold');
+  // For executive_outreach (Ali Personal Outreach), look at the lead's OTHER campaign to determine context
+  let effectiveCampaignType = campaign.type || '';
+  if (effectiveCampaignType === 'executive_outreach') {
+    try {
+      const [origCampaign] = await sequelize.query(`
+        SELECT c.type FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        WHERE cl.lead_id = :leadId AND c.type != 'executive_outreach'
+        ORDER BY cl.enrolled_at DESC LIMIT 1
+      `, { replacements: { leadId }, type: QueryTypes.SELECT }) as any[];
+      if (origCampaign?.type) effectiveCampaignType = origCampaign.type;
+    } catch { /* fall back to executive_outreach */ }
+  }
+  const isAlumni = effectiveCampaignType.includes('alumni') || !!lead.alumni_context;
+  const isCold = effectiveCampaignType.includes('cold');
   const senderRelationship = isAlumni
-    ? 'This lead is a Colaberry alumni. They know Ali Muwwakkil personally. Reference Ali as the person behind this outreach.'
+    ? 'This lead is a Colaberry Data Analytics/BI bootcamp graduate. They have NOT taken the AI Leadership Accelerator — it is a completely new program. Reference their data analytics background and career growth through Colaberry. Be warm but do NOT say they went through the Accelerator or imply prior familiarity with this program.'
     : isCold
-    ? 'This is a COLD prospect. They do NOT know Ali or Colaberry. Do not presume familiarity.'
+    ? 'This is a COLD prospect. They do NOT know Ali or Colaberry. Do not presume familiarity. Be professional and reference their role/company.'
     : 'This is a warm lead who has shown interest in Colaberry.';
 
   // Build temperature trend
@@ -176,6 +192,28 @@ export async function buildCompositeContext(
     ORDER BY created_at DESC LIMIT 1
   `, { replacements: { leadId }, type: QueryTypes.SELECT }) as any[];
   const lastClickedUrl = lastClick[0]?.url || null;
+
+  // Recent clicked URLs (last 5 distinct URLs with counts)
+  const recentClicks = await sequelize.query(`
+    SELECT metadata->>'url' as url, COUNT(*) as cnt
+    FROM interaction_outcomes
+    WHERE lead_id = :leadId AND outcome = 'clicked' AND metadata->>'url' IS NOT NULL
+    AND created_at > NOW() - interval '14 days'
+    GROUP BY metadata->>'url'
+    ORDER BY cnt DESC LIMIT 5
+  `, { replacements: { leadId }, type: QueryTypes.SELECT }) as any[];
+  const recentClickedUrls = recentClicks.map((c: any) => {
+    const url = c.url || '';
+    // Simplify URL for AI context — strip UTM params, show path + count
+    const path = url.replace(/https?:\/\/enterprise\.colaberry\.ai/, '').replace(/\?.*$/, '') || '/';
+    const label = path.includes('ai-architect') ? 'booking page'
+      : path.includes('alumni') ? 'alumni champion page'
+      : path.includes('enroll') ? 'enrollment page'
+      : path.includes('program') ? 'program info page'
+      : path === '/' ? 'homepage'
+      : path;
+    return `${label} (${c.cnt}x)`;
+  });
 
   // Last voice call outcome
   const lastCall = await sequelize.query(`
@@ -192,6 +230,7 @@ export async function buildCompositeContext(
       ? 'https://enterprise.colaberry.ai/alumni-ai-champion'
       : 'https://enterprise.colaberry.ai/ai-architect',
     mainSite: 'https://enterprise.colaberry.ai',
+    advisoryTool: 'https://advisor.colaberry.ai/advisory/',
   };
 
   // Build cohort context
@@ -227,7 +266,7 @@ export async function buildCompositeContext(
     },
     campaign: {
       name: campaign.name || '',
-      type: campaign.type || '',
+      type: effectiveCampaignType || campaign.type || '',
       senderName: settings.agent_name || settings.sender_name || 'Colaberry',
       senderRelationship,
       step: stepIndex,
@@ -244,6 +283,7 @@ export async function buildCompositeContext(
       lastCallOutcome,
       temperatureTrend: tempTrend,
       bookingAttempts: bookingCount,
+      recentClickedUrls,
     },
     previousMessages: formattedPrev,
     allowedUrls,

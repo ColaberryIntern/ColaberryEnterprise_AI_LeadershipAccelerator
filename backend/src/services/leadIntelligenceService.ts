@@ -230,7 +230,7 @@ export async function discoverLeadsForCampaign(
 
 export async function approveRecommendation(
   recommendationId: string,
-  adminUserId: string,
+  adminUserId: string | null,
 ): Promise<{ lead_id: number; enrolled: boolean }> {
   const rec = await LeadRecommendation.findByPk(recommendationId);
   if (!rec) throw new Error('Recommendation not found');
@@ -270,7 +270,7 @@ export async function approveRecommendation(
   // Update recommendation
   await rec.update({
     status: 'approved',
-    reviewed_by: adminUserId,
+    reviewed_by: adminUserId || 'system-auto',
     reviewed_at: new Date(),
     lead_id: leadId,
     updated_at: new Date(),
@@ -281,7 +281,7 @@ export async function approveRecommendation(
 
 export async function rejectRecommendation(
   recommendationId: string,
-  adminUserId: string,
+  adminUserId: string | null,
 ): Promise<void> {
   const rec = await LeadRecommendation.findByPk(recommendationId);
   if (!rec) throw new Error('Recommendation not found');
@@ -289,7 +289,7 @@ export async function rejectRecommendation(
 
   await rec.update({
     status: 'rejected',
-    reviewed_by: adminUserId,
+    reviewed_by: adminUserId || 'system-auto',
     reviewed_at: new Date(),
     updated_at: new Date(),
   });
@@ -297,7 +297,7 @@ export async function rejectRecommendation(
 
 export async function bulkApproveRecommendations(
   recommendationIds: string[],
-  adminUserId: string,
+  adminUserId: string | null,
 ): Promise<{ approved: number; failed: number; errors: string[] }> {
   let approved = 0;
   let failed = 0;

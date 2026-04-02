@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { STANDARD_CTAS } from '../config/programSchedule';
 import StrategyCallModal from '../components/StrategyCallModal';
+import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 
 interface CaseStudy {
   emoji: string;
@@ -117,56 +118,63 @@ function CaseStudiesPage() {
       <section className="section" aria-label="Case Studies">
         <div className="container">
           {caseStudies.map((cs, index) => (
-            <div
-              className={`card border-0 shadow-sm mb-5 overflow-hidden ${index % 2 === 1 ? 'bg-light' : ''}`}
-              key={cs.industry}
-            >
-              <div className="row g-0">
-                <div className={`col-lg-4 ${index % 2 === 1 ? 'order-lg-2' : ''}`}>
-                  <img
-                    src={cs.image}
-                    alt={cs.imageAlt}
-                    className="img-feature"
-                    style={{ minHeight: '300px' }}
-                  />
-                </div>
-                <div className={`col-lg-8 ${index % 2 === 1 ? 'order-lg-1' : ''}`}>
-                  <div className="card-body p-5">
-                    {/* Header */}
-                    <div className="d-flex align-items-center mb-4 flex-wrap gap-2">
-                      <span className="fs-1 me-3" aria-hidden="true">{cs.emoji}</span>
-                      <div>
-                        <h2 className="h4 mb-1">{cs.industry}</h2>
-                        <span className="badge bg-secondary me-2">🏢 {cs.companySize}</span>
-                        <span className="badge bg-primary">👔 {cs.role}</span>
+            <React.Fragment key={cs.industry}>
+              <div
+                className={`card border-0 shadow-sm mb-5 overflow-hidden ${index % 2 === 1 ? 'bg-light' : ''}`}
+              >
+                <div className="row g-0">
+                  <div className={`col-lg-4 ${index % 2 === 1 ? 'order-lg-2' : ''}`}>
+                    <img
+                      src={cs.image}
+                      alt={cs.imageAlt}
+                      className="img-feature"
+                      style={{ minHeight: '300px' }}
+                    />
+                  </div>
+                  <div className={`col-lg-8 ${index % 2 === 1 ? 'order-lg-1' : ''}`}>
+                    <div className="card-body p-5">
+                      {/* Header */}
+                      <div className="d-flex align-items-center mb-4 flex-wrap gap-2">
+                        <span className="fs-1 me-3" aria-hidden="true">{cs.emoji}</span>
+                        <div>
+                          <h2 className="h4 mb-1">{cs.industry}</h2>
+                          <span className="badge bg-secondary me-2">🏢 {cs.companySize}</span>
+                          <span className="badge bg-primary">👔 {cs.role}</span>
+                        </div>
                       </div>
+
+                      {/* Challenge */}
+                      <h3 className="h5 mb-2">🔴 The Challenge</h3>
+                      <p className="text-muted mb-4">{cs.challenge}</p>
+
+                      {/* Approach */}
+                      <h3 className="h5 mb-2">🔧 The Approach</h3>
+                      <p className="text-muted mb-4">{cs.approach}</p>
+
+                      {/* Outcomes */}
+                      <h3 className="h5 mb-3">📈 Outcomes</h3>
+                      <ul className="list-unstyled mb-4">
+                        {cs.outcomes.map((outcome) => (
+                          <li className="mb-2 fs-5" key={outcome}>{outcome}</li>
+                        ))}
+                      </ul>
+
+                      {/* Quote */}
+                      <blockquote className="border-start border-4 border-primary ps-4 py-2 mb-0">
+                        <p className="fst-italic mb-1">{cs.quote}</p>
+                        <footer className="text-muted">— {cs.attribution}</footer>
+                      </blockquote>
                     </div>
-
-                    {/* Challenge */}
-                    <h3 className="h5 mb-2">🔴 The Challenge</h3>
-                    <p className="text-muted mb-4">{cs.challenge}</p>
-
-                    {/* Approach */}
-                    <h3 className="h5 mb-2">🔧 The Approach</h3>
-                    <p className="text-muted mb-4">{cs.approach}</p>
-
-                    {/* Outcomes */}
-                    <h3 className="h5 mb-3">📈 Outcomes</h3>
-                    <ul className="list-unstyled mb-4">
-                      {cs.outcomes.map((outcome) => (
-                        <li className="mb-2 fs-5" key={outcome}>{outcome}</li>
-                      ))}
-                    </ul>
-
-                    {/* Quote */}
-                    <blockquote className="border-start border-4 border-primary ps-4 py-2 mb-0">
-                      <p className="fst-italic mb-1">{cs.quote}</p>
-                      <footer className="text-muted">— {cs.attribution}</footer>
-                    </blockquote>
                   </div>
                 </div>
               </div>
-            </div>
+              <AdvisoryCTABlock
+                headline="Could your team achieve similar results?"
+                buttonText="Try It For Your Company"
+                trackLabel="case_study_try_it"
+                variant="compact"
+              />
+            </React.Fragment>
           ))}
         </div>
       </section>

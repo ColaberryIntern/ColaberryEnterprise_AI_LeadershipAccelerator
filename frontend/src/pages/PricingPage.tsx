@@ -6,13 +6,14 @@ import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ExecutiveTestimonial from '../components/ExecutiveTestimonial';
 import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import ROIHighlightSection from '../components/ROIHighlightSection';
+import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 
 function PricingPage() {
   return (
     <>
       <SEOHead
         title="Pricing"
-        description="Executive Accelerator pricing — $4,500 per participant. Corporate group pricing and Enterprise Sponsorship pathways available for organizations deploying AI at scale."
+        description="Executive Accelerator pricing - $4,500 per participant. Corporate group pricing and Enterprise Sponsorship pathways available for organizations deploying AI at scale."
       />
 
       {/* Header */}
@@ -30,6 +31,14 @@ function PricingPage() {
           </p>
         </div>
       </section>
+
+      <AdvisoryCTABlock
+        headline="Not sure if this is right for you?"
+        subtext="Design your AI organization first - free, no signup required. See the impact before you invest."
+        buttonText="Design My AI Organization"
+        trackLabel="pricing_design_first"
+        variant="dark"
+      />
 
       {/* Single Pricing Tier */}
       <section className="section" aria-label="Pricing">
@@ -116,6 +125,8 @@ function PricingPage() {
         industry="Financial Services"
         companySize="1,000+ employees"
       />
+
+      <AdvisoryCTABlock variant="compact" trackLabel="pricing_post_testimonial" />
 
       {/* Enterprise Sponsorship Pathway */}
       <section className="section" aria-label="Enterprise Sponsorship">
