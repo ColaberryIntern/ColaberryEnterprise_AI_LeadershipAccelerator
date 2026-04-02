@@ -1,5 +1,6 @@
 export interface UtilityScenario {
   id: string;
+  demoId: string; // maps to demoScenarios.json scenario ID
   title: string;
   icon: string;
   description: string;
@@ -10,6 +11,7 @@ export interface UtilityScenario {
 export const UTILITY_SCENARIOS: UtilityScenario[] = [
   {
     id: 'outage-prediction',
+    demoId: 'utility-outage',
     title: 'Outage Prediction',
     icon: 'bi-lightning-charge',
     description: 'Predict transformer and equipment failures 48 hours before they happen using sensor data and weather patterns.',
@@ -18,6 +20,7 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
   },
   {
     id: 'storm-response',
+    demoId: 'utility-storm',
     title: 'Storm Response',
     icon: 'bi-cloud-lightning-rain',
     description: 'Auto-notify members, triage inbound calls, and coordinate restoration crews during severe weather events.',
@@ -26,6 +29,7 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
   },
   {
     id: 'smart-metering',
+    demoId: 'utility-metering',
     title: 'Smart Metering',
     icon: 'bi-speedometer2',
     description: 'Detect anomalies across 75,000+ meters in real-time — theft, malfunction, and usage pattern shifts.',
@@ -34,6 +38,7 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
   },
   {
     id: 'vegetation-mgmt',
+    demoId: 'utility-vegetation',
     title: 'Vegetation Management',
     icon: 'bi-tree',
     description: 'AI-prioritized trimming schedules using satellite imagery, growth models, and outage correlation data.',
@@ -42,6 +47,7 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
   },
   {
     id: 'rate-case',
+    demoId: 'utility-ratecase',
     title: 'Rate Case Automation',
     icon: 'bi-file-earmark-bar-graph',
     description: 'Generate regulatory filings, cost-of-service studies, and rate design analysis in hours instead of weeks.',
@@ -50,6 +56,7 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
   },
   {
     id: 'member-services',
+    demoId: 'utility-memberservices',
     title: 'Member Services AI',
     icon: 'bi-headset',
     description: '24/7 billing inquiries, outage status, service requests, and new connection applications — no hold times.',
@@ -58,6 +65,7 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
   },
   {
     id: 'fleet-dispatch',
+    demoId: 'utility-fleet',
     title: 'Fleet & Crew Dispatch',
     icon: 'bi-truck',
     description: 'Optimal crew routing, real-time job assignment, and automatic escalation for priority restoration work.',
@@ -66,6 +74,7 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
   },
   {
     id: 'regulatory-compliance',
+    demoId: 'utility-compliance',
     title: 'Regulatory Compliance',
     icon: 'bi-shield-check',
     description: 'Auto-generate NERC, FERC, and state PUC compliance reports from operational data. Continuous monitoring.',

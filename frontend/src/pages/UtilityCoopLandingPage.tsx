@@ -162,7 +162,7 @@ function UtilityCoopLandingPage() {
 
           <InlineDemoPlayer
             key={demoKey}
-            allowedScenarios={['utility']}
+            allowedScenarios={UTILITY_SCENARIOS.map(s => s.demoId)}
             trackContext="utility_landing"
             onDemoComplete={onDemoComplete}
             replayScenario={selectedScenario || undefined}
@@ -179,7 +179,7 @@ function UtilityCoopLandingPage() {
                     <button
                       key={s.id}
                       className={`btn btn-sm rounded-pill px-3 ${done ? 'btn-success' : 'btn-outline-primary'}`}
-                      onClick={() => playScenario('utility')}
+                      onClick={() => playScenario(s.demoId)}
                       style={{ fontSize: 13 }}
                       data-track={`utility_scenario_pick_${s.id}`}
                     >
@@ -220,7 +220,7 @@ function UtilityCoopLandingPage() {
                 <button
                   className="card border-0 shadow-sm h-100 text-start w-100"
                   data-track={`utility_card_${s.id}`}
-                  onClick={() => playScenario('utility')}
+                  onClick={() => playScenario(s.demoId)}
                   style={{ borderRadius: 12, transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer', background: '#fff' }}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.12)'; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = ''; }}
