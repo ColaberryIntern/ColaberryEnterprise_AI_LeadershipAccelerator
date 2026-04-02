@@ -176,7 +176,7 @@ export async function manualMatch(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseRequirements(docText: string): Array<{ key: string; text: string }> {
+export function parseRequirements(docText: string): Array<{ key: string; text: string }> {
   const requirements: Array<{ key: string; text: string }> = [];
   const lines = docText.split('\n');
   let reqIndex = 0;

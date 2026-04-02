@@ -3,6 +3,75 @@ import { requireParticipant } from '../middlewares/participantAuth';
 
 const router = Router();
 
+// ---------------------------------------------------------------------------
+// Project Setup Flow (user-driven input)
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/setup/status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getSetupStatus } = await import('../services/projectSetupService');
+    res.json(await getSetupStatus(req.participant!.sub));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/setup/requirements', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { content } = req.body;
+    if (!content || typeof content !== 'string' || content.trim().length < 10) {
+      res.status(400).json({ error: 'Requirements content is required (minimum 10 characters)' });
+      return;
+    }
+    const { uploadRequirements } = await import('../services/projectSetupService');
+    res.json(await uploadRequirements(req.participant!.sub, content.trim()));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/setup/claude-md', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { content } = req.body;
+    if (!content || typeof content !== 'string' || content.trim().length < 10) {
+      res.status(400).json({ error: 'CLAUDE.md content is required (minimum 10 characters)' });
+      return;
+    }
+    const { uploadClaudeMd } = await import('../services/projectSetupService');
+    res.json(await uploadClaudeMd(req.participant!.sub, content.trim()));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/setup/github', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { repo_url, access_token } = req.body;
+    if (!repo_url || typeof repo_url !== 'string') {
+      res.status(400).json({ error: 'repo_url is required' });
+      return;
+    }
+    const { connectGitHub } = await import('../services/projectSetupService');
+    res.json(await connectGitHub(req.participant!.sub, repo_url.trim(), access_token));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/project/setup/activate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { activateProject } = await import('../services/projectSetupService');
+    res.json(await activateProject(req.participant!.sub));
+  } catch (err: any) {
+    const status = err.message.includes('not') ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Core Project Endpoints
+// ---------------------------------------------------------------------------
+
 /**
  * GET /api/portal/project
  * Get the current participant's project with stage and variables.

@@ -13,6 +13,7 @@ import WarRoomTab from '../../components/project/WarRoomTab';
 import ProjectLockInScreen from '../../components/project/ProjectLockInScreen';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import WorkstationLauncher from '../../components/project/WorkstationLauncher';
+import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 
 interface ProjectData {
   id: string;
@@ -33,6 +34,12 @@ interface ProjectData {
   portfolio_cache?: any;
   requirements_completion_pct?: number;
   readiness_score_breakdown?: any;
+  setup_status?: {
+    requirements_loaded: boolean;
+    claude_md_loaded: boolean;
+    github_connected: boolean;
+    activated: boolean;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -528,20 +535,16 @@ function ProjectDashboard() {
   }
 
   if (error === 'no-project') {
-    return (
-      <div className="text-center py-5">
-        <i className="bi bi-rocket-takeoff fs-1 d-block mb-3" style={{ color: 'var(--color-text-light)' }}></i>
-        <h5 className="fw-semibold" style={{ color: 'var(--color-primary)' }}>No Project Yet</h5>
-        <p className="text-muted small">Your enterprise AI project will be created when you begin the curriculum.</p>
-        <Link to="/portal/curriculum" className="btn btn-sm btn-primary">
-          <i className="bi bi-book me-1"></i>Go to Curriculum
-        </Link>
-      </div>
-    );
+    return <ProjectSetupWizard onActivated={() => window.location.reload()} />;
   }
 
   if (error || !project) {
     return <div className="alert alert-danger">{error || 'Failed to load project.'}</div>;
+  }
+
+  // Show setup wizard if project exists but not yet activated (user-driven flow)
+  if (project.setup_status && !project.setup_status.activated) {
+    return <ProjectSetupWizard initialStatus={project.setup_status} onActivated={() => window.location.reload()} />;
   }
 
   const variables = project.project_variables || {};

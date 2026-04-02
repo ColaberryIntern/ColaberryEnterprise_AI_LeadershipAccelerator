@@ -28,6 +28,14 @@ export interface ProjectAttributes {
   health_score?: number;
   velocity_score?: number;
   stability_score?: number;
+  setup_status?: {
+    requirements_loaded: boolean;
+    claude_md_loaded: boolean;
+    github_connected: boolean;
+    activated: boolean;
+  } | null;
+  claude_md_content?: string;
+  requirements_document?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -57,6 +65,9 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare health_score: number;
   declare velocity_score: number;
   declare stability_score: number;
+  declare setup_status: any;
+  declare claude_md_content: string;
+  declare requirements_document: string;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -163,6 +174,19 @@ Project.init(
     },
     stability_score: {
       type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    setup_status: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: null,
+    },
+    claude_md_content: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    requirements_document: {
+      type: DataTypes.TEXT,
       allowNull: true,
     },
   },
