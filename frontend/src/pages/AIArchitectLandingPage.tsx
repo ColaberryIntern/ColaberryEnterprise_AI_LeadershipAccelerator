@@ -5,6 +5,8 @@ import StrategyCallModal from '../components/StrategyCallModal';
 const IntelligenceDemoSection = React.lazy(() => import('../components/intelligence-demo/IntelligenceDemoSection'));
 import { captureUTMFromURL, getAdvisoryUrl } from '../services/utmService';
 import { initTracker, trackEvent } from '../utils/tracker';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
+import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 const BG = '#F8FAFC';
 const BG_ALT = '#F1F5F9';
@@ -140,6 +142,15 @@ function AIArchitectLandingPage() {
           >
             Design AI Org - Free &rarr;
           </a>
+          <div style={{ maxWidth: 960, margin: '20px auto 0' }}>
+            <IndustryDemoGrid
+              demos={INDUSTRY_DEMOS.filter(d => ['saas', 'logistics', 'healthcare'].includes(d.scenario))}
+              headline="Or Watch a Demo First"
+              subtext="See a complete AI organization designed for a real business in seconds."
+              trackContext="ai_architect"
+              columns={3}
+            />
+          </div>
         </div>
 
         {/* SYSTEM FRAMEWORK */}

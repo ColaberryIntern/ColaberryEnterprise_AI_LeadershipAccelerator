@@ -90,7 +90,7 @@ router.get('/api/admin/war-room/live-metrics', requireAdmin, async (_req, res) =
     const { QueryTypes } = require('sequelize');
     const today = new Date().toISOString().slice(0, 10);
 
-    const [[emailsToday], [smsToday], [callsToday], [opensToday], [clicksToday], [repliesToday], [bookingsToday], [hotLeads], [qualifiedLeads], [nextCohort], [phase2Today], [aliToday], [advisorClicks], [advisorSessions], [advisorLeads]] = await Promise.all([
+    const [[emailsToday], [smsToday], [callsToday], [opensToday], [clicksToday], [repliesToday], [bookingsToday], [hotLeads], [qualifiedLeads], [nextCohort], [phase2Today], [aliToday], [advisorClicks], [advisorSessions], [advisorLeads], [demoStarts], [demoCompletes], topDemoRows] = await Promise.all([
       sequelize.query("SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status='sent' AND sent_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
       sequelize.query("SELECT COUNT(*) as cnt FROM communication_logs WHERE channel='sms' AND direction='outbound' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
       sequelize.query("SELECT COUNT(*) as cnt FROM communication_logs WHERE channel='voice' AND direction='outbound' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
@@ -106,6 +106,9 @@ router.get('/api/admin/war-room/live-metrics', requireAdmin, async (_req, res) =
       sequelize.query("SELECT COUNT(*) as cnt FROM interaction_outcomes WHERE outcome='clicked' AND created_at::date = :today AND metadata->>'url' LIKE '%advisor.colaberry.ai%'", { replacements: { today }, type: QueryTypes.SELECT }),
       sequelize.query("SELECT COUNT(DISTINCT visitor_id) as cnt FROM page_events WHERE created_at::date = :today AND page_url LIKE '%advisor.colaberry.ai%'", { replacements: { today }, type: QueryTypes.SELECT }),
       sequelize.query("SELECT COUNT(*) as cnt FROM leads WHERE source = 'advisory' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM page_events WHERE event_type = 'demo_start' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM page_events WHERE event_type = 'demo_complete' AND created_at::date = :today", { replacements: { today }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT event_data->>'industry' as industry, COUNT(*) as cnt FROM page_events WHERE event_type IN ('demo_industry_click', 'cta_click') AND created_at::date = :today AND event_data->>'industry' IS NOT NULL GROUP BY event_data->>'industry' ORDER BY cnt DESC LIMIT 1", { replacements: { today }, type: QueryTypes.SELECT }),
     ]);
 
     res.json({
@@ -124,6 +127,9 @@ router.get('/api/admin/war-room/live-metrics', requireAdmin, async (_req, res) =
       advisorClicksToday: parseInt(advisorClicks.cnt),
       advisorSessionsToday: parseInt(advisorSessions.cnt),
       advisorLeadsToday: parseInt(advisorLeads.cnt),
+      demoStartsToday: parseInt(demoStarts.cnt),
+      demoCompletesToday: parseInt(demoCompletes.cnt),
+      topDemoIndustry: (topDemoRows as any[])?.[0]?.industry || null,
     });
   } catch (err: any) {
     console.error('[WarRoom] Live metrics error:', err.message);

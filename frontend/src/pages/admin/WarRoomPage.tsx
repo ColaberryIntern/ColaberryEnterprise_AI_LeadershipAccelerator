@@ -190,6 +190,9 @@ export default function WarRoomPage() {
               <MetricCard label="Advisor Clicks" value={liveMetrics?.advisorClicksToday ?? '...'} color="#8b5cf6" />
               <MetricCard label="Advisor Sessions" value={liveMetrics?.advisorSessionsToday ?? '...'} color="#8b5cf6" />
               <MetricCard label="Advisor Leads" value={liveMetrics?.advisorLeadsToday ?? '...'} color="#8b5cf6" />
+              <MetricCard label="Demo Starts" value={liveMetrics?.demoStartsToday ?? 0} color="#8b5cf6" />
+              <MetricCard label="Demo Completes" value={liveMetrics?.demoCompletesToday ?? 0} color="#198754" />
+              <MetricCard label="Top Demo" value={liveMetrics?.topDemoIndustry || '—'} color="#fd7e14" />
             </div>
             <div className="mt-2 pt-2 border-top d-flex gap-3" style={{ fontSize: 11 }}>
               <span className="text-muted">Ali Emails: <strong>{liveMetrics?.aliEmailsToday ?? 0}</strong></span>

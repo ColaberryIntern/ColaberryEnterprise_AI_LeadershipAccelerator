@@ -8,6 +8,8 @@ import { validateForm } from '../utils/formValidation';
 import { getUTMParams, getAdvisoryUrl } from '../services/utmService';
 import TrustBadges from '../components/TrustBadges';
 import LiveDemoStrip from '../components/LiveDemoStrip';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
+import { INDUSTRY_DEMOS } from '../config/industryDemos';
 import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ROIHighlightSection from '../components/ROIHighlightSection';
@@ -261,6 +263,14 @@ function HomePage() {
             See yours in 5 minutes &rarr;
           </a>
         </div>
+
+        <IndustryDemoGrid
+          demos={INDUSTRY_DEMOS.filter(d => ['saas', 'logistics', 'healthcare'].includes(d.scenario))}
+          headline="Watch It Happen for Your Industry"
+          subtext="See a complete AI organization designed for a real business scenario in seconds."
+          trackContext="homepage"
+          columns={3}
+        />
       </div>
 
       {/* Enterprise Solution Section */}

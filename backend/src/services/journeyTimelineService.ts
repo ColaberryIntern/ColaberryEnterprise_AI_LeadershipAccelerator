@@ -162,6 +162,7 @@ async function fetchPageEvents(visitorId: string, leadId?: number): Promise<Jour
     demo_skip: () => 'Skipped AI Workforce Designer demo',
     demo_to_input_focus: () => 'Transitioned from demo to input (ready to start)',
     demo_watch_click: () => 'Clicked "Watch Demo" button',
+    demo_industry_click: (e) => `Clicked ${e.event_data?.industry || 'industry'} AI demo`,
   };
 
   return events.map((e: any) => {
@@ -170,7 +171,7 @@ async function fetchPageEvents(visitorId: string, leadId?: number): Promise<Jour
     const title = titleFn ? titleFn(e) : `${type} on ${e.page_category || e.page_path}`;
     const stage = ['booking_modal_opened', 'booking_date_selected', 'booking_time_selected', 'book_strategy_call_click'].includes(type)
       ? 'decision' as const
-      : ['cta_click', 'form_start', 'form_submit', 'demo_start', 'demo_complete', 'demo_skip', 'demo_to_input_focus', 'demo_watch_click'].includes(type)
+      : ['cta_click', 'form_start', 'form_submit', 'demo_start', 'demo_complete', 'demo_skip', 'demo_to_input_focus', 'demo_watch_click', 'demo_industry_click'].includes(type)
       ? 'consideration' as const
       : 'awareness' as const;
 

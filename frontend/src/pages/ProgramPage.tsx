@@ -5,6 +5,8 @@ import { PROGRAM_SCHEDULE, STANDARD_CTAS } from '../config/programSchedule';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
+import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 /** Intersection Observer hook for fade-in-on-scroll */
 function useFadeIn() {
@@ -512,6 +514,15 @@ function ProgramPage() {
         buttonText="Design It First"
         trackLabel="program_design_first"
       />
+
+      <div className="container" style={{ maxWidth: 960 }}>
+        <IndustryDemoGrid
+          demos={INDUSTRY_DEMOS.filter(d => ['saas', 'healthcare', 'consulting'].includes(d.scenario))}
+          headline="Watch It Happen First"
+          trackContext="program"
+          columns={3}
+        />
+      </div>
 
       <ROIHighlightSection
         headline="Before Sponsoring a Leader, Model the ROI."

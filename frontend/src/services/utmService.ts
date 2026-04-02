@@ -90,6 +90,26 @@ export function getAdvisoryUrl(path: string = '/advisory/'): string {
   }
 }
 
+/**
+ * Build a demo walkthrough URL for a specific industry scenario.
+ * Includes UTM passthrough + lid for identity resolution.
+ */
+export function getDemoWalkthroughUrl(scenario: string): string {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const utm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+      .filter(k => params.get(k))
+      .map(k => `${k}=${encodeURIComponent(params.get(k) || '')}`)
+      .join('&');
+    const lid = localStorage.getItem('cb_lead_id') || localStorage.getItem('cb_lid') || '';
+    const lidParam = lid ? `lid=${lid}` : '';
+    const extra = [utm, lidParam].filter(Boolean).join('&');
+    return `https://advisor.colaberry.ai/advisory/demo/walkthrough?scenario=${scenario}${extra ? '&' + extra : ''}`;
+  } catch {
+    return `https://advisor.colaberry.ai/advisory/demo/walkthrough?scenario=${scenario}`;
+  }
+}
+
 export function getUTMPayloadFields(): {
   utm_source?: string;
   utm_campaign?: string;

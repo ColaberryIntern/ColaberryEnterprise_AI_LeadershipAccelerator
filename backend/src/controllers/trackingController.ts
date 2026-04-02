@@ -47,6 +47,7 @@ const VALID_EVENT_TYPES = [
   'demo_skip',
   'demo_to_input_focus',
   'demo_watch_click',
+  'demo_industry_click',
 ] as const;
 
 function extractReferrerDomain(referrerUrl?: string): string | undefined {

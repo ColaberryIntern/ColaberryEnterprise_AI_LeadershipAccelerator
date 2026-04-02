@@ -1,5 +1,6 @@
 import React from 'react';
-import { getAdvisoryUrl } from '../services/utmService';
+import { getAdvisoryUrl, getDemoWalkthroughUrl } from '../services/utmService';
+import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 export default function LiveDemoStrip() {
   const url = getAdvisoryUrl();
@@ -30,6 +31,25 @@ export default function LiveDemoStrip() {
                 <div style={{ color: '#475569' }}>{a.action}</div>
               </div>
             </div>
+          ))}
+        </div>
+        {/* Industry demo pills */}
+        <p className="text-center text-muted small mt-4 mb-2 fw-semibold" style={{ letterSpacing: 1, textTransform: 'uppercase', fontSize: 10 }}>
+          Watch a Demo for Your Industry
+        </p>
+        <div className="d-flex flex-wrap justify-content-center gap-2 mb-3">
+          {INDUSTRY_DEMOS.map(d => (
+            <a
+              key={d.scenario}
+              href={getDemoWalkthroughUrl(d.scenario)}
+              className="btn btn-sm"
+              data-track={`demo_strip_${d.scenario}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 20, fontSize: 12, color: '#475569', padding: '5px 14px' }}
+            >
+              <i className={`bi ${d.icon} me-1`} />{d.label}
+            </a>
           ))}
         </div>
         <div className="text-center">

@@ -8,6 +8,8 @@ import SEOHead from '../components/SEOHead';
 import { STANDARD_CTAS } from '../config/programSchedule';
 import StrategyCallModal from '../components/StrategyCallModal';
 import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
+import IndustryDemoCard from '../components/IndustryDemoCard';
+import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 interface CaseStudy {
   emoji: string;
@@ -168,12 +170,15 @@ function CaseStudiesPage() {
                   </div>
                 </div>
               </div>
-              <AdvisoryCTABlock
-                headline="Could your team achieve similar results?"
-                buttonText="Try It For Your Company"
-                trackLabel="case_study_try_it"
-                variant="compact"
-              />
+              {(() => {
+                const demoMap: Record<string, string> = { 'Financial Services': 'saas', 'Healthcare': 'healthcare', 'Manufacturing': 'logistics' };
+                const matched = INDUSTRY_DEMOS.find(d => d.scenario === demoMap[cs.industry]);
+                return matched ? (
+                  <IndustryDemoCard demo={matched} compact trackContext="case_study" />
+                ) : (
+                  <AdvisoryCTABlock headline="Could your team achieve similar results?" buttonText="Try It For Your Company" trackLabel="case_study_try_it" variant="compact" />
+                );
+              })()}
             </React.Fragment>
           ))}
         </div>
