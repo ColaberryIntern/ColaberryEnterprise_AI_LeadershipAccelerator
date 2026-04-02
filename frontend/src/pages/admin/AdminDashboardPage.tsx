@@ -164,7 +164,7 @@ function AdminDashboardPage() {
       api.get('/api/admin/intelligence/cory/status'),                                 // 9
       api.get('/api/admin/admissions/stats'),                                         // 10
       api.get('/api/admin/dashboard/campaign-performance'),                            // 11
-      api.get('/api/admin/appointments/upcoming', { params: { days: 7 } }),           // 12
+      api.get('/api/admin/appointments/upcoming', { params: { days: 30 } }),          // 12
     ]).then(([sR, cR, osR, fR, lsR, psR, caR, hrR, scR, coR, adR, cpR, apR]) => {
       const s = settled(sR); if (s) setStats(s.data.stats);
       const c = settled(cR); if (c) setCohorts(c.data.cohorts);
