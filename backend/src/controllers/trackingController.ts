@@ -42,6 +42,11 @@ const VALID_EVENT_TYPES = [
   'booking_date_selected',
   'booking_time_selected',
   'book_strategy_call_click',
+  'demo_start',
+  'demo_complete',
+  'demo_skip',
+  'demo_to_input_focus',
+  'demo_watch_click',
 ] as const;
 
 function extractReferrerDomain(referrerUrl?: string): string | undefined {
