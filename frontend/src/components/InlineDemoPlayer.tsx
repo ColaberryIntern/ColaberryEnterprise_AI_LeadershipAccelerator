@@ -30,8 +30,6 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
   const timersRef = useRef<number[]>([]);
   const graphRef = useRef<any>(null);
   const runIdRef = useRef(0);
-  // Incremented to trigger demo start via useEffect
-  const [playTrigger, setPlayTrigger] = useState(0);
 
   function stopAll() {
     runIdRef.current++;
@@ -42,21 +40,21 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
 
   useEffect(() => { return () => stopAll(); }, []);
 
-  // This effect fires AFTER React renders the 'playing' state DOM
-  useEffect(() => {
-    if (state === 'playing' && playTrigger > 0) {
+  // Callback ref: fires when the playing container div mounts
+  const playingRef = React.useCallback((node: HTMLDivElement | null) => {
+    if (node && state === 'playing') {
+      // DOM is guaranteed ready — node just mounted
       const rid = runIdRef.current;
       runDemo(rid);
     }
-  }, [playTrigger]); // only re-run when playTrigger changes
+  }, [state]);
 
   function start() {
     stopAll();
-    const rid = ++runIdRef.current;
-    localStorage.setItem('cb_last_demo', scenario.id);
-    try { (window as any).trackBookingEvent?.('demo_start', { scenario: scenario.id, industry: scenario.industry, context: trackContext }); } catch {}
+    ++runIdRef.current;
+    localStorage.setItem('cb_last_demo', scenarioRef.current.id);
+    try { (window as any).trackBookingEvent?.('demo_start', { scenario: scenarioRef.current.id, industry: scenarioRef.current.industry, context: trackContext }); } catch {}
     setState('playing');
-    setPlayTrigger(rid); // triggers useEffect after render
   }
 
   function skip() {
@@ -69,11 +67,12 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
     stopAll();
     const found = (scenarios as any[]).find(s => s.id === id);
     if (found) scenarioRef.current = found;
-    const rid = ++runIdRef.current;
+    ++runIdRef.current;
     localStorage.setItem('cb_last_demo', id);
     try { (window as any).trackBookingEvent?.('demo_start', { scenario: id, industry: found?.industry, context: trackContext }); } catch {}
-    setState('playing');
-    setPlayTrigger(rid); // triggers useEffect after render
+    // Brief reset to initial then back to playing to remount the div
+    setState('initial');
+    setTimeout(() => setState('playing'), 50);
   }
 
   function delay(ms: number, rid: number): Promise<boolean> {
@@ -359,7 +358,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext }: Inl
       )}
 
       {state === 'playing' && (
-        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+        <div ref={playingRef} style={{ maxWidth: 800, margin: '0 auto' }}>
           <div className="d-flex justify-content-between align-items-center mb-2">
             <small className="text-muted fw-semibold" style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>
               <i className={`bi ${icons[scenario.id] || 'bi-building'} me-1`} />{scenario.industry} Demo
