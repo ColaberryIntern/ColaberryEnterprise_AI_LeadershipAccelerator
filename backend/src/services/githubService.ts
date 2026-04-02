@@ -202,6 +202,101 @@ export async function getFileTree(enrollmentId: string): Promise<any> {
   return connection?.file_tree_json || null;
 }
 
+// ---------------------------------------------------------------------------
+// File Read/Write (for CLAUDE.md and PROJECT_STATE.json)
+// ---------------------------------------------------------------------------
+
+export async function readFileFromRepo(
+  enrollmentId: string,
+  filePath: string
+): Promise<string | null> {
+  const connection = await getConnection(enrollmentId);
+  if (!connection || !connection.repo_owner || !connection.repo_name) return null;
+
+  const headers: any = { 'Accept': 'application/vnd.github.v3+json' };
+  if (connection.access_token_encrypted) {
+    headers['Authorization'] = `Bearer ${connection.access_token_encrypted}`;
+  }
+
+  try {
+    const url = `https://api.github.com/repos/${connection.repo_owner}/${connection.repo_name}/contents/${filePath}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    if (data.content && data.encoding === 'base64') {
+      return Buffer.from(data.content, 'base64').toString('utf-8');
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeFileToRepo(
+  enrollmentId: string,
+  filePath: string,
+  content: string,
+  commitMessage: string
+): Promise<{ sha: string } | null> {
+  const connection = await getConnection(enrollmentId);
+  if (!connection || !connection.repo_owner || !connection.repo_name) {
+    throw new Error('No GitHub repository connected');
+  }
+  if (!connection.access_token_encrypted) {
+    throw new Error('No GitHub access token configured');
+  }
+
+  const headers: any = {
+    'Accept': 'application/vnd.github.v3+json',
+    'Authorization': `Bearer ${connection.access_token_encrypted}`,
+    'Content-Type': 'application/json',
+  };
+
+  const url = `https://api.github.com/repos/${connection.repo_owner}/${connection.repo_name}/contents/${filePath}`;
+
+  // Check if file exists to get its SHA (needed for updates)
+  let existingSha: string | undefined;
+  try {
+    const checkRes = await fetch(url, { headers: { ...headers, 'Content-Type': undefined } });
+    if (checkRes.ok) {
+      const existing: any = await checkRes.json();
+      existingSha = existing.sha;
+    }
+  } catch {}
+
+  const body: any = {
+    message: commitMessage,
+    content: Buffer.from(content, 'utf-8').toString('base64'),
+  };
+  if (existingSha) body.sha = existingSha;
+
+  const res = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GitHub write failed (${res.status}): ${err}`);
+  }
+
+  const data: any = await res.json();
+  return { sha: data.content?.sha || '' };
+}
+
+export async function writeMultipleFilesToRepo(
+  enrollmentId: string,
+  files: Array<{ path: string; content: string }>,
+  commitMessage: string
+): Promise<{ filesWritten: number }> {
+  let written = 0;
+  for (const file of files) {
+    try {
+      await writeFileToRepo(enrollmentId, file.path, file.content, `${commitMessage} — ${file.path}`);
+      written++;
+    } catch (err) {
+      console.error(`[GitHub] Failed to write ${file.path}:`, (err as Error).message);
+    }
+  }
+  return { filesWritten: written };
+}
+
 export async function generateStatusReport(
   enrollmentId: string
 ): Promise<string | null> {

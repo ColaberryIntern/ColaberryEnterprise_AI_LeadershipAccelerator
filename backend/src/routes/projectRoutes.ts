@@ -699,4 +699,89 @@ router.post('/api/portal/project/suggestions/select', requireParticipant, async 
   }
 });
 
+// ---------------------------------------------------------------------------
+// CLAUDE.md & Project State
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/portal/project/claude-md
+ * Generate CLAUDE.md content from current project state.
+ */
+router.get('/api/portal/project/claude-md', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { generateClaudeMd, generateProjectState } = await import('../services/claudeMdService');
+    const claudeMd = await generateClaudeMd(enrollmentId);
+    const projectState = await generateProjectState(enrollmentId);
+    res.json({ claudeMd, projectState: JSON.parse(projectState) });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /claude-md error:', err.message);
+    res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/project/claude-md/push
+ * Push CLAUDE.md + PROJECT_STATE.json to participant's GitHub repo.
+ */
+router.post('/api/portal/project/claude-md/push', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { pushClaudeMdToRepo } = await import('../services/claudeMdService');
+    const result = await pushClaudeMdToRepo(enrollmentId);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /claude-md/push error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/project/scaffold/generate
+ * Generate project scaffold and push to GitHub repo.
+ */
+router.post('/api/portal/project/scaffold/generate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { generateAndPushScaffold } = await import('../services/projectScaffoldService');
+    const result = await generateAndPushScaffold(enrollmentId);
+    res.json(result);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /scaffold/generate error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/project/reconcile
+ * Compare DB state with repo CLAUDE.md/PROJECT_STATE.json.
+ */
+router.post('/api/portal/project/reconcile', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { reconcile } = await import('../services/projectReconciliationService');
+    const report = await reconcile(enrollmentId);
+    res.json(report);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] POST /reconcile error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/portal/project/workstation-context
+ * Get full context for launching AI Workstation (Claude Code).
+ */
+router.get('/api/portal/project/workstation-context', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { buildWorkstationContext } = await import('../services/workstationService');
+    const context = await buildWorkstationContext(enrollmentId);
+    res.json(context);
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /workstation-context error:', err.message);
+    res.status(err.message.includes('not found') ? 404 : 500).json({ error: err.message });
+  }
+});
+
 export default router;

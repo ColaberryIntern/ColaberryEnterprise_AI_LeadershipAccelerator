@@ -145,6 +145,17 @@ export async function completeAction(actionId: string): Promise<NextAction> {
   await action.save();
 
   console.log(`[NextAction] Completed: "${action.title}"`);
+
+  // Auto-sync CLAUDE.md to repo (non-blocking, non-critical)
+  try {
+    const { autoSync } = require('../projectReconciliationService');
+    // Need enrollmentId — get from project
+    const project = await (await import('../../models')).Project.findByPk(action.project_id);
+    if (project?.enrollment_id) {
+      autoSync(project.enrollment_id).catch(() => {});
+    }
+  } catch {}
+
   return action;
 }
 
