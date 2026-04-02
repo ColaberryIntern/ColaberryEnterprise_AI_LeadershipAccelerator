@@ -78,8 +78,15 @@ export default function StrategyCallModal({
   initialPhone = '',
   pageOrigin,
 }: StrategyCallModalProps) {
-  const { dates, loading, error: availError, refetch } = useCalendarAvailability();
+  const { dates, loading, error: availError, refetch, ensureLoaded } = useCalendarAvailability();
   const trackedRef = useRef(false);
+
+  // Fetch availability when modal opens (lazy load — not on page mount)
+  useEffect(() => {
+    if (show) {
+      ensureLoaded();
+    }
+  }, [show, ensureLoaded]);
 
   useEffect(() => {
     if (show && !loading && !trackedRef.current) {
