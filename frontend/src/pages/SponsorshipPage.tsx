@@ -6,6 +6,7 @@ import LeadCaptureForm from '../components/LeadCaptureForm';
 import Modal from '../components/ui/Modal';
 import { PROGRAM_SCHEDULE } from '../config/programSchedule';
 import ROIHighlightSection from '../components/ROIHighlightSection';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
 import api from '../utils/api';
 import kitMarkdownUrl from '../docs/CorporateSponsorshipKit.md';
 import { Cohort } from '../models/Cohort';
@@ -127,6 +128,10 @@ function SponsorshipPage() {
           </div>
         </div>
       </section>
+
+      <div className="container" style={{ maxWidth: 900 }}>
+        <IndustryDemoGrid trackContext="sponsorship" />
+      </div>
 
       <ROIHighlightSection
         headline="Run Your Organization's ROI Scenario."

@@ -9,7 +9,6 @@ import { getUTMParams, getAdvisoryUrl } from '../services/utmService';
 import TrustBadges from '../components/TrustBadges';
 import LiveDemoStrip from '../components/LiveDemoStrip';
 import IndustryDemoGrid from '../components/IndustryDemoGrid';
-import { INDUSTRY_DEMOS } from '../config/industryDemos';
 import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ROIHighlightSection from '../components/ROIHighlightSection';
@@ -264,12 +263,7 @@ function HomePage() {
           </a>
         </div>
 
-        <IndustryDemoGrid
-          demos={INDUSTRY_DEMOS.filter(d => ['saas', 'logistics', 'healthcare'].includes(d.scenario))}
-          headline="Watch It Happen for Your Industry"
-          subtext="See a complete AI organization designed for a real business scenario in seconds."
-          trackContext="homepage"
-        />
+        <IndustryDemoGrid trackContext="homepage" />
       </div>
 
       {/* Enterprise Solution Section */}
@@ -313,6 +307,10 @@ function HomePage() {
         subtext="Small workflow automation gains compound into enterprise-level financial results."
         presetValues={{ employees: 25, hours: 5 }}
       />
+
+      <div className="container" style={{ maxWidth: 900 }}>
+        <IndustryDemoGrid trackContext="homepage_mid" />
+      </div>
 
       {/* Why Enterprise Leaders Choose Colaberry */}
       <section className="section-alt" aria-label="Why Colaberry">

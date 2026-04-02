@@ -8,7 +8,6 @@ import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 import IndustryDemoGrid from '../components/IndustryDemoGrid';
-import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 function PricingPage() {
   return (
@@ -43,11 +42,7 @@ function PricingPage() {
       />
 
       <div className="container" style={{ maxWidth: 960 }}>
-        <IndustryDemoGrid
-          demos={INDUSTRY_DEMOS.filter(d => ['saas', 'healthcare', 'consulting'].includes(d.scenario))}
-          headline="See What Your AI Organization Could Look Like"
-          trackContext="pricing"
-        />
+        <IndustryDemoGrid trackContext="pricing" />
       </div>
 
       {/* Single Pricing Tier */}

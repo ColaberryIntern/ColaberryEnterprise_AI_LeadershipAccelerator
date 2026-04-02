@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import { STANDARD_CTAS } from '../config/programSchedule';
 import StrategyCallModal from '../components/StrategyCallModal';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
 
 function AdvisoryPage() {
   const [showBooking, setShowBooking] = useState(false);
@@ -191,6 +192,10 @@ function AdvisoryPage() {
           </div>
         </div>
       </section>
+
+      <div className="container" style={{ maxWidth: 900 }}>
+        <IndustryDemoGrid trackContext="advisory" />
+      </div>
 
       {/* Industries Served */}
       <section className="section-alt" aria-label="Industries Served">

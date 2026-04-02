@@ -6,6 +6,7 @@ import { validateForm, ValidationRules } from '../utils/formValidation';
 import { getUTMParams } from '../services/utmService';
 import api from '../utils/api';
 import { STANDARD_CTAS } from '../config/programSchedule';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
 
 const VALIDATION_RULES: ValidationRules = {
   required: ['fullName', 'email', 'company', 'title'],
@@ -481,6 +482,10 @@ function ContactPage() {
           )}
         </div>
       </section>
+
+      <div className="container" style={{ maxWidth: 900 }}>
+        <IndustryDemoGrid trackContext="contact" />
+      </div>
 
       {/* Strategy Call CTA */}
       <section

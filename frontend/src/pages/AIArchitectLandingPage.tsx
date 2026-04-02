@@ -6,7 +6,6 @@ const IntelligenceDemoSection = React.lazy(() => import('../components/intellige
 import { captureUTMFromURL, getAdvisoryUrl } from '../services/utmService';
 import { initTracker, trackEvent } from '../utils/tracker';
 import IndustryDemoGrid from '../components/IndustryDemoGrid';
-import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 const BG = '#F8FAFC';
 const BG_ALT = '#F1F5F9';
@@ -143,12 +142,7 @@ function AIArchitectLandingPage() {
             Design AI Org - Free &rarr;
           </a>
           <div style={{ maxWidth: 960, margin: '20px auto 0' }}>
-            <IndustryDemoGrid
-              demos={INDUSTRY_DEMOS.filter(d => ['saas', 'logistics', 'healthcare'].includes(d.scenario))}
-              headline="Or Watch a Demo First"
-              subtext="See a complete AI organization designed for a real business in seconds."
-              trackContext="ai_architect"
-            />
+            <IndustryDemoGrid trackContext="ai_architect" />
           </div>
         </div>
 
@@ -421,6 +415,10 @@ function AIArchitectLandingPage() {
             </p>
           </div>
         </section>
+
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 20px' }}>
+          <IndustryDemoGrid trackContext="ai_architect_bottom" />
+        </div>
 
         {/* FOOTER */}
         <footer style={{ padding: '24px 20px', textAlign: 'center', background: BG, borderTop: `1px solid ${BORDER}` }}>

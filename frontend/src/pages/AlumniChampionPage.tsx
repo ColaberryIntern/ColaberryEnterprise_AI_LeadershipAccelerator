@@ -3,6 +3,7 @@ import { initTracker } from '../utils/tracker';
 import { captureUTMFromURL } from '../services/utmService';
 import { captureCampaignFromURL } from '../services/campaignAttributionService';
 import SEOHead from '../components/SEOHead';
+import IndustryDemoGrid from '../components/IndustryDemoGrid';
 import MayaChatWidget from '../components/MayaChatWidget';
 
 const DARK = {
@@ -314,6 +315,10 @@ function AlumniChampionPage() {
             </p>
           </div>
         </section>
+
+        <div className="container" style={{ maxWidth: 900 }}>
+          <IndustryDemoGrid trackContext="alumni" />
+        </div>
 
         {/* ── What Participants Walk Away With (artifacts) ── */}
         <section style={{ padding: '4rem 0' }}>

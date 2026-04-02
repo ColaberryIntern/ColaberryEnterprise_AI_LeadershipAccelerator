@@ -6,7 +6,6 @@ import ArtifactValueBlock from '../components/ArtifactValueBlock';
 import ROIHighlightSection from '../components/ROIHighlightSection';
 import AdvisoryCTABlock from '../components/AdvisoryCTABlock';
 import IndustryDemoGrid from '../components/IndustryDemoGrid';
-import { INDUSTRY_DEMOS } from '../config/industryDemos';
 
 /** Intersection Observer hook for fade-in-on-scroll */
 function useFadeIn() {
@@ -516,11 +515,7 @@ function ProgramPage() {
       />
 
       <div className="container" style={{ maxWidth: 960 }}>
-        <IndustryDemoGrid
-          demos={INDUSTRY_DEMOS.filter(d => ['saas', 'healthcare', 'consulting'].includes(d.scenario))}
-          headline="Watch It Happen First"
-          trackContext="program"
-        />
+        <IndustryDemoGrid trackContext="program" />
       </div>
 
       <ROIHighlightSection
