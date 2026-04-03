@@ -429,6 +429,42 @@ router.post('/api/portal/project/requirements/extract', requireParticipant, asyn
     const { getProjectByEnrollment } = await import('../services/projectService');
     const project = await getProjectByEnrollment(enrollmentId);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    // If project has uploaded requirements_document, parse from that (new flow)
+    if (project.requirements_document) {
+      const { parseRequirementsWithSections } = await import('../services/requirementsParserService');
+      const { parseRequirements } = await import('../services/requirementsMatchingService');
+      const { RequirementsMap } = await import('../models');
+
+      // Parse flat requirements
+      const parsed = parseRequirements(project.requirements_document);
+      // Clear existing
+      await RequirementsMap.destroy({ where: { project_id: project.id } });
+      // Create rows
+      for (const req of parsed) {
+        await RequirementsMap.create({
+          project_id: project.id, requirement_key: req.key, requirement_text: req.text,
+          status: 'unmatched', github_file_paths: [], confidence_score: 0, is_active: true,
+        } as any);
+      }
+
+      // Run clustering (non-critical)
+      let clustered = false;
+      try {
+        const parsedWithSections = parseRequirementsWithSections(project.requirements_document);
+        const { clusterRequirements, persistHierarchy } = await import('../services/requirementClusteringService');
+        const hierarchy = await clusterRequirements(project.id, parsedWithSections);
+        await persistHierarchy(project.id, hierarchy);
+        clustered = true;
+      } catch (clusterErr) {
+        console.warn('[Extract] Clustering failed:', (clusterErr as Error).message);
+      }
+
+      res.json({ total: parsed.length, clustered, source: 'uploaded_document' });
+      return;
+    }
+
+    // Fallback: old flow (compiled artifact)
     const { extractRequirements } = await import('../services/requirementsMatchingService');
     const result = await extractRequirements(project.id);
     res.json(result);

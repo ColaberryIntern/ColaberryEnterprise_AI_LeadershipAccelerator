@@ -85,6 +85,9 @@ function RequirementsTab() {
   const [reqData, setReqData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
+  const [extractStep, setExtractStep] = useState('');
+  const [extractProgress, setExtractProgress] = useState(0);
+  const [extractResult, setExtractResult] = useState<any>(null);
   const [matching, setMatching] = useState(false);
 
   const loadRequirements = useCallback(() => {
@@ -99,12 +102,25 @@ function RequirementsTab() {
 
   const handleExtract = async () => {
     setExtracting(true);
+    setExtractResult(null);
+    setExtractStep('Parsing requirements document...');
+    setExtractProgress(20);
     try {
-      await portalApi.post('/api/portal/project/requirements/extract');
+      setExtractStep('Extracting & clustering requirements...');
+      setExtractProgress(50);
+      const res = await portalApi.post('/api/portal/project/requirements/extract');
+      setExtractProgress(90);
+      setExtractStep(`Done — ${res.data.total} requirements extracted${res.data.clustered ? ' & clustered into capabilities' : ''}`);
+      setExtractResult(res.data);
+      setExtractProgress(100);
       loadRequirements();
     } catch (err: any) {
+      setExtractStep('');
+      setExtractProgress(0);
       alert(err.response?.data?.error || 'Extract failed');
-    } finally { setExtracting(false); }
+    } finally {
+      setTimeout(() => { setExtracting(false); setExtractProgress(0); setExtractStep(''); }, 3000);
+    }
   };
 
   const handleMatch = async () => {
@@ -126,14 +142,40 @@ function RequirementsTab() {
 
   return (
     <>
-      <div className="d-flex gap-2 mb-3">
-        <button className="btn btn-sm btn-outline-primary" onClick={handleExtract} disabled={extracting}>
-          {extracting ? 'Extracting...' : 'Extract Requirements'}
+      <div className="d-flex gap-2 mb-3 align-items-center">
+        <button className="btn btn-sm btn-primary" onClick={handleExtract} disabled={extracting}>
+          {extracting ? <><span className="spinner-border spinner-border-sm me-1"></span>Extracting...</> : <><i className="bi bi-file-earmark-text me-1"></i>Extract Requirements</>}
         </button>
-        <button className="btn btn-sm btn-outline-primary" onClick={handleMatch} disabled={matching}>
-          {matching ? 'Matching...' : 'Match to Repo'}
+        <button className="btn btn-sm btn-outline-primary" onClick={handleMatch} disabled={matching || extracting}>
+          {matching ? <><span className="spinner-border spinner-border-sm me-1"></span>Matching...</> : <><i className="bi bi-github me-1"></i>Match to Repo</>}
         </button>
       </div>
+
+      {/* Progress bar during extraction */}
+      {(extracting || extractStep) && (
+        <div className="card border-0 shadow-sm mb-3">
+          <div className="card-body p-3">
+            <div className="d-flex justify-content-between small mb-1">
+              <span className="text-muted">{extractStep}</span>
+              <span className="fw-medium">{extractProgress}%</span>
+            </div>
+            <div className="progress" style={{ height: 6 }}>
+              <div className="progress-bar" style={{
+                width: `${extractProgress}%`,
+                background: extractProgress >= 100 ? 'var(--color-accent)' : 'var(--color-primary-light)',
+                transition: 'width 0.5s ease',
+              }} />
+            </div>
+            {extractResult && (
+              <div className="mt-2 small" style={{ color: 'var(--color-accent)' }}>
+                <i className="bi bi-check-circle me-1"></i>
+                {extractResult.total} requirements extracted
+                {extractResult.clustered && ' and grouped into capabilities'}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {reqData && reqData.total > 0 ? (
         <>
@@ -170,8 +212,10 @@ function RequirementsTab() {
           </div>
         </>
       ) : (
-        <div className="text-center py-4 text-muted small">
-          No requirements extracted yet. Compile your requirements document first, then click "Extract Requirements".
+        <div className="text-center py-4">
+          <i className="bi bi-file-earmark-text d-block mb-2" style={{ fontSize: 28, color: 'var(--color-text-light)' }}></i>
+          <p className="text-muted small mb-2">No requirements extracted yet.</p>
+          <p className="text-muted small">Click <strong>Extract Requirements</strong> to parse your uploaded requirements document into trackable items.</p>
         </div>
       )}
     </>
