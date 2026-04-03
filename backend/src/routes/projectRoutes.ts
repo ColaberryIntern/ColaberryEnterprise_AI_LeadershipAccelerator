@@ -123,7 +123,59 @@ router.get('/api/portal/project/execution-status', requireParticipant, async (re
 // ---------------------------------------------------------------------------
 
 // Capability/Feature/Scope routes removed — not yet implemented
-// Will be restored when Capability and Feature models are created
+// ---------------------------------------------------------------------------
+// Capability Hierarchy & Scope Control
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/capabilities', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    res.json(await getCapabilityHierarchy(project.id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/capabilities/scope', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { type, id, active } = req.body;
+    if (!type || !id || typeof active !== 'boolean') { res.status(400).json({ error: 'type, id, active required' }); return; }
+    const scope = await import('../services/projectScopeService');
+    if (type === 'capability') await scope.toggleCapability(id, active);
+    else if (type === 'feature') await scope.toggleFeature(id, active);
+    else if (type === 'requirement') await scope.toggleRequirement(id, active);
+    else { res.status(400).json({ error: 'type must be capability/feature/requirement' }); return; }
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    res.json(await scope.getCapabilityHierarchy(project!.id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/capabilities/add-feature', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { description, capability_id } = req.body;
+    if (!description) { res.status(400).json({ error: 'description required' }); return; }
+    const { generateFeature } = await import('../services/aiFeatureBuilderService');
+    res.json(await generateFeature(req.participant!.sub, description.trim(), capability_id));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/capabilities/recluster', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    if (!req.body.confirm) { res.status(400).json({ error: 'Set confirm: true' }); return; }
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project?.requirements_document) { res.status(400).json({ error: 'No requirements document' }); return; }
+    const { Capability: Cap } = await import('../models');
+    await Cap.destroy({ where: { project_id: project.id } });
+    const { parseRequirementsWithSections } = await import('../services/requirementsParserService');
+    const { clusterRequirements, persistHierarchy } = await import('../services/requirementClusteringService');
+    const parsed = parseRequirementsWithSections(project.requirements_document);
+    const hierarchy = await clusterRequirements(project.id, parsed);
+    res.json(await persistHierarchy(project.id, hierarchy));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
 
 // ---------------------------------------------------------------------------
 // Core Project Endpoints
