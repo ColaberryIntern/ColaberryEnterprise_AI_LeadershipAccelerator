@@ -72,6 +72,42 @@ router.get('/api/admin/war-room/feed', requireAdmin, async (_req, res) => {
         FROM enrollments e
         ORDER BY e.created_at DESC LIMIT 10
       )
+      UNION ALL
+      (
+        SELECT io.created_at, io.outcome AS event_type,
+               COALESCE(io.metadata->>'subject', io.metadata->>'url', '') AS detail, 'interaction' AS source,
+               io.lead_id,
+               l.name AS lead_name, l.email AS lead_email, l.lead_score,
+               l.lead_source_type, l.pipeline_stage AS lead_pipeline_stage,
+               NULL AS campaign_name, NULL AS campaign_type
+        FROM interaction_outcomes io
+        LEFT JOIN leads l ON io.lead_id = l.id
+        WHERE io.outcome IN ('opened', 'clicked', 'replied')
+        ORDER BY io.created_at DESC LIMIT 20
+      )
+      UNION ALL
+      (
+        SELECT pe.created_at, pe.event_type AS event_type,
+               CASE
+                 WHEN pe.event_type = 'demo_start' THEN 'Started AI demo on ' || pe.page_url
+                 WHEN pe.event_type = 'demo_complete' THEN 'Completed AI demo on ' || pe.page_url
+                 WHEN pe.event_type = 'form_start' THEN 'Started form on ' || pe.page_url
+                 WHEN pe.event_type = 'cta_click' THEN COALESCE(pe.event_data->>'element_text', 'CTA click') || ' on ' || pe.page_path
+                 WHEN pe.event_type = 'pageview' THEN 'Visited ' || pe.page_url
+                 ELSE pe.event_type || ' on ' || pe.page_path
+               END AS detail,
+               'visitor' AS source,
+               v.lead_id,
+               l.name AS lead_name, l.email AS lead_email, l.lead_score,
+               l.lead_source_type, l.pipeline_stage AS lead_pipeline_stage,
+               NULL AS campaign_name, NULL AS campaign_type
+        FROM page_events pe
+        JOIN visitors v ON v.id = pe.visitor_id
+        LEFT JOIN leads l ON v.lead_id = l.id
+        WHERE pe.event_type IN ('pageview', 'cta_click', 'form_start', 'form_submit', 'demo_start', 'demo_complete', 'demo_skip', 'scroll', 'booking_modal_opened')
+          AND pe.page_url LIKE '%advisor.colaberry.ai%'
+        ORDER BY pe.created_at DESC LIMIT 20
+      )
       ORDER BY created_at DESC
       LIMIT 50
     `, { type: QueryTypes.SELECT });
