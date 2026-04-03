@@ -126,8 +126,7 @@ import SectionExecutionLog from './SectionExecutionLog';
 import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
 import RequirementsMap from './RequirementsMap';
-import Capability from './Capability';
-import Feature from './Feature';
+// Capability and Feature models removed — not yet implemented
 import NextAction from './NextAction';
 import VerificationLog from './VerificationLog';
 import ProgressionLog from './ProgressionLog';
@@ -575,15 +574,9 @@ ArtifactDefinition.hasMany(ArtifactRelationship, { foreignKey: 'child_artifact_i
 ArtifactRelationship.belongsTo(ArtifactDefinition, { foreignKey: 'parent_artifact_id', as: 'parentArtifact' });
 ArtifactRelationship.belongsTo(ArtifactDefinition, { foreignKey: 'child_artifact_id', as: 'childArtifact' });
 
-// --- Capability → Feature → Requirement Hierarchy ---
-Project.hasMany(Capability, { foreignKey: 'project_id', as: 'capabilities' });
-Capability.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
-Capability.hasMany(Feature, { foreignKey: 'capability_id', as: 'features' });
-Feature.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capability' });
-Feature.hasMany(RequirementsMap, { foreignKey: 'feature_id', as: 'requirements' });
-RequirementsMap.belongsTo(Feature, { foreignKey: 'feature_id', as: 'feature' });
-Capability.hasMany(RequirementsMap, { foreignKey: 'capability_id', as: 'requirements' });
-RequirementsMap.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capability' });
+// Capability/Feature hierarchy removed — not yet implemented
+// Feature-RequirementsMap associations removed — not yet implemented
+// Capability-RequirementsMap associations removed — not yet implemented
 
 // --- Requirements Map ---
 Project.hasMany(RequirementsMap, { foreignKey: 'project_id', as: 'requirementsMaps' });
@@ -831,8 +824,8 @@ export {
   HealingPlan,
   ArtifactRelationship,
   RequirementsMap,
-  Capability,
-  Feature,
+  // Capability removed
+  // Feature removed
   NextAction,
   VerificationLog,
   ProgressionLog,
