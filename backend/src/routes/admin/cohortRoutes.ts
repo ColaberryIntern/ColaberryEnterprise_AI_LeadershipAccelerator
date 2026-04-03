@@ -105,7 +105,7 @@ router.get('/api/admin/war-room/feed', requireAdmin, async (_req, res) => {
         JOIN visitors v ON v.id = pe.visitor_id
         LEFT JOIN leads l ON v.lead_id = l.id
         WHERE pe.event_type IN ('pageview', 'cta_click', 'form_start', 'form_submit', 'demo_start', 'demo_complete', 'demo_skip', 'scroll', 'booking_modal_opened')
-          AND pe.page_url LIKE '%advisor.colaberry.ai%'
+          AND pe.event_type != 'heartbeat'
         ORDER BY pe.created_at DESC LIMIT 20
       )
       ORDER BY created_at DESC
