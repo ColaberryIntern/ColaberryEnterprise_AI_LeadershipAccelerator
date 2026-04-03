@@ -21,7 +21,7 @@ function PortalVerifyPage() {
     portalApi.get(`/api/portal/verify?token=${token}`)
       .then((res) => {
         login(res.data.jwt);
-        navigate('/portal/dashboard', { replace: true });
+        navigate('/portal/project', { replace: true });
       })
       .catch((err) => {
         setError(err.response?.data?.error || 'Invalid or expired link. Please request a new one.');

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Route, Outlet } from 'react-router-dom';
+import { Route, Outlet, Navigate } from 'react-router-dom';
 import { ParticipantAuthProvider } from '../contexts/ParticipantAuthContext';
 import PortalProtectedRoute from '../components/PortalProtectedRoute';
 import PortalLayout from '../components/Layout/PortalLayout';
@@ -23,7 +23,7 @@ const portalRoutes = (
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
     <Route element={<PortalProtectedRoute />}>
       <Route element={<PortalLayout />}>
-        <Route path="/portal/dashboard" element={<PortalDashboardPage />} />
+        <Route path="/portal/dashboard" element={<Navigate to="/portal/project" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />

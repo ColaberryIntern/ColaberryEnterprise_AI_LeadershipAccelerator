@@ -14,11 +14,9 @@ function PortalLayout() {
   };
 
   const navItems = [
-    { to: '/portal/dashboard', label: 'Dashboard', icon: 'bi-speedometer2' },
+    { to: '/portal/project', label: 'Project', icon: 'bi-rocket-takeoff' },
     { to: '/portal/curriculum', label: 'Curriculum', icon: 'bi-mortarboard' },
     { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
-    { to: '/portal/assignments', label: 'Assignments', icon: 'bi-file-earmark-text' },
-    { to: '/portal/progress', label: 'Progress', icon: 'bi-graph-up' },
   ];
 
   return (
