@@ -123,7 +123,7 @@ function HomePage() {
       <div
         className="text-center py-5"
         style={{
-          background: 'linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.88)), url("/hero-bg-team.jpg") center/cover no-repeat',
+          background: 'linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.88)), url("https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1920&q=80") center/cover no-repeat',
           color: '#fff',
           minHeight: 480,
           display: 'flex',
