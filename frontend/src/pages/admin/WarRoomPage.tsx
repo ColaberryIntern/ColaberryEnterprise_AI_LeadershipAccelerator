@@ -171,7 +171,7 @@ export default function WarRoomPage() {
         </div>
 
         {/* TOP RIGHT: Live Metrics */}
-        <div className="card border-0 shadow-sm" style={{ overflow: 'hidden' }}>
+        <div className="card border-0 shadow-sm" style={{ overflow: 'auto' }}>
           <div className="card-header bg-white border-0 py-2">
             <span className="fw-semibold" style={{ fontSize: 13 }}>Live Metrics</span>
             <span className="float-end text-muted" style={{ fontSize: 10 }}>Today</span>
