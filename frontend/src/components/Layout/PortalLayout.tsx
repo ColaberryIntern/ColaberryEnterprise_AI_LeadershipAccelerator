@@ -15,7 +15,6 @@ function PortalLayout() {
 
   const navItems = [
     { to: '/portal/project', label: 'Project', icon: 'bi-rocket-takeoff' },
-    { to: '/portal/curriculum', label: 'Curriculum', icon: 'bi-mortarboard' },
     { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
   ];
 
