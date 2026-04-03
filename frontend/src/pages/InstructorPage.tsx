@@ -24,7 +24,7 @@ function InstructorPage() {
       >
         <div className="container" style={{ maxWidth: 700 }}>
           <img
-            src="/ali-muwwakkil.jpg"
+            src="/ali-muwwakkil.png"
             alt="Ali Muwwakkil"
             className="mx-auto mb-4 d-block"
             style={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', border: '4px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
