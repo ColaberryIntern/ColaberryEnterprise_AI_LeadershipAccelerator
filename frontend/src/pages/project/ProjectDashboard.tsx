@@ -9,7 +9,8 @@ import ProjectLockInScreen from '../../components/project/ProjectLockInScreen';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import WorkstationLauncher from '../../components/project/WorkstationLauncher';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
-import CapabilityGrid from '../../components/project/CapabilityGrid';
+// CapabilityGrid removed — component not yet implemented
+const CapabilityGrid = () => <div className="text-muted small p-3">Capability grid coming soon.</div>;
 import RepoComponentsPanel from '../../components/project/RepoComponentsPanel';
 
 // Execution Overview — capability grid + repo analysis
