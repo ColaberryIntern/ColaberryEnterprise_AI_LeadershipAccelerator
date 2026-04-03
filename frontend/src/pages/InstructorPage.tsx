@@ -23,10 +23,13 @@ function InstructorPage() {
         }}
       >
         <div className="container" style={{ maxWidth: 700 }}>
-          <div className="mx-auto mb-4" style={{ width: 120, height: 120, borderRadius: '50%', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48, fontWeight: 700 }}>
-            AM
-          </div>
-          <h1 className="fw-bold mb-2" style={{ fontSize: 'clamp(28px, 5vw, 42px)' }}>Ali Muwwakkil</h1>
+          <img
+            src="/ali-muwwakkil.jpg"
+            alt="Ali Muwwakkil"
+            className="mx-auto mb-4 d-block"
+            style={{ width: 140, height: 140, borderRadius: '50%', objectFit: 'cover', border: '4px solid rgba(255,255,255,0.3)', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
+          />
+          <h1 className="fw-bold text-white mb-2" style={{ fontSize: 'clamp(28px, 5vw, 42px)', textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>Ali Muwwakkil</h1>
           <p className="mb-1" style={{ fontSize: 18, color: '#93c5fd' }}>Managing Director, Colaberry Enterprise AI</p>
           <p className="mb-4" style={{ fontSize: 15, color: '#94a3b8' }}>Instructor & AI System Architect</p>
           <button
