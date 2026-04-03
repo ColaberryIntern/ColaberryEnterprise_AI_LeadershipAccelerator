@@ -128,13 +128,11 @@ async function fetchSessionEvents(visitorId: string): Promise<JourneyTimelineEve
 
 async function fetchPageEvents(visitorId: string, leadId?: number): Promise<JourneyTimelineEvent[]> {
   // Fetch by visitor_id OR lead_id so email click-throughs with lid= are included
-  const where: any = {
-    [Op.or]: [
-      ...(visitorId ? [{ visitor_id: visitorId }] : []),
-      ...(leadId ? [{ visitor_id: String(leadId) }] : []),
-    ],
-  };
-  if (!visitorId && !leadId) return [];
+  const conditions: any[] = [];
+  if (visitorId) conditions.push({ visitor_id: visitorId });
+  if (leadId) conditions.push({ lead_id: leadId });
+  if (conditions.length === 0) return [];
+  const where: any = conditions.length === 1 ? conditions[0] : { [Op.or]: conditions };
 
   const events = await PageEvent.findAll({
     where,
