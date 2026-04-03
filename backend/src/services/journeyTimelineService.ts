@@ -127,15 +127,22 @@ async function fetchSessionEvents(visitorId: string): Promise<JourneyTimelineEve
 }
 
 async function fetchPageEvents(visitorId: string, leadId?: number): Promise<JourneyTimelineEvent[]> {
-  // Fetch by visitor_id OR lead_id so email click-throughs with lid= are included
-  const conditions: any[] = [];
-  if (visitorId) conditions.push({ visitor_id: visitorId });
-  if (leadId) conditions.push({ lead_id: leadId });
-  if (conditions.length === 0) return [];
-  const where: any = conditions.length === 1 ? conditions[0] : { [Op.or]: conditions };
+  // Collect all visitor_ids linked to this lead
+  const visitorIds: string[] = [];
+  if (visitorId) visitorIds.push(visitorId);
+  if (leadId) {
+    try {
+      const { Visitor } = require('../models');
+      const linkedVisitors = await Visitor.findAll({ where: { lead_id: leadId }, attributes: ['id'] });
+      for (const v of linkedVisitors) {
+        if (v.id && !visitorIds.includes(v.id)) visitorIds.push(v.id);
+      }
+    } catch { /* non-blocking */ }
+  }
+  if (visitorIds.length === 0) return [];
 
   const events = await PageEvent.findAll({
-    where,
+    where: { visitor_id: { [Op.in]: visitorIds } },
     order: [['timestamp', 'ASC']],
     limit: 200,
   });
