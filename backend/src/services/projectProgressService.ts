@@ -88,9 +88,12 @@ export async function calculateRequirementsProgress(enrollmentId: string): Promi
   const project = await getProjectByEnrollment(enrollmentId);
   if (!project) throw new Error('No project found');
 
-  // Get all requirements from RequirementsMap
+  // Get active requirements only (is_active = true or null for backward compat)
   const reqMaps = await RequirementsMap.findAll({
-    where: { project_id: project.id },
+    where: {
+      project_id: project.id,
+      is_active: { [Op.or]: [true, null] } as any,
+    },
     order: [['requirement_key', 'ASC']],
   });
 

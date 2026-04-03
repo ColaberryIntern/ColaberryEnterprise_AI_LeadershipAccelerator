@@ -20,6 +20,9 @@ export interface RequirementsMapAttributes {
   semantic_confidence?: number;
   semantic_reasoning?: string | null;
   semantic_last_checked?: Date | null;
+  capability_id?: string | null;
+  feature_id?: string | null;
+  is_active?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -43,6 +46,9 @@ class RequirementsMap extends Model<RequirementsMapAttributes> implements Requir
   declare semantic_confidence: number;
   declare semantic_reasoning: string | null;
   declare semantic_last_checked: Date | null;
+  declare capability_id: string | null;
+  declare feature_id: string | null;
+  declare is_active: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -130,6 +136,20 @@ RequirementsMap.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    capability_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'capabilities', key: 'id' },
+    },
+    feature_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'features', key: 'id' },
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
   },
   {
     sequelize,
@@ -141,6 +161,8 @@ RequirementsMap.init(
       { fields: ['project_id'] },
       { fields: ['source_artifact_id'] },
       { fields: ['status'] },
+      { fields: ['capability_id'] },
+      { fields: ['feature_id'] },
       {
         unique: true,
         fields: ['project_id', 'requirement_key'],

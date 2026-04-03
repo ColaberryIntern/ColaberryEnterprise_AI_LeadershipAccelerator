@@ -9,36 +9,24 @@ import ProjectLockInScreen from '../../components/project/ProjectLockInScreen';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import WorkstationLauncher from '../../components/project/WorkstationLauncher';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
-import RequirementsSectionBreakdown from '../../components/project/RequirementsSectionBreakdown';
+import CapabilityGrid from '../../components/project/CapabilityGrid';
 import RepoComponentsPanel from '../../components/project/RepoComponentsPanel';
 
-// Execution Overview — fetches from /execution-status and renders requirements-driven dashboard
+// Execution Overview — capability grid + repo analysis
 function ExecutionOverview() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [repoData, setRepoData] = useState<any>(null);
 
   useEffect(() => {
     portalApi.get('/api/portal/project/execution-status')
-      .then(res => setData(res.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then(res => setRepoData(res.data?.repo))
+      .catch(() => {});
   }, []);
-
-  if (loading) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
-  if (!data) return null;
 
   return (
     <>
-      {data.progress && (
-        <RequirementsSectionBreakdown
-          sections={data.progress.sections || []}
-          requirements={data.progress.requirements || []}
-          completionPct={data.progress.completion_percentage || 0}
-          nextAction={data.progress.next_action}
-        />
-      )}
+      <CapabilityGrid />
       <div className="mt-4">
-        <RepoComponentsPanel repo={data.repo} />
+        <RepoComponentsPanel repo={repoData} />
       </div>
     </>
   );

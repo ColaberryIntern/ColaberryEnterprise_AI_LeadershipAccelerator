@@ -160,6 +160,17 @@ export async function activateProject(enrollmentId: string): Promise<{
     }
   }
 
+  // Step 1b: Cluster requirements into Capability → Feature hierarchy
+  try {
+    const { parseRequirementsWithSections } = require('./requirementsParserService');
+    const { clusterRequirements, persistHierarchy } = require('./requirementClusteringService');
+    const parsedWithSections = parseRequirementsWithSections(project.requirements_document);
+    const hierarchy = await clusterRequirements(project.id, parsedWithSections);
+    await persistHierarchy(project.id, hierarchy);
+  } catch (err) {
+    console.warn('[ProjectSetup] Clustering failed (non-critical):', (err as Error).message);
+  }
+
   // Step 2: Sync GitHub file tree
   try {
     const syncResult = await fullSync(enrollmentId);

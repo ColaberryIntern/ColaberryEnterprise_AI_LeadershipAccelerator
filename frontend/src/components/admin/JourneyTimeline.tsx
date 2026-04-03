@@ -71,7 +71,10 @@ const STAGE_LABELS: Record<string, string> = {
   decision: 'Decision',
 };
 
-const STAGES = ['awareness', 'interest', 'consideration', 'evaluation', 'decision'];
+// Display order: decision first (what matters most) → awareness last
+const STAGES = ['decision', 'evaluation', 'consideration', 'interest', 'awareness'];
+// Progress bar order: natural funnel flow left to right
+const STAGES_PROGRESS = ['awareness', 'interest', 'consideration', 'evaluation', 'decision'];
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -131,10 +134,12 @@ export default function JourneyTimeline({ leadId }: { leadId: number }) {
   const { events, metrics, stage_summary } = data;
   const filteredEvents = filterCategory === 'all' ? events : events.filter(e => e.category === filterCategory);
 
-  // Group events by stage
+  // Group events by stage, sorted newest first within each stage
   const eventsByStage: Record<string, JourneyEvent[]> = {};
   for (const stage of STAGES) {
-    eventsByStage[stage] = filteredEvents.filter(e => e.journey_stage === stage);
+    eventsByStage[stage] = filteredEvents
+      .filter(e => e.journey_stage === stage)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   const categories = Array.from(new Set(events.map(e => e.category)));
@@ -190,8 +195,8 @@ export default function JourneyTimeline({ leadId }: { leadId: number }) {
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body py-3">
           <div className="d-flex justify-content-between align-items-center">
-            {STAGES.map((stage, idx) => {
-              const reached = STAGES.indexOf(metrics.current_stage) >= idx;
+            {STAGES_PROGRESS.map((stage, idx) => {
+              const reached = STAGES_PROGRESS.indexOf(metrics.current_stage) >= idx;
               const count = stage_summary[stage] || 0;
               return (
                 <div key={stage} className="text-center flex-fill">
@@ -209,12 +214,12 @@ export default function JourneyTimeline({ leadId }: { leadId: number }) {
                   <div className="small" style={{ color: reached ? STAGE_COLORS[stage] : '#a0aec0', fontWeight: reached ? 600 : 400 }}>
                     {STAGE_LABELS[stage]}
                   </div>
-                  {idx < STAGES.length - 1 && (
+                  {idx < STAGES_PROGRESS.length - 1 && (
                     <div style={{
                       position: 'absolute',
                       top: '50%',
-                      left: `${((idx + 1) / STAGES.length) * 100}%`,
-                      width: `${100 / STAGES.length}%`,
+                      left: `${((idx + 1) / STAGES_PROGRESS.length) * 100}%`,
+                      width: `${100 / STAGES_PROGRESS.length}%`,
                       height: 2,
                       backgroundColor: reached ? STAGE_COLORS[stage] : '#e2e8f0',
                     }} />
