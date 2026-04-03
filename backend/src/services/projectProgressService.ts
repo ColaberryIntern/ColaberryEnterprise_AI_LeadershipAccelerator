@@ -69,6 +69,90 @@ export async function getProgressBreakdown(enrollmentId: string): Promise<Progre
 }
 
 // ---------------------------------------------------------------------------
+// Requirements-Only Progress (for Project Execution Dashboard)
+// ---------------------------------------------------------------------------
+
+export interface RequirementsProgress {
+  completion_percentage: number;
+  current_phase: string;
+  sections: Array<{ name: string; total: number; completed: number; in_progress: number; pct: number }>;
+  requirements: Array<{ key: string; text: string; status: string; files: string[]; section: string }>;
+  next_action: string | null;
+  total: number;
+  completed: number;
+  in_progress: number;
+  not_started: number;
+}
+
+export async function calculateRequirementsProgress(enrollmentId: string): Promise<RequirementsProgress> {
+  const project = await getProjectByEnrollment(enrollmentId);
+  if (!project) throw new Error('No project found');
+
+  // Get all requirements from RequirementsMap
+  const reqMaps = await RequirementsMap.findAll({
+    where: { project_id: project.id },
+    order: [['requirement_key', 'ASC']],
+  });
+
+  const requirements = reqMaps.map(r => ({
+    key: r.requirement_key,
+    text: r.requirement_text,
+    status: (r.status === 'verified' || r.status === 'matched') ? 'completed'
+      : r.status === 'partial' ? 'in_progress' : 'not_started',
+    files: r.github_file_paths || [],
+    section: (r as any).section || 'General',
+  }));
+
+  const completed = requirements.filter(r => r.status === 'completed').length;
+  const inProgress = requirements.filter(r => r.status === 'in_progress').length;
+  const notStarted = requirements.filter(r => r.status === 'not_started').length;
+  const total = requirements.length;
+  const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  // Group by section
+  const sectionMap = new Map<string, { total: number; completed: number; in_progress: number }>();
+  for (const req of requirements) {
+    const s = sectionMap.get(req.section) || { total: 0, completed: 0, in_progress: 0 };
+    s.total++;
+    if (req.status === 'completed') s.completed++;
+    if (req.status === 'in_progress') s.in_progress++;
+    sectionMap.set(req.section, s);
+  }
+
+  const sections = Array.from(sectionMap.entries()).map(([name, s]) => ({
+    name,
+    total: s.total,
+    completed: s.completed,
+    in_progress: s.in_progress,
+    pct: s.total > 0 ? Math.round((s.completed / s.total) * 100) : 0,
+  }));
+
+  // Derive current phase from section with most in-progress work
+  let currentPhase = 'Not Started';
+  if (completionPct >= 100) currentPhase = 'Complete';
+  else if (completionPct >= 75) currentPhase = 'Finalization';
+  else if (completionPct >= 50) currentPhase = 'Build';
+  else if (completionPct >= 25) currentPhase = 'Foundation';
+  else if (completionPct > 0) currentPhase = 'Initial Build';
+
+  // Next action: first incomplete requirement
+  const nextReq = requirements.find(r => r.status === 'not_started') || requirements.find(r => r.status === 'in_progress');
+  const nextAction = nextReq ? `${nextReq.key}: ${nextReq.text}` : null;
+
+  return {
+    completion_percentage: completionPct,
+    current_phase: currentPhase,
+    sections,
+    requirements,
+    next_action: nextAction,
+    total,
+    completed,
+    in_progress: inProgress,
+    not_started: notStarted,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Internal Computation
 // ---------------------------------------------------------------------------
 

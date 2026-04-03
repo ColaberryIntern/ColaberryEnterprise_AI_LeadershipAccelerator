@@ -68,6 +68,56 @@ router.post('/api/portal/project/setup/activate', requireParticipant, async (req
   }
 });
 
+/**
+ * GET /api/portal/project/execution-status
+ * Single source of truth for the project execution dashboard.
+ * Returns requirements progress + repo analysis + current task.
+ */
+router.get('/api/portal/project/execution-status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { calculateRequirementsProgress } = await import('../services/projectProgressService');
+    const { analyzeRepo } = await import('../services/repoAnalysisService');
+    const { NextAction } = await import('../models');
+    const { getProjectByEnrollment } = await import('../services/projectService');
+
+    const project = await getProjectByEnrollment(enrollmentId);
+    if (!project) {
+      res.status(404).json({ error: 'No project found' });
+      return;
+    }
+
+    // Parallel fetch: requirements progress + repo analysis + current action
+    const [progress, repoAnalysis, currentAction] = await Promise.all([
+      calculateRequirementsProgress(enrollmentId).catch(() => null),
+      analyzeRepo(enrollmentId).catch(() => null),
+      NextAction.findOne({
+        where: { project_id: project.id, status: ['pending', 'accepted'] },
+        order: [['created_at', 'DESC']],
+      }).catch(() => null),
+    ]);
+
+    res.json({
+      project_id: project.id,
+      project_stage: project.project_stage,
+      organization_name: project.organization_name,
+      progress,
+      repo: repoAnalysis,
+      current_action: currentAction ? {
+        id: currentAction.id,
+        title: currentAction.title,
+        reason: currentAction.reason,
+        status: currentAction.status,
+        metadata: (currentAction as any).metadata,
+      } : null,
+      setup_status: project.setup_status,
+    });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] GET /execution-status error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Core Project Endpoints
 // ---------------------------------------------------------------------------
