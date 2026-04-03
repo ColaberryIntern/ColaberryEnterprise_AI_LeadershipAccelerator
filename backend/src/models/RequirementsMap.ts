@@ -153,8 +153,6 @@ RequirementsMap.init(
       { fields: ['project_id'] },
       { fields: ['source_artifact_id'] },
       { fields: ['status'] },
-      { fields: ['capability_id'] },
-      { fields: ['feature_id'] },
       {
         unique: true,
         fields: ['project_id', 'requirement_key'],
