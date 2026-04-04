@@ -56,6 +56,8 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
   const [activating, setActivating] = useState(false);
   const [activationResult, setActivationResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [progressBatch, setProgressBatch] = useState<{ batch: number; total: number } | null>(null);
 
   const allComplete = status.requirements_loaded && status.claude_md_loaded && status.github_connected;
 
@@ -86,6 +88,8 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
             setActivating(false);
           } else {
             setProgressMsg(p.message || 'Processing...');
+            if (p.percent != null) setProgressPercent(p.percent);
+            if (p.batch != null && p.total_batches != null) setProgressBatch({ batch: p.batch, total: p.total_batches });
           }
         } catch {}
       }, 3000);
@@ -149,8 +153,27 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
               <i className="bi bi-check-circle-fill d-block mb-2" style={{ fontSize: 40, color: 'var(--color-accent)' }}></i>
               <h5 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>Project Activated</h5>
               <p className="text-muted small mb-0">
-                {activationResult.requirements_count} requirements parsed &middot; {activationResult.file_count} files synced &middot; {activationResult.matched_count} matched
+                {activationResult.requirements_count || activationResult.capabilities} requirements parsed
               </p>
+            </div>
+          </div>
+        ) : activating ? (
+          <div className="card border-0 shadow-sm">
+            <div className="card-body py-4">
+              <div className="text-center mb-3">
+                <div className="spinner-border text-primary mb-2" style={{ width: 32, height: 32 }}></div>
+                <h6 className="fw-semibold mb-1" style={{ color: 'var(--color-primary)' }}>Building Your Project</h6>
+                <p className="text-muted small mb-0">{progressMsg || 'Starting activation...'}</p>
+              </div>
+              {/* Progress bar */}
+              <div className="progress mb-2" style={{ height: 10, borderRadius: 8 }}>
+                <div className="progress-bar progress-bar-striped progress-bar-animated"
+                  style={{ width: `${Math.max(progressPercent, 5)}%`, background: 'linear-gradient(135deg, var(--color-accent, #38a169), #2f855a)', transition: 'width 0.5s ease' }} />
+              </div>
+              <div className="d-flex justify-content-between text-muted" style={{ fontSize: 10 }}>
+                <span>{progressBatch ? `Batch ${progressBatch.batch} of ${progressBatch.total}` : 'Initializing...'}</span>
+                <span>{progressPercent}%</span>
+              </div>
             </div>
           </div>
         ) : (
@@ -165,11 +188,9 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
               cursor: allComplete ? 'pointer' : 'not-allowed',
             }}
             onClick={handleActivate}
-            disabled={!allComplete || activating}
+            disabled={!allComplete}
           >
-            {activating ? (
-              <><span className="spinner-border spinner-border-sm me-2"></span>{progressMsg || 'Activating...'}</>
-            ) : allComplete ? (
+            {allComplete ? (
               <><i className="bi bi-lightning-charge me-2"></i>Activate Your Project</>
             ) : (
               <><i className="bi bi-lock me-2"></i>Complete all steps to activate</>

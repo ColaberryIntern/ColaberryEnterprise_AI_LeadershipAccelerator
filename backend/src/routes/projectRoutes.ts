@@ -80,19 +80,35 @@ router.post('/api/portal/project/setup/activate', requireParticipant, async (req
 });
 
 router.get('/api/portal/project/setup/activation-progress', requireParticipant, async (req: Request, res: Response) => {
-  const progress = activationProgress.get(req.participant!.sub);
+  const enrollmentId = req.participant!.sub;
+  const progress = activationProgress.get(enrollmentId);
+
+  // Check clustering-level progress for granular updates
+  const { clusteringProgress } = await import('../services/requirementClusteringService');
+  const clusterProg = clusteringProgress.get(enrollmentId);
+
+  if (clusterProg && clusterProg.status === 'processing') {
+    res.json({
+      status: 'processing',
+      message: clusterProg.message,
+      batch: clusterProg.batch,
+      total_batches: clusterProg.total_batches,
+      capabilities_so_far: clusterProg.capabilities_so_far,
+      percent: clusterProg.total_batches > 0 ? Math.round((clusterProg.batch / clusterProg.total_batches) * 100) : 0,
+    });
+    return;
+  }
+
   if (!progress) {
-    // Check if project already exists (activation may have completed in a previous session)
     const { getProjectByEnrollment } = await import('../services/projectService');
-    const project = await getProjectByEnrollment(req.participant!.sub);
+    const project = await getProjectByEnrollment(enrollmentId);
     if (project) { res.json({ status: 'complete', message: 'Project already activated' }); return; }
     res.json({ status: 'not_started', message: 'Activation not started' });
     return;
   }
   res.json(progress);
-  // Clean up completed/failed entries after 5 minutes
   if (progress.status === 'complete' || progress.status === 'failed') {
-    setTimeout(() => activationProgress.delete(req.participant!.sub), 300000);
+    setTimeout(() => { activationProgress.delete(enrollmentId); clusteringProgress.delete(enrollmentId); }, 300000);
   }
 });
 

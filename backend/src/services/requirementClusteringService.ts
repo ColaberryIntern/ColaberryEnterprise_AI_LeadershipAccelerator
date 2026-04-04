@@ -4,6 +4,23 @@ import Feature from '../models/Feature';
 import { RequirementsMap } from '../models';
 import { ParsedRequirements } from './requirementsParserService';
 
+// Progress tracking for batch clustering
+export type ClusteringProgressCallback = (progress: {
+  batch: number;
+  total_batches: number;
+  capabilities_so_far: number;
+  message: string;
+}) => void;
+
+// Global progress store keyed by enrollmentId
+export const clusteringProgress = new Map<string, {
+  status: string;
+  batch: number;
+  total_batches: number;
+  capabilities_so_far: number;
+  message: string;
+}>();
+
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -62,7 +79,7 @@ async function clusterBatch(
   return parsed;
 }
 
-export async function clusterRequirements(projectId: string, parsedReqs: ParsedRequirements): Promise<ClusteredHierarchy> {
+export async function clusterRequirements(projectId: string, parsedReqs: ParsedRequirements, enrollmentId?: string): Promise<ClusteredHierarchy> {
   if (parsedReqs.total_requirements === 0) return { capabilities: [] };
 
   const params = getClusteringParams(parsedReqs.total_requirements);
@@ -90,9 +107,25 @@ export async function clusterRequirements(projectId: string, parsedReqs: ParsedR
       maxFeatures: params.maxFeatures,
     };
 
+    // Initialize progress tracking
+    if (enrollmentId) {
+      clusteringProgress.set(enrollmentId, {
+        status: 'processing', batch: 0, total_batches: batches.length,
+        capabilities_so_far: 0, message: `Analyzing ${allReqs.length} requirements across ${batches.length} batches...`,
+      });
+    }
+
     for (let bi = 0; bi < batches.length; bi++) {
       const batch = batches[bi];
       const batchSections = [...new Set(batch.map(r => r.section))];
+      // Update progress
+      if (enrollmentId) {
+        clusteringProgress.set(enrollmentId, {
+          status: 'processing', batch: bi + 1, total_batches: batches.length,
+          capabilities_so_far: merged.capabilities.length,
+          message: `Clustering batch ${bi + 1} of ${batches.length} (${batch.length} requirements)...`,
+        });
+      }
       try {
         const result = await clusterBatch(batch, batchSections, batchParams, bi, batches.length);
         merged.capabilities.push(...result.capabilities);

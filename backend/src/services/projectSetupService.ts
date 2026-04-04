@@ -165,7 +165,7 @@ export async function activateProject(enrollmentId: string): Promise<{
     const { parseRequirementsWithSections } = require('./requirementsParserService');
     const { clusterRequirements, persistHierarchy } = require('./requirementClusteringService');
     const parsedWithSections = parseRequirementsWithSections(project.requirements_document);
-    const hierarchy = await clusterRequirements(project.id, parsedWithSections);
+    const hierarchy = await clusterRequirements(project.id, parsedWithSections, enrollmentId);
     await persistHierarchy(project.id, hierarchy);
   } catch (err) {
     console.warn('[ProjectSetup] Clustering failed (non-critical):', (err as Error).message);
