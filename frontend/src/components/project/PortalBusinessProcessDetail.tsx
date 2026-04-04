@@ -69,6 +69,9 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const featuresWithGaps = features.filter((f: any) => (f.requirements || []).some((r: any) => r.status === 'unmatched' || r.status === 'not_started'));
   const gapFeatureNames = featuresWithGaps.map((f: any) => f.name);
 
+  const repoUrl = p.repo_url ? p.repo_url.replace(/\.git$/, '') : null;
+  const implLinks = p.implementation_links || {};
+
   // Group gaps by feature
   const gapsByFeature = new Map<string, any[]>();
   for (const g of gaps) {
@@ -131,6 +134,33 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           {/* ─── OVERVIEW ─── */}
           {tab === 'overview' && (
             <div>
+              {/* Usability Status Panel */}
+              {(() => {
+                const u = p.usability || {};
+                const dotStyle = (s: string) => ({ display: 'inline-block' as const, width: 8, height: 8, borderRadius: '50%', background: ({ ready: '#10b981', partial: '#f59e0b', missing: '#ef4444' })[s] || '#9ca3af', marginRight: 6 });
+                const labelStyle = (s: string) => ({ color: ({ ready: '#10b981', partial: '#f59e0b', missing: '#ef4444' })[s] || '#9ca3af' });
+                return (
+                  <div className="p-3 mb-4" style={{ background: u.usable ? '#10b98110' : '#ef444410', borderRadius: 8, border: `1px solid ${u.usable ? '#10b98130' : '#ef444430'}` }}>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <h6 className="fw-semibold small mb-0">
+                        <i className={`bi ${u.usable ? 'bi-check-circle-fill' : 'bi-x-circle-fill'} me-1`} style={{ color: u.usable ? '#10b981' : '#ef4444' }}></i>
+                        {u.usable ? 'This process is usable' : 'This process is not ready yet'}
+                      </h6>
+                    </div>
+                    <div className="d-flex gap-4 mb-1" style={{ fontSize: 12 }}>
+                      <span><span style={dotStyle(u.backend || 'missing')}></span><strong style={labelStyle(u.backend || 'missing')}>{(u.backend || 'missing').charAt(0).toUpperCase() + (u.backend || 'missing').slice(1)}</strong> Backend</span>
+                      <span><span style={dotStyle(u.frontend || 'missing')}></span><strong style={labelStyle(u.frontend || 'missing')}>{(u.frontend || 'missing').charAt(0).toUpperCase() + (u.frontend || 'missing').slice(1)}</strong> Frontend</span>
+                      <span><span style={dotStyle(u.agent || 'missing')}></span><strong style={labelStyle(u.agent || 'missing')}>{(u.agent || 'missing').charAt(0).toUpperCase() + (u.agent || 'missing').slice(1)}</strong> Agents</span>
+                    </div>
+                    {!u.usable && (u.why_not || []).length > 0 && (
+                      <div className="text-muted" style={{ fontSize: 10 }}>
+                        {(u.why_not || []).map((w: string, i: number) => <span key={i} className="d-block"><i className="bi bi-arrow-right me-1"></i>{w}</span>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {p.description && <p className="text-muted small mb-3">{p.description}</p>}
 
               {/* Stats */}
@@ -229,7 +259,11 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
                                   <div className="mb-1">
                                     <span className="text-muted" style={{ fontSize: 9 }}>Matched files:</span>
                                     <div className="d-flex flex-wrap gap-1 mt-1">
-                                      {files.map((f: string, i: number) => <span key={i} className="badge bg-light text-dark" style={{ fontSize: 8 }}><i className="bi bi-file-code me-1"></i>{f}</span>)}
+                                      {files.map((f: string, i: number) => repoUrl ? (
+                                        <a key={i} href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="badge bg-light text-dark text-decoration-none" style={{ fontSize: 8 }}><i className="bi bi-file-code me-1"></i>{f}</a>
+                                      ) : (
+                                        <span key={i} className="badge bg-light text-dark" style={{ fontSize: 8 }}><i className="bi bi-file-code me-1"></i>{f}</span>
+                                      ))}
                                     </div>
                                   </div>
                                 )}
