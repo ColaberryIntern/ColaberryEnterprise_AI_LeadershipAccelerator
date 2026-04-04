@@ -20,32 +20,41 @@ export default function PortalBusinessProcessesTab() {
   if (processes.length === 0) return (
     <div className="text-center py-5">
       <i className="bi bi-diagram-3 d-block mb-3" style={{ fontSize: 40, color: 'var(--color-text-light)' }}></i>
-      <h6 className="fw-semibold" style={{ color: 'var(--color-primary)' }}>No Business Processes Yet</h6>
-      <p className="text-muted small mb-0">Business processes will appear here once your requirements are extracted and grouped into capabilities.</p>
+      <h6 className="fw-semibold" style={{ color: 'var(--color-primary)' }}>No Business Processes Discovered</h6>
+      <p className="text-muted small mb-0">The system will discover business processes from your platform's backend services, agents, and routes.</p>
     </div>
   );
+
+  const totalAgents = processes.reduce((s: number, p: any) => s + (p.agent_count || 0), 0);
+  const totalServices = processes.reduce((s: number, p: any) => s + (p.service_count || 0), 0);
+  const totalCapabilities = processes.reduce((s: number, p: any) => s + (p.capabilities?.length || 0), 0);
 
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Your Business Processes</h6>
-          <p className="text-muted small mb-0">{processes.length} processes — manage AI controls, track health, and generate improvements</p>
+          <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Platform Business Processes</h6>
+          <p className="text-muted small mb-0">
+            {processes.length} processes · {totalCapabilities} components · {totalAgents} agents · {totalServices} services — discovered from codebase
+          </p>
         </div>
+        <span className="badge bg-success" style={{ fontSize: 10 }}>
+          <i className="bi bi-check-circle me-1"></i>Auto-Discovered
+        </span>
       </div>
 
       <div className="row g-3">
         {processes.map((p: any) => {
           const scores = p.strength_scores || {};
-          const overall = scores.overall || Math.round(Object.values(scores).reduce((s: number, v: any) => s + (typeof v === 'number' ? v : 0), 0) / Math.max(Object.keys(scores).length, 1));
+          const overall = scores.overall || 0;
           const color = AUTONOMY_COLORS[p.autonomy_level] || '#9ca3af';
-          const isSelected = selected === p.id;
+          const isSelected = selected === p.slug;
 
           return (
-            <div key={p.id} className="col-md-6 col-lg-4">
-              <div className={`card border-0 shadow-sm h-100 ${isSelected ? 'ring-primary' : ''}`}
+            <div key={p.slug} className="col-md-6 col-lg-4">
+              <div className={`card border-0 shadow-sm h-100`}
                 style={{ borderLeft: `4px solid ${color}`, cursor: 'pointer', outline: isSelected ? '2px solid var(--color-primary-light)' : 'none' }}
-                onClick={() => setSelected(isSelected ? null : p.id)}>
+                onClick={() => setSelected(isSelected ? null : p.slug)}>
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: 'var(--color-primary)' }}>{p.name}</h6>
@@ -53,7 +62,7 @@ export default function PortalBusinessProcessesTab() {
                       {(p.autonomy_level || 'manual').toUpperCase()}
                     </span>
                   </div>
-                  {p.description && <div className="text-muted mb-2" style={{ fontSize: 11 }}>{p.description.substring(0, 100)}{p.description.length > 100 ? '...' : ''}</div>}
+                  {p.description && <div className="text-muted mb-2" style={{ fontSize: 11 }}>{p.description.substring(0, 120)}{p.description.length > 120 ? '...' : ''}</div>}
 
                   {/* Strength bars */}
                   <div className="mb-2">
@@ -68,9 +77,15 @@ export default function PortalBusinessProcessesTab() {
                     ))}
                   </div>
 
+                  {/* Capability counts */}
                   <div className="d-flex justify-content-between small text-muted" style={{ fontSize: 10 }}>
-                    <span><i className="bi bi-cpu me-1"></i>{(p.linked_agents || []).length} agents</span>
-                    <span>Overall: <strong>{overall}/100</strong></span>
+                    <div className="d-flex gap-2">
+                      {p.agent_count > 0 && <span><i className="bi bi-cpu me-1"></i>{p.agent_count} agents</span>}
+                      <span><i className="bi bi-gear me-1"></i>{p.service_count || 0} services</span>
+                      {p.route_count > 0 && <span><i className="bi bi-signpost me-1"></i>{p.route_count} routes</span>}
+                      {p.model_count > 0 && <span><i className="bi bi-database me-1"></i>{p.model_count} models</span>}
+                    </div>
+                    <span className="fw-semibold">{overall}/100</span>
                   </div>
                 </div>
               </div>

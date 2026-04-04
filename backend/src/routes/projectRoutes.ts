@@ -1004,22 +1004,17 @@ router.get('/api/portal/project/workstation-context', requireParticipant, async 
 
 router.get('/api/portal/project/business-processes', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { getProjectByEnrollment } = await import('../services/projectService');
-    const project = await getProjectByEnrollment(req.participant!.sub);
-    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
-    const { Capability } = await import('../models');
-    const processes = await Capability.findAll({
-      where: { project_id: project.id },
-      order: [['sort_order', 'ASC'], ['name', 'ASC']],
-    });
+    const { discoverPlatformProcesses } = await import('../intelligence/processDiscoveryEngine');
+    const processes = await discoverPlatformProcesses();
     res.json(processes);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/api/portal/project/business-processes/:id', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { Capability } = await import('../models');
-    const process = await Capability.findByPk(req.params.id as string);
+    const { discoverPlatformProcesses } = await import('../intelligence/processDiscoveryEngine');
+    const all = await discoverPlatformProcesses();
+    const process = all.find(p => p.slug === (req.params.id as string)) || null;
     if (!process) { res.status(404).json({ error: 'Process not found' }); return; }
     res.json(process);
   } catch (err: any) { res.status(500).json({ error: err.message }); }

@@ -1,22 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 
-const AUTONOMY_LEVELS = ['manual', 'assisted', 'supervised', 'autonomous'];
-const PROMPT_TARGETS = [
-  { key: 'backend_improvement', label: 'Backend', icon: 'bi-gear' },
-  { key: 'frontend_exposure', label: 'Frontend', icon: 'bi-layout-wtf' },
-  { key: 'agent_enhancement', label: 'Agents', icon: 'bi-cpu' },
-  { key: 'hitl_adjustment', label: 'Controls', icon: 'bi-shield-check' },
-  { key: 'autonomy_upgrade', label: 'Autonomy', icon: 'bi-lightning' },
-  { key: 'monitoring_gap', label: 'Monitoring', icon: 'bi-graph-up' },
-];
-
 interface Props { processId: string; onClose: () => void; onUpdate: () => void; }
+
+const TYPE_ICONS: Record<string, string> = {
+  service: 'bi-gear-fill',
+  agent: 'bi-cpu-fill',
+  route: 'bi-signpost-fill',
+  model: 'bi-database-fill',
+  scheduler: 'bi-clock-fill',
+  analytics: 'bi-graph-up-arrow',
+  script: 'bi-file-code-fill',
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  service: '#3b82f6',
+  agent: '#8b5cf6',
+  route: '#10b981',
+  model: '#f59e0b',
+  scheduler: '#6366f1',
+  analytics: '#ec4899',
+};
 
 export default function PortalBusinessProcessDetail({ processId, onClose, onUpdate }: Props) {
   const [process, setProcess] = useState<any>(null);
-  const [evaluating, setEvaluating] = useState(false);
-  const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
 
   useEffect(() => {
     bpApi.getProcess(processId).then(r => setProcess(r.data)).catch(() => {});
@@ -25,41 +32,13 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   if (!process) return null;
 
   const scores = process.strength_scores || {};
-  const hitl = process.hitl_config || {};
-  const history = process.autonomy_history || [];
-
-  const handleAutonomyChange = async (level: string) => {
-    await bpApi.updateAutonomy(processId, level, 'User adjustment');
-    bpApi.getProcess(processId).then(r => setProcess(r.data));
-    onUpdate();
-  };
-
-  const handleHITLToggle = async (key: string, value: boolean) => {
-    await bpApi.updateHITL(processId, { [key]: value });
-    bpApi.getProcess(processId).then(r => setProcess(r.data));
-  };
-
-  const handleEvaluate = async () => {
-    setEvaluating(true);
-    try {
-      await bpApi.evaluate(processId);
-      const r = await bpApi.getProcess(processId);
-      setProcess(r.data);
-      onUpdate();
-    } catch {} finally { setEvaluating(false); }
-  };
-
-  const handleGeneratePrompt = async (target: string) => {
-    setGeneratingPrompt(target);
-    try {
-      const r = await bpApi.generatePrompt(processId, target);
-      await navigator.clipboard.writeText(r.data.prompt_text);
-      const toast = document.createElement('div');
-      toast.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:var(--color-primary,#1a365d);color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>Prompt copied — paste in Claude Code or ChatGPT</div>`;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
-    } catch {} finally { setGeneratingPrompt(null); }
-  };
+  const capabilities = process.capabilities || [];
+  const groupedCaps: Record<string, any[]> = {};
+  for (const cap of capabilities) {
+    const type = cap.type || 'service';
+    if (!groupedCaps[type]) groupedCaps[type] = [];
+    groupedCaps[type].push(cap);
+  }
 
   return (
     <div className="card border-0 shadow-sm">
@@ -67,92 +46,86 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
         <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)' }}>
           <i className="bi bi-diagram-3 me-2"></i>{process.name}
         </h6>
-        <div className="d-flex gap-2">
-          <button className="btn btn-sm btn-outline-primary" onClick={handleEvaluate} disabled={evaluating}>
-            {evaluating ? <><span className="spinner-border spinner-border-sm me-1"></span>Scoring...</> : <><i className="bi bi-bar-chart me-1"></i>Score Process</>}
-          </button>
-          <button className="btn btn-link btn-sm text-muted p-0" onClick={onClose}><i className="bi bi-x-lg"></i></button>
-        </div>
+        <button className="btn btn-link btn-sm text-muted p-0" onClick={onClose}><i className="bi bi-x-lg"></i></button>
       </div>
       <div className="card-body p-3">
+        <p className="text-muted small mb-3">{process.description}</p>
+
         <div className="row g-4">
-          {/* Left: Scores + Autonomy + HITL */}
-          <div className="col-md-6">
-            <div className="mb-4">
-              <label className="form-label small fw-medium">AI Autonomy Level</label>
-              <select className="form-select form-select-sm" value={process.autonomy_level || 'manual'} onChange={e => handleAutonomyChange(e.target.value)}>
-                {AUTONOMY_LEVELS.map(l => <option key={l} value={l}>{l.charAt(0).toUpperCase() + l.slice(1)}</option>)}
-              </select>
-              <div className="mt-1 text-muted" style={{ fontSize: 10 }}>
-                Success: {((process.success_rate || 0) * 100).toFixed(0)}% · Failure: {((process.failure_rate || 0) * 100).toFixed(0)}% · Confidence: {((process.confidence_score || 0) * 100).toFixed(0)}%
+          {/* Left: Scores */}
+          <div className="col-md-5">
+            <h6 className="fw-semibold small mb-2">Process Health Scores</h6>
+            {Object.entries(scores).filter(([k]) => k !== 'overall').map(([dim, val]: [string, any]) => (
+              <div key={dim} className="d-flex align-items-center gap-2 mb-1">
+                <span className="text-muted text-capitalize" style={{ fontSize: 11, width: 110 }}>{dim.replace(/_/g, ' ')}</span>
+                <div className="progress flex-grow-1" style={{ height: 6 }}>
+                  <div className="progress-bar" style={{ width: `${val}%`, background: val >= 70 ? 'var(--color-accent)' : val >= 40 ? '#f59e0b' : 'var(--color-secondary)' }} />
+                </div>
+                <span className="fw-medium" style={{ fontSize: 11, width: 25, textAlign: 'right' }}>{val}</span>
               </div>
+            ))}
+            <div className="mt-2 text-muted" style={{ fontSize: 10 }}>
+              Overall: <strong>{scores.overall || 0}/100</strong> · {capabilities.length} components discovered
             </div>
 
-            <div className="mb-4">
-              <h6 className="fw-semibold small mb-2">Process Health</h6>
-              {Object.entries(scores).filter(([k]) => k !== 'overall').map(([dim, val]: [string, any]) => (
-                <div key={dim} className="d-flex align-items-center gap-2 mb-1">
-                  <span className="text-muted text-capitalize" style={{ fontSize: 11, width: 110 }}>{dim.replace(/_/g, ' ')}</span>
-                  <div className="progress flex-grow-1" style={{ height: 6 }}>
-                    <div className="progress-bar" style={{ width: `${val}%`, background: val >= 70 ? 'var(--color-accent)' : val >= 40 ? '#f59e0b' : 'var(--color-secondary)' }} />
-                  </div>
-                  <span className="fw-medium" style={{ fontSize: 11, width: 25, textAlign: 'right' }}>{val}</span>
+            {/* Summary stats */}
+            <div className="mt-3 d-flex gap-3">
+              {process.agent_count > 0 && (
+                <div className="text-center">
+                  <div className="fw-bold" style={{ fontSize: 18, color: '#8b5cf6' }}>{process.agent_count}</div>
+                  <div className="text-muted" style={{ fontSize: 9 }}>Agents</div>
                 </div>
-              ))}
-            </div>
-
-            <div className="mb-4">
-              <h6 className="fw-semibold small mb-2">Your AI Controls</h6>
-              {[
-                { key: 'approval_before_execution', label: 'Approve before AI executes actions' },
-                { key: 'approval_after_generation', label: 'Approve after AI generates content' },
-                { key: 'approval_before_external_action', label: 'Approve before external integrations' },
-              ].map(({ key, label }) => (
-                <div key={key} className="form-check form-switch mb-1">
-                  <input className="form-check-input" type="checkbox" checked={hitl[key] !== false} onChange={e => handleHITLToggle(key, e.target.checked)} style={{ cursor: 'pointer' }} />
-                  <label className="form-check-label small">{label}</label>
+              )}
+              <div className="text-center">
+                <div className="fw-bold" style={{ fontSize: 18, color: '#3b82f6' }}>{process.service_count || 0}</div>
+                <div className="text-muted" style={{ fontSize: 9 }}>Services</div>
+              </div>
+              {process.route_count > 0 && (
+                <div className="text-center">
+                  <div className="fw-bold" style={{ fontSize: 18, color: '#10b981' }}>{process.route_count}</div>
+                  <div className="text-muted" style={{ fontSize: 9 }}>Routes</div>
                 </div>
-              ))}
+              )}
+              {process.model_count > 0 && (
+                <div className="text-center">
+                  <div className="fw-bold" style={{ fontSize: 18, color: '#f59e0b' }}>{process.model_count}</div>
+                  <div className="text-muted" style={{ fontSize: 9 }}>Models</div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Right: Agents + Prompts + History */}
-          <div className="col-md-6">
-            {(process.linked_agents || []).length > 0 && (
-              <div className="mb-4">
-                <h6 className="fw-semibold small mb-2">Linked Agents ({(process.linked_agents || []).length})</h6>
+          {/* Right: Built Components */}
+          <div className="col-md-7">
+            <h6 className="fw-semibold small mb-2">Built Components</h6>
+            {Object.entries(groupedCaps).map(([type, caps]) => (
+              <div key={type} className="mb-3">
+                <div className="d-flex align-items-center gap-1 mb-1">
+                  <i className={`bi ${TYPE_ICONS[type] || 'bi-file-code'}`} style={{ fontSize: 12, color: TYPE_COLORS[type] || '#6b7280' }}></i>
+                  <span className="fw-medium text-capitalize" style={{ fontSize: 11 }}>{type === 'analytics' ? 'Analytics' : type + 's'} ({caps.length})</span>
+                </div>
                 <div className="d-flex flex-wrap gap-1">
-                  {(process.linked_agents || []).map((a: string) => (
-                    <span key={a} className="badge bg-light text-dark" style={{ fontSize: 10 }}><i className="bi bi-cpu me-1"></i>{a}</span>
+                  {caps.map((cap: any, i: number) => (
+                    <span key={i} className="badge bg-light text-dark" style={{ fontSize: 9, fontWeight: 500 }}
+                      title={cap.file_path}>
+                      {cap.name}
+                    </span>
                   ))}
                 </div>
               </div>
-            )}
+            ))}
 
-            <div className="mb-4">
-              <h6 className="fw-semibold small mb-2">Generate Improvement Prompts</h6>
-              <div className="d-flex flex-wrap gap-1">
-                {PROMPT_TARGETS.map(t => (
-                  <button key={t.key} className="btn btn-sm btn-outline-secondary" onClick={() => handleGeneratePrompt(t.key)}
-                    disabled={generatingPrompt === t.key} style={{ fontSize: 10 }}>
-                    {generatingPrompt === t.key ? <span className="spinner-border spinner-border-sm"></span> : <i className={`bi ${t.icon} me-1`}></i>}
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <div className="text-muted mt-1" style={{ fontSize: 9 }}>Click to copy a Claude Code-compatible improvement prompt to clipboard</div>
-            </div>
-
-            {history.length > 0 && (
-              <div>
-                <h6 className="fw-semibold small mb-2">Autonomy History</h6>
-                {history.slice(-5).reverse().map((h: any, i: number) => (
-                  <div key={i} className="d-flex gap-2 mb-1" style={{ fontSize: 10 }}>
-                    <span className="text-muted">{new Date(h.timestamp).toLocaleDateString()}</span>
-                    <span>{h.from} → <strong>{h.to}</strong></span>
-                    <span className="text-muted">— {h.reason}</span>
-                  </div>
-                ))}
+            {/* Agent names from DB */}
+            {(process.agent_names || []).length > 0 && (
+              <div className="mt-3">
+                <h6 className="fw-semibold small mb-1">Registered Agents</h6>
+                <div className="d-flex flex-wrap gap-1">
+                  {process.agent_names.map((name: string) => (
+                    <span key={name} className="badge" style={{ fontSize: 9, background: '#8b5cf620', color: '#8b5cf6' }}>
+                      <i className="bi bi-cpu me-1"></i>{name}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
