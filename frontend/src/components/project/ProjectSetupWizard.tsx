@@ -59,17 +59,54 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
 
   const allComplete = status.requirements_loaded && status.claude_md_loaded && status.github_connected;
 
+  const [progressMsg, setProgressMsg] = useState('');
+
   const handleActivate = async () => {
     setActivating(true);
     setError(null);
+    setProgressMsg('Starting activation...');
     try {
-      const res = await portalApi.post('/api/portal/project/setup/activate');
-      setActivationResult(res.data);
-      setStatus(prev => ({ ...prev, activated: true }));
-      setTimeout(() => onActivated(), 1500);
+      // Start activation (returns immediately, runs in background)
+      await portalApi.post('/api/portal/project/setup/activate');
+
+      // Poll for progress
+      const pollInterval = setInterval(async () => {
+        try {
+          const res = await portalApi.get('/api/portal/project/setup/activation-progress');
+          const p = res.data;
+          if (p.status === 'complete') {
+            clearInterval(pollInterval);
+            setActivationResult(p);
+            setProgressMsg('Activation complete!');
+            setStatus(prev => ({ ...prev, activated: true }));
+            setTimeout(() => onActivated(), 1000);
+          } else if (p.status === 'failed') {
+            clearInterval(pollInterval);
+            setError(p.error || 'Activation failed');
+            setActivating(false);
+          } else {
+            setProgressMsg(p.message || 'Processing...');
+          }
+        } catch {}
+      }, 3000);
+
+      // Safety timeout after 10 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        // Check one final time
+        portalApi.get('/api/portal/project/setup/activation-progress').then(res => {
+          if (res.data.status === 'complete') {
+            setActivationResult(res.data);
+            setStatus(prev => ({ ...prev, activated: true }));
+            setTimeout(() => onActivated(), 1000);
+          } else {
+            setError('Activation timed out. Please refresh the page.');
+            setActivating(false);
+          }
+        }).catch(() => { setError('Activation timed out.'); setActivating(false); });
+      }, 600000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Activation failed');
-    } finally {
       setActivating(false);
     }
   };
@@ -131,7 +168,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
             disabled={!allComplete || activating}
           >
             {activating ? (
-              <><span className="spinner-border spinner-border-sm me-2"></span>Activating — parsing requirements &amp; syncing repo...</>
+              <><span className="spinner-border spinner-border-sm me-2"></span>{progressMsg || 'Activating...'}</>
             ) : allComplete ? (
               <><i className="bi bi-lightning-charge me-2"></i>Activate Your Project</>
             ) : (

@@ -58,13 +58,41 @@ router.post('/api/portal/project/setup/github', requireParticipant, async (req: 
   }
 });
 
+// In-memory activation progress tracker
+const activationProgress: Map<string, { status: string; message: string; batch?: number; total_batches?: number; capabilities?: number; error?: string }> = new Map();
+
 router.post('/api/portal/project/setup/activate', requireParticipant, async (req: Request, res: Response) => {
-  try {
-    const { activateProject } = await import('../services/projectSetupService');
-    res.json(await activateProject(req.participant!.sub));
-  } catch (err: any) {
-    const status = err.message.includes('not') ? 400 : 500;
-    res.status(status).json({ error: err.message });
+  const enrollmentId = req.participant!.sub;
+  // Start activation in background, return immediately
+  activationProgress.set(enrollmentId, { status: 'processing', message: 'Starting activation...' });
+  res.json({ status: 'processing', message: 'Activation started' });
+
+  // Run async
+  (async () => {
+    try {
+      const { activateProject } = await import('../services/projectSetupService');
+      const result = await activateProject(enrollmentId);
+      activationProgress.set(enrollmentId, { status: 'complete', message: 'Activation complete', capabilities: result.requirements_count || 0 });
+    } catch (err: any) {
+      activationProgress.set(enrollmentId, { status: 'failed', message: err.message, error: err.message });
+    }
+  })();
+});
+
+router.get('/api/portal/project/setup/activation-progress', requireParticipant, async (req: Request, res: Response) => {
+  const progress = activationProgress.get(req.participant!.sub);
+  if (!progress) {
+    // Check if project already exists (activation may have completed in a previous session)
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (project) { res.json({ status: 'complete', message: 'Project already activated' }); return; }
+    res.json({ status: 'not_started', message: 'Activation not started' });
+    return;
+  }
+  res.json(progress);
+  // Clean up completed/failed entries after 5 minutes
+  if (progress.status === 'complete' || progress.status === 'failed') {
+    setTimeout(() => activationProgress.delete(req.participant!.sub), 300000);
   }
 });
 
