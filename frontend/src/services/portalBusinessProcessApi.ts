@@ -1,0 +1,8 @@
+import portalApi from '../utils/portalApi';
+
+export const getProcesses = () => portalApi.get('/api/portal/project/business-processes');
+export const getProcess = (id: string) => portalApi.get(`/api/portal/project/business-processes/${id}`);
+export const updateHITL = (id: string, config: any) => portalApi.put(`/api/portal/project/business-processes/${id}/hitl`, config);
+export const updateAutonomy = (id: string, level: string, reason?: string) => portalApi.put(`/api/portal/project/business-processes/${id}/autonomy`, { level, reason });
+export const evaluate = (id: string) => portalApi.post(`/api/portal/project/business-processes/${id}/evaluate`);
+export const generatePrompt = (id: string, target: string) => portalApi.post(`/api/portal/project/business-processes/${id}/prompt`, { target });

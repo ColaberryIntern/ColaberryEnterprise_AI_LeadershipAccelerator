@@ -998,4 +998,66 @@ router.get('/api/portal/project/workstation-context', requireParticipant, async 
   }
 });
 
+// ---------------------------------------------------------------------------
+// Business Processes (BPOS) — portal-scoped
+// ---------------------------------------------------------------------------
+
+router.get('/api/portal/project/business-processes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { Capability } = await import('../models');
+    const processes = await Capability.findAll({
+      where: { project_id: project.id },
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+    });
+    res.json(processes);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/business-processes/:id', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { Capability } = await import('../models');
+    const process = await Capability.findByPk(req.params.id as string);
+    if (!process) { res.status(404).json({ error: 'Process not found' }); return; }
+    res.json(process);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/api/portal/project/business-processes/:id/hitl', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { updateHITLConfig, getHITLConfig } = await import('../intelligence/hitl/hitlEngine');
+    await updateHITLConfig(req.params.id as string, req.body);
+    res.json(await getHITLConfig(req.params.id as string));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/api/portal/project/business-processes/:id/autonomy', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { applyAutonomyChange, assessAutonomy } = await import('../intelligence/autonomyProgressionEngine');
+    await applyAutonomyChange(req.params.id as string, req.body.level, req.body.reason || 'User adjustment');
+    res.json(await assessAutonomy(req.params.id as string));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/business-processes/:id/evaluate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { scoreProcess } = await import('../intelligence/processScoringEngine');
+    const { assessAutonomy } = await import('../intelligence/autonomyProgressionEngine');
+    const scores = await scoreProcess(req.params.id as string);
+    const autonomy = await assessAutonomy(req.params.id as string);
+    res.json({ scores, autonomy });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/business-processes/:id/prompt', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { target } = req.body;
+    if (!target) { res.status(400).json({ error: 'target required' }); return; }
+    const { generateImprovementPrompt } = await import('../intelligence/promptGenerator');
+    res.json(await generateImprovementPrompt(req.params.id as string, target));
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;

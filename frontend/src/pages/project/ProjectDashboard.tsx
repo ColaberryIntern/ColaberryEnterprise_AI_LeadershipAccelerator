@@ -11,6 +11,7 @@ import WorkstationLauncher from '../../components/project/WorkstationLauncher';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import CapabilityGrid from '../../components/project/CapabilityGrid';
 import RepoComponentsPanel from '../../components/project/RepoComponentsPanel';
+import PortalBusinessProcessesTab from '../../components/project/PortalBusinessProcessesTab';
 
 // Execution Overview — capability grid + repo analysis
 function ExecutionOverview() {
@@ -61,7 +62,7 @@ interface ProjectData {
   updated_at: string;
 }
 
-type TabKey = 'overview' | 'requirements' | 'github' | 'compile' | 'readiness' | 'warroom' | 'contract' | 'discover';
+type TabKey = 'overview' | 'requirements' | 'business-processes' | 'github' | 'compile' | 'readiness' | 'warroom' | 'contract' | 'discover';
 
 function formatTimeAgo(dateStr: string): string {
   const now = new Date();
@@ -612,6 +613,7 @@ function ProjectDashboard() {
   const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
     { key: 'overview', label: 'Overview', icon: 'bi-grid' },
     { key: 'readiness', label: 'Readiness', icon: 'bi-speedometer2' },
+    { key: 'business-processes', label: 'Business Processes', icon: 'bi-diagram-3' },
     { key: 'requirements', label: 'Requirements', icon: 'bi-list-check' },
     { key: 'github', label: 'GitHub', icon: 'bi-github' },
     { key: 'compile', label: 'System Validation', icon: 'bi-shield-check' },
@@ -656,6 +658,7 @@ function ProjectDashboard() {
       )}
 
       {activeTab === 'readiness' && <ReadinessTab />}
+      {activeTab === 'business-processes' && <PortalBusinessProcessesTab />}
       {activeTab === 'requirements' && <RequirementsTab />}
       {activeTab === 'github' && <GitHubTab />}
       {activeTab === 'compile' && <CompileTab />}
