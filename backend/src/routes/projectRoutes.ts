@@ -1004,19 +1004,44 @@ router.get('/api/portal/project/workstation-context', requireParticipant, async 
 
 router.get('/api/portal/project/business-processes', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { discoverPlatformProcesses } = await import('../intelligence/processDiscoveryEngine');
-    const processes = await discoverPlatformProcesses();
-    res.json(processes);
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    // Enrich with gap analysis
+    const enriched = hierarchy.map((cap: any) => {
+      const allReqs = (cap.features || []).flatMap((f: any) => f.requirements || []);
+      const matched = allReqs.filter((r: any) => r.status === 'matched' || r.status === 'verified');
+      const partial = allReqs.filter((r: any) => r.status === 'partial');
+      const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
+      return {
+        ...cap,
+        source: 'requirements',
+        total_requirements: allReqs.length,
+        matched_requirements: matched.length,
+        partial_requirements: partial.length,
+        unmatched_requirements: unmatched.length,
+        gap_count: unmatched.length + partial.length,
+      };
+    });
+    res.json(enriched);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/api/portal/project/business-processes/:id', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { discoverPlatformProcesses } = await import('../intelligence/processDiscoveryEngine');
-    const all = await discoverPlatformProcesses();
-    const process = all.find(p => p.slug === (req.params.id as string)) || null;
-    if (!process) { res.status(404).json({ error: 'Process not found' }); return; }
-    res.json(process);
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const allReqs = (cap.features || []).flatMap((f: any) => f.requirements || []);
+    const matched = allReqs.filter((r: any) => r.status === 'matched' || r.status === 'verified');
+    const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
+    res.json({ ...cap, source: 'requirements', total_requirements: allReqs.length, matched_requirements: matched.length, unmatched_requirements: unmatched.length, gap_count: unmatched.length });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

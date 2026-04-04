@@ -3,23 +3,12 @@ import * as bpApi from '../../services/portalBusinessProcessApi';
 
 interface Props { processId: string; onClose: () => void; onUpdate: () => void; }
 
-const TYPE_ICONS: Record<string, string> = {
-  service: 'bi-gear-fill',
-  agent: 'bi-cpu-fill',
-  route: 'bi-signpost-fill',
-  model: 'bi-database-fill',
-  scheduler: 'bi-clock-fill',
-  analytics: 'bi-graph-up-arrow',
-  script: 'bi-file-code-fill',
-};
-
-const TYPE_COLORS: Record<string, string> = {
-  service: '#3b82f6',
-  agent: '#8b5cf6',
-  route: '#10b981',
-  model: '#f59e0b',
-  scheduler: '#6366f1',
-  analytics: '#ec4899',
+const STATUS_BADGES: Record<string, { bg: string; color: string; label: string }> = {
+  matched: { bg: '#10b98120', color: '#10b981', label: 'Implemented' },
+  verified: { bg: '#10b98120', color: '#10b981', label: 'Verified' },
+  partial: { bg: '#f59e0b20', color: '#f59e0b', label: 'Partial' },
+  unmatched: { bg: '#ef444420', color: '#ef4444', label: 'Not Built' },
+  not_started: { bg: '#9ca3af20', color: '#9ca3af', label: 'Not Started' },
 };
 
 export default function PortalBusinessProcessDetail({ processId, onClose, onUpdate }: Props) {
@@ -31,105 +20,108 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
 
   if (!process) return null;
 
-  const scores = process.strength_scores || {};
-  const capabilities = process.capabilities || [];
-  const groupedCaps: Record<string, any[]> = {};
-  for (const cap of capabilities) {
-    const type = cap.type || 'service';
-    if (!groupedCaps[type]) groupedCaps[type] = [];
-    groupedCaps[type].push(cap);
-  }
+  const features = process.features || [];
+  const totalR = process.total_requirements || 0;
+  const matchedR = process.matched_requirements || 0;
+  const gaps = process.gap_count || 0;
+  const pct = process.completion_pct || 0;
 
   return (
     <div className="card border-0 shadow-sm">
       <div className="card-header bg-white d-flex justify-content-between align-items-center">
-        <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)' }}>
-          <i className="bi bi-diagram-3 me-2"></i>{process.name}
-        </h6>
+        <div>
+          <h6 className="fw-semibold mb-0" style={{ color: 'var(--color-primary)' }}>
+            <i className="bi bi-diagram-3 me-2"></i>{process.name}
+          </h6>
+          <span className="text-muted" style={{ fontSize: 11 }}>{matchedR}/{totalR} requirements implemented · {Math.round(pct)}% complete</span>
+        </div>
         <button className="btn btn-link btn-sm text-muted p-0" onClick={onClose}><i className="bi bi-x-lg"></i></button>
       </div>
       <div className="card-body p-3">
-        <p className="text-muted small mb-3">{process.description}</p>
+        {process.description && <p className="text-muted small mb-3">{process.description}</p>}
 
-        <div className="row g-4">
-          {/* Left: Scores */}
-          <div className="col-md-5">
-            <h6 className="fw-semibold small mb-2">Process Health Scores</h6>
-            {Object.entries(scores).filter(([k]) => k !== 'overall').map(([dim, val]: [string, any]) => (
-              <div key={dim} className="d-flex align-items-center gap-2 mb-1">
-                <span className="text-muted text-capitalize" style={{ fontSize: 11, width: 110 }}>{dim.replace(/_/g, ' ')}</span>
-                <div className="progress flex-grow-1" style={{ height: 6 }}>
-                  <div className="progress-bar" style={{ width: `${val}%`, background: val >= 70 ? 'var(--color-accent)' : val >= 40 ? '#f59e0b' : 'var(--color-secondary)' }} />
-                </div>
-                <span className="fw-medium" style={{ fontSize: 11, width: 25, textAlign: 'right' }}>{val}</span>
-              </div>
-            ))}
-            <div className="mt-2 text-muted" style={{ fontSize: 10 }}>
-              Overall: <strong>{scores.overall || 0}/100</strong> · {capabilities.length} components discovered
-            </div>
-
-            {/* Summary stats */}
-            <div className="mt-3 d-flex gap-3">
-              {process.agent_count > 0 && (
-                <div className="text-center">
-                  <div className="fw-bold" style={{ fontSize: 18, color: '#8b5cf6' }}>{process.agent_count}</div>
-                  <div className="text-muted" style={{ fontSize: 9 }}>Agents</div>
-                </div>
-              )}
-              <div className="text-center">
-                <div className="fw-bold" style={{ fontSize: 18, color: '#3b82f6' }}>{process.service_count || 0}</div>
-                <div className="text-muted" style={{ fontSize: 9 }}>Services</div>
-              </div>
-              {process.route_count > 0 && (
-                <div className="text-center">
-                  <div className="fw-bold" style={{ fontSize: 18, color: '#10b981' }}>{process.route_count}</div>
-                  <div className="text-muted" style={{ fontSize: 9 }}>Routes</div>
-                </div>
-              )}
-              {process.model_count > 0 && (
-                <div className="text-center">
-                  <div className="fw-bold" style={{ fontSize: 18, color: '#f59e0b' }}>{process.model_count}</div>
-                  <div className="text-muted" style={{ fontSize: 9 }}>Models</div>
-                </div>
-              )}
-            </div>
+        {/* Summary stats */}
+        <div className="d-flex gap-4 mb-4">
+          <div className="text-center">
+            <div className="fw-bold" style={{ fontSize: 22, color: 'var(--color-accent)' }}>{matchedR}</div>
+            <div className="text-muted" style={{ fontSize: 10 }}>Implemented</div>
           </div>
-
-          {/* Right: Built Components */}
-          <div className="col-md-7">
-            <h6 className="fw-semibold small mb-2">Built Components</h6>
-            {Object.entries(groupedCaps).map(([type, caps]) => (
-              <div key={type} className="mb-3">
-                <div className="d-flex align-items-center gap-1 mb-1">
-                  <i className={`bi ${TYPE_ICONS[type] || 'bi-file-code'}`} style={{ fontSize: 12, color: TYPE_COLORS[type] || '#6b7280' }}></i>
-                  <span className="fw-medium text-capitalize" style={{ fontSize: 11 }}>{type === 'analytics' ? 'Analytics' : type + 's'} ({caps.length})</span>
-                </div>
-                <div className="d-flex flex-wrap gap-1">
-                  {caps.map((cap: any, i: number) => (
-                    <span key={i} className="badge bg-light text-dark" style={{ fontSize: 9, fontWeight: 500 }}
-                      title={cap.file_path}>
-                      {cap.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {/* Agent names from DB */}
-            {(process.agent_names || []).length > 0 && (
-              <div className="mt-3">
-                <h6 className="fw-semibold small mb-1">Registered Agents</h6>
-                <div className="d-flex flex-wrap gap-1">
-                  {process.agent_names.map((name: string) => (
-                    <span key={name} className="badge" style={{ fontSize: 9, background: '#8b5cf620', color: '#8b5cf6' }}>
-                      <i className="bi bi-cpu me-1"></i>{name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="text-center">
+            <div className="fw-bold" style={{ fontSize: 22, color: '#f59e0b' }}>{(process.partial_requirements || 0)}</div>
+            <div className="text-muted" style={{ fontSize: 10 }}>Partial</div>
+          </div>
+          <div className="text-center">
+            <div className="fw-bold" style={{ fontSize: 22, color: 'var(--color-secondary)' }}>{gaps}</div>
+            <div className="text-muted" style={{ fontSize: 10 }}>Gaps</div>
+          </div>
+          <div className="text-center">
+            <div className="fw-bold" style={{ fontSize: 22, color: 'var(--color-primary)' }}>{features.length}</div>
+            <div className="text-muted" style={{ fontSize: 10 }}>Features</div>
           </div>
         </div>
+
+        {/* Progress bar */}
+        <div className="progress mb-4" style={{ height: 6 }}>
+          <div className="progress-bar bg-success" style={{ width: `${pct}%` }} />
+        </div>
+
+        {/* Feature-level traceability */}
+        <h6 className="fw-semibold small mb-2">Requirements Traceability</h6>
+        {features.map((feature: any) => {
+          const reqs = feature.requirements || [];
+          const fPct = feature.completion_pct || 0;
+          return (
+            <div key={feature.id} className="mb-3">
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <span className="fw-medium" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+                  <i className="bi bi-layers me-1"></i>{feature.name}
+                </span>
+                <span className="text-muted" style={{ fontSize: 10 }}>{Math.round(fPct)}% · {reqs.filter((r: any) => r.status === 'matched' || r.status === 'verified').length}/{reqs.length}</span>
+              </div>
+              {feature.description && <div className="text-muted mb-1" style={{ fontSize: 10 }}>{feature.description}</div>}
+
+              {/* Requirements list */}
+              <div className="ps-3">
+                {reqs.map((req: any) => {
+                  const badge = STATUS_BADGES[req.status] || STATUS_BADGES.not_started;
+                  const files = req.github_file_paths || [];
+                  return (
+                    <div key={req.id} className="d-flex align-items-start gap-2 mb-1 py-1" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <span className="badge" style={{ background: badge.bg, color: badge.color, fontSize: 8, flexShrink: 0, marginTop: 2 }}>
+                        {badge.label}
+                      </span>
+                      <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11 }}>
+                          <strong className="me-1">{req.key}</strong>
+                          <span className="text-muted">{req.text?.substring(0, 120)}{req.text?.length > 120 ? '...' : ''}</span>
+                        </div>
+                        {files.length > 0 && (
+                          <div className="d-flex flex-wrap gap-1 mt-1">
+                            {files.slice(0, 3).map((f: string, i: number) => (
+                              <span key={i} className="badge bg-light text-dark" style={{ fontSize: 8 }}>
+                                <i className="bi bi-file-code me-1"></i>{f.split('/').pop()}
+                              </span>
+                            ))}
+                            {files.length > 3 && <span className="text-muted" style={{ fontSize: 8 }}>+{files.length - 3} more</span>}
+                          </div>
+                        )}
+                      </div>
+                      {req.confidence_score != null && (
+                        <span className="text-muted" style={{ fontSize: 9, flexShrink: 0 }}>{Math.round(req.confidence_score * 100)}%</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+
+        {features.length === 0 && (
+          <div className="text-center text-muted py-3" style={{ fontSize: 12 }}>
+            <i className="bi bi-info-circle me-1"></i>No features extracted yet. Click "Extract Requirements" on the Requirements tab first.
+          </div>
+        )}
       </div>
     </div>
   );

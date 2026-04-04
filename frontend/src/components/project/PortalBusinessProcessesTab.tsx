@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import PortalBusinessProcessDetail from './PortalBusinessProcessDetail';
 
-const AUTONOMY_COLORS: Record<string, string> = { manual: '#9ca3af', assisted: '#3b82f6', supervised: '#f59e0b', autonomous: '#10b981' };
+function completionColor(pct: number): string {
+  if (pct >= 80) return 'var(--color-accent)';
+  if (pct >= 40) return '#f59e0b';
+  return 'var(--color-secondary)';
+}
 
 export default function PortalBusinessProcessesTab() {
   const [processes, setProcesses] = useState<any[]>([]);
@@ -11,7 +15,7 @@ export default function PortalBusinessProcessesTab() {
 
   const load = () => {
     setLoading(true);
-    bpApi.getProcesses().then(r => setProcesses(r.data)).catch(() => {}).finally(() => setLoading(false));
+    bpApi.getProcesses().then(r => setProcesses(r.data || [])).catch(() => {}).finally(() => setLoading(false));
   };
   useEffect(load, []);
 
@@ -20,72 +24,73 @@ export default function PortalBusinessProcessesTab() {
   if (processes.length === 0) return (
     <div className="text-center py-5">
       <i className="bi bi-diagram-3 d-block mb-3" style={{ fontSize: 40, color: 'var(--color-text-light)' }}></i>
-      <h6 className="fw-semibold" style={{ color: 'var(--color-primary)' }}>No Business Processes Discovered</h6>
-      <p className="text-muted small mb-0">The system will discover business processes from your platform's backend services, agents, and routes.</p>
+      <h6 className="fw-semibold" style={{ color: 'var(--color-primary)' }}>No Business Processes Yet</h6>
+      <p className="text-muted small mb-0">Upload your requirements document and click "Extract Requirements" on the Requirements tab to generate business processes.</p>
     </div>
   );
 
-  const totalAgents = processes.reduce((s: number, p: any) => s + (p.agent_count || 0), 0);
-  const totalServices = processes.reduce((s: number, p: any) => s + (p.service_count || 0), 0);
-  const totalCapabilities = processes.reduce((s: number, p: any) => s + (p.capabilities?.length || 0), 0);
+  const totalReqs = processes.reduce((s: number, p: any) => s + (p.total_requirements || 0), 0);
+  const matchedReqs = processes.reduce((s: number, p: any) => s + (p.matched_requirements || 0), 0);
+  const overallPct = totalReqs > 0 ? Math.round((matchedReqs / totalReqs) * 100) : 0;
 
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Platform Business Processes</h6>
+          <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Business Processes</h6>
           <p className="text-muted small mb-0">
-            {processes.length} processes · {totalCapabilities} components · {totalAgents} agents · {totalServices} services — discovered from codebase
+            {processes.length} processes · {matchedReqs}/{totalReqs} requirements implemented · <strong>{overallPct}% complete</strong>
           </p>
         </div>
-        <span className="badge bg-success" style={{ fontSize: 10 }}>
-          <i className="bi bi-check-circle me-1"></i>Auto-Discovered
+        <span className="badge" style={{ background: `${completionColor(overallPct)}20`, color: completionColor(overallPct), fontSize: 12, fontWeight: 700, padding: '6px 12px' }}>
+          {overallPct}%
         </span>
+      </div>
+
+      {/* Overall progress bar */}
+      <div className="progress mb-4" style={{ height: 8 }}>
+        <div className="progress-bar" style={{ width: `${overallPct}%`, background: completionColor(overallPct) }} />
       </div>
 
       <div className="row g-3">
         {processes.map((p: any) => {
-          const scores = p.strength_scores || {};
-          const overall = scores.overall || 0;
-          const color = AUTONOMY_COLORS[p.autonomy_level] || '#9ca3af';
-          const isSelected = selected === p.slug;
+          const pct = p.completion_pct || 0;
+          const totalR = p.total_requirements || 0;
+          const matchedR = p.matched_requirements || 0;
+          const gaps = p.gap_count || 0;
+          const featureCount = (p.features || []).length;
+          const isSelected = selected === p.id;
 
           return (
-            <div key={p.slug} className="col-md-6 col-lg-4">
-              <div className={`card border-0 shadow-sm h-100`}
-                style={{ borderLeft: `4px solid ${color}`, cursor: 'pointer', outline: isSelected ? '2px solid var(--color-primary-light)' : 'none' }}
-                onClick={() => setSelected(isSelected ? null : p.slug)}>
+            <div key={p.id} className="col-md-6 col-lg-4">
+              <div className="card border-0 shadow-sm h-100"
+                style={{ borderLeft: `4px solid ${completionColor(pct)}`, cursor: 'pointer', outline: isSelected ? '2px solid var(--color-primary-light)' : 'none' }}
+                onClick={() => setSelected(isSelected ? null : p.id)}>
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: 'var(--color-primary)' }}>{p.name}</h6>
-                    <span className="badge" style={{ background: `${color}20`, color, fontSize: 10, fontWeight: 600 }}>
-                      {(p.autonomy_level || 'manual').toUpperCase()}
+                    <span className="badge" style={{ background: `${completionColor(pct)}20`, color: completionColor(pct), fontSize: 11, fontWeight: 700 }}>
+                      {Math.round(pct)}%
                     </span>
                   </div>
-                  {p.description && <div className="text-muted mb-2" style={{ fontSize: 11 }}>{p.description.substring(0, 120)}{p.description.length > 120 ? '...' : ''}</div>}
+                  {p.description && <div className="text-muted mb-2" style={{ fontSize: 11 }}>{p.description.substring(0, 100)}{p.description.length > 100 ? '...' : ''}</div>}
 
-                  {/* Strength bars */}
-                  <div className="mb-2">
-                    {['determinism', 'reliability', 'observability', 'automation', 'ai_maturity'].map(dim => (
-                      <div key={dim} className="d-flex align-items-center gap-1 mb-1">
-                        <span className="text-muted text-capitalize" style={{ fontSize: 9, width: 70 }}>{dim.replace('_', ' ')}</span>
-                        <div className="progress flex-grow-1" style={{ height: 4 }}>
-                          <div className="progress-bar" style={{ width: `${scores[dim] || 0}%`, background: (scores[dim] || 0) >= 70 ? 'var(--color-accent)' : (scores[dim] || 0) >= 40 ? '#f59e0b' : 'var(--color-secondary)' }} />
-                        </div>
-                        <span style={{ fontSize: 9, width: 20, textAlign: 'right' }}>{scores[dim] || 0}</span>
-                      </div>
-                    ))}
+                  {/* Progress bar */}
+                  <div className="progress mb-2" style={{ height: 5 }}>
+                    <div className="progress-bar" style={{ width: `${pct}%`, background: completionColor(pct) }} />
                   </div>
 
-                  {/* Capability counts */}
+                  {/* Stats */}
                   <div className="d-flex justify-content-between small text-muted" style={{ fontSize: 10 }}>
                     <div className="d-flex gap-2">
-                      {p.agent_count > 0 && <span><i className="bi bi-cpu me-1"></i>{p.agent_count} agents</span>}
-                      <span><i className="bi bi-gear me-1"></i>{p.service_count || 0} services</span>
-                      {p.route_count > 0 && <span><i className="bi bi-signpost me-1"></i>{p.route_count} routes</span>}
-                      {p.model_count > 0 && <span><i className="bi bi-database me-1"></i>{p.model_count} models</span>}
+                      <span><i className="bi bi-check-circle me-1"></i>{matchedR}/{totalR} reqs</span>
+                      <span><i className="bi bi-layers me-1"></i>{featureCount} features</span>
                     </div>
-                    <span className="fw-semibold">{overall}/100</span>
+                    {gaps > 0 && (
+                      <span style={{ color: 'var(--color-secondary)' }}>
+                        <i className="bi bi-exclamation-triangle me-1"></i>{gaps} gaps
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
