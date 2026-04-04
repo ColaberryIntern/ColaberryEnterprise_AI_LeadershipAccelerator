@@ -1038,10 +1038,40 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const hierarchy = await getCapabilityHierarchy(project.id);
     const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    // Enrich with Capability BPOS fields
+    const { Capability } = await import('../models');
+    const capModel = await Capability.findByPk(req.params.id as string);
     const allReqs = (cap.features || []).flatMap((f: any) => f.requirements || []);
     const matched = allReqs.filter((r: any) => r.status === 'matched' || r.status === 'verified');
+    const partial = allReqs.filter((r: any) => r.status === 'partial');
     const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
-    res.json({ ...cap, source: 'requirements', total_requirements: allReqs.length, matched_requirements: matched.length, unmatched_requirements: unmatched.length, gap_count: unmatched.length });
+    // Build vision from feature descriptions
+    const vision = (cap.features || []).map((f: any) => f.description || f.name).filter(Boolean);
+    // Build gaps list
+    const gaps = (cap.features || []).flatMap((f: any) =>
+      (f.requirements || []).filter((r: any) => r.status === 'unmatched' || r.status === 'partial' || r.status === 'not_started')
+        .map((r: any) => ({ ...r, feature_name: f.name }))
+    );
+    res.json({
+      ...cap,
+      source: 'requirements',
+      total_requirements: allReqs.length,
+      matched_requirements: matched.length,
+      partial_requirements: partial.length,
+      unmatched_requirements: unmatched.length,
+      gap_count: gaps.length,
+      vision,
+      gaps,
+      // BPOS fields from Capability model
+      hitl_config: capModel?.hitl_config || null,
+      autonomy_level: capModel?.autonomy_level || 'manual',
+      autonomy_history: capModel?.autonomy_history || [],
+      strength_scores: capModel?.strength_scores || null,
+      confidence_score: capModel?.confidence_score || null,
+      success_rate: capModel?.success_rate || null,
+      failure_rate: capModel?.failure_rate || null,
+      last_evaluated_at: capModel?.last_evaluated_at || null,
+    });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
