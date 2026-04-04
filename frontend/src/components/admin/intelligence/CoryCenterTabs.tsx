@@ -27,11 +27,12 @@ import TrendsTab from './tabs/TrendsTab';
 import AgentPerformanceTab from './tabs/AgentPerformanceTab';
 import DepartmentStrategyTab from './tabs/DepartmentStrategyTab';
 import ExecutionsTab from './tabs/ExecutionsTab';
+import BusinessProcessesTab from './tabs/BusinessProcessesTab';
 import FeedbackButtons from './FeedbackButtons';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach' | 'insights' | 'reports' | 'maps' | 'trends' | 'agent-performance' | 'dept-strategy' | 'executions';
+type TabKey = 'dashboard' | 'alerts' | 'orchestration' | 'timeline' | 'impact' | 'activity' | 'health' | 'errors' | 'initiatives' | 'roadmap' | 'dept-timeline' | 'innovation' | 'revenue' | 'outreach' | 'insights' | 'reports' | 'maps' | 'trends' | 'agent-performance' | 'dept-strategy' | 'executions' | 'business-processes';
 
 interface CoryCenterTabsProps {
   children: React.ReactNode; // DynamicCanvas goes here as the "dashboard" tab content
@@ -500,6 +501,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
       key: 'overview', label: 'Overview',
       tabs: [
         { key: 'dashboard', label: 'Dashboard' },
+        { key: 'business-processes', label: 'Business Processes' },
         { key: 'alerts', label: 'Alerts' },
         { key: 'impact', label: 'Impact' },
         { key: 'maps', label: 'Maps' },
@@ -623,6 +625,7 @@ export default function CoryCenterTabs({ children, onAgentClick }: CoryCenterTab
       {/* Tab Content */}
       <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
         {activeTab === 'dashboard' && children}
+        {activeTab === 'business-processes' && <BusinessProcessesTab />}
         {activeTab === 'alerts' && <AlertsTab />}
         {activeTab === 'orchestration' && <OrchestrationGraph onAgentClick={onAgentClick} entityFilter={entityFilter} layerFilter={activeLayer} />}
         {activeTab === 'activity' && <ActivityTab entityFilter={entityFilter} layerFilter={activeLayer} />}

@@ -10,6 +10,20 @@ export interface CapabilityAttributes {
   priority?: string;
   sort_order?: number;
   source?: string;
+  // BPOS fields
+  process_type?: string;
+  autonomy_level?: string;
+  confidence_score?: number;
+  success_rate?: number;
+  failure_rate?: number;
+  approval_dependency_pct?: number;
+  linked_agents?: string[];
+  linked_backend_services?: string[];
+  linked_frontend_components?: string[];
+  strength_scores?: Record<string, number>;
+  hitl_config?: Record<string, any>;
+  autonomy_history?: any[];
+  last_evaluated_at?: Date;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -21,6 +35,19 @@ class Capability extends Model<CapabilityAttributes> implements CapabilityAttrib
   declare priority: string;
   declare sort_order: number;
   declare source: string;
+  declare process_type: string;
+  declare autonomy_level: string;
+  declare confidence_score: number;
+  declare success_rate: number;
+  declare failure_rate: number;
+  declare approval_dependency_pct: number;
+  declare linked_agents: string[];
+  declare linked_backend_services: string[];
+  declare linked_frontend_components: string[];
+  declare strength_scores: Record<string, number>;
+  declare hitl_config: Record<string, any>;
+  declare autonomy_history: any[];
+  declare last_evaluated_at: Date;
 }
 
 Capability.init(
@@ -33,6 +60,20 @@ Capability.init(
     priority: { type: DataTypes.STRING(20), defaultValue: 'medium' },
     sort_order: { type: DataTypes.INTEGER, defaultValue: 0 },
     source: { type: DataTypes.STRING(30), defaultValue: 'parsed' },
+    // BPOS fields
+    process_type: { type: DataTypes.STRING(30), defaultValue: 'student_project' },
+    autonomy_level: { type: DataTypes.STRING(30), defaultValue: 'manual' },
+    confidence_score: { type: DataTypes.FLOAT, allowNull: true },
+    success_rate: { type: DataTypes.FLOAT, allowNull: true },
+    failure_rate: { type: DataTypes.FLOAT, allowNull: true },
+    approval_dependency_pct: { type: DataTypes.FLOAT, allowNull: true },
+    linked_agents: { type: DataTypes.JSONB, defaultValue: [] },
+    linked_backend_services: { type: DataTypes.JSONB, defaultValue: [] },
+    linked_frontend_components: { type: DataTypes.JSONB, defaultValue: [] },
+    strength_scores: { type: DataTypes.JSONB, allowNull: true },
+    hitl_config: { type: DataTypes.JSONB, allowNull: true },
+    autonomy_history: { type: DataTypes.JSONB, defaultValue: [] },
+    last_evaluated_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

@@ -43,6 +43,7 @@ import marketingFunnelRoutes from './admin/marketingFunnelRoutes';
 import artifactRelationshipRoutes from './admin/artifactRelationshipRoutes';
 import dashboardRoutes from './admin/dashboardRoutes';
 import communicationRoutes from './admin/communicationRoutes';
+import businessProcessRoutes from './admin/businessProcessRoutes';
 
 const router = Router();
 
@@ -90,5 +91,6 @@ router.use(marketingFunnelRoutes);
 router.use(artifactRelationshipRoutes);
 router.use(dashboardRoutes);
 router.use(communicationRoutes);
+router.use(businessProcessRoutes);
 
 export default router;
