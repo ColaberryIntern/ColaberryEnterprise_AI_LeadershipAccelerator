@@ -31,14 +31,14 @@ export async function getCapabilityHierarchy(projectId: string): Promise<Capabil
       const reqs = await RequirementsMap.findAll({ where: { feature_id: feat.id }, order: [['requirement_key', 'ASC']] });
       const reqNodes: RequirementNode[] = reqs.map(r => ({
         id: r.id, key: r.requirement_key, text: r.requirement_text,
-        status: (r.status === 'verified' || r.status === 'matched') ? 'completed' : r.status === 'partial' ? 'in_progress' : 'not_started',
+        status: r.status || 'not_started',
         is_active: r.is_active !== false,
         github_file_paths: r.github_file_paths || [],
         confidence_score: r.confidence_score || 0,
       }));
 
       const active = reqNodes.filter(r => r.is_active);
-      const completed = active.filter(r => r.status === 'completed').length;
+      const completed = active.filter(r => r.status === 'matched' || r.status === 'verified').length;
 
       featureNodes.push({
         id: feat.id, name: feat.name, description: feat.description || '', success_criteria: feat.success_criteria || '',
