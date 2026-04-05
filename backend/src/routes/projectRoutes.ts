@@ -1046,6 +1046,103 @@ router.get('/api/portal/project/workstation-context', requireParticipant, async 
 // Business Processes (BPOS) — portal-scoped
 // ---------------------------------------------------------------------------
 
+// ─── Shared enrichment for business processes ────────────────────────────────
+const NOISE_FILES_SET = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md', 'package-lock.json']);
+function enrichCapability(cap: any) {
+  const features = cap.features || [];
+  const allReqs = features.flatMap((f: any) => f.requirements || []);
+  const matched = allReqs.filter((r: any) => r.status === 'matched' || r.status === 'verified');
+  const partial = allReqs.filter((r: any) => r.status === 'partial');
+  const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
+  const totalR = allReqs.length;
+  const matchedR = matched.length;
+
+  // Filter noise files
+  const isReal = (f: string) => { const n = f.split('/').pop() || f; return !NOISE_FILES_SET.has(n) && !n.startsWith('.'); };
+  const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))].filter(isReal);
+  const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware') || (f.includes('models/') && !f.includes('frontend')));
+  const frontendFiles = allFiles.filter((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
+  const agentFiles = allFiles.filter((f: string) => f.includes('agent') || f.includes('Agent') || f.includes('intelligence/'));
+  const modelFiles = allFiles.filter((f: string) => f.includes('models/') && f.endsWith('.ts'));
+
+  const hasBackend = backendFiles.length > 0;
+  const hasFrontend = frontendFiles.length > 0;
+  const hasAgents = agentFiles.length > 0;
+
+  // ── 3 SEPARATE METRICS ──
+  const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
+  const readiness = (hasBackend ? 50 : 0) + (hasFrontend ? 30 : 0) + (hasAgents ? 20 : 0);
+  // Quality scoring (each 0-10)
+  const q = {
+    determinism: Math.min(10, backendFiles.length * 2),
+    reliability: Math.min(10, (modelFiles.length * 2) + (backendFiles.length > 2 ? 3 : 0)),
+    observability: 0, // no monitoring by default
+    ux_exposure: Math.min(10, frontendFiles.length * 3),
+    automation: Math.min(10, agentFiles.length * 3),
+    production_readiness: Math.min(10, (hasBackend ? 3 : 0) + (hasFrontend ? 3 : 0) + (hasAgents ? 2 : 0) + (modelFiles.length > 0 ? 2 : 0)),
+  };
+  const qualityTotal = Math.round(Object.values(q).reduce((s, v) => s + v, 0) * 100 / 60); // normalize to 0-100
+
+  // ── MATURITY LEVEL ──
+  let maturityLevel = 0, maturityLabel = 'Not Started';
+  const nextReqs: string[] = [];
+  if (allFiles.length > 0) { maturityLevel = 1; maturityLabel = 'Prototype'; }
+  if (hasBackend && reqCoverage > 50) { maturityLevel = 2; maturityLabel = 'Functional'; }
+  if (hasBackend && hasFrontend && reqCoverage > 70) { maturityLevel = 3; maturityLabel = 'Production'; }
+  if (hasBackend && hasFrontend && hasAgents && reqCoverage > 85) { maturityLevel = 4; maturityLabel = 'Autonomous'; }
+  if (hasBackend && hasFrontend && hasAgents && reqCoverage > 95 && qualityTotal > 70) { maturityLevel = 5; maturityLabel = 'Self-Optimizing'; }
+  // Next level requirements
+  if (maturityLevel < 2) { if (!hasBackend) nextReqs.push('Build backend services'); if (reqCoverage <= 50) nextReqs.push('Implement >50% of requirements'); }
+  if (maturityLevel === 2) { if (!hasFrontend) nextReqs.push('Create frontend UI'); if (reqCoverage <= 70) nextReqs.push('Increase requirement coverage to >70%'); }
+  if (maturityLevel === 3) { if (!hasAgents) nextReqs.push('Add AI agent automation'); if (reqCoverage <= 85) nextReqs.push('Cover >85% of requirements'); }
+  if (maturityLevel === 4) { if (reqCoverage <= 95) nextReqs.push('Cover >95% of requirements'); if (qualityTotal <= 70) nextReqs.push('Improve quality score above 70'); }
+
+  // ── GAPS (unified) ──
+  const reqGaps = features.flatMap((f: any) =>
+    (f.requirements || []).filter((r: any) => r.status === 'unmatched' || r.status === 'partial' || r.status === 'not_started')
+      .map((r: any) => ({ ...r, feature_name: f.name, gap_type: 'requirement' }))
+  );
+  const sysGaps: any[] = [];
+  if (!hasBackend) sysGaps.push({ text: 'Backend services needed — no services or API routes detected', key: 'SYS-BE', gap_type: 'system' });
+  if (!hasFrontend) sysGaps.push({ text: 'Frontend UI needed — no React components detected', key: 'SYS-FE', gap_type: 'system' });
+  const qualGaps: any[] = [];
+  if (q.observability === 0) qualGaps.push({ text: 'No monitoring or logging detected', key: 'Q-OBS', gap_type: 'quality' });
+  if (q.reliability < 3) qualGaps.push({ text: 'Low reliability — add data models and error handling', key: 'Q-REL', gap_type: 'quality' });
+  const allGaps = [...sysGaps, ...qualGaps, ...reqGaps];
+
+  // ── RECOMMENDATIONS (dependency-ordered) ──
+  const recs: Array<{ step: number; action: string; impact: string; dependency?: string }> = [];
+  let step = 1;
+  if (!hasBackend) recs.push({ step: step++, action: 'Build backend services and API routes', impact: '+50% readiness', dependency: 'None — foundation' });
+  if (modelFiles.length === 0) recs.push({ step: step++, action: 'Add database models', impact: '+20% reliability', dependency: 'Backend services' });
+  if (!hasAgents) recs.push({ step: step++, action: 'Add AI agent automation', impact: '+20% readiness, +30% automation', dependency: 'Backend services' });
+  if (!hasFrontend) recs.push({ step: step++, action: 'Create frontend UI components', impact: '+30% readiness, +UX exposure', dependency: 'Backend API' });
+  if (q.observability === 0) recs.push({ step: step++, action: 'Add monitoring and logging', impact: '+10% quality, enables L3', dependency: 'Backend services' });
+
+  const why_not: string[] = [];
+  if (!hasBackend) why_not.push('No backend services or API routes found');
+  if (!hasFrontend) why_not.push('No frontend UI components found');
+
+  return {
+    ...cap,
+    source: 'requirements',
+    total_requirements: totalR,
+    matched_requirements: matchedR,
+    partial_requirements: partial.length,
+    unmatched_requirements: unmatched.length,
+    completion_pct: reqCoverage, // override hierarchy's value
+    metrics: { requirements_coverage: reqCoverage, system_readiness: readiness, quality_score: qualityTotal },
+    quality: q,
+    maturity: { level: maturityLevel, label: maturityLabel, next_level_requirements: nextReqs },
+    gap_count: allGaps.length,
+    gaps: allGaps,
+    recommendations: recs,
+    usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: hasBackend && reqCoverage > 50, why_not },
+    implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: agentFiles, models: modelFiles },
+    vision: features.map((f: any) => f.description || f.name).filter(Boolean),
+  };
+}
+
 router.get('/api/portal/project/business-processes', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { getProjectByEnrollment } = await import('../services/projectService');
@@ -1053,75 +1150,7 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { getCapabilityHierarchy } = await import('../services/projectScopeService');
     const hierarchy = await getCapabilityHierarchy(project.id);
-    // Noise files that should never count as implementations
-    const NOISE_FILES = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md']);
-    const isRealFile = (f: string) => {
-      const name = f.split('/').pop() || f;
-      return !NOISE_FILES.has(name) && !name.startsWith('.');
-    };
-
-    // Enrich with gap analysis + usability status
-    const enriched = hierarchy.map((cap: any) => {
-      const allReqs = (cap.features || []).flatMap((f: any) => f.requirements || []);
-      const matched = allReqs.filter((r: any) => r.status === 'matched' || r.status === 'verified');
-      const partial = allReqs.filter((r: any) => r.status === 'partial');
-      const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
-      const totalR = allReqs.length;
-      const matchedR = matched.length;
-
-      // Classify REAL matched files by layer (filter out noise)
-      const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))].filter(isRealFile);
-      const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware') || f.includes('models/'));
-      const frontendFiles = allFiles.filter((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
-      const agentFiles = allFiles.filter((f: string) => f.includes('agent') || f.includes('Agent') || f.includes('intelligence/'));
-
-      // Usability assessment
-      const hasBackend = backendFiles.length > 0;
-      const hasFrontend = frontendFiles.length > 0;
-      const hasAgents = agentFiles.length > 0;
-      const why_not: string[] = [];
-      if (!hasBackend) why_not.push('No backend services or API routes found');
-      if (!hasFrontend) why_not.push('No frontend UI components found');
-
-      // REAL completion: penalize if layers are missing
-      let layerPenalty = 1.0;
-      if (!hasBackend) layerPenalty -= 0.4; // backend is critical
-      if (!hasFrontend) layerPenalty -= 0.2;
-      const rawPct = totalR > 0 ? (matchedR / totalR) * 100 : 0;
-      const adjustedPct = Math.max(0, Math.round(rawPct * Math.max(0, layerPenalty)));
-
-      // Gaps: include usability gaps + requirement gaps
-      const reqGapCount = unmatched.length + partial.length;
-      const usabilityGaps: string[] = [];
-      if (!hasBackend) usabilityGaps.push('Backend implementation needed');
-      if (!hasFrontend) usabilityGaps.push('Frontend UI needed');
-      const totalGaps = reqGapCount + usabilityGaps.length;
-
-      return {
-        ...cap,
-        source: 'requirements',
-        total_requirements: totalR,
-        matched_requirements: matchedR,
-        partial_requirements: partial.length,
-        unmatched_requirements: unmatched.length,
-        completion_pct: adjustedPct,
-        gap_count: totalGaps,
-        usability_gaps: usabilityGaps,
-        usability: {
-          backend: hasBackend ? (adjustedPct > 70 ? 'ready' : 'partial') : 'missing',
-          frontend: hasFrontend ? 'ready' : 'missing',
-          agent: hasAgents ? 'ready' : 'missing',
-          usable: hasBackend && adjustedPct > 50,
-          why_not,
-          backend_count: backendFiles.length,
-          frontend_count: frontendFiles.length,
-          agent_count: agentFiles.length,
-          backend_files: backendFiles.slice(0, 10),
-          frontend_files: frontendFiles.slice(0, 10),
-          agent_files: agentFiles.slice(0, 10),
-        },
-      };
-    });
+    const enriched = hierarchy.map(enrichCapability);
     res.json(enriched);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -1135,68 +1164,13 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const hierarchy = await getCapabilityHierarchy(project.id);
     const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
-    // Enrich with Capability BPOS fields
+    const enriched = enrichCapability(cap);
+    // Add BPOS fields from Capability model
     const { Capability } = await import('../models');
     const capModel = await Capability.findByPk(req.params.id as string);
-    const allReqs = (cap.features || []).flatMap((f: any) => f.requirements || []);
-    const matched = allReqs.filter((r: any) => r.status === 'matched' || r.status === 'verified');
-    const partial = allReqs.filter((r: any) => r.status === 'partial');
-    const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
-    // Build vision from feature descriptions
-    const vision = (cap.features || []).map((f: any) => f.description || f.name).filter(Boolean);
-    // Build gaps list
-    const gaps = (cap.features || []).flatMap((f: any) =>
-      (f.requirements || []).filter((r: any) => r.status === 'unmatched' || r.status === 'partial' || r.status === 'not_started')
-        .map((r: any) => ({ ...r, feature_name: f.name }))
-    );
-    // Filter noise files
-    const NOISE = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md']);
-    const isReal = (f: string) => { const n = f.split('/').pop() || f; return !NOISE.has(n) && !n.startsWith('.'); };
-    // Implementation links by layer
-    const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))].filter(isReal);
-    const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware') || f.includes('models/'));
-    const frontendFiles = allFiles.filter((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
-    const agentFiles = allFiles.filter((f: string) => f.includes('agent') || f.includes('Agent') || f.includes('intelligence/'));
-    const modelFiles = allFiles.filter((f: string) => f.includes('models/') && f.endsWith('.ts'));
-    const totalR = allReqs.length;
-    const matchedR = matched.length;
-    // Penalize completion if layers are missing
-    const hasBackend = backendFiles.length > 0;
-    const hasFrontend = frontendFiles.length > 0;
-    let layerPenalty = 1.0;
-    if (!hasBackend) layerPenalty -= 0.4;
-    if (!hasFrontend) layerPenalty -= 0.2;
-    const rawPct = totalR > 0 ? (matchedR / totalR) * 100 : 0;
-    const adjustedPct = Math.max(0, Math.round(rawPct * Math.max(0, layerPenalty)));
-    const why_not: string[] = [];
-    if (!hasBackend) why_not.push('No backend services or API routes found');
-    if (!hasFrontend) why_not.push('No frontend UI components found');
-    // Add usability gaps to requirement gaps
-    const usabilityGaps: string[] = [];
-    if (!hasBackend) usabilityGaps.push('Backend implementation needed — no services or routes detected');
-    if (!hasFrontend) usabilityGaps.push('Frontend UI needed — no React components detected');
-    const allGaps = [...gaps.map((g: any) => ({ ...g, gap_type: 'requirement' })), ...usabilityGaps.map(g => ({ text: g, gap_type: 'usability', key: 'SYS' }))];
     res.json({
-      ...cap,
-      source: 'requirements',
-      total_requirements: totalR,
-      matched_requirements: matchedR,
-      partial_requirements: partial.length,
-      unmatched_requirements: unmatched.length,
-      completion_pct: adjustedPct,
-      gap_count: allGaps.length,
-      vision,
-      gaps: allGaps,
-      usability: {
-        backend: hasBackend ? (adjustedPct > 70 ? 'ready' : 'partial') : 'missing',
-        frontend: hasFrontend ? 'ready' : 'missing',
-        agent: agentFiles.length > 0 ? 'ready' : 'missing',
-        usable: hasBackend && adjustedPct > 50,
-        why_not,
-      },
-      implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: agentFiles, models: modelFiles },
+      ...enriched,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
-      // BPOS fields from Capability model
       hitl_config: capModel?.hitl_config || null,
       autonomy_level: capModel?.autonomy_level || 'manual',
       autonomy_history: capModel?.autonomy_history || [],
