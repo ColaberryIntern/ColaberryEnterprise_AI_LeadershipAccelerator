@@ -44,7 +44,7 @@ import { runAdmissionsAssistantAgent } from './agents/admissions/admissionsAssis
 import { runOpenclawSupervisorAgent } from './agents/openclaw/openclawSupervisorAgent';
 import { runOpenclawMarketSignalAgent } from './agents/openclaw/openclawMarketSignalAgent';
 import { runOpenclawConversationDetectionAgent } from './agents/openclaw/openclawConversationDetectionAgent';
-import { runOpenclawEngagementMonitorAgent } from './agents/openclaw/openclawEngagementMonitorAgent';
+import { runEngagementMonitorAgent } from './agents/openclaw/openclawEngagementMonitorAgent';
 import { runOpenclawContentResponseAgent } from './agents/openclaw/openclawContentResponseAgent';
 import { runOpenclawBrowserWorkerAgent } from './agents/openclaw/openclawBrowserWorkerAgent';
 import { runOpenclawLearningOptimizationAgent } from './agents/openclaw/openclawLearningOptimizationAgent';
@@ -517,7 +517,7 @@ export async function runOpenclawConversationDetection(): Promise<AgentExecution
 }
 
 export async function runOpenclawEngagementMonitor(): Promise<AgentExecutionResult | null> {
-  return runAgent('OpenclawEngagementMonitorAgent', runOpenclawEngagementMonitorAgent);
+  return runAgent('OpenclawEngagementMonitorAgent', runEngagementMonitorAgent);
 }
 
 export async function runOpenclawContentResponse(): Promise<AgentExecutionResult | null> {
