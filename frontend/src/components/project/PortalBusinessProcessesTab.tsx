@@ -52,6 +52,13 @@ export default function PortalBusinessProcessesTab() {
         <div className="progress-bar" style={{ width: `${overallPct}%`, background: completionColor(overallPct) }} />
       </div>
 
+      {/* Detail panel appears here — above the card grid */}
+      {selected && (
+        <div className="mb-4">
+          <PortalBusinessProcessDetail processId={selected} onClose={() => setSelected(null)} onUpdate={load} />
+        </div>
+      )}
+
       <div className="row g-3">
         {processes.map((p: any) => {
           const pct = p.completion_pct || 0;
@@ -120,11 +127,6 @@ export default function PortalBusinessProcessesTab() {
         })}
       </div>
 
-      {selected && (
-        <div className="mt-4">
-          <PortalBusinessProcessDetail processId={selected} onClose={() => setSelected(null)} onUpdate={load} />
-        </div>
-      )}
     </div>
   );
 }
