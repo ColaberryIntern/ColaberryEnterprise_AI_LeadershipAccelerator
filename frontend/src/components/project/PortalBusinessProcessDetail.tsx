@@ -208,27 +208,31 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           )}
         </Section>
 
-        {/* 9: Feature Breakdown */}
-        <Section num={9} title="Feature Breakdown" collapsible defaultOpen={false}>
-          {features.map((f: any) => {
-            const reqs = f.requirements || [];
-            const fM = reqs.filter((r: any) => r.status === 'matched' || r.status === 'verified').length;
-            const fP = reqs.length > 0 ? Math.round((fM / reqs.length) * 100) : 0;
-            return (<div key={f.id} className="mb-1 py-1 d-flex justify-content-between align-items-center" style={{ borderBottom: '1px solid var(--color-border)' }}>
-              <span style={{ fontSize: 12 }}>{f.name}</span>
-              <div className="d-flex align-items-center gap-2"><span className="text-muted" style={{ fontSize: 10 }}>{fM}/{reqs.length}</span><div className="progress" style={{ width: 60, height: 4 }}><div className="progress-bar" style={{ width: `${fP}%`, background: fP >= 70 ? '#10b981' : fP >= 30 ? '#f59e0b' : '#ef4444' }} /></div><span className="fw-medium" style={{ fontSize: 10, width: 28 }}>{fP}%</span></div>
-            </div>);
-          })}
+        {/* 9: Execution Actions */}
+        <Section num={9} title="Execution Actions">
+          <p className="text-muted small mb-2">Click an action to see its full impact analysis, risk assessment, and Claude Code prompt.</p>
+          <div className="row g-2">
+            {PROMPT_TARGETS.map(t => {
+              const impacts: Record<string, string> = {
+                backend_improvement: '+50% readiness · Foundation',
+                frontend_exposure: '+30% readiness · User-facing',
+                agent_enhancement: '+20% readiness · Automation',
+              };
+              return (
+                <div key={t.key} className="col-md-4">
+                  <div className="card border-0 shadow-sm h-100" style={{ cursor: 'pointer', border: '1px solid var(--color-border)' }}
+                    onClick={() => setPredictionAction({ type: t.key, label: t.label })}>
+                    <div className="card-body p-2 text-center">
+                      <i className={`bi ${t.icon} d-block mb-1`} style={{ fontSize: 20, color: 'var(--color-primary)' }}></i>
+                      <div className="fw-semibold" style={{ fontSize: 12 }}>{t.label}</div>
+                      <div className="text-muted" style={{ fontSize: 9 }}>{impacts[t.key] || 'Improve system'}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </Section>
-
-        {/* 10: Action Buttons — open prediction modal */}
-        <div className="d-flex flex-wrap gap-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
-          {PROMPT_TARGETS.map(t => (
-            <button key={t.key} className="btn btn-sm btn-outline-primary" onClick={() => setPredictionAction({ type: t.key, label: t.label })} style={{ fontSize: 12 }}>
-              <i className={`bi ${t.icon} me-1`}></i>{t.label}
-            </button>
-          ))}
-        </div>
 
         {/* Prediction Modal */}
         {predictionAction && (

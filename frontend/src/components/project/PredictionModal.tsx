@@ -35,9 +35,13 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
     Promise.all([
       bpApi.predictImpact(processId, actionType),
       bpApi.generatePrompt(processId, actionType),
-    ]).then(([predRes, promptRes]) => {
+    ]).then(async ([predRes, promptRes]) => {
       setPrediction(predRes.data);
       setPrompt(promptRes.data);
+      // Auto-copy prompt to clipboard on load
+      if (promptRes.data?.prompt_text) {
+        try { await navigator.clipboard.writeText(promptRes.data.prompt_text); setCopying(true); setTimeout(() => setCopying(false), 3000); } catch {}
+      }
     }).catch(() => {}).finally(() => setLoading(false));
   }, [processId, actionType]);
 
@@ -66,6 +70,12 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
       <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div className="modal-content border-0 shadow-lg">
           {/* Header */}
+          {/* Auto-copy toast */}
+          {copying && (
+            <div className="alert alert-success py-2 px-3 mb-0 text-center" style={{ borderRadius: 0, fontSize: 12 }}>
+              <i className="bi bi-clipboard-check me-1"></i>Prompt auto-copied to clipboard — paste into Claude Code Plan Mode
+            </div>
+          )}
           <div className="modal-header py-3" style={{ borderBottom: '3px solid var(--color-primary)' }}>
             <div>
               <h5 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}><i className="bi bi-lightning me-2"></i>{actionLabel}</h5>
@@ -76,6 +86,17 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
 
           <div className="modal-body p-4">
             {/* Impact Dashboard */}
+            {/* Why This Matters */}
+            <div className="mb-4 p-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+              <h6 className="fw-semibold small mb-1" style={{ color: '#1e40af' }}><i className="bi bi-lightbulb me-1"></i>Why This Matters</h6>
+              <p className="text-muted small mb-0">
+                {p.dependencies_met === false
+                  ? `This action has unmet prerequisites. Complete the required steps first to avoid build failures.`
+                  : `Without this, the process cannot ${actionType === 'backend_improvement' ? 'function — backend is the foundation for all other layers' : actionType === 'frontend_exposure' ? 'be used by end users — there is no UI to interact with' : 'automate — manual intervention is required for every operation'}.`
+                }
+              </p>
+            </div>
+
             <h6 className="fw-semibold small mb-2"><i className="bi bi-graph-up-arrow me-1"></i>Predicted Impact</h6>
             <div className="mb-4">
               <MetricDelta label="System Readiness" before={p.projected_readiness - p.readiness_delta} after={p.projected_readiness} />
@@ -101,6 +122,15 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
               {(p.new_components || []).map((c: string, i: number) => (
                 <span key={i} className="badge" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10 }}>{c}</span>
               ))}
+            </div>
+
+            {/* Gaps Resolved */}
+            <h6 className="fw-semibold small mb-2"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>Gaps This Resolves</h6>
+            <div className="mb-4">
+              {actionType === 'backend_improvement' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Backend implementation gap — services and API routes</div>}
+              {actionType === 'frontend_exposure' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Frontend UI gap — user-facing components</div>}
+              {actionType === 'agent_enhancement' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Automation gap — AI agent orchestration</div>}
+              <div className="small text-muted"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Quality score improvement across affected dimensions</div>
             </div>
 
             {/* Risk & Dependencies */}
