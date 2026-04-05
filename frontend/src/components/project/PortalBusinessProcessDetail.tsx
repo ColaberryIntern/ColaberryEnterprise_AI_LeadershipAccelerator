@@ -116,11 +116,11 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
 
         {/* ── SECTION 3: What Exists ── */}
         <Section num={3} title="What Exists" collapsible defaultOpen={true}>
-          {(links.backend?.length > 0 || links.frontend?.length > 0 || links.agents?.length > 0) ? (
+          {(links.backend?.length > 0 || links.frontend?.length > 0 || links.agents?.length > 0 || links.models?.length > 0) ? (
             <div className="row g-3">
               {links.backend?.length > 0 && (
-                <div className="col-md-4">
-                  <div className="fw-medium small mb-1"><i className="bi bi-gear me-1" style={{ color: '#3b82f6' }}></i>Backend ({links.backend.length})</div>
+                <div className="col-md-3">
+                  <div className="fw-medium small mb-1"><i className="bi bi-gear me-1" style={{ color: '#3b82f6' }}></i>Services ({links.backend.length})</div>
                   {(showAllLinks ? links.backend : links.backend.slice(0, 5)).map((f: string, i: number) => (
                     <div key={i} style={{ fontSize: 10 }}>
                       {repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none">{f.split('/').pop()}</a> : <span>{f.split('/').pop()}</span>}
@@ -129,8 +129,16 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
                   {!showAllLinks && links.backend.length > 5 && <button className="btn btn-link btn-sm p-0" style={{ fontSize: 9 }} onClick={() => setShowAllLinks(true)}>+{links.backend.length - 5} more</button>}
                 </div>
               )}
+              {links.models?.length > 0 && (
+                <div className="col-md-3">
+                  <div className="fw-medium small mb-1"><i className="bi bi-database me-1" style={{ color: '#f59e0b' }}></i>Database ({links.models.length})</div>
+                  {links.models.slice(0, 5).map((f: string, i: number) => (
+                    <div key={i} style={{ fontSize: 10 }}>{repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none">{f.split('/').pop()}</a> : <span>{f.split('/').pop()}</span>}</div>
+                  ))}
+                </div>
+              )}
               {links.frontend?.length > 0 && (
-                <div className="col-md-4">
+                <div className="col-md-3">
                   <div className="fw-medium small mb-1"><i className="bi bi-layout-wtf me-1" style={{ color: '#10b981' }}></i>Frontend ({links.frontend.length})</div>
                   {links.frontend.slice(0, 5).map((f: string, i: number) => (
                     <div key={i} style={{ fontSize: 10 }}>{repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none">{f.split('/').pop()}</a> : <span>{f.split('/').pop()}</span>}</div>
@@ -138,7 +146,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
                 </div>
               )}
               {links.agents?.length > 0 && (
-                <div className="col-md-4">
+                <div className="col-md-3">
                   <div className="fw-medium small mb-1"><i className="bi bi-cpu me-1" style={{ color: '#8b5cf6' }}></i>Agents ({links.agents.length})</div>
                   {links.agents.slice(0, 5).map((f: string, i: number) => (
                     <div key={i} style={{ fontSize: 10 }}>{repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none">{f.split('/').pop()}</a> : <span>{f.split('/').pop()}</span>}</div>
@@ -154,10 +162,20 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
         {/* ── SECTION 4: Gaps ── */}
         <Section num={4} title={`Gaps (${gaps.length})`} collapsible defaultOpen={gaps.length > 0 && gaps.length <= 10}>
           {gaps.length === 0 ? (
-            <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>No gaps detected. All requirements have matching implementations.</div>
+            <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>No gaps detected.</div>
           ) : (
             <>
-              {(showAllGaps ? gaps : gaps.slice(0, 8)).map((g: any, i: number) => {
+              {/* Usability gaps first */}
+              {gaps.filter((g: any) => g.gap_type === 'usability').map((g: any, i: number) => (
+                <div key={`ug-${i}`} className="py-1 mb-1" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <div className="d-flex align-items-start gap-2">
+                    <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 8, flexShrink: 0, marginTop: 2 }}>System</span>
+                    <span style={{ fontSize: 11, color: '#ef4444' }}><i className="bi bi-exclamation-triangle me-1"></i>{g.text}</span>
+                  </div>
+                </div>
+              ))}
+              {/* Requirement gaps */}
+              {(showAllGaps ? gaps.filter((g: any) => g.gap_type !== 'usability') : gaps.filter((g: any) => g.gap_type !== 'usability').slice(0, 8)).map((g: any, i: number) => {
                 const expanded = expandedReqs.has(`gap-${g.key}`);
                 return (
                   <div key={i} className="py-1" style={{ borderBottom: '1px solid var(--color-border)', cursor: 'pointer' }} onClick={() => toggleReq(`gap-${g.key}`)}>

@@ -1053,6 +1053,13 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { getCapabilityHierarchy } = await import('../services/projectScopeService');
     const hierarchy = await getCapabilityHierarchy(project.id);
+    // Noise files that should never count as implementations
+    const NOISE_FILES = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md']);
+    const isRealFile = (f: string) => {
+      const name = f.split('/').pop() || f;
+      return !NOISE_FILES.has(name) && !name.startsWith('.');
+    };
+
     // Enrich with gap analysis + usability status
     const enriched = hierarchy.map((cap: any) => {
       const allReqs = (cap.features || []).flatMap((f: any) => f.requirements || []);
@@ -1061,17 +1068,35 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
       const totalR = allReqs.length;
       const matchedR = matched.length;
-      const pct = totalR > 0 ? (matchedR / totalR) * 100 : 0;
-      // Classify matched files by layer
-      const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))];
-      const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware'));
-      const frontendFiles = allFiles.filter((f: string) => f.includes('component') || f.includes('page') || f.includes('Page') || f.includes('.tsx') || f.includes('frontend/'));
+
+      // Classify REAL matched files by layer (filter out noise)
+      const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))].filter(isRealFile);
+      const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware') || f.includes('models/'));
+      const frontendFiles = allFiles.filter((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
       const agentFiles = allFiles.filter((f: string) => f.includes('agent') || f.includes('Agent') || f.includes('intelligence/'));
+
+      // Usability assessment
+      const hasBackend = backendFiles.length > 0;
+      const hasFrontend = frontendFiles.length > 0;
+      const hasAgents = agentFiles.length > 0;
       const why_not: string[] = [];
-      const isUsable = backendFiles.length > 0 && pct > 50;
-      if (backendFiles.length === 0) why_not.push('No backend implementation found');
-      if (pct <= 50) why_not.push(`Only ${Math.round(pct)}% of requirements implemented`);
-      if (frontendFiles.length === 0) why_not.push('No frontend UI found');
+      if (!hasBackend) why_not.push('No backend services or API routes found');
+      if (!hasFrontend) why_not.push('No frontend UI components found');
+
+      // REAL completion: penalize if layers are missing
+      let layerPenalty = 1.0;
+      if (!hasBackend) layerPenalty -= 0.4; // backend is critical
+      if (!hasFrontend) layerPenalty -= 0.2;
+      const rawPct = totalR > 0 ? (matchedR / totalR) * 100 : 0;
+      const adjustedPct = Math.max(0, Math.round(rawPct * Math.max(0, layerPenalty)));
+
+      // Gaps: include usability gaps + requirement gaps
+      const reqGapCount = unmatched.length + partial.length;
+      const usabilityGaps: string[] = [];
+      if (!hasBackend) usabilityGaps.push('Backend implementation needed');
+      if (!hasFrontend) usabilityGaps.push('Frontend UI needed');
+      const totalGaps = reqGapCount + usabilityGaps.length;
+
       return {
         ...cap,
         source: 'requirements',
@@ -1079,16 +1104,21 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         matched_requirements: matchedR,
         partial_requirements: partial.length,
         unmatched_requirements: unmatched.length,
-        gap_count: unmatched.length + partial.length,
+        completion_pct: adjustedPct,
+        gap_count: totalGaps,
+        usability_gaps: usabilityGaps,
         usability: {
-          backend: backendFiles.length > 0 ? (pct > 70 ? 'ready' : 'partial') : 'missing',
-          frontend: frontendFiles.length > 0 ? 'ready' : 'missing',
-          agent: agentFiles.length > 0 ? 'ready' : 'missing',
-          usable: isUsable,
+          backend: hasBackend ? (adjustedPct > 70 ? 'ready' : 'partial') : 'missing',
+          frontend: hasFrontend ? 'ready' : 'missing',
+          agent: hasAgents ? 'ready' : 'missing',
+          usable: hasBackend && adjustedPct > 50,
           why_not,
           backend_count: backendFiles.length,
           frontend_count: frontendFiles.length,
           agent_count: agentFiles.length,
+          backend_files: backendFiles.slice(0, 10),
+          frontend_files: frontendFiles.slice(0, 10),
+          agent_files: agentFiles.slice(0, 10),
         },
       };
     });
@@ -1119,18 +1149,33 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       (f.requirements || []).filter((r: any) => r.status === 'unmatched' || r.status === 'partial' || r.status === 'not_started')
         .map((r: any) => ({ ...r, feature_name: f.name }))
     );
+    // Filter noise files
+    const NOISE = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md']);
+    const isReal = (f: string) => { const n = f.split('/').pop() || f; return !NOISE.has(n) && !n.startsWith('.'); };
     // Implementation links by layer
-    const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))];
-    const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware'));
-    const frontendFiles = allFiles.filter((f: string) => f.includes('component') || f.includes('page') || f.includes('Page') || f.includes('.tsx') || f.includes('frontend/'));
+    const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))].filter(isReal);
+    const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware') || f.includes('models/'));
+    const frontendFiles = allFiles.filter((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
     const agentFiles = allFiles.filter((f: string) => f.includes('agent') || f.includes('Agent') || f.includes('intelligence/'));
+    const modelFiles = allFiles.filter((f: string) => f.includes('models/') && f.endsWith('.ts'));
     const totalR = allReqs.length;
     const matchedR = matched.length;
-    const pct = totalR > 0 ? (matchedR / totalR) * 100 : 0;
+    // Penalize completion if layers are missing
+    const hasBackend = backendFiles.length > 0;
+    const hasFrontend = frontendFiles.length > 0;
+    let layerPenalty = 1.0;
+    if (!hasBackend) layerPenalty -= 0.4;
+    if (!hasFrontend) layerPenalty -= 0.2;
+    const rawPct = totalR > 0 ? (matchedR / totalR) * 100 : 0;
+    const adjustedPct = Math.max(0, Math.round(rawPct * Math.max(0, layerPenalty)));
     const why_not: string[] = [];
-    if (backendFiles.length === 0) why_not.push('No backend implementation found');
-    if (pct <= 50) why_not.push(`Only ${Math.round(pct)}% of requirements implemented`);
-    if (frontendFiles.length === 0) why_not.push('No frontend UI found');
+    if (!hasBackend) why_not.push('No backend services or API routes found');
+    if (!hasFrontend) why_not.push('No frontend UI components found');
+    // Add usability gaps to requirement gaps
+    const usabilityGaps: string[] = [];
+    if (!hasBackend) usabilityGaps.push('Backend implementation needed — no services or routes detected');
+    if (!hasFrontend) usabilityGaps.push('Frontend UI needed — no React components detected');
+    const allGaps = [...gaps.map((g: any) => ({ ...g, gap_type: 'requirement' })), ...usabilityGaps.map(g => ({ text: g, gap_type: 'usability', key: 'SYS' }))];
     res.json({
       ...cap,
       source: 'requirements',
@@ -1138,17 +1183,18 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       matched_requirements: matchedR,
       partial_requirements: partial.length,
       unmatched_requirements: unmatched.length,
-      gap_count: gaps.length,
+      completion_pct: adjustedPct,
+      gap_count: allGaps.length,
       vision,
-      gaps,
+      gaps: allGaps,
       usability: {
-        backend: backendFiles.length > 0 ? (pct > 70 ? 'ready' : 'partial') : 'missing',
-        frontend: frontendFiles.length > 0 ? 'ready' : 'missing',
+        backend: hasBackend ? (adjustedPct > 70 ? 'ready' : 'partial') : 'missing',
+        frontend: hasFrontend ? 'ready' : 'missing',
         agent: agentFiles.length > 0 ? 'ready' : 'missing',
-        usable: backendFiles.length > 0 && pct > 50,
+        usable: hasBackend && adjustedPct > 50,
         why_not,
       },
-      implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: agentFiles },
+      implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: agentFiles, models: modelFiles },
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
       // BPOS fields from Capability model
       hitl_config: capModel?.hitl_config || null,
