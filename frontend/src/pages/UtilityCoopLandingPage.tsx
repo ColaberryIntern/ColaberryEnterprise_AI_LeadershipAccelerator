@@ -54,17 +54,17 @@ function UtilityCoopLandingPage() {
   };
 
   const painPoints = [
-    { icon: 'bi-clock-history', title: 'Discovery Takes Too Long', problem: 'Getting past the discovery stage takes months, drastically increasing time to solution.', solution: 'Pre-built co-op data structures eliminate discovery. Input your data, get results.' },
-    { icon: 'bi-database-x', title: 'Data Isn\'t Ready', problem: 'Most co-ops aren\'t data-ready or data-capable enough to start AI projects.', solution: 'We build the data pipeline to Azure and connect AI — whether your data is in spreadsheets or a warehouse.' },
-    { icon: 'bi-exclamation-triangle', title: 'Risk, Cost & Buy-In', problem: 'Risk, cost, and internal buy-in are central to why co-ops drag their feet on AI.', solution: 'See the ROI before you commit. Our demo shows exactly what AI does for your co-op — with real numbers.' },
-    { icon: 'bi-chat-square-dots', title: 'Talking, Not Adopting', problem: 'Most co-ops are talking about AI but not adopting AI or automation fully.', solution: 'Go from talk to production in 3 weeks. We\'ve built the playbook so you don\'t have to figure it out alone.' },
+    { icon: 'bi-people', title: 'Not Enough Crews', problem: 'You don\'t have enough linemen and the ones you have waste time on low-value work.', solution: 'AI prioritizes the 12 highest-impact jobs each day so the same crew covers 15% more line per week.' },
+    { icon: 'bi-truck', title: 'Wasted Truck Rolls', problem: 'Crews dispatched with incomplete info. Multiple visits to the same area. Poor routing.', solution: 'Even a 5-10% reduction in unnecessary truck rolls on a $15M field ops budget saves $750K-$1.5M/year.' },
+    { icon: 'bi-tree', title: 'Blunt Trimming Cycles', problem: 'You trim every X years regardless of risk. High-risk corridors grow unchecked while you trim low-risk areas.', solution: 'AI targets where risk and cost justify it. 10-20% reduction in trimming spend, or same spend with fewer outages.' },
+    { icon: 'bi-clipboard-data', title: 'No Daily Work Plan', problem: 'Your crews don\'t get a prioritized list each morning. Supervisors spend hours on the phone assigning jobs.', solution: 'AI generates: here are the 12 highest-value jobs today, in order. Trim here. Inspect here. Don\'t bother going here.' },
   ];
 
   return (
     <>
       <SEOHead
-        title="AI for Electric Cooperatives | Colaberry Enterprise AI"
-        description="See how AI predicts outages, automates dispatch, handles storm calls, and streamlines compliance — built for electric cooperative operations."
+        title="Get 10-15% More Work Done Without Adding Headcount | Colaberry Enterprise AI"
+        description="Help your crews get 10-15% more work done without adding headcount. AI-powered crew productivity, vegetation management, and truck roll optimization for electric cooperatives."
       />
 
       {/* ── Navbar ── */}
@@ -97,10 +97,10 @@ function UtilityCoopLandingPage() {
             <i className="bi bi-lightning-charge me-1" />Built for NRECA Member Cooperatives
           </span>
           <h1 className="fw-bold mb-3 text-white" style={{ fontSize: 'clamp(28px, 5vw, 48px)', lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
-            AI for Electric Cooperatives
+            Get 10-15% More Work Done Without Adding Headcount
           </h1>
           <p className="mb-4" style={{ fontSize: 18, color: '#e2e8f0', maxWidth: 650, margin: '0 auto', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-            See how AI predicts outages, automates dispatch, handles storm calls, and streamlines compliance — built for co-op operations.
+            AI that cuts unnecessary truck rolls, optimizes trimming schedules, and tells your crews exactly where to go every morning.
           </p>
           <div className="d-flex flex-wrap justify-content-center gap-3">
             <a
@@ -121,10 +121,10 @@ function UtilityCoopLandingPage() {
       <section id="demo" style={{ background: 'var(--color-bg-alt)', padding: '4rem 1.5rem' }}>
         <div className="container" style={{ maxWidth: 900 }}>
           <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>
-            {activeScenario ? `See AI ${activeScenario.title} in Action` : 'See AI Run a 380,000-Member Co-Op'}
+            {activeScenario ? `See AI ${activeScenario.title} in Action` : 'See a Crew Productivity Engine Built in Seconds'}
           </h2>
           <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>
-            {activeScenario ? activeScenario.description : 'Watch AI agents predict outages, dispatch crews, and handle 42,000 storm calls — in seconds.'}
+            {activeScenario ? activeScenario.description : 'Watch AI generate daily work plans, optimize routes, and prioritize jobs by impact for your field crews.'}
           </p>
 
           <InlineDemoPlayer
@@ -181,9 +181,9 @@ function UtilityCoopLandingPage() {
         <div className="container" style={{ maxWidth: 800 }}>
           <div className="row g-3 text-center">
             {[
-              { value: '$620K', label: 'Annual savings per co-op', color: 'var(--color-accent)' },
-              { value: '290%', label: 'Average ROI in first year', color: 'var(--color-primary)' },
-              { value: '10', label: 'AI agents running 24/7', color: 'var(--color-primary-light)' },
+              { value: '$1.5M', label: 'Annual savings from 10% field ops efficiency', color: 'var(--color-accent)' },
+              { value: '15%', label: 'More line covered per crew per week', color: 'var(--color-primary)' },
+              { value: '$8-25M', label: 'Controllable field ops spend per co-op', color: 'var(--color-primary-light)' },
             ].map((st, i) => (
               <div key={i} className="col-md-4">
                 <div style={{ fontSize: 36, fontWeight: 800, color: st.color, lineHeight: 1 }}>{st.value}</div>
@@ -197,8 +197,8 @@ function UtilityCoopLandingPage() {
       {/* ── Pain Points ── */}
       <section style={{ padding: '4rem 1.5rem' }}>
         <div className="container" style={{ maxWidth: 960 }}>
-          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>The Co-Op AI Challenge</h2>
-          <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>Every co-op we talk to faces the same barriers. Here's how we solve them.</p>
+          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>The Field Ops Problem Every Co-Op Has</h2>
+          <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>Your biggest controllable spend is field operations. $8-25M annually. And everyone knows it's not optimized.</p>
           <div className="row g-3">
             {painPoints.map((p, i) => (
               <div key={i} className="col-md-6">
@@ -214,6 +214,48 @@ function UtilityCoopLandingPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── The Real Numbers ── */}
+      <section style={{ background: 'var(--color-bg-alt)', padding: '3rem 1.5rem' }}>
+        <div className="container" style={{ maxWidth: 800 }}>
+          <h3 className="text-center fw-bold mb-4" style={{ color: 'var(--color-primary)', fontSize: 24 }}>The Real Numbers</h3>
+          <div className="card border-0 shadow-sm" style={{ borderRadius: 12 }}>
+            <div className="card-body p-4">
+              <div className="row g-4">
+                <div className="col-md-6">
+                  <h6 className="fw-bold mb-3" style={{ color: 'var(--color-primary)', fontSize: 14 }}>Where the Money Goes</h6>
+                  <div className="d-flex justify-content-between align-items-center mb-2 pb-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: 13 }}>Vegetation management</span>
+                    <span className="fw-bold" style={{ color: 'var(--color-primary)', fontSize: 14 }}>$3-10M/yr</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mb-2 pb-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: 13 }}>Truck rolls (labor, fuel, wear)</span>
+                    <span className="fw-bold" style={{ color: 'var(--color-primary)', fontSize: 14 }}>$5-15M/yr</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="fw-bold" style={{ fontSize: 14 }}>Total controllable spend</span>
+                    <span className="fw-bold" style={{ color: 'var(--color-accent)', fontSize: 16 }}>$8-25M/yr</span>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <h6 className="fw-bold mb-3" style={{ color: 'var(--color-primary)', fontSize: 14 }}>What AI Saves</h6>
+                  <div className="d-flex justify-content-between align-items-center mb-2 pb-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: 13 }}>10% efficiency gain</span>
+                    <span className="fw-bold" style={{ color: 'var(--color-accent)', fontSize: 14 }}>$1.5M/yr saved</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mb-2 pb-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: 13 }}>5% efficiency gain</span>
+                    <span className="fw-bold" style={{ color: 'var(--color-accent)', fontSize: 14 }}>$750K/yr saved</span>
+                  </div>
+                  <div className="text-muted mt-2" style={{ fontSize: 12, fontStyle: 'italic' }}>
+                    Based on $15M mid-size co-op field ops budget. That's board-level meaningful.
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -263,9 +305,9 @@ function UtilityCoopLandingPage() {
                 </div>
                 <div className="card-body p-4">
                   <h4 className="fw-bold mb-2" style={{ fontSize: 20, color: 'var(--color-primary)' }}>Enterprise AI Accelerator</h4>
-                  <p className="text-muted mb-3" style={{ fontSize: 14 }}>3-week hands-on program. Your team deploys a production AI system.</p>
+                  <p className="text-muted mb-3" style={{ fontSize: 14 }}>Your crew supervisors learn to deploy AI that generates daily work plans, optimizes routes, and prioritizes jobs by impact.</p>
                   <ul className="list-unstyled mb-0">
-                    {['3-week intensive, hands-on program', 'Your team deploys a production AI system', 'Built on your co-op data and use cases', 'Executive sponsorship kit included', 'Post-deployment support'].map((item, i) => (
+                    {['3-week hands-on program with your ops team', 'Deploy a Crew Productivity Engine on your data', 'Daily work plans, route optimization, risk-based trimming', 'Executive sponsorship kit with ROI projections', 'Post-deployment support and optimization'].map((item, i) => (
                       <li key={i} className="d-flex align-items-start gap-2 mb-2" style={{ fontSize: 13 }}>
                         <i className="bi bi-check-circle-fill flex-shrink-0" style={{ color: 'var(--color-accent)', marginTop: 2 }} />{item}
                       </li>
@@ -284,9 +326,9 @@ function UtilityCoopLandingPage() {
                 </div>
                 <div className="card-body p-4">
                   <h4 className="fw-bold mb-2" style={{ fontSize: 20, color: 'var(--color-primary)' }}>Advisory & Custom Build</h4>
-                  <p className="text-muted mb-3" style={{ fontSize: 14 }}>We embed with your team and deliver a production AI system.</p>
+                  <p className="text-muted mb-3" style={{ fontSize: 14 }}>We embed with your ops team and deliver a Crew Productivity Engine. Smarter vegetation scheduling, fewer truck rolls, more work per crew.</p>
                   <ul className="list-unstyled mb-0">
-                    {['Dedicated AI architects on your project', 'Pre-built co-op data structures — skip discovery', 'Flex up/down with contracting support', 'Production system delivered in weeks', 'Ongoing managed AI operations available'].map((item, i) => (
+                    {['Dedicated AI architects embedded with your ops team', 'Pre-built co-op field ops data structures', 'Crew routing, vegetation scheduling, daily work plans', 'Flex up/down with contracting support', 'Production system delivered in weeks'].map((item, i) => (
                       <li key={i} className="d-flex align-items-start gap-2 mb-2" style={{ fontSize: 13 }}>
                         <i className="bi bi-check-circle-fill flex-shrink-0" style={{ color: 'var(--color-primary-light)', marginTop: 2 }} />{item}
                       </li>

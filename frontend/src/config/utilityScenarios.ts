@@ -1,6 +1,6 @@
 export interface UtilityScenario {
   id: string;
-  demoId: string; // maps to demoScenarios.json scenario ID
+  demoId: string;
   title: string;
   icon: string;
   description: string;
@@ -9,6 +9,24 @@ export interface UtilityScenario {
 }
 
 export const UTILITY_SCENARIOS: UtilityScenario[] = [
+  {
+    id: 'fleet-dispatch',
+    demoId: 'utility-fleet',
+    title: 'Crew Productivity Engine',
+    icon: 'bi-truck',
+    description: 'Daily prioritized work plans, optimal routing, and real-time job assignment. Your crews cover 15% more line per week.',
+    kpi: '15% more line covered per crew',
+    agentCount: 9,
+  },
+  {
+    id: 'vegetation-mgmt',
+    demoId: 'utility-vegetation',
+    title: 'Smart Vegetation Management',
+    icon: 'bi-tree',
+    description: 'Risk-based trimming instead of fixed cycles. AI targets where risk and cost justify it. Same budget, dramatically fewer outages.',
+    kpi: '10-20% trimming cost reduction',
+    agentCount: 9,
+  },
   {
     id: 'outage-prediction',
     demoId: 'utility-outage',
@@ -32,17 +50,17 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
     demoId: 'utility-metering',
     title: 'Smart Metering',
     icon: 'bi-speedometer2',
-    description: 'Detect anomalies across 75,000+ meters in real-time — theft, malfunction, and usage pattern shifts.',
+    description: 'Detect anomalies across 75,000+ meters in real-time. Theft detection, malfunction alerts, and demand forecasting.',
     kpi: '$180K annual revenue recovery',
     agentCount: 9,
   },
   {
-    id: 'vegetation-mgmt',
-    demoId: 'utility-vegetation',
-    title: 'Vegetation Management',
-    icon: 'bi-tree',
-    description: 'AI-prioritized trimming schedules using satellite imagery, growth models, and outage correlation data.',
-    kpi: '35% reduction in vegetation-caused outages',
+    id: 'member-services',
+    demoId: 'utility-memberservices',
+    title: 'Member Services AI',
+    icon: 'bi-headset',
+    description: '24/7 billing inquiries, outage status, service requests, and new connection applications. No hold times.',
+    kpi: '45% reduction in call center volume',
     agentCount: 9,
   },
   {
@@ -52,24 +70,6 @@ export const UTILITY_SCENARIOS: UtilityScenario[] = [
     icon: 'bi-file-earmark-bar-graph',
     description: 'Generate regulatory filings, cost-of-service studies, and rate design analysis in hours instead of weeks.',
     kpi: '80% faster filing preparation',
-    agentCount: 9,
-  },
-  {
-    id: 'member-services',
-    demoId: 'utility-memberservices',
-    title: 'Member Services AI',
-    icon: 'bi-headset',
-    description: '24/7 billing inquiries, outage status, service requests, and new connection applications — no hold times.',
-    kpi: '45% reduction in call center volume',
-    agentCount: 9,
-  },
-  {
-    id: 'fleet-dispatch',
-    demoId: 'utility-fleet',
-    title: 'Fleet & Crew Dispatch',
-    icon: 'bi-truck',
-    description: 'Optimal crew routing, real-time job assignment, and automatic escalation for priority restoration work.',
-    kpi: '28% faster storm restoration',
     agentCount: 9,
   },
   {
