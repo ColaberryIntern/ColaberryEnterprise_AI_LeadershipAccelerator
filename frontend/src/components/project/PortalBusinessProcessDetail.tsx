@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
+import ProcessVisualPanel from './ProcessVisualPanel';
+import PredictionModal from './PredictionModal';
 
 interface Props { processId: string; onClose: () => void; onUpdate: () => void; }
 
@@ -39,6 +41,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [showAllGaps, setShowAllGaps] = useState(false);
   const [showAllLinks, setShowAllLinks] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
+  const [predictionAction, setPredictionAction] = useState<{ type: string; label: string } | null>(null);
 
   useEffect(() => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); }, [processId]);
   if (!p) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
@@ -87,6 +90,9 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
       </div>
 
       <div className="card-body p-3">
+       <div className="d-flex gap-3">
+        {/* Left: Intelligence Panel (70%) */}
+        <div style={{ flex: '1 1 70%', minWidth: 0 }}>
         {/* 1: Overview */}
         <Section num={1} title="Process Overview">
           <p className="text-muted small mb-0">{p.description || 'No description available.'}</p>
@@ -215,14 +221,25 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           })}
         </Section>
 
-        {/* 10: Action Buttons */}
+        {/* 10: Action Buttons — open prediction modal */}
         <div className="d-flex flex-wrap gap-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
           {PROMPT_TARGETS.map(t => (
-            <button key={t.key} className="btn btn-sm btn-outline-primary" onClick={() => handlePrompt(t.key)} disabled={generatingPrompt === t.key} style={{ fontSize: 12 }}>
-              {generatingPrompt === t.key ? <span className="spinner-border spinner-border-sm me-1"></span> : <i className={`bi ${t.icon} me-1`}></i>}{t.label}
+            <button key={t.key} className="btn btn-sm btn-outline-primary" onClick={() => setPredictionAction({ type: t.key, label: t.label })} style={{ fontSize: 12 }}>
+              <i className={`bi ${t.icon} me-1`}></i>{t.label}
             </button>
           ))}
         </div>
+
+        {/* Prediction Modal */}
+        {predictionAction && (
+          <PredictionModal processId={processId} actionType={predictionAction.type} actionLabel={predictionAction.label} onClose={() => setPredictionAction(null)} />
+        )}
+        </div>
+        {/* Right: Visual Panel (30%) */}
+        <div style={{ flex: '0 0 30%', minWidth: 280 }} className="d-none d-lg-block">
+          <ProcessVisualPanel links={links} usability={u} repoUrl={repoUrl} features={features} />
+        </div>
+       </div>
       </div>
     </div>
   );

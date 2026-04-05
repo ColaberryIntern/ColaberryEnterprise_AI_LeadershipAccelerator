@@ -1183,6 +1183,25 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+router.post('/api/portal/project/business-processes/:id/predict', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const enriched = enrichCapability(cap);
+    const { predictImpact } = await import('../intelligence/predictiveEngine');
+    const prediction = predictImpact(
+      { metrics: enriched.metrics, quality: enriched.quality, maturity: enriched.maturity, usability: enriched.usability },
+      req.body.action
+    );
+    res.json(prediction);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 router.put('/api/portal/project/business-processes/:id/hitl', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { updateHITLConfig, getHITLConfig } = await import('../intelligence/hitl/hitlEngine');

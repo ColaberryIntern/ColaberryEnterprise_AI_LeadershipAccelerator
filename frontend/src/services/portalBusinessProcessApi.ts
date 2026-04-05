@@ -6,3 +6,4 @@ export const updateHITL = (id: string, config: any) => portalApi.put(`/api/porta
 export const updateAutonomy = (id: string, level: string, reason?: string) => portalApi.put(`/api/portal/project/business-processes/${id}/autonomy`, { level, reason });
 export const evaluate = (id: string) => portalApi.post(`/api/portal/project/business-processes/${id}/evaluate`);
 export const generatePrompt = (id: string, target: string) => portalApi.post(`/api/portal/project/business-processes/${id}/prompt`, { target });
+export const predictImpact = (id: string, action: string) => portalApi.post(`/api/portal/project/business-processes/${id}/predict`, { action });
