@@ -1202,6 +1202,73 @@ router.post('/api/portal/project/business-processes/:id/predict', requirePartici
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Execution Intelligence (real data from agent activity logs) ──────────
+router.get('/api/portal/project/execution-intelligence', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const { sequelize: seq } = await import('../config/database');
+
+    // Recent activity timeline (last 50 events)
+    const [timeline] = await seq.query(`
+      SELECT l.id, l.agent_id, a.agent_name, l.action, l.result, l.confidence, l.duration_ms, l.created_at, l.reason
+      FROM ai_agent_activity_logs l
+      LEFT JOIN ai_agents a ON a.id = l.agent_id
+      ORDER BY l.created_at DESC LIMIT 50
+    `);
+
+    // Agent summary stats
+    const [agentStats] = await seq.query(`
+      SELECT agent_name, status, run_count, error_count
+      FROM ai_agents WHERE run_count > 0
+      ORDER BY run_count DESC LIMIT 20
+    `);
+
+    // Recent failure count (last 24h)
+    const [failures] = await seq.query(`
+      SELECT COUNT(*) as count FROM ai_agent_activity_logs
+      WHERE result = 'failed' AND created_at > NOW() - INTERVAL '24 hours'
+    `);
+
+    // Recent success count (last 24h)
+    const [successes] = await seq.query(`
+      SELECT COUNT(*) as count FROM ai_agent_activity_logs
+      WHERE result = 'success' AND created_at > NOW() - INTERVAL '24 hours'
+    `);
+
+    // Total runs last 24h
+    const [total24h] = await seq.query(`
+      SELECT COUNT(*) as count FROM ai_agent_activity_logs
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+    `);
+
+    // Most common failure reasons (last 7 days)
+    const [failureInsights] = await seq.query(`
+      SELECT a.agent_name, l.action, COUNT(*) as count
+      FROM ai_agent_activity_logs l
+      LEFT JOIN ai_agents a ON a.id = l.agent_id
+      WHERE l.result = 'failed' AND l.created_at > NOW() - INTERVAL '7 days'
+      GROUP BY a.agent_name, l.action
+      ORDER BY count DESC LIMIT 10
+    `);
+
+    const totalRuns24h = parseInt((total24h as any)[0]?.count || '0');
+    const failCount24h = parseInt((failures as any)[0]?.count || '0');
+    const successCount24h = parseInt((successes as any)[0]?.count || '0');
+    const successRate = totalRuns24h > 0 ? Math.round((successCount24h / totalRuns24h) * 100) : 0;
+
+    res.json({
+      timeline,
+      agent_stats: agentStats,
+      summary: {
+        total_runs_24h: totalRuns24h,
+        success_count_24h: successCount24h,
+        failure_count_24h: failCount24h,
+        success_rate: successRate,
+      },
+      failure_insights: failureInsights,
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 router.put('/api/portal/project/business-processes/:id/hitl', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { updateHITLConfig, getHITLConfig } = await import('../intelligence/hitl/hitlEngine');
