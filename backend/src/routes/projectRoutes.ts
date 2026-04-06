@@ -1051,11 +1051,14 @@ const NOISE_FILES_SET = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.pretti
 function enrichCapability(cap: any) {
   const features = cap.features || [];
   const allReqs = features.flatMap((f: any) => f.requirements || []);
-  const matched = allReqs.filter((r: any) => r.status === 'matched' || r.status === 'verified');
+  const verified = allReqs.filter((r: any) => r.status === 'verified');
+  const autoMatched = allReqs.filter((r: any) => r.status === 'matched');
+  const matched = [...verified, ...autoMatched]; // combined for coverage calc
   const partial = allReqs.filter((r: any) => r.status === 'partial');
   const unmatched = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started');
   const totalR = allReqs.length;
   const matchedR = matched.length;
+  const verifiedR = verified.length;
 
   // Filter noise files
   const isReal = (f: string) => { const n = f.split('/').pop() || f; return !NOISE_FILES_SET.has(n) && !n.startsWith('.'); };
@@ -1146,6 +1149,8 @@ function enrichCapability(cap: any) {
     source: 'requirements',
     total_requirements: totalR,
     matched_requirements: matchedR,
+    verified_requirements: verifiedR,
+    auto_matched_requirements: autoMatched.length,
     partial_requirements: partial.length,
     unmatched_requirements: unmatched.length,
     completion_pct: reqCoverage, // override hierarchy's value

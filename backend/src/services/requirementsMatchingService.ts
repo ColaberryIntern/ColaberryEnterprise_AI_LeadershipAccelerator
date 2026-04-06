@@ -76,6 +76,7 @@ export async function matchRequirementsToRepo(projectId: string): Promise<{
   matched: number;
   partial: number;
   unmatched: number;
+  verified: number;
 }> {
   const project = await Project.findByPk(projectId);
   if (!project) throw new Error(`Project not found: ${projectId}`);
@@ -85,7 +86,7 @@ export async function matchRequirementsToRepo(projectId: string): Promise<{
   const fileTree: string[] = extractFilePaths(connection?.file_tree_json);
 
   if (fileTree.length === 0) {
-    return { total: 0, matched: 0, partial: 0, unmatched: 0 };
+    return { total: 0, matched: 0, partial: 0, unmatched: 0, verified: 0 };
   }
 
   const requirements = await RequirementsMap.findAll({
@@ -96,13 +97,35 @@ export async function matchRequirementsToRepo(projectId: string): Promise<{
   let partial = 0;
   let unmatched = 0;
 
+  // Noise files that should NOT count as real implementations
+  const NOISE = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md', 'package-lock.json']);
+  const isRealImpl = (f: string) => {
+    const name = f.split('/').pop() || f;
+    if (NOISE.has(name) || name.startsWith('.')) return false;
+    if (/^\d{14}/.test(name)) return false; // migration files
+    // Must be a real implementation file (service, model, component, route, agent)
+    return (f.includes('service') || f.includes('Service') || f.includes('models/') ||
+            f.includes('component') || f.includes('page') || f.includes('Page') ||
+            f.includes('route') || f.includes('agent') || f.includes('Agent') ||
+            f.includes('controller') || f.includes('middleware')) &&
+           (name.endsWith('.ts') || name.endsWith('.tsx'));
+  };
+
+  let verified = 0;
+
   for (const req of requirements) {
     const { matchedFiles, score } = matchRequirementToFiles(req.requirement_text, fileTree);
 
     req.github_file_paths = matchedFiles;
     req.confidence_score = score;
 
-    if (score >= 0.7) {
+    // Auto-promote to verified if high confidence AND real implementation files exist
+    const realFiles = matchedFiles.filter(isRealImpl);
+    if (score >= 0.7 && realFiles.length > 0) {
+      req.status = 'verified';
+      req.verified_by = 'auto-verified';
+      verified++;
+    } else if (score >= 0.7) {
       req.status = 'matched';
       req.verified_by = 'auto';
       matched++;
@@ -118,7 +141,7 @@ export async function matchRequirementsToRepo(projectId: string): Promise<{
     await req.save();
   }
 
-  return { total: requirements.length, matched, partial, unmatched };
+  return { total: requirements.length, matched, partial, unmatched, verified };
 }
 
 // ---------------------------------------------------------------------------
