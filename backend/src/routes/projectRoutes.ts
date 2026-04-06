@@ -1062,7 +1062,17 @@ function enrichCapability(cap: any) {
   const allFiles: string[] = [...new Set<string>(allReqs.flatMap((r: any) => r.github_file_paths || []))].filter(isReal);
   const backendFiles = allFiles.filter((f: string) => f.includes('service') || f.includes('route') || f.includes('controller') || f.includes('middleware') || (f.includes('models/') && !f.includes('frontend')));
   const frontendFiles = allFiles.filter((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
-  const agentFiles = allFiles.filter((f: string) => f.includes('agent') || f.includes('Agent') || f.includes('intelligence/'));
+  // Agent detection: must be actual agent implementation files, NOT migrations, seeds, or scripts
+  const agentFiles = allFiles.filter((f: string) => {
+    const name = f.split('/').pop() || '';
+    // Exclude: migration files (timestamp prefix), seed files, .js files (compiled), scripts
+    if (/^\d{14}/.test(name)) return false; // migration files like 20260327000014-...
+    if (name.includes('seed') || name.includes('Seed')) return false;
+    if (name.endsWith('.js') && !f.includes('/dist/')) return false; // raw JS = likely migration
+    if (f.includes('scripts/') || f.includes('migrations/')) return false;
+    // Must be in agents/ or intelligence/agents/ directory AND be a .ts file
+    return (f.includes('agents/') || f.includes('intelligence/')) && name.endsWith('.ts') && (name.includes('Agent') || name.includes('agent'));
+  });
   const modelFiles = allFiles.filter((f: string) => f.includes('models/') && f.endsWith('.ts'));
 
   const hasBackend = backendFiles.length > 0;

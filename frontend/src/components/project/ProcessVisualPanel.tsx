@@ -164,38 +164,26 @@ export default function ProcessVisualPanel({ links, usability, repoUrl }: Props)
           {/* Agents — flow visualization */}
           {tab === 'agents' && (
             <div>
-              {ag.length === 0 && !execData?.agent_stats?.length ? (
-                <div className="text-center text-muted py-3" style={{ fontSize: 11 }}><i className="bi bi-cpu d-block mb-1" style={{ fontSize: 20 }}></i>No agents detected</div>
+              {ag.length === 0 ? (
+                <div className="text-center text-muted py-3" style={{ fontSize: 11 }}>
+                  <i className="bi bi-cpu d-block mb-1" style={{ fontSize: 20, color: '#ef4444' }}></i>
+                  <div className="fw-medium mb-1">No agents detected for this process</div>
+                  <div style={{ fontSize: 10 }}>Use the "Add AI Agent Automation" step in the Execution Plan to create agents.</div>
+                </div>
               ) : (
                 <>
-                  {ag.length > 0 && (
-                    <div className="mb-2">
-                      <span className="fw-semibold" style={{ fontSize: 10 }}>Process Agents</span>
-                      {ag.map((f: string, i: number) => {
-                        const name = f.split('/').pop()?.replace('.ts', '').replace('.js', '') || f;
-                        return (
-                          <div key={i} className="d-flex align-items-center gap-2 py-1" style={{ borderBottom: '1px solid #f0f0f0' }}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#8b5cf6' }}></span>
-                            {repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none" style={{ fontSize: 10 }}>{name}</a> : <span style={{ fontSize: 10 }}>{name}</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {execData?.agent_stats && (
-                    <div className="mt-2">
-                      <span className="fw-semibold" style={{ fontSize: 10 }}>Platform Agents (by runs)</span>
-                      {execData.agent_stats.slice(0, 10).map((a: any, i: number) => (
-                        <div key={i} className="d-flex justify-content-between align-items-center py-1" style={{ borderBottom: '1px solid #f0f0f0', fontSize: 9 }}>
-                          <span>{a.agent_name}</span>
-                          <div className="d-flex gap-2">
-                            <span className="text-muted">{(a.run_count || 0).toLocaleString()}</span>
-                            {a.error_count > 0 && <span style={{ color: '#ef4444' }}>{a.error_count} err</span>}
-                          </div>
+                  <div className="mb-2">
+                    <span className="fw-semibold" style={{ fontSize: 10 }}>Process Agents</span>
+                    {ag.map((f: string, i: number) => {
+                      const name = f.split('/').pop()?.replace('.ts', '').replace('.js', '') || f;
+                      return (
+                        <div key={i} className="d-flex align-items-center gap-2 py-1" style={{ borderBottom: '1px solid #f0f0f0' }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#8b5cf6' }}></span>
+                          {repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none" style={{ fontSize: 10 }}>{name}</a> : <span style={{ fontSize: 10 }}>{name}</span>}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    })}
+                  </div>
                 </>
               )}
             </div>
