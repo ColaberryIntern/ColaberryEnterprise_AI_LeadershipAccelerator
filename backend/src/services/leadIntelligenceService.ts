@@ -271,7 +271,7 @@ export async function approveRecommendation(
   // Update recommendation
   await rec.update({
     status: 'approved',
-    reviewed_by: adminUserId || 'system-auto',
+    reviewed_by: adminUserId || null,
     reviewed_at: new Date(),
     lead_id: leadId,
     updated_at: new Date(),
@@ -290,7 +290,7 @@ export async function rejectRecommendation(
 
   await rec.update({
     status: 'rejected',
-    reviewed_by: adminUserId || 'system-auto',
+    reviewed_by: adminUserId || null,
     reviewed_at: new Date(),
     updated_at: new Date(),
   });
