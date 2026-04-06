@@ -1,9 +1,9 @@
 version: "3.8"
 
-services:
-  # Reuse production DB — no separate database for dev
-  # The accelerator-db container from docker-compose.production.yml must be running
+# IMPORTANT: Always run with -p flag: docker compose -p colaberry-dev -f docker-compose.dev.yml up -d
+# This prevents Docker from conflicting with production containers.
 
+services:
   backend:
     build:
       context: .
