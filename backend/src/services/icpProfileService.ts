@@ -111,6 +111,9 @@ export function buildApolloFilters(profile: ICPProfile): ApolloSearchParams {
   // company size, locations) provide sufficient targeting. Keywords are retained in
   // the ICP profile for AI personalization of outreach messages.
 
+  // Only return people with verified emails — Apollo withholds emails by default
+  filters.contact_email_status = ['verified'];
+
   // Merge any raw apollo_filters passthrough
   if (profile.apollo_filters && Object.keys(profile.apollo_filters).length) {
     Object.assign(filters, profile.apollo_filters);
