@@ -101,7 +101,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
         {/* 2: System Truth — 3 metrics + usability */}
         <Section num={2} title="System Truth">
           <div className="row g-3 mb-3">
-            <div className="col-md-4"><MetricBar label="Requirements Coverage" value={m.requirements_coverage || 0} color={m.requirements_coverage >= 70 ? '#10b981' : m.requirements_coverage >= 30 ? '#f59e0b' : '#ef4444'} /></div>
+            <div className="col-md-4"><MetricBar label="Req. Matched (auto)" value={m.requirements_coverage || 0} color={m.requirements_coverage >= 70 ? '#10b981' : m.requirements_coverage >= 30 ? '#f59e0b' : '#ef4444'} /></div>
             <div className="col-md-4"><MetricBar label="System Readiness" value={m.system_readiness || 0} color={m.system_readiness >= 70 ? '#10b981' : m.system_readiness >= 30 ? '#f59e0b' : '#ef4444'} /></div>
             <div className="col-md-4"><MetricBar label="Quality Score" value={m.quality_score || 0} color={m.quality_score >= 70 ? '#10b981' : m.quality_score >= 30 ? '#f59e0b' : '#ef4444'} /></div>
           </div>

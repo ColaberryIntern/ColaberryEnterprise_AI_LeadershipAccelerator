@@ -88,19 +88,10 @@ export default function ProcessVisualPanel({ links, usability, repoUrl }: Props)
   const ag = links.agents || [];
   const db = links.models || [];
 
-  useEffect(() => {
-    if (tab === 'playback' && !execData) {
-      setLoadingExec(true);
-      bpApi.getExecutionIntelligence().then(r => setExecData(r.data)).catch(() => {}).finally(() => setLoadingExec(false));
-    }
-    if (tab === 'agents' && !execData) {
-      bpApi.getExecutionIntelligence().then(r => setExecData(r.data)).catch(() => {});
-    }
-  }, [tab, execData]);
+  // No execution data loading — Activity tab removed (shows platform data, not project-specific)
 
   const tabs: Array<{ key: VisualTab; label: string; icon: string }> = [
     { key: 'architecture', label: 'System', icon: 'bi-diagram-3' },
-    { key: 'playback', label: 'Activity', icon: 'bi-activity' },
     { key: 'agents', label: 'Agents', icon: 'bi-cpu' },
     { key: 'database', label: 'DB', icon: 'bi-database' },
   ];

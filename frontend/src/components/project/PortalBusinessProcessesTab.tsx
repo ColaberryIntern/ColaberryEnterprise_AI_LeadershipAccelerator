@@ -99,7 +99,7 @@ export default function PortalBusinessProcessesTab() {
 
                   {/* 3 metric mini bars */}
                   {[
-                    { label: 'Coverage', val: m.requirements_coverage || 0 },
+                    { label: 'Matched', val: m.requirements_coverage || 0 },
                     { label: 'Readiness', val: m.system_readiness || 0 },
                     { label: 'Quality', val: m.quality_score || 0 },
                   ].map(mb => (
