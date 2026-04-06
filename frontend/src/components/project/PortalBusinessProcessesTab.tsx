@@ -39,7 +39,7 @@ export default function PortalBusinessProcessesTab() {
         <div>
           <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Business Processes</h6>
           <p className="text-muted small mb-0">
-            {processes.length} processes · {matchedReqs}/{totalReqs} requirements implemented · <strong>{overallPct}% complete</strong>
+            {processes.length} processes · {totalReqs} requirements
           </p>
         </div>
         <span className="badge" style={{ background: `${completionColor(overallPct)}20`, color: completionColor(overallPct), fontSize: 12, fontWeight: 700, padding: '6px 12px' }}>

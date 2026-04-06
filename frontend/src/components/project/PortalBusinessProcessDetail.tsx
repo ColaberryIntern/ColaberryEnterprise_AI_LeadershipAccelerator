@@ -85,7 +85,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
       <div className="card-header bg-white py-3 d-flex justify-content-between align-items-start" style={{ borderBottom: `3px solid ${u.usable ? '#10b981' : '#ef4444'}` }}>
         <div>
           <h5 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>{p.name}</h5>
-          <span className="text-muted" style={{ fontSize: 12 }}>{p.matched_requirements}/{p.total_requirements} requirements</span>
+          <span className="text-muted" style={{ fontSize: 12 }}>{p.total_requirements} requirements</span>
         </div>
         <div className="d-flex align-items-center gap-2">
           <span className="badge px-2 py-1" style={{ background: `${matColor}20`, color: matColor, fontSize: 10, fontWeight: 700 }}>L{mat.level} {mat.label}</span>
@@ -177,13 +177,13 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
               <div>
                 <div className="d-flex gap-4 mb-2">
                   <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#10b981' }}>{verified}</div><div className="text-muted" style={{ fontSize: 9 }}>Verified</div></div>
-                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#3b82f6' }}>{built}</div><div className="text-muted" style={{ fontSize: 9 }}>Built</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#9ca3af' }}>{built}</div><div className="text-muted" style={{ fontSize: 9 }}>Auto-Matched</div></div>
                   <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#f59e0b' }}>{planned}</div><div className="text-muted" style={{ fontSize: 9 }}>Planned</div></div>
                   <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#ef4444' }}>{unmapped}</div><div className="text-muted" style={{ fontSize: 9 }}>Unmapped</div></div>
                 </div>
                 <div className="progress" style={{ height: 8 }}>
                   <div className="progress-bar" style={{ width: `${total > 0 ? (verified / total) * 100 : 0}%`, background: '#10b981' }} />
-                  <div className="progress-bar" style={{ width: `${total > 0 ? (built / total) * 100 : 0}%`, background: '#3b82f6' }} />
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (built / total) * 100 : 0}%`, background: '#cbd5e1' }} />
                   <div className="progress-bar" style={{ width: `${total > 0 ? (planned / total) * 100 : 0}%`, background: '#f59e0b' }} />
                 </div>
                 <div className="d-flex justify-content-between mt-1" style={{ fontSize: 9 }}>
