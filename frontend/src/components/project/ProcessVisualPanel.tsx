@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
+import ProcessDatabaseGraph from './ProcessDatabaseGraph';
 
 interface Props {
   links: { backend?: string[]; frontend?: string[]; agents?: string[]; models?: string[] };
@@ -88,7 +89,7 @@ export default function ProcessVisualPanel({ links, usability, repoUrl }: Props)
   const ag = links.agents || [];
   const db = links.models || [];
 
-  // No execution data loading — Activity tab removed (shows platform data, not project-specific)
+  const backend = links.backend || [];
 
   const tabs: Array<{ key: VisualTab; label: string; icon: string }> = [
     { key: 'architecture', label: 'System', icon: 'bi-diagram-3' },
@@ -180,24 +181,9 @@ export default function ProcessVisualPanel({ links, usability, repoUrl }: Props)
             </div>
           )}
 
-          {/* Database — model boxes */}
+          {/* Database — interactive graph */}
           {tab === 'database' && (
-            <div>
-              {db.length === 0 ? (
-                <div className="text-center text-muted py-3" style={{ fontSize: 11 }}><i className="bi bi-database d-block mb-1" style={{ fontSize: 20 }}></i>No models detected</div>
-              ) : (
-                <div className="d-flex flex-wrap gap-1 py-1">
-                  {db.map((f: string, i: number) => {
-                    const name = f.split('/').pop()?.replace('.ts', '') || f;
-                    return (
-                      <div key={i} className="px-2 py-1" style={{ background: '#f59e0b10', border: '1px solid #f59e0b30', borderRadius: 6, fontSize: 9 }}>
-                        {repoUrl ? <a href={`${repoUrl}/blob/main/${f}`} target="_blank" rel="noopener noreferrer" className="text-decoration-none" style={{ color: '#92400e' }}><i className="bi bi-database me-1"></i>{name}</a> : <span><i className="bi bi-database me-1"></i>{name}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <ProcessDatabaseGraph models={db} services={backend} repoUrl={repoUrl} />
           )}
         </div>
       </div>
