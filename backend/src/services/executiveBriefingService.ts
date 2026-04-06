@@ -14,10 +14,29 @@ import { Op } from 'sequelize';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export interface CampaignMetrics {
+  emailsSent: number;
+  smsSent: number;
+  callsMade: number;
+  uniqueOpens: number;
+  uniqueClicks: number;
+  advisorClicks: number;
+  replies: number;
+  bookings: number;
+  unsubscribes: number;
+  openRate: string;
+  clickRate: string;
+  byCampaign: { type: string; sent: number }[];
+  topClickers: { name: string; company: string; title: string; clicks: number }[];
+  advisorVisitors: { name: string; company: string; pageviews: number }[];
+  demoStarts: number;
+  demoCompletes: number;
+}
+
 export interface ExecutiveBriefingData {
   generatedAt: Date;
   type: 'daily' | 'weekly';
-  digest: any; // DigestData from digestService
+  digest: any;
   alertSummary: {
     openCount: number;
     criticalOpen: number;
@@ -35,7 +54,6 @@ export interface ExecutiveBriefingData {
     resolvedLast24h: number;
     criticalOpen: number;
   };
-  // Cory Brain intelligence data
   strategicInsights: {
     count: number;
     critical: number;
@@ -58,6 +76,7 @@ export interface ExecutiveBriefingData {
     completed: number;
     recent: { title: string; type: string; priority: string; status: string }[];
   };
+  campaignMetrics?: CampaignMetrics;
 }
 
 // ─── Compile Briefing Data ──────────────────────────────────────────────────
@@ -158,7 +177,55 @@ export async function compileExecutiveBriefing(
         status: i.status,
       })),
     },
+    campaignMetrics: await compileCampaignMetrics(lookback),
   };
+}
+
+async function compileCampaignMetrics(since: Date): Promise<CampaignMetrics> {
+  const { sequelize } = require('../config/database');
+  const { QueryTypes } = require('sequelize');
+  try {
+    const [[emails], [sms], [calls], [opens], [clicks], [advClicks], [replies], [bookings], [unsubs], byCampaign, topClickers, advisorVisitors, [demoS], [demoC]] = await Promise.all([
+      sequelize.query("SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status='sent' AND sent_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM communication_logs WHERE channel='sms' AND direction='outbound' AND created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM communication_logs WHERE channel='voice' AND direction='outbound' AND created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(DISTINCT lead_id) as cnt FROM interaction_outcomes WHERE outcome='opened' AND created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(DISTINCT lead_id) as cnt FROM interaction_outcomes WHERE outcome='clicked' AND created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(DISTINCT lead_id) as cnt FROM interaction_outcomes WHERE outcome='clicked' AND created_at >= :since AND metadata::text LIKE '%advisor.colaberry.ai%'", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM interaction_outcomes WHERE outcome='replied' AND created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM strategy_calls WHERE created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM leads WHERE status='unsubscribed' AND updated_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT c.type, COUNT(*) as sent FROM scheduled_emails se JOIN campaigns c ON c.id = se.campaign_id WHERE se.status='sent' AND se.sent_at >= :since GROUP BY c.type ORDER BY sent DESC", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT l.name, l.company, l.title, COUNT(*) as clicks FROM interaction_outcomes io JOIN leads l ON l.id = io.lead_id WHERE io.outcome='clicked' AND io.created_at >= :since GROUP BY l.name, l.company, l.title ORDER BY clicks DESC LIMIT 5", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT l.name, l.company, COUNT(*) FILTER (WHERE pe.event_type='pageview') as pageviews FROM page_events pe JOIN visitors v ON v.id = pe.visitor_id JOIN leads l ON l.id = v.lead_id WHERE pe.page_url LIKE '%advisor.colaberry.ai%' AND pe.created_at >= :since GROUP BY l.name, l.company ORDER BY pageviews DESC LIMIT 5", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM page_events WHERE event_type='demo_start' AND created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+      sequelize.query("SELECT COUNT(*) as cnt FROM page_events WHERE event_type='demo_complete' AND created_at >= :since", { replacements: { since }, type: QueryTypes.SELECT }),
+    ]);
+    const emailsSent = parseInt(emails.cnt);
+    const uniqueOpens = parseInt(opens.cnt);
+    const uniqueClicks = parseInt(clicks.cnt);
+    return {
+      emailsSent,
+      smsSent: parseInt(sms.cnt),
+      callsMade: parseInt(calls.cnt),
+      uniqueOpens,
+      uniqueClicks,
+      advisorClicks: parseInt(advClicks.cnt),
+      replies: parseInt(replies.cnt),
+      bookings: parseInt(bookings.cnt),
+      unsubscribes: parseInt(unsubs.cnt),
+      openRate: emailsSent > 0 ? Math.round((uniqueOpens / emailsSent) * 100) + '%' : '0%',
+      clickRate: emailsSent > 0 ? Math.round((uniqueClicks / emailsSent) * 100) + '%' : '0%',
+      byCampaign: (byCampaign as any[]).map(r => ({ type: r.type, sent: parseInt(r.sent) })),
+      topClickers: (topClickers as any[]).map(r => ({ name: r.name, company: r.company || '', title: r.title || '', clicks: parseInt(r.clicks) })),
+      advisorVisitors: (advisorVisitors as any[]).map(r => ({ name: r.name, company: r.company || '', pageviews: parseInt(r.pageviews) })),
+      demoStarts: parseInt(demoS.cnt),
+      demoCompletes: parseInt(demoC.cnt),
+    };
+  } catch (err: any) {
+    console.error('[Briefing] Campaign metrics failed:', err.message);
+    return { emailsSent: 0, smsSent: 0, callsMade: 0, uniqueOpens: 0, uniqueClicks: 0, advisorClicks: 0, replies: 0, bookings: 0, unsubscribes: 0, openRate: '0%', clickRate: '0%', byCampaign: [], topClickers: [], advisorVisitors: [], demoStarts: 0, demoCompletes: 0 };
+  }
 }
 
 // ─── Generate & Send Daily Briefing ─────────────────────────────────────────

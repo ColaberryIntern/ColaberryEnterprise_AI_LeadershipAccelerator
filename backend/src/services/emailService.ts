@@ -1518,35 +1518,47 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
   const fleet = data.agentFleet;
   const alerts = data.alertSummary;
   const tickets = data.ticketSummary;
-  const insights = data.strategicInsights;
+  const cm = data.campaignMetrics;
 
-  // Build conversational assessment
-  const healthyPct = fleet.total > 0 ? Math.round((fleet.healthy / fleet.total) * 100) : 100;
+  // Campaign performance assessment
+  const campaignSection = cm ? (() => {
+    const campaignBreakdown = cm.byCampaign.map(c => `${c.type.replace(/_/g, ' ')}: ${c.sent}`).join(', ');
+    const topClickersHtml = cm.topClickers.length > 0
+      ? cm.topClickers.map(c => `<li><strong>${c.name}</strong>${c.company ? ` (${c.company})` : ''}${c.title ? ` - ${c.title}` : ''} - ${c.clicks} clicks</li>`).join('')
+      : '<li>No clicks recorded yet</li>';
+    const advisorHtml = cm.advisorVisitors.length > 0
+      ? cm.advisorVisitors.map(v => `<li><strong>${v.name}</strong>${v.company ? ` (${v.company})` : ''} - ${v.pageviews} pageviews</li>`).join('')
+      : '<li>No advisor visitors</li>';
+    return `
+    <div class="highlight">
+      <strong>Outreach:</strong> ${cm.emailsSent.toLocaleString()} emails, ${cm.smsSent} SMS, ${cm.callsMade} calls<br>
+      <strong>Engagement:</strong> ${cm.uniqueOpens} opens (${cm.openRate}), ${cm.uniqueClicks} clicks (${cm.clickRate}), ${cm.replies} replies<br>
+      <strong>Advisor:</strong> ${cm.advisorClicks} clicked to AI Workforce Designer<br>
+      <strong>Demos:</strong> ${cm.demoStarts} started, ${cm.demoCompletes} completed<br>
+      <strong>Bookings:</strong> ${cm.bookings} | <strong>Unsubscribes:</strong> ${cm.unsubscribes}
+    </div>
+    <p style="font-size:13px;color:#718096;">By campaign: ${campaignBreakdown}</p>
+    <p><strong>Top clickers:</strong></p>
+    <ul style="font-size:13px;">${topClickersHtml}</ul>
+    <p><strong>AI Workforce Designer visitors:</strong></p>
+    <ul style="font-size:13px;">${advisorHtml}</ul>`;
+  })() : '';
+
+  // System health (secondary)
   const fleetAssessment = fleet.errored > 0
-    ? `${fleet.errored} agent${fleet.errored > 1 ? 's are' : ' is'} errored out of ${fleet.total} total -- I'm keeping an eye on ${fleet.errored === 1 ? 'it' : 'them'}.`
-    : `All ${fleet.total} agents are running healthy.`;
-
+    ? `${fleet.errored} agent${fleet.errored > 1 ? 's' : ''} errored out of ${fleet.total}.`
+    : `All ${fleet.total} agents healthy.`;
   const alertAssessment = alerts.criticalOpen > 0
-    ? `We have ${alerts.criticalOpen} critical alert${alerts.criticalOpen > 1 ? 's' : ''} that need${alerts.criticalOpen === 1 ? 's' : ''} your attention.`
-    : alerts.openCount > 0
-    ? `${alerts.openCount} open alert${alerts.openCount > 1 ? 's' : ''}, nothing critical.`
-    : 'No open alerts -- everything is clean.';
+    ? `${alerts.criticalOpen} critical alert${alerts.criticalOpen > 1 ? 's' : ''}.`
+    : alerts.openCount > 0 ? `${alerts.openCount} alerts, none critical.` : 'No alerts.';
 
-  const ticketAssessment = tickets.criticalOpen > 0
-    ? `${tickets.criticalOpen} critical ticket${tickets.criticalOpen > 1 ? 's' : ''} still open. ${tickets.resolvedLast24h > 0 ? `We resolved ${tickets.resolvedLast24h} in the last 24 hours.` : ''}`
-    : tickets.openCount > 0
-    ? `${tickets.openCount} open ticket${tickets.openCount > 1 ? 's' : ''}, ${tickets.resolvedLast24h} resolved in the last 24h. Nothing critical.`
-    : 'Ticket queue is clear.';
-
-  const insightSection = insights && insights.items.length > 0
-    ? `<p style="margin-top:16px;"><strong>Things I noticed:</strong></p><ul style="margin-top:4px;">${insights.items.slice(0, 3).map(i => `<li>${i.problem}${i.risk_tier === 'critical' ? ' <span style="color:#e53e3e;">(critical)</span>' : ''}</li>`).join('')}</ul>`
-    : '';
-
-  const overallTone = alerts.criticalOpen > 0 || fleet.errored > 2
-    ? 'A few things need your attention today.'
-    : fleet.errored > 0
-    ? 'Mostly smooth, a couple things to flag.'
-    : 'Everything is running smoothly.';
+  const overallTone = cm && cm.bookings > 0
+    ? `We got ${cm.bookings} new booking${cm.bookings > 1 ? 's' : ''}. Here's the full picture:`
+    : cm && cm.uniqueClicks > 20
+    ? `Good engagement today -- ${cm.uniqueClicks} people clicked through. Here's the breakdown:`
+    : cm && cm.emailsSent > 0
+    ? `${cm.emailsSent.toLocaleString()} emails went out. Here's how they performed:`
+    : 'Here\'s where things stand:';
 
   const html = `
 <!DOCTYPE html>
@@ -1560,7 +1572,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
     ul { padding-left: 20px; }
     li { margin-bottom: 6px; }
     .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; font-size: 14px; }
-    .critical { background: #fff5f5; border-left-color: #e53e3e; }
+    .sys { background: #f7fafc; border-left: 4px solid #a0aec0; padding: 10px 14px; margin: 12px 0; border-radius: 0 6px 6px 0; font-size: 12px; color: #718096; }
     a { color: #2b6cb0; }
     .sig { margin-top: 28px; color: #718096; font-size: 13px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
   </style>
@@ -1570,17 +1582,15 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
 
   <p>Hey Ali,</p>
 
-  <p>${overallTone} Here's where things stand:</p>
+  <p>${overallTone}</p>
 
-  <div class="${alerts.criticalOpen > 0 ? 'highlight critical' : 'highlight'}">
-    <strong>System Health:</strong> ${fleetAssessment}<br>
-    <strong>Alerts:</strong> ${alertAssessment}<br>
-    <strong>Tickets:</strong> ${ticketAssessment}
+  ${campaignSection}
+
+  <div class="sys">
+    <strong>System:</strong> ${fleetAssessment} ${alertAssessment} ${tickets.criticalOpen > 0 ? tickets.criticalOpen + ' critical tickets.' : ''}
   </div>
 
-  ${insightSection}
-
-  ${alerts.criticalOpen > 0 ? `<p>I'd recommend checking the <a href="https://enterprise.colaberry.ai/admin/intelligence">Intelligence dashboard</a> when you get a chance -- the critical items are flagged there.</p>` : `<p>Nothing urgent -- you can check the <a href="https://enterprise.colaberry.ai/admin/dashboard">dashboard</a> for the full picture whenever you have a minute.</p>`}
+  <p style="font-size:13px;">Full details in the <a href="https://enterprise.colaberry.ai/admin/war-room">War Room</a>.</p>
 
   <div class="sig">
     Cory<br>
