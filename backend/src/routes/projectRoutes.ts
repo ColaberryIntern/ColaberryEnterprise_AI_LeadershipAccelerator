@@ -1051,18 +1051,28 @@ const NOISE_FILES_SET = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.pretti
 function enrichCapability(cap: any) {
   const features = cap.features || [];
   const allReqs = features.flatMap((f: any) => f.requirements || []);
-  // Auto-promote matched → verified when matched to real implementation files with high confidence
+  // Auto-promote or demote requirements based on actual file quality
   const IMPL_PATTERNS = [/service/i, /route/i, /controller/i, /models?\//i, /\.tsx$/, /agent/i, /middleware/i, /component/i, /page/i];
   for (const r of allReqs) {
-    if (r.status === 'matched' && r.confidence_score >= 0.7) {
-      const files = r.github_file_paths || [];
+    if (r.status === 'matched' || r.status === 'partial') {
+      const files = (r.github_file_paths || []) as string[];
+      // Filter to only real implementation files (not noise)
       const realFiles = files.filter((f: string) => {
         const name = f.split('/').pop() || '';
         if (NOISE_FILES_SET.has(name)) return false;
         if (/^\d{14}/.test(name)) return false;
+        if (name.startsWith('.')) return false;
         return IMPL_PATTERNS.some(p => p.test(f));
       });
-      if (realFiles.length > 0) r.status = 'auto_verified';
+      if (realFiles.length > 0 && r.confidence_score >= 0.7) {
+        r.status = 'auto_verified';
+        r.github_file_paths = realFiles; // only show real files
+      } else if (realFiles.length === 0) {
+        // Matched only to noise files → demote to unmatched
+        r.status = 'unmatched';
+        r.github_file_paths = [];
+        r.confidence_score = 0;
+      }
     }
   }
   const verified = allReqs.filter((r: any) => r.status === 'verified' || r.status === 'auto_verified');
