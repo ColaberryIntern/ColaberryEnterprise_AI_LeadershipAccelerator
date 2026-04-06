@@ -5,6 +5,7 @@ interface Props {
   links: { backend?: string[]; frontend?: string[]; agents?: string[]; models?: string[] };
   usability: { backend?: string; frontend?: string; agent?: string };
   repoUrl?: string | null;
+  features?: any[];
 }
 
 type VisualTab = 'architecture' | 'playback' | 'agents' | 'database';
