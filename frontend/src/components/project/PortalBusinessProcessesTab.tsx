@@ -112,9 +112,20 @@ export default function PortalBusinessProcessesTab() {
                     </div>
                   ))}
 
-                  <div className="d-flex justify-content-between small text-muted mt-1" style={{ fontSize: 10 }}>
-                    <span><i className="bi bi-layers me-1"></i>{featureCount} features</span>
-                    {gaps > 0 && <span style={{ color: '#ef4444' }}><i className="bi bi-exclamation-triangle me-1"></i>{gaps} gaps</span>}
+                  {/* Maturity threshold bar */}
+                  <div className="position-relative mt-1 mb-1" style={{ height: 12 }}>
+                    <div className="progress" style={{ height: 4, marginTop: 2 }}>
+                      <div className="progress-bar" style={{ width: `${readiness}%`, background: matColor }} />
+                    </div>
+                    {/* Level markers */}
+                    {[{ pct: 10, l: '1' }, { pct: 50, l: '2' }, { pct: 70, l: '3' }, { pct: 85, l: '4' }].map(mk => (
+                      <span key={mk.l} style={{ position: 'absolute', left: `${mk.pct}%`, top: 0, transform: 'translateX(-50%)', fontSize: 7, color: readiness >= mk.pct ? matColor : '#cbd5e1' }}>L{mk.l}</span>
+                    ))}
+                  </div>
+
+                  <div className="d-flex justify-content-between small text-muted" style={{ fontSize: 9 }}>
+                    <span>{mat.label} → L{Math.min(5, (mat.level || 0) + 1)} at {[10, 50, 70, 85, 95][mat.level || 0] || 95}%</span>
+                    {gaps > 0 && <span style={{ color: '#ef4444' }}>{gaps} gaps</span>}
                   </div>
                 </div>
               </div>

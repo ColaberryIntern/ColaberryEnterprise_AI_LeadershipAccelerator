@@ -1072,13 +1072,13 @@ function enrichCapability(cap: any) {
   // ── 3 SEPARATE METRICS ──
   const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
   const readiness = (hasBackend ? 50 : 0) + (hasFrontend ? 30 : 0) + (hasAgents ? 20 : 0);
-  // Quality scoring (each 0-10)
+  // Quality scoring (each 0-10) — based on what exists + requirements coverage
   const q = {
-    determinism: Math.min(10, backendFiles.length * 2),
-    reliability: Math.min(10, (modelFiles.length * 2) + (backendFiles.length > 2 ? 3 : 0)),
-    observability: 0, // no monitoring by default
-    ux_exposure: Math.min(10, frontendFiles.length * 3),
-    automation: Math.min(10, agentFiles.length * 3),
+    determinism: hasBackend ? Math.min(10, 5 + backendFiles.length) : (reqCoverage > 50 ? 2 : 0),
+    reliability: modelFiles.length > 0 ? Math.min(10, 4 + modelFiles.length) : (hasBackend ? 2 : 0),
+    observability: 0, // honest — no monitoring detected
+    ux_exposure: hasFrontend ? Math.min(10, 6 + frontendFiles.length) : 0,
+    automation: hasAgents ? Math.min(10, 6 + agentFiles.length) : (reqCoverage > 70 ? 1 : 0),
     production_readiness: Math.min(10, (hasBackend ? 3 : 0) + (hasFrontend ? 3 : 0) + (hasAgents ? 2 : 0) + (modelFiles.length > 0 ? 2 : 0)),
   };
   const qualityTotal = Math.round(Object.values(q).reduce((s, v) => s + v, 0) * 100 / 60); // normalize to 0-100

@@ -24,29 +24,32 @@ export async function generateImprovementPrompt(processId: string, target: Promp
   const frontend = process.linked_frontend_components || [];
   const evolution = await analyzeProcessEvolution(processId);
 
+  const preamble = `You are operating in Claude Code PLAN MODE.\n\nDO NOT start coding immediately. Study the codebase first, then produce a detailed implementation plan.\n\n`;
+  const constraints = `\n\n# CONSTRAINTS\n- Follow existing patterns in the codebase\n- DO NOT break existing functionality\n- All changes must be additive\n- Use TypeScript with strict types\n- Follow Bootstrap 5 design system with var(--color-*) tokens\n- Target audience: enterprise executives (clean, professional UI)\n`;
+
   const generators: Record<PromptTarget, () => GeneratedPrompt> = {
     backend_improvement: () => ({
       target: 'backend_improvement',
-      title: `Improve backend for ${process.name}`,
-      prompt_text: `You are improving the "${process.name}" business process.\n\nCurrent backend services: ${backend.join(', ') || 'None'}\nCurrent scores: Determinism ${scores.determinism || 0}/100, Reliability ${scores.reliability || 0}/100\n\nImprovements needed:\n${evolution.improvement_areas.map(a => `- ${a}`).join('\n')}\n\nTasks:\n1. Add input validation and error handling to existing services\n2. Add retry logic with exponential backoff\n3. Add structured logging for observability\n4. Write unit tests for critical paths\n\nDo NOT break existing functionality. All changes must be additive.`,
+      title: `Build backend for ${process.name}`,
+      prompt_text: `${preamble}# OBJECTIVE\n\nBuild the backend services and API routes for the "${process.name}" business process.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# CURRENT STATE\n\n- Existing backend services: ${backend.join(', ') || 'NONE — this is a new build'}\n- Current readiness: ${scores.determinism || 0}/10 determinism, ${scores.reliability || 0}/10 reliability\n- Gaps: ${evolution.improvement_areas.slice(0, 5).join('; ') || 'No specific gaps identified'}\n\n# WHAT TO BUILD\n\n1. Create a new service file: \`backend/src/services/${process.name.replace(/[^a-zA-Z]/g, '')}Service.ts\`\n   - Core business logic for this process\n   - Input validation and error handling\n   - Retry logic with exponential backoff\n\n2. Create API routes: \`backend/src/routes/admin/${process.name.replace(/[^a-zA-Z]/g, '').toLowerCase()}Routes.ts\`\n   - RESTful endpoints (GET list, GET detail, POST create, PUT update)\n   - Use \`requireAdmin\` middleware from \`../../middlewares/authMiddleware\`\n   - Follow lazy import pattern: \`const { Service } = await import('../../services/...')\`\n\n3. Create database model if needed: \`backend/src/models/${process.name.replace(/[^a-zA-Z]/g, '')}.ts\`\n   - Sequelize model with UUID primary key\n   - \`sync({ alter: true })\` compatible\n\n4. Register routes in \`backend/src/routes/adminRoutes.ts\`\n\n5. Add structured logging for observability${constraints}`,
       estimated_complexity: 'medium',
-      affected_files: backend.map(s => `backend/src/services/${s}.ts`),
+      affected_files: [`backend/src/services/${process.name.replace(/[^a-zA-Z]/g, '')}Service.ts`, `backend/src/routes/admin/${process.name.replace(/[^a-zA-Z]/g, '').toLowerCase()}Routes.ts`],
     }),
 
     frontend_exposure: () => ({
       target: 'frontend_exposure',
-      title: `Add UI for ${process.name}`,
-      prompt_text: `You are adding frontend visibility for the "${process.name}" business process.\n\nCurrent frontend components: ${frontend.join(', ') || 'None'}\nCurrent UX Exposure score: ${scores.ux_exposure || 0}/100\n\nTasks:\n1. Create an admin panel showing process health, agent status, and recent activity\n2. Add status badges and progress indicators\n3. Follow Bootstrap 5 design system with var(--color-*) tokens\n4. Add to the Intelligence OS page as a new tab or panel\n\nDesign for enterprise executives (clean, scannable, professional).`,
+      title: `Build UI for ${process.name}`,
+      prompt_text: `${preamble}# OBJECTIVE\n\nCreate the frontend UI for the "${process.name}" business process.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# CURRENT STATE\n\n- Existing frontend components: ${frontend.join(', ') || 'NONE — this is a new build'}\n- Backend API: ${backend.length > 0 ? 'EXISTS (' + backend.join(', ') + ')' : 'NOT YET BUILT — build backend first'}\n\n# WHAT TO BUILD\n\n1. Create page component: \`frontend/src/pages/admin/${process.name.replace(/[^a-zA-Z]/g, '')}Page.tsx\`\n   - React functional component with hooks\n   - Use \`api\` from \`../../utils/api\` for API calls\n   - Bootstrap 5 layout with \`card border-0 shadow-sm\` pattern\n\n2. Add route in \`frontend/src/routes/adminRoutes.tsx\`\n   - Lazy load: \`const Page = lazy(() => import(...))\`\n\n3. Add navigation link in admin sidebar\n\n# UI REQUIREMENTS\n\n- Cards with \`border-0 shadow-sm\` and \`card-header bg-white fw-semibold\`\n- Tables with \`table-responsive > table table-hover mb-0\`\n- Buttons: always \`btn-sm\` in admin UI\n- Colors: use \`var(--color-primary)\`, \`var(--color-accent)\`, etc.\n- Design for enterprise executives aged 35-60: clean, calm, authoritative${constraints}`,
       estimated_complexity: 'medium',
-      affected_files: frontend.map(c => `frontend/src/components/${c}.tsx`),
+      affected_files: [`frontend/src/pages/admin/${process.name.replace(/[^a-zA-Z]/g, '')}Page.tsx`],
     }),
 
     agent_enhancement: () => ({
       target: 'agent_enhancement',
-      title: `Enhance agents for ${process.name}`,
-      prompt_text: `You are enhancing the agents powering "${process.name}".\n\nLinked agents: ${agents.join(', ')}\nCurrent AI Maturity: ${scores.ai_maturity || 0}/100\n\nAgent gaps:\n${evolution.agent_recommendations.map(r => `- ${r.agent_name} (${r.status}): ${r.recommendations.join(', ')}`).join('\n')}\n\nTasks:\n1. Fix any errored agents\n2. Add missing agents\n3. Improve prompt quality for LLM-based agents\n4. Add memory/learning loops where applicable\n5. Register all new agents in agentRegistry.ts\n\nFollow existing agent patterns in backend/src/intelligence/agents/.`,
+      title: `Add AI agent for ${process.name}`,
+      prompt_text: `${preamble}# OBJECTIVE\n\nBuild an AI agent to automate the "${process.name}" business process.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# CURRENT STATE\n\n- Existing agents: ${agents.join(', ') || 'NONE'}\n- Agent gaps: ${evolution.agent_recommendations.map(r => r.agent_name + ': ' + r.recommendations[0]).join('; ') || 'No specific gaps'}\n\n# WHAT TO BUILD\n\n1. Create agent: \`backend/src/intelligence/agents/${process.name.replace(/[^a-zA-Z]/g, '')}Agent.ts\`\n   - Follow pattern from existing agents (e.g., ActionPlannerAgent.ts)\n   - Export an async executor function\n   - Register in \`agentRegistry.ts\` with category and department\n\n2. Agent must:\n   - Accept structured input (config object)\n   - Return \`AgentExecutionResult\` with success/failure\n   - Log activity to \`AiAgentActivityLog\`\n   - Handle errors gracefully with retry logic\n\n3. Add to agent seed: \`backend/src/services/agentRegistrySeed.ts\`\n   - agent_name, agent_type, department, trigger_type\n\n# AGENT PATTERNS\n\n- Use \`callLLMWithAudit()\` for LLM calls\n- Use \`AiAgentActivityLog.create()\` for execution logging\n- Implement idempotent operations (safe to rerun)${constraints}`,
       estimated_complexity: 'large',
-      affected_files: agents.map(a => `backend/src/intelligence/agents/${a}.ts`),
+      affected_files: [`backend/src/intelligence/agents/${process.name.replace(/[^a-zA-Z]/g, '')}Agent.ts`],
     }),
 
     hitl_adjustment: () => ({

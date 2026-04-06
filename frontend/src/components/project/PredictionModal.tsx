@@ -99,22 +99,44 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
 
             <h6 className="fw-semibold small mb-2"><i className="bi bi-graph-up-arrow me-1"></i>Predicted Impact</h6>
             <div className="mb-4">
-              <MetricDelta label="System Readiness" before={p.projected_readiness - p.readiness_delta} after={p.projected_readiness} />
-              <MetricDelta label="Quality Score" before={p.projected_quality - p.quality_delta} after={p.projected_quality} />
+              <MetricDelta label="System Readiness" before={p.readiness_before || 0} after={p.projected_readiness} />
+              <MetricDelta label="Quality Score" before={p.quality_before || 0} after={p.projected_quality} />
             </div>
 
             {/* Level Progression */}
-            <div className="d-flex align-items-center gap-3 mb-4 p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
+            <div className="d-flex align-items-center gap-3 mb-2 p-3" style={{ background: p.maturity_advances ? '#10b98110' : 'var(--color-bg-alt)', borderRadius: 8, border: p.maturity_advances ? '1px solid #10b98130' : 'none' }}>
               <div className="text-center">
                 <div className="text-muted" style={{ fontSize: 9 }}>Current</div>
                 <div className="fw-bold" style={{ fontSize: 14, color: 'var(--color-primary)' }}>L{p.level_before?.level} {p.level_before?.label}</div>
               </div>
-              <i className="bi bi-arrow-right" style={{ fontSize: 18, color: '#10b981' }}></i>
+              <i className="bi bi-arrow-right" style={{ fontSize: 18, color: p.maturity_advances ? '#10b981' : '#9ca3af' }}></i>
               <div className="text-center">
                 <div className="text-muted" style={{ fontSize: 9 }}>After</div>
-                <div className="fw-bold" style={{ fontSize: 14, color: '#10b981' }}>L{p.level_after?.level} {p.level_after?.label}</div>
+                <div className="fw-bold" style={{ fontSize: 14, color: p.maturity_advances ? '#10b981' : 'var(--color-primary)' }}>L{p.level_after?.level} {p.level_after?.label}</div>
               </div>
+              {p.maturity_advances && <span className="badge bg-success ms-auto" style={{ fontSize: 10 }}>LEVEL UP</span>}
             </div>
+
+            {/* Quality Dimension Changes */}
+            {(p.quality_dimensions || []).length > 0 && (
+              <div className="mb-4">
+                <h6 className="fw-semibold small mb-2"><i className="bi bi-bar-chart me-1"></i>Quality Dimension Changes</h6>
+                {p.quality_dimensions.map((d: any) => {
+                  const improved = d.after > d.before;
+                  return (
+                    <div key={d.dimension} className="d-flex justify-content-between align-items-center mb-1" style={{ fontSize: 11 }}>
+                      <span className="text-muted text-capitalize" style={{ width: 130 }}>{d.dimension.replace(/_/g, ' ')}</span>
+                      <div className="d-flex align-items-center gap-1">
+                        <span>{d.before}/10</span>
+                        <i className="bi bi-arrow-right" style={{ fontSize: 9, color: '#9ca3af' }}></i>
+                        <strong style={{ color: improved ? '#10b981' : '#9ca3af' }}>{d.after}/10</strong>
+                        {improved && <span style={{ fontSize: 9, color: '#10b981' }}>+{d.after - d.before}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* New Components */}
             <h6 className="fw-semibold small mb-2"><i className="bi bi-plus-circle me-1"></i>What Will Be Built</h6>
