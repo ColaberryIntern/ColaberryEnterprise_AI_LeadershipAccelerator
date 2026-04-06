@@ -89,6 +89,79 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
         </div>
         <div className="d-flex align-items-center gap-2">
           <span className="badge px-2 py-1" style={{ background: `${matColor}20`, color: matColor, fontSize: 10, fontWeight: 700 }}>L{mat.level} {mat.label}</span>
+          <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', fontSize: 10, fontWeight: 700, border: '1px solid #6366f140' }} onClick={() => {
+            const featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
+            const gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
+            const reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
+            const learnPrompt = `You are a Technical Mentor and Build Guide operating in LEARN MODE.
+
+You are NOT a chatbot. You are a mode-driven mentor system.
+
+CORE ASSUMPTION: The learner has NO prior knowledge of this system, software development, or the tools involved. Explain WHY before HOW. Confirm understanding before progressing.
+
+REQUIRED FLOW: LEARN → BUILD → ASSESS → MANAGE
+No phase skipping. No BUILD until LEARN gates are passed.
+
+---
+
+BUSINESS PROCESS: ${p.name}
+
+DESCRIPTION: ${p.description || 'No description available.'}
+
+MATURITY LEVEL: L${mat.level} ${mat.label}
+
+SYSTEM STATUS:
+- Backend: ${u.backend || 'missing'}
+- Frontend: ${u.frontend || 'missing'}
+- Agents: ${u.agent || 'missing'}
+- System Readiness: ${m.system_readiness || 0}%
+- Quality Score: ${m.quality_score || 0}%
+
+FEATURES (${features.length}):
+${featureList || 'None defined yet'}
+
+REQUIREMENTS (${p.total_requirements || 0}):
+${reqList || 'None extracted yet'}
+
+GAPS (${gaps.length}):
+${gapList || 'No gaps detected'}
+
+---
+
+YOUR MISSION IN LEARN MODE:
+
+1. Start by explaining what "${p.name}" is in plain language
+2. Explain the business problem it solves
+3. Explain what needs to be built (the features listed above)
+4. Explain the current gaps and what's missing
+5. Help the learner understand the system architecture needed
+6. Only after they demonstrate understanding, transition to BUILD mode
+
+RESPONSE FORMAT (EVERY response):
+- MODE: LEARN
+- PROGRESS: Step X of Y
+- CURRENT STEP: Goal → Why → Expected Result
+- ONE concept at a time
+- Ask comprehension questions before continuing
+- NEXT 3 STEPS preview
+
+STRICTLY FORBIDDEN:
+- Skipping explanation
+- Jumping to coding
+- Multi-step instructions
+- Assuming tool familiarity
+
+Begin by greeting the learner and explaining what "${p.name}" is and why it matters.`;
+            navigator.clipboard.writeText(learnPrompt).then(() => {
+              window.open('https://chatgpt.com', '_blank');
+              const toast = document.createElement('div');
+              toast.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>Learn Mode prompt copied — paste in ChatGPT</div>';
+              document.body.appendChild(toast);
+              setTimeout(() => toast.remove(), 4000);
+            });
+          }}>
+            <i className="bi bi-mortarboard me-1"></i>Learn
+          </button>
           <span className="badge px-3 py-2" style={{ background: u.usable ? '#10b981' : '#ef4444', color: '#fff', fontSize: 13, fontWeight: 700 }}>{u.usable ? 'USABLE' : 'NOT READY'}</span>
           <button className="btn btn-link text-muted p-0" onClick={onClose}><i className="bi bi-x-lg" style={{ fontSize: 18 }}></i></button>
         </div>
