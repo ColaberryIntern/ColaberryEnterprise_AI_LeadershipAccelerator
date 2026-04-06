@@ -42,6 +42,10 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [showAllLinks, setShowAllLinks] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
   const [predictionAction, setPredictionAction] = useState<{ type: string; label: string } | null>(null);
+  const [syncText, setSyncText] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [showSync, setShowSync] = useState(false);
 
   useEffect(() => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); }, [processId]);
   if (!p) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
@@ -159,14 +163,35 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           )}
         </Section>
 
-        {/* 5: Completion */}
-        <Section num={5} title="Completion">
-          <div className="d-flex gap-4 mb-2">
-            <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#10b981' }}>{p.matched_requirements || 0}</div><div className="text-muted" style={{ fontSize: 9 }}>Implemented</div></div>
-            <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#f59e0b' }}>{p.partial_requirements || 0}</div><div className="text-muted" style={{ fontSize: 9 }}>Partial</div></div>
-            <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#ef4444' }}>{p.unmatched_requirements || 0}</div><div className="text-muted" style={{ fontSize: 9 }}>Missing</div></div>
-            <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: 'var(--color-primary)' }}>{features.length}</div><div className="text-muted" style={{ fontSize: 9 }}>Features</div></div>
-          </div>
+        {/* 5: Requirements Status */}
+        <Section num={5} title="Requirements Status">
+          {(() => {
+            const allReqs = features.flatMap((f: any) => f.requirements || []);
+            const verified = allReqs.filter((r: any) => r.status === 'verified').length;
+            const built = allReqs.filter((r: any) => r.status === 'matched').length;
+            const planned = allReqs.filter((r: any) => r.status === 'partial').length;
+            const unmapped = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started').length;
+            const total = allReqs.length;
+            return (
+              <div>
+                <div className="d-flex gap-4 mb-2">
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#10b981' }}>{verified}</div><div className="text-muted" style={{ fontSize: 9 }}>Verified</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#3b82f6' }}>{built}</div><div className="text-muted" style={{ fontSize: 9 }}>Built</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#f59e0b' }}>{planned}</div><div className="text-muted" style={{ fontSize: 9 }}>Planned</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#ef4444' }}>{unmapped}</div><div className="text-muted" style={{ fontSize: 9 }}>Unmapped</div></div>
+                </div>
+                <div className="progress" style={{ height: 8 }}>
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (verified / total) * 100 : 0}%`, background: '#10b981' }} />
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (built / total) * 100 : 0}%`, background: '#3b82f6' }} />
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (planned / total) * 100 : 0}%`, background: '#f59e0b' }} />
+                </div>
+                <div className="d-flex justify-content-between mt-1" style={{ fontSize: 9 }}>
+                  <span className="text-muted">{total} total requirements</span>
+                  <span style={{ color: '#10b981' }}>{total > 0 ? Math.round((verified / total) * 100) : 0}% verified</span>
+                </div>
+              </div>
+            );
+          })()}
         </Section>
 
         {/* 6: Quality Scores */}
@@ -239,6 +264,35 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
               </div>
             );});
           })()}
+        </Section>
+
+        {/* 9: Sync — paste Claude output */}
+        <Section num={9} title="Sync This Process">
+          <p className="text-muted small mb-2">After running a Claude Code prompt, paste the validation report here to update requirement states.</p>
+          {!showSync ? (
+            <button className="btn btn-sm btn-outline-primary" onClick={() => setShowSync(true)}>
+              <i className="bi bi-arrow-repeat me-1"></i>Paste Claude Output
+            </button>
+          ) : (
+            <div>
+              <textarea className="form-control form-control-sm mb-2" rows={6} placeholder="Paste the VALIDATION REPORT from Claude Code output here..." value={syncText} onChange={e => setSyncText(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 11 }} />
+              <div className="d-flex gap-2">
+                <button className="btn btn-sm btn-primary" disabled={syncing || !syncText.trim()} onClick={async () => {
+                  setSyncing(true);
+                  try { const r = await bpApi.syncProcess(processId, syncText); setSyncResult(r.data); load(); onUpdate(); } catch {} finally { setSyncing(false); }
+                }}>
+                  {syncing ? <><span className="spinner-border spinner-border-sm me-1"></span>Syncing...</> : <><i className="bi bi-check-circle me-1"></i>Sync</>}
+                </button>
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => { setShowSync(false); setSyncText(''); setSyncResult(null); }}>Cancel</button>
+              </div>
+              {syncResult && (
+                <div className="mt-2 p-2" style={{ background: '#10b98110', borderRadius: 6, border: '1px solid #10b98130', fontSize: 11 }}>
+                  <i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>
+                  {syncResult.summary}
+                </div>
+              )}
+            </div>
+          )}
         </Section>
 
         {/* Prediction Modal */}

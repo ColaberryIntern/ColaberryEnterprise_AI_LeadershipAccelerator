@@ -1314,4 +1314,17 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Sync Engine: paste Claude output to update requirement states ────────
+router.post('/api/portal/project/business-processes/:id/sync', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { parseValidationReport, syncProcessFromReport } = await import('../intelligence/processSyncEngine');
+    const report = parseValidationReport(req.body.report || '');
+    const result = await syncProcessFromReport(project.id, req.params.id as string, report);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;
