@@ -1250,6 +1250,15 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     // Add BPOS fields from Capability model
     const { Capability } = await import('../models');
     const capModel = await Capability.findByPk(req.params.id as string);
+    // Level 2: Add flow data from graph
+    let flowData = null;
+    try {
+      const { buildProcessGraph } = await import('../intelligence/graph/graphBuilder');
+      const { getProcessFlow } = await import('../intelligence/graph/graphQueryEngine');
+      const graph = await buildProcessGraph(project.id, req.params.id as string);
+      flowData = getProcessFlow(graph, `proc:${req.params.id as string}`);
+    } catch { /* graph is optional */ }
+
     res.json({
       ...enriched,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
@@ -1261,6 +1270,8 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       success_rate: capModel?.success_rate || null,
       failure_rate: capModel?.failure_rate || null,
       last_evaluated_at: capModel?.last_evaluated_at || null,
+      flow: flowData?.flow || null,
+      broken_connections: flowData?.broken_connections || [],
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

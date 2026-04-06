@@ -196,5 +196,99 @@ export function getNextBestActions(graph: ContextGraph, processId: string): Arra
     });
   }
 
+  // Level 2: Relationship-based actions
+  const routeNodes = allFiles.filter(f => f.type === 'api_route');
+  const serviceNodes = allFiles.filter(f => f.type === 'service');
+  const modelNodes = allFiles.filter(f => f.type === 'db_model');
+
+  // Check for disconnected routes (no calls_service edge)
+  const disconnectedRoutes = routeNodes.filter(r => !graph.getEdgesFrom(r.id).some(e => e.type === 'calls_service'));
+  if (disconnectedRoutes.length > 0 && hasBackend) {
+    actions.push({
+      step: step++, key: 'connect_api_service', label: 'Connect API Routes to Services',
+      impact: '+10% reliability', depends_on: 'Backend services',
+      fixes: [`${disconnectedRoutes.length} disconnected API routes`], enables: ['Data flow', 'API functionality'],
+      blocked: false, prompt_target: 'backend_improvement',
+      requirements_covered: [],
+    });
+  }
+
+  // Check for services without DB models
+  const unmodeled = serviceNodes.filter(s => !graph.getEdgesFrom(s.id).some(e => e.type === 'uses_model'));
+  if (unmodeled.length > 0 && !hasModels) {
+    actions.push({
+      step: step++, key: 'connect_service_db', label: 'Add Database Models for Services',
+      impact: '+15% reliability', depends_on: 'Backend services',
+      fixes: [`${unmodeled.length} services without data models`], enables: ['Persistent storage', 'Data integrity'],
+      blocked: false, prompt_target: 'backend_improvement',
+      requirements_covered: [],
+    });
+  }
+
   return actions;
+}
+
+// ── Level 2 Query Functions ──
+
+/** Routes with no calls_service edge */
+export function getUnconnectedAPIs(graph: ContextGraph): GraphNode[] {
+  return graph.getNodesByType('api_route').filter(r => !graph.getEdgesFrom(r.id).some(e => e.type === 'calls_service'));
+}
+
+/** Services not called by any route */
+export function getOrphanServices(graph: ContextGraph): GraphNode[] {
+  return graph.getNodesByType('service').filter(s => !graph.getEdgesTo(s.id).some(e => e.type === 'calls_service'));
+}
+
+/** Services with no uses_model edge */
+export function getDataFlowIssues(graph: ContextGraph): GraphNode[] {
+  return graph.getNodesByType('service').filter(s => !graph.getEdgesFrom(s.id).some(e => e.type === 'uses_model'));
+}
+
+/** Services that could have agents but don't */
+export function getAgentIntegrationGaps(graph: ContextGraph): GraphNode[] {
+  return graph.getNodesByType('service').filter(s => !graph.getEdgesFrom(s.id).some(e => e.type === 'triggers_agent'));
+}
+
+/** Build ordered flow for a process: Frontend → API → Service → DB → Agent */
+export function getProcessFlow(graph: ContextGraph, processId: string): {
+  flow: Array<{ layer: string; status: 'ready' | 'partial' | 'missing'; files: string[]; connections: string[] }>;
+  broken_connections: string[];
+} {
+  const features = graph.getConnectedNodes(processId, 'contains');
+  const allReqs = features.flatMap(f => graph.getConnectedNodes(f.id, 'contains')).filter(n => n.type === 'requirement');
+  const allFiles = allReqs.flatMap(r => graph.getConnectedNodes(r.id, 'matched_to'));
+
+  const frontendFiles = allFiles.filter(f => f.metadata?.path?.includes('.tsx')).map(f => f.label);
+  const routeFiles = allFiles.filter(f => f.type === 'api_route').map(f => f.label);
+  const serviceFiles = allFiles.filter(f => f.type === 'service').map(f => f.label);
+  const modelFiles = allFiles.filter(f => f.type === 'db_model').map(f => f.label);
+  const agentFiles = allFiles.filter(f => f.type === 'agent').map(f => f.label);
+
+  const broken: string[] = [];
+
+  // Check connections
+  const routeNodes = allFiles.filter(f => f.type === 'api_route');
+  const serviceNodes = allFiles.filter(f => f.type === 'service');
+  for (const r of routeNodes) {
+    if (!graph.getEdgesFrom(r.id).some(e => e.type === 'calls_service')) {
+      broken.push(`${r.label} → Service: no connection`);
+    }
+  }
+  for (const s of serviceNodes) {
+    if (!graph.getEdgesFrom(s.id).some(e => e.type === 'uses_model')) {
+      broken.push(`${s.label} → Database: no model linked`);
+    }
+  }
+
+  return {
+    flow: [
+      { layer: 'Frontend', status: frontendFiles.length > 0 ? 'ready' : 'missing', files: frontendFiles, connections: [] },
+      { layer: 'API Routes', status: routeFiles.length > 0 ? 'ready' : 'missing', files: routeFiles, connections: broken.filter(b => b.includes('→ Service')) },
+      { layer: 'Services', status: serviceFiles.length > 0 ? 'ready' : 'missing', files: serviceFiles, connections: broken.filter(b => b.includes('→ Database')) },
+      { layer: 'Database', status: modelFiles.length > 0 ? 'ready' : 'missing', files: modelFiles, connections: [] },
+      { layer: 'Agents', status: agentFiles.length > 0 ? 'ready' : 'missing', files: agentFiles, connections: [] },
+    ],
+    broken_connections: broken,
+  };
 }

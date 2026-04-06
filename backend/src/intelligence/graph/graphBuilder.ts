@@ -147,5 +147,64 @@ export async function buildProjectGraph(projectId: string): Promise<ContextGraph
     }
   }
 
+  // Level 2: Add relational edges between file nodes
+  addRelationalEdges(graph);
+
   return graph;
+}
+
+/** Extract domain stem: "userService.ts" → "user", "AuditLog.ts" → "auditlog" */
+function extractStem(filename: string): string {
+  return filename.replace(/\.(ts|tsx|js|jsx)$/, '').replace(/(Service|Routes?|Controller|Agent|Model|Log|Schema)s?$/i, '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+/** Level 2: Add relational edges between file nodes using naming conventions */
+function addRelationalEdges(graph: ContextGraph): void {
+  const routes: Array<{ id: string; stem: string; label: string }> = [];
+  const services: Array<{ id: string; stem: string; label: string }> = [];
+  const models: Array<{ id: string; stem: string; label: string }> = [];
+  const agents: Array<{ id: string; stem: string; label: string }> = [];
+
+  for (const node of graph.nodes.values()) {
+    const stem = extractStem(node.label || '');
+    if (!stem) continue;
+    if (node.type === 'api_route') routes.push({ id: node.id, stem, label: node.label });
+    else if (node.type === 'service') services.push({ id: node.id, stem, label: node.label });
+    else if (node.type === 'db_model') models.push({ id: node.id, stem, label: node.label });
+    else if (node.type === 'agent') agents.push({ id: node.id, stem, label: node.label });
+  }
+
+  // Route → Service
+  for (const route of routes) {
+    let matched = false;
+    for (const svc of services) {
+      if (route.stem === svc.stem || svc.stem.includes(route.stem) || route.stem.includes(svc.stem)) {
+        graph.addEdge({ from: route.id, to: svc.id, type: 'calls_service', metadata: { inferred: 'naming_convention' } });
+        matched = true;
+      }
+    }
+    if (!matched) {
+      const gapId = `gap:conn:${route.id}`;
+      graph.addNode({ id: gapId, type: 'gap', label: `API not wired: ${route.label}`, status: 'missing', metadata: { gap_type: 'missing_connection', layer: 'api_to_service' } });
+      graph.addEdge({ from: route.id, to: gapId, type: 'missing_connection' });
+    }
+  }
+
+  // Service → Model
+  for (const svc of services) {
+    for (const model of models) {
+      if (svc.stem === model.stem || model.stem.includes(svc.stem) || svc.stem.includes(model.stem)) {
+        graph.addEdge({ from: svc.id, to: model.id, type: 'uses_model', metadata: { inferred: 'naming_convention' } });
+      }
+    }
+  }
+
+  // Service → Agent
+  for (const svc of services) {
+    for (const agt of agents) {
+      if (svc.stem === agt.stem || agt.stem.includes(svc.stem) || svc.stem.includes(agt.stem)) {
+        graph.addEdge({ from: svc.id, to: agt.id, type: 'triggers_agent', metadata: { inferred: 'naming_convention' } });
+      }
+    }
+  }
 }
