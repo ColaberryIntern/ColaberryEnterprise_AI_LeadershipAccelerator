@@ -45,6 +45,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [syncText, setSyncText] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [resyncing, setResyncing] = useState(false);
   const [showSync, setShowSync] = useState(false);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
@@ -88,6 +89,21 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           <span className="text-muted" style={{ fontSize: 12 }}>{p.total_requirements} requirements</span>
         </div>
         <div className="d-flex align-items-center gap-2">
+          <button className="btn btn-sm" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10, fontWeight: 700, border: '1px solid #3b82f640' }}
+            disabled={resyncing}
+            onClick={async () => {
+              setResyncing(true);
+              try {
+                const r = await bpApi.resyncProcess(processId);
+                const rs = r.data?.resync;
+                const el = document.createElement('div');
+                el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px"><i class="bi bi-check-circle me-2"></i>Resynced: ${rs?.matched || 0} matched, ${rs?.partial || 0} partial, ${rs?.unmatched || 0} unmapped (${rs?.files_scanned || 0} files scanned)</div>`;
+                document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
+                load(); onUpdate();
+              } catch {} finally { setResyncing(false); }
+            }}>
+            {resyncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Syncing...</> : <><i className="bi bi-arrow-repeat me-1"></i>Resync</>}
+          </button>
           <span className="badge px-2 py-1" style={{ background: `${matColor}20`, color: matColor, fontSize: 10, fontWeight: 700 }}>L{mat.level} {mat.label}</span>
           <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', fontSize: 10, fontWeight: 700, border: '1px solid #6366f140' }} onClick={() => {
             const featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');

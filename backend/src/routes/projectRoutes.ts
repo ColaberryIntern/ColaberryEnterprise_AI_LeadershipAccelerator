@@ -1397,6 +1397,76 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Resync: re-match requirements to repo for a specific process ────────
+router.post('/api/portal/project/business-processes/:id/resync', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    // 1. Sync GitHub file tree
+    try {
+      const { syncFileTree } = await import('../services/githubService');
+      await syncFileTree(req.participant!.sub);
+    } catch { /* non-critical */ }
+
+    // 2. Re-run requirement matching for this process's requirements only
+    const { RequirementsMap } = await import('../models');
+    const { getConnection } = await import('../services/githubService');
+    const conn = await getConnection(req.participant!.sub);
+    const fileTree: string[] = [];
+    if (conn?.file_tree_json?.tree) {
+      for (const item of (conn.file_tree_json as any).tree) {
+        if (item.type === 'blob') fileTree.push(item.path);
+      }
+    }
+
+    const processReqs = await RequirementsMap.findAll({
+      where: { project_id: project.id, capability_id: req.params.id as string },
+    });
+
+    // Simple keyword matching per requirement
+    const stopwords = new Set(['the', 'a', 'an', 'is', 'are', 'and', 'or', 'for', 'to', 'in', 'of', 'on', 'with', 'that', 'this', 'be', 'as', 'by', 'at', 'it', 'must', 'should', 'will', 'can', 'all', 'each', 'from', 'have', 'has', 'not', 'but']);
+    let matched = 0, partial = 0, unmatched = 0;
+
+    for (const req2 of processReqs) {
+      const text = (req2.requirement_text || '').toLowerCase();
+      const keywords = text.split(/\W+/).filter(w => w.length > 2 && !stopwords.has(w));
+      if (keywords.length === 0) { unmatched++; continue; }
+
+      const matchedFiles: string[] = [];
+      for (const filePath of fileTree) {
+        const fileTokens = filePath.toLowerCase().split(/[\/\.\-_]+/);
+        const overlap = keywords.filter(k => fileTokens.some(t => t.includes(k) || k.includes(t)));
+        if (overlap.length >= Math.max(1, keywords.length * 0.2)) {
+          matchedFiles.push(filePath);
+        }
+      }
+
+      const score = matchedFiles.length > 0 ? Math.min(1, matchedFiles.length / (keywords.length * 0.3)) : 0;
+      req2.github_file_paths = matchedFiles.slice(0, 10);
+      req2.confidence_score = score;
+      req2.status = score >= 0.7 ? 'matched' : score >= 0.3 ? 'partial' : 'unmatched';
+      await req2.save();
+
+      if (score >= 0.7) matched++;
+      else if (score >= 0.3) partial++;
+      else unmatched++;
+    }
+
+    // 3. Run reconciliation (without validation report — just graph rebuild + recalculate)
+    const { reconcileAfterExecution } = await import('../intelligence/execution/reconciliationEngine');
+    const result = await reconcileAfterExecution(
+      req.participant!.sub, project.id, req.params.id as string, ''
+    );
+
+    res.json({
+      ...result,
+      resync: { total: processReqs.length, matched, partial, unmatched, files_scanned: fileTree.length },
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Sync Engine: paste Claude output → full reconciliation ────────
 router.post('/api/portal/project/business-processes/:id/sync', requireParticipant, async (req: Request, res: Response) => {
   try {
