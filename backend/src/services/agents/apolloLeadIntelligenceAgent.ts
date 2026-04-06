@@ -138,7 +138,7 @@ export async function runWeeklyLeadEnrollmentAgent(
     if (pendingCount < 200 && campaign.icpProfiles?.length > 0) {
       try {
         const discoveryResult = await discoverLeadsForCampaign(campaign.id, {
-          max_leads_per_profile: 50,
+          max_leads_per_profile: config.max_discovery_per_profile || 500,
           min_program_fit_score: minFitScore,
         });
         actions.push({
