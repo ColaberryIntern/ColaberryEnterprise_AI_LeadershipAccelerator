@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ArchitectureGraph from './system/ArchitectureGraph';
 import NodeDetailsPanel from './system/NodeDetailsPanel';
-import ProcessDatabaseGraph from './ProcessDatabaseGraph';
+import DatabaseERD from './system/DatabaseERD';
 import FlowVisualizer from './system/FlowVisualizer';
 
 interface Props {
@@ -99,7 +99,7 @@ export default function SystemIntelligencePanel({ links, usability, metrics, rep
 
           {/* Database ERD */}
           {tab === 'database' && (
-            <ProcessDatabaseGraph models={links.models || []} services={links.backend || []} repoUrl={repoUrl} />
+            <DatabaseERD models={links.models || []} repoUrl={repoUrl} />
           )}
         </div>
       </div>
