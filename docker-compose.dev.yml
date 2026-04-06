@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  # Reuse production DB — no separate database for dev
+  # The accelerator-db container from docker-compose.production.yml must be running
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: accelerator-dev-backend
+    restart: always
+    env_file: .env.dev
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@accelerator-db:5432/${DB_NAME:-accelerator_prod}
+      INTELLIGENCE_ENGINE_URL: http://accelerator-dev-intelligence:5000
+      NODE_OPTIONS: "--max-old-space-size=512"
+      APP_ENV: dev
+      ENABLE_EXPERIMENTAL_FEATURES: "true"
+      ENABLE_CONTEXT_GRAPH_V2: "true"
+      ENABLE_EXECUTION_ENGINE: "true"
+    networks:
+      - default
+      - prod_network
+    expose:
+      - "3002"
+    ports:
+      - "3002:3001"
+
+  intelligence:
+    build:
+      context: ./intelligence/ai_engine
+      dockerfile: Dockerfile
+    container_name: accelerator-dev-intelligence
+    restart: always
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@accelerator-db:5432/${DB_NAME:-accelerator_prod}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      FLASK_ENV: development
+    networks:
+      - default
+      - prod_network
+    expose:
+      - "5000"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile.dev
+    container_name: accelerator-dev-nginx
+    restart: always
+    ports:
+      - "9999:80"
+    depends_on:
+      - backend
+
+networks:
+  prod_network:
+    external: true
+    name: colaberry-enterprise-ai-leadership-accelerator_default

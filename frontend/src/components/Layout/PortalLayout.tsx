@@ -21,6 +21,11 @@ function PortalLayout() {
   return (
     <MentorContextProvider>
     <div className="min-vh-100" style={{ background: 'var(--color-bg-alt)' }}>
+      {process.env.REACT_APP_ENV === 'dev' && (
+        <div style={{ background: '#f59e0b', color: '#fff', textAlign: 'center', fontSize: 11, padding: '2px 0', fontWeight: 700, letterSpacing: 1 }}>
+          DEV MODE — Experimental Features Enabled
+        </div>
+      )}
       <nav className="navbar navbar-expand-lg bg-white border-bottom shadow-sm">
         <div className="container">
           <span className="navbar-brand fw-bold" style={{ color: 'var(--color-primary)' }}>
