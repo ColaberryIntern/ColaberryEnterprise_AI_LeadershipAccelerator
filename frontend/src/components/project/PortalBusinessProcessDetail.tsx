@@ -47,7 +47,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [syncResult, setSyncResult] = useState<any>(null);
   const [showSync, setShowSync] = useState(false);
 
-  useEffect(() => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); }, [processId]);
+  const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
+  useEffect(load, [processId]);
   if (!p) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
 
   const m = p.metrics || {};
