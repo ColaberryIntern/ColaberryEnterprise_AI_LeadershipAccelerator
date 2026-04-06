@@ -147,11 +147,12 @@ function AdminCampaignDetailPage() {
         fetch(`/api/admin/campaigns/${id}/leads?limit=1000`, { headers }),
       ]);
       const campData = await campRes.json();
-      const statsData = await statsRes.json();
-      const leadsData = await leadsRes.json();
+      const statsData = await statsRes.json().catch(() => ({ stats: null }));
+      const leadsData = await leadsRes.json().catch(() => ({ leads: [] }));
+      if (campData?.error) { showToast(campData.error, 'error'); return; }
       setCampaign(campData);
-      setStats(statsData.stats);
-      setLeads(leadsData.leads || []);
+      setStats(statsData?.stats || null);
+      setLeads(leadsData?.leads || []);
     } catch (err) {
       showToast('Failed to load campaign data.', 'error');
     } finally {
@@ -290,7 +291,7 @@ function AdminCampaignDetailPage() {
             <span className={`badge rounded-pill bg-${STATUS_COLORS[campaign.status] || 'secondary'}`}>
               {campaign.status}
             </span>
-            <span className="badge bg-light text-dark border">{campaign.type.replace(/_/g, ' ')}</span>
+            <span className="badge bg-light text-dark border">{(campaign.type || '').replace(/_/g, ' ')}</span>
             {isTestMode && (
               <span className="badge bg-danger">TEST MODE</span>
             )}
