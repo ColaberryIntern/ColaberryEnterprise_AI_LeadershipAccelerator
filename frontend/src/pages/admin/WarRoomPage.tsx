@@ -217,15 +217,33 @@ export default function WarRoomPage() {
                   {activities.map((a: any, i: number) => {
                     const evtType = a.event_type || a.type || 'event';
                     const detail = a.detail || a.subject || a.description || '-';
+                    const badgeLabel =
+                      evtType === 'demo_start' ? 'demo' :
+                      evtType === 'demo_complete' ? 'demo done' :
+                      evtType === 'pageview' ? 'visit' :
+                      evtType === 'cta_click' ? 'cta click' :
+                      evtType === 'form_start' ? 'form start' :
+                      evtType === 'form_submit' ? 'form submit' :
+                      evtType === 'booking_modal_opened' ? 'booking' :
+                      evtType === 'opened' ? 'opened' :
+                      evtType === 'clicked' ? 'clicked' :
+                      evtType === 'replied' ? 'replied' :
+                      evtType;
                     const badgeClass =
+                      evtType === 'demo_start' || evtType === 'demo_complete' ? 'text-white' :
+                      evtType === 'pageview' || evtType === 'opened' ? 'bg-info' :
+                      evtType === 'cta_click' || evtType === 'clicked' || evtType === 'form_start' ? 'bg-success' :
+                      evtType === 'booking_modal_opened' || evtType === 'form_submit' ? 'bg-danger' :
+                      evtType === 'replied' ? 'bg-warning text-dark' :
                       evtType.includes('email') || evtType.includes('sent') ? 'bg-primary' :
                       evtType.includes('voice') || evtType.includes('call') || evtType.includes('sms') ? 'bg-success' :
                       evtType.includes('enrollment') ? 'bg-warning text-dark' :
                       evtType.includes('status') || evtType.includes('score') ? 'bg-info' :
                       evtType.includes('failed') || evtType.includes('bounced') ? 'bg-danger' :
                       'bg-secondary';
-                    const srcType = a.lead_source_type || '';
+                    const srcType = a.source === 'visitor' ? 'visitor' : (a.lead_source_type || '');
                     const srcBadge =
+                      srcType === 'visitor' ? { label: 'Visitor', cls: 'text-white' } :
                       srcType === 'warm' ? { label: 'Marketing', cls: 'bg-primary' } :
                       srcType === 'cold' ? { label: 'Cold', cls: 'bg-warning text-dark' } :
                       srcType === 'alumni' ? { label: 'Alumni', cls: 'bg-success' } :
@@ -241,8 +259,8 @@ export default function WarRoomPage() {
                             {a.created_at ? formatTimeAgo(a.created_at) : '-'}
                           </td>
                           <td style={{ width: 90 }}>
-                            <span className={`badge ${badgeClass}`} style={{ fontSize: 9 }}>
-                              {evtType.replace(/_/g, ' ')}
+                            <span className={`badge ${badgeClass}`} style={{ fontSize: 9, ...(evtType === 'demo_start' || evtType === 'demo_complete' ? { background: '#8b5cf6' } : evtType === 'pageview' || srcType === 'visitor' ? {} : {}) }}>
+                              {badgeLabel.replace(/_/g, ' ')}
                             </span>
                           </td>
                           <td>
@@ -250,7 +268,7 @@ export default function WarRoomPage() {
                             <span className="text-muted">{detail.length > 60 ? detail.slice(0, 60) + '...' : detail}</span>
                           </td>
                           <td style={{ width: 80 }}>
-                            {srcBadge && <span className={`badge ${srcBadge.cls}`} style={{ fontSize: 8 }}>{srcBadge.label}</span>}
+                            {srcBadge && <span className={`badge ${srcBadge.cls}`} style={{ fontSize: 8, ...(srcType === 'visitor' ? { background: '#8b5cf6' } : {}) }}>{srcBadge.label}</span>}
                           </td>
                           <td style={{ width: 20, color: '#adb5bd', fontSize: 11 }}>
                             {isExpanded ? '\u25B2' : '\u25BC'}
