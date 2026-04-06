@@ -59,4 +59,4 @@ services:
 networks:
   prod_network:
     external: true
-    name: colaberry-enterprise-ai-leadership-accelerator_default
+    name: colaberry-accelerator_default
