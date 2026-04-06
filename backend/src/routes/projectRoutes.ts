@@ -1120,14 +1120,22 @@ function enrichCapability(cap: any) {
   if (q.reliability < 3) qualGaps.push({ text: 'Low reliability — add data models and error handling', key: 'Q-REL', gap_type: 'quality' });
   const allGaps = [...sysGaps, ...qualGaps, ...reqGaps];
 
-  // ── RECOMMENDATIONS (dependency-ordered) ──
-  const recs: Array<{ step: number; action: string; impact: string; dependency?: string }> = [];
-  let step = 1;
-  if (!hasBackend) recs.push({ step: step++, action: 'Build backend services and API routes', impact: '+50% readiness', dependency: 'None — foundation' });
-  if (modelFiles.length === 0) recs.push({ step: step++, action: 'Add database models', impact: '+20% reliability', dependency: 'Backend services' });
-  if (!hasAgents) recs.push({ step: step++, action: 'Add AI agent automation', impact: '+20% readiness, +30% automation', dependency: 'Backend services' });
-  if (!hasFrontend) recs.push({ step: step++, action: 'Create frontend UI components', impact: '+30% readiness, +UX exposure', dependency: 'Backend API' });
-  if (q.observability === 0) recs.push({ step: step++, action: 'Add monitoring and logging', impact: '+10% quality, enables L3', dependency: 'Backend services' });
+  // ── DYNAMIC EXECUTION PLAN (from nextBestActionEngine) ──
+  const { generateExecutionPlan } = require('../intelligence/nextBestActionEngine');
+  const allReqsFlat = features.flatMap((f: any) => f.requirements || []);
+  const systemState = {
+    hasBackend, hasFrontend, hasAgents,
+    hasModels: modelFiles.length > 0,
+    backendCount: backendFiles.length, frontendCount: frontendFiles.length,
+    agentCount: agentFiles.length, modelCount: modelFiles.length,
+    reqCoverage, readiness, qualityScore: qualityTotal,
+    maturityLevel: maturityLevel,
+    gapTypes: [...(hasBackend ? [] : ['system']), ...(q.observability === 0 ? ['quality'] : []), ...(allReqsFlat.some((r: any) => r.status === 'unmatched') ? ['requirement'] : [])],
+    unverifiedCount: allReqsFlat.filter((r: any) => r.status === 'matched').length,
+    verifiedCount: allReqsFlat.filter((r: any) => r.status === 'verified').length,
+    totalRequirements: totalR,
+  };
+  const executionPlan = generateExecutionPlan(systemState);
 
   const why_not: string[] = [];
   if (!hasBackend) why_not.push('No backend services or API routes found');
@@ -1146,7 +1154,7 @@ function enrichCapability(cap: any) {
     maturity: { level: maturityLevel, label: maturityLabel, next_level_requirements: nextReqs },
     gap_count: allGaps.length,
     gaps: allGaps,
-    recommendations: recs,
+    execution_plan: executionPlan,
     usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: hasBackend && reqCoverage > 50, why_not },
     implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: agentFiles, models: modelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),

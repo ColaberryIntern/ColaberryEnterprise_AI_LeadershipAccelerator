@@ -278,18 +278,13 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           )}
         </Section>
 
-        {/* 8: Execution Plan */}
+        {/* 8: Execution Plan (dynamic from backend) */}
         <Section num={8} title="Execution Plan">
           {(() => {
-            const steps = [
-              { key: 'backend_improvement', step: 1, label: 'Build Backend Services', impact: '+50% readiness', depends: 'None — Foundation', fixes: ['Backend Missing'], enables: ['API', 'UI', 'Agents'], icon: 'bi-gear', blocked: false },
-              { key: 'database_models', step: 2, label: 'Add Database Models', impact: '+20% reliability', depends: 'Backend', fixes: ['Data Layer Missing'], enables: ['Persistent storage'], icon: 'bi-database', blocked: u.backend === 'missing' },
-              { key: 'frontend_exposure', step: 3, label: 'Create Frontend UI', impact: '+30% readiness', depends: 'Backend API', fixes: ['UX Exposure'], enables: ['User interaction'], icon: 'bi-layout-wtf', blocked: u.backend === 'missing' },
-              { key: 'agent_enhancement', step: 4, label: 'Add AI Agent Automation', impact: '+20% automation', depends: 'Backend', fixes: ['Automation Gap'], enables: ['Autonomous operation'], icon: 'bi-cpu', blocked: u.backend === 'missing' },
-              { key: 'monitoring_gap', step: 5, label: 'Add Monitoring & Logging', impact: '+10% quality', depends: 'Backend', fixes: ['Observability'], enables: ['Error detection', 'Performance tracking'], icon: 'bi-graph-up', blocked: u.backend === 'missing' },
-            ];
-            const firstAvailable = steps.findIndex(s => !s.blocked);
-            return steps.map((s, i) => {
+            const steps = p.execution_plan || [];
+            if (steps.length === 0) return <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>No actions needed — system is fully built.</div>;
+            const firstAvailable = steps.findIndex((s: any) => !s.blocked);
+            return steps.map((s: any, i: number) => {
               const isNext = i === firstAvailable;
               return (
               <div key={s.key} className="mb-3 pb-3" style={{ borderBottom: i < steps.length - 1 ? '1px dashed var(--color-border)' : 'none', background: isNext ? '#eff6ff' : 'transparent', borderRadius: isNext ? 8 : 0, padding: isNext ? 12 : 0 }}>
@@ -303,16 +298,16 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     <div className="d-flex justify-content-between align-items-start">
                       <div>
                         <div className="fw-semibold" style={{ fontSize: 13, color: s.blocked ? '#9ca3af' : 'var(--color-primary)' }}>
-                          <i className={`bi ${s.icon} me-1`}></i>{s.label}
+                          {s.label}
                           <span className="badge ms-2" style={{ background: '#10b98120', color: '#10b981', fontSize: 9 }}>{s.impact}</span>
                         </div>
-                        <div className="text-muted" style={{ fontSize: 10 }}>Depends on: {s.depends}</div>
+                        <div className="text-muted" style={{ fontSize: 10 }}>Depends on: {s.depends_on}</div>
                       </div>
                       <div className="d-flex gap-1">
-                        <button className="btn btn-sm btn-outline-primary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.key === 'database_models' ? 'backend_improvement' : s.key, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
+                        <button className="btn btn-sm btn-outline-primary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.prompt_target, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
                           <i className="bi bi-play-fill me-1"></i>Run
                         </button>
-                        <button className="btn btn-sm btn-outline-secondary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.key === 'database_models' ? 'backend_improvement' : s.key, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
+                        <button className="btn btn-sm btn-outline-secondary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.prompt_target, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
                           <i className="bi bi-eye me-1"></i>Preview
                         </button>
                       </div>
@@ -321,7 +316,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                       <span style={{ color: '#10b981' }}><i className="bi bi-check-circle me-1"></i>Fixes: {s.fixes.join(', ')}</span>
                       <span style={{ color: '#3b82f6' }}><i className="bi bi-unlock me-1"></i>Enables: {s.enables.join(', ')}</span>
                     </div>
-                    {s.blocked && <div style={{ fontSize: 9, color: '#ef4444' }} className="mt-1"><i className="bi bi-lock me-1"></i>Blocked — complete step {s.step - 1} first</div>}
+                    {s.blocked && <div style={{ fontSize: 9, color: '#ef4444' }} className="mt-1"><i className="bi bi-lock me-1"></i>{s.block_reason || 'Blocked'}</div>}
                   </div>
                 </div>
               </div>
