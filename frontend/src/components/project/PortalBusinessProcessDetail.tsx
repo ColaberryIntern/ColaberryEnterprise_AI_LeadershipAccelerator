@@ -344,9 +344,36 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 <button className="btn btn-sm btn-outline-secondary" onClick={() => { setShowSync(false); setSyncText(''); setSyncResult(null); }}>Cancel</button>
               </div>
               {syncResult && (
-                <div className="mt-2 p-2" style={{ background: '#10b98110', borderRadius: 6, border: '1px solid #10b98130', fontSize: 11 }}>
-                  <i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>
-                  {syncResult.summary}
+                <div className="mt-2 p-2" style={{ borderRadius: 6, fontSize: 11, background: syncResult.verification?.verified ? '#10b98110' : '#f59e0b10', border: `1px solid ${syncResult.verification?.verified ? '#10b98130' : '#f59e0b30'}` }}>
+                  <div className="fw-medium mb-1">
+                    {syncResult.verification?.verified ? (
+                      <><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>Verified — all claims confirmed</>
+                    ) : (
+                      <><i className="bi bi-exclamation-triangle me-1" style={{ color: '#f59e0b' }}></i>Sync complete — {syncResult.verification?.discrepancies?.length || 0} discrepancies</>
+                    )}
+                  </div>
+                  <div className="d-flex gap-3 text-muted mb-1" style={{ fontSize: 10 }}>
+                    <span>Files verified: {syncResult.verification?.filesVerified || 0}</span>
+                    <span>Coverage: {syncResult.verification?.coverageScore || 0}%</span>
+                    <span>Reqs updated: {(syncResult.requirements?.verified || 0) + (syncResult.requirements?.auto_matched || 0)}</span>
+                  </div>
+                  {syncResult.discrepancies?.length > 0 && (
+                    <div className="mt-1">
+                      {syncResult.discrepancies.slice(0, 3).map((d: string, i: number) => (
+                        <div key={i} className="text-muted" style={{ fontSize: 9 }}><i className="bi bi-dot"></i>{d}</div>
+                      ))}
+                    </div>
+                  )}
+                  {syncResult.followUpNeeded && syncResult.followUpPrompt && (
+                    <button className="btn btn-sm btn-outline-warning mt-1" style={{ fontSize: 10 }} onClick={async () => {
+                      await navigator.clipboard.writeText(syncResult.followUpPrompt);
+                      const el = document.createElement('div');
+                      el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px">Follow-up prompt copied</div>';
+                      document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
+                    }}>
+                      <i className="bi bi-arrow-repeat me-1"></i>Copy Follow-Up Prompt
+                    </button>
+                  )}
                 </div>
               )}
             </div>
