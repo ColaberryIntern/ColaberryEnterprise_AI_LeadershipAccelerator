@@ -1051,7 +1051,21 @@ const NOISE_FILES_SET = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.pretti
 function enrichCapability(cap: any) {
   const features = cap.features || [];
   const allReqs = features.flatMap((f: any) => f.requirements || []);
-  const verified = allReqs.filter((r: any) => r.status === 'verified');
+  // Auto-promote matched → verified when matched to real implementation files with high confidence
+  const IMPL_PATTERNS = [/service/i, /route/i, /controller/i, /models?\//i, /\.tsx$/, /agent/i, /middleware/i, /component/i, /page/i];
+  for (const r of allReqs) {
+    if (r.status === 'matched' && r.confidence_score >= 0.7) {
+      const files = r.github_file_paths || [];
+      const realFiles = files.filter((f: string) => {
+        const name = f.split('/').pop() || '';
+        if (NOISE_FILES_SET.has(name)) return false;
+        if (/^\d{14}/.test(name)) return false;
+        return IMPL_PATTERNS.some(p => p.test(f));
+      });
+      if (realFiles.length > 0) r.status = 'auto_verified';
+    }
+  }
+  const verified = allReqs.filter((r: any) => r.status === 'verified' || r.status === 'auto_verified');
   const autoMatched = allReqs.filter((r: any) => r.status === 'matched');
   const matched = [...verified, ...autoMatched]; // combined for coverage calc
   const partial = allReqs.filter((r: any) => r.status === 'partial');
