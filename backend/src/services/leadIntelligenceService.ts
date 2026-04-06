@@ -166,12 +166,11 @@ export async function discoverLeadsForCampaign(
       for (const person of people) {
         totalEvaluated++;
 
-        // Skip people without email — can't enroll in email campaigns
-        if (!person.email) continue;
-
         // Dedup: skip if already a lead (by email)
-        const existingLead = await Lead.findOne({ where: { email: person.email.toLowerCase() } });
-        if (existingLead) continue;
+        if (person.email) {
+          const existingLead = await Lead.findOne({ where: { email: person.email.toLowerCase() } });
+          if (existingLead) continue;
+        }
 
         // Dedup: skip if already recommended (by apollo_person_id)
         if (person.id) {

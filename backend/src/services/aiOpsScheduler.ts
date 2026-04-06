@@ -113,7 +113,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runCoryStrategicCycle, label: 'Cory Brain strategic cycle' },
   { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
-  { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1', runner: runWeeklyLeadEnrollment, label: 'Weekly cold lead enrollment (Monday 9 AM CT)' },
+  { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1-5', runner: runWeeklyLeadEnrollment, label: 'Daily cold lead enrollment (Mon-Fri 9 AM CT, 20/day)' },
 
   // Admissions intelligence
   { agentName: 'AdmissionsVisitorActivity', hardcodedSchedule: '*/10 * * * *', runner: runAdmissionsVisitorActivity, label: 'Admissions visitor activity' },

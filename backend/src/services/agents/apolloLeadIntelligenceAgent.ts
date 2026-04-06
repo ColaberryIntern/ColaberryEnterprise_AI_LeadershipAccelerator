@@ -1,6 +1,9 @@
 import { Op } from 'sequelize';
 import { Campaign, ICPProfile, LeadRecommendation } from '../../models';
 import { discoverLeadsForCampaign, bulkApproveRecommendations } from '../leadIntelligenceService';
+import { searchApolloFromProfileBulk } from '../icpProfileService';
+import { importApolloResults } from '../apolloService';
+import { enrollLeadsInCampaign } from '../campaignService';
 import type { AgentAction, AgentExecutionResult } from './types';
 
 /**
@@ -96,7 +99,7 @@ export async function runWeeklyLeadEnrollmentAgent(
   const actions: AgentAction[] = [];
   const errors: string[] = [];
 
-  const maxEnrollment = config.max_weekly_enrollment || 300;
+  const maxEnrollment = config.max_weekly_enrollment || 20;
   const minFitScore = config.min_fit_score || 50;
 
   // Find the Phase 1 cold outbound campaign
@@ -180,15 +183,59 @@ export async function runWeeklyLeadEnrollmentAgent(
     });
 
     if (topRecommendations.length === 0) {
-      actions.push({
-        campaign_id: campaign.id,
-        action: 'no_eligible_leads',
-        reason: `No pending recommendations with fit score >= ${minFitScore}`,
-        confidence: 1.0,
-        before_state: null,
-        after_state: null,
-        result: 'skipped',
-      });
+      // Fallback: direct import path (same as campaignBuilderService)
+      // Search Apollo → enrich → import → enroll in one step
+      if (campaign.icpProfiles?.length > 0) {
+        try {
+          const profile = campaign.icpProfiles[0];
+          const people = await searchApolloFromProfileBulk(profile.id, maxEnrollment);
+          const importResult = await importApolloResults(people, {
+            campaign_id: campaign.id,
+            scoring_criteria: {
+              target_industries: profile.industries || [],
+              company_size_min: profile.company_size_min,
+              company_size_max: profile.company_size_max,
+            },
+          });
+
+          // Enroll newly imported leads
+          const newLeadIds = importResult.leads
+            .filter((l: any) => l._options?.isNewRecord !== false)
+            .map((l: any) => l.id);
+          let enrolled = 0;
+          if (newLeadIds.length > 0) {
+            const enrollResult = await enrollLeadsInCampaign(campaign.id, newLeadIds);
+            enrolled = enrollResult.enrolled || 0;
+          }
+
+          actions.push({
+            campaign_id: campaign.id,
+            action: 'direct_import_completed',
+            reason: `Direct import: ${importResult.imported} new leads imported, ${importResult.duplicates} duplicates skipped, ${enrolled} enrolled in campaign`,
+            confidence: 1.0,
+            before_state: { searched: people.length },
+            after_state: {
+              imported: importResult.imported,
+              duplicates: importResult.duplicates,
+              errors: importResult.errors,
+              enrolled,
+            },
+            result: importResult.imported > 0 ? 'success' : 'skipped',
+          });
+        } catch (err: any) {
+          errors.push(`Direct import failed: ${err.message}`);
+        }
+      } else {
+        actions.push({
+          campaign_id: campaign.id,
+          action: 'no_eligible_leads',
+          reason: `No pending recommendations and no ICP profiles for direct import`,
+          confidence: 1.0,
+          before_state: null,
+          after_state: null,
+          result: 'skipped',
+        });
+      }
     } else {
       // Bulk approve — null adminUserId triggers 'system-auto' fallback
       const ids = topRecommendations.map((r) => r.id);
