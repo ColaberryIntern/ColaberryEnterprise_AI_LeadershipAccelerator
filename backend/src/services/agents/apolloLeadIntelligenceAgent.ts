@@ -204,8 +204,8 @@ export async function runWeeklyLeadEnrollmentAgent(
             .map((l: any) => l.id);
           let enrolled = 0;
           if (newLeadIds.length > 0) {
-            const enrollResult = await enrollLeadsInCampaign(campaign.id, newLeadIds);
-            enrolled = enrollResult.enrolled || 0;
+            const enrollResults = await enrollLeadsInCampaign(campaign.id, newLeadIds);
+            enrolled = enrollResults.filter((r: any) => r.status === 'enrolled' || r.status === 'active').length;
           }
 
           actions.push({
