@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
-import ProcessVisualPanel from './ProcessVisualPanel';
+import SystemIntelligencePanel from './SystemIntelligencePanel';
 import PredictionModal from './PredictionModal';
 
 interface Props { processId: string; onClose: () => void; onUpdate: () => void; }
@@ -358,9 +358,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           <PredictionModal processId={processId} actionType={predictionAction.type} actionLabel={predictionAction.label} onClose={() => setPredictionAction(null)} />
         )}
         </div>
-        {/* Right: Visual Panel (30%) */}
+        {/* Right: System Intelligence Panel (30%) */}
         <div style={{ flex: '0 0 30%', minWidth: 280 }} className="d-none d-lg-block">
-          <ProcessVisualPanel links={links} usability={u} repoUrl={repoUrl} features={features} />
+          <SystemIntelligencePanel links={links} usability={u} metrics={m} repoUrl={repoUrl} />
         </div>
        </div>
       </div>
