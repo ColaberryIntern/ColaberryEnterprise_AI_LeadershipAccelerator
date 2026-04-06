@@ -190,26 +190,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           )}
         </Section>
 
-        {/* 8: Recommendations */}
-        <Section num={8} title="Recommendations" collapsible defaultOpen={recs.length > 0 && recs.length <= 5}>
-          {recs.length === 0 ? <div className="text-muted small">No recommendations — process is fully implemented.</div> : (
-            recs.map((r: any) => (
-              <div key={r.step} className="d-flex gap-2 mb-2 py-1" style={{ borderBottom: '1px solid var(--color-border)' }}>
-                <span className="badge" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10, width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', flexShrink: 0 }}>{r.step}</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>{r.action}</div>
-                  <div className="d-flex gap-2" style={{ fontSize: 9 }}>
-                    <span style={{ color: '#10b981' }}>{r.impact}</span>
-                    {r.dependency && <span className="text-muted">Depends on: {r.dependency}</span>}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </Section>
-
-        {/* 9: Execution Plan */}
-        <Section num={9} title="Execution Plan">
+        {/* 8: Execution Plan */}
+        <Section num={8} title="Execution Plan">
           {(() => {
             const steps = [
               { key: 'backend_improvement', step: 1, label: 'Build Backend Services', impact: '+50% readiness', depends: 'None — Foundation', fixes: ['Backend Missing'], enables: ['API', 'UI', 'Agents'], icon: 'bi-gear', blocked: false },
@@ -218,11 +200,15 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
               { key: 'agent_enhancement', step: 4, label: 'Add AI Agent Automation', impact: '+20% automation', depends: 'Backend', fixes: ['Automation Gap'], enables: ['Autonomous operation'], icon: 'bi-cpu', blocked: u.backend === 'missing' },
               { key: 'monitoring_gap', step: 5, label: 'Add Monitoring & Logging', impact: '+10% quality', depends: 'Backend', fixes: ['Observability'], enables: ['Error detection', 'Performance tracking'], icon: 'bi-graph-up', blocked: u.backend === 'missing' },
             ];
-            return steps.map((s, i) => (
-              <div key={s.key} className="mb-3 pb-3" style={{ borderBottom: i < steps.length - 1 ? '1px dashed var(--color-border)' : 'none' }}>
+            const firstAvailable = steps.findIndex(s => !s.blocked);
+            return steps.map((s, i) => {
+              const isNext = i === firstAvailable;
+              return (
+              <div key={s.key} className="mb-3 pb-3" style={{ borderBottom: i < steps.length - 1 ? '1px dashed var(--color-border)' : 'none', background: isNext ? '#eff6ff' : 'transparent', borderRadius: isNext ? 8 : 0, padding: isNext ? 12 : 0 }}>
+                {isNext && <div className="mb-2"><span className="badge" style={{ background: '#3b82f6', color: '#fff', fontSize: 9 }}><i className="bi bi-star-fill me-1"></i>Recommended Next Step</span></div>}
                 <div className="d-flex align-items-start gap-3">
                   <div className="text-center" style={{ flexShrink: 0 }}>
-                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 28, height: 28, background: s.blocked ? '#e2e8f0' : 'var(--color-primary)', color: s.blocked ? '#9ca3af' : '#fff', fontSize: 12 }}>{s.step}</span>
+                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 28, height: 28, background: s.blocked ? '#e2e8f0' : isNext ? '#3b82f6' : 'var(--color-primary)', color: s.blocked ? '#9ca3af' : '#fff', fontSize: 12 }}>{s.step}</span>
                     {i < steps.length - 1 && <div style={{ width: 2, height: 20, background: '#e2e8f0', margin: '4px auto' }}></div>}
                   </div>
                   <div className="flex-grow-1">
@@ -251,7 +237,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
                   </div>
                 </div>
               </div>
-            ));
+            );});
           })()}
         </Section>
 
