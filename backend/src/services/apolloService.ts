@@ -58,6 +58,7 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   if (params.person_locations?.length) body.person_locations = params.person_locations;
   if (params.q_keywords) body.q_keywords = params.q_keywords;
   if (params.has_direct_phone) body.contact_has_direct_phone = true;
+  if (params.contact_email_status?.length) body.contact_email_status = params.contact_email_status;
 
   console.log(`[Apollo] Search request body:`, JSON.stringify(body));
 
