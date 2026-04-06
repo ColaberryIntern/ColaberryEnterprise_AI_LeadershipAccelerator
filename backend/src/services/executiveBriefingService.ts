@@ -300,12 +300,12 @@ export async function generateExecutiveDigest(period: 'morning' | 'evening'): Pr
     const { events } = await getExecutiveEvents({ status: 'new', limit: 50 });
 
     // Build digest as a briefing data structure — always include campaign metrics
-    const lookback = period === 'weekly' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const lookback = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const campaignMetrics = await compileCampaignMetrics(lookback);
 
     const digestData: ExecutiveBriefingData = {
       generatedAt: new Date(),
-      type: period === 'weekly' ? 'weekly' : 'daily',
+      type: 'daily',
       digest: {
         period,
         executiveEvents: events.map((e: any) => ({
