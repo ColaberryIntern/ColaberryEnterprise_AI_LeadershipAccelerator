@@ -97,11 +97,16 @@ function UtilityCoopLandingPage() {
             <i className="bi bi-lightning-charge me-1" />Built for NRECA Member Cooperatives
           </span>
           <h1 className="fw-bold mb-3 text-white" style={{ fontSize: 'clamp(28px, 5vw, 48px)', lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
-            Get 10-15% More Work Done Without Adding Headcount
+            Are You Thinking About Using AI to Get 10-15% Daily Operational Efficiency?
           </h1>
-          <p className="mb-4" style={{ fontSize: 18, color: '#e2e8f0', maxWidth: 650, margin: '0 auto', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-            AI that cuts unnecessary truck rolls, optimizes trimming schedules, and tells your crews exactly where to go every morning.
+          <p className="mb-3" style={{ fontSize: 19, color: '#ffffff', maxWidth: 650, margin: '0 auto', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
+            You are at the right place. Here is how:
           </p>
+          <ul className="list-unstyled mb-4" style={{ fontSize: 17, color: '#e2e8f0', maxWidth: 500, margin: '0 auto', textAlign: 'left', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
+            <li className="mb-2"><i className="bi bi-check-circle-fill text-success me-2" />Reduce unnecessary truck rolls</li>
+            <li className="mb-2"><i className="bi bi-check-circle-fill text-success me-2" />Optimize trimming schedules</li>
+            <li className="mb-2"><i className="bi bi-check-circle-fill text-success me-2" />Optimized crew schedules and daily work plans</li>
+          </ul>
           <div className="d-flex flex-wrap justify-content-center gap-3">
             <a
               href="#demo"
@@ -326,9 +331,9 @@ function UtilityCoopLandingPage() {
                 </div>
                 <div className="card-body p-4">
                   <h4 className="fw-bold mb-2" style={{ fontSize: 20, color: 'var(--color-primary)' }}>Advisory & Custom Build</h4>
-                  <p className="text-muted mb-3" style={{ fontSize: 14 }}>We embed with your ops team and deliver a Crew Productivity Engine. Smarter vegetation scheduling, fewer truck rolls, more work per crew.</p>
+                  <p className="text-muted mb-3" style={{ fontSize: 14 }}>We embed with your ops team and deliver a Crew Productivity Engine powered by the <strong>AIXcelerator</strong> platform. Smarter vegetation scheduling, fewer truck rolls, more work per crew.</p>
                   <ul className="list-unstyled mb-0">
-                    {['Dedicated AI architects embedded with your ops team', 'Pre-built co-op field ops data structures', 'Crew routing, vegetation scheduling, daily work plans', 'Flex up/down with contracting support', 'Production system delivered in weeks'].map((item, i) => (
+                    {['Dedicated AI architects embedded with your ops team', 'AIXcelerator platform to augment delivery speed', 'Pre-built co-op field ops data structures', 'Crew routing, vegetation scheduling, daily work plans', 'Flex up/down with contracting support', 'Production system delivered in weeks'].map((item, i) => (
                       <li key={i} className="d-flex align-items-start gap-2 mb-2" style={{ fontSize: 13 }}>
                         <i className="bi bi-check-circle-fill flex-shrink-0" style={{ color: 'var(--color-primary-light)', marginTop: 2 }} />{item}
                       </li>
