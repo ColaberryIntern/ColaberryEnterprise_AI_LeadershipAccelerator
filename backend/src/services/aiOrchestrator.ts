@@ -45,6 +45,7 @@ import { runOpenclawSupervisorAgent } from './agents/openclaw/openclawSupervisor
 import { runOpenclawMarketSignalAgent } from './agents/openclaw/openclawMarketSignalAgent';
 import { runOpenclawConversationDetectionAgent } from './agents/openclaw/openclawConversationDetectionAgent';
 import { runEngagementMonitorAgent } from './agents/openclaw/openclawEngagementMonitorAgent';
+import { runResponseOrchestratorAgent } from './agents/openclaw/openclawResponseOrchestratorAgent';
 import { runOpenclawContentResponseAgent } from './agents/openclaw/openclawContentResponseAgent';
 import { runOpenclawBrowserWorkerAgent } from './agents/openclaw/openclawBrowserWorkerAgent';
 import { runOpenclawLearningOptimizationAgent } from './agents/openclaw/openclawLearningOptimizationAgent';
@@ -518,6 +519,10 @@ export async function runOpenclawConversationDetection(): Promise<AgentExecution
 
 export async function runOpenclawEngagementMonitor(): Promise<AgentExecutionResult | null> {
   return runAgent('OpenclawEngagementMonitorAgent', runEngagementMonitorAgent);
+}
+
+export async function runOpenclawResponseOrchestrator(): Promise<AgentExecutionResult | null> {
+  return runAgent('OpenclawResponseOrchestratorAgent', runResponseOrchestratorAgent);
 }
 
 export async function runOpenclawContentResponse(): Promise<AgentExecutionResult | null> {
