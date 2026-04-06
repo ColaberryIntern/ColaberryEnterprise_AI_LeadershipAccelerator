@@ -15,6 +15,7 @@ export interface ApolloSearchParams {
   per_page?: number;
   page?: number;
   has_direct_phone?: boolean;
+  contact_email_status?: string[];
 }
 
 export interface ApolloPersonResult {
