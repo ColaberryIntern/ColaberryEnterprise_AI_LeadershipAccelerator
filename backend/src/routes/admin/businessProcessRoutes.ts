@@ -106,15 +106,30 @@ router.get('/api/admin/graph/:projectId/:capabilityId', requireAdmin, async (req
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// Debug: view full project graph with priorities
+// Debug: view full project graph with priorities + execution data
 router.get('/api/admin/graph/:projectId', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { buildProjectGraph } = await import('../../intelligence/graph/graphBuilder');
-    const { getProcessPriority } = await import('../../intelligence/graph/graphQueryEngine');
+    const { buildProjectGraph, buildExecutionGraph } = await import('../../intelligence/graph/graphBuilder');
+    const { getProcessPriority, getExecutionStats, getFailingPaths, getSlowPaths, getUnusedComponents } = await import('../../intelligence/graph/graphQueryEngine');
     const graph = await buildProjectGraph(req.params.projectId as string);
+
+    // Level 3: Add behavioral edges from real execution data
+    const executionSummary = await buildExecutionGraph(graph);
+
     const priorities = getProcessPriority(graph);
+    const executionStats = getExecutionStats(graph);
     const graphJson = graph.toJSON();
-    res.json({ ...graphJson, priorities: Object.fromEntries(priorities) });
+    res.json({
+      ...graphJson,
+      priorities: Object.fromEntries(priorities),
+      execution: {
+        ...executionSummary,
+        stats: executionStats,
+        failing: getFailingPaths(graph).map(n => ({ id: n.id, label: n.label, failure_rate: n.metadata.failure_rate })),
+        slow: getSlowPaths(graph).map(n => ({ id: n.id, label: n.label, avg_ms: n.metadata.avg_duration_ms })),
+        unused: getUnusedComponents(graph).map(n => ({ id: n.id, label: n.label, type: n.type })),
+      },
+    });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

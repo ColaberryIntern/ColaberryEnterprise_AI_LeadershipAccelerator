@@ -292,3 +292,54 @@ export function getProcessFlow(graph: ContextGraph, processId: string): {
     broken_connections: broken,
   };
 }
+
+// ── Level 3: Behavioral Query Functions ──
+
+/** Nodes with execution_failed edges (>10% failure rate) */
+export function getFailingPaths(graph: ContextGraph): GraphNode[] {
+  const failEdges = graph.edges.filter(e => e.type === 'execution_failed');
+  return failEdges.map(e => graph.getNode(e.from)).filter((n): n is GraphNode => !!n);
+}
+
+/** Nodes with execution_slow edges (>500ms avg) */
+export function getSlowPaths(graph: ContextGraph): GraphNode[] {
+  const slowEdges = graph.edges.filter(e => e.type === 'execution_slow');
+  return slowEdges.map(e => graph.getNode(e.from)).filter((n): n is GraphNode => !!n);
+}
+
+/** Service/agent nodes with zero execution data */
+export function getUnusedComponents(graph: ContextGraph): GraphNode[] {
+  return [...graph.nodes.values()].filter(n =>
+    (n.type === 'service' || n.type === 'agent') && !n.metadata.execution_count
+  );
+}
+
+/** Aggregate execution stats from all nodes with execution data */
+export function getExecutionStats(graph: ContextGraph): {
+  totalRuns: number; successRate: number; failureRate: number; avgDuration: number;
+  activeAgents: number; failingAgents: number; slowAgents: number;
+} {
+  let totalRuns = 0, totalSuccess = 0, totalFail = 0, totalDur = 0, durCount = 0;
+  let activeAgents = 0, failingAgents = 0, slowAgents = 0;
+
+  for (const node of graph.nodes.values()) {
+    if (node.metadata.execution_count) {
+      const runs = node.metadata.execution_count;
+      totalRuns += runs;
+      totalSuccess += Math.round(runs * (node.metadata.success_rate || 0) / 100);
+      totalFail += Math.round(runs * (node.metadata.failure_rate || 0) / 100);
+      if (node.metadata.avg_duration_ms) { totalDur += node.metadata.avg_duration_ms * runs; durCount += runs; }
+      activeAgents++;
+      if ((node.metadata.failure_rate || 0) > 10) failingAgents++;
+      if ((node.metadata.avg_duration_ms || 0) > 500) slowAgents++;
+    }
+  }
+
+  return {
+    totalRuns,
+    successRate: totalRuns > 0 ? Math.round((totalSuccess / totalRuns) * 100) : 0,
+    failureRate: totalRuns > 0 ? Math.round((totalFail / totalRuns) * 100) : 0,
+    avgDuration: durCount > 0 ? Math.round(totalDur / durCount) : 0,
+    activeAgents, failingAgents, slowAgents,
+  };
+}

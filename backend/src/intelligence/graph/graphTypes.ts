@@ -4,7 +4,7 @@
  */
 
 export type NodeType = 'process' | 'feature' | 'requirement' | 'file' | 'service' | 'api_route' | 'db_model' | 'agent' | 'gap';
-export type EdgeType = 'contains' | 'implements' | 'matched_to' | 'depends_on' | 'calls' | 'writes_to' | 'reads_from' | 'missing' | 'verified' | 'enables' | 'defines_api' | 'calls_service' | 'uses_model' | 'triggers_agent' | 'imports' | 'missing_connection';
+export type EdgeType = 'contains' | 'implements' | 'matched_to' | 'depends_on' | 'calls' | 'writes_to' | 'reads_from' | 'missing' | 'verified' | 'enables' | 'defines_api' | 'calls_service' | 'uses_model' | 'triggers_agent' | 'imports' | 'missing_connection' | 'executed_calls' | 'execution_success' | 'execution_failed' | 'execution_slow';
 export type NodeStatus = 'active' | 'partial' | 'missing' | 'verified' | 'unverified';
 
 export interface GraphNode {

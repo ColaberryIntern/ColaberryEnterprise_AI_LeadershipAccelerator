@@ -1,6 +1,8 @@
 /**
  * Context Graph Builder
- * Builds graph from existing system data: Capability → Feature → Requirement → Files
+ * L1: Structure (process→feature→requirement→file)
+ * L2: Relations (route→service→model→agent)
+ * L3: Behavior (execution data from real agent activity logs)
  */
 import { ContextGraph, GraphNode, NodeStatus } from './graphTypes';
 import { getCapabilityHierarchy } from '../../services/projectScopeService';
@@ -206,5 +208,90 @@ function addRelationalEdges(graph: ContextGraph): void {
         graph.addEdge({ from: svc.id, to: agt.id, type: 'triggers_agent', metadata: { inferred: 'naming_convention' } });
       }
     }
+  }
+}
+
+/**
+ * Level 3: Add behavioral edges from real execution data (AiAgentActivityLog).
+ * Enriches agent nodes with run counts, success rates, and creates execution edges.
+ */
+export async function buildExecutionGraph(graph: ContextGraph): Promise<{
+  totalRuns: number; successRate: number; failureRate: number; avgDuration: number; activeAgents: number;
+}> {
+  try {
+    const { sequelize } = await import('../../config/database');
+
+    // Aggregate last 7 days of execution data per agent
+    const [agentStats]: any[] = await sequelize.query(`
+      SELECT l.agent_id, a.agent_name,
+        COUNT(*) as total_runs,
+        COUNT(*) FILTER (WHERE l.result = 'success') as successes,
+        COUNT(*) FILTER (WHERE l.result = 'failed') as failures,
+        ROUND(AVG(l.duration_ms)::numeric, 0) as avg_ms,
+        MAX(l.created_at) as last_run
+      FROM ai_agent_activity_logs l
+      JOIN ai_agents a ON a.id = l.agent_id
+      WHERE l.created_at > NOW() - INTERVAL '7 days'
+      GROUP BY l.agent_id, a.agent_name
+      ORDER BY total_runs DESC
+      LIMIT 50
+    `);
+
+    let totalRuns = 0, totalSuccesses = 0, totalFailures = 0, totalDuration = 0, durationCount = 0;
+
+    for (const stat of agentStats) {
+      const agentName = stat.agent_name;
+      const runs = parseInt(stat.total_runs) || 0;
+      const successes = parseInt(stat.successes) || 0;
+      const failures = parseInt(stat.failures) || 0;
+      const avgMs = parseInt(stat.avg_ms) || 0;
+      const successRate = runs > 0 ? successes / runs : 0;
+      const failureRate = runs > 0 ? failures / runs : 0;
+
+      totalRuns += runs;
+      totalSuccesses += successes;
+      totalFailures += failures;
+      if (avgMs > 0) { totalDuration += avgMs * runs; durationCount += runs; }
+
+      // Find matching agent node in graph
+      const agentNode = [...graph.nodes.values()].find(n => n.type === 'agent' && extractStem(n.label) === extractStem(agentName));
+
+      if (agentNode) {
+        // Enrich node metadata with execution data
+        agentNode.metadata.execution_count = runs;
+        agentNode.metadata.success_rate = Math.round(successRate * 100);
+        agentNode.metadata.failure_rate = Math.round(failureRate * 100);
+        agentNode.metadata.avg_duration_ms = avgMs;
+        agentNode.metadata.last_executed = stat.last_run;
+
+        // Add behavioral edges
+        if (failureRate > 0.1) {
+          graph.addEdge({ from: agentNode.id, to: agentNode.id, type: 'execution_failed', metadata: { failure_rate: failureRate, failures, total: runs } });
+        }
+        if (avgMs > 500) {
+          graph.addEdge({ from: agentNode.id, to: agentNode.id, type: 'execution_slow', metadata: { avg_ms: avgMs } });
+        }
+        if (successRate > 0.9 && runs > 10) {
+          graph.addEdge({ from: agentNode.id, to: agentNode.id, type: 'execution_success', metadata: { success_rate: successRate, runs } });
+        }
+      } else {
+        // Agent exists in DB but not in the structural graph — add as standalone node
+        const nodeId = `agent:exec:${agentName}`;
+        graph.addNode({ id: nodeId, type: 'agent', label: agentName, status: successRate > 0.9 ? 'active' : 'partial', metadata: {
+          execution_count: runs, success_rate: Math.round(successRate * 100), failure_rate: Math.round(failureRate * 100),
+          avg_duration_ms: avgMs, last_executed: stat.last_run, source: 'execution_data',
+        }});
+      }
+    }
+
+    return {
+      totalRuns,
+      successRate: totalRuns > 0 ? Math.round((totalSuccesses / totalRuns) * 100) : 0,
+      failureRate: totalRuns > 0 ? Math.round((totalFailures / totalRuns) * 100) : 0,
+      avgDuration: durationCount > 0 ? Math.round(totalDuration / durationCount) : 0,
+      activeAgents: agentStats.length,
+    };
+  } catch {
+    return { totalRuns: 0, successRate: 0, failureRate: 0, avgDuration: 0, activeAgents: 0 };
   }
 }
