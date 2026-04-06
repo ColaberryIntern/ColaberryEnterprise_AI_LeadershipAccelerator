@@ -208,30 +208,51 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           )}
         </Section>
 
-        {/* 9: Execution Actions */}
-        <Section num={9} title="Execution Actions">
-          <p className="text-muted small mb-2">Click an action to see its full impact analysis, risk assessment, and Claude Code prompt.</p>
-          <div className="row g-2">
-            {PROMPT_TARGETS.map(t => {
-              const impacts: Record<string, string> = {
-                backend_improvement: '+50% readiness · Foundation',
-                frontend_exposure: '+30% readiness · User-facing',
-                agent_enhancement: '+20% readiness · Automation',
-              };
-              return (
-                <div key={t.key} className="col-md-4">
-                  <div className="card border-0 shadow-sm h-100" style={{ cursor: 'pointer', border: '1px solid var(--color-border)' }}
-                    onClick={() => setPredictionAction({ type: t.key, label: t.label })}>
-                    <div className="card-body p-2 text-center">
-                      <i className={`bi ${t.icon} d-block mb-1`} style={{ fontSize: 20, color: 'var(--color-primary)' }}></i>
-                      <div className="fw-semibold" style={{ fontSize: 12 }}>{t.label}</div>
-                      <div className="text-muted" style={{ fontSize: 9 }}>{impacts[t.key] || 'Improve system'}</div>
+        {/* 9: Execution Plan */}
+        <Section num={9} title="Execution Plan">
+          {(() => {
+            const steps = [
+              { key: 'backend_improvement', step: 1, label: 'Build Backend Services', impact: '+50% readiness', depends: 'None — Foundation', fixes: ['Backend Missing'], enables: ['API', 'UI', 'Agents'], icon: 'bi-gear', blocked: false },
+              { key: 'database_models', step: 2, label: 'Add Database Models', impact: '+20% reliability', depends: 'Backend', fixes: ['Data Layer Missing'], enables: ['Persistent storage'], icon: 'bi-database', blocked: u.backend === 'missing' },
+              { key: 'frontend_exposure', step: 3, label: 'Create Frontend UI', impact: '+30% readiness', depends: 'Backend API', fixes: ['UX Exposure'], enables: ['User interaction'], icon: 'bi-layout-wtf', blocked: u.backend === 'missing' },
+              { key: 'agent_enhancement', step: 4, label: 'Add AI Agent Automation', impact: '+20% automation', depends: 'Backend', fixes: ['Automation Gap'], enables: ['Autonomous operation'], icon: 'bi-cpu', blocked: u.backend === 'missing' },
+              { key: 'monitoring_gap', step: 5, label: 'Add Monitoring & Logging', impact: '+10% quality', depends: 'Backend', fixes: ['Observability'], enables: ['Error detection', 'Performance tracking'], icon: 'bi-graph-up', blocked: u.backend === 'missing' },
+            ];
+            return steps.map((s, i) => (
+              <div key={s.key} className="mb-3 pb-3" style={{ borderBottom: i < steps.length - 1 ? '1px dashed var(--color-border)' : 'none' }}>
+                <div className="d-flex align-items-start gap-3">
+                  <div className="text-center" style={{ flexShrink: 0 }}>
+                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 28, height: 28, background: s.blocked ? '#e2e8f0' : 'var(--color-primary)', color: s.blocked ? '#9ca3af' : '#fff', fontSize: 12 }}>{s.step}</span>
+                    {i < steps.length - 1 && <div style={{ width: 2, height: 20, background: '#e2e8f0', margin: '4px auto' }}></div>}
+                  </div>
+                  <div className="flex-grow-1">
+                    <div className="d-flex justify-content-between align-items-start">
+                      <div>
+                        <div className="fw-semibold" style={{ fontSize: 13, color: s.blocked ? '#9ca3af' : 'var(--color-primary)' }}>
+                          <i className={`bi ${s.icon} me-1`}></i>{s.label}
+                          <span className="badge ms-2" style={{ background: '#10b98120', color: '#10b981', fontSize: 9 }}>{s.impact}</span>
+                        </div>
+                        <div className="text-muted" style={{ fontSize: 10 }}>Depends on: {s.depends}</div>
+                      </div>
+                      <div className="d-flex gap-1">
+                        <button className="btn btn-sm btn-outline-primary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.key === 'database_models' ? 'backend_improvement' : s.key, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
+                          <i className="bi bi-play-fill me-1"></i>Run
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.key === 'database_models' ? 'backend_improvement' : s.key, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
+                          <i className="bi bi-eye me-1"></i>Preview
+                        </button>
+                      </div>
                     </div>
+                    <div className="d-flex gap-3 mt-1" style={{ fontSize: 10 }}>
+                      <span style={{ color: '#10b981' }}><i className="bi bi-check-circle me-1"></i>Fixes: {s.fixes.join(', ')}</span>
+                      <span style={{ color: '#3b82f6' }}><i className="bi bi-unlock me-1"></i>Enables: {s.enables.join(', ')}</span>
+                    </div>
+                    {s.blocked && <div style={{ fontSize: 9, color: '#ef4444' }} className="mt-1"><i className="bi bi-lock me-1"></i>Blocked — complete step {s.step - 1} first</div>}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            ));
+          })()}
         </Section>
 
         {/* Prediction Modal */}
