@@ -1438,20 +1438,20 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
 
     for (const req2 of processReqs) {
       const text = (req2.requirement_text || '').toLowerCase();
-      const keywords = text.split(/\W+/).filter(w => w.length > 3 && !stopwords.has(w));
+      const keywords = text.split(/\W+/).filter(w => w.length > 2 && !stopwords.has(w));
       if (keywords.length === 0) { req2.status = 'unmatched'; req2.github_file_paths = []; req2.confidence_score = 0; await req2.save(); unmatched++; continue; }
 
       const matchedFiles: string[] = [];
       for (const filePath of implFileTree) {
         const fileTokens = filePath.toLowerCase().split(/[\/\.\-_]+/).filter(t => t.length > 2);
-        // Require at least 40% keyword overlap (up from 20%)
-        const overlap = keywords.filter(k => fileTokens.some(t => t === k || (t.length > 4 && k.length > 4 && (t.includes(k) || k.includes(t)))));
-        if (overlap.length >= Math.max(2, keywords.length * 0.4)) {
+        // Require 30% keyword overlap — balanced between false positives and false negatives
+        const overlap = keywords.filter(k => fileTokens.some(t => t === k || (t.length > 3 && k.length > 3 && (t.includes(k) || k.includes(t)))));
+        if (overlap.length >= Math.max(2, keywords.length * 0.3)) {
           matchedFiles.push(filePath);
         }
       }
 
-      const score = matchedFiles.length > 0 ? Math.min(1, matchedFiles.length / Math.max(3, keywords.length * 0.5)) : 0;
+      const score = matchedFiles.length > 0 ? Math.min(1, matchedFiles.length / Math.max(2, keywords.length * 0.4)) : 0;
       req2.github_file_paths = matchedFiles.slice(0, 10);
       req2.confidence_score = score;
       req2.status = score >= 0.7 ? 'matched' : score >= 0.3 ? 'partial' : 'unmatched';
