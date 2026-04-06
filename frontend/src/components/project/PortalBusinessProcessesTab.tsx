@@ -80,7 +80,12 @@ export default function PortalBusinessProcessesTab() {
                 onClick={() => setSelected(isSelected ? null : p.id)}>
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
-                    <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: 'var(--color-primary)' }}>{p.name}</h6>
+                    <div className="d-flex align-items-center gap-2">
+                      {p.priority_rank && (
+                        <span className="badge" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10, fontWeight: 700, minWidth: 22, textAlign: 'center' }} title={p.priority_reason || ''}>#{p.priority_rank}</span>
+                      )}
+                      <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: 'var(--color-primary)' }}>{p.name}</h6>
+                    </div>
                     <div className="d-flex align-items-center gap-1">
                       <span className="badge" style={{ background: `${matColor}20`, color: matColor, fontSize: 8, fontWeight: 700 }}>L{mat.level}</span>
                       <span className="badge" style={{ background: usable ? '#10b98120' : '#ef444420', color: usable ? '#10b981' : '#ef4444', fontSize: 9 }}>

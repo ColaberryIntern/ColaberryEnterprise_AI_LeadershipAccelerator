@@ -1198,6 +1198,31 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     const { getCapabilityHierarchy } = await import('../services/projectScopeService');
     const hierarchy = await getCapabilityHierarchy(project.id);
     const enriched = hierarchy.map(enrichCapability);
+
+    // Graph-based prioritization
+    try {
+      const { buildProjectGraph } = await import('../intelligence/graph/graphBuilder');
+      const { getProcessPriority } = await import('../intelligence/graph/graphQueryEngine');
+      const graph = await buildProjectGraph(project.id);
+      const priorities = getProcessPriority(graph);
+      // Sort by priority score (highest first)
+      enriched.sort((a: any, b: any) => {
+        const pa = priorities.get(`proc:${a.id}`)?.score || 0;
+        const pb = priorities.get(`proc:${b.id}`)?.score || 0;
+        return pb - pa;
+      });
+      // Add rank + reason
+      enriched.forEach((cap: any, i: number) => {
+        const p = priorities.get(`proc:${cap.id}`);
+        cap.priority_rank = i + 1;
+        cap.priority_reason = p?.reason || 'Standard priority';
+        cap.priority_score = p?.score || 0;
+      });
+    } catch (graphErr) {
+      // Graph is optional — fallback to unsorted
+      enriched.forEach((cap: any, i: number) => { cap.priority_rank = i + 1; cap.priority_reason = 'Default order'; cap.priority_score = 0; });
+    }
+
     res.json(enriched);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -1212,6 +1237,16 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const enriched = enrichCapability(cap);
+
+    // Try graph-driven execution plan
+    try {
+      const { buildProcessGraph } = await import('../intelligence/graph/graphBuilder');
+      const { getNextBestActions } = await import('../intelligence/graph/graphQueryEngine');
+      const graph = await buildProcessGraph(project.id, req.params.id as string);
+      const graphActions = getNextBestActions(graph, `proc:${req.params.id as string}`);
+      if (graphActions.length > 0) enriched.execution_plan = graphActions;
+    } catch { /* fallback to heuristic plan already in enriched */ }
+
     // Add BPOS fields from Capability model
     const { Capability } = await import('../models');
     const capModel = await Capability.findByPk(req.params.id as string);

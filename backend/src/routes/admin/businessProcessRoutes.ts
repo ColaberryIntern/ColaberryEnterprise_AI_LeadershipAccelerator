@@ -96,4 +96,26 @@ router.post('/api/admin/business-processes/optimize', requireAdmin, async (_req:
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Debug: view context graph for a process
+router.get('/api/admin/graph/:projectId/:capabilityId', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { buildProcessGraph } = await import('../../intelligence/graph/graphBuilder');
+    const { getProcessPriority } = await import('../../intelligence/graph/graphQueryEngine');
+    const graph = await buildProcessGraph(req.params.projectId as string, req.params.capabilityId as string);
+    res.json(graph.toJSON());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Debug: view full project graph with priorities
+router.get('/api/admin/graph/:projectId', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { buildProjectGraph } = await import('../../intelligence/graph/graphBuilder');
+    const { getProcessPriority } = await import('../../intelligence/graph/graphQueryEngine');
+    const graph = await buildProjectGraph(req.params.projectId as string);
+    const priorities = getProcessPriority(graph);
+    const graphJson = graph.toJSON();
+    res.json({ ...graphJson, priorities: Object.fromEntries(priorities) });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;
