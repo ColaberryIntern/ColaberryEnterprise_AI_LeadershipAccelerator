@@ -29,9 +29,13 @@ export default function PortalBusinessProcessesTab() {
     </div>
   );
 
+  const [reclassifying, setReclassifying] = useState(false);
+
   const totalReqs = processes.reduce((s: number, p: any) => s + (p.total_requirements || 0), 0);
   const matchedReqs = processes.reduce((s: number, p: any) => s + (p.matched_requirements || 0), 0);
   const overallPct = totalReqs > 0 ? Math.round((matchedReqs / totalReqs) * 100) : 0;
+  const uncatProcess = processes.find((p: any) => (p.name || '').toLowerCase().includes('uncategorized'));
+  const uncatCount = uncatProcess?.total_requirements || 0;
 
   return (
     <div>
@@ -48,9 +52,34 @@ export default function PortalBusinessProcessesTab() {
       </div>
 
       {/* Overall progress bar */}
-      <div className="progress mb-4" style={{ height: 8 }}>
+      <div className="progress mb-3" style={{ height: 8 }}>
         <div className="progress-bar" style={{ width: `${overallPct}%`, background: completionColor(overallPct) }} />
       </div>
+
+      {/* Reclassification banner */}
+      {uncatCount > 10 && (
+        <div className="d-flex align-items-center justify-content-between p-2 mb-3" style={{ background: '#f59e0b10', border: '1px solid #f59e0b30', borderRadius: 8 }}>
+          <div>
+            <span className="fw-medium" style={{ fontSize: 12, color: '#92400e' }}>
+              <i className="bi bi-exclamation-triangle me-1"></i>{uncatCount} requirements need classification
+            </span>
+            <div className="text-muted" style={{ fontSize: 10 }}>Redistribute uncategorized requirements to existing or new business processes</div>
+          </div>
+          <button className="btn btn-sm btn-warning" disabled={reclassifying} onClick={async () => {
+            setReclassifying(true);
+            try {
+              const r = await bpApi.reclassifyRequirements();
+              const d = r.data;
+              const el = document.createElement('div');
+              el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px"><i class="bi bi-check-circle me-2"></i>Reclassified: ${d.matched} matched to existing, ${d.clustered} clustered into ${d.new_processes?.length || 0} new processes, ${d.remaining} remaining</div>`;
+              document.body.appendChild(el); setTimeout(() => el.remove(), 5000);
+              load();
+            } catch {} finally { setReclassifying(false); }
+          }}>
+            {reclassifying ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Classifying...</> : <><i className="bi bi-arrow-repeat me-1"></i>Reclassify Now</>}
+          </button>
+        </div>
+      )}
 
       {/* Detail panel appears here — above the card grid */}
       {selected && (

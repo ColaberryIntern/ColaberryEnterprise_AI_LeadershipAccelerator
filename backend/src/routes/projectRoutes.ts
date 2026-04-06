@@ -1489,4 +1489,16 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Reclassify: redistribute uncategorized requirements ────────
+router.post('/api/portal/project/business-processes/reclassify', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { groupRequirements } = await import('../intelligence/requirements/requirementGrouper');
+    const result = await groupRequirements(project.id);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;
