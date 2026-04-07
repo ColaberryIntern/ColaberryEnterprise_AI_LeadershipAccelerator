@@ -144,11 +144,6 @@ function WarRoomTab() {
         </div>
       )}
 
-      {/* AI Workstation */}
-      <div className="mb-4">
-        <WorkstationLauncher />
-      </div>
-
       {/* Header Stats */}
       <div className="row g-3 mb-4">
         <div className="col-md-3">
