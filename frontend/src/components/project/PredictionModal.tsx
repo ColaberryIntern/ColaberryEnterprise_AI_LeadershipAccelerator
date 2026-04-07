@@ -206,7 +206,7 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
           {/* Footer */}
           <div className="modal-footer">
             <button className="btn btn-outline-secondary btn-sm" onClick={onClose}>Cancel</button>
-            <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', border: '1px solid #6366f140', fontWeight: 600 }} onClick={() => {
+            <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', border: '1px solid #6366f140', fontWeight: 600 }} onClick={async () => {
               const p = prediction || {};
               const proc = processData || {};
               const featSummary = (proc.features || []).slice(0, 5).map((f: any) => `- ${f.name}: ${f.description || ''}`).join('\n');
@@ -279,8 +279,12 @@ RULES:
 
 START by greeting the learner, briefly summarizing the project, then explaining which business process and step they're about to learn.`;
 
-              navigator.clipboard.writeText(learnPrompt);
-              window.open('https://chat.openai.com', '_blank');
+              // Clipboard fallback for HTTP (dev)
+              try { await navigator.clipboard.writeText(learnPrompt); } catch {
+                const ta = document.createElement('textarea'); ta.value = learnPrompt; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+                document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+              }
+              window.open('https://chatgpt.com', '_blank');
               const el = document.createElement('div');
               el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px"><i class="bi bi-mortarboard me-2"></i>Learn prompt copied — paste in ChatGPT</div>';
               document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
