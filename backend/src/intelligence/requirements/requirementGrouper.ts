@@ -1,12 +1,21 @@
 /**
  * Requirement Grouping + Reclassification Engine
- * Redistributes uncategorized requirements to existing or new processes.
- * Two-pass: 1) match to existing processes, 2) cluster remaining into new ones.
+ * Redistributes uncategorized requirements using:
+ * Pass 1: Keyword match to existing processes (aggressive)
+ * Pass 2: LLM clustering for remainder (no "Miscellaneous" allowed)
+ * Pass 3: Final sweep — assign stragglers to closest match
  */
+import OpenAI from 'openai';
 import Capability from '../../models/Capability';
 import Feature from '../../models/Feature';
 import { RequirementsMap } from '../../models';
 import { Op } from 'sequelize';
+
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return _openai;
+}
 
 const STOPWORDS = new Set([
   'the', 'a', 'an', 'is', 'are', 'and', 'or', 'for', 'to', 'in', 'of', 'on', 'with',
@@ -29,7 +38,7 @@ function scoreSimilarity(reqKeywords: string[], processKeywords: string[]): numb
   if (reqKeywords.length === 0 || processKeywords.length === 0) return 0;
   const processSet = new Set(processKeywords);
   const overlap = reqKeywords.filter(k => processSet.has(k) || [...processSet].some(pk => (pk.length > 4 && k.length > 4 && (pk.includes(k) || k.includes(pk)))));
-  return overlap.length / Math.max(3, reqKeywords.length);
+  return overlap.length / Math.max(2, reqKeywords.length);
 }
 
 export interface GroupingResult {
@@ -40,27 +49,31 @@ export interface GroupingResult {
   details: Array<{ req_key: string; action: string; target: string; confidence: number }>;
 }
 
-/**
- * Main grouping function — redistributes uncategorized requirements.
- */
 export async function groupRequirements(projectId: string): Promise<GroupingResult> {
   const result: GroupingResult = { matched: 0, clustered: 0, remaining: 0, new_processes: [], details: [] };
 
-  // Find the uncategorized capability
-  const uncatCap = await Capability.findOne({
-    where: { project_id: projectId, name: { [Op.like]: '%ncategorized%' } },
+  // Find uncategorized + auto:miscellaneous capabilities
+  const uncatCaps = await Capability.findAll({
+    where: {
+      project_id: projectId,
+      [Op.or]: [
+        { name: { [Op.like]: '%ncategorized%' } },
+        { name: { [Op.like]: '%iscellaneous%' } },
+      ],
+    },
   });
-  if (!uncatCap) return result;
+  if (uncatCaps.length === 0) return result;
 
-  // Load uncategorized requirements
+  // Load all uncategorized requirements
+  const uncatIds = uncatCaps.map(c => c.id);
   const uncatReqs = await RequirementsMap.findAll({
-    where: { project_id: projectId, capability_id: uncatCap.id },
+    where: { project_id: projectId, capability_id: { [Op.in]: uncatIds } },
   });
   if (uncatReqs.length === 0) return result;
 
-  // Load all other processes with their keywords
+  // Load real processes
   const otherCaps = await Capability.findAll({
-    where: { project_id: projectId, id: { [Op.ne]: uncatCap.id } },
+    where: { project_id: projectId, id: { [Op.notIn]: uncatIds } },
   });
 
   const processProfiles = otherCaps.map(cap => ({
@@ -69,15 +82,15 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
     keywords: extractKeywords(`${cap.name} ${cap.description || ''}`),
   }));
 
-  // Also load features for each process (for assignment)
-  const featureMap = new Map<string, string>(); // capability_id → first feature_id
+  // Feature map for assignment
+  const featureMap = new Map<string, string>();
   for (const cap of otherCaps) {
     const feat = await Feature.findOne({ where: { capability_id: cap.id }, order: [['sort_order', 'ASC']] });
     if (feat) featureMap.set(cap.id, feat.id);
   }
 
-  // ── PASS 1: Match to existing processes ──
-  const unmatched: typeof uncatReqs = [];
+  // ── PASS 1: Aggressive keyword match to existing processes (threshold 0.15) ──
+  const unmatched: typeof uncatReqs[number][] = [];
 
   for (const req of uncatReqs) {
     const reqKeywords = extractKeywords(req.requirement_text || '');
@@ -89,15 +102,10 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
 
     for (const profile of processProfiles) {
       const score = scoreSimilarity(reqKeywords, profile.keywords);
-      if (score > bestScore) {
-        bestScore = score;
-        bestCapId = profile.id;
-        bestCapName = profile.name;
-      }
+      if (score > bestScore) { bestScore = score; bestCapId = profile.id; bestCapName = profile.name; }
     }
 
-    if (bestScore >= 0.3 && bestCapId) {
-      // Get or create feature
+    if (bestScore >= 0.15 && bestCapId) {
       let featId = featureMap.get(bestCapId);
       if (!featId) {
         const newFeat = await Feature.create({
@@ -107,99 +115,160 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
         featId = newFeat.id;
         featureMap.set(bestCapId, featId);
       }
-
       req.capability_id = bestCapId;
       req.feature_id = featId;
       await req.save();
       result.matched++;
-      result.details.push({ req_key: req.requirement_key, action: 'matched', target: bestCapName, confidence: Math.round(bestScore * 100) });
     } else {
       unmatched.push(req);
     }
   }
 
-  // ── PASS 2: Cluster remaining by keyword similarity ──
-  const clusters = new Map<string, typeof uncatReqs>(); // dominant keyword → requirements
+  // ── PASS 2: LLM clustering for remaining (NO miscellaneous allowed) ──
+  if (unmatched.length > 0) {
+    const existingNames = otherCaps.map(c => c.name).join(', ');
+    const BATCH_SIZE = 200;
 
-  for (const req of unmatched) {
-    const keywords = extractKeywords(req.requirement_text || '');
-    if (keywords.length === 0) {
-      result.remaining++;
-      continue;
-    }
+    for (let i = 0; i < unmatched.length; i += BATCH_SIZE) {
+      const batch = unmatched.slice(i, i + BATCH_SIZE);
+      const reqList = batch.map(r => `${r.requirement_key}: ${(r.requirement_text || '').substring(0, 120)}`).join('\n');
 
-    // Find the most distinctive keyword (least common = most specific)
-    const sorted = keywords.sort((a, b) => a.length - b.length).reverse(); // longer = more specific
-    const dominant = sorted[0] || 'general';
+      try {
+        const response = await getOpenAI().chat.completions.create({
+          model: 'gpt-4o-mini',
+          temperature: 0.2,
+          max_tokens: 4000,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: 'You organize software requirements into business process categories. Respond with valid JSON only.',
+            },
+            {
+              role: 'user',
+              content: `You have ${batch.length} requirements that need to be assigned to business process categories.
 
-    // Try to find existing cluster with similar dominant keyword
-    let assigned = false;
-    for (const [clusterKey, members] of clusters) {
-      if (clusterKey === dominant || clusterKey.includes(dominant) || dominant.includes(clusterKey)) {
-        members.push(req);
-        assigned = true;
-        break;
+EXISTING CATEGORIES (use these when possible):
+${existingNames}
+
+REQUIREMENTS:
+${reqList}
+
+RULES:
+1. Assign each requirement to an existing category OR create a new meaningful category
+2. NEVER create categories named "Miscellaneous", "Other", "General", "Uncategorized", or "Various"
+3. Every category must represent a REAL business function (e.g., "Customer Analytics", "Email Automation", "Compliance Reporting")
+4. Each requirement must appear in exactly ONE category
+5. Create 3-10 new categories if needed — each must have a clear business purpose
+
+Respond:
+{"categories":[{"name":"Category Name","requirement_keys":["REQ-001","REQ-002"]}]}`,
+            },
+          ],
+        });
+
+        const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+        const categories = parsed.categories || [];
+
+        for (const cat of categories) {
+          if (!cat.name || !cat.requirement_keys?.length) continue;
+
+          // Check if this maps to an existing process
+          const existingMatch = otherCaps.find(c => c.name.toLowerCase() === cat.name.toLowerCase());
+          let targetCapId: string;
+          let targetFeatId: string;
+
+          if (existingMatch) {
+            targetCapId = existingMatch.id;
+            let fid = featureMap.get(targetCapId);
+            if (!fid) {
+              const nf = await Feature.create({ capability_id: targetCapId, name: 'Core Functionality', status: 'active', priority: 'medium', sort_order: 0, source: 'auto' } as any);
+              fid = nf.id;
+              featureMap.set(targetCapId, fid);
+            }
+            targetFeatId = fid;
+          } else {
+            // Create new process
+            const [newCap] = await Capability.findOrCreate({
+              where: { project_id: projectId, name: cat.name },
+              defaults: {
+                project_id: projectId, name: cat.name,
+                description: `Business process for ${cat.name.toLowerCase()} requirements.`,
+                status: 'active', priority: 'medium', sort_order: 100, source: 'auto',
+              } as any,
+            });
+            targetCapId = newCap.id;
+            const [newFeat] = await Feature.findOrCreate({
+              where: { capability_id: newCap.id, name: 'Core Functionality' },
+              defaults: { capability_id: newCap.id, name: 'Core Functionality', status: 'active', priority: 'medium', sort_order: 0, source: 'auto' } as any,
+            });
+            targetFeatId = newFeat.id;
+            result.new_processes.push(`${cat.name} (${cat.requirement_keys.length} reqs)`);
+          }
+
+          // Assign requirements
+          for (const key of cat.requirement_keys) {
+            const req = batch.find(r => r.requirement_key === key);
+            if (req) {
+              req.capability_id = targetCapId;
+              req.feature_id = targetFeatId;
+              await req.save();
+              result.clustered++;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[RequirementGrouper] LLM batch failed:', (err as Error).message);
+        // Pass 3 fallback: assign remaining to closest match
+        for (const req of batch) {
+          if (req.capability_id && !uncatIds.includes(req.capability_id)) continue; // already assigned
+          const reqKeywords = extractKeywords(req.requirement_text || '');
+          let bestScore = 0, bestCapId = '';
+          for (const profile of processProfiles) {
+            const score = scoreSimilarity(reqKeywords, profile.keywords);
+            if (score > bestScore) { bestScore = score; bestCapId = profile.id; }
+          }
+          if (bestCapId) {
+            let fid = featureMap.get(bestCapId);
+            if (!fid) {
+              const nf = await Feature.create({ capability_id: bestCapId, name: 'Core Functionality', status: 'active', priority: 'medium', sort_order: 0, source: 'auto' } as any);
+              fid = nf.id;
+              featureMap.set(bestCapId, fid);
+            }
+            req.capability_id = bestCapId;
+            req.feature_id = fid;
+            await req.save();
+            result.matched++;
+          } else {
+            result.remaining++;
+          }
+        }
       }
     }
-    if (!assigned) {
-      clusters.set(dominant, [req]);
-    }
   }
 
-  // Merge small clusters (< 3 members) into a "Miscellaneous" cluster
-  const miscReqs: typeof uncatReqs = [];
-  const finalClusters = new Map<string, typeof uncatReqs>();
-
-  for (const [key, members] of clusters) {
-    if (members.length >= 3) {
-      finalClusters.set(key, members);
+  // ── CLEANUP: Delete empty uncategorized capabilities ──
+  for (const cap of uncatCaps) {
+    const remaining = await RequirementsMap.count({ where: { project_id: projectId, capability_id: cap.id } });
+    if (remaining === 0) {
+      await Feature.destroy({ where: { capability_id: cap.id } });
+      await cap.destroy();
     } else {
-      miscReqs.push(...members);
+      result.remaining += remaining;
     }
   }
-  if (miscReqs.length > 0) {
-    finalClusters.set('miscellaneous', miscReqs);
-  }
 
-  // Create capabilities + features for each cluster
-  for (const [clusterName, members] of finalClusters) {
-    const capName = `Auto: ${clusterName.charAt(0).toUpperCase() + clusterName.slice(1)}`;
-
-    const [newCap] = await Capability.findOrCreate({
-      where: { project_id: projectId, name: capName },
-      defaults: {
-        project_id: projectId, name: capName,
-        description: `Auto-generated process grouping ${members.length} related requirements.`,
-        status: 'active', priority: 'medium', sort_order: 100, source: 'auto',
-      } as any,
-    });
-
-    const [newFeat] = await Feature.findOrCreate({
-      where: { capability_id: newCap.id, name: 'Core Functionality' },
-      defaults: {
-        capability_id: newCap.id, name: 'Core Functionality',
-        description: 'Auto-grouped requirements', status: 'active', priority: 'medium', sort_order: 0, source: 'auto',
-      } as any,
-    });
-
-    for (const req of members) {
-      req.capability_id = newCap.id;
-      req.feature_id = newFeat.id;
-      await req.save();
+  // Also delete any Auto: Miscellaneous
+  const miscCaps = await Capability.findAll({
+    where: { project_id: projectId, name: { [Op.like]: '%iscellaneous%' } },
+  });
+  for (const mc of miscCaps) {
+    const mcCount = await RequirementsMap.count({ where: { project_id: projectId, capability_id: mc.id } });
+    if (mcCount === 0) {
+      await Feature.destroy({ where: { capability_id: mc.id } });
+      await mc.destroy();
     }
-
-    result.clustered += members.length;
-    result.new_processes.push(`${capName} (${members.length} reqs)`);
-    result.details.push({ req_key: `${members.length} reqs`, action: 'clustered', target: capName, confidence: 50 });
   }
-
-  // ── CLEANUP: Delete uncategorized if empty ──
-  const remainingCount = await RequirementsMap.count({ where: { project_id: projectId, capability_id: uncatCap.id } });
-  if (remainingCount === 0) {
-    await Feature.destroy({ where: { capability_id: uncatCap.id } });
-    await uncatCap.destroy();
-  }
-  result.remaining = remainingCount;
 
   return result;
 }
