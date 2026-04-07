@@ -182,7 +182,7 @@ function RequirementsTab() {
 
       {reqData && reqData.total > 0 ? (() => {
         const allReqs = reqData.requirements || [];
-        const processNames = [...new Set(allReqs.map((r: any) => r.capability_name || 'Unassigned').filter(Boolean))].sort();
+        const processNames = [...new Set(allReqs.map((r: any) => r.capability_name || 'Unassigned').filter(Boolean))].sort() as string[];
         const filtered = allReqs.filter((r: any) => {
           const textMatch = !filterText || (r.requirement_text || '').toLowerCase().includes(filterText.toLowerCase()) || (r.requirement_key || '').toLowerCase().includes(filterText.toLowerCase());
           const procMatch = !filterProcess || (r.capability_name || 'Unassigned') === filterProcess;
