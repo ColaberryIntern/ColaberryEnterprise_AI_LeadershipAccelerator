@@ -909,8 +909,11 @@ function ProjectDashboard() {
 
       {activeTab === 'system-evolution' && (
         <>
-          <ProjectSelectionScreen onSelected={() => setActiveTab('overview')} />
-          <div className="mt-4"><CompileTab /></div>
+          <div className="mb-4">
+            <h6 className="fw-bold mb-3" style={{ color: 'var(--color-primary)' }}><i className="bi bi-rocket-takeoff me-2"></i>System Evolution</h6>
+            <p className="text-muted small">Grow your system by adding new capabilities or managing existing documents.</p>
+          </div>
+          <CompileTab />
         </>
       )}
     </>
