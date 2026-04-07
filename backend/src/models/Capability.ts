@@ -24,6 +24,7 @@ export interface CapabilityAttributes {
   hitl_config?: Record<string, any>;
   autonomy_history?: any[];
   last_evaluated_at?: Date;
+  lifecycle_status?: string;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -48,6 +49,7 @@ class Capability extends Model<CapabilityAttributes> implements CapabilityAttrib
   declare hitl_config: Record<string, any>;
   declare autonomy_history: any[];
   declare last_evaluated_at: Date;
+  declare lifecycle_status: string;
 }
 
 Capability.init(
@@ -72,6 +74,7 @@ Capability.init(
     linked_frontend_components: { type: DataTypes.JSONB, defaultValue: [] },
     strength_scores: { type: DataTypes.JSONB, allowNull: true },
     hitl_config: { type: DataTypes.JSONB, allowNull: true },
+    lifecycle_status: { type: DataTypes.STRING(20), defaultValue: 'active' },
     autonomy_history: { type: DataTypes.JSONB, defaultValue: [] },
     last_evaluated_at: { type: DataTypes.DATE, allowNull: true },
   },

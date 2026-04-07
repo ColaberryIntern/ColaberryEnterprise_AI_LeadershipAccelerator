@@ -13,6 +13,7 @@ export default function PortalBusinessProcessesTab() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [reclassifying, setReclassifying] = useState(false);
+  const [lifecycleFilter, setLifecycleFilter] = useState<'active' | 'deferred' | 'all'>('active');
 
   const load = () => {
     setLoading(true);
@@ -30,6 +31,7 @@ export default function PortalBusinessProcessesTab() {
     </div>
   );
 
+  const filteredProcesses = lifecycleFilter === 'all' ? processes : processes.filter((p: any) => (p.lifecycle_status || 'active') === lifecycleFilter);
   const totalReqs = processes.reduce((s: number, p: any) => s + (p.total_requirements || 0), 0);
   const matchedReqs = processes.reduce((s: number, p: any) => s + (p.matched_requirements || 0), 0);
   const overallPct = totalReqs > 0 ? Math.round((matchedReqs / totalReqs) * 100) : 0;
@@ -42,12 +44,20 @@ export default function PortalBusinessProcessesTab() {
         <div>
           <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Business Processes</h6>
           <p className="text-muted small mb-0">
-            {processes.length} processes · {totalReqs} requirements
+            {filteredProcesses.length} of {processes.length} processes · {totalReqs} requirements
           </p>
         </div>
-        <span className="badge" style={{ background: `${completionColor(overallPct)}20`, color: completionColor(overallPct), fontSize: 12, fontWeight: 700, padding: '6px 12px' }}>
-          {overallPct}%
-        </span>
+        <div className="d-flex align-items-center gap-2">
+          <div className="btn-group btn-group-sm">
+            {(['active', 'deferred', 'all'] as const).map(f => (
+              <button key={f} className={`btn btn-sm ${lifecycleFilter === f ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10 }}
+                onClick={() => setLifecycleFilter(f)}>{f.charAt(0).toUpperCase() + f.slice(1)}</button>
+            ))}
+          </div>
+          <span className="badge" style={{ background: `${completionColor(overallPct)}20`, color: completionColor(overallPct), fontSize: 12, fontWeight: 700, padding: '6px 12px' }}>
+            {overallPct}%
+          </span>
+        </div>
       </div>
 
       {/* Overall progress bar */}
@@ -88,7 +98,7 @@ export default function PortalBusinessProcessesTab() {
       )}
 
       <div className="row g-3">
-        {processes.map((p: any) => {
+        {filteredProcesses.map((p: any) => {
           const m = p.metrics || {};
           const mat = p.maturity || {};
           const gaps = p.gap_count || 0;

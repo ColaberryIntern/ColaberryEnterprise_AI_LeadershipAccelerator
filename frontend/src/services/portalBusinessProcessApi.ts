@@ -10,4 +10,5 @@ export const predictImpact = (id: string, action: string) => portalApi.post(`/ap
 export const syncProcess = (id: string, report: string) => portalApi.post(`/api/portal/project/business-processes/${id}/sync`, { report });
 export const resyncProcess = (id: string) => portalApi.post(`/api/portal/project/business-processes/${id}/resync`);
 export const reclassifyRequirements = () => portalApi.post('/api/portal/project/business-processes/reclassify');
+export const setLifecycle = (id: string, status: string) => portalApi.put(`/api/portal/project/business-processes/${id}/lifecycle`, { status });
 export const getExecutionIntelligence = () => portalApi.get('/api/portal/project/execution-intelligence');

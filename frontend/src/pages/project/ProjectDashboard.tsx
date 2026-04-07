@@ -62,7 +62,7 @@ interface ProjectData {
   updated_at: string;
 }
 
-type TabKey = 'overview' | 'requirements' | 'business-processes' | 'github' | 'compile' | 'readiness' | 'warroom' | 'contract' | 'discover';
+type TabKey = 'overview' | 'business-processes' | 'execution' | 'code-intelligence' | 'system-evolution';
 
 function formatTimeAgo(dateStr: string): string {
   const now = new Date();
@@ -642,6 +642,52 @@ function ReadinessTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Readiness KPI Bar — compact version of ReadinessTab for Overview
+// ---------------------------------------------------------------------------
+function ReadinessKPIBar() {
+  const [data, setData] = useState<any>(null);
+  useEffect(() => {
+    Promise.all([
+      portalApi.get('/api/portal/project/progress').catch(() => ({ data: null })),
+      portalApi.get('/api/portal/project/warroom').catch(() => ({ data: null })),
+    ]).then(([progRes, wrRes]) => {
+      const prog = progRes.data;
+      const wr = wrRes.data;
+      setData({
+        readiness: prog ? Math.round(prog.productionReadinessScore) : 0,
+        requirements: prog ? Math.round(prog.requirementsCompletionPct) : 0,
+        health: wr?.risk?.health?.health_score ? Math.round(wr.risk.health.health_score * 100) : 0,
+        velocity: wr?.risk?.health?.velocity_score ? Math.round(wr.risk.health.velocity_score * 100) : 0,
+        stability: wr?.risk?.health?.stability_score ? Math.round(wr.risk.health.stability_score * 100) : 0,
+      });
+    });
+  }, []);
+
+  if (!data) return null;
+
+  const kpis = [
+    { label: 'Readiness', value: data.readiness, color: data.readiness >= 70 ? '#10b981' : data.readiness >= 40 ? '#f59e0b' : '#ef4444' },
+    { label: 'Requirements', value: data.requirements, color: data.requirements >= 70 ? '#10b981' : data.requirements >= 40 ? '#f59e0b' : '#ef4444' },
+    { label: 'Health', value: data.health, color: data.health >= 70 ? '#10b981' : data.health >= 40 ? '#f59e0b' : '#ef4444' },
+    { label: 'Velocity', value: data.velocity, color: data.velocity >= 50 ? '#10b981' : data.velocity >= 20 ? '#f59e0b' : '#ef4444' },
+    { label: 'Stability', value: data.stability, color: data.stability >= 70 ? '#10b981' : data.stability >= 40 ? '#f59e0b' : '#ef4444' },
+  ];
+
+  return (
+    <div className="row g-2 mb-4">
+      {kpis.map(k => (
+        <div key={k.label} className="col">
+          <div className="card border-0 shadow-sm text-center py-2">
+            <div className="fw-bold" style={{ fontSize: 22, color: k.color }}>{k.value}%</div>
+            <div className="text-muted" style={{ fontSize: 10 }}>{k.label}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Project System Prompt — editable on Overview tab
 // ---------------------------------------------------------------------------
 function ProjectSystemPromptCard() {
@@ -760,7 +806,7 @@ function ProjectDashboard() {
   // Persist active tab in URL hash
   const getInitialTab = (): TabKey => {
     const hash = window.location.hash.replace('#', '');
-    const valid: TabKey[] = ['overview', 'readiness', 'business-processes', 'requirements', 'github', 'compile', 'warroom', 'discover'];
+    const valid: TabKey[] = ['overview', 'business-processes', 'execution', 'code-intelligence', 'system-evolution'];
     return valid.includes(hash as TabKey) ? (hash as TabKey) : 'overview';
   };
   const [activeTab, setActiveTabState] = useState<TabKey>(getInitialTab);
@@ -804,14 +850,11 @@ function ProjectDashboard() {
 
   const variables = project.project_variables || {};
   const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
-    { key: 'overview', label: 'Overview', icon: 'bi-grid' },
-    { key: 'readiness', label: 'Readiness', icon: 'bi-speedometer2' },
+    { key: 'overview', label: 'Overview', icon: 'bi-speedometer2' },
     { key: 'business-processes', label: 'Business Processes', icon: 'bi-diagram-3' },
-    { key: 'requirements', label: 'Requirements', icon: 'bi-list-check' },
-    { key: 'github', label: 'GitHub', icon: 'bi-github' },
-    { key: 'compile', label: 'System Validation', icon: 'bi-shield-check' },
-    { key: 'warroom', label: 'War Room', icon: 'bi-activity' },
-    { key: 'discover', label: 'Project Selection', icon: 'bi-lightbulb' },
+    { key: 'execution', label: 'Execution', icon: 'bi-activity' },
+    { key: 'code-intelligence', label: 'Code Intelligence', icon: 'bi-code-slash' },
+    { key: 'system-evolution', label: 'System Evolution', icon: 'bi-rocket-takeoff' },
   ];
 
   return (
@@ -843,6 +886,8 @@ function ProjectDashboard() {
 
       {activeTab === 'overview' && (
         <>
+          {/* KPI Bar — merged from Readiness */}
+          <ReadinessKPIBar />
           <ProjectSystemPromptCard />
           <div className="mb-4">
             <WorkstationLauncher />
@@ -851,13 +896,23 @@ function ProjectDashboard() {
         </>
       )}
 
-      {activeTab === 'readiness' && <ReadinessTab />}
       {activeTab === 'business-processes' && <PortalBusinessProcessesTab />}
-      {activeTab === 'requirements' && <RequirementsTab />}
-      {activeTab === 'github' && <GitHubTab />}
-      {activeTab === 'compile' && <CompileTab />}
-      {activeTab === 'warroom' && <WarRoomTab />}
-      {activeTab === 'discover' && <ProjectSelectionScreen onSelected={() => setActiveTab('overview')} />}
+
+      {activeTab === 'execution' && <WarRoomTab />}
+
+      {activeTab === 'code-intelligence' && (
+        <>
+          <GitHubTab />
+          <div className="mt-4"><RequirementsTab /></div>
+        </>
+      )}
+
+      {activeTab === 'system-evolution' && (
+        <>
+          <ProjectSelectionScreen onSelected={() => setActiveTab('overview')} />
+          <div className="mt-4"><CompileTab /></div>
+        </>
+      )}
     </>
   );
 }

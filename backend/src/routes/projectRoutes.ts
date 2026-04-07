@@ -1514,6 +1514,20 @@ router.post('/api/portal/project/business-processes/reclassify', requireParticip
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Process Lifecycle Management ────────
+router.put('/api/portal/project/business-processes/:id/lifecycle', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { Capability } = await import('../models');
+    const cap = await Capability.findByPk(req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const status = req.body.status;
+    if (!['active', 'deferred', 'future'].includes(status)) { res.status(400).json({ error: 'Invalid status' }); return; }
+    cap.lifecycle_status = status;
+    await cap.save();
+    res.json({ success: true, lifecycle_status: status });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Project System Prompt ────────
 router.get('/api/portal/project/system-prompt', requireParticipant, async (req: Request, res: Response) => {
   try {
