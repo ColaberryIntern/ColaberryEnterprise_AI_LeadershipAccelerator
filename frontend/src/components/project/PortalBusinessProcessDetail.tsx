@@ -112,7 +112,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
             {resyncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Syncing...</> : <><i className="bi bi-arrow-repeat me-1"></i>Resync</>}
           </button>
           <span className="badge px-2 py-1" style={{ background: `${matColor}20`, color: matColor, fontSize: 10, fontWeight: 700 }}>L{mat.level} {mat.label}</span>
-          <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', fontSize: 10, fontWeight: 700, border: '1px solid #6366f140' }} onClick={() => {
+          <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', fontSize: 10, fontWeight: 700, border: '1px solid #6366f140' }} onClick={async () => {
             const featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
             const gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
             const reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
@@ -170,13 +170,16 @@ RULES:
 - If the learner asks a question, answer it thoroughly before continuing
 
 Begin by greeting the learner and explaining what "${p.name}" is and why it matters for their business.`;
-            navigator.clipboard.writeText(learnPrompt).then(() => {
-              window.open('https://chatgpt.com', '_blank');
-              const toast = document.createElement('div');
-              toast.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>Learn Mode prompt copied — paste in ChatGPT</div>';
-              document.body.appendChild(toast);
-              setTimeout(() => toast.remove(), 4000);
-            });
+            // Clipboard fallback for HTTP (dev) — uses textarea trick
+            try { await navigator.clipboard.writeText(learnPrompt); } catch {
+              const ta = document.createElement('textarea'); ta.value = learnPrompt; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+              document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+            }
+            window.open('https://chatgpt.com', '_blank');
+            const toast = document.createElement('div');
+            toast.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>Learn Mode prompt copied — paste in ChatGPT</div>';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
           }}>
             <i className="bi bi-mortarboard me-1"></i>Learn
           </button>
