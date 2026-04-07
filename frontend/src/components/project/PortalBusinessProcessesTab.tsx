@@ -12,6 +12,7 @@ export default function PortalBusinessProcessesTab() {
   const [processes, setProcesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [reclassifying, setReclassifying] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -28,8 +29,6 @@ export default function PortalBusinessProcessesTab() {
       <p className="text-muted small mb-0">Upload your requirements document and click "Extract Requirements" on the Requirements tab to generate business processes.</p>
     </div>
   );
-
-  const [reclassifying, setReclassifying] = useState(false);
 
   const totalReqs = processes.reduce((s: number, p: any) => s + (p.total_requirements || 0), 0);
   const matchedReqs = processes.reduce((s: number, p: any) => s + (p.matched_requirements || 0), 0);
