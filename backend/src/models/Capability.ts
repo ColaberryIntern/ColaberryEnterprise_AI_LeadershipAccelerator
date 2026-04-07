@@ -25,6 +25,7 @@ export interface CapabilityAttributes {
   autonomy_history?: any[];
   last_evaluated_at?: Date;
   lifecycle_status?: string;
+  last_execution?: Record<string, any>;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -75,6 +76,7 @@ Capability.init(
     strength_scores: { type: DataTypes.JSONB, allowNull: true },
     hitl_config: { type: DataTypes.JSONB, allowNull: true },
     lifecycle_status: { type: DataTypes.STRING(20), defaultValue: 'active' },
+    last_execution: { type: DataTypes.JSONB, allowNull: true },
     autonomy_history: { type: DataTypes.JSONB, defaultValue: [] },
     last_evaluated_at: { type: DataTypes.DATE, allowNull: true },
   },

@@ -98,9 +98,21 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
               try {
                 const r = await bpApi.resyncProcess(processId);
                 const rs = r.data?.resync;
+                const wc = r.data?.what_changed;
+                let msg = `Resynced: ${rs?.matched || 0} matched, ${rs?.partial || 0} partial, ${rs?.unmatched || 0} unmapped`;
+                let bg = '#1a365d';
+                if (wc) {
+                  if (wc.status === 'complete') {
+                    msg = `✅ Last step "${wc.last_step}" verified — all ${wc.promised_files} files found`;
+                    bg = '#059669';
+                  } else if (wc.status === 'incomplete') {
+                    msg = `⚠️ Last step "${wc.last_step}" incomplete — ${wc.missing.length} file(s) not found: ${wc.missing.slice(0, 2).map((f: string) => f.split('/').pop()).join(', ')}`;
+                    bg = '#d97706';
+                  }
+                }
                 const el = document.createElement('div');
-                el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px"><i class="bi bi-check-circle me-2"></i>Resynced: ${rs?.matched || 0} matched, ${rs?.partial || 0} partial, ${rs?.unmatched || 0} unmapped (${rs?.files_scanned || 0} files scanned)</div>`;
-                document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
+                el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:${bg};color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px;max-width:600px">${msg}</div>`;
+                document.body.appendChild(el); setTimeout(() => el.remove(), 6000);
                 load(); onUpdate();
               } catch {} finally { setResyncing(false); }
             }}>
@@ -352,61 +364,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           })()}
         </Section>
 
-        {/* 9: Sync — paste Claude output */}
-        <Section num={9} title="Sync This Process">
-          <p className="text-muted small mb-2">After running a Claude Code prompt, paste the validation report here to update requirement states.</p>
-          {!showSync ? (
-            <button className="btn btn-sm btn-outline-primary" onClick={() => setShowSync(true)}>
-              <i className="bi bi-arrow-repeat me-1"></i>Paste Claude Output
-            </button>
-          ) : (
-            <div>
-              <textarea className="form-control form-control-sm mb-2" rows={6} placeholder="Paste the VALIDATION REPORT from Claude Code output here..." value={syncText} onChange={e => setSyncText(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 11 }} />
-              <div className="d-flex gap-2">
-                <button className="btn btn-sm btn-primary" disabled={syncing || !syncText.trim()} onClick={async () => {
-                  setSyncing(true);
-                  try { const r = await bpApi.syncProcess(processId, syncText); setSyncResult(r.data); load(); onUpdate(); } catch {} finally { setSyncing(false); }
-                }}>
-                  {syncing ? <><span className="spinner-border spinner-border-sm me-1"></span>Syncing...</> : <><i className="bi bi-check-circle me-1"></i>Sync</>}
-                </button>
-                <button className="btn btn-sm btn-outline-secondary" onClick={() => { setShowSync(false); setSyncText(''); setSyncResult(null); }}>Cancel</button>
-              </div>
-              {syncResult && (
-                <div className="mt-2 p-2" style={{ borderRadius: 6, fontSize: 11, background: syncResult.verification?.verified ? '#10b98110' : '#f59e0b10', border: `1px solid ${syncResult.verification?.verified ? '#10b98130' : '#f59e0b30'}` }}>
-                  <div className="fw-medium mb-1">
-                    {syncResult.verification?.verified ? (
-                      <><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>Verified — all claims confirmed</>
-                    ) : (
-                      <><i className="bi bi-exclamation-triangle me-1" style={{ color: '#f59e0b' }}></i>Sync complete — {syncResult.verification?.discrepancies?.length || 0} discrepancies</>
-                    )}
-                  </div>
-                  <div className="d-flex gap-3 text-muted mb-1" style={{ fontSize: 10 }}>
-                    <span>Files verified: {syncResult.verification?.filesVerified || 0}</span>
-                    <span>Coverage: {syncResult.verification?.coverageScore || 0}%</span>
-                    <span>Reqs updated: {(syncResult.requirements?.verified || 0) + (syncResult.requirements?.auto_matched || 0)}</span>
-                  </div>
-                  {syncResult.discrepancies?.length > 0 && (
-                    <div className="mt-1">
-                      {syncResult.discrepancies.slice(0, 3).map((d: string, i: number) => (
-                        <div key={i} className="text-muted" style={{ fontSize: 9 }}><i className="bi bi-dot"></i>{d}</div>
-                      ))}
-                    </div>
-                  )}
-                  {syncResult.followUpNeeded && syncResult.followUpPrompt && (
-                    <button className="btn btn-sm btn-outline-warning mt-1" style={{ fontSize: 10 }} onClick={async () => {
-                      await navigator.clipboard.writeText(syncResult.followUpPrompt);
-                      const el = document.createElement('div');
-                      el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px">Follow-up prompt copied</div>';
-                      document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
-                    }}>
-                      <i className="bi bi-arrow-repeat me-1"></i>Copy Follow-Up Prompt
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </Section>
+        {/* Sync info — Resync button in header handles everything */}
 
         {/* Prediction Modal */}
         {predictionAction && (

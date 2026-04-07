@@ -1418,7 +1418,24 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
     const { target } = req.body;
     if (!target) { res.status(400).json({ error: 'target required' }); return; }
     const { generateImprovementPrompt } = await import('../intelligence/promptGenerator');
-    res.json(await generateImprovementPrompt(req.params.id as string, target));
+    const prompt = await generateImprovementPrompt(req.params.id as string, target);
+
+    // Save what this prompt promises to build (for post-resync comparison)
+    const { Capability } = await import('../models');
+    const cap = await Capability.findByPk(req.params.id as string);
+    if (cap) {
+      (cap as any).last_execution = {
+        step: prompt.title,
+        target,
+        promised_files: prompt.affected_files || [],
+        promised_at: new Date().toISOString(),
+        status: 'pending',
+      };
+      (cap as any).changed('last_execution', true);
+      await cap.save();
+    }
+
+    res.json(prompt);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1493,9 +1510,62 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       req.participant!.sub, project.id, req.params.id as string, ''
     );
 
+    // 4. Compare last execution promise vs reality
+    const { Capability } = await import('../models');
+    const cap = await Capability.findByPk(req.params.id as string);
+    const lastExec = (cap as any)?.last_execution;
+    let whatChanged: any = null;
+
+    if (lastExec && lastExec.status === 'pending') {
+      const promisedFiles = lastExec.promised_files || [];
+      const foundFiles: string[] = [];
+      const missingFiles: string[] = [];
+
+      for (const pf of promisedFiles) {
+        // Check if promised file (or similar) exists in repo
+        const pfName = (pf.split('/').pop() || '').toLowerCase().replace(/\.(ts|tsx|js)$/, '');
+        const found = fileTree.some(f => {
+          const fName = (f.split('/').pop() || '').toLowerCase().replace(/\.(ts|tsx|js)$/, '');
+          return fName === pfName || fName.includes(pfName) || pfName.includes(fName);
+        });
+        if (found) foundFiles.push(pf);
+        else missingFiles.push(pf);
+      }
+
+      const newFilesInRepo = fileTree.filter(f => {
+        const fTime = new Date(lastExec.promised_at || 0).getTime();
+        // Can't check file timestamps from tree — just check if file is in agents/services/routes
+        return (f.includes('agents/') || f.includes('services/') || f.includes('routes/')) &&
+          !promisedFiles.some((pf: string) => f.includes(pf.split('/').pop() || '___'));
+      });
+
+      whatChanged = {
+        last_step: lastExec.step,
+        promised_files: promisedFiles.length,
+        found: foundFiles.length,
+        missing: missingFiles,
+        status: missingFiles.length === 0 ? 'complete' : 'incomplete',
+        follow_up_needed: missingFiles.length > 0,
+      };
+
+      // Update execution status
+      if (cap) {
+        (cap as any).last_execution = {
+          ...lastExec,
+          status: missingFiles.length === 0 ? 'verified' : 'incomplete',
+          verified_at: new Date().toISOString(),
+          found_files: foundFiles,
+          missing_files: missingFiles,
+        };
+        (cap as any).changed('last_execution', true);
+        await cap.save();
+      }
+    }
+
     res.json({
       ...result,
       resync: { total: processReqs.length, matched, partial, unmatched, files_scanned: fileTree.length },
+      what_changed: whatChanged,
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
