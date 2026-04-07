@@ -44,7 +44,7 @@ export default function PortalBusinessProcessesTab() {
         <div>
           <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>Business Processes</h6>
           <p className="text-muted small mb-0">
-            {filteredProcesses.length} of {processes.length} processes · {totalReqs} requirements
+            {processes.filter((p: any) => p.usability?.usable).length}/{processes.length} processes completed · {matchedReqs}/{totalReqs} requirements
           </p>
         </div>
         <div className="d-flex align-items-center gap-2">
