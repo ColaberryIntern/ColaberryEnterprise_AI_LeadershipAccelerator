@@ -1533,9 +1533,9 @@ router.put('/api/portal/project/system-prompt', requireParticipant, async (req: 
     const { getProjectByEnrollment } = await import('../services/projectService');
     const project = await getProjectByEnrollment(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
-    const vars = (project as any).project_variables || {};
-    vars.system_prompt = req.body.system_prompt || '';
+    const vars = { ...((project as any).project_variables || {}), system_prompt: req.body.system_prompt || '' };
     (project as any).project_variables = vars;
+    (project as any).changed('project_variables', true);
     await project.save();
     res.json({ success: true });
   } catch (err: any) { res.status(500).json({ error: err.message }); }

@@ -690,10 +690,10 @@ function ProjectSystemPromptCard() {
       <div className="card-body py-2 px-3">
         {editing ? (
           <textarea className="form-control form-control-sm" rows={4} value={prompt} onChange={e => setPrompt(e.target.value)}
-            style={{ fontSize: 12, fontFamily: 'inherit' }}
+            style={{ fontSize: 12, fontFamily: 'inherit', resize: 'vertical', minHeight: 80 }}
             placeholder="Describe who this project is for, what you're building, and what you're trying to accomplish..." />
         ) : (
-          <p className="text-muted small mb-0" style={{ whiteSpace: 'pre-wrap' }}>{prompt}</p>
+          <p className="text-muted small mb-0" style={{ whiteSpace: 'pre-wrap', maxHeight: 60, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any }}>{prompt}</p>
         )}
         <div className="text-muted mt-1" style={{ fontSize: 9 }}>This context is included in all Learn prompts so the AI mentor understands your project.</div>
       </div>
