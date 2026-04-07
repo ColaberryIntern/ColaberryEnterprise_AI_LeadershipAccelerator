@@ -10,11 +10,14 @@ interface InlineDemoPlayerProps {
   onDemoComplete?: (scenarioId: string) => void;
   /** Force replay a specific scenario (change this value to trigger) */
   replayScenario?: string;
+  /** Auto-play immediately without requiring "Watch It Build" click */
+  autoPlay?: boolean;
 }
 
-export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDemoComplete, replayScenario }: InlineDemoPlayerProps) {
+export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDemoComplete, replayScenario, autoPlay }: InlineDemoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'initial' | 'playing' | 'done'>('initial');
+  const autoPlayedRef = useRef(false);
   const advisoryUrl = getAdvisoryUrl();
 
   const pool = useMemo(() => {
@@ -69,6 +72,14 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
       runDemo(rid);
     }
   }, [state]);
+
+  // Auto-play on mount if autoPlay prop is true
+  useEffect(() => {
+    if (autoPlay && !autoPlayedRef.current && state === 'initial') {
+      autoPlayedRef.current = true;
+      setTimeout(() => start(), 300);
+    }
+  }, [autoPlay]);
 
   function start() {
     stopAll();

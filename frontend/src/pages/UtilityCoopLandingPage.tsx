@@ -134,10 +134,10 @@ function UtilityCoopLandingPage() {
 
           <InlineDemoPlayer
             key={demoKey}
-            allowedScenarios={UTILITY_SCENARIOS.map(s => s.demoId)}
+            allowedScenarios={selectedScenario ? [selectedScenario] : UTILITY_SCENARIOS.map(s => s.demoId)}
             trackContext="utility_landing"
             onDemoComplete={onDemoComplete}
-            replayScenario={selectedScenario || undefined}
+            autoPlay={!!selectedScenario}
           />
 
           {/* 8 Scenario Picker — shows after demo completes */}

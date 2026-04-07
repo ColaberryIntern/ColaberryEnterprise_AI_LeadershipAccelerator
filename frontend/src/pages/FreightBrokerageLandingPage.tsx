@@ -115,6 +115,7 @@ function FreightBrokerageLandingPage() {
             allowedScenarios={selectedScenario ? [selectedScenario] : ['freight-billing', 'freight-invoice', 'freight-dispute', 'freight-settlement']}
             trackContext="freight-landing"
             onDemoComplete={onDemoComplete}
+            autoPlay={!!selectedScenario}
           />
           {showPicker && (
             <div className="text-center mt-4">
