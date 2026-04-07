@@ -1111,9 +1111,21 @@ function enrichCapability(cap: any) {
   });
   const modelFiles = allFiles.filter((f: string) => f.includes('models/') && f.endsWith('.ts'));
 
+  // Also check for agent files matching this process name (not just requirement-matched files)
+  // This catches agents like "engagementFeaturesAgent.ts" that weren't keyword-matched to requirements
+  const processNameStems = (cap.name || '').toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
+  const allReqFiles = allFiles; // files already found
+  // Check if any matched file is an agent for THIS process by name
+  const processAgentFiles = allReqFiles.filter((f: string) => {
+    const name = (f.split('/').pop() || '').toLowerCase();
+    return name.includes('agent') && processNameStems.some((stem: string) => name.includes(stem));
+  });
+  // Merge with existing agent detection
+  const combinedAgentFiles = [...new Set([...agentFiles, ...processAgentFiles])];
+
   const hasBackend = backendFiles.length > 0;
   const hasFrontend = frontendFiles.length > 0;
-  const hasAgents = agentFiles.length > 0;
+  const hasAgents = combinedAgentFiles.length > 0;
 
   // ── 3 SEPARATE METRICS ──
   const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
@@ -1194,7 +1206,7 @@ function enrichCapability(cap: any) {
     gaps: allGaps,
     execution_plan: executionPlan,
     usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: hasBackend && reqCoverage > 50, why_not },
-    implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: agentFiles, models: modelFiles },
+    implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: combinedAgentFiles, models: modelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
   };
 }

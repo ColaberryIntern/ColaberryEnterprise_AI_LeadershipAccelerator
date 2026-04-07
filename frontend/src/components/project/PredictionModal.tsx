@@ -104,20 +104,20 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
 
             <h6 className="fw-semibold small mb-2"><i className="bi bi-graph-up-arrow me-1"></i>Predicted Impact</h6>
             <div className="mb-4">
-              <MetricDelta label="System Readiness" before={p.readiness_before || 0} after={p.projected_readiness} />
-              <MetricDelta label="Quality Score" before={p.quality_before || 0} after={p.projected_quality} />
+              <MetricDelta label="System Readiness" before={p.readiness_before || 0} after={p.projected_readiness || p.readiness_before || 0} />
+              <MetricDelta label="Quality Score" before={p.quality_before || 0} after={p.projected_quality || p.quality_before || 0} />
             </div>
 
             {/* Level Progression */}
             <div className="d-flex align-items-center gap-3 mb-2 p-3" style={{ background: p.maturity_advances ? '#10b98110' : 'var(--color-bg-alt)', borderRadius: 8, border: p.maturity_advances ? '1px solid #10b98130' : 'none' }}>
               <div className="text-center">
                 <div className="text-muted" style={{ fontSize: 9 }}>Current</div>
-                <div className="fw-bold" style={{ fontSize: 14, color: 'var(--color-primary)' }}>L{p.level_before?.level} {p.level_before?.label}</div>
+                <div className="fw-bold" style={{ fontSize: 14, color: 'var(--color-primary)' }}>L{p.level_before?.level || 1} {p.level_before?.label || 'Prototype'}</div>
               </div>
               <i className="bi bi-arrow-right" style={{ fontSize: 18, color: p.maturity_advances ? '#10b981' : '#9ca3af' }}></i>
               <div className="text-center">
                 <div className="text-muted" style={{ fontSize: 9 }}>After</div>
-                <div className="fw-bold" style={{ fontSize: 14, color: p.maturity_advances ? '#10b981' : 'var(--color-primary)' }}>L{p.level_after?.level} {p.level_after?.label}</div>
+                <div className="fw-bold" style={{ fontSize: 14, color: p.maturity_advances ? '#10b981' : 'var(--color-primary)' }}>L{p.level_after?.level || 1} {p.level_after?.label || 'Prototype'}</div>
               </div>
               {p.maturity_advances && <span className="badge bg-success ms-auto" style={{ fontSize: 10 }}>LEVEL UP</span>}
             </div>
