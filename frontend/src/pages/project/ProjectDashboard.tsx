@@ -90,6 +90,8 @@ function RequirementsTab() {
   const [extractProgress, setExtractProgress] = useState(0);
   const [extractResult, setExtractResult] = useState<any>(null);
   const [matching, setMatching] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [filterProcess, setFilterProcess] = useState('');
 
   const loadRequirements = useCallback(() => {
     setLoading(true);
@@ -178,41 +180,62 @@ function RequirementsTab() {
         </div>
       )}
 
-      {reqData && reqData.total > 0 ? (
-        <>
-          <div className="d-flex gap-3 mb-3 flex-wrap">
-            <div className="small"><strong>{reqData.total}</strong> total</div>
-            <div className="small text-success"><strong>{reqData.matched + (reqData.verified || 0)}</strong> matched</div>
-            <div className="small text-warning"><strong>{reqData.partial}</strong> partial</div>
-            <div className="small text-muted"><strong>{reqData.unmatched}</strong> unmatched</div>
-            <div className="small"><strong>{Math.round((reqData.overallScore || 0) * 100)}%</strong> coverage</div>
-          </div>
-          <div className="table-responsive">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th className="small">Key</th>
-                  <th className="small">Requirement</th>
-                  <th className="small">Status</th>
-                  <th className="small">Confidence</th>
-                  <th className="small">Files</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(reqData.requirements || []).map((r: any) => (
-                  <tr key={r.id}>
-                    <td className="small fw-medium">{r.requirement_key}</td>
-                    <td className="small" style={{ maxWidth: 400 }}>{r.requirement_text}</td>
-                    <td>{statusBadge(r.status)}</td>
-                    <td className="small">{r.confidence_score != null ? `${Math.round(r.confidence_score * 100)}%` : '-'}</td>
-                    <td className="small text-muted">{(r.github_file_paths || []).length > 0 ? `${r.github_file_paths.length} files` : '-'}</td>
+      {reqData && reqData.total > 0 ? (() => {
+        const allReqs = reqData.requirements || [];
+        const processNames = [...new Set(allReqs.map((r: any) => r.capability_name || 'Unassigned').filter(Boolean))].sort();
+        const filtered = allReqs.filter((r: any) => {
+          const textMatch = !filterText || (r.requirement_text || '').toLowerCase().includes(filterText.toLowerCase()) || (r.requirement_key || '').toLowerCase().includes(filterText.toLowerCase());
+          const procMatch = !filterProcess || (r.capability_name || 'Unassigned') === filterProcess;
+          return textMatch && procMatch;
+        });
+        return (
+          <>
+            <div className="d-flex gap-3 mb-3 flex-wrap align-items-center">
+              <div className="small"><strong>{reqData.total}</strong> total</div>
+              <div className="small text-success"><strong>{reqData.matched + (reqData.verified || 0)}</strong> matched</div>
+              <div className="small text-warning"><strong>{reqData.partial}</strong> partial</div>
+              <div className="small text-muted"><strong>{reqData.unmatched}</strong> unmatched</div>
+            </div>
+            {/* Filters */}
+            <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
+              <input type="text" className="form-control form-control-sm" placeholder="Search requirements..." value={filterText} onChange={e => setFilterText(e.target.value)} style={{ maxWidth: 250, fontSize: 12 }} />
+              <select className="form-select form-select-sm" value={filterProcess} onChange={e => setFilterProcess(e.target.value)} style={{ maxWidth: 250, fontSize: 12 }}>
+                <option value="">All Business Processes</option>
+                {processNames.map((n: string) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              {(filterText || filterProcess) && <button className="btn btn-sm btn-link text-muted" onClick={() => { setFilterText(''); setFilterProcess(''); }}>Clear</button>}
+              <span className="text-muted small ms-auto">{filtered.length} shown</span>
+            </div>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th className="small">Key</th>
+                    <th className="small">Requirement</th>
+                    <th className="small">Business Process</th>
+                    <th className="small">Status</th>
+                    <th className="small">Confidence</th>
+                    <th className="small">Files</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : (
+                </thead>
+                <tbody>
+                  {filtered.slice(0, 100).map((r: any) => (
+                    <tr key={r.id}>
+                      <td className="small fw-medium">{r.requirement_key}</td>
+                      <td className="small" style={{ maxWidth: 350 }}>{r.requirement_text}</td>
+                      <td className="small"><span className="badge bg-light text-dark" style={{ fontSize: 9 }}>{r.capability_name || 'Unassigned'}</span></td>
+                      <td>{statusBadge(r.status)}</td>
+                      <td className="small">{r.confidence_score != null ? `${Math.round(r.confidence_score * 100)}%` : '-'}</td>
+                      <td className="small text-muted">{(r.github_file_paths || []).length > 0 ? `${r.github_file_paths.length} files` : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filtered.length > 100 && <div className="text-muted small text-center py-2">Showing first 100 of {filtered.length} results</div>}
+            </div>
+          </>
+        );
+      })() : (
         <div className="text-center py-4">
           <i className="bi bi-file-earmark-text d-block mb-2" style={{ fontSize: 28, color: 'var(--color-text-light)' }}></i>
           <p className="text-muted small mb-2">No requirements extracted yet.</p>
@@ -373,18 +396,34 @@ function CompileTab() {
 
   if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
 
+  const [selectedDoc, setSelectedDoc] = useState<{ type: string; content: string } | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [saving, setSaving] = useState(false);
+
   const docTypes = ['requirements', 'claude_md', 'system_prompt', 'interaction_protocol'] as const;
   const docLabels: Record<string, string> = {
-    requirements: 'Requirements',
+    requirements: 'Requirements Document',
     claude_md: 'CLAUDE.md',
     system_prompt: 'System Prompt',
     interaction_protocol: 'Interaction Protocol',
+  };
+  const docIcons: Record<string, string> = {
+    requirements: 'bi-file-earmark-text', claude_md: 'bi-file-code',
+    system_prompt: 'bi-terminal', interaction_protocol: 'bi-chat-dots',
+  };
+
+  const handleOpenDoc = async (dt: string) => {
+    try {
+      const res = await portalApi.post('/api/portal/project/compile', { document_type: dt });
+      setSelectedDoc({ type: dt, content: res.data.document || '' });
+      setEditContent(res.data.document || '');
+    } catch { setSelectedDoc({ type: dt, content: 'Failed to load document.' }); setEditContent(''); }
   };
 
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <p className="small text-muted mb-0">Compile your project artifacts into system documents.</p>
+        <p className="small text-muted mb-0">System documents compiled from your project. Click to view, edit, or replace.</p>
         <button className="btn btn-sm btn-primary" onClick={handleCompileAll} disabled={!!compiling}>
           {compiling === 'all' ? 'Compiling All...' : 'Compile All'}
         </button>
@@ -395,21 +434,18 @@ function CompileTab() {
           const docStatus = status?.documents?.[dt];
           return (
             <div key={dt} className="col-md-6">
-              <div className="card border-0 shadow-sm h-100">
+              <div className="card border-0 shadow-sm h-100" style={{ cursor: 'pointer' }} onClick={() => handleOpenDoc(dt)}>
                 <div className="card-body">
                   <div className="d-flex justify-content-between align-items-start mb-2">
-                    <h6 className="fw-semibold mb-0">{docLabels[dt]}</h6>
-                    <button
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() => handleCompile(dt)}
-                      disabled={!!compiling}
-                    >
+                    <h6 className="fw-semibold mb-0"><i className={`bi ${docIcons[dt]} me-2`}></i>{docLabels[dt]}</h6>
+                    <button className="btn btn-sm btn-outline-primary" onClick={e => { e.stopPropagation(); handleCompile(dt); }} disabled={!!compiling}>
                       {compiling === dt ? 'Compiling...' : 'Compile'}
                     </button>
                   </div>
                   <div className="small text-muted">
                     Sources: {docStatus?.sourceArtifactsAvailable || 0} / {docStatus?.sourceArtifactsTotal || 0} available
                   </div>
+                  <div className="small text-muted mt-1"><i className="bi bi-eye me-1"></i>Click to view & edit</div>
                   {docStatus?.lastCompiled && (
                     <div className="small text-muted">
                       Last compiled: {formatTimeAgo(docStatus.lastCompiled)}
@@ -433,6 +469,47 @@ function CompileTab() {
           </div>
           <div className="card-body">
             <pre className="small mb-0" style={{ whiteSpace: 'pre-wrap', maxHeight: 400, overflow: 'auto' }}>{compiledDoc}</pre>
+          </div>
+        </div>
+      )}
+
+      {/* Document drill-down modal */}
+      {selectedDoc && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setSelectedDoc(null)}>
+          <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h6 className="modal-title fw-semibold"><i className={`bi ${docIcons[selectedDoc.type]} me-2`}></i>{docLabels[selectedDoc.type]}</h6>
+                <button className="btn-close" onClick={() => setSelectedDoc(null)}></button>
+              </div>
+              <div className="modal-body">
+                <textarea className="form-control form-control-sm" rows={20} value={editContent} onChange={e => setEditContent(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: 11, resize: 'vertical' }} />
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-sm btn-outline-secondary" onClick={() => setSelectedDoc(null)}>Cancel</button>
+                <button className="btn btn-sm btn-outline-primary" onClick={() => { navigator.clipboard.writeText(editContent); }}>
+                  <i className="bi bi-clipboard me-1"></i>Copy
+                </button>
+                <button className="btn btn-sm btn-primary" disabled={saving} onClick={async () => {
+                  setSaving(true);
+                  try {
+                    if (selectedDoc.type === 'requirements') {
+                      await portalApi.post('/api/portal/project/setup/requirements', { content: editContent });
+                    } else if (selectedDoc.type === 'claude_md') {
+                      await portalApi.post('/api/portal/project/setup/claude-md', { content: editContent });
+                    }
+                    setSelectedDoc(null);
+                    loadStatus();
+                    const el = document.createElement('div');
+                    el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px">Document saved</div>';
+                    document.body.appendChild(el); setTimeout(() => el.remove(), 2500);
+                  } catch { alert('Save failed'); } finally { setSaving(false); }
+                }}>
+                  {saving ? 'Saving...' : <><i className="bi bi-check-circle me-1"></i>Save & Replace</>}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -623,7 +700,7 @@ function ProjectDashboard() {
   // Persist active tab in URL hash
   const getInitialTab = (): TabKey => {
     const hash = window.location.hash.replace('#', '');
-    const valid: TabKey[] = ['overview', 'readiness', 'business-processes', 'requirements', 'github', 'compile', 'warroom', 'contract', 'discover'];
+    const valid: TabKey[] = ['overview', 'readiness', 'business-processes', 'requirements', 'github', 'compile', 'warroom', 'discover'];
     return valid.includes(hash as TabKey) ? (hash as TabKey) : 'overview';
   };
   const [activeTab, setActiveTabState] = useState<TabKey>(getInitialTab);
@@ -674,7 +751,6 @@ function ProjectDashboard() {
     { key: 'github', label: 'GitHub', icon: 'bi-github' },
     { key: 'compile', label: 'System Validation', icon: 'bi-shield-check' },
     { key: 'warroom', label: 'War Room', icon: 'bi-activity' },
-    { key: 'contract', label: 'Design Contract', icon: 'bi-file-earmark-code' },
     { key: 'discover', label: 'Project Selection', icon: 'bi-lightbulb' },
   ];
 
@@ -720,8 +796,7 @@ function ProjectDashboard() {
       {activeTab === 'github' && <GitHubTab />}
       {activeTab === 'compile' && <CompileTab />}
       {activeTab === 'warroom' && <WarRoomTab />}
-      {activeTab === 'contract' && <ProjectLockInScreen />}
-      {activeTab === 'discover' && <ProjectSelectionScreen onSelected={() => setActiveTab('contract')} />}
+      {activeTab === 'discover' && <ProjectSelectionScreen onSelected={() => setActiveTab('overview')} />}
     </>
   );
 }

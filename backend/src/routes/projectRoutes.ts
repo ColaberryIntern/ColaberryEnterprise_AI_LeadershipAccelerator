@@ -541,6 +541,15 @@ router.get('/api/portal/project/requirements/map', requireParticipant, async (re
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { getRequirementsStatus } = await import('../services/requirementsMatchingService');
     const status = await getRequirementsStatus(project.id);
+    // Enrich with capability names
+    const { Capability } = await import('../models');
+    const caps = await Capability.findAll({ where: { project_id: project.id }, attributes: ['id', 'name'] });
+    const capMap = new Map(caps.map((c: any) => [c.id, c.name]));
+    status.requirements = status.requirements.map((r: any) => {
+      const json = r.toJSON ? r.toJSON() : r;
+      json.capability_name = capMap.get(json.capability_id) || 'Unassigned';
+      return json;
+    });
     res.json(status);
   } catch (err: any) {
     console.error('[ProjectRoutes] GET /requirements/map error:', err.message);
