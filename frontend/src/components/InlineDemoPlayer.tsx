@@ -314,10 +314,17 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     for (const ev of data.sim) {
       if (runIdRef.current !== rid) return;
       narr(ev.narr);
-      graphRef.current?.highlight(ev.agent);
+      if (!ev.is_hitl) graphRef.current?.highlight(ev.agent);
       const fi = document.createElement('div');
-      fi.className = 'ep-feed-item' + (ev.agent === 'AI Control Tower' ? ' cory' : '');
-      fi.innerHTML = '<strong style="font-size:.75rem;">' + ev.agent + '</strong><div style="font-size:.7rem;">' + ev.action + '</div>';
+      const isHitl = ev.is_hitl === true;
+      fi.className = 'ep-feed-item' + (ev.agent === 'AI Control Tower' ? ' cory' : '') + (isHitl ? ' hitl' : '');
+      if (isHitl) {
+        fi.style.borderLeft = '3px solid #38a169';
+        fi.style.background = '#f0fff4';
+      }
+      const icon = isHitl ? '<i class="bi bi-person-check-fill" style="color:#38a169;margin-right:4px;"></i>' : '';
+      const badge = isHitl ? '<span style="font-size:.6rem;background:#38a169;color:white;padding:1px 5px;border-radius:3px;margin-left:4px;">HUMAN APPROVAL</span>' : '';
+      fi.innerHTML = icon + '<strong style="font-size:.75rem;">' + ev.agent + '</strong>' + badge + '<div style="font-size:.7rem;">' + ev.action + '</div>';
       feed.insertBefore(fi, feed.firstChild);
       if (!ok(await delay(2000, rid))) return;
     }
