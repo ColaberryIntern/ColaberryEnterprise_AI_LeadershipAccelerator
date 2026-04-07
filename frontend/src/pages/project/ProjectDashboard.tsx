@@ -908,13 +908,28 @@ function ProjectDashboard() {
       )}
 
       {activeTab === 'system-evolution' && (
-        <>
-          <div className="mb-4">
-            <h6 className="fw-bold mb-3" style={{ color: 'var(--color-primary)' }}><i className="bi bi-rocket-takeoff me-2"></i>System Evolution</h6>
-            <p className="text-muted small">Grow your system by adding new capabilities or managing existing documents.</p>
+        <div>
+          <h6 className="fw-bold mb-3" style={{ color: 'var(--color-primary)' }}><i className="bi bi-rocket-takeoff me-2"></i>System Evolution</h6>
+          <p className="text-muted small mb-4">Grow your system by adding new capabilities or managing existing documents.</p>
+          <div className="card border-0 shadow-sm mb-3">
+            <div className="card-body">
+              <h6 className="fw-semibold small mb-2"><i className="bi bi-file-earmark-code me-2"></i>System Documents</h6>
+              <p className="text-muted small mb-3">Compile and manage your project documents. Click to view or edit.</p>
+              <div className="row g-3">
+                {['Requirements', 'CLAUDE.md', 'System Prompt', 'Interaction Protocol'].map(doc => (
+                  <div key={doc} className="col-md-6">
+                    <div className="card border h-100" style={{ cursor: 'pointer' }}>
+                      <div className="card-body py-3">
+                        <div className="fw-medium small">{doc}</div>
+                        <div className="text-muted" style={{ fontSize: 10 }}>Click to compile and edit</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <CompileTab />
-        </>
+        </div>
       )}
     </>
   );
