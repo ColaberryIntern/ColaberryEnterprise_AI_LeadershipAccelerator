@@ -71,6 +71,38 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
   });
   if (uncatReqs.length === 0) return result;
 
+  // ── PRE-PASS: Delete fragment requirements (not real requirements) ──
+  const isFragment = (text: string): boolean => {
+    if (!text || text.length < 15) return true;
+    const t = text.trim();
+    if (/^\*\*[^*]+\*\*:?\s*$/.test(t)) return true; // bold label only
+    if (/^[A-Za-z\s-]+:\s*$/.test(t)) return true; // label with colon
+    if (t.split(/\s+/).length < 4) return true; // less than 4 words
+    if (/^\*\*(Components|Criteria|Edge Cases|Input|Output|Notes|Status|Priority|Dependencies)\*\*/i.test(t)) return true;
+    return false;
+  };
+
+  let fragmentsDeleted = 0;
+  const realReqs: typeof uncatReqs[number][] = [];
+  for (const req of uncatReqs) {
+    if (isFragment(req.requirement_text || '')) {
+      await req.destroy();
+      fragmentsDeleted++;
+    } else {
+      realReqs.push(req);
+    }
+  }
+  if (fragmentsDeleted > 0) console.log(`[RequirementGrouper] Deleted ${fragmentsDeleted} fragment requirements`);
+
+  if (realReqs.length === 0) {
+    // All were fragments — cleanup empty capabilities
+    for (const cap of uncatCaps) {
+      await Feature.destroy({ where: { capability_id: cap.id } });
+      await cap.destroy();
+    }
+    return result;
+  }
+
   // Load real processes
   const otherCaps = await Capability.findAll({
     where: { project_id: projectId, id: { [Op.notIn]: uncatIds } },
@@ -90,9 +122,9 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
   }
 
   // ── PASS 1: Aggressive keyword match to existing processes (threshold 0.15) ──
-  const unmatched: typeof uncatReqs[number][] = [];
+  const unmatched: typeof realReqs[number][] = [];
 
-  for (const req of uncatReqs) {
+  for (const req of realReqs) {
     const reqKeywords = extractKeywords(req.requirement_text || '');
     if (reqKeywords.length === 0) { unmatched.push(req); continue; }
 

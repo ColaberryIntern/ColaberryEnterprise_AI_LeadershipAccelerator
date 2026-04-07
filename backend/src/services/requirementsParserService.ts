@@ -77,14 +77,55 @@ export function parseRequirementsWithSections(docText: string): ParsedRequiremen
     }
   }
 
-  // Build flat list
-  const flat = sections.flatMap(s => s.requirements);
+  // Build flat list and filter out fragments
+  for (const section of sections) {
+    section.requirements = section.requirements.filter(r => isRealRequirement(r.text));
+  }
+  // Remove empty sections
+  const cleanSections = sections.filter(s => s.requirements.length > 0);
+
+  // Re-index requirement keys sequentially
+  let finalIdx = 0;
+  for (const section of cleanSections) {
+    for (const req of section.requirements) {
+      finalIdx++;
+      req.key = `REQ-${String(finalIdx).padStart(3, '0')}`;
+    }
+  }
+
+  const flat = cleanSections.flatMap(s => s.requirements);
 
   return {
-    sections,
+    sections: cleanSections,
     total_requirements: flat.length,
     flat,
   };
+}
+
+/**
+ * Filter out fragment/noise text that got parsed as requirements.
+ * Rejects: markdown headers, field labels, single-word items, etc.
+ */
+function isRealRequirement(text: string): boolean {
+  if (!text || text.length < 15) return false;
+
+  const trimmed = text.trim();
+
+  // Reject if it's just a bold label with no content (e.g., "**Components**:" or "**Input:**")
+  if (/^\*\*[^*]+\*\*:?\s*$/.test(trimmed)) return false;
+
+  // Reject if it's just a label ending with colon (e.g., "Edge Cases:" or "Criteria:")
+  if (/^[A-Za-z\s-]+:\s*$/.test(trimmed)) return false;
+
+  // Reject if no verb-like content (likely not a requirement)
+  // Must have at least 3 words to be a real requirement
+  const words = trimmed.split(/\s+/);
+  if (words.length < 4) return false;
+
+  // Reject common markdown formatting fragments
+  if (/^\*\*(Components|Criteria|Edge Cases|Input|Output|Notes|Status|Priority|Dependencies)\*\*/i.test(trimmed)) return false;
+
+  return true;
 }
 
 /**
