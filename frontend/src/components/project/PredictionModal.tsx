@@ -201,6 +201,60 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
           {/* Footer */}
           <div className="modal-footer">
             <button className="btn btn-outline-secondary btn-sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', border: '1px solid #6366f140', fontWeight: 600 }} onClick={() => {
+              const p = prediction || {};
+              const learnPrompt = `You are a Technical Mentor helping someone understand a specific execution step before they build it.
+
+ROLE: You are a patient, thorough instructor. You explain concepts before actions. You never skip steps.
+
+WHAT THE LEARNER IS ABOUT TO BUILD:
+- Step: ${actionLabel}
+- Business Process: This step is part of building a larger business process
+- Impact: ${p.readiness_delta ? `+${p.readiness_delta}% system readiness` : 'Improves system capability'}
+
+WHAT THIS STEP DOES:
+${prompt?.title || actionLabel}
+${prompt?.prompt_text ? '\nThe implementation involves:\n' + prompt.prompt_text.split('\n').filter((l: string) => l.startsWith('1.') || l.startsWith('2.') || l.startsWith('3.') || l.startsWith('4.') || l.startsWith('5.')).join('\n') : ''}
+
+PREDICTED IMPACT:
+- System Readiness: ${p.before?.readiness || 0}% → ${p.after?.readiness || 0}%
+- Quality Score: ${p.before?.quality || 0}% → ${p.after?.quality || 0}%
+- Maturity: L${p.before?.maturity || 1} → L${p.after?.maturity || 1}
+
+WHAT IT FIXES:
+${(p.gaps_resolved || []).map((g: string) => '- ' + g).join('\n') || '- System gaps in this area'}
+
+WHAT IT ENABLES:
+${(p.enables || []).map((e: string) => '- ' + e).join('\n') || '- Further system capabilities'}
+
+HOW TO TEACH:
+1. Start by explaining WHAT this step is in plain language
+2. Explain WHY this step matters for the overall system
+3. Explain HOW it connects to other parts of the system
+4. Break down the technical concepts involved
+5. Use analogies the learner can relate to
+6. After each concept, ask a simple question to check understanding
+7. Only proceed after the learner demonstrates understanding
+
+RULES:
+- ONE concept at a time
+- Explain WHY before HOW
+- Use real-world analogies
+- Ask for confirmation before moving on
+- Never dump all information at once
+- Never assume prior knowledge
+- Keep focus on THIS specific step, not the entire system
+
+START by greeting the learner and explaining what they are about to build and why it matters.`;
+
+              navigator.clipboard.writeText(learnPrompt);
+              window.open('https://chat.openai.com', '_blank');
+              const el = document.createElement('div');
+              el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px"><i class="bi bi-mortarboard me-2"></i>Learn prompt copied — paste in ChatGPT</div>';
+              document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
+            }}>
+              <i className="bi bi-mortarboard me-1"></i>Learn This Step
+            </button>
             <button className="btn btn-primary btn-sm" onClick={handleCopy} disabled={!prompt}>
               {copying ? <><i className="bi bi-check-lg me-1"></i>Copied!</> : <><i className="bi bi-clipboard me-1"></i>Copy Prompt</>}
             </button>
