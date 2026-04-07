@@ -565,13 +565,69 @@ function ReadinessTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Next Business Process Action — shows top priority process to work on
+// ---------------------------------------------------------------------------
+function NextBusinessProcessAction({ onNavigate }: { onNavigate: () => void }) {
+  const [topProcess, setTopProcess] = useState<any>(null);
+  useEffect(() => {
+    portalApi.get('/api/portal/project/business-processes')
+      .then(res => {
+        const procs = res.data || [];
+        // Find first non-usable process (highest priority = first in sorted list)
+        const next = procs.find((p: any) => !(p.usability?.usable));
+        setTopProcess(next || procs[0] || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!topProcess) return null;
+
+  const m = topProcess.metrics || {};
+  const mat = topProcess.maturity || {};
+  const readiness = m.system_readiness || 0;
+  const u = topProcess.usability || {};
+
+  return (
+    <div className="card border-0 shadow-sm mb-4">
+      <div className="card-body p-3">
+        <div className="d-flex justify-content-between align-items-start">
+          <div>
+            <div className="text-muted small mb-1">
+              <i className="bi bi-flag me-1"></i>Next Business Process
+              {topProcess.priority_rank && <span className="badge bg-primary ms-2" style={{ fontSize: 9 }}>#{topProcess.priority_rank}</span>}
+            </div>
+            <h6 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>{topProcess.name}</h6>
+            <div className="d-flex gap-3 text-muted" style={{ fontSize: 11 }}>
+              <span>{topProcess.total_requirements || 0} requirements</span>
+              <span>Readiness: {readiness}%</span>
+              <span>L{mat.level || 1} {mat.label || 'Prototype'}</span>
+              <span style={{ color: u.usable ? '#10b981' : '#ef4444' }}>{u.usable ? 'Usable' : 'Not Ready'}</span>
+            </div>
+          </div>
+          <button className="btn btn-sm btn-primary" onClick={onNavigate}>
+            <i className="bi bi-arrow-right me-1"></i>Start Work
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Dashboard Component
 // ---------------------------------------------------------------------------
 function ProjectDashboard() {
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  // Persist active tab in URL hash
+  const getInitialTab = (): TabKey => {
+    const hash = window.location.hash.replace('#', '');
+    const valid: TabKey[] = ['overview', 'readiness', 'business-processes', 'requirements', 'github', 'compile', 'warroom', 'contract', 'discover'];
+    return valid.includes(hash as TabKey) ? (hash as TabKey) : 'overview';
+  };
+  const [activeTab, setActiveTabState] = useState<TabKey>(getInitialTab);
+  const setActiveTab = (tab: TabKey) => { setActiveTabState(tab); window.location.hash = tab; };
 
   useEffect(() => {
     portalApi.get('/api/portal/project')
@@ -634,7 +690,8 @@ function ProjectDashboard() {
 
       <ProjectProgress currentStage={project.project_stage} />
 
-      <ProjectNextActionPanel />
+      {/* Next Action: highest priority business process */}
+      <NextBusinessProcessAction onNavigate={() => setActiveTab('business-processes')} />
 
       <nav className="nav nav-tabs mb-4">
         {tabs.map(t => (
