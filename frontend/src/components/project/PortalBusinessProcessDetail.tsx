@@ -332,14 +332,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         </div>
                         <div className="text-muted" style={{ fontSize: 10 }}>Depends on: {s.depends_on}</div>
                       </div>
-                      <div className="d-flex gap-1">
-                        <button className="btn btn-sm btn-outline-primary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.prompt_target, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
-                          <i className="bi bi-play-fill me-1"></i>Run
-                        </button>
-                        <button className="btn btn-sm btn-outline-secondary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.prompt_target, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
-                          <i className="bi bi-eye me-1"></i>Preview
-                        </button>
-                      </div>
+                      <button className="btn btn-sm btn-outline-primary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.prompt_target, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
+                        <i className="bi bi-eye me-1"></i>Preview
+                      </button>
                     </div>
                     <div className="d-flex gap-3 mt-1" style={{ fontSize: 10 }}>
                       <span style={{ color: '#10b981' }}><i className="bi bi-check-circle me-1"></i>Fixes: {s.fixes.join(', ')}</span>
