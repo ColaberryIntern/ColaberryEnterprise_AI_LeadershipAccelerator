@@ -261,24 +261,23 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         {/* 5: Requirements Status */}
         <Section num={5} title="Requirements Status">
           {(() => {
-            const allReqs = features.flatMap((f: any) => f.requirements || []);
-            const verified = allReqs.filter((r: any) => r.status === 'verified').length;
-            const built = allReqs.filter((r: any) => r.status === 'matched').length;
-            const planned = allReqs.filter((r: any) => r.status === 'partial').length;
-            const unmapped = allReqs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started').length;
-            const total = allReqs.length;
+            const total = p.total_requirements || 0;
+            const verified = p.verified_requirements || 0;
+            const autoMatched = p.auto_matched_requirements || 0;
+            const partial = p.partial_requirements || 0;
+            const unmapped = p.unmatched_requirements || 0;
             return (
               <div>
                 <div className="d-flex gap-4 mb-2">
                   <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#10b981' }}>{verified}</div><div className="text-muted" style={{ fontSize: 9 }}>Verified</div></div>
-                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#9ca3af' }}>{built}</div><div className="text-muted" style={{ fontSize: 9 }}>Auto-Matched</div></div>
-                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#f59e0b' }}>{planned}</div><div className="text-muted" style={{ fontSize: 9 }}>Planned</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#9ca3af' }}>{autoMatched}</div><div className="text-muted" style={{ fontSize: 9 }}>Auto-Matched</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#f59e0b' }}>{partial}</div><div className="text-muted" style={{ fontSize: 9 }}>Planned</div></div>
                   <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#ef4444' }}>{unmapped}</div><div className="text-muted" style={{ fontSize: 9 }}>Unmapped</div></div>
                 </div>
                 <div className="progress" style={{ height: 8 }}>
                   <div className="progress-bar" style={{ width: `${total > 0 ? (verified / total) * 100 : 0}%`, background: '#10b981' }} />
-                  <div className="progress-bar" style={{ width: `${total > 0 ? (built / total) * 100 : 0}%`, background: '#cbd5e1' }} />
-                  <div className="progress-bar" style={{ width: `${total > 0 ? (planned / total) * 100 : 0}%`, background: '#f59e0b' }} />
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (autoMatched / total) * 100 : 0}%`, background: '#cbd5e1' }} />
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (partial / total) * 100 : 0}%`, background: '#f59e0b' }} />
                 </div>
                 <div className="d-flex justify-content-between mt-1" style={{ fontSize: 9 }}>
                   <span className="text-muted">{total} total requirements</span>
