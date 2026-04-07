@@ -889,9 +889,6 @@ function ProjectDashboard() {
           {/* KPI Bar — merged from Readiness */}
           <ReadinessKPIBar />
           <ProjectSystemPromptCard />
-          <div className="mb-4">
-            <WorkstationLauncher />
-          </div>
           <ExecutionOverview />
         </>
       )}

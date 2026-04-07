@@ -34,9 +34,15 @@ function ProjectHeader({ organizationName, industry, projectStage, selectedUseCa
               </span>
             )}
           </div>
-          <span className={`badge ${stage.badge} fs-6`}>
-            <i className={`${stage.icon} me-1`}></i>{stage.label}
-          </span>
+          <div className="d-flex align-items-center gap-2">
+            <button className="btn btn-sm" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontWeight: 600, fontSize: 12, border: 'none', borderRadius: 8, padding: '6px 14px' }}
+              onClick={() => window.open('https://chatgpt.com', '_blank')}>
+              <i className="bi bi-terminal me-1"></i>Open AI Workstation
+            </button>
+            <span className={`badge ${stage.badge} fs-6`}>
+              <i className={`${stage.icon} me-1`}></i>{stage.label}
+            </span>
+          </div>
         </div>
         {(selectedUseCase || primaryBusinessProblem) && (
           <div className="mt-3 pt-3 border-top">
