@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
+import portalApi from '../../utils/portalApi';
 import SystemIntelligencePanel from './SystemIntelligencePanel';
 import PredictionModal from './PredictionModal';
 
@@ -51,10 +52,9 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
   useEffect(() => {
-    // Fetch project system prompt for learn context
-    import('../../utils/portalApi').then(({ default: portalApi }) => {
-      portalApi.get('/api/portal/project/system-prompt').then(r => setProjectContext(r.data?.system_prompt || '')).catch(() => {});
-    });
+    portalApi.get('/api/portal/project/system-prompt')
+      .then(r => setProjectContext(r.data?.system_prompt || ''))
+      .catch(() => {});
   }, []);
   useEffect(load, [processId]);
   if (!p) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
