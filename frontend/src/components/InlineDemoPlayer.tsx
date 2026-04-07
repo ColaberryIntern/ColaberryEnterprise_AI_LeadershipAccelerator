@@ -150,7 +150,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     requestAnimationFrame(step);
   }
 
-  function buildGraph(contId: string, agents: any[]) {
+  function buildGraph(contId: string, agents: any[], simSteps?: any[]) {
     const cont = document.getElementById(contId);
     if (!cont || !(window as any).d3) return { highlight: () => {}, destroy: () => {} };
     cont.innerHTML = '';
@@ -158,46 +158,108 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     const d3 = (window as any).d3;
     const colors: any = { Executive: '#1a1a2e', Operations: '#f59e0b', 'Customer Support': '#6f42c1', Sales: '#4361ee', Finance: '#dc3545', Marketing: '#198754', HR: '#0dcaf0', Compliance: '#198754' };
     const nodes: any[] = [], links: any[] = [], deptMap: any = {};
+
+    // Add AI agent nodes
     agents.forEach(a => {
-      nodes.push({ id: a.name, name: a.name, dept: a.dept, r: a.cory ? 24 : a.primary ? 14 : 10, color: colors[a.dept] || '#64748b', isCory: !!a.cory });
+      nodes.push({ id: a.name, name: a.name, dept: a.dept, r: a.cory ? 24 : a.primary ? 14 : 10, color: colors[a.dept] || '#64748b', isCory: !!a.cory, isHuman: false });
       if (!a.cory) { if (!deptMap[a.dept]) deptMap[a.dept] = []; deptMap[a.dept].push(a.name); }
     });
+
+    // Add human nodes from HITL sim steps
+    const humanNames = new Set<string>();
+    if (simSteps) {
+      simSteps.filter((s: any) => s.is_hitl).forEach((s: any) => {
+        const name = s.agent;
+        if (!humanNames.has(name)) {
+          humanNames.add(name);
+          nodes.push({ id: name, name: name, dept: 'Human', r: 16, color: '#38a169', isCory: false, isHuman: true });
+        }
+      });
+    }
+
     const cory = nodes.find(n => n.isCory);
-    if (cory) nodes.forEach(n => { if (!n.isCory) links.push({ source: cory.id, target: n.id }); });
+    if (cory) {
+      nodes.forEach(n => {
+        if (!n.isCory && !n.isHuman) links.push({ source: cory.id, target: n.id });
+        // Humans connect to the Control Tower with a special link
+        if (n.isHuman) links.push({ source: cory.id, target: n.id });
+      });
+    }
     Object.values(deptMap).forEach((arr: any) => { for (let i = 0; i < arr.length - 1; i++) links.push({ source: arr[i], target: arr[i + 1] }); });
+
     const svg = d3.select('#' + contId).append('svg').attr('width', w).attr('height', h);
     const defs = svg.append('defs');
     const f = defs.append('filter').attr('id', 'epglow');
     f.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'b');
     const m = f.append('feMerge'); m.append('feMergeNode').attr('in', 'b'); m.append('feMergeNode').attr('in', 'SourceGraphic');
+
+    // Position humans to the right side
+    nodes.filter(n => n.isHuman).forEach((n, i) => { n.fx = w - 50; n.fy = 60 + i * 60; });
+
     const sim = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id((d: any) => d.id).distance(70))
       .force('charge', d3.forceManyBody().strength(-200))
       .force('center', d3.forceCenter(w / 2, h / 2))
       .force('collision', d3.forceCollide(20));
     const link = svg.append('g').selectAll('line').data(links).enter().append('line')
-      .attr('stroke', '#cbd5e1').attr('stroke-width', 1.5).attr('stroke-dasharray', '4,3');
+      .attr('stroke', (d: any) => (d.source.isHuman || d.target.isHuman) ? '#38a169' : '#cbd5e1')
+      .attr('stroke-width', (d: any) => (d.source.isHuman || d.target.isHuman) ? 2 : 1.5)
+      .attr('stroke-dasharray', '4,3');
     const node = svg.append('g').selectAll('g').data(nodes).enter().append('g');
-    node.append('circle').attr('r', (d: any) => d.r).attr('fill', (d: any) => d.color)
-      .attr('stroke', 'white').attr('stroke-width', 2).attr('filter', (d: any) => d.isCory ? 'url(#epglow)' : null);
-    node.append('text').text((d: any) => d.name.substring(0, 2).toUpperCase())
-      .attr('text-anchor', 'middle').attr('dy', '.35em').attr('fill', 'white').attr('font-size', '8px').attr('font-weight', '700').style('pointer-events', 'none');
+
+    // AI agents = circles, Humans = rounded rectangles
+    node.each(function(this: any, d: any) {
+      const g = d3.select(this);
+      if (d.isHuman) {
+        g.append('rect')
+          .attr('x', -18).attr('y', -14).attr('width', 36).attr('height', 28)
+          .attr('rx', 6).attr('ry', 6)
+          .attr('fill', '#38a169').attr('stroke', 'white').attr('stroke-width', 2);
+        g.append('text').text('\u{1F464}')
+          .attr('text-anchor', 'middle').attr('dy', '.35em').attr('font-size', '14px').style('pointer-events', 'none');
+      } else {
+        g.append('circle').attr('r', d.r).attr('fill', d.color)
+          .attr('stroke', 'white').attr('stroke-width', 2)
+          .attr('filter', d.isCory ? 'url(#epglow)' : null);
+        g.append('text').text(d.name.substring(0, 2).toUpperCase())
+          .attr('text-anchor', 'middle').attr('dy', '.35em').attr('fill', 'white').attr('font-size', '8px').attr('font-weight', '700').style('pointer-events', 'none');
+      }
+    });
+
+    // Add labels below human nodes
+    node.filter((d: any) => d.isHuman).append('text')
+      .text((d: any) => d.name.replace(' (Human)', ''))
+      .attr('text-anchor', 'middle').attr('dy', '26px').attr('fill', '#38a169').attr('font-size', '7px').attr('font-weight', '600').style('pointer-events', 'none');
+
     sim.on('tick', () => {
       link.attr('x1', (d: any) => d.source.x).attr('y1', (d: any) => d.source.y)
         .attr('x2', (d: any) => d.target.x).attr('y2', (d: any) => d.target.y);
-      node.attr('transform', (d: any) => { d.x = Math.max(25, Math.min(w - 25, d.x)); d.y = Math.max(25, Math.min(h - 25, d.y)); return 'translate(' + d.x + ',' + d.y + ')'; });
+      node.attr('transform', (d: any) => {
+        if (!d.fx) { d.x = Math.max(25, Math.min(w - 25, d.x)); d.y = Math.max(25, Math.min(h - 25, d.y)); }
+        return 'translate(' + d.x + ',' + d.y + ')';
+      });
     });
+
     function hl(name: string) {
+      // Highlight both circle and rect nodes
       node.select('circle').transition().duration(200)
         .attr('r', (d: any) => d.name === name ? d.r + 7 : d.r)
         .attr('stroke', (d: any) => d.name === name ? '#facc15' : 'white')
         .attr('stroke-width', (d: any) => d.name === name ? 3 : 2);
+      node.select('rect').transition().duration(200)
+        .attr('stroke', (d: any) => d.name === name ? '#facc15' : 'white')
+        .attr('stroke-width', (d: any) => d.name === name ? 3 : 2)
+        .attr('x', (d: any) => d.name === name ? -22 : -18)
+        .attr('y', (d: any) => d.name === name ? -18 : -14)
+        .attr('width', (d: any) => d.name === name ? 44 : 36)
+        .attr('height', (d: any) => d.name === name ? 36 : 28);
       link.transition().duration(200)
-        .attr('stroke', (d: any) => (d.source.name === name || d.target.name === name) ? '#facc15' : '#cbd5e1')
+        .attr('stroke', (d: any) => (d.source.name === name || d.target.name === name) ? '#facc15' : (d.source.isHuman || d.target.isHuman) ? '#38a169' : '#cbd5e1')
         .attr('stroke-width', (d: any) => (d.source.name === name || d.target.name === name) ? 3 : 1.5);
       setTimeout(() => {
         node.select('circle').transition().duration(400).attr('r', (d: any) => d.r).attr('stroke', 'white').attr('stroke-width', 2);
-        link.transition().duration(400).attr('stroke', '#cbd5e1').attr('stroke-width', 1.5);
+        node.select('rect').transition().duration(400).attr('stroke', 'white').attr('stroke-width', 2).attr('x', -18).attr('y', -14).attr('width', 36).attr('height', 28);
+        link.transition().duration(400).attr('stroke', (d: any) => (d.source.isHuman || d.target.isHuman) ? '#38a169' : '#cbd5e1').attr('stroke-width', 1.5);
       }, 1200);
     }
     return { highlight: hl, destroy: () => { sim.stop(); svg.remove(); } };
@@ -282,7 +344,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     countUp(document.getElementById('ek4')!, kp.agents, '', '');
     if (!ok(await delay(1500, rid))) return;
     if (graphRef.current) graphRef.current.destroy();
-    graphRef.current = buildGraph('ep-graph-res', data.agents);
+    graphRef.current = buildGraph('ep-graph-res', data.agents, data.sim);
     if (!ok(await delay(2000, rid))) return;
 
     const deptColors: any = { Executive: 'dark', Operations: 'warning', 'Customer Support': 'info', Sales: 'primary', Finance: 'danger', Marketing: 'success', HR: 'info', Compliance: 'success' };
@@ -307,14 +369,14 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     showStep('sim');
     if (!ok(await delay(400, rid))) return;
     if (graphRef.current) graphRef.current.destroy();
-    graphRef.current = buildGraph('ep-graph-sim', data.agents);
+    graphRef.current = buildGraph('ep-graph-sim', data.agents, data.sim);
     if (!ok(await delay(1200, rid))) return;
     const feed = document.getElementById('ep-feed');
     if (!feed) return;
     for (const ev of data.sim) {
       if (runIdRef.current !== rid) return;
       narr(ev.narr);
-      if (!ev.is_hitl) graphRef.current?.highlight(ev.agent);
+      graphRef.current?.highlight(ev.agent);
       const fi = document.createElement('div');
       const isHitl = ev.is_hitl === true;
       fi.className = 'ep-feed-item' + (ev.agent === 'AI Control Tower' ? ' cory' : '') + (isHitl ? ' hitl' : '');
