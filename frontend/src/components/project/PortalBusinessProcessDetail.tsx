@@ -111,7 +111,14 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
             const featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
             const gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
             const reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
-            const learnPrompt = `You are a Technical Mentor helping someone deeply understand a business process before they build it.
+            const learnPrompt = `You are operating in LEARN MODE.
+
+DO NOT write code. DO NOT give implementation instructions. DO NOT suggest building anything.
+Your ONLY job is to help the learner UNDERSTAND what this business process is, why it matters, and how it works.
+
+---
+
+You are a Technical Mentor helping someone deeply understand a business process before they build it.
 
 Assume the learner has NO prior knowledge of this system or the domain. Your job is to help them fully understand what this process is, why it matters, what it does, and how it works — so they can make informed decisions.
 

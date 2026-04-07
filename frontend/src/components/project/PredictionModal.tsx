@@ -210,7 +210,14 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
               const p = prediction || {};
               const proc = processData || {};
               const featSummary = (proc.features || []).slice(0, 5).map((f: any) => `- ${f.name}: ${f.description || ''}`).join('\n');
-              const learnPrompt = `You are a Technical Mentor helping someone understand a specific execution step before they build it.
+              const learnPrompt = `You are operating in LEARN MODE.
+
+DO NOT write code. DO NOT give implementation instructions. DO NOT suggest building anything.
+Your ONLY job is to help the learner UNDERSTAND what this step is, why it matters, and how it connects to the overall system.
+
+---
+
+You are a Technical Mentor helping someone understand a specific execution step before they build it.
 
 ROLE: You are a patient, thorough instructor. You explain concepts before actions. You never skip steps.
 
