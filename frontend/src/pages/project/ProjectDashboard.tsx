@@ -642,6 +642,66 @@ function ReadinessTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Project System Prompt — editable on Overview tab
+// ---------------------------------------------------------------------------
+function ProjectSystemPromptCard() {
+  const [prompt, setPrompt] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    portalApi.get('/api/portal/project/system-prompt')
+      .then(res => {
+        const d = res.data;
+        setPrompt(d.system_prompt || `${d.organization_name || 'Our organization'} is building ${d.selected_use_case || 'an AI system'} to solve: ${d.primary_business_problem || 'business challenges'}. Industry: ${d.industry || 'Technology'}. Goal: ${d.automation_goal || 'Automate key processes'}.`);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await portalApi.put('/api/portal/project/system-prompt', { system_prompt: prompt });
+      setEditing(false);
+    } catch {} finally { setSaving(false); }
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="card border-0 shadow-sm mb-4">
+      <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span className="fw-semibold small"><i className="bi bi-file-text me-2"></i>Project System Prompt</span>
+        {!editing ? (
+          <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => setEditing(true)}>
+            <i className="bi bi-pencil me-1"></i>Edit
+          </button>
+        ) : (
+          <div className="d-flex gap-1">
+            <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="card-body py-2 px-3">
+        {editing ? (
+          <textarea className="form-control form-control-sm" rows={4} value={prompt} onChange={e => setPrompt(e.target.value)}
+            style={{ fontSize: 12, fontFamily: 'inherit' }}
+            placeholder="Describe who this project is for, what you're building, and what you're trying to accomplish..." />
+        ) : (
+          <p className="text-muted small mb-0" style={{ whiteSpace: 'pre-wrap' }}>{prompt}</p>
+        )}
+        <div className="text-muted mt-1" style={{ fontSize: 9 }}>This context is included in all Learn prompts so the AI mentor understands your project.</div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Next Business Process Action — shows top priority process to work on
 // ---------------------------------------------------------------------------
 function NextBusinessProcessAction({ onNavigate }: { onNavigate: () => void }) {
@@ -783,6 +843,7 @@ function ProjectDashboard() {
 
       {activeTab === 'overview' && (
         <>
+          <ProjectSystemPromptCard />
           <div className="mb-4">
             <WorkstationLauncher />
           </div>

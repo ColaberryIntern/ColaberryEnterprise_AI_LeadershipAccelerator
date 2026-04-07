@@ -27,6 +27,8 @@ function MetricDelta({ label, before, after, unit }: { label: string; before: nu
 export default function PredictionModal({ processId, actionType, actionLabel, onClose }: Props) {
   const [prediction, setPrediction] = useState<any>(null);
   const [prompt, setPrompt] = useState<any>(null);
+  const [processData, setProcessData] = useState<any>(null);
+  const [projectContext, setProjectContext] = useState('');
   const [loading, setLoading] = useState(true);
   const [copying, setCopying] = useState(false);
 
@@ -35,10 +37,13 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
     Promise.all([
       bpApi.predictImpact(processId, actionType),
       bpApi.generatePrompt(processId, actionType),
-    ]).then(async ([predRes, promptRes]) => {
+      bpApi.getProcess(processId),
+      import('../../utils/portalApi').then(({ default: api }) => api.get('/api/portal/project/system-prompt')),
+    ]).then(async ([predRes, promptRes, procRes, projRes]) => {
       setPrediction(predRes.data);
       setPrompt(promptRes.data);
-      // Auto-copy prompt to clipboard on load
+      setProcessData(procRes.data);
+      setProjectContext(projRes.data?.system_prompt || '');
       if (promptRes.data?.prompt_text) {
         try { await navigator.clipboard.writeText(promptRes.data.prompt_text); setCopying(true); setTimeout(() => setCopying(false), 3000); } catch {}
       }
@@ -203,49 +208,76 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
             <button className="btn btn-outline-secondary btn-sm" onClick={onClose}>Cancel</button>
             <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', border: '1px solid #6366f140', fontWeight: 600 }} onClick={() => {
               const p = prediction || {};
+              const proc = processData || {};
+              const featSummary = (proc.features || []).slice(0, 5).map((f: any) => `- ${f.name}: ${f.description || ''}`).join('\n');
               const learnPrompt = `You are a Technical Mentor helping someone understand a specific execution step before they build it.
 
 ROLE: You are a patient, thorough instructor. You explain concepts before actions. You never skip steps.
 
-WHAT THE LEARNER IS ABOUT TO BUILD:
-- Step: ${actionLabel}
-- Business Process: This step is part of building a larger business process
-- Impact: ${p.readiness_delta ? `+${p.readiness_delta}% system readiness` : 'Improves system capability'}
+---
 
-WHAT THIS STEP DOES:
+# LEVEL 1: PROJECT CONTEXT (THE BIGGER PICTURE)
+
+${projectContext || 'No project system prompt set yet — ask the learner about their project.'}
+
+---
+
+# LEVEL 2: BUSINESS PROCESS CONTEXT
+
+This step belongs to the business process: "${proc.name || 'Unknown'}"
+
+Process Description: ${proc.description || 'No description'}
+
+Key Features in this process:
+${featSummary || '- No features listed'}
+
+Current State:
+- System Readiness: ${proc.metrics?.system_readiness || 0}%
+- Quality Score: ${proc.metrics?.quality_score || 0}%
+- Maturity: L${proc.maturity?.level || 1} ${proc.maturity?.label || 'Prototype'}
+- Status: ${proc.usability?.usable ? 'USABLE' : 'NOT READY'}
+
+---
+
+# LEVEL 3: STEP CONTEXT (WHAT WE'RE LEARNING ABOUT)
+
+Step: ${actionLabel}
+Impact: ${p.readiness_delta ? `+${p.readiness_delta}% system readiness` : 'Improves system capability'}
+
+What this step does:
 ${prompt?.title || actionLabel}
-${prompt?.prompt_text ? '\nThe implementation involves:\n' + prompt.prompt_text.split('\n').filter((l: string) => l.startsWith('1.') || l.startsWith('2.') || l.startsWith('3.') || l.startsWith('4.') || l.startsWith('5.')).join('\n') : ''}
+${prompt?.prompt_text ? '\nImplementation involves:\n' + prompt.prompt_text.split('\n').filter((l: string) => l.startsWith('1.') || l.startsWith('2.') || l.startsWith('3.') || l.startsWith('4.') || l.startsWith('5.')).join('\n') : ''}
 
-PREDICTED IMPACT:
-- System Readiness: ${p.before?.readiness || 0}% → ${p.after?.readiness || 0}%
-- Quality Score: ${p.before?.quality || 0}% → ${p.after?.quality || 0}%
+Predicted Impact:
+- Readiness: ${p.before?.readiness || 0}% → ${p.after?.readiness || 0}%
+- Quality: ${p.before?.quality || 0}% → ${p.after?.quality || 0}%
 - Maturity: L${p.before?.maturity || 1} → L${p.after?.maturity || 1}
 
-WHAT IT FIXES:
-${(p.gaps_resolved || []).map((g: string) => '- ' + g).join('\n') || '- System gaps in this area'}
+What it fixes: ${(p.gaps_resolved || []).join(', ') || 'System gaps'}
+What it enables: ${(p.enables || []).join(', ') || 'Further capabilities'}
 
-WHAT IT ENABLES:
-${(p.enables || []).map((e: string) => '- ' + e).join('\n') || '- Further system capabilities'}
+---
 
-HOW TO TEACH:
-1. Start by explaining WHAT this step is in plain language
-2. Explain WHY this step matters for the overall system
-3. Explain HOW it connects to other parts of the system
-4. Break down the technical concepts involved
-5. Use analogies the learner can relate to
-6. After each concept, ask a simple question to check understanding
-7. Only proceed after the learner demonstrates understanding
+# HOW TO TEACH
+
+1. Start by explaining the OVERALL PROJECT — what are we building and why (from Level 1)
+2. Then explain this BUSINESS PROCESS — what role does it play in the project (from Level 2)
+3. Then explain THIS SPECIFIC STEP — what are we about to build (from Level 3)
+4. Explain WHY this step matters for the overall system
+5. Explain HOW it connects to other parts of the system
+6. Break down the technical concepts involved
+7. Use analogies the learner can relate to
+8. After each concept, ask a question to check understanding
 
 RULES:
 - ONE concept at a time
+- Always connect back to the bigger picture (project → process → step)
 - Explain WHY before HOW
 - Use real-world analogies
 - Ask for confirmation before moving on
-- Never dump all information at once
 - Never assume prior knowledge
-- Keep focus on THIS specific step, not the entire system
 
-START by greeting the learner and explaining what they are about to build and why it matters.`;
+START by greeting the learner, briefly summarizing the project, then explaining which business process and step they're about to learn.`;
 
               navigator.clipboard.writeText(learnPrompt);
               window.open('https://chat.openai.com', '_blank');

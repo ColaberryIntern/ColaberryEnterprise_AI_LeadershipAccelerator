@@ -1510,4 +1510,35 @@ router.post('/api/portal/project/business-processes/reclassify', requireParticip
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Project System Prompt ────────
+router.get('/api/portal/project/system-prompt', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const vars = (project as any).project_variables || {};
+    res.json({
+      system_prompt: vars.system_prompt || '',
+      organization_name: project.organization_name,
+      primary_business_problem: project.primary_business_problem,
+      selected_use_case: project.selected_use_case,
+      automation_goal: (project as any).automation_goal,
+      industry: project.industry,
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/api/portal/project/system-prompt', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const vars = (project as any).project_variables || {};
+    vars.system_prompt = req.body.system_prompt || '';
+    (project as any).project_variables = vars;
+    await project.save();
+    res.json({ success: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;

@@ -42,6 +42,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [showAllLinks, setShowAllLinks] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
   const [predictionAction, setPredictionAction] = useState<{ type: string; label: string } | null>(null);
+  const [projectContext, setProjectContext] = useState('');
   const [syncText, setSyncText] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
@@ -49,6 +50,12 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [showSync, setShowSync] = useState(false);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
+  useEffect(() => {
+    // Fetch project system prompt for learn context
+    import('../../utils/portalApi').then(({ default: portalApi }) => {
+      portalApi.get('/api/portal/project/system-prompt').then(r => setProjectContext(r.data?.system_prompt || '')).catch(() => {});
+    });
+  }, []);
   useEffect(load, [processId]);
   if (!p) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
 
@@ -112,6 +119,12 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
             const learnPrompt = `You are a Technical Mentor helping someone deeply understand a business process before they build it.
 
 Assume the learner has NO prior knowledge of this system or the domain. Your job is to help them fully understand what this process is, why it matters, what it does, and how it works — so they can make informed decisions.
+
+---
+
+# PROJECT CONTEXT (THE BIGGER PICTURE)
+
+${projectContext || 'No project system prompt set yet.'}
 
 ---
 
