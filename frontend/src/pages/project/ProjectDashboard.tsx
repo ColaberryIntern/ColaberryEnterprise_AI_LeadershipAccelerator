@@ -642,6 +642,51 @@ function ReadinessTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Add Business Process Card — NLP input for System Evolution
+// ---------------------------------------------------------------------------
+function AddBusinessProcessCard({ onAdded }: { onAdded: () => void }) {
+  const [input, setInput] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  const handleAdd = async () => {
+    if (!input.trim()) return;
+    setAdding(true);
+    try {
+      const res = await portalApi.post('/api/portal/project/business-processes/add', { description: input });
+      setResult(res.data);
+      setInput('');
+      setTimeout(() => { setResult(null); onAdded(); }, 2000);
+    } catch (err: any) {
+      setResult({ error: err.response?.data?.error || 'Failed to add process' });
+    } finally { setAdding(false); }
+  };
+
+  return (
+    <div className="card border-0 shadow-sm mb-4">
+      <div className="card-body">
+        <h6 className="fw-semibold small mb-2"><i className="bi bi-plus-circle me-2" style={{ color: 'var(--color-accent)' }}></i>Add Business Process</h6>
+        <p className="text-muted small mb-3">Describe what you want to add. The system will create a new business process with requirements.</p>
+        <div className="d-flex gap-2">
+          <input type="text" className="form-control form-control-sm" placeholder="e.g., I want automated email onboarding for new customers..."
+            value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            style={{ fontSize: 12 }} />
+          <button className="btn btn-sm btn-primary" onClick={handleAdd} disabled={adding || !input.trim()} style={{ whiteSpace: 'nowrap' }}>
+            {adding ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Adding...</> : <><i className="bi bi-plus-lg me-1"></i>Add</>}
+          </button>
+        </div>
+        {result && (
+          <div className={`mt-2 small ${result.error ? 'text-danger' : 'text-success'}`}>
+            {result.error ? <><i className="bi bi-exclamation-triangle me-1"></i>{result.error}</> : <><i className="bi bi-check-circle me-1"></i>Process "{result.name}" created with {result.requirements_count || 0} requirements</>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Readiness KPI Bar — compact version of ReadinessTab for Overview
 // ---------------------------------------------------------------------------
 function ReadinessKPIBar() {
@@ -908,10 +953,15 @@ function ProjectDashboard() {
         <div>
           <h6 className="fw-bold mb-3" style={{ color: 'var(--color-primary)' }}><i className="bi bi-rocket-takeoff me-2"></i>System Evolution</h6>
           <p className="text-muted small mb-4">Grow your system by adding new capabilities or managing existing documents.</p>
+
+          {/* Add Business Process */}
+          <AddBusinessProcessCard onAdded={() => setActiveTab('business-processes')} />
+
+          {/* System Documents */}
           <div className="card border-0 shadow-sm mb-3">
             <div className="card-body">
               <h6 className="fw-semibold small mb-2"><i className="bi bi-file-earmark-code me-2"></i>System Documents</h6>
-              <p className="text-muted small mb-3">Compile and manage your project documents. Click to view or edit.</p>
+              <p className="text-muted small mb-3">Compile and manage your project documents.</p>
               <div className="row g-3">
                 {['Requirements', 'CLAUDE.md', 'System Prompt', 'Interaction Protocol'].map(doc => (
                   <div key={doc} className="col-md-6">

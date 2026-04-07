@@ -1514,6 +1514,62 @@ router.post('/api/portal/project/business-processes/reclassify', requireParticip
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Add Business Process (NLP) ────────
+router.post('/api/portal/project/business-processes/add', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const description = req.body.description || '';
+    if (!description.trim()) { res.status(400).json({ error: 'Description is required' }); return; }
+
+    // Use LLM to generate process name + requirements from description
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 2000,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: 'You create business process definitions from natural language descriptions. Respond with valid JSON only.' },
+        { role: 'user', content: `Create a business process from this description:\n\n"${description}"\n\nRespond:\n{"name":"Process Name","description":"Detailed description","requirements":["REQ text 1","REQ text 2","REQ text 3"]}` },
+      ],
+    });
+
+    const parsed = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    if (!parsed.name) { res.status(400).json({ error: 'Could not generate process' }); return; }
+
+    const { Capability, Feature, RequirementsMap } = await import('../models');
+
+    // Create capability
+    const cap = await Capability.create({
+      project_id: project.id, name: parsed.name, description: parsed.description || description,
+      status: 'active', priority: 'medium', sort_order: 50, source: 'user_input',
+      lifecycle_status: 'active',
+    } as any);
+
+    // Create default feature
+    const feat = await Feature.create({
+      capability_id: cap.id, name: 'Core Functionality',
+      description: parsed.description || description,
+      status: 'active', priority: 'medium', sort_order: 0, source: 'user_input',
+    } as any);
+
+    // Create requirements
+    let reqCount = 0;
+    const reqs = parsed.requirements || [];
+    for (let i = 0; i < reqs.length; i++) {
+      await RequirementsMap.create({
+        project_id: project.id, capability_id: cap.id, feature_id: feat.id,
+        requirement_key: `REQ-NEW-${Date.now()}-${i}`,
+        requirement_text: reqs[i], status: 'unmatched', confidence_score: 0,
+      });
+      reqCount++;
+    }
+
+    res.json({ success: true, id: cap.id, name: parsed.name, description: parsed.description, requirements_count: reqCount });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Process Lifecycle Management ────────
 router.put('/api/portal/project/business-processes/:id/lifecycle', requireParticipant, async (req: Request, res: Response) => {
   try {
