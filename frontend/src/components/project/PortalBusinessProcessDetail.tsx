@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
-import portalApi from '../../utils/portalApi';
 import SystemIntelligencePanel from './SystemIntelligencePanel';
 import PredictionModal from './PredictionModal';
 
@@ -43,7 +42,6 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [showAllLinks, setShowAllLinks] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
   const [predictionAction, setPredictionAction] = useState<{ type: string; label: string } | null>(null);
-  const [projectContext, setProjectContext] = useState('');
   const [syncText, setSyncText] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
@@ -51,11 +49,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [showSync, setShowSync] = useState(false);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
-  useEffect(() => {
-    portalApi.get('/api/portal/project/system-prompt')
-      .then(r => setProjectContext(r.data?.system_prompt || ''))
-      .catch(() => {});
-  }, []);
+  // Project context comes from the process detail API response (p.project_system_prompt)
+  const projectContext = p?.project_system_prompt || '';
   useEffect(load, [processId]);
   if (!p) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
 

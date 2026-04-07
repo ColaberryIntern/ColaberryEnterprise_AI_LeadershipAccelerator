@@ -1268,9 +1268,13 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       flowData = getProcessFlow(graph, `proc:${req.params.id as string}`);
     } catch { /* graph is optional */ }
 
+    // Include project system prompt for Learn context
+    const projectVars = (project as any).project_variables || {};
+
     res.json({
       ...enriched,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
+      project_system_prompt: projectVars.system_prompt || '',
       hitl_config: capModel?.hitl_config || null,
       autonomy_level: capModel?.autonomy_level || 'manual',
       autonomy_history: capModel?.autonomy_history || [],
