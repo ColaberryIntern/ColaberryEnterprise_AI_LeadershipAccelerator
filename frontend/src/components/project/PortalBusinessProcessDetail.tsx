@@ -42,10 +42,9 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [showAllLinks, setShowAllLinks] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState<string | null>(null);
   const [predictionAction, setPredictionAction] = useState<{ type: string; label: string } | null>(null);
-  const [syncText, setSyncText] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<any>(null);
   const [resyncing, setResyncing] = useState(false);
+  const [resyncModal, setResyncModal] = useState<any>(null);
   const [showSync, setShowSync] = useState(false);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
@@ -95,26 +94,38 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
             disabled={resyncing}
             onClick={async () => {
               setResyncing(true);
+              // Capture before state
+              const before = {
+                matched: p.matched_requirements || 0,
+                verified: p.verified_requirements || 0,
+                readiness: p.metrics?.system_readiness || 0,
+                quality: p.metrics?.quality_score || 0,
+                maturity: p.maturity?.level || 1,
+                gaps: p.gap_count || 0,
+              };
               try {
                 const r = await bpApi.resyncProcess(processId);
                 const rs = r.data?.resync;
                 const wc = r.data?.what_changed;
-                let msg = `Resynced: ${rs?.matched || 0} matched, ${rs?.partial || 0} partial, ${rs?.unmatched || 0} unmapped`;
-                let bg = '#1a365d';
-                if (wc) {
-                  if (wc.status === 'complete') {
-                    msg = `✅ Last step "${wc.last_step}" verified — all ${wc.promised_files} files found`;
-                    bg = '#059669';
-                  } else if (wc.status === 'incomplete') {
-                    msg = `⚠️ Last step "${wc.last_step}" incomplete — ${wc.missing.length} file(s) not found: ${wc.missing.slice(0, 2).map((f: string) => f.split('/').pop()).join(', ')}`;
-                    bg = '#d97706';
-                  }
-                }
+                // Reload to get after state
+                const afterRes = await bpApi.getProcess(processId);
+                const after = afterRes.data;
+                const afterMetrics = {
+                  matched: after.matched_requirements || 0,
+                  verified: after.verified_requirements || 0,
+                  readiness: after.metrics?.system_readiness || 0,
+                  quality: after.metrics?.quality_score || 0,
+                  maturity: after.maturity?.level || 1,
+                  gaps: after.gap_count || 0,
+                };
+                setResyncModal({ before, after: afterMetrics, resync: rs, what_changed: wc });
+                setP(after);
+                onUpdate();
+              } catch {
                 const el = document.createElement('div');
-                el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:${bg};color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px;max-width:600px">${msg}</div>`;
-                document.body.appendChild(el); setTimeout(() => el.remove(), 6000);
-                load(); onUpdate();
-              } catch {} finally { setResyncing(false); }
+                el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;font-size:12px">Resync failed</div>';
+                document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+              } finally { setResyncing(false); }
             }}>
             {resyncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Syncing...</> : <><i className="bi bi-arrow-repeat me-1"></i>Resync</>}
           </button>
@@ -364,7 +375,86 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           })()}
         </Section>
 
-        {/* Sync info — Resync button in header handles everything */}
+        {/* Resync Results Modal */}
+        {resyncModal && (
+          <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setResyncModal(null)}>
+            <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header py-2" style={{ borderBottom: `3px solid ${resyncModal.what_changed?.status === 'complete' ? '#10b981' : resyncModal.what_changed?.status === 'incomplete' ? '#f59e0b' : '#3b82f6'}` }}>
+                  <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
+                    <i className="bi bi-arrow-repeat me-2"></i>Resync Complete
+                  </h6>
+                  <button className="btn-close" onClick={() => setResyncModal(null)}></button>
+                </div>
+                <div className="modal-body">
+                  {/* Last Step Verification */}
+                  {resyncModal.what_changed && (
+                    <div className="mb-3 p-2" style={{ background: resyncModal.what_changed.status === 'complete' ? '#10b98110' : '#f59e0b10', borderRadius: 8, border: `1px solid ${resyncModal.what_changed.status === 'complete' ? '#10b98130' : '#f59e0b30'}` }}>
+                      <div className="fw-medium small">
+                        {resyncModal.what_changed.status === 'complete' ? (
+                          <><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>Last step verified: {resyncModal.what_changed.last_step}</>
+                        ) : (
+                          <><i className="bi bi-exclamation-triangle me-1" style={{ color: '#f59e0b' }}></i>Last step incomplete: {resyncModal.what_changed.last_step}</>
+                        )}
+                      </div>
+                      {resyncModal.what_changed.missing?.length > 0 && (
+                        <div className="mt-1 text-muted" style={{ fontSize: 10 }}>
+                          Missing: {resyncModal.what_changed.missing.map((f: string) => f.split('/').pop()).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* KPI Changes */}
+                  <h6 className="fw-semibold small mb-2">What Changed</h6>
+                  <div className="table-responsive">
+                    <table className="table table-sm mb-0" style={{ fontSize: 12 }}>
+                      <thead className="table-light">
+                        <tr><th>Metric</th><th className="text-end">Before</th><th className="text-end">After</th><th className="text-end">Change</th></tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { label: 'Verified Reqs', before: resyncModal.before.verified, after: resyncModal.after.verified },
+                          { label: 'Matched Reqs', before: resyncModal.before.matched, after: resyncModal.after.matched },
+                          { label: 'System Readiness', before: resyncModal.before.readiness, after: resyncModal.after.readiness, unit: '%' },
+                          { label: 'Quality Score', before: resyncModal.before.quality, after: resyncModal.after.quality, unit: '%' },
+                          { label: 'Maturity Level', before: resyncModal.before.maturity, after: resyncModal.after.maturity, prefix: 'L' },
+                          { label: 'Gaps', before: resyncModal.before.gaps, after: resyncModal.after.gaps },
+                        ].map(row => {
+                          const delta = row.after - row.before;
+                          const color = row.label === 'Gaps' ? (delta < 0 ? '#10b981' : delta > 0 ? '#ef4444' : '#9ca3af') : (delta > 0 ? '#10b981' : delta < 0 ? '#ef4444' : '#9ca3af');
+                          return (
+                            <tr key={row.label}>
+                              <td>{row.label}</td>
+                              <td className="text-end text-muted">{row.prefix || ''}{row.before}{row.unit || ''}</td>
+                              <td className="text-end fw-medium">{row.prefix || ''}{row.after}{row.unit || ''}</td>
+                              <td className="text-end fw-bold" style={{ color }}>{delta > 0 ? '+' : ''}{delta}{row.unit || ''}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Resync Stats */}
+                  {resyncModal.resync && (
+                    <div className="mt-3 d-flex gap-3 text-muted" style={{ fontSize: 10 }}>
+                      <span>{resyncModal.resync.matched} matched</span>
+                      <span>{resyncModal.resync.partial} partial</span>
+                      <span>{resyncModal.resync.unmatched} unmapped</span>
+                      <span>{resyncModal.resync.files_scanned} files scanned</span>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer py-2">
+                  <button className="btn btn-sm btn-primary" onClick={() => setResyncModal(null)}>
+                    <i className="bi bi-arrow-right me-1"></i>Continue to Next Step
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Prediction Modal */}
         {predictionAction && (
