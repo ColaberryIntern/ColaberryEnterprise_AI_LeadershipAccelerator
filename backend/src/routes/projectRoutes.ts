@@ -1304,9 +1304,9 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     // Inject last_execution from Capability model
-    const { Capability: CapDetail } = await import('../models');
-    const capModel = await CapDetail.findByPk(req.params.id as string, { attributes: ['id', 'last_execution'] });
-    if (capModel) (cap as any).last_execution = (capModel as any).last_execution;
+    const { Capability: CapExec } = await import('../models');
+    const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution'] });
+    if (capExec) (cap as any).last_execution = (capExec as any).last_execution;
     // Inject repo file tree for agent detection
     try {
       const { getConnection } = await import('../services/githubService');
