@@ -25,7 +25,7 @@ services:
     expose:
       - "3002"
     ports:
-      - "3002:3001"
+      - "3012:3001"
 
   intelligence:
     build:

@@ -1139,7 +1139,10 @@ function enrichCapability(cap: any) {
 
   // ── 3 SEPARATE METRICS ──
   const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
-  const readiness = (hasBackend ? 50 : 0) + (hasFrontend ? 30 : 0) + (hasAgents ? 20 : 0);
+  // Readiness = 40% layer existence + 60% requirement coverage
+  // A system with all layers but 0% req coverage is only 40% ready, not 100%
+  const layerScore = (hasBackend ? 50 : 0) + (hasFrontend ? 30 : 0) + (hasAgents ? 20 : 0);
+  const readiness = Math.round(layerScore * 0.4 + reqCoverage * 0.6);
   // Quality scoring (each 0-10) — based on what exists + requirements coverage
   const q = {
     determinism: hasBackend ? Math.min(10, 5 + backendFiles.length) : (reqCoverage > 50 ? 2 : 0),
@@ -1179,7 +1182,6 @@ function enrichCapability(cap: any) {
   const allGaps = [...sysGaps, ...qualGaps, ...reqGaps];
 
   // ── DYNAMIC EXECUTION PLAN (from nextBestActionEngine) ──
-  const { generateExecutionPlan } = require('../intelligence/nextBestActionEngine');
   const allReqsFlat = features.flatMap((f: any) => f.requirements || []);
   const systemState = {
     hasBackend, hasFrontend, hasAgents,
@@ -1194,11 +1196,12 @@ function enrichCapability(cap: any) {
     totalRequirements: totalR,
   };
   // Only use USER-DRIVEN completed steps (from copying prompts), NOT repo state
-  // Repo state is already handled by the condition checks in generateExecutionPlan
-  // (e.g., !hasBackend → show build_backend, hasAgents → skip add_agents)
+  // The engine sanitizes these — invalid keys (old bugs) are ignored
   const lastExec = (cap as any).last_execution;
   const completedSteps: string[] = lastExec?.completed_steps || [];
+  const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
   const executionPlan = generateExecutionPlan(systemState, completedSteps);
+  const processComplete = isProcessComplete(systemState);
 
   const why_not: string[] = [];
   if (!hasBackend) why_not.push('No backend services or API routes found');
@@ -1219,8 +1222,9 @@ function enrichCapability(cap: any) {
     maturity: { level: maturityLevel, label: maturityLabel, next_level_requirements: nextReqs },
     gap_count: allGaps.length,
     gaps: allGaps,
+    is_complete: processComplete,
     execution_plan: executionPlan,
-    usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: hasBackend && reqCoverage > 50, why_not },
+    usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
     implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: combinedAgentFiles, models: modelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
   };

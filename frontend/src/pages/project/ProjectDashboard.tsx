@@ -861,9 +861,9 @@ function NextBusinessProcessAction({ onNavigate }: { onNavigate: () => void }) {
     portalApi.get('/api/portal/project/business-processes')
       .then(res => {
         const procs = res.data || [];
-        // Find first non-usable process (highest priority = first in sorted list)
-        const next = procs.find((p: any) => !(p.usability?.usable));
-        setTopProcess(next || procs[0] || null);
+        // Find first incomplete process (already sorted by priority from backend)
+        const next = procs.find((p: any) => !p.is_complete) || procs[0] || null;
+        setTopProcess(next);
       })
       .catch(() => {});
   }, []);

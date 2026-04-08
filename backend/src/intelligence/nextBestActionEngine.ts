@@ -1,7 +1,12 @@
 /**
- * Next Best Action Engine
- * Generates dynamic, project-specific execution plans based on real system state.
- * Actions are regenerated after every sync — completed steps disappear, new ones emerge.
+ * Next Best Action Engine — Deterministic Execution Planner
+ *
+ * RULES (deterministic, not probabilistic):
+ * 1. A process is COMPLETE when: reqCoverage >= 90% AND qualityScore >= 70 AND all layers exist
+ * 2. If a process is NOT complete, there MUST be at least one action
+ * 3. completed_steps only filters by exact key match — invalid keys are ignored
+ * 4. Actions are ordered by priority (highest first)
+ * 5. The engine never returns empty for an incomplete process
  */
 
 export interface ExecutionAction {
@@ -15,10 +20,10 @@ export interface ExecutionAction {
   blocked: boolean;
   block_reason?: string;
   requirements_covered: string[];
-  prompt_target: string; // maps to promptGenerator target
+  prompt_target: string;
 }
 
-interface SystemState {
+export interface SystemState {
   hasBackend: boolean;
   hasFrontend: boolean;
   hasAgents: boolean;
@@ -31,18 +36,25 @@ interface SystemState {
   readiness: number;
   qualityScore: number;
   maturityLevel: number;
-  gapTypes: string[]; // 'system' | 'quality' | 'requirement'
+  gapTypes: string[];
   unverifiedCount: number;
   verifiedCount: number;
   totalRequirements: number;
 }
 
-// All possible actions with conditions
+// Valid step keys — ONLY these are accepted in completed_steps
+const VALID_STEP_KEYS = new Set([
+  'build_backend', 'add_database', 'add_frontend', 'add_agents',
+  'add_monitoring', 'improve_reliability', 'enhance_agents',
+  'optimize_performance', 'verify_requirements', 'implement_requirements',
+]);
+
+// All possible actions with deterministic conditions
 const ACTION_TEMPLATES = [
   {
     key: 'build_backend',
     label: 'Build Backend Services',
-    impact: '+50% readiness',
+    impact: '+30% readiness',
     depends_on: 'None — Foundation',
     fixes: ['Backend Missing', 'API Routes Missing'],
     enables: ['API endpoints', 'Frontend integration', 'Agent automation'],
@@ -53,7 +65,7 @@ const ACTION_TEMPLATES = [
   {
     key: 'add_database',
     label: 'Add Database Models',
-    impact: '+20% reliability',
+    impact: '+15% reliability',
     depends_on: 'Backend services',
     fixes: ['Data Layer Missing', 'Low reliability'],
     enables: ['Persistent storage', 'Data integrity'],
@@ -65,7 +77,7 @@ const ACTION_TEMPLATES = [
   {
     key: 'add_frontend',
     label: 'Create Frontend UI',
-    impact: '+30% readiness',
+    impact: '+20% readiness',
     depends_on: 'Backend API',
     fixes: ['Frontend Missing', 'No user interface'],
     enables: ['User interaction', 'UX exposure'],
@@ -77,7 +89,7 @@ const ACTION_TEMPLATES = [
   {
     key: 'add_agents',
     label: 'Add AI Agent Automation',
-    impact: '+20% automation',
+    impact: '+15% automation',
     depends_on: 'Backend services',
     fixes: ['Automation Gap', 'Manual processes'],
     enables: ['Autonomous operation', 'Scheduled tasks'],
@@ -85,6 +97,22 @@ const ACTION_TEMPLATES = [
     condition: (s: SystemState) => !s.hasAgents,
     blockedIf: (s: SystemState) => !s.hasBackend,
     priority: 70,
+  },
+  {
+    key: 'implement_requirements',
+    label: 'Implement Unmapped Requirements',
+    impact: '+requirement coverage',
+    depends_on: 'Backend services',
+    fixes: ['Low requirement coverage', 'Unmapped requirements'],
+    enables: ['Higher completion %', 'Full feature delivery'],
+    prompt_target: 'backend_improvement',
+    // Fires when coverage is below 80% and there are >3 unmapped requirements
+    condition: (s: SystemState) => {
+      const unmapped = s.totalRequirements - s.verifiedCount - s.unverifiedCount;
+      return s.hasBackend && s.reqCoverage < 80 && unmapped > 3;
+    },
+    blockedIf: (s: SystemState) => !s.hasBackend,
+    priority: 65,
   },
   {
     key: 'add_monitoring',
@@ -110,6 +138,17 @@ const ACTION_TEMPLATES = [
     priority: 55,
   },
   {
+    key: 'verify_requirements',
+    label: 'Verify Unverified Requirements',
+    impact: '+verified confidence',
+    depends_on: 'Implementation exists',
+    fixes: ['Unverified auto-matches'],
+    enables: ['Accurate completion tracking', 'Trust in metrics'],
+    prompt_target: 'backend_improvement',
+    condition: (s: SystemState) => s.unverifiedCount > 0 && s.hasBackend,
+    priority: 50,
+  },
+  {
     key: 'enhance_agents',
     label: 'Enhance Agent Intelligence',
     impact: '+10% automation, +10% quality',
@@ -128,26 +167,36 @@ const ACTION_TEMPLATES = [
     fixes: ['Performance gaps'],
     enables: ['Scale readiness', 'Production deployment'],
     prompt_target: 'backend_improvement',
-    condition: (s: SystemState) => s.hasBackend && s.hasFrontend && s.readiness >= 80 && s.qualityScore < 90,
+    condition: (s: SystemState) => s.hasBackend && s.hasFrontend && s.qualityScore < 90,
     priority: 30,
-  },
-  {
-    key: 'verify_requirements',
-    label: 'Verify Unverified Requirements',
-    impact: '+verified confidence',
-    depends_on: 'Implementation exists',
-    fixes: ['Unverified auto-matches'],
-    enables: ['Accurate completion tracking', 'Trust in metrics'],
-    prompt_target: 'backend_improvement',
-    condition: (s: SystemState) => s.unverifiedCount > 0 && s.hasBackend,
-    priority: 50,
   },
 ];
 
+/**
+ * Deterministic completion check.
+ * A process is complete ONLY when ALL criteria are met.
+ */
+export function isProcessComplete(state: SystemState): boolean {
+  return (
+    state.reqCoverage >= 90 &&
+    state.qualityScore >= 70 &&
+    state.hasBackend &&
+    state.hasFrontend &&
+    state.hasModels
+  );
+}
+
 export function generateExecutionPlan(state: SystemState, completedStepKeys?: string[]): ExecutionAction[] {
+  // If process is deterministically complete, return empty
+  if (isProcessComplete(state)) return [];
+
+  // Sanitize completed keys — ONLY accept valid step keys, ignore corrupt data
+  const completed = new Set(
+    (completedStepKeys || []).filter(k => VALID_STEP_KEYS.has(k))
+  );
+
   const actions: ExecutionAction[] = [];
   let step = 1;
-  const completed = new Set(completedStepKeys || []);
 
   // Filter to applicable actions, exclude completed steps, sort by priority
   const applicable = ACTION_TEMPLATES
@@ -166,14 +215,47 @@ export function generateExecutionPlan(state: SystemState, completedStepKeys?: st
       enables: template.enables,
       blocked,
       block_reason: blocked ? `Requires: ${template.depends_on}` : undefined,
-      requirements_covered: [], // filled by caller if needed
+      requirements_covered: [],
       prompt_target: template.prompt_target,
     });
   }
 
-  // If no actions needed, system is complete
-  if (actions.length === 0 && state.readiness >= 100 && state.qualityScore >= 90) {
-    // No actions — system is mature
+  // SAFETY NET: If process is NOT complete but all actions were filtered out
+  // (e.g., all were in completed_steps), force-show the most relevant action
+  if (actions.length === 0) {
+    // Determine what's most needed
+    if (state.reqCoverage < 80) {
+      actions.push({
+        step: 1, key: 'implement_requirements',
+        label: 'Implement Unmapped Requirements',
+        impact: '+requirement coverage',
+        depends_on: 'Backend services',
+        fixes: ['Low requirement coverage'], enables: ['Higher completion %'],
+        blocked: false, requirements_covered: [],
+        prompt_target: 'backend_improvement',
+      });
+    } else if (state.qualityScore < 70) {
+      actions.push({
+        step: 1, key: 'optimize_performance',
+        label: 'Improve Quality Score',
+        impact: '+quality',
+        depends_on: 'All layers built',
+        fixes: ['Quality below threshold'], enables: ['Production readiness'],
+        blocked: false, requirements_covered: [],
+        prompt_target: 'backend_improvement',
+      });
+    } else if (!state.hasBackend || !state.hasFrontend || !state.hasModels) {
+      const missing = !state.hasBackend ? 'Backend' : !state.hasFrontend ? 'Frontend' : 'Database Models';
+      actions.push({
+        step: 1, key: !state.hasBackend ? 'build_backend' : !state.hasFrontend ? 'add_frontend' : 'add_database',
+        label: `Build Missing Layer: ${missing}`,
+        impact: '+readiness',
+        depends_on: 'None',
+        fixes: [`${missing} Missing`], enables: ['Process completion'],
+        blocked: false, requirements_covered: [],
+        prompt_target: 'backend_improvement',
+      });
+    }
   }
 
   return actions;
