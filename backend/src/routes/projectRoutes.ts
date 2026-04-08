@@ -1468,13 +1468,25 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
     if (cap) {
       const prevExec = (cap as any).last_execution || {};
       const prevCompleted = prevExec.completed_steps || [];
+      // Derive the SPECIFIC step key from the prompt title
+      const titleLower = (prompt.title || '').toLowerCase();
+      const stepKey =
+        titleLower.includes('optimize') ? 'optimize_performance' :
+        titleLower.includes('reliab') ? 'improve_reliability' :
+        titleLower.includes('monitor') ? 'add_monitoring' :
+        titleLower.includes('verif') ? 'verify_requirements' :
+        titleLower.includes('frontend') || titleLower.includes('ui') ? 'add_frontend' :
+        titleLower.includes('database') || titleLower.includes('model') ? 'add_database' :
+        titleLower.includes('agent') ? 'add_agents' :
+        titleLower.includes('backend') ? 'build_backend' :
+        target; // fallback to prompt target
       (cap as any).last_execution = {
         step: prompt.title,
         target,
         promised_files: prompt.affected_files || [],
         promised_at: new Date().toISOString(),
         status: 'pending',
-        completed_steps: [...new Set([...prevCompleted, target])], // accumulate completed step keys
+        completed_steps: [...new Set([...prevCompleted, stepKey])],
       };
       (cap as any).changed('last_execution', true);
       await cap.save();
