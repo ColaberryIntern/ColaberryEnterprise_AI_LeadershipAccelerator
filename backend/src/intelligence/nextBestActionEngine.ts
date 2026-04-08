@@ -144,13 +144,14 @@ const ACTION_TEMPLATES = [
   },
 ];
 
-export function generateExecutionPlan(state: SystemState): ExecutionAction[] {
+export function generateExecutionPlan(state: SystemState, completedStepKeys?: string[]): ExecutionAction[] {
   const actions: ExecutionAction[] = [];
   let step = 1;
+  const completed = new Set(completedStepKeys || []);
 
-  // Filter to applicable actions, sort by priority
+  // Filter to applicable actions, exclude completed steps, sort by priority
   const applicable = ACTION_TEMPLATES
-    .filter(t => t.condition(state))
+    .filter(t => t.condition(state) && !completed.has(t.key))
     .sort((a, b) => b.priority - a.priority);
 
   for (const template of applicable) {

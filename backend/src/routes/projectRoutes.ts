@@ -1193,7 +1193,28 @@ function enrichCapability(cap: any) {
     verifiedCount: allReqsFlat.filter((r: any) => r.status === 'verified').length,
     totalRequirements: totalR,
   };
-  const executionPlan = generateExecutionPlan(systemState);
+  // Derive completed steps from what exists in the repo
+  const completedSteps: string[] = [];
+  if (hasBackend) completedSteps.push('build_backend');
+  if (modelFiles.length > 0) completedSteps.push('add_database');
+  if (hasFrontend) completedSteps.push('add_frontend');
+  if (hasAgents) completedSteps.push('add_agents', 'enhance_agents');
+  // Check last_execution for additional completed steps
+  const lastExec = (cap as any).last_execution;
+  if (lastExec?.status === 'verified' && lastExec.step) {
+    // Map step label back to key
+    const stepKeyMap: Record<string, string> = {
+      'build backend': 'build_backend', 'add database': 'add_database',
+      'create frontend': 'add_frontend', 'add ai agent': 'add_agents',
+      'enhance agent': 'enhance_agents', 'add monitoring': 'add_monitoring',
+      'build ui': 'add_frontend',
+    };
+    const stepLower = (lastExec.step || '').toLowerCase();
+    for (const [match, key] of Object.entries(stepKeyMap)) {
+      if (stepLower.includes(match)) completedSteps.push(key);
+    }
+  }
+  const executionPlan = generateExecutionPlan(systemState, [...new Set(completedSteps)]);
 
   const why_not: string[] = [];
   if (!hasBackend) why_not.push('No backend services or API routes found');
