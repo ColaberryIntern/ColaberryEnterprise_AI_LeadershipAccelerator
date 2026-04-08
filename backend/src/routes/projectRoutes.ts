@@ -1193,21 +1193,24 @@ function enrichCapability(cap: any) {
     verifiedCount: allReqsFlat.filter((r: any) => r.status === 'verified').length,
     totalRequirements: totalR,
   };
-  // Derive completed steps from what exists in the repo
+  // Derive completed steps from: 1) repo state, 2) persisted completed_steps, 3) last execution
   const completedSteps: string[] = [];
   if (hasBackend) completedSteps.push('build_backend');
   if (modelFiles.length > 0) completedSteps.push('add_database');
   if (hasFrontend) completedSteps.push('add_frontend');
   if (hasAgents) completedSteps.push('add_agents', 'enhance_agents');
-  // Check last_execution for additional completed steps
+  // Include ALL previously completed step keys (persisted across resyncs)
   const lastExec = (cap as any).last_execution;
+  if (lastExec?.completed_steps) {
+    completedSteps.push(...lastExec.completed_steps);
+  }
+  // Also check last verified step label
   if (lastExec?.status === 'verified' && lastExec.step) {
-    // Map step label back to key
     const stepKeyMap: Record<string, string> = {
       'build backend': 'build_backend', 'add database': 'add_database',
       'create frontend': 'add_frontend', 'add ai agent': 'add_agents',
       'enhance agent': 'enhance_agents', 'add monitoring': 'add_monitoring',
-      'build ui': 'add_frontend',
+      'build ui': 'add_frontend', 'optimize': 'optimize_performance',
     };
     const stepLower = (lastExec.step || '').toLowerCase();
     for (const [match, key] of Object.entries(stepKeyMap)) {
@@ -1463,12 +1466,15 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
     const { Capability } = await import('../models');
     const cap = await Capability.findByPk(req.params.id as string);
     if (cap) {
+      const prevExec = (cap as any).last_execution || {};
+      const prevCompleted = prevExec.completed_steps || [];
       (cap as any).last_execution = {
         step: prompt.title,
         target,
         promised_files: prompt.affected_files || [],
         promised_at: new Date().toISOString(),
         status: 'pending',
+        completed_steps: [...new Set([...prevCompleted, target])], // accumulate completed step keys
       };
       (cap as any).changed('last_execution', true);
       await cap.save();
