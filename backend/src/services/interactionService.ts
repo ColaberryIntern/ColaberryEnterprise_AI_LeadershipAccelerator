@@ -1,4 +1,4 @@
-import { InteractionOutcome, Lead, ScheduledEmail, CampaignLead } from '../models';
+import { InteractionOutcome, Lead, ScheduledEmail, CampaignLead, Campaign, FollowUpSequence } from '../models';
 import type { OutcomeType } from '../models/InteractionOutcome';
 import { classifyLead } from './leadClassificationService';
 import { logActivity } from './activityService';
@@ -177,12 +177,24 @@ export async function recordOutcome(params: RecordOutcomeParams): Promise<void> 
             });
             updates.next_action_at = nextAction ? nextAction.scheduled_for : null;
 
-            // Auto-complete CampaignLead when no more pending actions AND this was the last step.
-            // Under event-driven sequencing, the next step may not exist yet (it gets created
-            // by scheduleNextStep after this), so only complete if we've reached the final step.
-            if (!nextAction && params.step_index !== undefined) {
-              const totalSteps = (campaignLead as any).total_steps || 0;
-              if (totalSteps === 0 || params.step_index >= totalSteps - 1) {
+            // Auto-complete CampaignLead ONLY when we've truly reached the last step.
+            // Under event-driven sequencing, the next step hasn't been created yet
+            // (scheduleNextStep runs after this), so we must check the actual sequence
+            // step count, not just whether a pending action exists.
+            if (params.step_index !== undefined) {
+              let totalSteps = (campaignLead as any).total_steps || 0;
+              // If total_steps not populated, look it up from the sequence
+              if (totalSteps === 0 && params.campaign_id) {
+                try {
+                  const campaign = await Campaign.findByPk(params.campaign_id);
+                  if (campaign?.sequence_id) {
+                    const seq = await FollowUpSequence.findByPk(campaign.sequence_id);
+                    totalSteps = seq?.steps?.length || 0;
+                  }
+                } catch {}
+              }
+              // Only mark completed if this was genuinely the final step
+              if (totalSteps > 0 && params.step_index >= totalSteps - 1 && !nextAction) {
                 updates.status = 'completed';
               }
             }
