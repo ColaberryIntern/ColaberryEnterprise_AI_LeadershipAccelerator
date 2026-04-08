@@ -120,7 +120,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
                 };
                 setResyncModal({ before, after: afterMetrics, resync: rs, what_changed: wc });
                 setP(after);
-                onUpdate();
+                // Don't call onUpdate() here — it triggers parent reload which unmounts this component
+                // and loses the modal state. onUpdate will be called when modal is dismissed.
               } catch {
                 const el = document.createElement('div');
                 el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;font-size:12px">Resync failed</div>';
@@ -377,14 +378,14 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
 
         {/* Resync Results Modal */}
         {resyncModal && (
-          <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setResyncModal(null)}>
+          <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => { setResyncModal(null); onUpdate(); }}>
             <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
               <div className="modal-content">
                 <div className="modal-header py-2" style={{ borderBottom: `3px solid ${resyncModal.what_changed?.status === 'complete' ? '#10b981' : resyncModal.what_changed?.status === 'incomplete' ? '#f59e0b' : '#3b82f6'}` }}>
                   <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
                     <i className="bi bi-arrow-repeat me-2"></i>Resync Complete
                   </h6>
-                  <button className="btn-close" onClick={() => setResyncModal(null)}></button>
+                  <button className="btn-close" onClick={() => { setResyncModal(null); onUpdate(); }}></button>
                 </div>
                 <div className="modal-body">
                   {/* Last Step Verification */}
@@ -447,7 +448,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   )}
                 </div>
                 <div className="modal-footer py-2">
-                  <button className="btn btn-sm btn-primary" onClick={() => setResyncModal(null)}>
+                  <button className="btn btn-sm btn-primary" onClick={() => { setResyncModal(null); onUpdate(); }}>
                     <i className="bi bi-arrow-right me-1"></i>Continue to Next Step
                   </button>
                 </div>
