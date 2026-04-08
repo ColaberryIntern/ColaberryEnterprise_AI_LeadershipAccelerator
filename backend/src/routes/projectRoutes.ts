@@ -1259,7 +1259,11 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       const conn = await getConnection(req.participant!.sub);
       if (conn?.file_tree_json?.tree) repoFileTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
     } catch {}
-    hierarchy.forEach((cap: any) => { cap._repoFileTree = repoFileTree; });
+    // Inject last_execution from Capability models (hierarchy doesn't include JSONB fields)
+    const { Capability: CapabilityModel } = await import('../models');
+    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution'] });
+    const execMap = new Map(capModels.map((c: any) => [c.id, c.last_execution]));
+    hierarchy.forEach((cap: any) => { cap._repoFileTree = repoFileTree; cap.last_execution = execMap.get(cap.id) || null; });
     const enriched = hierarchy.map(enrichCapability);
 
     // Graph-based prioritization
@@ -1299,6 +1303,10 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const hierarchy = await getCapabilityHierarchy(project.id);
     const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    // Inject last_execution from Capability model
+    const { Capability: CapDetail } = await import('../models');
+    const capModel = await CapDetail.findByPk(req.params.id as string, { attributes: ['id', 'last_execution'] });
+    if (capModel) (cap as any).last_execution = (capModel as any).last_execution;
     // Inject repo file tree for agent detection
     try {
       const { getConnection } = await import('../services/githubService');
