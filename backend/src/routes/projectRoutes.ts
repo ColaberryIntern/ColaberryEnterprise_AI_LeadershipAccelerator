@@ -1116,14 +1116,19 @@ function enrichCapability(cap: any) {
   });
   const modelFiles = allFiles.filter((f: string) => f.includes('models/') && f.endsWith('.ts'));
 
-  // Also check for agent files matching this process name (not just requirement-matched files)
-  // This catches agents like "engagementFeaturesAgent.ts" that weren't keyword-matched to requirements
+  // Also check FULL repo file tree for agent files matching this process name
+  // This catches agents like "userManagementAgent.ts" that weren't keyword-matched to any requirement
   const processNameStems = (cap.name || '').toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
-  const allReqFiles = allFiles; // files already found
-  // Check if any matched file is an agent for THIS process by name
-  const processAgentFiles = allReqFiles.filter((f: string) => {
+  // _repoFileTree is injected by the caller (list/detail endpoints) if available
+  const repoTree: string[] = (cap as any)._repoFileTree || allFiles;
+  const processAgentFiles = repoTree.filter((f: string) => {
     const name = (f.split('/').pop() || '').toLowerCase();
-    return name.includes('agent') && processNameStems.some((stem: string) => name.includes(stem));
+    if (!name.includes('agent') || !name.endsWith('.ts')) return false;
+    if (/^\d{14}/.test(name)) return false; // migrations
+    if (name.includes('seed')) return false;
+    if (f.includes('migrations/') || f.includes('scripts/')) return false;
+    // Must match at least one process name stem
+    return processNameStems.some((stem: string) => name.includes(stem));
   });
   // Merge with existing agent detection
   const combinedAgentFiles = [...new Set([...agentFiles, ...processAgentFiles])];
@@ -1223,6 +1228,14 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { getCapabilityHierarchy } = await import('../services/projectScopeService');
     const hierarchy = await getCapabilityHierarchy(project.id);
+    // Inject repo file tree for agent detection by process name
+    let repoFileTree: string[] = [];
+    try {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) repoFileTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+    } catch {}
+    hierarchy.forEach((cap: any) => { cap._repoFileTree = repoFileTree; });
     const enriched = hierarchy.map(enrichCapability);
 
     // Graph-based prioritization
@@ -1262,6 +1275,12 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const hierarchy = await getCapabilityHierarchy(project.id);
     const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    // Inject repo file tree for agent detection
+    try {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) (cap as any)._repoFileTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+    } catch {}
     const enriched = enrichCapability(cap);
 
     // Try graph-driven execution plan
