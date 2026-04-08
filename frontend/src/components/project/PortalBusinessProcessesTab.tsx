@@ -15,11 +15,19 @@ export default function PortalBusinessProcessesTab() {
   const [reclassifying, setReclassifying] = useState(false);
   const [lifecycleFilter, setLifecycleFilter] = useState<'active' | 'deferred' | 'all'>('active');
 
-  const load = () => {
+  const load = (selectTop = false) => {
     setLoading(true);
-    bpApi.getProcesses().then(r => setProcesses(r.data || [])).catch(() => {}).finally(() => setLoading(false));
+    bpApi.getProcesses().then(r => {
+      const procs = r.data || [];
+      setProcesses(procs);
+      // After resync: auto-select the #1 priority process
+      if (selectTop && procs.length > 0) {
+        const top = procs.find((p: any) => !p.is_complete) || procs[0];
+        setSelected(top?.id || null);
+      }
+    }).catch(() => {}).finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(() => load(), []);
 
   if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm"></div></div>;
 
@@ -93,7 +101,7 @@ export default function PortalBusinessProcessesTab() {
       {/* Detail panel appears here — above the card grid */}
       {selected && (
         <div className="mb-4">
-          <PortalBusinessProcessDetail processId={selected} onClose={() => setSelected(null)} onUpdate={load} />
+          <PortalBusinessProcessDetail processId={selected} onClose={() => setSelected(null)} onUpdate={() => load(true)} />
         </div>
       )}
 
