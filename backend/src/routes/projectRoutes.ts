@@ -603,6 +603,9 @@ router.get('/api/portal/project/github/status', requireParticipant, async (req: 
     const { getConnection } = await import('../services/githubService');
     const conn = await getConnection(enrollmentId);
     if (!conn) { res.json({ connected: false }); return; }
+    const limit = parseInt(req.query.limit as string) || 5;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const allCommits = conn.commit_summary_json || [];
     res.json({
       connected: true,
       repo_url: conn.repo_url,
@@ -611,7 +614,9 @@ router.get('/api/portal/project/github/status', requireParticipant, async (req: 
       language: conn.repo_language,
       file_count: conn.file_count,
       last_sync: conn.last_sync_at,
-      recent_commits: (conn.commit_summary_json || []).slice(0, 5),
+      recent_commits: allCommits.slice(offset, offset + limit),
+      total_commits: allCommits.length,
+      has_more: offset + limit < allCommits.length,
     });
   } catch (err: any) {
     console.error('[ProjectRoutes] GET /github/status error:', err.message);

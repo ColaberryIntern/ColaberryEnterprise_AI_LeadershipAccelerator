@@ -253,14 +253,16 @@ function GitHubTab() {
   const [ghData, setGhData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [commitLimit, setCommitLimit] = useState(5);
+  const [selectedCommit, setSelectedCommit] = useState<any>(null);
 
   const loadStatus = useCallback(() => {
     setLoading(true);
-    portalApi.get('/api/portal/project/github/status')
+    portalApi.get(`/api/portal/project/github/status?limit=${commitLimit}`)
       .then(res => setGhData(res.data))
       .catch(() => setGhData(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [commitLimit]);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
@@ -277,74 +279,132 @@ function GitHubTab() {
   if (loading) return <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>;
 
   if (!ghData?.connected) {
-    return (
-      <div className="text-center py-4 text-muted small">
-        No GitHub repository connected. Connect a repo through your project settings.
-      </div>
-    );
+    return <div className="text-center py-4 text-muted small">No GitHub repository connected.</div>;
   }
+
+  const commits = ghData.recent_commits || [];
+  const repoBase = ghData.repo_url?.replace(/\.git$/, '');
 
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
           <strong className="small">Repository:</strong>{' '}
-          <a href={ghData.repo_url} target="_blank" rel="noopener noreferrer" className="small">{ghData.repo_owner}/{ghData.repo_name}</a>
+          <a href={ghData.repo_url} target="_blank" rel="noopener noreferrer" className="small">
+            <i className="bi bi-github me-1"></i>{ghData.repo_owner}/{ghData.repo_name}
+          </a>
         </div>
         <button className="btn btn-sm btn-outline-primary" onClick={handleSync} disabled={syncing}>
-          {syncing ? 'Syncing...' : 'Sync Now'}
+          {syncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Syncing...</> : <><i className="bi bi-arrow-repeat me-1"></i>Sync Now</>}
         </button>
       </div>
 
-      <div className="row g-3 mb-3">
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center py-3">
-              <div className="fs-4 fw-bold" style={{ color: 'var(--color-primary)' }}>{ghData.file_count || 0}</div>
-              <div className="text-muted small">Files</div>
+      <div className="row g-3 mb-4">
+        {[
+          { value: ghData.file_count || 0, label: 'Files', icon: 'bi-file-earmark-code', color: 'var(--color-primary)' },
+          { value: ghData.language || '-', label: 'Language', icon: 'bi-braces', color: 'var(--color-accent)' },
+          { value: ghData.total_commits || commits.length, label: 'Total Commits', icon: 'bi-git', color: '#8b5cf6' },
+          { value: ghData.last_sync ? formatTimeAgo(ghData.last_sync) : 'Never', label: 'Last Sync', icon: 'bi-clock', color: '#f59e0b' },
+        ].map(card => (
+          <div key={card.label} className="col-md-3">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body text-center py-3">
+                <i className={`bi ${card.icon} d-block mb-1`} style={{ fontSize: 18, color: card.color }}></i>
+                <div className="fw-bold" style={{ fontSize: 18, color: card.color }}>{card.value}</div>
+                <div className="text-muted" style={{ fontSize: 10 }}>{card.label}</div>
+              </div>
             </div>
           </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center py-3">
-              <div className="fs-4 fw-bold" style={{ color: 'var(--color-accent)' }}>{ghData.language || '-'}</div>
-              <div className="text-muted small">Language</div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center py-3">
-              <div className="fs-4 fw-bold" style={{ color: 'var(--color-primary)' }}>{(ghData.recent_commits || []).length}</div>
-              <div className="text-muted small">Recent Commits</div>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body text-center py-3">
-              <div className="fs-6 fw-bold" style={{ color: 'var(--color-primary)' }}>{ghData.last_sync ? formatTimeAgo(ghData.last_sync) : 'Never'}</div>
-              <div className="text-muted small">Last Sync</div>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {ghData.recent_commits?.length > 0 && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white fw-semibold small">Recent Commits</div>
-          <div className="card-body p-0">
-            <div className="list-group list-group-flush">
-              {ghData.recent_commits.map((c: any, i: number) => (
-                <div key={i} className="list-group-item d-flex justify-content-between align-items-start py-2">
-                  <div>
-                    <code className="small me-2">{c.sha}</code>
-                    <span className="small">{c.message}</span>
-                  </div>
-                  <div className="text-muted small text-nowrap">{c.date ? new Date(c.date).toLocaleDateString() : ''}</div>
+      {/* Commit Timeline */}
+      <div className="card border-0 shadow-sm">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
+          <span className="fw-semibold small"><i className="bi bi-git me-2"></i>Commit History</span>
+          <span className="text-muted" style={{ fontSize: 10 }}>Showing {commits.length} of {ghData.total_commits || commits.length}</span>
+        </div>
+        <div className="card-body p-0">
+          {commits.map((c: any, i: number) => {
+            const commitDate = c.date ? new Date(c.date) : null;
+            const timeAgo = commitDate ? formatTimeAgo(c.date) : '';
+            const dateStr = commitDate ? commitDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+            const timeStr = commitDate ? commitDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+
+            return (
+              <div key={i} className="d-flex align-items-start gap-3 px-3 py-2" style={{ borderBottom: '1px solid var(--color-border)', cursor: 'pointer', transition: 'background 0.15s' }}
+                onClick={() => setSelectedCommit(c)}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f7fafc')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                {/* Timeline dot */}
+                <div className="d-flex flex-column align-items-center" style={{ width: 20, flexShrink: 0 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: i === 0 ? '#10b981' : '#cbd5e1', marginTop: 4 }}></div>
+                  {i < commits.length - 1 && <div style={{ width: 2, flexGrow: 1, background: '#e2e8f0', minHeight: 20 }}></div>}
                 </div>
-              ))}
+                {/* Content */}
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  <div className="d-flex justify-content-between align-items-start">
+                    <div style={{ minWidth: 0 }}>
+                      <div className="fw-medium" style={{ fontSize: 12 }}>{c.message}</div>
+                      <div className="d-flex gap-2 mt-1" style={{ fontSize: 10 }}>
+                        <span className="text-muted"><i className="bi bi-person me-1"></i>{c.author || 'Unknown'}</span>
+                        <code style={{ color: 'var(--color-primary-light)', background: '#eef2ff', padding: '0 4px', borderRadius: 3 }}>{c.sha}</code>
+                        {c.files_changed > 0 && <span className="text-muted"><i className="bi bi-file-diff me-1"></i>{c.files_changed} files</span>}
+                      </div>
+                    </div>
+                    <div className="text-end text-muted" style={{ fontSize: 10, flexShrink: 0, marginLeft: 8 }}>
+                      <div>{timeAgo}</div>
+                      <div>{dateStr} {timeStr}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {ghData.has_more && (
+          <div className="card-footer bg-white text-center py-2">
+            <button className="btn btn-sm btn-link text-muted" onClick={() => setCommitLimit(prev => prev + 10)} style={{ fontSize: 11 }}>
+              <i className="bi bi-chevron-down me-1"></i>Load More Commits
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Commit Detail Modal */}
+      {selectedCommit && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setSelectedCommit(null)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header py-2">
+                <h6 className="modal-title fw-semibold" style={{ fontSize: 13 }}><i className="bi bi-git me-2"></i>Commit Details</h6>
+                <button className="btn-close" onClick={() => setSelectedCommit(null)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="fw-medium mb-2">{selectedCommit.message}</div>
+                <div className="d-flex gap-3 mb-3 text-muted" style={{ fontSize: 11 }}>
+                  <span><i className="bi bi-person me-1"></i>{selectedCommit.author || 'Unknown'}</span>
+                  <span><i className="bi bi-clock me-1"></i>{selectedCommit.date ? new Date(selectedCommit.date).toLocaleString() : '-'}</span>
+                  <code style={{ color: 'var(--color-primary-light)' }}>{selectedCommit.sha}</code>
+                </div>
+                {repoBase && (
+                  <a href={`${repoBase}/commit/${selectedCommit.sha}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary mb-3" style={{ fontSize: 11 }}>
+                    <i className="bi bi-github me-1"></i>View on GitHub
+                  </a>
+                )}
+                <div className="border-top pt-2">
+                  <div className="fw-medium small mb-1">What This Commit Likely Contains:</div>
+                  <div className="text-muted small">
+                    {selectedCommit.message?.toLowerCase().includes('agent') && <div><i className="bi bi-cpu me-1" style={{ color: '#8b5cf6' }}></i>Agent implementation</div>}
+                    {selectedCommit.message?.toLowerCase().includes('service') && <div><i className="bi bi-gear me-1" style={{ color: '#3b82f6' }}></i>Backend service</div>}
+                    {selectedCommit.message?.toLowerCase().includes('route') && <div><i className="bi bi-signpost me-1" style={{ color: '#f59e0b' }}></i>API route</div>}
+                    {selectedCommit.message?.toLowerCase().includes('model') && <div><i className="bi bi-database me-1" style={{ color: '#10b981' }}></i>Database model</div>}
+                    {selectedCommit.message?.toLowerCase().includes('ui') || selectedCommit.message?.toLowerCase().includes('page') || selectedCommit.message?.toLowerCase().includes('frontend') ? <div><i className="bi bi-layout-wtf me-1" style={{ color: '#ec4899' }}></i>Frontend UI</div> : null}
+                    {selectedCommit.message?.toLowerCase().includes('fix') && <div><i className="bi bi-wrench me-1" style={{ color: '#ef4444' }}></i>Bug fix</div>}
+                    {selectedCommit.message?.toLowerCase().includes('test') && <div><i className="bi bi-check2-square me-1" style={{ color: '#06b6d4' }}></i>Tests</div>}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
