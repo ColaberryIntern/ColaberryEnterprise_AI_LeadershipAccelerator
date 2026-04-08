@@ -1193,31 +1193,12 @@ function enrichCapability(cap: any) {
     verifiedCount: allReqsFlat.filter((r: any) => r.status === 'verified').length,
     totalRequirements: totalR,
   };
-  // Derive completed steps from: 1) repo state, 2) persisted completed_steps, 3) last execution
-  const completedSteps: string[] = [];
-  if (hasBackend) completedSteps.push('build_backend');
-  if (modelFiles.length > 0) completedSteps.push('add_database');
-  if (hasFrontend) completedSteps.push('add_frontend');
-  if (hasAgents) completedSteps.push('add_agents', 'enhance_agents');
-  // Include ALL previously completed step keys (persisted across resyncs)
+  // Only use USER-DRIVEN completed steps (from copying prompts), NOT repo state
+  // Repo state is already handled by the condition checks in generateExecutionPlan
+  // (e.g., !hasBackend → show build_backend, hasAgents → skip add_agents)
   const lastExec = (cap as any).last_execution;
-  if (lastExec?.completed_steps) {
-    completedSteps.push(...lastExec.completed_steps);
-  }
-  // Also check last verified step label
-  if (lastExec?.status === 'verified' && lastExec.step) {
-    const stepKeyMap: Record<string, string> = {
-      'build backend': 'build_backend', 'add database': 'add_database',
-      'create frontend': 'add_frontend', 'add ai agent': 'add_agents',
-      'enhance agent': 'enhance_agents', 'add monitoring': 'add_monitoring',
-      'build ui': 'add_frontend', 'optimize': 'optimize_performance',
-    };
-    const stepLower = (lastExec.step || '').toLowerCase();
-    for (const [match, key] of Object.entries(stepKeyMap)) {
-      if (stepLower.includes(match)) completedSteps.push(key);
-    }
-  }
-  const executionPlan = generateExecutionPlan(systemState, [...new Set(completedSteps)]);
+  const completedSteps: string[] = lastExec?.completed_steps || [];
+  const executionPlan = generateExecutionPlan(systemState, completedSteps);
 
   const why_not: string[] = [];
   if (!hasBackend) why_not.push('No backend services or API routes found');
@@ -1485,6 +1466,7 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
         titleLower.includes('verif') ? 'verify_requirements' :
         titleLower.includes('frontend') || titleLower.includes('ui') ? 'add_frontend' :
         titleLower.includes('database') || titleLower.includes('model') ? 'add_database' :
+        titleLower.includes('enhance') && titleLower.includes('agent') ? 'enhance_agents' :
         titleLower.includes('agent') ? 'add_agents' :
         titleLower.includes('backend') ? 'build_backend' :
         target; // fallback to prompt target
