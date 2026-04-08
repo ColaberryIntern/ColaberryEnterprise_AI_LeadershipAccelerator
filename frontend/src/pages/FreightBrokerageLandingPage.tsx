@@ -101,6 +101,81 @@ function FreightBrokerageLandingPage() {
         </div>
       </section>
 
+      {/* System Flow Diagram */}
+      <section className="py-5">
+        <div className="container" style={{ maxWidth: 900 }}>
+          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>One Connected System, Not 4 Separate Tools</h2>
+          <p className="text-center text-muted mb-4">Every module feeds the next. The AI Control Tower orchestrates the entire financial lifecycle.</p>
+          <div className="position-relative" style={{ padding: '20px 0' }}>
+            {/* AR Flow (top) */}
+            <div className="d-flex align-items-center justify-content-center gap-2 flex-wrap mb-3">
+              <div className="text-muted small fw-semibold" style={{ minWidth: 90, textAlign: 'right' }}>
+                <i className="bi bi-truck me-1" />Load Delivered
+              </div>
+              <i className="bi bi-arrow-right text-muted" />
+              <button onClick={() => playScenario('freight-billing')} className="btn btn-sm fw-semibold px-3 py-2" style={{ background: selectedScenario === 'freight-billing' ? 'var(--color-primary)' : '#f1f5f9', color: selectedScenario === 'freight-billing' ? 'white' : 'var(--color-primary)', border: '2px solid var(--color-primary)', borderRadius: 8, fontSize: 13, transition: 'all .2s' }}>
+                <i className="bi bi-calculator me-1" />Billing Engine
+              </button>
+              <i className="bi bi-arrow-right text-muted" />
+              <button onClick={() => playScenario('freight-invoice')} className="btn btn-sm fw-semibold px-3 py-2" style={{ background: selectedScenario === 'freight-invoice' ? '#2b6cb0' : '#f1f5f9', color: selectedScenario === 'freight-invoice' ? 'white' : '#2b6cb0', border: '2px solid #2b6cb0', borderRadius: 8, fontSize: 13, transition: 'all .2s' }}>
+                <i className="bi bi-receipt me-1" />Invoice Engine
+              </button>
+              <i className="bi bi-arrow-right text-muted" />
+              <div className="text-muted small fw-semibold" style={{ minWidth: 90 }}>
+                <i className="bi bi-cash-coin me-1" />Cash Collected
+              </div>
+            </div>
+
+            {/* Center - Control Tower + Dispute */}
+            <div className="text-center my-3">
+              <div className="d-inline-flex align-items-center gap-3">
+                <div className="d-flex flex-column align-items-center">
+                  <i className="bi bi-arrow-down-up text-muted mb-1" style={{ fontSize: 14 }} />
+                  <button onClick={() => playScenario('freight-dispute')} className="btn btn-sm fw-semibold px-3 py-2" style={{ background: selectedScenario === 'freight-dispute' ? '#dc3545' : '#f1f5f9', color: selectedScenario === 'freight-dispute' ? 'white' : '#dc3545', border: '2px solid #dc3545', borderRadius: 8, fontSize: 13, transition: 'all .2s' }}>
+                    <i className="bi bi-exclamation-triangle me-1" />Dispute Engine
+                  </button>
+                  <i className="bi bi-arrow-down-up text-muted mt-1" style={{ fontSize: 14 }} />
+                </div>
+                <div className="d-flex flex-column align-items-center mx-4">
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#1a1a2e', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '3px solid #334155', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                    <span style={{ color: 'white', fontSize: 11, fontWeight: 700, textAlign: 'center', lineHeight: 1.1 }}>AI<br/>Tower</span>
+                  </div>
+                  <small className="text-muted mt-1" style={{ fontSize: 10 }}>Orchestrator</small>
+                </div>
+                <div className="d-flex flex-column align-items-center">
+                  <div style={{ width: 36, height: 36, borderRadius: 6, background: '#38a169', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid white', boxShadow: '0 2px 8px rgba(56,161,105,0.3)' }}>
+                    <i className="bi bi-person-check-fill text-white" style={{ fontSize: 16 }} />
+                  </div>
+                  <small style={{ color: '#38a169', fontSize: 10, fontWeight: 600, marginTop: 4 }}>Human<br/>Oversight</small>
+                </div>
+              </div>
+            </div>
+
+            {/* AP Flow (bottom) */}
+            <div className="d-flex align-items-center justify-content-center gap-2 flex-wrap mt-3">
+              <div className="text-muted small fw-semibold" style={{ minWidth: 90, textAlign: 'right' }}>
+                <i className="bi bi-file-earmark-text me-1" />Carrier Invoice
+              </div>
+              <i className="bi bi-arrow-right text-muted" />
+              <button onClick={() => playScenario('freight-settlement')} className="btn btn-sm fw-semibold px-3 py-2" style={{ background: selectedScenario === 'freight-settlement' ? '#198754' : '#f1f5f9', color: selectedScenario === 'freight-settlement' ? 'white' : '#198754', border: '2px solid #198754', borderRadius: 8, fontSize: 13, transition: 'all .2s' }}>
+                <i className="bi bi-bank me-1" />Settlement Engine
+              </button>
+              <i className="bi bi-arrow-right text-muted" />
+              <div className="text-muted small fw-semibold" style={{ minWidth: 90 }}>
+                <i className="bi bi-check-circle me-1" />Carrier Paid
+              </div>
+            </div>
+
+            {/* Labels */}
+            <div className="d-flex justify-content-between mt-4" style={{ fontSize: 11 }}>
+              <span className="badge bg-primary bg-opacity-10 text-primary">AR (Customer Side)</span>
+              <span className="badge bg-success bg-opacity-10 text-success">AP (Carrier Side)</span>
+            </div>
+          </div>
+          <p className="text-center text-muted small mt-3"><i className="bi bi-info-circle me-1" />Click any module to watch its demo. All 4 share the same data: load records, documents, charge ledger, and audit log.</p>
+        </div>
+      </section>
+
       {/* Demo Section */}
       <section id="demo" className="py-5" style={{ background: 'var(--color-bg-alt)' }}>
         <div className="container" style={{ maxWidth: 1100 }}>
