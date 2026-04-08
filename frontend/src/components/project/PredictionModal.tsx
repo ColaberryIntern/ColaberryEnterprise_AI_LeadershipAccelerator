@@ -44,16 +44,21 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
       setPrompt(promptRes.data);
       setProcessData(procRes.data);
       setProjectContext(projRes.data?.system_prompt || '');
-      if (promptRes.data?.prompt_text) {
-        try { await navigator.clipboard.writeText(promptRes.data.prompt_text); setCopying(true); setTimeout(() => setCopying(false), 3000); } catch {}
-      }
+      // Auto-copy disabled on HTTP — user clicks Copy Prompt manually
     }).catch(() => {}).finally(() => setLoading(false));
   }, [processId, actionType]);
+
+  const copyToClipboard = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); } catch {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+  };
 
   const handleCopy = async () => {
     if (!prompt?.prompt_text) return;
     setCopying(true);
-    await navigator.clipboard.writeText(prompt.prompt_text);
+    await copyToClipboard(prompt.prompt_text);
     setTimeout(() => setCopying(false), 2000);
   };
 
@@ -286,11 +291,7 @@ RULES:
 
 START by greeting the learner, briefly summarizing the project, then explaining which business process and step they're about to learn.`;
 
-              // Clipboard fallback for HTTP (dev)
-              try { await navigator.clipboard.writeText(learnPrompt); } catch {
-                const ta = document.createElement('textarea'); ta.value = learnPrompt; ta.style.position = 'fixed'; ta.style.left = '-9999px';
-                document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-              }
+              await copyToClipboard(learnPrompt);
               window.open('https://chatgpt.com', '_blank');
               const el = document.createElement('div');
               el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#6366f1;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px"><i class="bi bi-mortarboard me-2"></i>Learn prompt copied — paste in ChatGPT</div>';
