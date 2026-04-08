@@ -1497,10 +1497,10 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
     const project = await getProjectByEnrollment(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
 
-    // 1. Sync GitHub file tree
+    // 1. Full GitHub sync (file tree + commits + stats) — keeps Code Intelligence in sync
     try {
-      const { syncFileTree } = await import('../services/githubService');
-      await syncFileTree(req.participant!.sub);
+      const { fullSync } = await import('../services/githubService');
+      await fullSync(req.participant!.sub);
     } catch { /* non-critical */ }
 
     // 2. Re-run requirement matching for this process's requirements only
@@ -1667,6 +1667,11 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
     const { getProjectByEnrollment } = await import('../services/projectService');
     const project = await getProjectByEnrollment(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    // Full GitHub sync first — keeps Code Intelligence tab current
+    try {
+      const { fullSync } = await import('../services/githubService');
+      await fullSync(req.participant!.sub);
+    } catch { /* non-critical */ }
     const { reconcileAfterExecution } = await import('../intelligence/execution/reconciliationEngine');
     const result = await reconcileAfterExecution(
       req.participant!.sub, project.id, req.params.id as string, req.body.report || ''
