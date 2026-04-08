@@ -42,72 +42,64 @@ export function getMissingCapabilities(graph: ContextGraph): GraphNode[] {
  * Rank processes by priority using graph analysis.
  * Returns Map<processNodeId, priorityScore> (higher = build first)
  *
- * DETERMINISTIC RULES:
- * 1. Incomplete processes ALWAYS rank above complete ones
- * 2. Among incomplete: more remaining work = higher priority
- * 3. Foundation processes (shared infrastructure) get a boost
- * 4. Backend-heavy processes rank above frontend-only
+ * DETERMINISTIC PRIORITY RULES:
+ *
+ * Priority = "how urgently does this process need work?"
+ *
+ * HIGH priority = not started yet, has important gaps, is a foundation for others
+ * LOW priority  = already has implementation, layers built, work in progress
+ *
+ * The key insight: a process with existing backend/frontend/agents has ALREADY
+ * received attention. Processes with NOTHING built need to be worked on first.
  */
 export function getProcessPriority(graph: ContextGraph): Map<string, { score: number; reason: string }> {
   const processes = graph.getNodesByType('process');
   const priorities = new Map<string, { score: number; reason: string }>();
 
   for (const proc of processes) {
-    let score = 0;
+    let score = 100; // base score for all processes
     const reasons: string[] = [];
 
     const features = graph.getConnectedNodes(proc.id, 'contains');
     const allReqs = features.flatMap(f => graph.getConnectedNodes(f.id, 'contains'));
     const allFiles = allReqs.flatMap(r => graph.getConnectedNodes(r.id, 'matched_to'));
-    const gaps = allReqs.flatMap(r => graph.getConnectedNodes(r.id, 'missing'));
 
     const totalReqs = allReqs.length;
-    const matchedReqs = allReqs.filter(r => allFiles.length > 0 || r.status === 'verified' || (r.status as string) === 'auto_verified').length;
-    const reqCoverage = totalReqs > 0 ? matchedReqs / totalReqs : 0;
-
+    const hasFiles = allFiles.length > 0;
     const serviceCount = allFiles.filter(f => f.type === 'service').length;
     const modelCount = allFiles.filter(f => f.type === 'db_model').length;
-    const hasBackendFiles = allFiles.some(f => f.type === 'service' || f.type === 'db_model');
-    const hasFrontendOnly = !hasBackendFiles && allFiles.some(f => f.metadata?.path?.includes('.tsx'));
+    const hasBackendFiles = serviceCount > 0 || modelCount > 0;
 
-    // ── RULE 1: Completion penalty — complete processes go to the back ──
-    // A process with >90% coverage and good quality is "done" — deprioritize heavily
-    if (reqCoverage >= 0.9 && hasBackendFiles) {
-      score -= 500;
-      reasons.push('Near-complete (deprioritized)');
+    // ── RULE 1: PENALTY for existing implementation ──
+    // Processes that already have files built should go BELOW those with nothing
+    // This is the most important rule — prevents "rich get richer" prioritization
+    if (hasFiles) {
+      const filePenalty = Math.min(allFiles.length * 20, 300);
+      score -= filePenalty;
+      reasons.push(`Already has ${allFiles.length} files (-${filePenalty})`);
+    }
+    if (hasBackendFiles) {
+      score -= 100;
+      reasons.push('Has backend (already started)');
     }
 
-    // ── RULE 2: Remaining work = higher priority ──
-    // More gaps = more work needed = should be worked on first
-    if (gaps.length > 0) {
-      score += gaps.length * 5;
-      reasons.push(`${gaps.length} unimplemented requirements`);
-    }
+    // ── RULE 2: Requirement count = importance ──
+    // More requirements = more important process (but capped)
+    score += Math.min(totalReqs * 3, 120);
 
-    // ── RULE 3: Foundation bonus — shared infrastructure processes first ──
+    // ── RULE 3: Foundation bonus — shared infrastructure first ──
     const dependsOnEdges = graph.getEdgesFrom(proc.id).filter(e => e.type === 'depends_on');
     const sharedProcessCount = new Set(dependsOnEdges.map(e => e.to)).size;
     if (sharedProcessCount > 0) {
       score += sharedProcessCount * 15;
-      reasons.push(`Shared infrastructure with ${sharedProcessCount} processes`);
+      reasons.push(`Foundation for ${sharedProcessCount} processes`);
     }
 
-    // ── RULE 4: Infrastructure files = build first ──
-    if (serviceCount > 0 || modelCount > 0) {
-      score += (serviceCount + modelCount) * 10;
-      reasons.push(`${serviceCount} services, ${modelCount} models`);
-    }
-
-    // ── RULE 5: Requirement count (tiebreaker) ──
-    score += totalReqs * 2;
-
-    // ── RULE 6: Layer order — backend before frontend ──
-    if (hasBackendFiles) {
-      score += 20;
-      reasons.push('Backend infrastructure');
-    } else if (hasFrontendOnly) {
-      score -= 10;
-      reasons.push('Frontend-only');
+    // ── RULE 4: Not-started bonus ──
+    // Processes with zero implementation get a significant boost
+    if (!hasFiles && totalReqs > 0) {
+      score += 200;
+      reasons.push('Not started — needs attention');
     }
 
     priorities.set(proc.id, { score, reason: reasons.join('; ') || 'Standard priority' });
