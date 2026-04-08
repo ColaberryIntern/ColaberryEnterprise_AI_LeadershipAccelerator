@@ -1185,7 +1185,7 @@ function enrichCapability(cap: any) {
     hasBackend, hasFrontend, hasAgents,
     hasModels: modelFiles.length > 0,
     backendCount: backendFiles.length, frontendCount: frontendFiles.length,
-    agentCount: agentFiles.length, modelCount: modelFiles.length,
+    agentCount: combinedAgentFiles.length, modelCount: modelFiles.length,
     reqCoverage, readiness, qualityScore: qualityTotal,
     maturityLevel: maturityLevel,
     gapTypes: [...(hasBackend ? [] : ['system']), ...(q.observability === 0 ? ['quality'] : []), ...(allReqsFlat.some((r: any) => r.status === 'unmatched') ? ['requirement'] : [])],
@@ -1283,14 +1283,8 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     } catch {}
     const enriched = enrichCapability(cap);
 
-    // Try graph-driven execution plan
-    try {
-      const { buildProcessGraph } = await import('../intelligence/graph/graphBuilder');
-      const { getNextBestActions } = await import('../intelligence/graph/graphQueryEngine');
-      const graph = await buildProcessGraph(project.id, req.params.id as string);
-      const graphActions = getNextBestActions(graph, `proc:${req.params.id as string}`);
-      if (graphActions.length > 0) enriched.execution_plan = graphActions;
-    } catch { /* fallback to heuristic plan already in enriched */ }
+    // Graph-driven execution plan disabled — enrichment plan uses correct agent/file detection
+    // The graph planner doesn't have access to full repo tree, so it produces stale results
 
     // Add BPOS fields from Capability model
     const { Capability } = await import('../models');

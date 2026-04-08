@@ -241,7 +241,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         </Section>
 
         {/* 3: What Exists */}
-        <Section num={3} title="What Exists" collapsible defaultOpen={true}>
+        <Section num={3} title="What Exists" collapsible defaultOpen={false}>
           {(links.backend?.length > 0 || links.frontend?.length > 0 || links.agents?.length > 0 || links.models?.length > 0) ? (
             <div className="row g-3">
               {[
