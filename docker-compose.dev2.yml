@@ -12,7 +12,7 @@ services:
     restart: always
     env_file: .env.dev
     environment:
-      DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@accelerator-db:5432/${DB_NAME:-accelerator_prod}
+      DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@accelerator-db:5432/accelerator_dev2
       INTELLIGENCE_ENGINE_URL: http://accelerator-dev2-intelligence:5000
       NODE_OPTIONS: "--max-old-space-size=512"
       APP_ENV: dev
@@ -34,7 +34,7 @@ services:
     container_name: accelerator-dev2-intelligence
     restart: always
     environment:
-      DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@accelerator-db:5432/${DB_NAME:-accelerator_prod}
+      DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@accelerator-db:5432/accelerator_dev2
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
