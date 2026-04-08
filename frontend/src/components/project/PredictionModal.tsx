@@ -31,6 +31,8 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
   const [projectContext, setProjectContext] = useState('');
   const [loading, setLoading] = useState(true);
   const [copying, setCopying] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
+  const [resyncDone, setResyncDone] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -209,7 +211,22 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
           </div>
 
           {/* Footer */}
-          <div className="modal-footer">
+          <div className="modal-footer d-flex justify-content-between">
+            <button className="btn btn-sm" style={{ background: '#10b98120', color: '#059669', border: '1px solid #10b98140', fontWeight: 600 }}
+              disabled={resyncing}
+              onClick={async () => {
+                setResyncing(true);
+                try {
+                  await bpApi.resyncProcess(processId);
+                  setResyncDone(true);
+                  setTimeout(() => setResyncDone(false), 3000);
+                } catch {} finally { setResyncing(false); }
+              }}>
+              {resyncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Syncing...</>
+                : resyncDone ? <><i className="bi bi-check-circle me-1"></i>Synced!</>
+                : <><i className="bi bi-arrow-repeat me-1"></i>Resync</>}
+            </button>
+            <div className="d-flex gap-2">
             <button className="btn btn-outline-secondary btn-sm" onClick={onClose}>Cancel</button>
             <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', border: '1px solid #6366f140', fontWeight: 600 }} onClick={async () => {
               const p = prediction || {};
@@ -302,6 +319,7 @@ START by greeting the learner, briefly summarizing the project, then explaining 
             <button className="btn btn-primary btn-sm" onClick={handleCopy} disabled={!prompt}>
               {copying ? <><i className="bi bi-check-lg me-1"></i>Copied!</> : <><i className="bi bi-clipboard me-1"></i>Copy Prompt</>}
             </button>
+            </div>
           </div>
         </div>
       </div>
