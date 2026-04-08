@@ -6,6 +6,7 @@ interface Props {
   actionType: string;
   actionLabel: string;
   onClose: () => void;
+  onResync?: () => void;
 }
 
 function MetricDelta({ label, before, after, unit }: { label: string; before: number; after: number; unit?: string }) {
@@ -24,7 +25,7 @@ function MetricDelta({ label, before, after, unit }: { label: string; before: nu
   );
 }
 
-export default function PredictionModal({ processId, actionType, actionLabel, onClose }: Props) {
+export default function PredictionModal({ processId, actionType, actionLabel, onClose, onResync }: Props) {
   const [prediction, setPrediction] = useState<any>(null);
   const [prompt, setPrompt] = useState<any>(null);
   const [processData, setProcessData] = useState<any>(null);
@@ -215,12 +216,17 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
             <button className="btn btn-sm" style={{ background: '#10b98120', color: '#059669', border: '1px solid #10b98140', fontWeight: 600 }}
               disabled={resyncing}
               onClick={async () => {
-                setResyncing(true);
-                try {
-                  await bpApi.resyncProcess(processId);
-                  setResyncDone(true);
-                  setTimeout(() => setResyncDone(false), 3000);
-                } catch {} finally { setResyncing(false); }
+                if (onResync) {
+                  onClose(); // close prediction modal
+                  onResync(); // trigger parent's resync with results modal
+                } else {
+                  setResyncing(true);
+                  try {
+                    await bpApi.resyncProcess(processId);
+                    setResyncDone(true);
+                    setTimeout(() => setResyncDone(false), 3000);
+                  } catch {} finally { setResyncing(false); }
+                }
               }}>
               {resyncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Syncing...</>
                 : resyncDone ? <><i className="bi bi-check-circle me-1"></i>Synced!</>

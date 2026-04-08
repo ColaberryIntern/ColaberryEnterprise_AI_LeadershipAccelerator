@@ -459,7 +459,28 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
 
         {/* Prediction Modal */}
         {predictionAction && (
-          <PredictionModal processId={processId} actionType={predictionAction.type} actionLabel={predictionAction.label} onClose={() => setPredictionAction(null)} />
+          <PredictionModal processId={processId} actionType={predictionAction.type} actionLabel={predictionAction.label} onClose={() => setPredictionAction(null)} onResync={async () => {
+            // Trigger the same resync flow as the header Resync button
+            setResyncing(true);
+            const before = {
+              matched: p.matched_requirements || 0, verified: p.verified_requirements || 0,
+              readiness: p.metrics?.system_readiness || 0, quality: p.metrics?.quality_score || 0,
+              maturity: p.maturity?.level || 1, gaps: p.gap_count || 0,
+            };
+            try {
+              const r = await bpApi.resyncProcess(processId);
+              const afterRes = await bpApi.getProcess(processId);
+              const after = afterRes.data;
+              setResyncModal({
+                before, after: {
+                  matched: after.matched_requirements || 0, verified: after.verified_requirements || 0,
+                  readiness: after.metrics?.system_readiness || 0, quality: after.metrics?.quality_score || 0,
+                  maturity: after.maturity?.level || 1, gaps: after.gap_count || 0,
+                }, resync: r.data?.resync, what_changed: r.data?.what_changed,
+              });
+              setP(after);
+            } catch {} finally { setResyncing(false); }
+          }} />
         )}
         </div>
         {/* Right: System Intelligence Panel (30%) */}
