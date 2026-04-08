@@ -62,7 +62,7 @@ export function getProcessPriority(graph: ContextGraph): Map<string, { score: nu
     const gaps = allReqs.flatMap(r => graph.getConnectedNodes(r.id, 'missing'));
 
     const totalReqs = allReqs.length;
-    const matchedReqs = allReqs.filter(r => allFiles.length > 0 || r.status === 'verified' || r.status === 'auto_verified').length;
+    const matchedReqs = allReqs.filter(r => allFiles.length > 0 || r.status === 'verified' || (r.status as string) === 'auto_verified').length;
     const reqCoverage = totalReqs > 0 ? matchedReqs / totalReqs : 0;
 
     const serviceCount = allFiles.filter(f => f.type === 'service').length;
