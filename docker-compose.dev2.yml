@@ -48,7 +48,7 @@ services:
   nginx:
     build:
       context: .
-      dockerfile: nginx/Dockerfile.dev
+      dockerfile: nginx/Dockerfile.dev2
     container_name: accelerator-dev2-nginx
     restart: always
     ports:
