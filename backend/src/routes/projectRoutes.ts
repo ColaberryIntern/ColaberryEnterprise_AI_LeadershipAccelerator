@@ -1550,6 +1550,39 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       else unmatched++;
     }
 
+    // 2b. Process-level matching: if implementation files exist for this process name,
+    // promote remaining unmatched requirements to "matched" (the process IS being built)
+    const { Capability: CapModel } = await import('../models');
+    const processCap = await CapModel.findByPk(req.params.id as string);
+    if (processCap) {
+      const procStems = (processCap.name || '').toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
+      const noiseP = new Set(['.gitignore', '.env.example', '.prettierrc', '.sequelizerc', 'package.json', 'tsconfig.json', 'README.md']);
+      const procImplFiles = fileTree.filter((f: string) => {
+        const name = (f.split('/').pop() || '').toLowerCase();
+        if (noiseP.has(name) || name.startsWith('.') || /^\d{14}/.test(name) || f.includes('migrations/')) return false;
+        return (f.includes('services/') || f.includes('routes/') || f.includes('agents/') || f.includes('models/'))
+          && procStems.some((stem: string) => name.includes(stem));
+      });
+
+      if (procImplFiles.length >= 2) {
+        // Process has real implementation — promote unmatched reqs
+        let promoted = 0;
+        for (const req2 of processReqs) {
+          if (req2.status === 'unmatched' && !req2.github_file_paths?.length) {
+            req2.status = 'matched';
+            req2.github_file_paths = procImplFiles.slice(0, 5);
+            req2.confidence_score = 0.6;
+            req2.verified_by = 'process_level';
+            await req2.save();
+            matched++;
+            unmatched--;
+            promoted++;
+          }
+        }
+        if (promoted > 0) console.log(`[Resync] Process-level matching: promoted ${promoted} reqs for "${processCap.name}" (${procImplFiles.length} impl files found)`);
+      }
+    }
+
     // 3. Run reconciliation (without validation report — just graph rebuild + recalculate)
     const { reconcileAfterExecution } = await import('../intelligence/execution/reconciliationEngine');
     const result = await reconcileAfterExecution(
