@@ -446,18 +446,54 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
       `}</style>
 
       {state === 'initial' && (
-        <div className="text-center py-4 px-3" style={{ background: 'var(--color-bg-alt, #f7fafc)', borderRadius: 12, border: '1px solid var(--color-border, #e2e8f0)' }}>
-          <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary, #1a365d)', fontSize: 18 }}>
-            See a <span style={{ color: 'var(--color-primary-light, #2b6cb0)' }}>{scenario.industry}</span> AI Organization Get Configured in Seconds
-          </h5>
-          <button
-            className="btn btn-dark rounded-pill px-4 py-2"
-            data-track={`demo_play_${scenario.id}_${trackContext || 'page'}`}
-            onClick={start}
-            style={{ fontSize: 14 }}
-          >
-            <i className="bi bi-play-circle me-2" />Watch It Build
-          </button>
+        <div
+          onClick={start}
+          data-track={`demo_play_${scenario.id}_${trackContext || 'page'}`}
+          style={{
+            position: 'relative', cursor: 'pointer', borderRadius: 12, overflow: 'hidden',
+            minHeight: 360, maxWidth: 800, margin: '0 auto',
+            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+            border: '1px solid #334155', transition: 'transform 0.2s',
+          }}
+          onMouseEnter={e => { (e.currentTarget.querySelector('.ep-play-btn') as any)?.style?.setProperty('transform', 'scale(1.12)'); }}
+          onMouseLeave={e => { (e.currentTarget.querySelector('.ep-play-btn') as any)?.style?.setProperty('transform', 'scale(1)'); }}
+        >
+          {/* Top bar mimicking video player chrome */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '12px 16px', background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+              <i className={`bi ${icons[scenario.id] || 'bi-building'} me-1`} />{scenario.industry} Demo
+            </span>
+            <span style={{ color: '#64748b', fontSize: 11 }}>{scenario.kpis?.agents || scenario.agents?.length || 10} AI Agents</span>
+          </div>
+
+          {/* Subtle decorative grid dots in background */}
+          <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
+
+          {/* Big centered play button */}
+          <div className="ep-play-btn" style={{
+            width: 80, height: 80, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '2px solid rgba(255,255,255,0.25)',
+            transition: 'transform 0.2s, background 0.2s',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          }}>
+            <i className="bi bi-play-fill" style={{ fontSize: 40, color: 'white', marginLeft: 4 }} />
+          </div>
+
+          {/* Title + subtitle */}
+          <h4 style={{ color: 'white', marginTop: 24, fontSize: 20, fontWeight: 700, textAlign: 'center', padding: '0 20px', lineHeight: 1.3 }}>
+            See a <span style={{ color: '#60a5fa' }}>{scenario.industry}</span> AI Organization Get Built
+          </h4>
+          <p style={{ color: '#94a3b8', fontSize: 14, margin: '6px 0 0', textAlign: 'center' }}>
+            Watch {scenario.kpis?.agents || scenario.agents?.length || 10} AI agents configure in seconds
+          </p>
+
+          {/* Bottom bar mimicking video progress */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, background: 'rgba(255,255,255,0.08)' }}>
+            <div style={{ width: '0%', height: '100%', background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', borderRadius: 2 }} />
+          </div>
         </div>
       )}
 
