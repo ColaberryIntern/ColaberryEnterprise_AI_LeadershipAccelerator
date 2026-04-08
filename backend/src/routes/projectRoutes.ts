@@ -1481,9 +1481,16 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       return !noisePatterns.has(name) && !name.startsWith('.') && !/^\d{14}/.test(name) && !f.includes('migrations/');
     });
 
-    let matched = 0, partial = 0, unmatched = 0;
+    let matched = 0, partial = 0, unmatched = 0, preserved = 0;
 
     for (const req2 of processReqs) {
+      // ADDITIVE ONLY: never demote already-matched or verified requirements
+      if (req2.status === 'matched' || req2.status === 'verified' || req2.status === 'auto_verified') {
+        matched++;
+        preserved++;
+        continue; // skip re-matching — preserve existing match
+      }
+
       const text = (req2.requirement_text || '').toLowerCase();
       const keywords = text.split(/\W+/).filter(w => w.length > 2 && !stopwords.has(w));
       if (keywords.length === 0) { req2.status = 'unmatched'; req2.github_file_paths = []; req2.confidence_score = 0; await req2.save(); unmatched++; continue; }
@@ -1569,7 +1576,7 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
 
     res.json({
       ...result,
-      resync: { total: processReqs.length, matched, partial, unmatched, files_scanned: fileTree.length },
+      resync: { total: processReqs.length, matched, partial, unmatched, preserved, files_scanned: fileTree.length },
       what_changed: whatChanged,
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
