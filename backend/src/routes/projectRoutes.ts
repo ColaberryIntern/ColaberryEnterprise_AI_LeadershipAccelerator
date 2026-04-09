@@ -1352,10 +1352,16 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const hierarchy = await getCapabilityHierarchy(project.id);
     const cap = hierarchy.find((c: any) => c.id === (req.params.id as string));
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
-    // Inject last_execution from Capability model
+    // Inject Capability model fields not in hierarchy (JSONB + mode fields)
     const { Capability: CapExec } = await import('../models');
-    const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution'] });
-    if (capExec) (cap as any).last_execution = (capExec as any).last_execution;
+    const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template'] });
+    if (capExec) {
+      (cap as any).last_execution = (capExec as any).last_execution;
+      (cap as any).mode_override = (capExec as any).mode_override;
+      (cap as any).applicability_status = (capExec as any).applicability_status || 'active';
+      (cap as any).execution_profile = (capExec as any).execution_profile || 'production';
+      (cap as any).strategy_template = (capExec as any).strategy_template || 'default';
+    }
     (cap as any)._projectMode = (project as any).target_mode || 'production';
     // Inject repo file tree for agent detection
     try {
