@@ -1750,10 +1750,10 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       const capAfter = hierAfter.find((c: any) => c.id === req.params.id);
       if (capAfter) {
         // Inject repo file tree for accurate enrichment
-        capAfter._repoFileTree = fileTree;
+        (capAfter as any)._repoFileTree = fileTree;
         const { Capability: CapAfterModel } = await import('../models');
         const capAfterExec = await CapAfterModel.findByPk(req.params.id as string, { attributes: ['id', 'last_execution'] });
-        if (capAfterExec) capAfter.last_execution = (capAfterExec as any).last_execution;
+        if (capAfterExec) (capAfter as any).last_execution = (capAfterExec as any).last_execution;
         const enrichedAfter = enrichCapability(capAfter);
         const { captureSnapshot, detectRegressions } = await import('../intelligence/verification/regressionDetector');
         metricsAfter = captureSnapshot(enrichedAfter);
