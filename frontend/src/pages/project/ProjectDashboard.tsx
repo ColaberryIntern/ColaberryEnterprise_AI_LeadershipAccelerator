@@ -747,6 +747,66 @@ function AddBusinessProcessCard({ onAdded }: { onAdded: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
+// Project Mode Selector — set project-wide target mode
+// ---------------------------------------------------------------------------
+function ProjectModeSelector() {
+  const [mode, setMode] = useState<string>('production');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    portalApi.get('/api/portal/project/business-processes')
+      .then(res => {
+        const procs = res.data || [];
+        if (procs.length > 0 && procs[0].effective_mode) setMode(procs[0].effective_mode);
+      }).catch(() => {});
+  }, []);
+
+  const handleChange = async (newMode: string) => {
+    setSaving(true);
+    try {
+      await portalApi.put('/api/portal/project/target-mode', { mode: newMode });
+      setMode(newMode);
+    } catch {} finally { setSaving(false); }
+  };
+
+  const modes = [
+    { value: 'mvp', label: 'MVP', desc: 'L2 · 60% coverage', color: 'var(--color-warning, #f59e0b)' },
+    { value: 'production', label: 'Production', desc: 'L3 · 90% coverage', color: 'var(--color-info, #3b82f6)' },
+    { value: 'enterprise', label: 'Enterprise', desc: 'L4 · 95% coverage', color: 'var(--color-purple, #6366f1)' },
+    { value: 'autonomous', label: 'Autonomous', desc: 'L5 · 98% coverage', color: 'var(--color-accent, #38a169)' },
+  ];
+
+  return (
+    <div className="card border-0 shadow-sm mb-3">
+      <div className="card-body p-3">
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
+              <i className="bi bi-sliders me-2"></i>Project Target Mode
+            </span>
+            <span className="text-muted ms-2" style={{ fontSize: 10 }}>Controls completion criteria for all processes</span>
+          </div>
+          <div className="btn-group btn-group-sm">
+            {modes.map(m => (
+              <button
+                key={m.value}
+                className={`btn btn-sm ${mode === m.value ? 'btn-primary' : 'btn-outline-secondary'}`}
+                style={{ fontSize: 10, padding: '3px 10px' }}
+                onClick={() => handleChange(m.value)}
+                disabled={saving}
+                title={m.desc}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Readiness KPI Bar — compact version of ReadinessTab for Overview
 // ---------------------------------------------------------------------------
 function ReadinessKPIBar() {
@@ -991,6 +1051,8 @@ function ProjectDashboard() {
 
       {activeTab === 'overview' && (
         <>
+          {/* Project Mode Selector */}
+          <ProjectModeSelector />
           {/* KPI Bar — merged from Readiness */}
           <ReadinessKPIBar />
           <ProjectSystemPromptCard />

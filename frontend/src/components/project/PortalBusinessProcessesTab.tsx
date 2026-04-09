@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import PortalBusinessProcessDetail from './PortalBusinessProcessDetail';
+import SteeringPanel from './SteeringPanel';
 
 function completionColor(pct: number): string {
   if (pct >= 80) return 'var(--color-accent)';
@@ -98,6 +99,9 @@ export default function PortalBusinessProcessesTab() {
         </div>
       )}
 
+      {/* NLP Steering Panel */}
+      <SteeringPanel onAction={() => load(true)} />
+
       {/* Detail panel appears here — above the card grid */}
       {selected && (
         <div className="mb-4">
@@ -133,8 +137,13 @@ export default function PortalBusinessProcessesTab() {
                       <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: 'var(--color-primary)' }}>{p.name}</h6>
                     </div>
                     <div className="d-flex align-items-center gap-1">
+                      {p.effective_mode && p.effective_mode !== 'production' && (
+                        <span className="badge" style={{ background: 'var(--color-info, #3b82f6)20', color: 'var(--color-info, #3b82f6)', fontSize: 8, fontWeight: 700 }}>
+                          {p.effective_mode}{p.mode_override ? ' ✦' : ''}
+                        </span>
+                      )}
                       <span className="badge" style={{ background: `${matColor}20`, color: matColor, fontSize: 8, fontWeight: 700 }}>L{mat.level}</span>
-                      <span className="badge" style={{ background: usable ? '#10b98120' : '#ef444420', color: usable ? 'var(--color-success)' : 'var(--color-danger)', fontSize: 9 }}>
+                      <span className="badge" style={{ background: usable ? 'var(--color-success, #10b981)20' : 'var(--color-danger, #ef4444)20', color: usable ? 'var(--color-success)' : 'var(--color-danger)', fontSize: 9 }}>
                         {usable ? 'Usable' : 'Not Ready'}
                       </span>
                     </div>

@@ -325,11 +325,34 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           ))}
         </Section>
 
-        {/* 7: Maturity Path */}
-        <Section num={7} title={`Maturity: L${mat.level} ${mat.label}`} collapsible defaultOpen={false}>
+        {/* 7: Maturity Path (mode-aware) */}
+        <Section num={7} title={`Maturity: L${mat.level} ${mat.label}${mat.target_level ? ` → L${mat.target_level} Target` : ''}`} collapsible defaultOpen={false}>
           <div className="d-flex gap-1 mb-2">
-            {[1,2,3,4,5].map(l => <div key={l} style={{ width: 40, height: 6, borderRadius: 3, background: l <= mat.level ? matColor : '#e2e8f0' }}></div>)}
+            {[1,2,3,4,5].map(l => (
+              <div key={l} style={{
+                width: 40, height: 6, borderRadius: 3,
+                background: l <= mat.level ? matColor : l === mat.target_level ? `${matColor}40` : '#e2e8f0',
+                border: l === mat.target_level ? `1px dashed ${matColor}` : 'none',
+              }}></div>
+            ))}
           </div>
+          {p.effective_mode && (
+            <div className="mb-2 d-flex align-items-center gap-2">
+              <span className="badge" style={{ background: 'var(--color-info, #3b82f6)15', color: 'var(--color-info, #3b82f6)', fontSize: 10 }}>
+                {p.effective_mode} mode{p.mode_override ? ' (override)' : ''}
+              </span>
+              {p.mode_completion?.complete_for_mode ? (
+                <span className="text-success small"><i className="bi bi-check-circle me-1"></i>Complete for {p.effective_mode}</span>
+              ) : p.mode_completion?.gap_reason ? (
+                <span className="text-muted small"><i className="bi bi-arrow-right me-1"></i>{p.mode_completion.gap_reason}</span>
+              ) : null}
+            </div>
+          )}
+          {mat.mode_gap && (
+            <div className="mb-2 small" style={{ color: 'var(--color-warning)' }}>
+              <i className="bi bi-arrow-up-right me-1"></i>{mat.mode_gap}
+            </div>
+          )}
           {(mat.next_level_requirements || []).length > 0 && (
             <div><div className="fw-medium small mb-1">To reach next level:</div>{mat.next_level_requirements.map((r: string, i: number) => <div key={i} className="text-muted small"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-primary-light)' }}></i>{r}</div>)}</div>
           )}
