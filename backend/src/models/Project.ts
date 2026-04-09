@@ -36,6 +36,7 @@ export interface ProjectAttributes {
   } | null;
   claude_md_content?: string;
   requirements_document?: string;
+  target_mode?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -188,6 +189,10 @@ Project.init(
     requirements_document: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    target_mode: {
+      type: DataTypes.STRING(20),
+      defaultValue: 'production',
     },
   },
   {

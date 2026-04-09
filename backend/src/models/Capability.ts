@@ -28,6 +28,8 @@ export interface CapabilityAttributes {
   last_execution?: Record<string, any>;
   execution_profile?: string;
   strategy_template?: string;
+  mode_override?: string;
+  applicability_status?: string;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -83,6 +85,8 @@ Capability.init(
     last_evaluated_at: { type: DataTypes.DATE, allowNull: true },
     execution_profile: { type: DataTypes.STRING(20), defaultValue: 'production' },
     strategy_template: { type: DataTypes.STRING(30), defaultValue: 'default' },
+    mode_override: { type: DataTypes.STRING(20), allowNull: true },
+    applicability_status: { type: DataTypes.STRING(20), defaultValue: 'active' },
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

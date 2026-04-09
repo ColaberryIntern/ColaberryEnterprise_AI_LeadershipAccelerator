@@ -1208,18 +1208,26 @@ function enrichCapability(cap: any) {
   const lastExec = (cap as any).last_execution;
   const completedSteps: string[] = lastExec?.completed_steps || [];
   const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
-  // Load profile and strategy from Capability (defaults: production + default)
+  // Resolve effective mode: BP override > Project target_mode > 'production'
+  const { resolveMode } = require('../intelligence/profiles/modeResolver');
   const { getProfile } = require('../intelligence/profiles/executionProfiles');
   const { getStrategy } = require('../intelligence/profiles/strategyTemplates');
-  const profile = getProfile((cap as any).execution_profile);
+  const effectiveMode = resolveMode(
+    (cap as any)._projectMode || 'production',
+    (cap as any).mode_override
+  );
+  const profile = getProfile(effectiveMode);
   const strategy = getStrategy((cap as any).strategy_template);
   const profileOptions = {
     completion: profile.completion_thresholds,
     qualityGateCoverageMin: profile.quality_gate_enabled ? profile.quality_gate_coverage_min : 0,
     strategyOverrides: strategy.priority_overrides,
+    allowedActionKeys: profile.allowed_action_keys,
   };
   const executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
-  const processComplete = isProcessComplete(systemState, profile.completion_thresholds);
+  // Mode-aware completion: requires BOTH maturity threshold AND coverage/quality thresholds
+  const meetsMaturity = maturityLevel >= (profile.completion_maturity_threshold || 3);
+  const processComplete = meetsMaturity && isProcessComplete(systemState, profile.completion_thresholds);
 
   const why_not: string[] = [];
   if (!hasBackend) why_not.push('No backend services or API routes found');
@@ -1244,7 +1252,26 @@ function enrichCapability(cap: any) {
       return { score: Math.round(avg * 100) / 100, source: 'requirement_avg', sample_size: scored.length };
     })(),
     quality: q,
-    maturity: { level: maturityLevel, label: maturityLabel, next_level_requirements: nextReqs },
+    effective_mode: effectiveMode,
+    mode_override: (cap as any).mode_override || null,
+    applicability_status: (cap as any).applicability_status || 'active',
+    mode_completion: {
+      target_maturity: profile.completion_maturity_threshold,
+      current_maturity: maturityLevel,
+      complete_for_mode: processComplete,
+      gap_reason: maturityLevel < profile.completion_maturity_threshold
+        ? `Maturity L${maturityLevel} below L${profile.completion_maturity_threshold} target for ${effectiveMode} mode`
+        : !processComplete ? 'Coverage or quality below threshold' : null,
+    },
+    maturity: {
+      level: maturityLevel,
+      label: maturityLabel,
+      target_level: profile.completion_maturity_threshold,
+      next_level_requirements: nextReqs,
+      mode_gap: maturityLevel < profile.completion_maturity_threshold
+        ? `Advance from L${maturityLevel} to L${profile.completion_maturity_threshold} (${effectiveMode} mode)`
+        : null,
+    },
     gap_count: allGaps.length,
     gaps: allGaps,
     is_complete: processComplete,
@@ -1273,7 +1300,8 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     const { Capability: CapabilityModel } = await import('../models');
     const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution'] });
     const execMap = new Map(capModels.map((c: any) => [c.id, c.last_execution]));
-    hierarchy.forEach((cap: any) => { cap._repoFileTree = repoFileTree; cap.last_execution = execMap.get(cap.id) || null; });
+    const projectMode = (project as any).target_mode || 'production';
+    hierarchy.forEach((cap: any) => { cap._repoFileTree = repoFileTree; cap.last_execution = execMap.get(cap.id) || null; cap._projectMode = projectMode; });
     const enriched = hierarchy.map(enrichCapability);
 
     // Graph-based prioritization
@@ -1317,6 +1345,7 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const { Capability: CapExec } = await import('../models');
     const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution'] });
     if (capExec) (cap as any).last_execution = (capExec as any).last_execution;
+    (cap as any)._projectMode = (project as any).target_mode || 'production';
     // Inject repo file tree for agent detection
     try {
       const { getConnection } = await import('../services/githubService');
@@ -1843,6 +1872,47 @@ router.get('/api/portal/project/business-processes/:id/verify', requireParticipa
         created_at: s.created_at,
       })),
     });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Mode: set project target mode + BP mode overrides ────────
+router.put('/api/portal/project/target-mode', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { mode } = req.body;
+    const { getProfile } = await import('../intelligence/profiles/executionProfiles');
+    const profile = getProfile(mode);
+    if (!profile || profile.name !== mode) { res.status(400).json({ error: `Invalid mode: ${mode}` }); return; }
+    (project as any).target_mode = mode;
+    await project.save();
+    res.json({ target_mode: mode, profile: profile.label });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/api/portal/project/business-processes/:id/mode', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { mode_override, applicability_status } = req.body;
+    const { Capability } = await import('../models');
+    const cap = await Capability.findByPk(req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    if (mode_override !== undefined) {
+      if (mode_override !== null) {
+        const { getProfile } = await import('../intelligence/profiles/executionProfiles');
+        const profile = getProfile(mode_override);
+        if (!profile || profile.name !== mode_override) { res.status(400).json({ error: `Invalid mode: ${mode_override}` }); return; }
+      }
+      (cap as any).mode_override = mode_override;
+    }
+    if (applicability_status !== undefined) {
+      if (!['active', 'deferred', 'not_required'].includes(applicability_status)) {
+        res.status(400).json({ error: `Invalid applicability: ${applicability_status}` }); return;
+      }
+      (cap as any).applicability_status = applicability_status;
+    }
+    await cap.save();
+    res.json({ mode_override: (cap as any).mode_override, applicability_status: (cap as any).applicability_status });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

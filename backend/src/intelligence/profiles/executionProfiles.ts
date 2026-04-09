@@ -5,7 +5,7 @@
  */
 import { RegressionThresholds, DEFAULT_THRESHOLDS } from '../verification/verificationConfig';
 
-export type ProfileName = 'mvp' | 'production' | 'enterprise';
+export type ProfileName = 'mvp' | 'production' | 'enterprise' | 'autonomous';
 
 export interface ExecutionProfile {
   name: ProfileName;
@@ -14,11 +14,15 @@ export interface ExecutionProfile {
   completion_thresholds: {
     reqCoverage: number;
     qualityScore: number;
-    requiredLayers: string[]; // 'backend' | 'frontend' | 'models' | 'agents'
+    requiredLayers: string[];
   };
+  /** Maturity level required for mode completion (L2=MVP, L3=Production, L4=Enterprise, L5=Autonomous) */
+  completion_maturity_threshold: number;
+  /** Step keys allowed in this mode. null = all allowed. */
+  allowed_action_keys: string[] | null;
   regression_thresholds: RegressionThresholds;
   quality_gate_enabled: boolean;
-  quality_gate_coverage_min: number; // below this, quality steps are blocked
+  quality_gate_coverage_min: number;
   structural_check_mode: 'skip' | 'warn' | 'block';
   max_parallel_steps: number;
 }
@@ -33,6 +37,8 @@ export const PROFILES: Record<ProfileName, ExecutionProfile> = {
       qualityScore: 40,
       requiredLayers: ['backend'],
     },
+    completion_maturity_threshold: 2, // L2 Functional
+    allowed_action_keys: null,
     regression_thresholds: {
       ...DEFAULT_THRESHOLDS,
       reqCoverage_min_delta: -10,
@@ -49,13 +55,15 @@ export const PROFILES: Record<ProfileName, ExecutionProfile> = {
     label: 'Production Mode',
     description: 'Balanced — standard thresholds, warn on structural issues, quality gate enabled',
     completion_thresholds: {
-      reqCoverage: 90,       // current hardcoded default
-      qualityScore: 70,      // current hardcoded default
+      reqCoverage: 90,
+      qualityScore: 70,
       requiredLayers: ['backend', 'frontend', 'models'],
     },
+    completion_maturity_threshold: 3, // L3 Production
+    allowed_action_keys: null,
     regression_thresholds: DEFAULT_THRESHOLDS,
     quality_gate_enabled: true,
-    quality_gate_coverage_min: 10, // current hardcoded default
+    quality_gate_coverage_min: 10,
     structural_check_mode: 'warn',
     max_parallel_steps: 2,
   },
@@ -69,11 +77,36 @@ export const PROFILES: Record<ProfileName, ExecutionProfile> = {
       qualityScore: 85,
       requiredLayers: ['backend', 'frontend', 'models', 'agents'],
     },
+    completion_maturity_threshold: 4, // L4 Autonomous
+    allowed_action_keys: null,
     regression_thresholds: {
       ...DEFAULT_THRESHOLDS,
       reqCoverage_min_delta: -2,
       qualityScore_min_delta: -3,
-      maturityLevel_min_delta: 0, // never allow ANY maturity drop
+      maturityLevel_min_delta: 0,
+    },
+    quality_gate_enabled: true,
+    quality_gate_coverage_min: 15,
+    structural_check_mode: 'block',
+    max_parallel_steps: 1,
+  },
+
+  autonomous: {
+    name: 'autonomous',
+    label: 'Autonomous Mode',
+    description: 'Full self-operation — all layers, high quality, agent-driven execution',
+    completion_thresholds: {
+      reqCoverage: 98,
+      qualityScore: 90,
+      requiredLayers: ['backend', 'frontend', 'models', 'agents'],
+    },
+    completion_maturity_threshold: 5, // L5 Self-Optimizing
+    allowed_action_keys: null,
+    regression_thresholds: {
+      ...DEFAULT_THRESHOLDS,
+      reqCoverage_min_delta: -1,
+      qualityScore_min_delta: -2,
+      maturityLevel_min_delta: 0,
     },
     quality_gate_enabled: true,
     quality_gate_coverage_min: 15,
@@ -84,5 +117,5 @@ export const PROFILES: Record<ProfileName, ExecutionProfile> = {
 
 export function getProfile(name?: string): ExecutionProfile {
   if (name && name in PROFILES) return PROFILES[name as ProfileName];
-  return PROFILES.production; // default preserves current behavior
+  return PROFILES.production;
 }

@@ -204,7 +204,7 @@ export function isProcessComplete(state: SystemState, profile?: { reqCoverage: n
 export function generateExecutionPlan(
   state: SystemState,
   completedStepKeys?: string[],
-  profileOptions?: { completion?: { reqCoverage: number; qualityScore: number; requiredLayers: string[] }; qualityGateCoverageMin?: number; strategyOverrides?: Record<string, number> }
+  profileOptions?: { completion?: { reqCoverage: number; qualityScore: number; requiredLayers: string[] }; qualityGateCoverageMin?: number; strategyOverrides?: Record<string, number>; allowedActionKeys?: string[] | null }
 ): ExecutionAction[] {
   // If process is deterministically complete, return empty
   if (isProcessComplete(state, profileOptions?.completion)) return [];
@@ -232,6 +232,8 @@ export function generateExecutionPlan(
       if (completed.has(t.key)) return false;
       // Block quality steps when coverage is too low to measure quality
       if (qualityStepsBlocked && QUALITY_STEP_KEYS.has(t.key)) return false;
+      // Mode-aware action filtering: only allow steps in the profile's allowed list
+      if (profileOptions?.allowedActionKeys && !profileOptions.allowedActionKeys.includes(t.key)) return false;
       return true;
     })
     .sort((a, b) => {
