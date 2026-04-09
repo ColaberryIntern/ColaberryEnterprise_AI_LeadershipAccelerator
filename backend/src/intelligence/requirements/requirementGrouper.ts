@@ -156,10 +156,24 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
     }
   }
 
-  // ── PASS 2: LLM clustering for remaining (NO miscellaneous allowed) ──
+  // ── PASS 2: LLM clustering for remaining (business-taxonomy-aware) ──
   if (unmatched.length > 0) {
     const existingNames = otherCaps.map(c => c.name).join(', ');
     const BATCH_SIZE = 200;
+
+    // Load or generate business-specific taxonomy
+    let taxonomyPrompt = '';
+    let businessContextPrompt = '';
+    try {
+      const { generateTaxonomy } = await import('./taxonomyGenerator');
+      const taxonomy = await generateTaxonomy(projectId);
+      const categoryList = taxonomy.categories.map(c => `- ${c.name}: ${c.description}`).join('\n');
+      taxonomyPrompt = `BUSINESS TAXONOMY for ${taxonomy.business_context.organization} (${taxonomy.business_context.industry}):\n${categoryList}`;
+      businessContextPrompt = `\nBUSINESS CONTEXT:\n${taxonomy.business_context.business_summary?.substring(0, 500) || ''}`;
+    } catch {
+      // Fallback to generic taxonomy
+      taxonomyPrompt = `REFERENCE TAXONOMY:\n- User Management and Access\n- Data Management and Storage\n- Analytics and Reporting\n- Content and Communication\n- Search and Discovery\n- Workflow and Automation\n- Security and Compliance\n- Integration and APIs\n- Performance and Reliability\n- Testing and Quality\n- Deployment and Operations`;
+    }
 
     for (let i = 0; i < unmatched.length; i += BATCH_SIZE) {
       const batch = unmatched.slice(i, i + BATCH_SIZE);
@@ -174,31 +188,12 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
           messages: [
             {
               role: 'system',
-              content: `You organize software requirements into business capability categories using a standard taxonomy. Respond with valid JSON only.
+              content: `You organize software requirements into business capability categories. Respond with valid JSON only.
 
-REFERENCE TAXONOMY (use these as a guide — pick the closest match):
-- Authentication & Authorization
-- User Management & Roles
-- Data Management & Storage
-- API Gateway & Integration
-- Search & Discovery
-- Analytics & Reporting
-- Notification & Communication
-- Content Management
-- Workflow & Automation
-- AI & Machine Learning
-- Security & Compliance
-- Monitoring & Observability
-- Testing & Quality Assurance
-- Deployment & Infrastructure
-- UI/UX & Frontend Design
-- Performance & Optimization
-- Error Handling & Resilience
-- Admin & Configuration
-- Onboarding & User Experience
-- Billing & Payments
+${taxonomyPrompt}
+${businessContextPrompt}
 
-You may create categories outside this list if they represent a REAL business capability not covered above.`,
+Assign requirements to these categories. Only create new categories if a requirement truly does not fit any existing one.`,
             },
             {
               role: 'user',
@@ -211,14 +206,14 @@ REQUIREMENTS:
 ${reqList}
 
 RULES:
-1. Use the reference taxonomy categories when possible — pick the CLOSEST match
-2. Merge related requirements into ONE category. Do NOT create separate categories for the same concern (e.g., "AI Recommendations" + "AI Recommendations Error Handling" → "AI & Machine Learning")
-3. NEVER create categories named after technical layers: "Frontend Layer", "Backend Layer", "Database", "API Layer", "Security Layer"
+1. Use the business taxonomy categories — pick the CLOSEST match
+2. Merge related requirements into ONE category. Do NOT create separate categories for the same concern
+3. NEVER create categories named after technical layers: "Frontend Layer", "Backend Layer", "Database", "API Layer"
 4. NEVER create categories named "Miscellaneous", "Other", "General", "Uncategorized", or "Various"
-5. Each category must describe a USER-FACING or BUSINESS capability, not an implementation detail
+5. Each category must describe a USER-FACING or BUSINESS capability
 6. Each requirement must appear in exactly ONE category
-7. Target 10-25 total categories. Fewer is better if requirements naturally group together
-8. Category names must be 2-5 words, title case, describing WHAT the system does (not HOW)
+7. Use "and" (not "&") in all category names for consistency
+8. Category names must be 2-5 words, title case
 
 Respond:
 {"categories":[{"name":"Category Name","requirement_keys":["REQ-001","REQ-002"]}]}`,

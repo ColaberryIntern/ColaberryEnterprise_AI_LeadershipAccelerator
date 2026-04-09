@@ -1892,6 +1892,36 @@ router.get('/api/portal/project/business-processes/:id/verify', requireParticipa
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Taxonomy: business-specific capability categories ────────
+router.get('/api/portal/project/taxonomy', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const vars = (project as any).project_variables || {};
+    const taxonomy = vars.generated_taxonomy || null;
+    res.json({ taxonomy, has_taxonomy: !!taxonomy });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/taxonomy/regenerate', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    // Clear existing taxonomy to force regeneration
+    const vars = (project as any).project_variables || {};
+    delete vars.generated_taxonomy;
+    (project as any).project_variables = vars;
+    (project as any).changed('project_variables', true);
+    await project.save();
+    // Regenerate
+    const { generateTaxonomy } = await import('../intelligence/requirements/taxonomyGenerator');
+    const taxonomy = await generateTaxonomy(project.id);
+    res.json({ taxonomy, regenerated: true });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── AI Architect: conversational system planning ────────
 router.post('/api/portal/project/architect/start', requireParticipant, async (req: Request, res: Response) => {
   try {
