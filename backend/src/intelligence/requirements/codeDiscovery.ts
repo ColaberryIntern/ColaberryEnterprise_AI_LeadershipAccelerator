@@ -218,10 +218,17 @@ function extractStem(path: string): string {
 }
 
 function stemToName(stem: string): string {
-  // Convert camelCase/lowercase stem to Title Case name
-  const words = stem.replace(/([A-Z])/g, ' $1').replace(/([a-z])([A-Z])/g, '$1 $2');
-  const titleCase = words.charAt(0).toUpperCase() + words.slice(1);
-  return titleCase.trim() + ' Management';
+  // Convert camelCase/lowercase stem to readable Title Case name
+  // Insert spaces before capitals: "campaignAnalytics" → "Campaign Analytics"
+  const spaced = stem
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+  const titleCase = spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  // Don't add "Management" if the name already implies a domain
+  const suffixes = ['analytics', 'tracking', 'monitoring', 'response', 'integration', 'management'];
+  const lower = titleCase.toLowerCase();
+  if (suffixes.some(s => lower.includes(s))) return titleCase.trim();
+  return titleCase.trim();
 }
 
 function classifyFile(path: string): 'service' | 'route' | 'model' | 'agent' | 'other' {

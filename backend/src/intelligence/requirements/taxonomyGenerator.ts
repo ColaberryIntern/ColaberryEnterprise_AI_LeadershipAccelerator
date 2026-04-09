@@ -52,12 +52,48 @@ export async function generateTaxonomy(projectId: string): Promise<BusinessTaxon
   // Extract executive summary from requirements doc (first 3000 chars)
   const docSummary = reqDoc.substring(0, 3000).trim();
 
+  // Discover existing application structure from admin routes + GitHub tree
+  let appStructure = '';
+  try {
+    const { getConnection } = await import('../../services/githubService');
+    const conn = await getConnection(project.enrollment_id);
+    if (conn?.file_tree_json?.tree) {
+      const blobs = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+      // Extract admin route files → application domains
+      const adminRoutes = blobs.filter((p: string) => p.includes('/routes/admin/') && p.endsWith('.ts'))
+        .map((p: string) => {
+          const name = (p.split('/').pop() || '').replace('Routes.ts', '').replace('.ts', '');
+          return name.charAt(0).toUpperCase() + name.slice(1).replace(/([A-Z])/g, ' $1').trim();
+        });
+      // Extract service files → capabilities
+      const services = blobs.filter((p: string) => p.includes('/services/') && p.endsWith('Service.ts'))
+        .map((p: string) => {
+          const name = (p.split('/').pop() || '').replace('Service.ts', '');
+          return name.charAt(0).toUpperCase() + name.slice(1).replace(/([A-Z])/g, ' $1').trim();
+        });
+      // Extract model files → data domains
+      const models = blobs.filter((p: string) => p.includes('/models/') && p.endsWith('.ts') && !p.includes('index'))
+        .map((p: string) => (p.split('/').pop() || '').replace('.ts', ''));
+
+      if (adminRoutes.length > 0) {
+        appStructure = `\nEXISTING APPLICATION STRUCTURE (discovered from codebase):
+Admin Pages: ${adminRoutes.join(', ')}
+Services: ${services.slice(0, 30).join(', ')}
+Data Models: ${models.slice(0, 30).join(', ')}
+
+IMPORTANT: The taxonomy MUST include categories that cover these existing application areas.
+Complex modules (with multiple routes/services) should be their own categories.`;
+      }
+    }
+  } catch { /* non-critical */ }
+
   // Build business context string
   const businessContext = [
     `Organization: ${orgName}`,
     industry ? `Industry: ${industry}` : null,
     businessProblem ? `Business Problem: ${businessProblem}` : null,
     useCase ? `Use Case: ${useCase}` : null,
+    appStructure || null,
     docSummary ? `\nDocument Summary:\n${docSummary}` : null,
   ].filter(Boolean).join('\n');
 
