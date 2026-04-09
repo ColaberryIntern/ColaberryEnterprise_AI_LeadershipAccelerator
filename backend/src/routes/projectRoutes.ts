@@ -1460,8 +1460,22 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
   try {
     const { target } = req.body;
     if (!target) { res.status(400).json({ error: 'target required' }); return; }
+
+    // For requirement_implementation, fetch unmapped requirements and pass as extra context
+    let extraContext: any = undefined;
+    if (target === 'requirement_implementation') {
+      const { RequirementsMap } = await import('../models');
+      const unmapped = await RequirementsMap.findAll({
+        where: { capability_id: req.params.id, status: ['unmatched', 'not_started'] },
+        attributes: ['requirement_text'],
+        order: [['requirement_key', 'ASC']],
+        limit: 30,
+      });
+      extraContext = { unmappedRequirements: unmapped.map((r: any) => ({ requirement_text: r.requirement_text })) };
+    }
+
     const { generateImprovementPrompt } = await import('../intelligence/promptGenerator');
-    const prompt = await generateImprovementPrompt(req.params.id as string, target);
+    const prompt = await generateImprovementPrompt(req.params.id as string, target, extraContext);
 
     // Save what this prompt promises to build (for post-resync comparison)
     const { Capability } = await import('../models');

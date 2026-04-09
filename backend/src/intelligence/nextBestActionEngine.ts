@@ -113,7 +113,7 @@ const ACTION_TEMPLATES = [
     depends_on: 'Backend services',
     fixes: ['Low requirement coverage', 'Unmapped requirements'],
     enables: ['Higher completion %', 'Full feature delivery'],
-    prompt_target: 'backend_improvement',
+    prompt_target: 'requirement_implementation',
     // Fires when coverage is below 80% and there are >3 unmapped requirements
     // Uses project-level backend check — if the project has a backend, this process can be implemented
     condition: (s: SystemState) => {

@@ -4,7 +4,7 @@
 import Capability from '../models/Capability';
 import { analyzeProcessEvolution } from './agentEvolutionEngine';
 
-export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap';
+export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation';
 
 export interface GeneratedPrompt {
   target: PromptTarget;
@@ -14,7 +14,7 @@ export interface GeneratedPrompt {
   affected_files: string[];
 }
 
-export async function generateImprovementPrompt(processId: string, target: PromptTarget): Promise<GeneratedPrompt> {
+export async function generateImprovementPrompt(processId: string, target: PromptTarget, extraContext?: any): Promise<GeneratedPrompt> {
   const process = await Capability.findByPk(processId);
   if (!process) throw new Error('Process not found');
 
@@ -76,6 +76,21 @@ export async function generateImprovementPrompt(processId: string, target: Promp
       estimated_complexity: 'medium',
       affected_files: ['backend/src/services/reporting/kpiService.ts', 'backend/src/services/risk/anomalyDetectionService.ts'],
     }),
+
+    requirement_implementation: () => {
+      // Use unmapped requirements passed via extraContext
+      const reqList = extraContext?.unmappedRequirements || [];
+      const reqText = reqList.length > 0
+        ? reqList.map((r: any, i: number) => `${i + 1}. ${r.requirement_text}`).join('\n')
+        : 'No specific requirements loaded — check the Requirements tab for details.';
+      return {
+        target: 'requirement_implementation' as PromptTarget,
+        title: `Implement requirements for ${process.name}`,
+        prompt_text: `${preamble}# OBJECTIVE\n\nImplement the unmapped requirements for the "${process.name}" business process.\n\nThe project already has backend services, frontend components, and database models.\nDo NOT rebuild existing infrastructure. Instead, extend the existing codebase to cover these specific requirements.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# UNMAPPED REQUIREMENTS TO IMPLEMENT\n\n${reqText}\n\n# CURRENT STATE\n\n- Existing backend: ${backend.join(', ') || 'Check backend/src/services/ and backend/src/routes/'}\n- Existing frontend: ${frontend.join(', ') || 'Check frontend/src/pages/ and frontend/src/components/'}\n- Existing agents: ${agents.join(', ') || 'Check backend/src/intelligence/agents/'}\n\n# APPROACH\n\n1. Study the existing codebase structure first\n2. Identify which existing files need to be extended (NOT recreated)\n3. Add new endpoints, services, or components ONLY where they don't exist\n4. Map each requirement to a specific implementation change\n5. Update existing tests or add new ones\n\n# DO NOT\n\n- Create duplicate services or routes that already exist\n- Rebuild the database schema from scratch\n- Create new standalone projects\n- Ignore existing patterns in the codebase${constraints}${validationSection}`,
+        estimated_complexity: 'medium' as const,
+        affected_files: [],
+      };
+    },
   };
 
   return generators[target]();
