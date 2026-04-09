@@ -1298,10 +1298,21 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     } catch {}
     // Inject last_execution from Capability models (hierarchy doesn't include JSONB fields)
     const { Capability: CapabilityModel } = await import('../models');
-    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution'] });
-    const execMap = new Map(capModels.map((c: any) => [c.id, c.last_execution]));
+    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template'] });
+    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template }]));
     const projectMode = (project as any).target_mode || 'production';
-    hierarchy.forEach((cap: any) => { cap._repoFileTree = repoFileTree; cap.last_execution = execMap.get(cap.id) || null; cap._projectMode = projectMode; });
+    hierarchy.forEach((cap: any) => {
+      cap._repoFileTree = repoFileTree;
+      cap._projectMode = projectMode;
+      const extra = execMap.get(cap.id);
+      if (extra) {
+        cap.last_execution = extra.last_execution;
+        cap.mode_override = extra.mode_override;
+        cap.applicability_status = extra.applicability_status || 'active';
+        cap.execution_profile = extra.execution_profile || 'production';
+        cap.strategy_template = extra.strategy_template || 'default';
+      }
+    });
     const enriched = hierarchy.map(enrichCapability);
 
     // Graph-based prioritization
