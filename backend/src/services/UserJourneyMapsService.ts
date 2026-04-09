@@ -239,12 +239,45 @@ export async function getStalledJourneys(): Promise<Array<{
 // Journey map template CRUD
 // ---------------------------------------------------------------------------
 
-export async function getJourneyMaps(): Promise<any[]> {
+export async function getJourneyMaps(params?: {
+  search?: string;
+  status?: string;
+  project_id?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{ rows: any[]; count: number }> {
   const { default: UserJourneyMap } = await import('../models/UserJourneyMap');
-  return UserJourneyMap.findAll({
-    where: { status: 'active' },
+
+  const where: any = {};
+  const page = params?.page || 1;
+  const limit = Math.min(params?.limit || 25, 100);
+  const offset = (page - 1) * limit;
+
+  // Status filter (default to active)
+  where.status = params?.status || 'active';
+
+  // Project filter
+  if (params?.project_id) {
+    where.project_id = params.project_id;
+  }
+
+  // Search across name and description
+  if (params?.search) {
+    where[Op.or] = [
+      { name: { [Op.iLike]: `%${params.search}%` } },
+      { description: { [Op.iLike]: `%${params.search}%` } },
+    ];
+  }
+
+  const { rows, count } = await UserJourneyMap.findAndCountAll({
+    where,
     order: [['created_at', 'DESC']],
+    limit,
+    offset,
   });
+
+  console.log(`${LOG_PREFIX} Listed journey maps: ${count} total, page ${page}`);
+  return { rows, count };
 }
 
 export async function getJourneyMapById(id: string): Promise<any | null> {
@@ -266,8 +299,10 @@ export async function createJourneyMap(data: {
     throw new Error('project_id and name are required');
   }
 
-  console.log(`${LOG_PREFIX} Creating journey map: ${data.name}`);
-  return UserJourneyMap.create(data as any);
+  console.log(`${LOG_PREFIX} Creating journey map: ${data.name} (project: ${data.project_id})`);
+  const map = await UserJourneyMap.create(data as any);
+  console.log(`${LOG_PREFIX} Created journey map ${(map as any).id}`);
+  return map;
 }
 
 export async function updateJourneyMap(id: string, data: Partial<{
@@ -282,7 +317,7 @@ export async function updateJourneyMap(id: string, data: Partial<{
   const map = await UserJourneyMap.findByPk(id);
   if (!map) throw new Error('Journey map not found');
 
-  console.log(`${LOG_PREFIX} Updating journey map: ${id}`);
+  console.log(`${LOG_PREFIX} Updating journey map ${id}: fields=[${Object.keys(data).join(', ')}]`);
   await map.update(data);
   return map;
 }

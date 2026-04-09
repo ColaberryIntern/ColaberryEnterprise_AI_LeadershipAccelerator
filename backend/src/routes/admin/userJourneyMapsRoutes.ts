@@ -35,11 +35,18 @@ router.get('/api/admin/user-journey-maps/stage/:stage', requireAdmin, async (req
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// List journey map templates
-router.get('/api/admin/user-journey-maps', requireAdmin, async (_req: Request, res: Response) => {
+// List journey map templates (with search, pagination, filters)
+router.get('/api/admin/user-journey-maps', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { getJourneyMaps } = await import('../../services/UserJourneyMapsService');
-    res.json(await getJourneyMaps());
+    const params = {
+      search: req.query.search as string | undefined,
+      status: req.query.status as string | undefined,
+      project_id: req.query.project_id as string | undefined,
+      page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
+      limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
+    };
+    res.json(await getJourneyMaps(params));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
