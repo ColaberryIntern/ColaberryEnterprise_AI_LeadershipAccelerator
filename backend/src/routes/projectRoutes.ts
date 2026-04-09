@@ -1892,6 +1892,63 @@ router.get('/api/portal/project/business-processes/:id/verify', requireParticipa
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── AI Architect: conversational system planning ────────
+router.post('/api/portal/project/architect/start', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { v4: uuid } = await import('uuid');
+    const sessionId = uuid();
+    const { createSession } = await import('../intelligence/architect/architectEngine');
+    const state = createSession(sessionId, project.id);
+    const { ArchitectSession } = await import('../models');
+    await ArchitectSession.create({ id: sessionId, project_id: project.id, conversation_state: state, status: 'active' } as any);
+    res.json({ session_id: sessionId, message: 'What would you like to build or improve?', phase: 'identify' });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/architect/turn', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { session_id, input } = req.body;
+    if (!session_id || !input?.trim()) { res.status(400).json({ error: 'session_id and input required' }); return; }
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { ArchitectSession } = await import('../models');
+    const session = await ArchitectSession.findByPk(session_id);
+    if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+    const { processArchitectTurn } = await import('../intelligence/architect/architectEngine');
+    const projectMode = (project as any).target_mode || 'production';
+    const { state, response } = await processArchitectTurn((session as any).conversation_state, input, projectMode);
+    (session as any).conversation_state = state;
+    if (state.phase === 'complete') {
+      (session as any).status = 'completed';
+      if (response.created_bp) (session as any).created_bp_id = response.created_bp.id;
+      if (state.prompt_output) (session as any).generated_prompt = state.prompt_output;
+    }
+    (session as any).changed('conversation_state', true);
+    await session.save();
+    res.json(response);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/architect/sessions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { ArchitectSession } = await import('../models');
+    const sessions = await ArchitectSession.findAll({
+      where: { project_id: project.id },
+      order: [['created_at', 'DESC']],
+      limit: 10,
+      attributes: ['id', 'status', 'created_bp_id', 'created_at'],
+    });
+    res.json(sessions);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── NLP Steering: classify intent → preview → apply → revert ────────
 router.post('/api/portal/project/steer', requireParticipant, async (req: Request, res: Response) => {
   try {

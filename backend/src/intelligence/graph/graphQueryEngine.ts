@@ -101,8 +101,11 @@ export function getProcessPriority(graph: ContextGraph): Map<string, { score: nu
       reasons.push('Not started — needs attention');
     }
 
-    // ── RULE 5: Human-created priority boost ──
-    if (proc.metadata?.source === 'user_input' || proc.metadata?.priority === 'high') {
+    // ── RULE 5: Human/architect priority boost ──
+    if (proc.metadata?.source === 'architect') {
+      score += 75;
+      reasons.push('Architect-created (refined requirements)');
+    } else if (proc.metadata?.source === 'user_input' || proc.metadata?.priority === 'high') {
       score += 50;
       reasons.push('User-created or priority-boosted');
     }

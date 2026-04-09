@@ -8,6 +8,7 @@ import WarRoomTab from '../../components/project/WarRoomTab';
 import ProjectLockInScreen from '../../components/project/ProjectLockInScreen';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import WorkstationLauncher from '../../components/project/WorkstationLauncher';
+import ArchitectChat from '../../components/project/ArchitectChat';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import CapabilityGrid from '../../components/project/CapabilityGrid';
 import RepoComponentsPanel from '../../components/project/RepoComponentsPanel';
@@ -1100,6 +1101,8 @@ function ProjectDashboard() {
           </div>
         </div>
       )}
+      {/* Floating AI Architect Chat */}
+      <ArchitectChat />
     </>
   );
 }
