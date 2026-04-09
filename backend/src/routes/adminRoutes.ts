@@ -45,6 +45,7 @@ import dashboardRoutes from './admin/dashboardRoutes';
 import communicationRoutes from './admin/communicationRoutes';
 import businessProcessRoutes from './admin/businessProcessRoutes';
 import userJourneyMapsRoutes from './admin/userJourneyMapsRoutes';
+import roleRoutes from './admin/roleRoutes';
 
 const router = Router();
 
@@ -94,5 +95,6 @@ router.use(dashboardRoutes);
 router.use(communicationRoutes);
 router.use(businessProcessRoutes);
 router.use(userJourneyMapsRoutes);
+router.use(roleRoutes);
 
 export default router;
