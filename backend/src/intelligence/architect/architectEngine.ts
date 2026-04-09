@@ -272,8 +272,8 @@ async function handleAssess(state: ConversationState, _input: string): Promise<T
   } else {
     // Generate clean BP name via LLM instead of raw concatenation
     const cleanName = await generateProcessName(
-      intent.target_description,
-      intent.specific_requirements
+      state.intent?.target_description || '',
+      state.intent?.specific_requirements || []
     );
     state.bp_decision = {
       decision: 'create_new',
@@ -585,11 +585,12 @@ async function assessSystem(projectId: string, intent: ArchitectIntent): Promise
   const related_files: string[] = [];
   const existing_requirements: SystemAssessment['existing_requirements'] = [];
 
+  const intentWords = intent.target_description.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
+
   try {
     // 1. Find matching BPs by keyword overlap
     const { Capability } = await import('../../models');
     const caps = await Capability.findAll({ where: { project_id: projectId }, attributes: ['id', 'name'] });
-    const intentWords = intent.target_description.toLowerCase().split(/\W+/).filter(w => w.length > 3);
 
     for (const cap of caps) {
       const capWords = (cap as any).name.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
@@ -626,7 +627,7 @@ async function assessSystem(projectId: string, intent: ArchitectIntent): Promise
       ['service', 'api_route', 'db_model', 'agent'].includes(n.type)
     );
     const relatedByKeyword = allFileNodes.filter(f =>
-      intentWords.some(w => (f.label || '').toLowerCase().includes(w) || (f.metadata?.path || '').toLowerCase().includes(w))
+      intentWords.some((w: string) => (f.label || '').toLowerCase().includes(w) || (f.metadata?.path || '').toLowerCase().includes(w))
     );
     related_files.push(...relatedByKeyword.map(f => f.metadata?.path || f.label).slice(0, 10));
   } catch { /* graph query non-critical */ }
