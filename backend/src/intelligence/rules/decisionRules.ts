@@ -113,6 +113,36 @@ export const CANONICAL_RULES: DecisionRule[] = [
     condition: 'After every resync, compare before/after metrics. Flag regressions exceeding configured thresholds.',
     severity: 'enforced',
   },
+
+  // ── Steering Rules ──
+  {
+    id: 'STEER_001',
+    name: 'Human Priority Boost',
+    category: 'priority',
+    condition: 'User-created or priority-boosted processes get +50 priority bonus in ranking',
+    severity: 'enforced',
+  },
+  {
+    id: 'STEER_002',
+    name: 'Steering Reversibility',
+    category: 'safety',
+    condition: 'All NLP steering actions must be logged in steering_actions table and reversible',
+    severity: 'enforced',
+  },
+  {
+    id: 'STEER_003',
+    name: 'Mode Transition Safety',
+    category: 'safety',
+    condition: 'Cannot downgrade mode if process has already passed the higher threshold maturity level',
+    severity: 'enforced',
+  },
+  {
+    id: 'STEER_004',
+    name: 'NLP Classification Only',
+    category: 'action_selection',
+    condition: 'LLM is used ONLY for intent classification. All execution decisions are deterministic.',
+    severity: 'enforced',
+  },
 ];
 
 /** Get all rules, optionally filtered by category */

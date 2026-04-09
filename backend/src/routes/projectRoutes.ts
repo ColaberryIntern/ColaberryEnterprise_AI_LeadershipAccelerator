@@ -1892,6 +1892,107 @@ router.get('/api/portal/project/business-processes/:id/verify', requireParticipa
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── NLP Steering: classify intent → preview → apply → revert ────────
+router.post('/api/portal/project/steer', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { input } = req.body;
+    if (!input?.trim()) { res.status(400).json({ error: 'Input is required' }); return; }
+
+    // Step 1: Classify intent
+    const { classifyIntent } = await import('../intelligence/steering/intentClassifier');
+    const { Capability } = await import('../models');
+    const processes = await Capability.findAll({ where: { project_id: project.id }, attributes: ['name'] });
+    const processNames = processes.map((p: any) => p.name);
+    const intent = await classifyIntent(input, processNames);
+
+    // Step 2: Preview changes (NOT applied yet)
+    const { previewSteeringIntent } = await import('../intelligence/steering/steeringExecutor');
+    const result = await previewSteeringIntent(project.id, intent);
+
+    res.json({ ...result, user_input: input });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/steer/:actionId/apply', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { applySteeringAction } = await import('../intelligence/steering/steeringExecutor');
+    const result = await applySteeringAction(req.params.actionId as string);
+
+    // If the intent was add_process, delegate to existing creation logic
+    const { default: SteeringAction } = await import('../models/SteeringAction');
+    const action = await SteeringAction.findByPk(req.params.actionId as string);
+    const intent = (action as any)?.classified_intent;
+    if (intent?.type === 'add_process') {
+      const { getProjectByEnrollment } = await import('../services/projectService');
+      const project = await getProjectByEnrollment(req.participant!.sub);
+      if (project) {
+        // Delegate to existing NLP add logic
+        const OpenAI = (await import('openai')).default;
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 2000,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: 'You create business process definitions from natural language descriptions. Respond with valid JSON only.' },
+            { role: 'user', content: `Create a business process from this description:\n\n"${intent.description}"\n\nRespond:\n{"name":"Process Name","description":"Detailed description","requirements":["REQ text 1","REQ text 2","REQ text 3","REQ text 4","REQ text 5"]}` },
+          ],
+        });
+        const parsed = JSON.parse(completion.choices[0]?.message?.content || '{}');
+        if (parsed.name) {
+          const { Capability, Feature, RequirementsMap } = await import('../models');
+          const cap = await Capability.create({
+            project_id: project.id, name: parsed.name, description: parsed.description || intent.description,
+            status: 'active', priority: 'high', sort_order: 0, source: 'user_input',
+            lifecycle_status: 'active', applicability_status: 'active',
+            execution_profile: (project as any).target_mode || 'production',
+          } as any);
+          const feat = await Feature.create({
+            capability_id: cap.id, name: 'Core Functionality',
+            description: parsed.description || intent.description,
+            status: 'active', priority: 'medium', sort_order: 0, source: 'user_input',
+          } as any);
+          for (let i = 0; i < (parsed.requirements || []).length; i++) {
+            await RequirementsMap.create({
+              project_id: project.id, capability_id: cap.id, feature_id: feat.id,
+              requirement_key: `REQ-NEW-${Date.now()}-${i}`, requirement_text: parsed.requirements[i],
+              status: 'unmatched', confidence_score: 0,
+            });
+          }
+          return res.json({ ...result, created_process: { id: cap.id, name: parsed.name, requirements_count: (parsed.requirements || []).length } });
+        }
+      }
+    }
+
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/steer/:actionId/revert', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { revertSteeringAction } = await import('../intelligence/steering/steeringExecutor');
+    const result = await revertSteeringAction(req.params.actionId as string);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/steering-history', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: SteeringAction } = await import('../models/SteeringAction');
+    const actions = await SteeringAction.findAll({
+      where: { project_id: project.id },
+      order: [['created_at', 'DESC']],
+      limit: 20,
+    });
+    res.json(actions);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Mode: set project target mode + BP mode overrides ────────
 router.put('/api/portal/project/target-mode', requireParticipant, async (req: Request, res: Response) => {
   try {

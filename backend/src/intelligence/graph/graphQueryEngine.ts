@@ -96,10 +96,15 @@ export function getProcessPriority(graph: ContextGraph): Map<string, { score: nu
     }
 
     // ── RULE 4: Not-started bonus ──
-    // Processes with zero implementation get a significant boost
     if (!hasFiles && totalReqs > 0) {
       score += 200;
       reasons.push('Not started — needs attention');
+    }
+
+    // ── RULE 5: Human-created priority boost ──
+    if (proc.metadata?.source === 'user_input' || proc.metadata?.priority === 'high') {
+      score += 50;
+      reasons.push('User-created or priority-boosted');
     }
 
     priorities.set(proc.id, { score, reason: reasons.join('; ') || 'Standard priority' });

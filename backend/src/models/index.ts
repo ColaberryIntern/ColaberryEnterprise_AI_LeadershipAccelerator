@@ -143,6 +143,7 @@ import UserJourneyMap from './UserJourneyMap';
 import ImplementationStrategy from './ImplementationStrategy';
 import BposExecutionSnapshot from './BposExecutionSnapshot';
 import BposStepExecution from './BposStepExecution';
+import SteeringAction from './SteeringAction';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -853,4 +854,5 @@ export {
   ImplementationStrategy,
   BposExecutionSnapshot,
   BposStepExecution,
+  SteeringAction,
 };
