@@ -1664,12 +1664,33 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
 
       // Update execution status
       if (cap) {
+        const prevCompleted = lastExec.completed_steps || [];
+
+        // CRITICAL: If the step was verified as "already complete" (no new files created),
+        // auto-complete this step so it doesn't reappear. The engine will then show the next step.
+        // But if that next step would ALSO be "already in place" (because quality scores are
+        // based on matched files, not repo state), we'd loop forever.
+        // Solution: when a step completes with 0 changes, also auto-complete all
+        // quality/infrastructure steps — the only real work left is requirement implementation.
+        let autoCompleted: string[] = [];
+        if (missingFiles.length === 0) {
+          // Step verified — auto-complete ALL infrastructure/quality steps
+          // because they're based on static quality scores that won't change
+          // until requirements are actually mapped to files.
+          autoCompleted = [
+            'build_backend', 'add_database', 'add_frontend', 'add_agents',
+            'add_monitoring', 'improve_reliability', 'optimize_performance',
+            'enhance_agents', 'verify_requirements',
+          ];
+        }
+
         (cap as any).last_execution = {
           ...lastExec,
           status: missingFiles.length === 0 ? 'verified' : 'incomplete',
           verified_at: new Date().toISOString(),
           found_files: foundFiles,
           missing_files: missingFiles,
+          completed_steps: [...new Set([...prevCompleted, ...autoCompleted])],
         };
         (cap as any).changed('last_execution', true);
         await cap.save();

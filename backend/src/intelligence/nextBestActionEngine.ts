@@ -207,9 +207,22 @@ export function generateExecutionPlan(state: SystemState, completedStepKeys?: st
   const actions: ExecutionAction[] = [];
   let step = 1;
 
+  // GUARD: If requirement coverage is very low (<10%) and the project has infrastructure,
+  // the ONLY meaningful work is implementing requirements. Quality-based steps
+  // (monitoring, reliability, performance) are noise because quality scores are
+  // derived from matched files — they can't improve until requirements are mapped.
+  const qualityStepsBlocked = state.reqCoverage < 10 && (!!state.projectHasBackend || state.hasBackend);
+  const QUALITY_STEP_KEYS = new Set(['add_monitoring', 'improve_reliability', 'optimize_performance', 'enhance_agents', 'verify_requirements']);
+
   // Filter to applicable actions, exclude completed steps, sort by priority
   const applicable = ACTION_TEMPLATES
-    .filter(t => t.condition(state) && !completed.has(t.key))
+    .filter(t => {
+      if (!t.condition(state)) return false;
+      if (completed.has(t.key)) return false;
+      // Block quality steps when coverage is too low to measure quality
+      if (qualityStepsBlocked && QUALITY_STEP_KEYS.has(t.key)) return false;
+      return true;
+    })
     .sort((a, b) => b.priority - a.priority);
 
   for (const template of applicable) {
