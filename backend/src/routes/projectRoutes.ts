@@ -1137,6 +1137,13 @@ function enrichCapability(cap: any) {
   const hasFrontend = frontendFiles.length > 0;
   const hasAgents = combinedAgentFiles.length > 0;
 
+  // Project-level layer detection from full repo file tree
+  // If the PROJECT has backend/frontend/agents, don't tell each process to "Build Backend" etc.
+  const projectHasBackend = repoTree.some((f: string) => f.includes('service') || f.includes('route') || f.includes('controller'));
+  const projectHasFrontend = repoTree.some((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
+  const projectHasAgents = repoTree.some((f: string) => (f.includes('agents/') || f.includes('intelligence/')) && f.endsWith('.ts') && f.toLowerCase().includes('agent'));
+  const projectHasModels = repoTree.some((f: string) => f.includes('models/') && f.endsWith('.ts'));
+
   // ── 3 SEPARATE METRICS ──
   const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
   // Readiness = 40% layer existence + 60% requirement coverage
@@ -1186,6 +1193,7 @@ function enrichCapability(cap: any) {
   const systemState = {
     hasBackend, hasFrontend, hasAgents,
     hasModels: modelFiles.length > 0,
+    projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels,
     backendCount: backendFiles.length, frontendCount: frontendFiles.length,
     agentCount: combinedAgentFiles.length, modelCount: modelFiles.length,
     reqCoverage, readiness, qualityScore: qualityTotal,

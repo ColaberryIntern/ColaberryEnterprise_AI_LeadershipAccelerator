@@ -28,6 +28,13 @@ export interface SystemState {
   hasFrontend: boolean;
   hasAgents: boolean;
   hasModels: boolean;
+  // Project-level layer detection (from full repo file tree)
+  // When true, "Build Backend/Frontend/Agents" steps are suppressed
+  // because the layer exists in the repo — the process just needs requirement mapping
+  projectHasBackend?: boolean;
+  projectHasFrontend?: boolean;
+  projectHasAgents?: boolean;
+  projectHasModels?: boolean;
   backendCount: number;
   frontendCount: number;
   agentCount: number;
@@ -59,7 +66,8 @@ const ACTION_TEMPLATES = [
     fixes: ['Backend Missing', 'API Routes Missing'],
     enables: ['API endpoints', 'Frontend integration', 'Agent automation'],
     prompt_target: 'backend_improvement',
-    condition: (s: SystemState) => !s.hasBackend,
+    // Only show if NEITHER this process NOR the project has a backend
+    condition: (s: SystemState) => !s.hasBackend && !s.projectHasBackend,
     priority: 100,
   },
   {
@@ -70,8 +78,8 @@ const ACTION_TEMPLATES = [
     fixes: ['Data Layer Missing', 'Low reliability'],
     enables: ['Persistent storage', 'Data integrity'],
     prompt_target: 'backend_improvement',
-    condition: (s: SystemState) => !s.hasModels && s.hasBackend,
-    blockedIf: (s: SystemState) => !s.hasBackend,
+    condition: (s: SystemState) => !s.hasModels && !s.projectHasModels && (s.hasBackend || !!s.projectHasBackend),
+    blockedIf: (s: SystemState) => !s.hasBackend && !s.projectHasBackend,
     priority: 90,
   },
   {
@@ -82,8 +90,8 @@ const ACTION_TEMPLATES = [
     fixes: ['Frontend Missing', 'No user interface'],
     enables: ['User interaction', 'UX exposure'],
     prompt_target: 'frontend_exposure',
-    condition: (s: SystemState) => !s.hasFrontend,
-    blockedIf: (s: SystemState) => !s.hasBackend,
+    condition: (s: SystemState) => !s.hasFrontend && !s.projectHasFrontend,
+    blockedIf: (s: SystemState) => !s.hasBackend && !s.projectHasBackend,
     priority: 80,
   },
   {
@@ -94,8 +102,8 @@ const ACTION_TEMPLATES = [
     fixes: ['Automation Gap', 'Manual processes'],
     enables: ['Autonomous operation', 'Scheduled tasks'],
     prompt_target: 'agent_enhancement',
-    condition: (s: SystemState) => !s.hasAgents,
-    blockedIf: (s: SystemState) => !s.hasBackend,
+    condition: (s: SystemState) => !s.hasAgents && !s.projectHasAgents,
+    blockedIf: (s: SystemState) => !s.hasBackend && !s.projectHasBackend,
     priority: 70,
   },
   {
@@ -107,11 +115,12 @@ const ACTION_TEMPLATES = [
     enables: ['Higher completion %', 'Full feature delivery'],
     prompt_target: 'backend_improvement',
     // Fires when coverage is below 80% and there are >3 unmapped requirements
+    // Uses project-level backend check — if the project has a backend, this process can be implemented
     condition: (s: SystemState) => {
       const unmapped = s.totalRequirements - s.verifiedCount - s.unverifiedCount;
-      return s.hasBackend && s.reqCoverage < 80 && unmapped > 3;
+      return (s.hasBackend || !!s.projectHasBackend) && s.reqCoverage < 80 && unmapped > 3;
     },
-    blockedIf: (s: SystemState) => !s.hasBackend,
+    blockedIf: (s: SystemState) => !s.hasBackend && !s.projectHasBackend,
     priority: 65,
   },
   {
@@ -122,8 +131,8 @@ const ACTION_TEMPLATES = [
     fixes: ['No observability', 'No error tracking'],
     enables: ['Error detection', 'Performance tracking', 'Production readiness'],
     prompt_target: 'monitoring_gap',
-    condition: (s: SystemState) => s.hasBackend && s.qualityScore < 50 && s.gapTypes.includes('quality'),
-    blockedIf: (s: SystemState) => !s.hasBackend,
+    condition: (s: SystemState) => (s.hasBackend || !!s.projectHasBackend) && s.qualityScore < 50 && s.gapTypes.includes('quality'),
+    blockedIf: (s: SystemState) => !s.hasBackend && !s.projectHasBackend,
     priority: 60,
   },
   {
@@ -134,7 +143,7 @@ const ACTION_TEMPLATES = [
     fixes: ['Low reliability', 'Missing error handling'],
     enables: ['Production stability', 'Retry logic'],
     prompt_target: 'backend_improvement',
-    condition: (s: SystemState) => s.hasBackend && s.qualityScore < 60,
+    condition: (s: SystemState) => (s.hasBackend || !!s.projectHasBackend) && s.qualityScore < 60,
     priority: 55,
   },
   {
@@ -145,7 +154,7 @@ const ACTION_TEMPLATES = [
     fixes: ['Unverified auto-matches'],
     enables: ['Accurate completion tracking', 'Trust in metrics'],
     prompt_target: 'backend_improvement',
-    condition: (s: SystemState) => s.unverifiedCount > 0 && s.hasBackend,
+    condition: (s: SystemState) => s.unverifiedCount > 0 && (s.hasBackend || !!s.projectHasBackend),
     priority: 50,
   },
   {
@@ -167,7 +176,7 @@ const ACTION_TEMPLATES = [
     fixes: ['Performance gaps'],
     enables: ['Scale readiness', 'Production deployment'],
     prompt_target: 'backend_improvement',
-    condition: (s: SystemState) => s.hasBackend && s.hasFrontend && s.qualityScore < 90,
+    condition: (s: SystemState) => (s.hasBackend || !!s.projectHasBackend) && (s.hasFrontend || !!s.projectHasFrontend) && s.qualityScore < 90,
     priority: 30,
   },
 ];
