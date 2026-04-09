@@ -174,24 +174,51 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
           messages: [
             {
               role: 'system',
-              content: 'You organize software requirements into business process categories. Respond with valid JSON only.',
+              content: `You organize software requirements into business capability categories using a standard taxonomy. Respond with valid JSON only.
+
+REFERENCE TAXONOMY (use these as a guide — pick the closest match):
+- Authentication & Authorization
+- User Management & Roles
+- Data Management & Storage
+- API Gateway & Integration
+- Search & Discovery
+- Analytics & Reporting
+- Notification & Communication
+- Content Management
+- Workflow & Automation
+- AI & Machine Learning
+- Security & Compliance
+- Monitoring & Observability
+- Testing & Quality Assurance
+- Deployment & Infrastructure
+- UI/UX & Frontend Design
+- Performance & Optimization
+- Error Handling & Resilience
+- Admin & Configuration
+- Onboarding & User Experience
+- Billing & Payments
+
+You may create categories outside this list if they represent a REAL business capability not covered above.`,
             },
             {
               role: 'user',
-              content: `You have ${batch.length} requirements that need to be assigned to business process categories.
+              content: `Organize ${batch.length} requirements into business capability categories.
 
-EXISTING CATEGORIES (use these when possible):
+EXISTING CATEGORIES (reuse these when possible):
 ${existingNames}
 
 REQUIREMENTS:
 ${reqList}
 
 RULES:
-1. Assign each requirement to an existing category OR create a new meaningful category
-2. NEVER create categories named "Miscellaneous", "Other", "General", "Uncategorized", or "Various"
-3. Every category must represent a REAL business function (e.g., "Customer Analytics", "Email Automation", "Compliance Reporting")
-4. Each requirement must appear in exactly ONE category
-5. Create 3-10 new categories if needed — each must have a clear business purpose
+1. Use the reference taxonomy categories when possible — pick the CLOSEST match
+2. Merge related requirements into ONE category. Do NOT create separate categories for the same concern (e.g., "AI Recommendations" + "AI Recommendations Error Handling" → "AI & Machine Learning")
+3. NEVER create categories named after technical layers: "Frontend Layer", "Backend Layer", "Database", "API Layer", "Security Layer"
+4. NEVER create categories named "Miscellaneous", "Other", "General", "Uncategorized", or "Various"
+5. Each category must describe a USER-FACING or BUSINESS capability, not an implementation detail
+6. Each requirement must appear in exactly ONE category
+7. Target 10-25 total categories. Fewer is better if requirements naturally group together
+8. Category names must be 2-5 words, title case, describing WHAT the system does (not HOW)
 
 Respond:
 {"categories":[{"name":"Category Name","requirement_keys":["REQ-001","REQ-002"]}]}`,
