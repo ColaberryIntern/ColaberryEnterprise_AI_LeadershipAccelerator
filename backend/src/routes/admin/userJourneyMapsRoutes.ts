@@ -69,6 +69,14 @@ router.post('/api/admin/user-journey-maps', requireAdmin, async (req: Request, r
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Seed persona journey map templates
+router.post('/api/admin/user-journey-maps/seed', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const { seedPersonaJourneyMaps } = await import('../../services/UserJourneyMapsService');
+    res.json(await seedPersonaJourneyMaps());
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // Update journey map template
 router.put('/api/admin/user-journey-maps/:id', requireAdmin, async (req: Request, res: Response) => {
   try {

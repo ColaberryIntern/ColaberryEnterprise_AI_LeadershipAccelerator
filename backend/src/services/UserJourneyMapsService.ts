@@ -321,3 +321,91 @@ export async function updateJourneyMap(id: string, data: Partial<{
   await map.update(data);
   return map;
 }
+
+// ---------------------------------------------------------------------------
+// Persona journey map seeding
+// ---------------------------------------------------------------------------
+
+const PERSONA_JOURNEY_MAPS = [
+  {
+    name: 'Secondary User Persona Journey',
+    description: 'End-to-end journey for secondary user personas (IT Managers, Data Scientists, Corporate Trainers) across awareness through evaluation phases.',
+    stages: [
+      {
+        id: 'awareness',
+        name: 'Awareness',
+        description: 'Users become aware of the accelerator through marketing channels.',
+        touchpoints: ['Social media', 'Webinars', 'Email campaigns'],
+        goals: ['Understand the benefits of the accelerator'],
+        pain_points: ['Lack of familiarity with the platform and its offerings'],
+        order: 1,
+      },
+      {
+        id: 'consideration',
+        name: 'Consideration',
+        description: 'Users evaluate the program, often through demos or consultations.',
+        touchpoints: ['One-on-one meetings', 'Demo sessions', 'FAQs'],
+        goals: ['Assess how the program aligns with organizational needs'],
+        pain_points: ['Concerns about return on investment'],
+        order: 2,
+      },
+      {
+        id: 'onboarding',
+        name: 'Onboarding',
+        description: 'Users sign up and access the platform for the first time.',
+        touchpoints: ['Onboarding emails', 'Guided tours', 'Support'],
+        goals: ['Successfully navigate the platform and understand its functionalities'],
+        pain_points: ['Information overload', 'Technical challenges'],
+        order: 3,
+      },
+      {
+        id: 'engagement',
+        name: 'Engagement',
+        description: 'Users actively participate in workshops, training sessions, and collaborative projects.',
+        touchpoints: ['Online course materials', 'Community forums', 'Live Q&A sessions'],
+        goals: ['Acquire knowledge and skills regarding AI'],
+        pain_points: ['Time constraints and balancing commitments'],
+        order: 4,
+      },
+      {
+        id: 'evaluation',
+        name: 'Evaluation',
+        description: 'Users assess the impact of the program on their organization\'s AI capabilities.',
+        touchpoints: ['Feedback surveys', 'Follow-up meetings', 'Performance analytics'],
+        goals: ['Determine the effectiveness of AI initiatives'],
+        pain_points: ['Difficulty in measuring AI\'s ROI'],
+        order: 5,
+      },
+    ],
+    metadata: { persona_type: 'secondary', source: 'build_guide' },
+  },
+];
+
+export async function seedPersonaJourneyMaps(): Promise<{ created: number; skipped: number }> {
+  const { default: UserJourneyMap } = await import('../models/UserJourneyMap');
+  const { SYSTEM_PLATFORM_PROJECT_ID } = await import('./businessProcessSeedService');
+
+  let created = 0, skipped = 0;
+
+  for (const template of PERSONA_JOURNEY_MAPS) {
+    const existing = await UserJourneyMap.findOne({
+      where: { project_id: SYSTEM_PLATFORM_PROJECT_ID, name: template.name },
+    });
+
+    if (existing) { skipped++; continue; }
+
+    await UserJourneyMap.create({
+      project_id: SYSTEM_PLATFORM_PROJECT_ID,
+      name: template.name,
+      description: template.description,
+      stages: template.stages,
+      status: 'active',
+      created_by: 'system',
+      metadata: template.metadata,
+    } as any);
+    created++;
+    console.log(`${LOG_PREFIX} Seeded journey map: ${template.name}`);
+  }
+
+  return { created, skipped };
+}
