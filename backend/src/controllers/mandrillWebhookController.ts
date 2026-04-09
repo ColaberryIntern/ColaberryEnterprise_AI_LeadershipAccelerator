@@ -92,6 +92,11 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
     let processed = 0;
     let skipped = 0;
 
+    // Log event type distribution for debugging
+    const eventTypeCounts: Record<string, number> = {};
+    for (const e of events) { eventTypeCounts[e.event] = (eventTypeCounts[e.event] || 0) + 1; }
+    console.log(`[MandrillWebhook] Event types received: ${JSON.stringify(eventTypeCounts)}`);
+
     for (const event of events) {
       const outcome = mapMandrillEvent(event.event);
       if (!outcome) {
@@ -104,7 +109,10 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
       const scheduledEmailId = metadata.scheduled_email_id;
 
       if (!scheduledEmailId) {
-        // Can't link back to our system without the tracking ID
+        // Log what we're skipping for debugging
+        if (event.event === 'open' || event.event === 'click') {
+          console.log(`[MandrillWebhook] Skipping ${event.event} for ${event.msg?.email || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
+        }
         skipped++;
         continue;
       }
