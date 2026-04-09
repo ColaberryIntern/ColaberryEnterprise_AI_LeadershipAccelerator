@@ -1628,17 +1628,20 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       });
 
       if (procImplFiles.length >= 2) {
-        // Process has real implementation — promote unmatched reqs
+        // Process has real implementation files — promote unmatched AND partial reqs
+        // Confidence 0.75 ensures enrichCapability treats them as auto_verified
         let promoted = 0;
         for (const req2 of processReqs) {
-          if (req2.status === 'unmatched' && !req2.github_file_paths?.length) {
+          const prevStatus = req2.status;
+          if ((prevStatus === 'unmatched' || prevStatus === 'partial') && req2.verified_by !== 'process_level') {
             req2.status = 'matched';
             req2.github_file_paths = procImplFiles.slice(0, 5);
-            req2.confidence_score = 0.6;
+            req2.confidence_score = 0.75; // above enrichCapability's 0.7 threshold
             req2.verified_by = 'process_level';
             await req2.save();
+            if (prevStatus === 'unmatched') unmatched--;
+            else if (prevStatus === 'partial') partial--;
             matched++;
-            unmatched--;
             promoted++;
           }
         }
