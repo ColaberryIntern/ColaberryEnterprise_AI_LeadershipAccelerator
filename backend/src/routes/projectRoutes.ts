@@ -1556,10 +1556,21 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
     // Strict keyword matching — filters noise files, requires higher overlap
     const stopwords = new Set(['the', 'a', 'an', 'is', 'are', 'and', 'or', 'for', 'to', 'in', 'of', 'on', 'with', 'that', 'this', 'be', 'as', 'by', 'at', 'it', 'must', 'should', 'will', 'can', 'all', 'each', 'from', 'have', 'has', 'not', 'but', 'use', 'using', 'used', 'also', 'such', 'may', 'would', 'could', 'when', 'where', 'how', 'what', 'which', 'their', 'they', 'them', 'then', 'than', 'been', 'being', 'its', 'into', 'only', 'any', 'some', 'more', 'most', 'other', 'over', 'new', 'just', 'get', 'set', 'add', 'make', 'like', 'about', 'after', 'before', 'between', 'through', 'during', 'without', 'within', 'across', 'along', 'based', 'need', 'needs', 'include', 'ensure', 'provide', 'support', 'system', 'data', 'process', 'user', 'create', 'manage', 'track', 'allow', 'enable']);
     // Noise file patterns to exclude from matching
-    const noisePatterns = new Set(['.gitignore', '.env.example', '.prettierrc', '.sequelizerc', 'package.json', 'package-lock.json', 'tsconfig.json', 'README.md', 'next-env.d.ts', 'next.config.ts', 'jest.config.ts', 'postcss.config.mjs', 'eslint.config.mjs', 'globals.css', 'layout.tsx', 'docker-compose.yml']);
+    const noisePatterns = new Set(['.gitignore', '.env.example', '.env.dev', '.env.production.example', '.prettierrc', '.sequelizerc', 'package.json', 'package-lock.json', 'tsconfig.json', 'README.md', 'next-env.d.ts', 'next.config.ts', 'jest.config.ts', 'postcss.config.mjs', 'eslint.config.mjs', 'globals.css', 'layout.tsx', 'docker-compose.yml', 'docker-compose.dev.yml', 'docker-compose.dev2.yml', 'docker-compose.production.yml', 'CLAUDE.md', '.dockerignore', 'CODEOWNERS', 'eslint.config.mjs']);
+    // Only match against REAL implementation files — not dotdirs, configs, or metadata
     const implFileTree = fileTree.filter(f => {
       const name = f.split('/').pop() || '';
-      return !noisePatterns.has(name) && !name.startsWith('.') && !/^\d{14}/.test(name) && !f.includes('migrations/');
+      if (noisePatterns.has(name)) return false;
+      if (name.startsWith('.')) return false;
+      if (/^\d{14}/.test(name)) return false; // migration timestamps
+      // Exclude entire directories that are never implementation code
+      if (f.startsWith('.claude/') || f.startsWith('.github/') || f.startsWith('.git/')) return false;
+      if (f.includes('migrations/') || f.includes('node_modules/') || f.includes('dist/')) return false;
+      if (f.includes('__tests__/') || f.includes('scripts/')) return false;
+      // Must be a code file (ts, tsx, js, jsx, py, sql) or meaningful config
+      if (!/\.(ts|tsx|js|jsx|py|sql|json)$/.test(name)) return false;
+      if (name === 'package.json' || name === 'tsconfig.json') return false; // already in noise
+      return true;
     });
 
     let matched = 0, partial = 0, unmatched = 0, preserved = 0;
