@@ -40,6 +40,7 @@ const QUALITY_IMPACTS: Record<string, Record<string, number>> = {
   backend_improvement: { determinism: 6, reliability: 5, observability: 2, ux_exposure: 0, automation: 0, production_readiness: 4 },
   frontend_exposure: { determinism: 0, reliability: 0, observability: 0, ux_exposure: 7, automation: 0, production_readiness: 3 },
   agent_enhancement: { determinism: 0, reliability: 2, observability: 1, ux_exposure: 0, automation: 7, production_readiness: 2 },
+  requirement_implementation: { determinism: 4, reliability: 3, observability: 1, ux_exposure: 2, automation: 1, production_readiness: 3 },
 };
 
 const ACTION_META: Record<string, { readiness_target: number; description: string; components: string[]; deps: string[]; risks: string[] }> = {
@@ -63,6 +64,13 @@ const ACTION_META: Record<string, { readiness_target: number; description: strin
     components: ['Agent class', 'Agent registration', 'Trigger logic', 'Decision rules', 'Memory/learning'],
     deps: ['Backend services must exist first'],
     risks: ['Agent must be registered in agentRegistry', 'Test agent logic before enabling in production'],
+  },
+  requirement_implementation: {
+    readiness_target: 60,
+    description: 'Map and implement unmapped requirements by extending existing backend, frontend, and database layers.',
+    components: ['Service extensions', 'Route additions', 'Model updates', 'UI components', 'Validation logic'],
+    deps: [],
+    risks: ['Extend existing files — do not create duplicates', 'Verify requirement coverage after implementation'],
   },
 };
 
