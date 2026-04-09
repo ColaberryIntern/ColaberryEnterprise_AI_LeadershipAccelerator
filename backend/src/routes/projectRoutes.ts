@@ -578,6 +578,26 @@ router.post('/api/portal/project/github/sync', requireParticipant, async (req: R
     const enrollmentId = req.participant!.sub;
     const { fullSync } = await import('../services/githubService');
     const result = await fullSync(enrollmentId);
+
+    // Auto-discover existing code after sync (non-blocking)
+    try {
+      const { getProjectByEnrollment } = await import('../services/projectService');
+      const project = await getProjectByEnrollment(enrollmentId);
+      if (project) {
+        const { Capability } = await import('../models');
+        const existingDiscovered = await Capability.count({ where: { project_id: project.id, source: 'discovered' } });
+        if (existingDiscovered === 0) {
+          // First sync — discover existing code
+          const { discoverExistingCode } = await import('../intelligence/requirements/codeDiscovery');
+          const discovery = await discoverExistingCode(project.id, enrollmentId);
+          console.log(`[CodeDiscovery] Auto-discovered ${discovery.capabilities_created} capabilities on first GitHub sync`);
+          (result as any).discovery = discovery;
+        }
+      }
+    } catch (discErr: any) {
+      console.error('[CodeDiscovery] Auto-discovery error:', discErr.message);
+    }
+
     res.json(result);
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /github/sync error:', err.message);
@@ -1889,6 +1909,18 @@ router.get('/api/portal/project/business-processes/:id/verify', requireParticipa
         created_at: s.created_at,
       })),
     });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Code Discovery: scan repo for existing capabilities ────────
+router.post('/api/portal/project/discover-code', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { discoverExistingCode } = await import('../intelligence/requirements/codeDiscovery');
+    const result = await discoverExistingCode(project.id, req.participant!.sub);
+    res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
