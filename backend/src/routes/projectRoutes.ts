@@ -1464,6 +1464,7 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
       // Derive the SPECIFIC step key from the prompt title
       const titleLower = (prompt.title || '').toLowerCase();
       const stepKey =
+        titleLower.includes('implement') && titleLower.includes('requirement') ? 'implement_requirements' :
         titleLower.includes('optimize') ? 'optimize_performance' :
         titleLower.includes('reliab') ? 'improve_reliability' :
         titleLower.includes('monitor') ? 'add_monitoring' :
