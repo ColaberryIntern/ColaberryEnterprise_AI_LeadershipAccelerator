@@ -923,7 +923,7 @@ function NextBusinessProcessAction({ onNavigate }: { onNavigate: () => void }) {
       .then(res => {
         const procs = res.data || [];
         // Find first incomplete process (already sorted by priority from backend)
-        const next = procs.find((p: any) => !p.is_complete) || procs[0] || null;
+        const next = procs.find((p: any) => !p.is_complete && (p.applicability_status || 'active') === 'active') || procs[0] || null;
         setTopProcess(next);
       })
       .catch(() => {});

@@ -40,7 +40,7 @@ export default function PortalBusinessProcessesTab() {
     </div>
   );
 
-  const filteredProcesses = lifecycleFilter === 'all' ? processes : processes.filter((p: any) => (p.lifecycle_status || 'active') === lifecycleFilter);
+  const filteredProcesses = lifecycleFilter === 'all' ? processes : processes.filter((p: any) => (p.applicability_status || p.lifecycle_status || 'active') === lifecycleFilter);
   const totalReqs = processes.reduce((s: number, p: any) => s + (p.total_requirements || 0), 0);
   const matchedReqs = processes.reduce((s: number, p: any) => s + (p.matched_requirements || 0), 0);
   const overallPct = totalReqs > 0 ? Math.round((matchedReqs / totalReqs) * 100) : 0;
