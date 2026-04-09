@@ -1464,14 +1464,26 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
     // For requirement_implementation, fetch unmapped requirements and pass as extra context
     let extraContext: any = undefined;
     if (target === 'requirement_implementation') {
+      // Fetch ALL requirements for this process — not just DB "unmatched" status.
+      // Reason: process-level matching may have set status='matched' in DB,
+      // but enrichCapability demotes them back to 'unmatched' in memory because
+      // the matched files are noise. The DB and UI disagree.
+      // Solution: include ALL requirements so Claude knows what to implement.
       const { RequirementsMap } = await import('../models');
-      const unmapped = await RequirementsMap.findAll({
-        where: { capability_id: req.params.id, status: ['unmatched', 'not_started'] },
-        attributes: ['requirement_text'],
+      const allReqs = await RequirementsMap.findAll({
+        where: { capability_id: req.params.id },
+        attributes: ['requirement_text', 'status', 'confidence_score'],
         order: [['requirement_key', 'ASC']],
-        limit: 30,
+        limit: 50,
       });
-      extraContext = { unmappedRequirements: unmapped.map((r: any) => ({ requirement_text: r.requirement_text })) };
+      // Filter: include unmatched, not_started, and low-confidence "matched" (< 0.7)
+      const needsWork = allReqs.filter((r: any) =>
+        r.status === 'unmatched' || r.status === 'not_started' ||
+        (r.status === 'matched' && (r.confidence_score || 0) < 0.7)
+      );
+      // If all reqs appear matched but with low confidence, include them all
+      const reqs = needsWork.length > 0 ? needsWork : allReqs;
+      extraContext = { unmappedRequirements: reqs.map((r: any) => ({ requirement_text: r.requirement_text })) };
     }
 
     const { generateImprovementPrompt } = await import('../intelligence/promptGenerator');
