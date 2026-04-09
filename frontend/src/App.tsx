@@ -29,7 +29,7 @@ function App() {
           {publicRoutes}
         </Route>
       </Routes>
-      <GlobalCoryWidget />
+      {/* GlobalCoryWidget removed — replaced by ArchitectChat on portal pages */}
       </ToastProvider>
     </AuthProvider>
   );
