@@ -11,10 +11,10 @@ const PROMPT_TARGETS = [
   { key: 'agent_enhancement', label: 'Enhance Agent', icon: 'bi-cpu' },
 ];
 
-const MATURITY_COLORS: Record<number, string> = { 0: '#9ca3af', 1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#10b981', 5: '#8b5cf6' };
+const MATURITY_COLORS: Record<number, string> = { 0: '#9ca3af', 1: 'var(--color-danger)', 2: 'var(--color-warning)', 3: 'var(--color-info)', 4: 'var(--color-success)', 5: '#8b5cf6' };
 
 function StatusDot({ status }: { status: string }) {
-  const c: Record<string, string> = { ready: '#10b981', partial: '#f59e0b', missing: '#ef4444' };
+  const c: Record<string, string> = { ready: 'var(--color-success)', partial: 'var(--color-warning)', missing: 'var(--color-danger)' };
   const l: Record<string, string> = { ready: 'Ready', partial: 'Partial', missing: 'Missing' };
   return <span className="d-flex align-items-center gap-1"><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: c[status] || '#9ca3af' }}></span><strong style={{ color: c[status] || '#9ca3af', fontSize: 12 }}>{l[status] || status}</strong></span>;
 }
@@ -84,13 +84,13 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
 
   return (
     <div className="card border-0 shadow">
-      <div className="card-header bg-white py-3 d-flex justify-content-between align-items-start" style={{ borderBottom: `3px solid ${u.usable ? '#10b981' : '#ef4444'}` }}>
+      <div className="card-header bg-white py-3 d-flex justify-content-between align-items-start" style={{ borderBottom: `3px solid ${u.usable ? 'var(--color-success)' : 'var(--color-danger)'}` }}>
         <div>
           <h5 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>{p.name}</h5>
           <span className="text-muted" style={{ fontSize: 12 }}>{p.total_requirements} requirements</span>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <button className="btn btn-sm" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10, fontWeight: 700, border: '1px solid #3b82f640' }}
+          <button className="btn btn-sm" style={{ background: '#3b82f620', color: 'var(--color-info)', fontSize: 10, fontWeight: 700, border: '1px solid #3b82f640' }}
             disabled={resyncing}
             onClick={async () => {
               setResyncing(true);
@@ -209,7 +209,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           }}>
             <i className="bi bi-mortarboard me-1"></i>Learn
           </button>
-          <span className="badge px-3 py-2" style={{ background: u.usable ? '#10b981' : '#ef4444', color: '#fff', fontSize: 13, fontWeight: 700 }}>{u.usable ? 'USABLE' : 'NOT READY'}</span>
+          <span className="badge px-3 py-2" style={{ background: u.usable ? 'var(--color-success)' : 'var(--color-danger)', color: '#fff', fontSize: 13, fontWeight: 700 }}>{u.usable ? 'USABLE' : 'NOT READY'}</span>
           <button className="btn btn-link text-muted p-0" onClick={onClose}><i className="bi bi-x-lg" style={{ fontSize: 18 }}></i></button>
         </div>
       </div>
@@ -226,9 +226,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         {/* 2: System Truth — 3 metrics + usability */}
         <Section num={2} title="System Truth">
           <div className="row g-3 mb-3">
-            <div className="col-md-4"><MetricBar label="Req. Matched (auto)" value={m.requirements_coverage || 0} color={m.requirements_coverage >= 70 ? '#10b981' : m.requirements_coverage >= 30 ? '#f59e0b' : '#ef4444'} /></div>
-            <div className="col-md-4"><MetricBar label="System Readiness" value={m.system_readiness || 0} color={m.system_readiness >= 70 ? '#10b981' : m.system_readiness >= 30 ? '#f59e0b' : '#ef4444'} /></div>
-            <div className="col-md-4"><MetricBar label="Quality Score" value={m.quality_score || 0} color={m.quality_score >= 70 ? '#10b981' : m.quality_score >= 30 ? '#f59e0b' : '#ef4444'} /></div>
+            <div className="col-md-4"><MetricBar label="Req. Matched (auto)" value={m.requirements_coverage || 0} color={m.requirements_coverage >= 70 ? 'var(--color-success)' : m.requirements_coverage >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} /></div>
+            <div className="col-md-4"><MetricBar label="System Readiness" value={m.system_readiness || 0} color={m.system_readiness >= 70 ? 'var(--color-success)' : m.system_readiness >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} /></div>
+            <div className="col-md-4"><MetricBar label="Quality Score" value={m.quality_score || 0} color={m.quality_score >= 70 ? 'var(--color-success)' : m.quality_score >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} /></div>
           </div>
           <div className="d-flex gap-4 mb-2">
             <div><span className="text-muted" style={{ fontSize: 11 }}>Backend</span><br/><StatusDot status={u.backend || 'missing'} /></div>
@@ -236,7 +236,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             <div><span className="text-muted" style={{ fontSize: 11 }}>Agents</span><br/><StatusDot status={u.agent || 'missing'} /></div>
           </div>
           {!u.usable && (u.why_not || []).length > 0 && (
-            <div className="mt-1">{(u.why_not || []).map((w: string, i: number) => <div key={i} className="text-muted small"><i className="bi bi-arrow-right me-1" style={{ color: '#ef4444' }}></i>{w}</div>)}</div>
+            <div className="mt-1">{(u.why_not || []).map((w: string, i: number) => <div key={i} className="text-muted small"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-danger)' }}></i>{w}</div>)}</div>
           )}
         </Section>
 
@@ -245,9 +245,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           {(links.backend?.length > 0 || links.frontend?.length > 0 || links.agents?.length > 0 || links.models?.length > 0) ? (
             <div className="row g-3">
               {[
-                { key: 'backend', label: 'Services', icon: 'bi-gear', color: '#3b82f6' },
-                { key: 'models', label: 'Database', icon: 'bi-database', color: '#f59e0b' },
-                { key: 'frontend', label: 'Frontend', icon: 'bi-layout-wtf', color: '#10b981' },
+                { key: 'backend', label: 'Services', icon: 'bi-gear', color: 'var(--color-info)' },
+                { key: 'models', label: 'Database', icon: 'bi-database', color: 'var(--color-warning)' },
+                { key: 'frontend', label: 'Frontend', icon: 'bi-layout-wtf', color: 'var(--color-success)' },
                 { key: 'agents', label: 'Agents', icon: 'bi-cpu', color: '#8b5cf6' },
               ].filter(l => (links[l.key] || []).length > 0).map(l => (
                 <div key={l.key} className="col-md-3">
@@ -264,10 +264,10 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
 
         {/* 4: Gaps */}
         <Section num={4} title={`Gaps (${gaps.length})`} collapsible defaultOpen={gaps.length > 0 && gaps.length <= 10}>
-          {gaps.length === 0 ? <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>No gaps detected.</div> : (
+          {gaps.length === 0 ? <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>No gaps detected.</div> : (
             <>
               {gaps.filter((g: any) => g.gap_type === 'system').map((g: any, i: number) => (
-                <div key={`s${i}`} className="py-1" style={{ borderBottom: '1px solid var(--color-border)' }}><span className="badge me-2" style={{ background: '#ef444420', color: '#ef4444', fontSize: 8 }}>System</span><span style={{ fontSize: 11, color: '#ef4444' }}>{g.text}</span></div>
+                <div key={`s${i}`} className="py-1" style={{ borderBottom: '1px solid var(--color-border)' }}><span className="badge me-2" style={{ background: '#ef444420', color: 'var(--color-danger)', fontSize: 8 }}>System</span><span style={{ fontSize: 11, color: 'var(--color-danger)' }}>{g.text}</span></div>
               ))}
               {gaps.filter((g: any) => g.gap_type === 'quality').map((g: any, i: number) => (
                 <div key={`q${i}`} className="py-1" style={{ borderBottom: '1px solid var(--color-border)' }}><span className="badge me-2" style={{ background: '#9ca3af20', color: '#9ca3af', fontSize: 8 }}>Quality</span><span className="text-muted" style={{ fontSize: 11 }}>{g.text}</span></div>
@@ -275,7 +275,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
               {(showAllGaps ? gaps.filter((g: any) => g.gap_type === 'requirement') : gaps.filter((g: any) => g.gap_type === 'requirement').slice(0, 5)).map((g: any, i: number) => {
                 const exp = expandedReqs.has(`g-${g.key}`);
                 return (<div key={`r${i}`} className="py-1" style={{ borderBottom: '1px solid var(--color-border)', cursor: 'pointer' }} onClick={() => toggleReq(`g-${g.key}`)}>
-                  <span className="badge me-2" style={{ background: '#f59e0b20', color: '#f59e0b', fontSize: 8 }}>Req</span>
+                  <span className="badge me-2" style={{ background: '#f59e0b20', color: 'var(--color-warning)', fontSize: 8 }}>Req</span>
                   <strong style={{ fontSize: 10 }}>{g.key}</strong> <span className="text-muted" style={{ fontSize: 11 }}>{exp ? g.text : (g.text?.length > 80 ? g.text.substring(0, 80) + '...' : g.text)}</span>
                 </div>);
               })}
@@ -295,19 +295,19 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             return (
               <div>
                 <div className="d-flex gap-4 mb-2">
-                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#10b981' }}>{verified}</div><div className="text-muted" style={{ fontSize: 9 }}>Verified</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: 'var(--color-success)' }}>{verified}</div><div className="text-muted" style={{ fontSize: 9 }}>Verified</div></div>
                   <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#9ca3af' }}>{autoMatched}</div><div className="text-muted" style={{ fontSize: 9 }}>Auto-Matched</div></div>
-                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#f59e0b' }}>{partial}</div><div className="text-muted" style={{ fontSize: 9 }}>Planned</div></div>
-                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: '#ef4444' }}>{unmapped}</div><div className="text-muted" style={{ fontSize: 9 }}>Unmapped</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: 'var(--color-warning)' }}>{partial}</div><div className="text-muted" style={{ fontSize: 9 }}>Planned</div></div>
+                  <div className="text-center"><div className="fw-bold" style={{ fontSize: 20, color: 'var(--color-danger)' }}>{unmapped}</div><div className="text-muted" style={{ fontSize: 9 }}>Unmapped</div></div>
                 </div>
                 <div className="progress" style={{ height: 8 }}>
-                  <div className="progress-bar" style={{ width: `${total > 0 ? (verified / total) * 100 : 0}%`, background: '#10b981' }} />
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (verified / total) * 100 : 0}%`, background: 'var(--color-success)' }} />
                   <div className="progress-bar" style={{ width: `${total > 0 ? (autoMatched / total) * 100 : 0}%`, background: '#cbd5e1' }} />
-                  <div className="progress-bar" style={{ width: `${total > 0 ? (partial / total) * 100 : 0}%`, background: '#f59e0b' }} />
+                  <div className="progress-bar" style={{ width: `${total > 0 ? (partial / total) * 100 : 0}%`, background: 'var(--color-warning)' }} />
                 </div>
                 <div className="d-flex justify-content-between mt-1" style={{ fontSize: 9 }}>
                   <span className="text-muted">{total} total requirements</span>
-                  <span style={{ color: '#10b981' }}>{total > 0 ? Math.round((verified / total) * 100) : 0}% verified</span>
+                  <span style={{ color: 'var(--color-success)' }}>{total > 0 ? Math.round((verified / total) * 100) : 0}% verified</span>
                 </div>
               </div>
             );
@@ -319,7 +319,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           {Object.entries(q).map(([dim, val]: [string, any]) => (
             <div key={dim} className="d-flex align-items-center gap-2 mb-1">
               <span className="text-muted text-capitalize" style={{ fontSize: 11, width: 130 }}>{dim.replace(/_/g, ' ')}</span>
-              <div className="progress flex-grow-1" style={{ height: 6 }}><div className="progress-bar" style={{ width: `${val * 10}%`, background: val >= 7 ? '#10b981' : val >= 4 ? '#f59e0b' : '#ef4444' }} /></div>
+              <div className="progress flex-grow-1" style={{ height: 6 }}><div className="progress-bar" style={{ width: `${val * 10}%`, background: val >= 7 ? 'var(--color-success)' : val >= 4 ? 'var(--color-warning)' : 'var(--color-danger)' }} /></div>
               <span className="fw-medium" style={{ fontSize: 11, width: 25 }}>{val}/10</span>
             </div>
           ))}
@@ -339,16 +339,16 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         <Section num={8} title="Execution Plan">
           {(() => {
             const steps = p.execution_plan || [];
-            if (steps.length === 0) return <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>No actions needed — system is fully built.</div>;
+            if (steps.length === 0) return <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>No actions needed — system is fully built.</div>;
             const firstAvailable = steps.findIndex((s: any) => !s.blocked);
             return steps.map((s: any, i: number) => {
               const isNext = i === firstAvailable;
               return (
               <div key={s.key} className="mb-3 pb-3" style={{ borderBottom: i < steps.length - 1 ? '1px dashed var(--color-border)' : 'none', background: isNext ? '#eff6ff' : 'transparent', borderRadius: isNext ? 8 : 0, padding: isNext ? 12 : 0 }}>
-                {isNext && <div className="mb-2"><span className="badge" style={{ background: '#3b82f6', color: '#fff', fontSize: 9 }}><i className="bi bi-star-fill me-1"></i>Recommended Next Step</span></div>}
+                {isNext && <div className="mb-2"><span className="badge" style={{ background: 'var(--color-info)', color: '#fff', fontSize: 9 }}><i className="bi bi-star-fill me-1"></i>Recommended Next Step</span></div>}
                 <div className="d-flex align-items-start gap-3">
                   <div className="text-center" style={{ flexShrink: 0 }}>
-                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 28, height: 28, background: s.blocked ? '#e2e8f0' : isNext ? '#3b82f6' : 'var(--color-primary)', color: s.blocked ? '#9ca3af' : '#fff', fontSize: 12 }}>{s.step}</span>
+                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 28, height: 28, background: s.blocked ? '#e2e8f0' : isNext ? 'var(--color-info)' : 'var(--color-primary)', color: s.blocked ? '#9ca3af' : '#fff', fontSize: 12 }}>{s.step}</span>
                     {i < steps.length - 1 && <div style={{ width: 2, height: 20, background: '#e2e8f0', margin: '4px auto' }}></div>}
                   </div>
                   <div className="flex-grow-1">
@@ -356,7 +356,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                       <div>
                         <div className="fw-semibold" style={{ fontSize: 13, color: s.blocked ? '#9ca3af' : 'var(--color-primary)' }}>
                           {s.label}
-                          <span className="badge ms-2" style={{ background: '#10b98120', color: '#10b981', fontSize: 9 }}>{s.impact}</span>
+                          <span className="badge ms-2" style={{ background: '#10b98120', color: 'var(--color-success)', fontSize: 9 }}>{s.impact}</span>
                         </div>
                         <div className="text-muted" style={{ fontSize: 10 }}>Depends on: {s.depends_on}</div>
                       </div>
@@ -365,10 +365,10 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                       </button>
                     </div>
                     <div className="d-flex gap-3 mt-1" style={{ fontSize: 10 }}>
-                      <span style={{ color: '#10b981' }}><i className="bi bi-check-circle me-1"></i>Fixes: {s.fixes.join(', ')}</span>
-                      <span style={{ color: '#3b82f6' }}><i className="bi bi-unlock me-1"></i>Enables: {s.enables.join(', ')}</span>
+                      <span style={{ color: 'var(--color-success)' }}><i className="bi bi-check-circle me-1"></i>Fixes: {s.fixes.join(', ')}</span>
+                      <span style={{ color: 'var(--color-info)' }}><i className="bi bi-unlock me-1"></i>Enables: {s.enables.join(', ')}</span>
                     </div>
-                    {s.blocked && <div style={{ fontSize: 9, color: '#ef4444' }} className="mt-1"><i className="bi bi-lock me-1"></i>{s.block_reason || 'Blocked'}</div>}
+                    {s.blocked && <div style={{ fontSize: 9, color: 'var(--color-danger)' }} className="mt-1"><i className="bi bi-lock me-1"></i>{s.block_reason || 'Blocked'}</div>}
                   </div>
                 </div>
               </div>
@@ -381,7 +381,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => { setResyncModal(null); onUpdate(); }}>
             <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
               <div className="modal-content">
-                <div className="modal-header py-2" style={{ borderBottom: `3px solid ${resyncModal.what_changed?.status === 'complete' ? '#10b981' : resyncModal.what_changed?.status === 'incomplete' ? '#f59e0b' : '#3b82f6'}` }}>
+                <div className="modal-header py-2" style={{ borderBottom: `3px solid ${resyncModal.what_changed?.status === 'complete' ? 'var(--color-success)' : resyncModal.what_changed?.status === 'incomplete' ? 'var(--color-warning)' : 'var(--color-info)'}` }}>
                   <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
                     <i className="bi bi-arrow-repeat me-2"></i>Resync Complete
                   </h6>
@@ -393,9 +393,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     <div className="mb-3 p-2" style={{ background: resyncModal.what_changed.status === 'complete' ? '#10b98110' : '#f59e0b10', borderRadius: 8, border: `1px solid ${resyncModal.what_changed.status === 'complete' ? '#10b98130' : '#f59e0b30'}` }}>
                       <div className="fw-medium small">
                         {resyncModal.what_changed.status === 'complete' ? (
-                          <><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>Last step verified: {resyncModal.what_changed.last_step}</>
+                          <><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>Last step verified: {resyncModal.what_changed.last_step}</>
                         ) : (
-                          <><i className="bi bi-exclamation-triangle me-1" style={{ color: '#f59e0b' }}></i>Last step incomplete: {resyncModal.what_changed.last_step}</>
+                          <><i className="bi bi-exclamation-triangle me-1" style={{ color: 'var(--color-warning)' }}></i>Last step incomplete: {resyncModal.what_changed.last_step}</>
                         )}
                       </div>
                       {resyncModal.what_changed.missing?.length > 0 && (
@@ -423,7 +423,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                           { label: 'Gaps', before: resyncModal.before.gaps, after: resyncModal.after.gaps },
                         ].map(row => {
                           const delta = row.after - row.before;
-                          const color = row.label === 'Gaps' ? (delta < 0 ? '#10b981' : delta > 0 ? '#ef4444' : '#9ca3af') : (delta > 0 ? '#10b981' : delta < 0 ? '#ef4444' : '#9ca3af');
+                          const color = row.label === 'Gaps' ? (delta < 0 ? 'var(--color-success)' : delta > 0 ? 'var(--color-danger)' : '#9ca3af') : (delta > 0 ? 'var(--color-success)' : delta < 0 ? 'var(--color-danger)' : '#9ca3af');
                           return (
                             <tr key={row.label}>
                               <td>{row.label}</td>

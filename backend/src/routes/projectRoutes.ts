@@ -1236,6 +1236,13 @@ function enrichCapability(cap: any) {
     unmatched_requirements: allReqsFlat.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started').length,
     completion_pct: reqCoverage, // override hierarchy's value
     metrics: { requirements_coverage: reqCoverage, system_readiness: readiness, quality_score: qualityTotal },
+    // Process-level confidence: weighted average of requirement confidence scores
+    confidence: (() => {
+      const scored = allReqsFlat.filter((r: any) => r.confidence_score > 0);
+      if (scored.length === 0) return { score: 0, source: 'no_matches', sample_size: 0 };
+      const avg = scored.reduce((s: number, r: any) => s + (r.confidence_score || 0), 0) / scored.length;
+      return { score: Math.round(avg * 100) / 100, source: 'requirement_avg', sample_size: scored.length };
+    })(),
     quality: q,
     maturity: { level: maturityLevel, label: maturityLabel, next_level_requirements: nextReqs },
     gap_count: allGaps.length,

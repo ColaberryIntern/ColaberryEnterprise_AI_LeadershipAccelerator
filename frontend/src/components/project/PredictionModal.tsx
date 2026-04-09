@@ -11,7 +11,7 @@ interface Props {
 
 function MetricDelta({ label, before, after, unit }: { label: string; before: number; after: number; unit?: string }) {
   const delta = after - before;
-  const color = delta > 0 ? '#10b981' : delta < 0 ? '#ef4444' : '#9ca3af';
+  const color = delta > 0 ? 'var(--color-success)' : delta < 0 ? 'var(--color-danger)' : '#9ca3af';
   return (
     <div className="d-flex justify-content-between align-items-center mb-2 py-1" style={{ borderBottom: '1px solid var(--color-border)' }}>
       <span className="text-muted" style={{ fontSize: 11 }}>{label}</span>
@@ -76,7 +76,7 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
   );
 
   const p = prediction || {};
-  const riskColors: Record<string, string> = { low: '#10b981', medium: '#f59e0b', high: '#ef4444' };
+  const riskColors: Record<string, string> = { low: 'var(--color-success)', medium: 'var(--color-warning)', high: 'var(--color-danger)' };
 
   return (
     <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -131,10 +131,10 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                 <div className="text-muted" style={{ fontSize: 9 }}>Current</div>
                 <div className="fw-bold" style={{ fontSize: 14, color: 'var(--color-primary)' }}>L{p.level_before?.level || 1} {p.level_before?.label || 'Prototype'}</div>
               </div>
-              <i className="bi bi-arrow-right" style={{ fontSize: 18, color: p.maturity_advances ? '#10b981' : '#9ca3af' }}></i>
+              <i className="bi bi-arrow-right" style={{ fontSize: 18, color: p.maturity_advances ? 'var(--color-success)' : '#9ca3af' }}></i>
               <div className="text-center">
                 <div className="text-muted" style={{ fontSize: 9 }}>After</div>
-                <div className="fw-bold" style={{ fontSize: 14, color: p.maturity_advances ? '#10b981' : 'var(--color-primary)' }}>L{p.level_after?.level || 1} {p.level_after?.label || 'Prototype'}</div>
+                <div className="fw-bold" style={{ fontSize: 14, color: p.maturity_advances ? 'var(--color-success)' : 'var(--color-primary)' }}>L{p.level_after?.level || 1} {p.level_after?.label || 'Prototype'}</div>
               </div>
               {p.maturity_advances && <span className="badge bg-success ms-auto" style={{ fontSize: 10 }}>LEVEL UP</span>}
             </div>
@@ -151,8 +151,8 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                       <div className="d-flex align-items-center gap-1">
                         <span>{d.before}/10</span>
                         <i className="bi bi-arrow-right" style={{ fontSize: 9, color: '#9ca3af' }}></i>
-                        <strong style={{ color: improved ? '#10b981' : '#9ca3af' }}>{d.after}/10</strong>
-                        {improved && <span style={{ fontSize: 9, color: '#10b981' }}>+{d.after - d.before}</span>}
+                        <strong style={{ color: improved ? 'var(--color-success)' : '#9ca3af' }}>{d.after}/10</strong>
+                        {improved && <span style={{ fontSize: 9, color: 'var(--color-success)' }}>+{d.after - d.before}</span>}
                       </div>
                     </div>
                   );
@@ -164,17 +164,17 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
             <h6 className="fw-semibold small mb-2"><i className="bi bi-plus-circle me-1"></i>What Will Be Built</h6>
             <div className="d-flex flex-wrap gap-1 mb-4">
               {(p.new_components || []).map((c: string, i: number) => (
-                <span key={i} className="badge" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 10 }}>{c}</span>
+                <span key={i} className="badge" style={{ background: '#3b82f620', color: 'var(--color-info)', fontSize: 10 }}>{c}</span>
               ))}
             </div>
 
             {/* Gaps Resolved */}
-            <h6 className="fw-semibold small mb-2"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>Gaps This Resolves</h6>
+            <h6 className="fw-semibold small mb-2"><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>Gaps This Resolves</h6>
             <div className="mb-4">
-              {actionType === 'backend_improvement' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Backend implementation gap — services and API routes</div>}
-              {actionType === 'frontend_exposure' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Frontend UI gap — user-facing components</div>}
-              {actionType === 'agent_enhancement' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Automation gap — AI agent orchestration</div>}
-              <div className="small text-muted"><i className="bi bi-arrow-right me-1" style={{ color: '#10b981' }}></i>Quality score improvement across affected dimensions</div>
+              {actionType === 'backend_improvement' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-success)' }}></i>Backend implementation gap — services and API routes</div>}
+              {actionType === 'frontend_exposure' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-success)' }}></i>Frontend UI gap — user-facing components</div>}
+              {actionType === 'agent_enhancement' && <div className="small text-muted mb-1"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-success)' }}></i>Automation gap — AI agent orchestration</div>}
+              <div className="small text-muted"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-success)' }}></i>Quality score improvement across affected dimensions</div>
             </div>
 
             {/* Risk & Dependencies */}
@@ -191,10 +191,10 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
               <div className="col-md-6">
                 <h6 className="fw-semibold small mb-2"><i className="bi bi-diagram-2 me-1"></i>Dependencies</h6>
                 {p.dependencies_met ? (
-                  <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>All prerequisites met</div>
+                  <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>All prerequisites met</div>
                 ) : (
                   (p.missing_prerequisites || []).map((d: string, i: number) => (
-                    <div key={i} className="small" style={{ color: '#ef4444' }}><i className="bi bi-x-circle me-1"></i>{d}</div>
+                    <div key={i} className="small" style={{ color: 'var(--color-danger)' }}><i className="bi bi-x-circle me-1"></i>{d}</div>
                   ))
                 )}
               </div>
