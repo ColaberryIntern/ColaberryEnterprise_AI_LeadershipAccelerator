@@ -99,9 +99,6 @@ export default function PortalBusinessProcessesTab() {
         </div>
       )}
 
-      {/* NLP Steering Panel */}
-      <SteeringPanel onAction={() => load(true)} />
-
       {/* Detail panel appears here — above the card grid */}
       {selected && (
         <div className="mb-4">

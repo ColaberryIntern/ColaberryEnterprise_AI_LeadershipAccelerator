@@ -84,16 +84,16 @@ export default function ArchitectChat() {
     return (
       <button
         onClick={handleOpen}
-        className="btn btn-primary shadow-lg"
+        className="btn btn-primary shadow-lg d-flex align-items-center gap-2"
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 1050,
-          width: 56, height: 56, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 24, border: 'none',
+          height: 48, borderRadius: 24, padding: '0 20px 0 16px',
+          fontSize: 14, border: 'none',
         }}
-        title="AI Architect"
+        title="AI Architect — Build & improve with guidance"
       >
-        <i className="bi bi-robot"></i>
+        <i className="bi bi-robot" style={{ fontSize: 20 }}></i>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>Architect</span>
       </button>
     );
   }
