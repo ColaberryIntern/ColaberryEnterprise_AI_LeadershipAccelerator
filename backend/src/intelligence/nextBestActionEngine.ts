@@ -241,7 +241,7 @@ export function generateExecutionPlan(state: SystemState, completedStepKeys?: st
         depends_on: 'Backend services',
         fixes: ['Low requirement coverage'], enables: ['Higher completion %'],
         blocked: false, requirements_covered: [],
-        prompt_target: 'backend_improvement',
+        prompt_target: 'requirement_implementation',
       });
     } else if (state.qualityScore < 70) {
       actions.push({
