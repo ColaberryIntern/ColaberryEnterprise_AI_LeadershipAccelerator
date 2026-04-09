@@ -80,6 +80,15 @@ const PLATFORM_PROCESSES = [
     strength_scores: { determinism: 85, reliability: 80, observability: 90, ux_exposure: 40, automation: 60, ai_maturity: 50, human_dependency: 60 },
     autonomy_level: 'manual',
   },
+  {
+    name: 'User Journey Maps',
+    description: 'End-to-end user journey tracking across awareness, consideration, onboarding, engagement, and evaluation phases with funnel analytics and stall detection.',
+    linked_agents: ['visitor_tracking', 'lead_scoring'],
+    linked_backend_services: ['UserJourneyMapsService', 'journeyTimelineService'],
+    linked_frontend_components: ['JourneyTimeline', 'MapsTab'],
+    strength_scores: { determinism: 65, reliability: 70, observability: 75, ux_exposure: 60, automation: 55, ai_maturity: 50, human_dependency: 40 },
+    autonomy_level: 'assisted',
+  },
 ];
 
 export async function seedBusinessProcesses(): Promise<{ created: number; skipped: number }> {

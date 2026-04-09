@@ -44,6 +44,7 @@ import artifactRelationshipRoutes from './admin/artifactRelationshipRoutes';
 import dashboardRoutes from './admin/dashboardRoutes';
 import communicationRoutes from './admin/communicationRoutes';
 import businessProcessRoutes from './admin/businessProcessRoutes';
+import userJourneyMapsRoutes from './admin/userJourneyMapsRoutes';
 
 const router = Router();
 
@@ -92,5 +93,6 @@ router.use(artifactRelationshipRoutes);
 router.use(dashboardRoutes);
 router.use(communicationRoutes);
 router.use(businessProcessRoutes);
+router.use(userJourneyMapsRoutes);
 
 export default router;

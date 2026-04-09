@@ -139,6 +139,7 @@ import EngagementEvent from './EngagementEvent';
 import ResponseQueue from './ResponseQueue';
 import LinkedInActionQueue from './LinkedInActionQueue';
 import OpenclawConversation from './OpenclawConversation';
+import UserJourneyMap from './UserJourneyMap';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -845,4 +846,5 @@ export {
   ResponseQueue,
   LinkedInActionQueue,
   OpenclawConversation,
+  UserJourneyMap,
 };
