@@ -1,4 +1,4 @@
-import { Op, fn, col, literal } from 'sequelize';
+import { Op, fn, col, literal, QueryTypes } from 'sequelize';
 import { Visitor, VisitorSession, PageEvent, Lead, IntentScore, Campaign } from '../models';
 import { sequelize } from '../config/database';
 
@@ -364,4 +364,134 @@ export async function getVisitorProfile(visitorId: string): Promise<object | nul
     sessions,
     recent_events: recentEvents,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 8. Dashboard Summary (raw SQL aggregates)
+// ---------------------------------------------------------------------------
+
+export interface VisitorDashboardSummary {
+  total_sessions: number;
+  unique_visitors: number;
+  avg_session_duration: number;
+  bounce_rate: number;
+  page_views_per_session: number;
+}
+
+export async function getVisitorDashboard(days = 30): Promise<VisitorDashboardSummary> {
+  const [row] = await sequelize.query<VisitorDashboardSummary>(
+    `SELECT
+       COUNT(*)::int                                          AS total_sessions,
+       COUNT(DISTINCT visitor_id)::int                        AS unique_visitors,
+       COALESCE(ROUND(AVG(duration_seconds)), 0)::int         AS avg_session_duration,
+       CASE WHEN COUNT(*) = 0 THEN 0
+            ELSE ROUND(SUM(CASE WHEN is_bounce THEN 1 ELSE 0 END)::numeric / COUNT(*) * 100, 1)
+       END::float                                             AS bounce_rate,
+       CASE WHEN COUNT(*) = 0 THEN 0
+            ELSE ROUND(SUM(pageview_count)::numeric / COUNT(*), 1)
+       END::float                                             AS page_views_per_session
+     FROM visitor_sessions
+     WHERE started_at >= NOW() - INTERVAL ':days days'`,
+    {
+      replacements: { days },
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  return row ?? {
+    total_sessions: 0,
+    unique_visitors: 0,
+    avg_session_duration: 0,
+    bounce_rate: 0,
+    page_views_per_session: 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 9. Conversion Funnel (raw SQL)
+// ---------------------------------------------------------------------------
+
+export interface ConversionFunnel {
+  total_visitors: number;
+  total_sessions: number;
+  total_leads: number;
+}
+
+export async function getConversionFunnel(days = 30): Promise<ConversionFunnel> {
+  const [row] = await sequelize.query<ConversionFunnel>(
+    `SELECT
+       COUNT(DISTINCT vs.visitor_id)::int   AS total_visitors,
+       COUNT(DISTINCT vs.id)::int           AS total_sessions,
+       COUNT(DISTINCT vs.lead_id)::int      AS total_leads
+     FROM visitor_sessions vs
+     WHERE vs.started_at >= NOW() - INTERVAL ':days days'`,
+    {
+      replacements: { days },
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  return row ?? { total_visitors: 0, total_sessions: 0, total_leads: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// 10. Top Pages (raw SQL)
+// ---------------------------------------------------------------------------
+
+export interface TopPage {
+  page_path: string;
+  page_title: string | null;
+  view_count: number;
+  unique_visitors: number;
+}
+
+export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
+  const rows = await sequelize.query<TopPage>(
+    `SELECT
+       pe.page_path,
+       MAX(pe.page_title)                       AS page_title,
+       COUNT(*)::int                             AS view_count,
+       COUNT(DISTINCT pe.visitor_id)::int        AS unique_visitors
+     FROM page_events pe
+     WHERE pe.event_type = 'pageview'
+       AND pe.timestamp >= NOW() - INTERVAL ':days days'
+     GROUP BY pe.page_path
+     ORDER BY view_count DESC
+     LIMIT :limit`,
+    {
+      replacements: { days, limit },
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
+// 11. Device Breakdown (raw SQL)
+// ---------------------------------------------------------------------------
+
+export interface DeviceBreakdown {
+  device_type: string;
+  session_count: number;
+  percentage: number;
+}
+
+export async function getDeviceBreakdown(days = 30): Promise<DeviceBreakdown[]> {
+  const rows = await sequelize.query<DeviceBreakdown>(
+    `SELECT
+       COALESCE(device_type, 'unknown')           AS device_type,
+       COUNT(*)::int                               AS session_count,
+       ROUND(COUNT(*)::numeric * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 1)::float AS percentage
+     FROM visitor_sessions
+     WHERE started_at >= NOW() - INTERVAL ':days days'
+     GROUP BY device_type
+     ORDER BY session_count DESC`,
+    {
+      replacements: { days },
+      type: QueryTypes.SELECT,
+    },
+  );
+
+  return rows;
 }

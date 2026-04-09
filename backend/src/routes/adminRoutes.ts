@@ -47,6 +47,7 @@ import businessProcessRoutes from './admin/businessProcessRoutes';
 import userJourneyMapsRoutes from './admin/userJourneyMapsRoutes';
 import roleRoutes from './admin/roleRoutes';
 import implementationStrategyRoutes from './admin/implementationStrategyRoutes';
+import visitorAnalyticsRoutes from './admin/visitorAnalyticsRoutes';
 
 const router = Router();
 
@@ -98,5 +99,6 @@ router.use(businessProcessRoutes);
 router.use(userJourneyMapsRoutes);
 router.use(roleRoutes);
 router.use(implementationStrategyRoutes);
+router.use(visitorAnalyticsRoutes);
 
 export default router;
