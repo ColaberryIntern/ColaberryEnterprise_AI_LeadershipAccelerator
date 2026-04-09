@@ -26,6 +26,8 @@ export interface CapabilityAttributes {
   last_evaluated_at?: Date;
   lifecycle_status?: string;
   last_execution?: Record<string, any>;
+  execution_profile?: string;
+  strategy_template?: string;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -79,6 +81,8 @@ Capability.init(
     last_execution: { type: DataTypes.JSONB, allowNull: true },
     autonomy_history: { type: DataTypes.JSONB, defaultValue: [] },
     last_evaluated_at: { type: DataTypes.DATE, allowNull: true },
+    execution_profile: { type: DataTypes.STRING(20), defaultValue: 'production' },
+    strategy_template: { type: DataTypes.STRING(30), defaultValue: 'default' },
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

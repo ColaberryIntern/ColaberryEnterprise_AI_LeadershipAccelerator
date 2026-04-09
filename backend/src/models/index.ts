@@ -141,6 +141,8 @@ import LinkedInActionQueue from './LinkedInActionQueue';
 import OpenclawConversation from './OpenclawConversation';
 import UserJourneyMap from './UserJourneyMap';
 import ImplementationStrategy from './ImplementationStrategy';
+import BposExecutionSnapshot from './BposExecutionSnapshot';
+import BposStepExecution from './BposStepExecution';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -849,4 +851,6 @@ export {
   OpenclawConversation,
   UserJourneyMap,
   ImplementationStrategy,
+  BposExecutionSnapshot,
+  BposStepExecution,
 };
