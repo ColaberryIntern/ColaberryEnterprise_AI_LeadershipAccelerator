@@ -184,20 +184,30 @@ const ACTION_TEMPLATES = [
 /**
  * Deterministic completion check.
  * A process is complete ONLY when ALL criteria are met.
+ * Optional profile parameter controls thresholds (defaults to production).
  */
-export function isProcessComplete(state: SystemState): boolean {
+export function isProcessComplete(state: SystemState, profile?: { reqCoverage: number; qualityScore: number; requiredLayers: string[] }): boolean {
+  const thresholds = profile || { reqCoverage: 90, qualityScore: 70, requiredLayers: ['backend', 'frontend', 'models'] };
+  const layerCheck: Record<string, boolean> = {
+    backend: state.hasBackend,
+    frontend: state.hasFrontend,
+    models: state.hasModels,
+    agents: state.hasAgents,
+  };
   return (
-    state.reqCoverage >= 90 &&
-    state.qualityScore >= 70 &&
-    state.hasBackend &&
-    state.hasFrontend &&
-    state.hasModels
+    state.reqCoverage >= thresholds.reqCoverage &&
+    state.qualityScore >= thresholds.qualityScore &&
+    thresholds.requiredLayers.every(l => layerCheck[l])
   );
 }
 
-export function generateExecutionPlan(state: SystemState, completedStepKeys?: string[]): ExecutionAction[] {
+export function generateExecutionPlan(
+  state: SystemState,
+  completedStepKeys?: string[],
+  profileOptions?: { completion?: { reqCoverage: number; qualityScore: number; requiredLayers: string[] }; qualityGateCoverageMin?: number; strategyOverrides?: Record<string, number> }
+): ExecutionAction[] {
   // If process is deterministically complete, return empty
-  if (isProcessComplete(state)) return [];
+  if (isProcessComplete(state, profileOptions?.completion)) return [];
 
   // Sanitize completed keys — ONLY accept valid step keys, ignore corrupt data
   const completed = new Set(
@@ -207,11 +217,12 @@ export function generateExecutionPlan(state: SystemState, completedStepKeys?: st
   const actions: ExecutionAction[] = [];
   let step = 1;
 
-  // GUARD: If requirement coverage is very low (<10%) and the project has infrastructure,
+  // GUARD: If requirement coverage is very low and the project has infrastructure,
   // the ONLY meaningful work is implementing requirements. Quality-based steps
   // (monitoring, reliability, performance) are noise because quality scores are
   // derived from matched files — they can't improve until requirements are mapped.
-  const qualityStepsBlocked = state.reqCoverage < 10 && (!!state.projectHasBackend || state.hasBackend);
+  const qualityGateMin = profileOptions?.qualityGateCoverageMin ?? 10;
+  const qualityStepsBlocked = state.reqCoverage < qualityGateMin && (!!state.projectHasBackend || state.hasBackend);
   const QUALITY_STEP_KEYS = new Set(['add_monitoring', 'improve_reliability', 'optimize_performance', 'enhance_agents', 'verify_requirements']);
 
   // Filter to applicable actions, exclude completed steps, sort by priority
@@ -223,7 +234,12 @@ export function generateExecutionPlan(state: SystemState, completedStepKeys?: st
       if (qualityStepsBlocked && QUALITY_STEP_KEYS.has(t.key)) return false;
       return true;
     })
-    .sort((a, b) => b.priority - a.priority);
+    .sort((a, b) => {
+      const overrides = profileOptions?.strategyOverrides || {};
+      const aPriority = (a.priority || 0) + (overrides[a.key] || 0);
+      const bPriority = (b.priority || 0) + (overrides[b.key] || 0);
+      return bPriority - aPriority;
+    });
 
   for (const template of applicable) {
     const blocked = template.blockedIf ? template.blockedIf(state) : false;

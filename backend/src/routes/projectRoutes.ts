@@ -1208,8 +1208,18 @@ function enrichCapability(cap: any) {
   const lastExec = (cap as any).last_execution;
   const completedSteps: string[] = lastExec?.completed_steps || [];
   const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
-  const executionPlan = generateExecutionPlan(systemState, completedSteps);
-  const processComplete = isProcessComplete(systemState);
+  // Load profile and strategy from Capability (defaults: production + default)
+  const { getProfile } = require('../intelligence/profiles/executionProfiles');
+  const { getStrategy } = require('../intelligence/profiles/strategyTemplates');
+  const profile = getProfile((cap as any).execution_profile);
+  const strategy = getStrategy((cap as any).strategy_template);
+  const profileOptions = {
+    completion: profile.completion_thresholds,
+    qualityGateCoverageMin: profile.quality_gate_enabled ? profile.quality_gate_coverage_min : 0,
+    strategyOverrides: strategy.priority_overrides,
+  };
+  const executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
+  const processComplete = isProcessComplete(systemState, profile.completion_thresholds);
 
   const why_not: string[] = [];
   if (!hasBackend) why_not.push('No backend services or API routes found');
@@ -1826,6 +1836,30 @@ router.get('/api/portal/project/business-processes/:id/verify', requireParticipa
         created_at: s.created_at,
       })),
     });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Profile & Strategy: get/set execution profile and strategy template ────────
+router.put('/api/portal/project/business-processes/:id/profile', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { execution_profile, strategy_template } = req.body;
+    const { Capability } = await import('../models');
+    const cap = await Capability.findByPk(req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    if (execution_profile) (cap as any).execution_profile = execution_profile;
+    if (strategy_template) (cap as any).strategy_template = strategy_template;
+    await cap.save();
+    res.json({ execution_profile: (cap as any).execution_profile, strategy_template: (cap as any).strategy_template });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Decision Rules: list canonical rules for admin display ────────
+router.get('/api/portal/project/decision-rules', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const { getRules } = await import('../intelligence/rules/decisionRules');
+    const { PROFILES } = await import('../intelligence/profiles/executionProfiles');
+    const { STRATEGIES } = await import('../intelligence/profiles/strategyTemplates');
+    res.json({ rules: getRules(), profiles: PROFILES, strategies: STRATEGIES });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
