@@ -1532,6 +1532,19 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
     const project = await getProjectByEnrollment(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
 
+    // ── VERIFICATION LAYER: Capture BEFORE snapshot ──
+    let metricsBefore: any = null;
+    try {
+      const { getCapabilityHierarchy: getHierBefore } = await import('../services/projectScopeService');
+      const hierBefore = await getHierBefore(project.id);
+      const capBefore = hierBefore.find((c: any) => c.id === req.params.id);
+      if (capBefore) {
+        const enrichedBefore = enrichCapability(capBefore);
+        const { captureSnapshot } = await import('../intelligence/verification/regressionDetector');
+        metricsBefore = captureSnapshot(enrichedBefore);
+      }
+    } catch { /* non-critical */ }
+
     // 1. Full GitHub sync (file tree + commits + stats) — keeps Code Intelligence in sync
     try {
       const { fullSync } = await import('../services/githubService');
@@ -1728,10 +1741,90 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       }
     }
 
+    // ── VERIFICATION LAYER: Capture AFTER snapshot + detect regressions ──
+    let regressions: any[] = [];
+    let metricsAfter: any = null;
+    try {
+      const { getCapabilityHierarchy: getHierAfter } = await import('../services/projectScopeService');
+      const hierAfter = await getHierAfter(project.id);
+      const capAfter = hierAfter.find((c: any) => c.id === req.params.id);
+      if (capAfter) {
+        // Inject repo file tree for accurate enrichment
+        capAfter._repoFileTree = fileTree;
+        const { Capability: CapAfterModel } = await import('../models');
+        const capAfterExec = await CapAfterModel.findByPk(req.params.id as string, { attributes: ['id', 'last_execution'] });
+        if (capAfterExec) capAfter.last_execution = (capAfterExec as any).last_execution;
+        const enrichedAfter = enrichCapability(capAfter);
+        const { captureSnapshot, detectRegressions } = await import('../intelligence/verification/regressionDetector');
+        metricsAfter = captureSnapshot(enrichedAfter);
+        if (metricsBefore) {
+          regressions = detectRegressions(metricsBefore, metricsAfter);
+        }
+      }
+
+      // Store snapshot in BposExecutionSnapshot
+      const { BposExecutionSnapshot } = await import('../models');
+      await BposExecutionSnapshot.create({
+        process_id: req.params.id,
+        step_key: whatChanged?.last_step || null,
+        execution_type: 'resync',
+        metrics_before: metricsBefore,
+        metrics_after: metricsAfter,
+        regressions,
+        triggered_by: req.participant!.sub,
+      });
+    } catch (snapErr: any) {
+      console.error('[Resync] Snapshot capture error:', snapErr.message);
+    }
+
     res.json({
       ...result,
       resync: { total: processReqs.length, matched, partial, unmatched, preserved, files_scanned: fileTree.length },
       what_changed: whatChanged,
+      verification: {
+        regressions,
+        metrics_before: metricsBefore,
+        metrics_after: metricsAfter,
+        regression_count: regressions.length,
+      },
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Verify: on-demand structural + regression check ────────
+router.get('/api/portal/project/business-processes/:id/verify', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    // Build graph for this process
+    const { buildProcessGraph } = await import('../intelligence/graph/graphBuilder');
+    const graph = await buildProcessGraph(project.id, req.params.id as string);
+
+    // Run structural checks
+    const { runStructuralChecks } = await import('../intelligence/verification/structuralVerifier');
+    const structuralReport = runStructuralChecks(graph, req.params.id as string);
+
+    // Get recent snapshots for trend analysis
+    const { BposExecutionSnapshot } = await import('../models');
+    const recentSnapshots = await BposExecutionSnapshot.findAll({
+      where: { process_id: req.params.id },
+      order: [['created_at', 'DESC']],
+      limit: 10,
+    });
+
+    res.json({
+      structural: structuralReport,
+      history: recentSnapshots.map((s: any) => ({
+        id: s.id,
+        step_key: s.step_key,
+        execution_type: s.execution_type,
+        metrics_before: s.metrics_before,
+        metrics_after: s.metrics_after,
+        regressions: s.regressions,
+        created_at: s.created_at,
+      })),
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
