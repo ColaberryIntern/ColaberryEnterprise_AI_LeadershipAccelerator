@@ -125,7 +125,22 @@ export async function generateImprovementPrompt(processId: string, target: Promp
     },
   };
 
-  return generators[target]();
+  const result = generators[target]();
+
+  // Inject applicable system blocks as additional context
+  try {
+    const { getApplicableBlocks } = require('./acceleration/systemBlocks');
+    const blocks = getApplicableBlocks(target);
+    if (blocks.length > 0) {
+      const blockText = blocks.map((b: any) => b.prompt_fragment).join('\n\n');
+      result.prompt_text = result.prompt_text.replace(
+        '# CONSTRAINTS',
+        `${blockText}\n\n# CONSTRAINTS`
+      );
+    }
+  } catch { /* acceleration layer not loaded — non-critical */ }
+
+  return result;
 }
 
 export async function generateAllPrompts(processId: string): Promise<GeneratedPrompt[]> {
