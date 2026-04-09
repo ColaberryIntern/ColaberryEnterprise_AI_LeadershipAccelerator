@@ -228,9 +228,10 @@ async function handleClarify(state: ConversationState, input: string, mode: stri
     state.intent.target_description += ' — ' + input;
   }
 
-  // After 2+ clarification turns with sufficient detail, move to assess
+  // After 3+ clarification turns with sufficient detail, move to assess
+  // Ensures we ask about: 1) area, 2) functionality, 3) technical constraints
   const reqCount = state.intent?.specific_requirements.length || 0;
-  if (reqCount >= 2) {
+  if (reqCount >= 3) {
     state.phase = 'assess';
     return handleAssess(state, input);
   }
@@ -269,13 +270,18 @@ async function handleAssess(state: ConversationState, _input: string): Promise<T
       new_bp_requirements: state.intent?.specific_requirements || [],
     };
   } else {
+    // Generate clean BP name via LLM instead of raw concatenation
+    const cleanName = await generateProcessName(
+      intent.target_description,
+      intent.specific_requirements
+    );
     state.bp_decision = {
       decision: 'create_new',
       target_bp_id: null,
       target_bp_name: null,
       match_confidence: 0,
       match_reason: 'No existing process matches — creating new',
-      new_bp_name: state.intent?.target_description.substring(0, 80) || 'New Process',
+      new_bp_name: cleanName,
       new_bp_requirements: state.intent?.specific_requirements || [],
     };
   }
@@ -442,14 +448,27 @@ async function handleConfirm(state: ConversationState, input: string): Promise<T
     }
   }
 
+  // Generate full BP plan via golden paths
+  let fullPlan: any[] = [];
+  try {
+    const { selectGoldenPath } = await import('../acceleration/goldenPaths');
+    const goldenPath = selectGoldenPath(0, { backend: false, frontend: false });
+    if (goldenPath) {
+      fullPlan = goldenPath.steps.map(s => ({ key: s.key, label: s.prompt_target, estimated_minutes: s.estimated_minutes }));
+      (state as any).full_bp_plan = fullPlan;
+    }
+  } catch { /* non-critical */ }
+
   state.phase = 'complete';
 
   const actionLabel = d.decision === 'create_new' ? 'Created' : d.decision === 'extend' ? 'Extended' : 'Targeting';
+  const planNote = fullPlan.length > 0 ? `\n\nFull plan: ${fullPlan.length} steps, ~${fullPlan.reduce((s: number, p: any) => s + p.estimated_minutes, 0)} minutes estimated.` : '';
   return {
     phase: 'complete',
-    message: `${actionLabel} "${d.target_bp_name || d.new_bp_name}".\n\nHere's your Claude Code prompt — copy it and run in PLAN MODE.`,
+    message: `${actionLabel} "${d.target_bp_name || d.new_bp_name}".${planNote}\n\nHere's your Claude Code prompt — copy it and run in PLAN MODE.`,
     prompt,
     created_bp: createdBP,
+    summary: { structured_output: getStructuredOutput(state), full_plan: fullPlan },
     action_required: 'copy_prompt',
   };
 }
@@ -464,7 +483,19 @@ async function classifyIntentType(input: string): Promise<ArchitectIntent['inten
       model: 'gpt-4o-mini', temperature: 0, max_tokens: 50,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: 'Classify user input into exactly ONE type. Respond: {"type":"ui_improvement|new_feature|system_change|bug_fix|integration"}\n\nui_improvement = change appearance/layout/design\nnew_feature = build something that doesn\'t exist\nsystem_change = modify behavior/logic/workflow\nbug_fix = fix something broken\nintegration = connect with external system' },
+        { role: 'system', content: `Classify user input into exactly ONE type. Respond: {"type":"ui_improvement|new_feature|system_change|bug_fix|integration"}
+
+ui_improvement = change appearance, layout, design, redesign a page, improve visuals
+new_feature = build something that doesn't exist yet
+system_change = modify behavior, logic, workflow, configuration
+bug_fix = fix something broken, not working correctly
+integration = connect with external system or API
+
+IMPORTANT RULES:
+- If input mentions a URL, page path (e.g., /admin/visitors), or "this page" → ui_improvement
+- If input mentions "redesign", "improve the look", "change the design" → ui_improvement
+- If input mentions "dashboard" with existing page context → ui_improvement
+- If input mentions "create", "build", "add new" without page reference → new_feature` },
         { role: 'user', content: input },
       ],
     });
@@ -474,10 +505,33 @@ async function classifyIntentType(input: string): Promise<ArchitectIntent['inten
     // Fallback: keyword-based classification
     const lower = input.toLowerCase();
     if (lower.includes('fix') || lower.includes('bug') || lower.includes('broken')) return 'bug_fix';
-    if (lower.includes('page') || lower.includes('design') || lower.includes('ui') || lower.includes('layout')) return 'ui_improvement';
+    if (lower.includes('redesign') || lower.includes('/admin/') || lower.includes('this page') || lower.includes('.ai/')) return 'ui_improvement';
+    if (lower.includes('page') || lower.includes('design') || lower.includes('ui') || lower.includes('layout') || lower.includes('dashboard')) return 'ui_improvement';
     if (lower.includes('connect') || lower.includes('integrate') || lower.includes('api')) return 'integration';
     if (lower.includes('change') || lower.includes('modify') || lower.includes('update')) return 'system_change';
     return 'new_feature';
+  }
+}
+
+/** Generate a clean 3-5 word process name from conversation context */
+async function generateProcessName(description: string, requirements: string[]): Promise<string> {
+  try {
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini', temperature: 0, max_tokens: 30,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: 'Generate a concise 3-5 word business process name. Respond: {"name":"Clean Process Name"}\n\nExamples:\n- "Visitor Analytics Dashboard"\n- "Lead Notification System"\n- "User Role Management"\n- "Project Dashboard Redesign"' },
+        { role: 'user', content: `Description: ${description.substring(0, 200)}\nRequirements: ${requirements.slice(0, 3).join('; ')}` },
+      ],
+    });
+    const parsed = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    return parsed.name || description.substring(0, 50);
+  } catch {
+    // Fallback: extract first meaningful phrase
+    const words = description.split(/\s+/).filter(w => w.length > 2).slice(0, 5);
+    return words.join(' ').substring(0, 50) || 'New Process';
   }
 }
 
@@ -564,6 +618,19 @@ async function assessSystem(projectId: string, intent: ArchitectIntent): Promise
     }
   } catch { /* non-critical */ }
 
+  // 3. Query Context Graph for related files
+  try {
+    const { buildProjectGraph } = await import('../graph/graphBuilder');
+    const graph = await buildProjectGraph(projectId);
+    const allFileNodes = [...graph.nodes.values()].filter(n =>
+      ['service', 'api_route', 'db_model', 'agent'].includes(n.type)
+    );
+    const relatedByKeyword = allFileNodes.filter(f =>
+      intentWords.some(w => (f.label || '').toLowerCase().includes(w) || (f.metadata?.path || '').toLowerCase().includes(w))
+    );
+    related_files.push(...relatedByKeyword.map(f => f.metadata?.path || f.label).slice(0, 10));
+  } catch { /* graph query non-critical */ }
+
   // Determine recommendation
   let recommended_action: SystemAssessment['recommended_action'] = 'create_new';
   let reason = 'No matching processes found';
@@ -577,4 +644,20 @@ async function assessSystem(projectId: string, intent: ArchitectIntent): Promise
   }
 
   return { matching_bps: matching_bps.slice(0, 5), related_files, existing_requirements: existing_requirements.slice(0, 10), recommended_action, reason };
+}
+
+/** Structured output matching the spec's required format */
+export function getStructuredOutput(state: ConversationState): Record<string, any> {
+  return {
+    intent_type: state.intent?.intent_type || 'unknown',
+    target: state.intent?.target_description || '',
+    refined_requirements: state.intent?.specific_requirements || [],
+    bp_decision: state.bp_decision?.decision || 'create_new',
+    target_bp_id: state.bp_decision?.target_bp_id || null,
+    new_bp_required: state.bp_decision?.decision === 'create_new',
+    execution_scope: state.intent?.scope || 'single_step',
+    mode_context: state.intent?.mode_context || 'production',
+    first_prompt_only: true,
+    full_bp_plan: (state as any).full_bp_plan || [],
+  };
 }

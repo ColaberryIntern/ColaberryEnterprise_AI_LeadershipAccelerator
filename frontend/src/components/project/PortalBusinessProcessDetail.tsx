@@ -470,9 +470,15 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     </div>
                   )}
                 </div>
-                <div className="modal-footer py-2">
+                <div className="modal-footer py-2 d-flex justify-content-between align-items-center">
+                  <div className="d-flex align-items-center gap-2 flex-grow-1 me-3">
+                    <i className="bi bi-robot" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
+                    <input className="form-control form-control-sm" style={{ fontSize: 11 }}
+                      placeholder="Want to improve this? Tell the Architect..."
+                      onKeyDown={(e: any) => { if (e.key === 'Enter' && e.target.value.trim()) { setResyncModal(null); onUpdate(); /* ArchitectChat picks up via global state */ } }} />
+                  </div>
                   <button className="btn btn-sm btn-primary" onClick={() => { setResyncModal(null); onUpdate(); }}>
-                    <i className="bi bi-arrow-right me-1"></i>Continue to Next Step
+                    <i className="bi bi-arrow-right me-1"></i>Continue
                   </button>
                 </div>
               </div>
