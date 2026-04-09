@@ -1613,13 +1613,18 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
     const { Capability: CapModel } = await import('../models');
     const processCap = await CapModel.findByPk(req.params.id as string);
     if (processCap) {
+      // Process name stems — require at least 2 stems to match a filename to avoid
+      // false positives (e.g., "user" matching AdminUser.ts for "User Journey Maps")
       const procStems = (processCap.name || '').toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
-      const noiseP = new Set(['.gitignore', '.env.example', '.prettierrc', '.sequelizerc', 'package.json', 'tsconfig.json', 'README.md']);
       const procImplFiles = fileTree.filter((f: string) => {
         const name = (f.split('/').pop() || '').toLowerCase();
-        if (noiseP.has(name) || name.startsWith('.') || /^\d{14}/.test(name) || f.includes('migrations/')) return false;
-        return (f.includes('services/') || f.includes('routes/') || f.includes('agents/') || f.includes('models/'))
-          && procStems.some((stem: string) => name.includes(stem));
+        if (name.startsWith('.') || /^\d{14}/.test(name) || f.includes('migrations/')) return false;
+        if (f.startsWith('.claude/') || f.startsWith('.github/') || f.includes('node_modules/')) return false;
+        if (!(f.includes('services/') || f.includes('routes/') || f.includes('agents/') || f.includes('models/'))) return false;
+        // Require at least 2 process name stems to match the filename
+        // This prevents "user" alone from matching AdminUser.ts
+        const matchingStemCount = procStems.filter((stem: string) => name.includes(stem)).length;
+        return matchingStemCount >= Math.min(2, procStems.length);
       });
 
       if (procImplFiles.length >= 2) {
