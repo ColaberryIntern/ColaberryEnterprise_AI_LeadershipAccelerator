@@ -4,7 +4,7 @@
 import Capability from '../models/Capability';
 import { analyzeProcessEvolution } from './agentEvolutionEngine';
 
-export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation';
+export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation' | 'add_database' | 'improve_reliability' | 'verify_requirements' | 'optimize_performance';
 
 export interface GeneratedPrompt {
   target: PromptTarget;
@@ -75,6 +75,38 @@ export async function generateImprovementPrompt(processId: string, target: Promp
       prompt_text: `You are adding monitoring and observability for "${process.name}".\n\nCurrent Observability score: ${scores.observability || 0}/100\n\nGaps:\n${evolution.missing_monitoring.map(m => `- ${m}`).join('\n')}\n\nTasks:\n1. Add KPI definitions for this process to kpiService.ts\n2. Add anomaly detection rules\n3. Add alert thresholds for key metrics\n4. Ensure all agent actions are logged to activity trail\n5. Add dashboard widget showing process health`,
       estimated_complexity: 'medium',
       affected_files: ['backend/src/services/reporting/kpiService.ts', 'backend/src/services/risk/anomalyDetectionService.ts'],
+    }),
+
+    add_database: () => ({
+      target: 'add_database' as PromptTarget,
+      title: `Add database models for ${process.name}`,
+      prompt_text: `${preamble}# OBJECTIVE\n\nAdd database models and data layer for the "${process.name}" business process.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# WHAT TO BUILD\n\n1. Create Sequelize model: \`backend/src/models/${process.name.replace(/[^a-zA-Z]/g, '')}.ts\`\n   - UUID primary key\n   - Proper data types and validations\n   - Timestamps (createdAt, updatedAt)\n   - Associations to related models\n\n2. Add migration if needed\n\n3. Ensure model is registered in \`backend/src/models/index.ts\`\n\n# DO NOT\n\n- Drop or recreate existing tables\n- Modify existing model files unless adding associations${constraints}${validationSection}`,
+      estimated_complexity: 'medium' as const,
+      affected_files: [`backend/src/models/${process.name.replace(/[^a-zA-Z]/g, '')}.ts`],
+    }),
+
+    improve_reliability: () => ({
+      target: 'improve_reliability' as PromptTarget,
+      title: `Improve reliability for ${process.name}`,
+      prompt_text: `${preamble}# OBJECTIVE\n\nImprove reliability and error handling for the "${process.name}" business process.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# CURRENT STATE\n\n- Existing services: ${backend.join(', ') || 'Check backend/src/services/'}\n- Reliability score: ${scores.reliability || 0}/10\n\n# WHAT TO IMPROVE\n\n1. Add try-catch blocks with meaningful error messages\n2. Add input validation at API boundaries\n3. Add retry logic with exponential backoff for external calls\n4. Add proper HTTP status codes (400, 404, 409, 500)\n5. Add request/response logging for debugging\n6. Add database transaction support where needed\n\n# DO NOT\n\n- Rebuild existing services from scratch\n- Change API contracts (keep backward compatibility)${constraints}${validationSection}`,
+      estimated_complexity: 'medium' as const,
+      affected_files: [],
+    }),
+
+    verify_requirements: () => ({
+      target: 'verify_requirements' as PromptTarget,
+      title: `Verify requirements for ${process.name}`,
+      prompt_text: `${preamble}# OBJECTIVE\n\nVerify that auto-matched requirements for "${process.name}" are actually implemented correctly.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# WHAT TO DO\n\n1. Review each auto-matched requirement\n2. Check if the matched implementation file actually fulfills the requirement\n3. For each verified requirement, confirm the implementation is complete\n4. For gaps, identify what's missing and implement it\n5. Run any existing tests to validate\n\n# CURRENT STATE\n\n- Existing backend: ${backend.join(', ') || 'Check backend/src/services/'}\n- Existing frontend: ${frontend.join(', ') || 'Check frontend/src/components/'}\n\n# DO NOT\n\n- Skip verification — check each match manually\n- Create new infrastructure — only fill gaps in existing code${constraints}${validationSection}`,
+      estimated_complexity: 'medium' as const,
+      affected_files: [],
+    }),
+
+    optimize_performance: () => ({
+      target: 'optimize_performance' as PromptTarget,
+      title: `Optimize performance for ${process.name}`,
+      prompt_text: `${preamble}# OBJECTIVE\n\nOptimize system performance for the "${process.name}" business process.\n\n# BUSINESS CONTEXT\n\n${process.description || 'No description available.'}\n\n# WHAT TO IMPROVE\n\n1. Add database query optimization (indexes, eager loading)\n2. Add caching where appropriate (in-memory or Redis)\n3. Optimize API response payloads (select only needed fields)\n4. Add pagination for list endpoints\n5. Review and optimize frontend bundle size\n6. Add performance monitoring and alerts\n\n# CURRENT STATE\n\n- Existing services: ${backend.join(', ') || 'Check backend/src/services/'}\n- Quality score: ${Object.entries(scores).map(([k, v]) => `${k}: ${v}`).join(', ') || 'Unknown'}\n\n# DO NOT\n\n- Premature optimization — measure first\n- Break existing functionality${constraints}${validationSection}`,
+      estimated_complexity: 'medium' as const,
+      affected_files: [],
     }),
 
     requirement_implementation: () => {

@@ -105,7 +105,16 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
               <p className="text-muted small mb-0">
                 {p.dependencies_met === false
                   ? `This action has unmet prerequisites. Complete the required steps first to avoid build failures.`
-                  : `Without this, the process cannot ${actionType === 'backend_improvement' ? 'function — backend is the foundation for all other layers' : actionType === 'frontend_exposure' ? 'be used by end users — there is no UI to interact with' : actionType === 'requirement_implementation' ? 'reach full coverage — unmapped requirements represent missing functionality' : 'automate — manual intervention is required for every operation'}.`
+                  : `Without this, the process cannot ${
+                    actionType === 'backend_improvement' ? 'function — backend is the foundation for all other layers'
+                    : actionType === 'frontend_exposure' ? 'be used by end users — there is no UI to interact with'
+                    : actionType === 'requirement_implementation' ? 'reach full coverage — unmapped requirements represent missing functionality'
+                    : actionType === 'add_database' ? 'persist data — models are needed for reliable storage'
+                    : actionType === 'improve_reliability' ? 'handle failures gracefully — error handling prevents data loss'
+                    : actionType === 'verify_requirements' ? 'be trusted — unverified matches may be false positives'
+                    : actionType === 'optimize_performance' ? 'scale — performance bottlenecks will block production deployment'
+                    : 'automate — manual intervention is required for every operation'
+                  }.`
                 }
               </p>
             </div>

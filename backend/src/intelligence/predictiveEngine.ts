@@ -41,6 +41,10 @@ const QUALITY_IMPACTS: Record<string, Record<string, number>> = {
   frontend_exposure: { determinism: 0, reliability: 0, observability: 0, ux_exposure: 7, automation: 0, production_readiness: 3 },
   agent_enhancement: { determinism: 0, reliability: 2, observability: 1, ux_exposure: 0, automation: 7, production_readiness: 2 },
   requirement_implementation: { determinism: 4, reliability: 3, observability: 1, ux_exposure: 2, automation: 1, production_readiness: 3 },
+  add_database: { determinism: 3, reliability: 6, observability: 0, ux_exposure: 0, automation: 0, production_readiness: 3 },
+  improve_reliability: { determinism: 4, reliability: 7, observability: 2, ux_exposure: 0, automation: 0, production_readiness: 4 },
+  verify_requirements: { determinism: 2, reliability: 2, observability: 1, ux_exposure: 1, automation: 0, production_readiness: 2 },
+  optimize_performance: { determinism: 5, reliability: 4, observability: 3, ux_exposure: 2, automation: 1, production_readiness: 5 },
 };
 
 const ACTION_META: Record<string, { readiness_target: number; description: string; components: string[]; deps: string[]; risks: string[] }> = {
@@ -71,6 +75,34 @@ const ACTION_META: Record<string, { readiness_target: number; description: strin
     components: ['Service extensions', 'Route additions', 'Model updates', 'UI components', 'Validation logic'],
     deps: [],
     risks: ['Extend existing files — do not create duplicates', 'Verify requirement coverage after implementation'],
+  },
+  add_database: {
+    readiness_target: 40,
+    description: 'Add database models and data persistence layer for this process.',
+    components: ['Sequelize models', 'Migrations', 'Model associations', 'Data validation'],
+    deps: ['Backend services must exist first'],
+    risks: ['Ensure model is compatible with existing schema'],
+  },
+  improve_reliability: {
+    readiness_target: 70,
+    description: 'Add error handling, input validation, retry logic, and transaction support.',
+    components: ['Error handlers', 'Input validators', 'Retry logic', 'Transaction wrappers', 'Logging'],
+    deps: [],
+    risks: ['Do not change API contracts', 'Test error paths thoroughly'],
+  },
+  verify_requirements: {
+    readiness_target: 50,
+    description: 'Verify auto-matched requirements are actually implemented and fill any gaps found.',
+    components: ['Verification checks', 'Gap implementations', 'Test coverage'],
+    deps: [],
+    risks: ['Manual review required — automated matching may have false positives'],
+  },
+  optimize_performance: {
+    readiness_target: 90,
+    description: 'Optimize query performance, add caching, pagination, and monitoring.',
+    components: ['Database indexes', 'Query optimization', 'Caching layer', 'Pagination', 'Performance monitoring'],
+    deps: [],
+    risks: ['Measure before optimizing', 'Caching can cause stale data issues'],
   },
 };
 

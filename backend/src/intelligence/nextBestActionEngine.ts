@@ -77,7 +77,7 @@ const ACTION_TEMPLATES = [
     depends_on: 'Backend services',
     fixes: ['Data Layer Missing', 'Low reliability'],
     enables: ['Persistent storage', 'Data integrity'],
-    prompt_target: 'backend_improvement',
+    prompt_target: 'add_database',
     condition: (s: SystemState) => !s.hasModels && !s.projectHasModels && (s.hasBackend || !!s.projectHasBackend),
     blockedIf: (s: SystemState) => !s.hasBackend && !s.projectHasBackend,
     priority: 90,
@@ -142,7 +142,7 @@ const ACTION_TEMPLATES = [
     depends_on: 'Backend + Database',
     fixes: ['Low reliability', 'Missing error handling'],
     enables: ['Production stability', 'Retry logic'],
-    prompt_target: 'backend_improvement',
+    prompt_target: 'improve_reliability',
     condition: (s: SystemState) => (s.hasBackend || !!s.projectHasBackend) && s.qualityScore < 60,
     priority: 55,
   },
@@ -153,7 +153,7 @@ const ACTION_TEMPLATES = [
     depends_on: 'Implementation exists',
     fixes: ['Unverified auto-matches'],
     enables: ['Accurate completion tracking', 'Trust in metrics'],
-    prompt_target: 'backend_improvement',
+    prompt_target: 'verify_requirements',
     condition: (s: SystemState) => s.unverifiedCount > 0 && (s.hasBackend || !!s.projectHasBackend),
     priority: 50,
   },
@@ -175,7 +175,7 @@ const ACTION_TEMPLATES = [
     depends_on: 'All layers built',
     fixes: ['Performance gaps'],
     enables: ['Scale readiness', 'Production deployment'],
-    prompt_target: 'backend_improvement',
+    prompt_target: 'optimize_performance',
     condition: (s: SystemState) => (s.hasBackend || !!s.projectHasBackend) && (s.hasFrontend || !!s.projectHasFrontend) && s.qualityScore < 90,
     priority: 30,
   },
@@ -251,7 +251,7 @@ export function generateExecutionPlan(state: SystemState, completedStepKeys?: st
         depends_on: 'All layers built',
         fixes: ['Quality below threshold'], enables: ['Production readiness'],
         blocked: false, requirements_covered: [],
-        prompt_target: 'backend_improvement',
+        prompt_target: 'optimize_performance',
       });
     } else if (!state.hasBackend || !state.hasFrontend || !state.hasModels) {
       const missing = !state.hasBackend ? 'Backend' : !state.hasFrontend ? 'Frontend' : 'Database Models';
@@ -262,7 +262,7 @@ export function generateExecutionPlan(state: SystemState, completedStepKeys?: st
         depends_on: 'None',
         fixes: [`${missing} Missing`], enables: ['Process completion'],
         blocked: false, requirements_covered: [],
-        prompt_target: 'backend_improvement',
+        prompt_target: !state.hasBackend ? 'backend_improvement' : !state.hasFrontend ? 'frontend_exposure' : 'add_database',
       });
     }
   }
