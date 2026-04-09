@@ -187,6 +187,11 @@ const ACTION_TEMPLATES = [
  * Optional profile parameter controls thresholds (defaults to production).
  */
 export function isProcessComplete(state: SystemState, profile?: { reqCoverage: number; qualityScore: number; requiredLayers: string[] }): boolean {
+  // Fragment processes (0-1 requirements) are considered complete if they have any coverage
+  // These are parsing artifacts, not real business processes
+  if (state.totalRequirements <= 1 && state.reqCoverage > 0) return true;
+  if (state.totalRequirements === 0) return true;
+
   const thresholds = profile || { reqCoverage: 90, qualityScore: 70, requiredLayers: ['backend', 'frontend', 'models'] };
   const layerCheck: Record<string, boolean> = {
     backend: state.hasBackend,
@@ -264,7 +269,9 @@ export function generateExecutionPlan(
   // (e.g., all were in completed_steps), force-show the most relevant action
   if (actions.length === 0) {
     // Determine what's most needed
-    if (state.reqCoverage < 80) {
+    // Only show implement_requirements if there are enough requirements to be meaningful (>1)
+    const unmappedCount = state.totalRequirements - state.verifiedCount - state.unverifiedCount;
+    if (state.reqCoverage < 80 && unmappedCount > 1) {
       actions.push({
         step: 1, key: 'implement_requirements',
         label: 'Implement Unmapped Requirements',
