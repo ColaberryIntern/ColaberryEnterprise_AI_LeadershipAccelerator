@@ -2229,11 +2229,11 @@ router.put('/api/portal/project/target-mode', requireParticipant, async (req: Re
 
     if (cascade !== false) { // default: cascade
       // Clear all BP-level mode overrides so project mode takes effect everywhere
-      const [, meta] = await Capability.update(
+      const [affectedCount] = await Capability.update(
         { mode_override: null } as any,
         { where: { project_id: project.id, mode_override: { [require('sequelize').Op.ne]: null } } },
       );
-      overridesCleared = (meta as any) || 0;
+      overridesCleared = affectedCount;
 
       // Re-prioritize: sort by gap-to-completion for the new mode
       const allCaps = await Capability.findAll({ where: { project_id: project.id } });
