@@ -73,7 +73,9 @@ function UtilityCoopLandingPage() {
   const advisoryUrl = getAdvisoryUrl();
 
   // Detect role from URL param for personalized hero + demo
-  const role = new URLSearchParams(window.location.search).get('role') || 'ops';
+  // If no role param, randomly alternate between all 4 roles each page load
+  const urlRole = new URLSearchParams(window.location.search).get('role');
+  const role = urlRole || (['ceo', 'cio', 'ops', 'cfo'][Math.floor(Math.random() * 4)]);
   const heroContent = ROLE_HEROES[role] || ROLE_HEROES.ops;
 
   // Map each role to the most relevant demo to auto-play first
