@@ -753,6 +753,7 @@ function AddBusinessProcessCard({ onAdded }: { onAdded: () => void }) {
 function ProjectModeSelector() {
   const [mode, setMode] = useState<string>('production');
   const [saving, setSaving] = useState(false);
+  const [lastResult, setLastResult] = useState<any>(null);
 
   useEffect(() => {
     portalApi.get('/api/portal/project/business-processes')
@@ -763,45 +764,62 @@ function ProjectModeSelector() {
   }, []);
 
   const handleChange = async (newMode: string) => {
+    if (newMode === mode) return;
     setSaving(true);
+    setLastResult(null);
     try {
-      await portalApi.put('/api/portal/project/target-mode', { mode: newMode });
+      const r = await portalApi.put('/api/portal/project/target-mode', { mode: newMode, cascade: true });
       setMode(newMode);
+      setLastResult(r.data);
+      setTimeout(() => setLastResult(null), 6000);
     } catch {} finally { setSaving(false); }
   };
 
   const modes = [
-    { value: 'mvp', label: 'MVP', desc: 'L2 · 60% coverage', color: 'var(--color-warning, #f59e0b)' },
-    { value: 'production', label: 'Production', desc: 'L3 · 90% coverage', color: 'var(--color-info, #3b82f6)' },
-    { value: 'enterprise', label: 'Enterprise', desc: 'L4 · 95% coverage', color: 'var(--color-purple, #6366f1)' },
-    { value: 'autonomous', label: 'Autonomous', desc: 'L5 · 98% coverage', color: 'var(--color-accent, #38a169)' },
+    { value: 'mvp', label: 'MVP', desc: 'L2 · 60% coverage · Fast iteration', icon: 'bi-lightning' },
+    { value: 'production', label: 'Production', desc: 'L3 · 90% coverage · Standard quality', icon: 'bi-server' },
+    { value: 'enterprise', label: 'Enterprise', desc: 'L4 · 95% coverage · Strict validation', icon: 'bi-building' },
+    { value: 'autonomous', label: 'Autonomous', desc: 'L5 · 98% coverage · Full self-operation', icon: 'bi-robot' },
   ];
 
   return (
     <div className="card border-0 shadow-sm mb-3">
       <div className="card-body p-3">
-        <div className="d-flex justify-content-between align-items-center">
+        <div className="d-flex justify-content-between align-items-center mb-2">
           <div>
             <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
               <i className="bi bi-sliders me-2"></i>Project Target Mode
             </span>
-            <span className="text-muted ms-2" style={{ fontSize: 10 }}>Controls completion criteria for all processes</span>
+            <span className="text-muted ms-2" style={{ fontSize: 10 }}>Changes completion criteria, quality gates, and priorities for all processes</span>
           </div>
-          <div className="btn-group btn-group-sm">
-            {modes.map(m => (
+        </div>
+        <div className="d-flex gap-2">
+          {modes.map(m => {
+            const active = mode === m.value;
+            return (
               <button
                 key={m.value}
-                className={`btn btn-sm ${mode === m.value ? 'btn-primary' : 'btn-outline-secondary'}`}
-                style={{ fontSize: 10, padding: '3px 10px' }}
+                className={`btn btn-sm flex-fill ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
+                style={{ fontSize: 10, padding: '6px 8px', lineHeight: 1.3 }}
                 onClick={() => handleChange(m.value)}
                 disabled={saving}
                 title={m.desc}
               >
-                {m.label}
+                <i className={`bi ${m.icon} me-1`}></i>{m.label}
+                {active && <i className="bi bi-check-lg ms-1"></i>}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
+        {lastResult && (
+          <div className="mt-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 10 }}>
+            <i className="bi bi-check-circle me-1" style={{ color: 'var(--color-accent)' }}></i>
+            Switched to <strong>{lastResult.profile}</strong>
+            {lastResult.overrides_cleared > 0 && <> · {lastResult.overrides_cleared} process overrides cleared</>}
+            {' '}· Requires {lastResult.completion_thresholds?.reqCoverage}% coverage, L{lastResult.maturity_required} maturity
+            {' '}· All processes re-prioritized by gap to completion
+          </div>
+        )}
       </div>
     </div>
   );

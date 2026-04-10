@@ -2213,13 +2213,60 @@ router.put('/api/portal/project/target-mode', requireParticipant, async (req: Re
     const { getProjectByEnrollment } = await import('../services/projectService');
     const project = await getProjectByEnrollment(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
-    const { mode } = req.body;
+    const { mode, cascade } = req.body;
     const { getProfile } = await import('../intelligence/profiles/executionProfiles');
     const profile = getProfile(mode);
     if (!profile || profile.name !== mode) { res.status(400).json({ error: `Invalid mode: ${mode}` }); return; }
+
+    const prevMode = (project as any).target_mode || 'production';
     (project as any).target_mode = mode;
     await project.save();
-    res.json({ target_mode: mode, profile: profile.label });
+
+    // Cascade: clear all BP overrides + re-prioritize by gap-to-completion
+    let overridesCleared = 0;
+    const { Capability } = await import('../models');
+    const { RequirementsMap } = await import('../models');
+
+    if (cascade !== false) { // default: cascade
+      // Clear all BP-level mode overrides so project mode takes effect everywhere
+      const [, meta] = await Capability.update(
+        { mode_override: null } as any,
+        { where: { project_id: project.id, mode_override: { [require('sequelize').Op.ne]: null } } },
+      );
+      overridesCleared = (meta as any) || 0;
+
+      // Re-prioritize: sort by gap-to-completion for the new mode
+      const allCaps = await Capability.findAll({ where: { project_id: project.id } });
+      const capGaps: Array<{ id: string; gap: number; unmatched: number }> = [];
+      for (const cap of allCaps) {
+        if ((cap.name || '').toLowerCase().includes('uncategorized')) {
+          capGaps.push({ id: cap.id, gap: 999, unmatched: 999 });
+          continue;
+        }
+        const reqs = await RequirementsMap.findAll({ where: { project_id: project.id, capability_id: cap.id } });
+        const total = reqs.length;
+        const matched = reqs.filter((r: any) => r.status === 'matched' || r.status === 'verified' || r.status === 'auto_verified').length;
+        const coverage = total > 0 ? Math.round((matched / total) * 100) : 0;
+        const gap = Math.max(0, profile.completion_thresholds.reqCoverage - coverage);
+        const unmatched = total - matched;
+        capGaps.push({ id: cap.id, gap, unmatched });
+      }
+
+      // Sort: biggest gap first (most work needed = highest priority), then by unmatched count
+      capGaps.sort((a, b) => b.gap - a.gap || b.unmatched - a.unmatched);
+      for (let i = 0; i < capGaps.length; i++) {
+        await Capability.update({ sort_order: i } as any, { where: { id: capGaps[i].id } });
+      }
+    }
+
+    res.json({
+      target_mode: mode,
+      previous_mode: prevMode,
+      profile: profile.label,
+      overrides_cleared: overridesCleared,
+      completion_thresholds: profile.completion_thresholds,
+      maturity_required: profile.completion_maturity_threshold,
+    });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
