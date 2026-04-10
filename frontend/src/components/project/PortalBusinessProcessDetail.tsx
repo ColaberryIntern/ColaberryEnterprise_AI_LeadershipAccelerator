@@ -118,7 +118,7 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
                   maturity: after.maturity?.level || 1,
                   gaps: after.gap_count || 0,
                 };
-                setResyncModal({ before, after: afterMetrics, resync: rs, what_changed: wc });
+                setResyncModal({ before, after: afterMetrics, resync: rs, what_changed: wc, summary: r.data?.summary });
                 setP(after);
                 // Don't call onUpdate() here — it triggers parent reload which unmounts this component
                 // and loses the modal state. onUpdate will be called when modal is dismissed.
@@ -429,6 +429,13 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     </div>
                   )}
 
+                  {/* LLM Summary */}
+                  {resyncModal.summary && (
+                    <div className="mb-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                      <p className="mb-0 small" style={{ color: 'var(--color-text)', lineHeight: 1.5 }}>{resyncModal.summary}</p>
+                    </div>
+                  )}
+
                   {/* KPI Changes */}
                   <h6 className="fw-semibold small mb-2">What Changed</h6>
                   <div className="table-responsive">
@@ -505,7 +512,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   matched: after.matched_requirements || 0, verified: after.verified_requirements || 0,
                   readiness: after.metrics?.system_readiness || 0, quality: after.metrics?.quality_score || 0,
                   maturity: after.maturity?.level || 1, gaps: after.gap_count || 0,
-                }, resync: r.data?.resync, what_changed: r.data?.what_changed,
+                }, resync: r.data?.resync, what_changed: r.data?.what_changed, summary: r.data?.summary,
               });
               setP(after);
             } catch {} finally { setResyncing(false); }

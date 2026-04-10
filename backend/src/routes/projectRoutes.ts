@@ -1890,10 +1890,40 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       console.error('[Resync] Snapshot capture error:', snapErr.message);
     }
 
+    // ── LLM Summary: explain what happened in plain language ──
+    let summary = '';
+    try {
+      const capName = processCap?.name || 'this process';
+      const reqTexts = processReqs.slice(0, 10).map(r => (r.requirement_text || '').substring(0, 80)).filter(Boolean);
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 200,
+        messages: [{
+          role: 'system',
+          content: 'You write concise executive summaries of software project sync results. One short paragraph, 2-3 sentences max. Be specific about what was checked and what the current state means for the project. Write for a non-technical executive.'
+        }, {
+          role: 'user',
+          content: `Business process: "${capName}"
+Requirements (${processReqs.length} total): ${reqTexts.join(' | ')}
+Resync results: ${matched} requirements matched to code, ${partial} partially matched, ${unmatched} unmapped, ${preserved} previously verified (preserved), ${fileTree.length} repository files scanned.
+${whatChanged ? `Last step: "${whatChanged.last_step}" — status: ${whatChanged.status}${whatChanged.missing?.length ? ', missing files: ' + whatChanged.missing.join(', ') : ''}` : 'No previous execution step tracked.'}
+Metrics: readiness ${metricsAfter?.readiness || metricsBefore?.readiness || 0}%, quality ${metricsAfter?.quality || metricsBefore?.quality || 0}%, maturity L${metricsAfter?.maturity || metricsBefore?.maturity || 0}, gaps: ${metricsAfter?.gaps ?? metricsBefore?.gaps ?? 0}
+${regressions.length > 0 ? 'Regressions detected: ' + regressions.map((r: any) => r.metric).join(', ') : 'No regressions detected.'}
+
+Write a short paragraph summarizing what this resync found and what it means for the project.`
+        }],
+      });
+      summary = completion.choices[0]?.message?.content || '';
+    } catch (err) {
+      console.error('[Resync] Summary generation failed:', (err as Error).message);
+    }
+
     res.json({
       ...result,
       resync: { total: processReqs.length, matched, partial, unmatched, preserved, files_scanned: fileTree.length },
       what_changed: whatChanged,
+      summary,
       verification: {
         regressions,
         metrics_before: metricsBefore,
