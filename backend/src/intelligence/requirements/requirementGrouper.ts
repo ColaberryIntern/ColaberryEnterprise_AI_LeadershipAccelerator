@@ -76,10 +76,11 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
   const isFragment = (text: string): boolean => {
     if (!text || text.length < 15) return true;
     const t = text.trim();
-    if (/^\*\*[^*]+\*\*:?\s*$/.test(t)) return true; // bold label only
-    if (/^[A-Za-z\s-]+:\s*$/.test(t)) return true; // label with colon
+    if (/^\*\*[^*]+\*\*:?\s*$/.test(t)) return true; // bold label only: "**User Actions**"
+    if (/^\*\*[^*]+\*\*:\s*.{1,60}$/.test(t) && t.split(/\s+/).length < 12) return true; // bold label + short definition: "**Ticket**: Manages tickets..."
+    if (/^[A-Za-z\s-]+:\s*$/.test(t)) return true; // label with colon only
     if (t.split(/\s+/).length < 4) return true; // less than 4 words
-    if (/^\*\*(Components|Criteria|Edge Cases|Input|Output|Notes|Status|Priority|Dependencies)\*\*/i.test(t)) return true;
+    if (/^\*\*(Components|Criteria|Edge Cases|Input|Output|Notes|Status|Priority|Dependencies|User Actions?|Ticket|Session|Record|Entity|Field|Table|Column)\*\*/i.test(t)) return true;
     return false;
   };
 
