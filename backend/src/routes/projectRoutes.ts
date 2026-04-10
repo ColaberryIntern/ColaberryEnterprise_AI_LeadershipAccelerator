@@ -590,7 +590,7 @@ router.post('/api/portal/project/github/sync', requireParticipant, async (req: R
           // First sync — discover existing code
           const { discoverExistingCode } = await import('../intelligence/requirements/codeDiscovery');
           const discovery = await discoverExistingCode(project.id, enrollmentId);
-          console.log(`[CodeDiscovery] Auto-discovered ${discovery.capabilities_created} capabilities on first GitHub sync`);
+          console.log(`[CodeDiscovery] Auto-discovered ${discovery.capabilities_discovered} modules, merged ${discovery.merged_into_existing} into existing BPs`);
           (result as any).discovery = discovery;
         }
       }
