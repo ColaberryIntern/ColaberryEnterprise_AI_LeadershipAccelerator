@@ -72,9 +72,18 @@ function UtilityCoopLandingPage() {
   const [showPicker, setShowPicker] = useState(false);
   const advisoryUrl = getAdvisoryUrl();
 
-  // Detect role from URL param for personalized hero
+  // Detect role from URL param for personalized hero + demo
   const role = new URLSearchParams(window.location.search).get('role') || 'ops';
   const heroContent = ROLE_HEROES[role] || ROLE_HEROES.ops;
+
+  // Map each role to the most relevant demo to auto-play first
+  const ROLE_DEFAULT_DEMOS: Record<string, string[]> = {
+    ceo: ['utility-outage', 'utility-storm'],           // Board-level: reliability, member satisfaction
+    cio: ['utility-metering', 'utility-compliance'],     // Data/IT: NISC integration, analytics, compliance
+    ops: ['utility-fleet', 'utility-vegetation'],         // Field ops: crew productivity, vegetation
+    cfo: ['utility-ratecase', 'utility-fleet'],           // Finance: rate case automation, cost savings
+  };
+  const roleDefaultDemos = ROLE_DEFAULT_DEMOS[role] || ROLE_DEFAULT_DEMOS.ops;
 
   useEffect(() => {
     initTracker();
@@ -197,15 +206,15 @@ function UtilityCoopLandingPage() {
       <section id="demo" style={{ background: 'var(--color-bg-alt)', padding: '4rem 1.5rem' }}>
         <div className="container" style={{ maxWidth: 900 }}>
           <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>
-            {activeScenario ? `See AI ${activeScenario.title} in Action` : 'See a Crew Productivity Engine Built in Seconds'}
+            {activeScenario ? `See AI ${activeScenario.title} in Action` : role === 'ceo' ? 'See How AI Improves Grid Reliability' : role === 'cio' ? 'See AI Work With Your Data Infrastructure' : role === 'cfo' ? 'See the ROI Math in Action' : 'See a Crew Productivity Engine Built in Seconds'}
           </h2>
           <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>
-            {activeScenario ? activeScenario.description : 'Watch AI generate daily work plans, optimize routes, and prioritize jobs by impact for your field crews.'}
+            {activeScenario ? activeScenario.description : role === 'ceo' ? 'Watch AI predict outages, coordinate storm response, and deliver board-ready reliability metrics.' : role === 'cio' ? 'Watch AI analyze meter data, detect anomalies, and generate compliance reports from your existing systems.' : role === 'cfo' ? 'Watch AI automate rate case preparation and optimize field operations spend.' : 'Watch AI generate daily work plans, optimize routes, and prioritize jobs by impact for your field crews.'}
           </p>
 
           <InlineDemoPlayer
             key={demoKey}
-            allowedScenarios={selectedScenario ? [selectedScenario] : UTILITY_SCENARIOS.map(s => s.demoId)}
+            allowedScenarios={selectedScenario ? [selectedScenario] : roleDefaultDemos}
             trackContext="utility_landing"
             onDemoComplete={onDemoComplete}
             autoPlay={!!selectedScenario}
