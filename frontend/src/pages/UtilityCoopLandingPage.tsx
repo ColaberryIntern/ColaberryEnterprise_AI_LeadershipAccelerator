@@ -20,6 +20,50 @@ const SCENARIO_EMOJIS: Record<string, string> = {
   'regulatory-compliance': '\u{1F6E1}\uFE0F',
 };
 
+// Role-based hero content for personalized email campaigns
+const ROLE_HEROES: Record<string, { badge: string; headline: string; subhead: string; bullets: string[] }> = {
+  ceo: {
+    badge: 'For Co-op CEOs and General Managers',
+    headline: 'Your Board Is Asking About AI. Do You Have an Answer?',
+    subhead: 'See exactly what AI does for a co-op your size, with real numbers your board can act on:',
+    bullets: [
+      '$1.5M annual savings on a $15M field ops budget',
+      'Go from "talking about AI" to production in 3 weeks',
+      'Board-ready ROI projections with transparent methodology',
+    ],
+  },
+  cio: {
+    badge: 'For Co-op CIOs and IT Directors',
+    headline: 'Your Data Is in NISC and Azure. Now What?',
+    subhead: 'An AI layer that works with your existing infrastructure, not against it:',
+    bullets: [
+      'Connects to NISC, Azure, Oracle, and your existing data stack',
+      'No data migration required. AI agents read from your systems.',
+      'SOC 2 aligned audit trails and full explainability',
+    ],
+  },
+  cfo: {
+    badge: 'For Co-op CFOs and Finance Leaders',
+    headline: 'Can You Justify the AI Investment to Your Board?',
+    subhead: 'Every number traces to a verifiable benchmark. See the math before you commit:',
+    bullets: [
+      '3-month payback on a $15M field ops budget',
+      'Conservative estimates: 10-15% efficiency, not inflated projections',
+      'Implementation costs that scale with your co-op size',
+    ],
+  },
+  ops: {
+    badge: 'For VP Operations and Engineering Directors',
+    headline: 'Are You Thinking About Using AI to Get 10-15% Daily Operational Efficiency?',
+    subhead: 'You are at the right place. Here is how:',
+    bullets: [
+      'Reduce unnecessary truck rolls',
+      'Optimize trimming schedules',
+      'Optimized crew schedules and daily work plans',
+    ],
+  },
+};
+
 function UtilityCoopLandingPage() {
   const [showBooking, setShowBooking] = useState(false);
   const [demoKey, setDemoKey] = useState(0);
@@ -28,10 +72,16 @@ function UtilityCoopLandingPage() {
   const [showPicker, setShowPicker] = useState(false);
   const advisoryUrl = getAdvisoryUrl();
 
+  // Detect role from URL param for personalized hero
+  const role = new URLSearchParams(window.location.search).get('role') || 'ops';
+  const heroContent = ROLE_HEROES[role] || ROLE_HEROES.ops;
+
   useEffect(() => {
     initTracker();
     captureUTMFromURL();
     captureCampaignFromURL();
+    // Track which role variant was viewed
+    try { (window as any).trackBookingEvent?.('role_variant_view', { role }); } catch {}
   }, []);
 
   const openBooking = () => setShowBooking(true);
@@ -53,12 +103,33 @@ function UtilityCoopLandingPage() {
     }, 100);
   };
 
-  const painPoints = [
-    { icon: 'bi-people', title: 'Not Enough Crews', problem: 'You don\'t have enough linemen and the ones you have waste time on low-value work.', solution: 'AI prioritizes the 12 highest-impact jobs each day so the same crew covers 15% more line per week.' },
-    { icon: 'bi-truck', title: 'Wasted Truck Rolls', problem: 'Crews dispatched with incomplete info. Multiple visits to the same area. Poor routing.', solution: 'Even a 5-10% reduction in unnecessary truck rolls on a $15M field ops budget saves $750K-$1.5M/year.' },
-    { icon: 'bi-tree', title: 'Blunt Trimming Cycles', problem: 'You trim every X years regardless of risk. High-risk corridors grow unchecked while you trim low-risk areas.', solution: 'AI targets where risk and cost justify it. 10-20% reduction in trimming spend, or same spend with fewer outages.' },
-    { icon: 'bi-clipboard-data', title: 'No Daily Work Plan', problem: 'Your crews don\'t get a prioritized list each morning. Supervisors spend hours on the phone assigning jobs.', solution: 'AI generates: here are the 12 highest-value jobs today, in order. Trim here. Inspect here. Don\'t bother going here.' },
-  ];
+  const painPointsByRole: Record<string, { icon: string; title: string; problem: string; solution: string }[]> = {
+    ops: [
+      { icon: 'bi-people', title: 'Not Enough Crews', problem: 'You don\'t have enough linemen and the ones you have waste time on low-value work.', solution: 'AI prioritizes the 12 highest-impact jobs each day so the same crew covers 15% more line per week.' },
+      { icon: 'bi-truck', title: 'Wasted Truck Rolls', problem: 'Crews dispatched with incomplete info. Multiple visits to the same area. Poor routing.', solution: 'Even a 5-10% reduction in unnecessary truck rolls on a $15M field ops budget saves $750K-$1.5M/year.' },
+      { icon: 'bi-tree', title: 'Blunt Trimming Cycles', problem: 'You trim every X years regardless of risk. High-risk corridors grow unchecked while you trim low-risk areas.', solution: 'AI targets where risk and cost justify it. 10-20% reduction in trimming spend, or same spend with fewer outages.' },
+      { icon: 'bi-clipboard-data', title: 'No Daily Work Plan', problem: 'Your crews don\'t get a prioritized list each morning. Supervisors spend hours on the phone assigning jobs.', solution: 'AI generates: here are the 12 highest-value jobs today, in order. Trim here. Inspect here. Don\'t bother going here.' },
+    ],
+    ceo: [
+      { icon: 'bi-chat-square-dots', title: 'Talking, Not Adopting', problem: 'Most co-ops are talking about AI but not adopting. Risk, cost, and internal buy-in are central to dragging feet.', solution: 'See the ROI before you commit. Our demos show exactly what AI does for your co-op, with real numbers.' },
+      { icon: 'bi-graph-up-arrow', title: 'Board Wants Results', problem: 'Your board has heard about AI from every conference. They want a plan, not another vendor pitch.', solution: 'Walk into the next board meeting with a concrete AI deployment plan, projected savings, and a 3-week timeline.' },
+      { icon: 'bi-shield-check', title: 'Risk of Getting It Wrong', problem: 'AI projects fail when discovery takes too long, data is not ready, or the solution does not fit co-op operations.', solution: 'Pre-built co-op data structures eliminate discovery. Human oversight at every critical decision point.' },
+      { icon: 'bi-people', title: 'Workforce Concerns', problem: 'Your team worries AI means job cuts. That slows adoption.', solution: 'AI handles the 95% routine work. Your team moves from operator to supervisor. Same people, higher leverage.' },
+    ],
+    cio: [
+      { icon: 'bi-database', title: 'NISC Controls the Data', problem: 'Your data lives in NISC (iVue, Oracle, EDC) with 15-minute latency. Getting data out for AI is the first challenge.', solution: 'We connect to NISC, Azure, Oracle, and your existing systems. No data migration. AI agents read from your infrastructure.' },
+      { icon: 'bi-shield-lock', title: 'Security and Compliance', problem: 'NERC CIP, data governance, and member privacy are non-negotiable. Any AI solution must meet these standards.', solution: 'SOC 2 aligned audit trails. Every AI decision is explainable, replayable, and traceable. Full compliance monitoring.' },
+      { icon: 'bi-puzzle', title: 'Integration Complexity', problem: 'You have ABS, CIS, OMS, NAM, TMS, MDM, IVCM, Power BI dashboards. Adding another system is the last thing you need.', solution: 'This is an overlay, not a replacement. It sits on top of your existing stack and makes it smarter.' },
+      { icon: 'bi-code-square', title: 'No AI Team', problem: 'You have IT staff who manage NISC and networks. You do not have a team of data scientists or ML engineers.', solution: 'You do not need one. The AI agents are pre-built for co-op operations. Your IT team manages the system, not the models.' },
+    ],
+    cfo: [
+      { icon: 'bi-calculator', title: 'Prove the ROI', problem: 'Every dollar spent on technology needs board-level justification. "AI is the future" is not a business case.', solution: 'Fully deterministic ROI calculation. Every number traces to BLS data, industry benchmarks, and your co-op size. See the math.' },
+      { icon: 'bi-piggy-bank', title: '$8M-$25M Controllable Spend', problem: 'Vegetation management ($3-10M) and truck rolls ($5-15M) are your largest controllable costs. Both are visibly inefficient.', solution: '10% efficiency gain on a $15M field ops budget = $1.5M/year. That is board-level meaningful.' },
+      { icon: 'bi-clock-history', title: 'Payback Period', problem: 'Long implementation timelines mean years before you see returns. That does not work for your budget cycle.', solution: '3-month payback. Implementation cost scales with your co-op size. Production system delivered in weeks, not years.' },
+      { icon: 'bi-file-earmark-bar-graph', title: 'Audit-Ready Numbers', problem: 'You need numbers you can defend in a rate case or board presentation. Not vendor marketing.', solution: 'Our ROI methodology is fully transparent and expandable. Adjust inputs with your actual numbers to validate.' },
+    ],
+  };
+  const painPoints = painPointsByRole[role] || painPointsByRole.ops;
 
   return (
     <>
@@ -94,18 +165,18 @@ function UtilityCoopLandingPage() {
       >
         <div className="container" style={{ maxWidth: 800 }}>
           <span className="badge bg-success mb-3" style={{ fontSize: 12, padding: '6px 14px' }}>
-            <i className="bi bi-lightning-charge me-1" />Built for NRECA Member Cooperatives
+            <i className="bi bi-lightning-charge me-1" />{heroContent.badge}
           </span>
           <h1 className="fw-bold mb-3 text-white" style={{ fontSize: 'clamp(28px, 5vw, 48px)', lineHeight: 1.2, textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>
-            Are You Thinking About Using AI to Get 10-15% Daily Operational Efficiency?
+            {heroContent.headline}
           </h1>
           <p className="mb-3" style={{ fontSize: 19, color: '#ffffff', maxWidth: 650, margin: '0 auto', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-            You are at the right place. Here is how:
+            {heroContent.subhead}
           </p>
           <ul className="list-unstyled mb-4" style={{ fontSize: 17, color: '#e2e8f0', maxWidth: 500, margin: '0 auto', textAlign: 'left', textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-            <li className="mb-2"><i className="bi bi-check-circle-fill text-success me-2" />Reduce unnecessary truck rolls</li>
-            <li className="mb-2"><i className="bi bi-check-circle-fill text-success me-2" />Optimize trimming schedules</li>
-            <li className="mb-2"><i className="bi bi-check-circle-fill text-success me-2" />Optimized crew schedules and daily work plans</li>
+            {heroContent.bullets.map((b, i) => (
+              <li key={i} className="mb-2"><i className="bi bi-check-circle-fill text-success me-2" />{b}</li>
+            ))}
           </ul>
           <div className="d-flex flex-wrap justify-content-center gap-3">
             <a
