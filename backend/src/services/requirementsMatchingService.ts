@@ -225,9 +225,23 @@ export function parseRequirements(docText: string): Array<{ key: string; text: s
       continue;
     }
 
-    // Extract bold key-value pairs as requirements
+    // Extract bold key-value pairs as requirements (skip metadata labels)
     const kvMatch = trimmed.match(/^\*\*(.+?)\*\*:\s*(.+)/);
     if (kvMatch && kvMatch[2].length > 10) {
+      const label = kvMatch[1].toLowerCase();
+      // Skip common document metadata labels that aren't requirements
+      const metadataLabels = new Set([
+        'status', 'status code', 'priority', 'dependencies', 'notes', 'input', 'output',
+        'components', 'criteria', 'edge cases', 'error', 'demographics', 'goals',
+        'technology', 'healthcare', 'manufacturing', 'market demand', 'competitive pressure',
+        'purpose', 'implementation', 'user actions', 'ticket', 'session', 'record',
+        'entity', 'field', 'table', 'column', 'type', 'description', 'example',
+        'response', 'request', 'endpoint', 'method', 'parameters', 'returns',
+        'risk', 'impact', 'severity', 'category', 'source', 'target', 'format',
+      ]);
+      if (metadataLabels.has(label)) continue;
+      // Also skip if the value is very short (< 6 words) — likely a label definition, not a requirement
+      if (kvMatch[2].split(/\s+/).length < 6) continue;
       reqIndex++;
       const key = `REQ-${String(reqIndex).padStart(3, '0')}`;
       requirements.push({ key, text: `${kvMatch[1]}: ${kvMatch[2]}` });

@@ -376,13 +376,18 @@ async function handleConfirm(state: ConversationState, input: string): Promise<T
         source: 'architect',
       } as any);
 
+      const archTs = Date.now();
       for (let i = 0; i < d.new_bp_requirements.length; i++) {
+        const reqText = d.new_bp_requirements[i];
+        // Dedup: skip if same text already exists in this capability
+        const existing = await RequirementsMap.findOne({ where: { project_id: state.project_id, capability_id: cap.id, requirement_text: reqText } });
+        if (existing) continue;
         await RequirementsMap.create({
           project_id: state.project_id,
           capability_id: cap.id,
           feature_id: feat.id,
-          requirement_key: `REQ-ARCH-${Date.now()}-${i}`,
-          requirement_text: d.new_bp_requirements[i],
+          requirement_key: `REQ-ARCH-${archTs}-${i}`,
+          requirement_text: reqText,
           status: 'unmatched',
           confidence_score: 0,
         });
@@ -402,13 +407,18 @@ async function handleConfirm(state: ConversationState, input: string): Promise<T
       const { RequirementsMap, Feature } = await import('../../models');
       const feat = await Feature.findOne({ where: { capability_id: targetBPId }, order: [['sort_order', 'ASC']] });
       if (feat) {
+        const extTs = Date.now();
         for (let i = 0; i < d.new_bp_requirements.length; i++) {
+          const reqText = d.new_bp_requirements[i];
+          // Dedup: skip if same text already exists in this capability
+          const existing = await RequirementsMap.findOne({ where: { project_id: state.project_id, capability_id: targetBPId, requirement_text: reqText } });
+          if (existing) continue;
           await RequirementsMap.create({
             project_id: state.project_id,
             capability_id: targetBPId,
             feature_id: feat.id,
-            requirement_key: `REQ-ARCH-${Date.now()}-${i}`,
-            requirement_text: d.new_bp_requirements[i],
+            requirement_key: `REQ-ARCH-${extTs}-${i}`,
+            requirement_text: reqText,
             status: 'unmatched',
             confidence_score: 0,
           });

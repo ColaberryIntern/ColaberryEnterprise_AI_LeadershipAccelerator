@@ -131,15 +131,20 @@ export async function discoverExistingCode(
       source: 'discovered',
     } as any);
 
-    // Create verified requirements for each file
+    // Create verified requirements for each file (skip if already discovered)
     for (const file of cap.files) {
       const fileName = file.path.split('/').pop() || file.path;
+      const discText = `[Existing] ${fileName} — ${file.type} implementation`;
+      const existing = await RequirementsMap.findOne({
+        where: { project_id: projectId, capability_id: (targetBP as any).id, requirement_text: discText },
+      });
+      if (existing) continue; // Already discovered — skip duplicate
       await RequirementsMap.create({
         project_id: projectId,
         capability_id: (targetBP as any).id,
         feature_id: feat.id,
         requirement_key: `DISC-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        requirement_text: `[Existing] ${fileName} — ${file.type} implementation`,
+        requirement_text: discText,
         status: 'verified',
         confidence_score: 1.0,
         github_file_paths: [file.path],
