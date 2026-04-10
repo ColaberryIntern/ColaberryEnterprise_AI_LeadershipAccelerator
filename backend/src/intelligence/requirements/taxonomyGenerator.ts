@@ -75,14 +75,36 @@ export async function generateTaxonomy(projectId: string): Promise<BusinessTaxon
       const models = blobs.filter((p: string) => p.includes('/models/') && p.endsWith('.ts') && !p.includes('index'))
         .map((p: string) => (p.split('/').pop() || '').replace('.ts', ''));
 
+      // Detect complex domains: modules that have service + route + model = major capability
+      const stemMap = new Map<string, string[]>();
+      for (const p of blobs) {
+        if (!p.endsWith('.ts') || p.includes('index') || p.includes('__tests__')) continue;
+        if (!(p.includes('/services/') || p.includes('/routes/') || p.includes('/models/') || p.includes('/agents/'))) continue;
+        const name = (p.split('/').pop() || '').replace(/\.(ts|tsx)$/, '').replace(/(Service|Routes?|Agent|Controller)s?$/i, '').toLowerCase();
+        if (name.length < 3) continue;
+        if (!stemMap.has(name)) stemMap.set(name, []);
+        stemMap.get(name)!.push(p);
+      }
+      const complexDomains = [...stemMap.entries()]
+        .filter(([, files]) => files.length >= 2)
+        .map(([stem, files]) => {
+          const readable = stem.charAt(0).toUpperCase() + stem.slice(1).replace(/([a-z])([A-Z])/g, '$1 $2');
+          const types = files.map(f => f.includes('/services/') ? 'service' : f.includes('/routes/') ? 'route' : f.includes('/models/') ? 'model' : 'agent');
+          return `${readable} (${[...new Set(types)].join('+')})`;
+        });
+
       if (adminRoutes.length > 0) {
         appStructure = `\nEXISTING APPLICATION STRUCTURE (discovered from codebase):
 Admin Pages: ${adminRoutes.join(', ')}
 Services: ${services.slice(0, 30).join(', ')}
 Data Models: ${models.slice(0, 30).join(', ')}
 
-IMPORTANT: The taxonomy MUST include categories that cover these existing application areas.
-Complex modules (with multiple routes/services) should be their own categories.`;
+COMPLEX MODULES (service+route+model = major capability — EACH MUST have its own category):
+${complexDomains.join('\n')}
+
+CRITICAL: Each complex module listed above MUST map to its own category or a closely related one.
+Do NOT dump all models into "Data Management". Lead, Campaign, Dashboard, Enrollment, Revenue,
+Ticket, Alert are SEPARATE business domains — each needs its own category.`;
       }
     }
   } catch { /* non-critical */ }
@@ -171,6 +193,7 @@ async function callLLMForTaxonomy(
           content: `You are a business analyst specializing in ${industry}. Your job is to create a capability taxonomy for a software system.
 
 A capability taxonomy defines WHAT a system does for its users — not HOW it's built technically.
+Each major functional area of the application should be its own category.
 
 RULES:
 1. Generate 12-20 categories specific to this business and industry
