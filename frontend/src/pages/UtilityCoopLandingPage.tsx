@@ -72,11 +72,10 @@ function UtilityCoopLandingPage() {
   const [showPicker, setShowPicker] = useState(false);
   const advisoryUrl = getAdvisoryUrl();
 
-  // Detect role from URL param for personalized hero + demo
-  // If no role param, randomly alternate between all 4 roles each page load
-  const urlRole = new URLSearchParams(window.location.search).get('role');
-  const role = urlRole || (['ceo', 'cio', 'ops', 'cfo'][Math.floor(Math.random() * 4)]);
-  const heroContent = ROLE_HEROES[role] || ROLE_HEROES.ops;
+  // Detect role from URL param — only personalize when coming from email campaign
+  // Default (no param) shows the standard ops page with randomized demos
+  const role = new URLSearchParams(window.location.search).get('role') || '';
+  const heroContent = role && ROLE_HEROES[role] ? ROLE_HEROES[role] : ROLE_HEROES.ops;
 
   // Map each role to the most relevant demo to auto-play first
   const ROLE_DEFAULT_DEMOS: Record<string, string[]> = {
@@ -85,7 +84,8 @@ function UtilityCoopLandingPage() {
     ops: ['utility-fleet', 'utility-vegetation'],         // Field ops: crew productivity, vegetation
     cfo: ['utility-ratecase', 'utility-fleet'],           // Finance: rate case automation, cost savings
   };
-  const roleDefaultDemos = ROLE_DEFAULT_DEMOS[role] || ROLE_DEFAULT_DEMOS.ops;
+  // No role param = randomize across all demos; with role param = targeted demos
+  const roleDefaultDemos = role && ROLE_DEFAULT_DEMOS[role] ? ROLE_DEFAULT_DEMOS[role] : UTILITY_SCENARIOS.map(s => s.demoId);
 
   useEffect(() => {
     initTracker();
@@ -140,7 +140,7 @@ function UtilityCoopLandingPage() {
       { icon: 'bi-file-earmark-bar-graph', title: 'Audit-Ready Numbers', problem: 'You need numbers you can defend in a rate case or board presentation. Not vendor marketing.', solution: 'Our ROI methodology is fully transparent and expandable. Adjust inputs with your actual numbers to validate.' },
     ],
   };
-  const painPoints = painPointsByRole[role] || painPointsByRole.ops;
+  const painPoints = (role && painPointsByRole[role]) ? painPointsByRole[role] : painPointsByRole.ops;
 
   return (
     <>
@@ -208,10 +208,10 @@ function UtilityCoopLandingPage() {
       <section id="demo" style={{ background: 'var(--color-bg-alt)', padding: '4rem 1.5rem' }}>
         <div className="container" style={{ maxWidth: 900 }}>
           <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>
-            {activeScenario ? `See AI ${activeScenario.title} in Action` : role === 'ceo' ? 'See How AI Improves Grid Reliability' : role === 'cio' ? 'See AI Work With Your Data Infrastructure' : role === 'cfo' ? 'See the ROI Math in Action' : 'See a Crew Productivity Engine Built in Seconds'}
+            {activeScenario ? `See AI ${activeScenario.title} in Action` : ({'ceo': 'See How AI Improves Grid Reliability', 'cio': 'See AI Work With Your Data Infrastructure', 'cfo': 'See the ROI Math in Action'} as any)[role] || 'See AI Run a 380,000-Member Co-Op'}
           </h2>
           <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>
-            {activeScenario ? activeScenario.description : role === 'ceo' ? 'Watch AI predict outages, coordinate storm response, and deliver board-ready reliability metrics.' : role === 'cio' ? 'Watch AI analyze meter data, detect anomalies, and generate compliance reports from your existing systems.' : role === 'cfo' ? 'Watch AI automate rate case preparation and optimize field operations spend.' : 'Watch AI generate daily work plans, optimize routes, and prioritize jobs by impact for your field crews.'}
+            {activeScenario ? activeScenario.description : ({'ceo': 'Watch AI predict outages, coordinate storm response, and deliver board-ready reliability metrics.', 'cio': 'Watch AI analyze meter data, detect anomalies, and generate compliance reports from your existing systems.', 'cfo': 'Watch AI automate rate case preparation and optimize field operations spend.'} as any)[role] || 'Watch 10 AI agents predict outages, dispatch crews, and handle 42,000 storm calls in seconds.'}
           </p>
 
           <InlineDemoPlayer
