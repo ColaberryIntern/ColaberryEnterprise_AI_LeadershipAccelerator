@@ -2,7 +2,6 @@ import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { MentorContextProvider } from '../../contexts/MentorContext';
-import PortalMentorChat from '../portal/PortalMentorChat';
 
 function PortalLayout() {
   const { logout } = useParticipantAuth();
@@ -75,7 +74,6 @@ function PortalLayout() {
         <Outlet />
       </main>
 
-      <PortalMentorChat />
     </div>
     </MentorContextProvider>
   );
