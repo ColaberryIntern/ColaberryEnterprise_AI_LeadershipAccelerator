@@ -4,6 +4,22 @@ import { requireParticipant } from '../middlewares/participantAuth';
 const router = Router();
 
 // ---------------------------------------------------------------------------
+// Project-scoped ownership helpers (data isolation)
+// ---------------------------------------------------------------------------
+async function getParticipantProject(enrollmentId: string) {
+  const { getProjectByEnrollment } = await import('../services/projectService');
+  return getProjectByEnrollment(enrollmentId);
+}
+
+async function findOwnedCapability(enrollmentId: string, capabilityId: string) {
+  const project = await getParticipantProject(enrollmentId);
+  if (!project) return null;
+  const { Capability } = await import('../models');
+  const cap = await Capability.findOne({ where: { id: capabilityId, project_id: project.id } });
+  return cap;
+}
+
+// ---------------------------------------------------------------------------
 // Project Setup Flow (user-driven input)
 // ---------------------------------------------------------------------------
 
@@ -559,9 +575,12 @@ router.get('/api/portal/project/requirements/map', requireParticipant, async (re
 
 router.put('/api/portal/project/requirements/map/:id', requireParticipant, async (req: Request, res: Response) => {
   try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { manualMatch } = await import('../services/requirementsMatchingService');
     const { file_paths } = req.body;
-    const result = await manualMatch(req.params.id as string, file_paths || []);
+    const result = await manualMatch(project.id, req.params.id as string, file_paths || []);
     res.json(result);
   } catch (err: any) {
     console.error('[ProjectRoutes] PUT /requirements/map error:', err.message);
@@ -1515,6 +1534,8 @@ router.get('/api/portal/project/execution-intelligence', requireParticipant, asy
 
 router.put('/api/portal/project/business-processes/:id/hitl', requireParticipant, async (req: Request, res: Response) => {
   try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { updateHITLConfig, getHITLConfig } = await import('../intelligence/hitl/hitlEngine');
     await updateHITLConfig(req.params.id as string, req.body);
     res.json(await getHITLConfig(req.params.id as string));
@@ -1523,6 +1544,8 @@ router.put('/api/portal/project/business-processes/:id/hitl', requireParticipant
 
 router.put('/api/portal/project/business-processes/:id/autonomy', requireParticipant, async (req: Request, res: Response) => {
   try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { applyAutonomyChange, assessAutonomy } = await import('../intelligence/autonomyProgressionEngine');
     await applyAutonomyChange(req.params.id as string, req.body.level, req.body.reason || 'User adjustment');
     res.json(await assessAutonomy(req.params.id as string));
@@ -1531,6 +1554,8 @@ router.put('/api/portal/project/business-processes/:id/autonomy', requirePartici
 
 router.post('/api/portal/project/business-processes/:id/evaluate', requireParticipant, async (req: Request, res: Response) => {
   try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { scoreProcess } = await import('../intelligence/processScoringEngine');
     const { assessAutonomy } = await import('../intelligence/autonomyProgressionEngine');
     const scores = await scoreProcess(req.params.id as string);
@@ -1543,6 +1568,11 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
   try {
     const { target } = req.body;
     if (!target) { res.status(400).json({ error: 'target required' }); return; }
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { Capability: CapCheck } = await import('../models');
+    const ownerCheck = await CapCheck.findOne({ where: { id: req.params.id as string, project_id: project.id } });
+    if (!ownerCheck) { res.status(404).json({ error: 'Process not found' }); return; }
 
     // For requirement_implementation, fetch unmapped requirements and pass as extra context
     let extraContext: any = undefined;
@@ -1574,7 +1604,7 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
 
     // Save what this prompt promises to build (for post-resync comparison)
     const { Capability } = await import('../models');
-    const cap = await Capability.findByPk(req.params.id as string);
+    const cap = await Capability.findOne({ where: { id: req.params.id as string, project_id: project.id } });
     if (cap) {
       const prevExec = (cap as any).last_execution || {};
       const prevCompleted = prevExec.completed_steps || [];
@@ -1707,7 +1737,7 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
     // 2b. Process-level matching: if implementation files exist for this process name,
     // promote remaining unmatched requirements to "matched" (the process IS being built)
     const { Capability: CapModel } = await import('../models');
-    const processCap = await CapModel.findByPk(req.params.id as string);
+    const processCap = await CapModel.findOne({ where: { id: req.params.id as string, project_id: project.id } });
     if (processCap) {
       // Process name stems — require at least 2 stems to match a filename to avoid
       // false positives (e.g., "user" matching AdminUser.ts for "User Journey Maps")
@@ -1753,7 +1783,7 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
 
     // 4. Compare last execution promise vs reality
     const { Capability } = await import('../models');
-    const cap = await Capability.findByPk(req.params.id as string);
+    const cap = await Capability.findOne({ where: { id: req.params.id as string, project_id: project.id } });
     const lastExec = (cap as any)?.last_execution;
     let whatChanged: any = null;
 
@@ -1978,7 +2008,7 @@ router.post('/api/portal/project/architect/turn', requireParticipant, async (req
     const project = await getProjectByEnrollment(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { ArchitectSession } = await import('../models');
-    const session = await ArchitectSession.findByPk(session_id);
+    const session = await ArchitectSession.findOne({ where: { id: session_id, project_id: project.id } });
     if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
     const { processArchitectTurn } = await import('../intelligence/architect/architectEngine');
     const projectMode = (project as any).target_mode || 'production';
@@ -2037,17 +2067,19 @@ router.post('/api/portal/project/steer', requireParticipant, async (req: Request
 
 router.post('/api/portal/project/steer/:actionId/apply', requireParticipant, async (req: Request, res: Response) => {
   try {
+    // Verify ownership before applying
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { default: SteeringAction } = await import('../models/SteeringAction');
+    const action = await SteeringAction.findOne({ where: { id: req.params.actionId as string, project_id: project.id } });
+    if (!action) { res.status(404).json({ error: 'Action not found' }); return; }
+
     const { applySteeringAction } = await import('../intelligence/steering/steeringExecutor');
     const result = await applySteeringAction(req.params.actionId as string);
-
-    // If the intent was add_process, delegate to existing creation logic
-    const { default: SteeringAction } = await import('../models/SteeringAction');
-    const action = await SteeringAction.findByPk(req.params.actionId as string);
     const intent = (action as any)?.classified_intent;
     if (intent?.type === 'add_process') {
-      const { getProjectByEnrollment } = await import('../services/projectService');
-      const project = await getProjectByEnrollment(req.participant!.sub);
-      if (project) {
+      {
         // Delegate to existing NLP add logic
         const OpenAI = (await import('openai')).default;
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -2131,8 +2163,7 @@ router.put('/api/portal/project/target-mode', requireParticipant, async (req: Re
 router.put('/api/portal/project/business-processes/:id/mode', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { mode_override, applicability_status } = req.body;
-    const { Capability } = await import('../models');
-    const cap = await Capability.findByPk(req.params.id as string);
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     if (mode_override !== undefined) {
       if (mode_override !== null) {
@@ -2157,8 +2188,7 @@ router.put('/api/portal/project/business-processes/:id/mode', requireParticipant
 router.put('/api/portal/project/business-processes/:id/profile', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { execution_profile, strategy_template } = req.body;
-    const { Capability } = await import('../models');
-    const cap = await Capability.findByPk(req.params.id as string);
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     if (execution_profile) (cap as any).execution_profile = execution_profile;
     if (strategy_template) (cap as any).strategy_template = strategy_template;
@@ -2267,8 +2297,7 @@ router.post('/api/portal/project/business-processes/add', requireParticipant, as
 // ─── Process Lifecycle Management ────────
 router.put('/api/portal/project/business-processes/:id/lifecycle', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { Capability } = await import('../models');
-    const cap = await Capability.findByPk(req.params.id as string);
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const status = req.body.status;
     if (!['active', 'deferred', 'future'].includes(status)) { res.status(400).json({ error: 'Invalid status' }); return; }

@@ -180,10 +180,11 @@ export async function getRequirementsStatus(projectId: string): Promise<{
 // ---------------------------------------------------------------------------
 
 export async function manualMatch(
+  projectId: string,
   requirementMapId: string,
   filePaths: string[]
 ): Promise<RequirementsMap> {
-  const req = await RequirementsMap.findByPk(requirementMapId);
+  const req = await RequirementsMap.findOne({ where: { id: requirementMapId, project_id: projectId } });
   if (!req) throw new Error(`Requirement not found: ${requirementMapId}`);
 
   req.github_file_paths = filePaths;
