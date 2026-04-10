@@ -750,7 +750,7 @@ function AddBusinessProcessCard({ onAdded }: { onAdded: () => void }) {
 // ---------------------------------------------------------------------------
 // Project Mode Selector — set project-wide target mode
 // ---------------------------------------------------------------------------
-function ProjectModeSelector() {
+function ProjectModeSelector({ onModeChange }: { onModeChange?: () => void }) {
   const [mode, setMode] = useState<string>('production');
   const [saving, setSaving] = useState(false);
   const [lastResult, setLastResult] = useState<any>(null);
@@ -772,6 +772,7 @@ function ProjectModeSelector() {
       setMode(newMode);
       setLastResult(r.data);
       setTimeout(() => setLastResult(null), 6000);
+      if (onModeChange) onModeChange();
     } catch {} finally { setSaving(false); }
   };
 
@@ -987,6 +988,8 @@ function ProjectDashboard() {
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const triggerRefresh = () => setRefreshKey(k => k + 1);
   // Persist active tab in URL hash
   const getInitialTab = (): TabKey => {
     const hash = window.location.hash.replace('#', '');
@@ -1054,7 +1057,7 @@ function ProjectDashboard() {
       <ProjectProgress currentStage={project.project_stage} />
 
       {/* Next Action: highest priority business process */}
-      <NextBusinessProcessAction onNavigate={() => setActiveTab('business-processes')} />
+      <NextBusinessProcessAction key={`nba-${refreshKey}`} onNavigate={() => setActiveTab('business-processes')} />
 
       <nav className="nav nav-tabs mb-4">
         {tabs.map(t => (
@@ -1071,15 +1074,15 @@ function ProjectDashboard() {
       {activeTab === 'overview' && (
         <>
           {/* Project Mode Selector */}
-          <ProjectModeSelector />
+          <ProjectModeSelector onModeChange={triggerRefresh} />
           {/* KPI Bar — merged from Readiness */}
-          <ReadinessKPIBar />
+          <ReadinessKPIBar key={`kpi-${refreshKey}`} />
           <ProjectSystemPromptCard />
           <ExecutionOverview />
         </>
       )}
 
-      {activeTab === 'business-processes' && <PortalBusinessProcessesTab />}
+      {activeTab === 'business-processes' && <PortalBusinessProcessesTab key={`bp-${refreshKey}`} />}
 
       {activeTab === 'execution' && <WarRoomTab />}
 
