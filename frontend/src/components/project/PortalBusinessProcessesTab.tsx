@@ -89,10 +89,17 @@ export default function PortalBusinessProcessesTab() {
               const r = await bpApi.reclassifyRequirements();
               const d = r.data;
               const el = document.createElement('div');
-              el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px"><i class="bi bi-check-circle me-2"></i>Reclassified: ${d.matched} matched to existing, ${d.clustered} clustered into ${d.new_processes?.length || 0} new processes, ${d.remaining} remaining</div>`;
+              const dbg = d._debug ? ` [${d._debug.uncatCount} uncat, ${d._debug.otherProcessCount} targets, ${d._debug.llmCategories || 0} LLM cats${d._debug.llmError ? ', ERR: ' + d._debug.llmError.substring(0, 60) : ''}]` : '';
+              const color = (d.matched + d.clustered) > 0 ? '#1a365d' : '#92400e';
+              el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:${color};color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px;max-width:600px"><i class="bi bi-${(d.matched + d.clustered) > 0 ? 'check-circle' : 'exclamation-triangle'} me-2"></i>Reclassified: ${d.matched} matched to existing, ${d.clustered} clustered into ${d.new_processes?.length || 0} new processes, ${d.remaining} remaining${dbg}</div>`;
               document.body.appendChild(el); setTimeout(() => el.remove(), 5000);
               load();
-            } catch {} finally { setReclassifying(false); }
+            } catch (err: any) {
+              const msg = err?.response?.data?.error || err?.message || 'Reclassification failed';
+              const el = document.createElement('div');
+              el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#e53e3e;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:12px"><i class="bi bi-x-circle me-2"></i>${msg}</div>`;
+              document.body.appendChild(el); setTimeout(() => el.remove(), 5000);
+            } finally { setReclassifying(false); }
           }}>
             {reclassifying ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 12, height: 12 }}></span>Classifying...</> : <><i className="bi bi-arrow-repeat me-1"></i>Reclassify Now</>}
           </button>

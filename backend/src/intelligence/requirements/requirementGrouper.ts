@@ -47,6 +47,7 @@ export interface GroupingResult {
   remaining: number;
   new_processes: string[];
   details: Array<{ req_key: string; action: string; target: string; confidence: number }>;
+  _debug?: { uncatCount: number; otherProcessCount: number; pass1Unmatched: number; llmCategories?: number; llmError?: string };
 }
 
 export async function groupRequirements(projectId: string): Promise<GroupingResult> {
@@ -121,6 +122,9 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
     if (feat) featureMap.set(cap.id, feat.id);
   }
 
+  result._debug = { uncatCount: realReqs.length, otherProcessCount: otherCaps.length, pass1Unmatched: 0 };
+  console.log(`[RequirementGrouper] ${realReqs.length} uncategorized reqs, ${otherCaps.length} target processes`);
+
   // ── PASS 1: Aggressive keyword match to existing processes (threshold 0.15) ──
   const unmatched: typeof realReqs[number][] = [];
 
@@ -156,6 +160,9 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
     }
   }
 
+  result._debug!.pass1Unmatched = unmatched.length;
+  console.log(`[RequirementGrouper] Pass 1: ${result.matched} matched, ${unmatched.length} unmatched`);
+
   // ── PASS 2: LLM clustering for remaining (business-taxonomy-aware) ──
   if (unmatched.length > 0) {
     const existingNames = otherCaps.map(c => c.name).join(', ');
@@ -177,7 +184,14 @@ export async function groupRequirements(projectId: string): Promise<GroupingResu
 
     for (let i = 0; i < unmatched.length; i += BATCH_SIZE) {
       const batch = unmatched.slice(i, i + BATCH_SIZE);
-      const reqList = batch.map(r => `${r.requirement_key}: ${(r.requirement_text || '').substring(0, 120)}`).join('\n');
+      // Use simple numeric IDs to avoid LLM mangling requirement keys
+      const idMap = new Map<string, typeof batch[number]>();
+      const reqList = batch.map((r, idx) => {
+        const simpleId = `R${idx + 1}`;
+        idMap.set(simpleId, r);
+        idMap.set(r.requirement_key, r); // also support original key
+        return `${simpleId}: ${(r.requirement_text || '').substring(0, 120)}`;
+      }).join('\n');
 
       try {
         const response = await getOpenAI().chat.completions.create({
@@ -214,21 +228,28 @@ RULES:
 6. Each requirement must appear in exactly ONE category
 7. Use "and" (not "&") in all category names for consistency
 8. Category names must be 2-5 words, title case
+9. Use the EXACT requirement IDs as shown (R1, R2, etc.) in requirement_keys
 
 Respond:
-{"categories":[{"name":"Category Name","requirement_keys":["REQ-001","REQ-002"]}]}`,
+{"categories":[{"name":"Category Name","requirement_keys":["R1","R2"]}]}`,
             },
           ],
         });
 
-        const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+        const rawContent = response.choices[0]?.message?.content || '{}';
+        const parsed = JSON.parse(rawContent);
         const categories = parsed.categories || [];
+        console.log(`[RequirementGrouper] LLM returned ${categories.length} categories for batch of ${batch.length}`);
+        result._debug!.llmCategories = (result._debug!.llmCategories || 0) + categories.length;
 
         for (const cat of categories) {
           if (!cat.name || !cat.requirement_keys?.length) continue;
 
-          // Check if this maps to an existing process
-          const existingMatch = otherCaps.find(c => c.name.toLowerCase() === cat.name.toLowerCase());
+          // Check if this maps to an existing process (fuzzy match)
+          const existingMatch = otherCaps.find(c =>
+            c.name.toLowerCase() === cat.name.toLowerCase() ||
+            c.name.toLowerCase().replace(/\s+and\s+/g, ' ').includes(cat.name.toLowerCase().replace(/\s+and\s+/g, ' ').split(' ').slice(0, 2).join(' '))
+          );
           let targetCapId: string;
           let targetFeatId: string;
 
@@ -260,19 +281,24 @@ Respond:
             result.new_processes.push(`${cat.name} (${cat.requirement_keys.length} reqs)`);
           }
 
-          // Assign requirements
+          // Assign requirements (lookup by simple ID or original key)
+          let catMatched = 0;
           for (const key of cat.requirement_keys) {
-            const req = batch.find(r => r.requirement_key === key);
+            const req = idMap.get(key) || idMap.get(key.toUpperCase()) || batch.find(r => r.requirement_key === key);
             if (req) {
               req.capability_id = targetCapId;
               req.feature_id = targetFeatId;
               await req.save();
               result.clustered++;
+              catMatched++;
             }
           }
+          console.log(`[RequirementGrouper]   Category "${cat.name}": ${catMatched}/${cat.requirement_keys.length} keys matched`);
         }
       } catch (err) {
-        console.error('[RequirementGrouper] LLM batch failed:', (err as Error).message);
+        const errMsg = (err as Error).message;
+        console.error('[RequirementGrouper] LLM batch failed:', errMsg);
+        result._debug!.llmError = errMsg;
         // Pass 3 fallback: assign remaining to closest match
         for (const req of batch) {
           if (req.capability_id && !uncatIds.includes(req.capability_id)) continue; // already assigned
