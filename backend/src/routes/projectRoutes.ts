@@ -1890,38 +1890,71 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       console.error('[Resync] Snapshot capture error:', snapErr.message);
     }
 
-    // ── LLM Summary: explain what happened in plain language ──
+    // ── Summary: delta-based bullets, LLM only when real changes happened ──
     let summary = '';
     try {
       const capName = processCap?.name || 'this process';
-      const reqTexts = processReqs.slice(0, 10).map(r => (r.requirement_text || '').substring(0, 80)).filter(Boolean);
-      const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 200,
-        messages: [{
-          role: 'system',
-          content: 'You write concise executive summaries of software project sync results. One short paragraph, 2-3 sentences max. Be specific about what was checked and what the current state means for the project. Write for a non-technical executive.'
-        }, {
-          role: 'user',
-          content: `Business process: "${capName}"
-Requirements (${processReqs.length} total): ${reqTexts.join(' | ')}
-Resync results: ${matched} requirements matched to code, ${partial} partially matched, ${unmatched} unmapped, ${preserved} previously verified (preserved), ${fileTree.length} repository files scanned.
-${whatChanged ? `Last step: "${whatChanged.last_step}" — status: ${whatChanged.status}${whatChanged.missing?.length ? ', missing files: ' + whatChanged.missing.join(', ') : ''}` : 'No previous execution step tracked.'}
-Metrics: readiness ${metricsAfter?.readiness || metricsBefore?.readiness || 0}%, quality ${metricsAfter?.quality || metricsBefore?.quality || 0}%, maturity L${metricsAfter?.maturity || metricsBefore?.maturity || 0}, gaps: ${metricsAfter?.gaps ?? metricsBefore?.gaps ?? 0}
-${regressions.length > 0 ? 'Regressions detected: ' + regressions.map((r: any) => r.metric).join(', ') : 'No regressions detected.'}
+      // Separate DISC-* (code inventory) from REQ-* (real requirements)
+      const realReqs = processReqs.filter(r => !r.requirement_key.startsWith('DISC-'));
+      const discReqs = processReqs.filter(r => r.requirement_key.startsWith('DISC-'));
+      const realMatched = realReqs.filter(r => r.status === 'matched' || r.status === 'verified' || r.status === 'auto_verified').length;
+      const realUnmatched = realReqs.filter(r => r.status === 'unmatched').length;
 
-Write a short paragraph summarizing what this resync found and what it means for the project.`
-        }],
-      });
-      summary = completion.choices[0]?.message?.content || '';
+      // Calculate deltas from before/after metrics
+      const readinessBefore = metricsBefore?.readiness || 0;
+      const readinessAfter = metricsAfter?.readiness || 0;
+      const qualityBefore = metricsBefore?.quality || 0;
+      const qualityAfter = metricsAfter?.quality || 0;
+      const hasChange = readinessBefore !== readinessAfter || qualityBefore !== qualityAfter || (whatChanged?.status === 'complete');
+
+      if (!hasChange && matched === preserved && partial === 0) {
+        // Nothing changed — short static bullets, no LLM call
+        const bullets = [];
+        bullets.push(`• Scanned ${fileTree.length} repository files — no new matches found`);
+        if (realUnmatched > 0) bullets.push(`• ${realUnmatched} requirements still need implementation`);
+        if (discReqs.length > 0) bullets.push(`• ${discReqs.length} existing code files already cataloged`);
+        if (realReqs.length === 0) bullets.push(`• No document requirements defined yet — upload requirements to get started`);
+        bullets.push(`• Next step: generate a prompt and run it in your AI workstation to build the missing pieces`);
+        summary = bullets.join('\n');
+      } else {
+        // Real changes — use LLM with delta context, request bullets
+        const changedReqs = processReqs.filter(r => r.verified_by === 'process_level' || r.verified_by === 'e2e_test' || r.verified_by === 'manual').slice(0, 5);
+        const newlyMatched = matched - preserved;
+        const OpenAI = (await import('openai')).default;
+        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 200,
+          messages: [{
+            role: 'system',
+            content: 'Write 3-4 bullet points summarizing what changed in this code sync. Each bullet starts with •. Be specific about what improved. Write for a technical executive. No filler — only mention real changes.'
+          }, {
+            role: 'user',
+            content: `Business process: "${capName}"
+CHANGES THIS SYNC:
+- ${newlyMatched} NEW requirements matched to code (${preserved} were already matched)
+- Readiness: ${readinessBefore}% → ${readinessAfter}%
+- Quality: ${qualityBefore}% → ${qualityAfter}%
+${whatChanged ? `- Last step "${whatChanged.last_step}": ${whatChanged.status === 'complete' ? 'VERIFIED — files delivered' : 'INCOMPLETE — ' + (whatChanged.missing?.length || 0) + ' files still missing'}` : ''}
+${changedReqs.length > 0 ? '- Newly matched: ' + changedReqs.map(r => (r.requirement_text || '').substring(0, 50)).join(', ') : ''}
+${regressions.length > 0 ? '- REGRESSIONS: ' + regressions.map((r: any) => r.metric).join(', ') : ''}
+STILL NEEDED: ${realUnmatched} requirements unmapped out of ${realReqs.length} total
+
+Write 3-4 bullet points about what specifically changed and what needs attention next.`
+          }],
+        });
+        summary = completion.choices[0]?.message?.content || '';
+      }
     } catch (err) {
       console.error('[Resync] Summary generation failed:', (err as Error).message);
     }
 
     res.json({
       ...result,
-      resync: { total: processReqs.length, matched, partial, unmatched, preserved, files_scanned: fileTree.length },
+      resync: {
+        total: processReqs.length, matched, partial, unmatched, preserved, files_scanned: fileTree.length,
+        disc_count: processReqs.filter(r => r.requirement_key.startsWith('DISC-')).length,
+        req_count: processReqs.filter(r => !r.requirement_key.startsWith('DISC-')).length,
+      },
       what_changed: whatChanged,
       summary,
       verification: {

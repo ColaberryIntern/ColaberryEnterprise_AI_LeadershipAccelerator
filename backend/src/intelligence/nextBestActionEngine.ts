@@ -266,41 +266,25 @@ export function generateExecutionPlan(
   }
 
   // SAFETY NET: If process is NOT complete but all actions were filtered out
-  // (e.g., all were in completed_steps), force-show the most relevant action
+  // (e.g., all were in completed_steps), force-show the NEXT most relevant action
+  // that hasn't been completed yet
   if (actions.length === 0) {
-    // Determine what's most needed
-    // Only show implement_requirements if there are enough requirements to be meaningful (>1)
     const unmappedCount = state.totalRequirements - state.verifiedCount - state.unverifiedCount;
-    if (state.reqCoverage < 80 && unmappedCount > 1) {
+    const candidates = [
+      { cond: state.reqCoverage < 80 && unmappedCount > 1, key: 'implement_requirements', label: 'Implement Unmapped Requirements', impact: '+requirement coverage', depends: 'Backend services', fixes: ['Low requirement coverage'], enables: ['Higher completion %'], target: 'requirement_implementation' },
+      { cond: state.qualityScore < 70, key: 'optimize_performance', label: 'Improve Quality Score', impact: '+quality', depends: 'All layers built', fixes: ['Quality below threshold'], enables: ['Production readiness'], target: 'optimize_performance' },
+      { cond: !state.hasBackend, key: 'build_backend', label: 'Build Missing Layer: Backend', impact: '+readiness', depends: 'None', fixes: ['Backend Missing'], enables: ['Process completion'], target: 'backend_improvement' },
+      { cond: !state.hasFrontend, key: 'add_frontend', label: 'Build Missing Layer: Frontend', impact: '+readiness', depends: 'None', fixes: ['Frontend Missing'], enables: ['Process completion'], target: 'frontend_exposure' },
+      { cond: !state.hasModels, key: 'add_database', label: 'Build Missing Layer: Database Models', impact: '+readiness', depends: 'None', fixes: ['Database Missing'], enables: ['Process completion'], target: 'add_database' },
+      { cond: true, key: 'verify_requirements', label: 'Verify Requirement Coverage', impact: '+verification', depends: 'Implementation complete', fixes: ['Unverified requirements'], enables: ['Confidence in delivery'], target: 'verify_requirements' },
+    ];
+    // Pick the first candidate that hasn't been completed
+    const pick = candidates.find(c => c.cond && !completed.has(c.key));
+    if (pick) {
       actions.push({
-        step: 1, key: 'implement_requirements',
-        label: 'Implement Unmapped Requirements',
-        impact: '+requirement coverage',
-        depends_on: 'Backend services',
-        fixes: ['Low requirement coverage'], enables: ['Higher completion %'],
-        blocked: false, requirements_covered: [],
-        prompt_target: 'requirement_implementation',
-      });
-    } else if (state.qualityScore < 70) {
-      actions.push({
-        step: 1, key: 'optimize_performance',
-        label: 'Improve Quality Score',
-        impact: '+quality',
-        depends_on: 'All layers built',
-        fixes: ['Quality below threshold'], enables: ['Production readiness'],
-        blocked: false, requirements_covered: [],
-        prompt_target: 'optimize_performance',
-      });
-    } else if (!state.hasBackend || !state.hasFrontend || !state.hasModels) {
-      const missing = !state.hasBackend ? 'Backend' : !state.hasFrontend ? 'Frontend' : 'Database Models';
-      actions.push({
-        step: 1, key: !state.hasBackend ? 'build_backend' : !state.hasFrontend ? 'add_frontend' : 'add_database',
-        label: `Build Missing Layer: ${missing}`,
-        impact: '+readiness',
-        depends_on: 'None',
-        fixes: [`${missing} Missing`], enables: ['Process completion'],
-        blocked: false, requirements_covered: [],
-        prompt_target: !state.hasBackend ? 'backend_improvement' : !state.hasFrontend ? 'frontend_exposure' : 'add_database',
+        step: 1, key: pick.key, label: pick.label, impact: pick.impact,
+        depends_on: pick.depends, fixes: pick.fixes, enables: pick.enables,
+        blocked: false, requirements_covered: [], prompt_target: pick.target,
       });
     }
   }
