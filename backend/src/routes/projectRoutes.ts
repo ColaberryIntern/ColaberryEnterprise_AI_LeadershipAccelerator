@@ -1296,13 +1296,16 @@ function enrichCapability(cap: any) {
   let executionPlan: any[];
   try {
     const { generateStepsFromRequirements } = require('../services/requirementToStepService');
+    const reqInputs = allReqsFlat.map((r: any) => ({
+      requirement_key: r.requirement_key || r.key,
+      requirement_text: r.requirement_text || r.text || '',
+      status: r.status,
+      modes: r.modes,
+    }));
+    const unfinishedCount = reqInputs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started' || r.status === 'partial').length;
+    if (unfinishedCount > 0) console.log(`[enrichCapability] ${cap.name}: ${reqInputs.length} reqs (${unfinishedCount} unfinished), mode=${effectiveMode}`);
     executionPlan = generateStepsFromRequirements({
-      requirements: allReqsFlat.map((r: any) => ({
-        requirement_key: r.requirement_key || r.key,
-        requirement_text: r.requirement_text || r.text || '',
-        status: r.status,
-        modes: r.modes,
-      })),
+      requirements: reqInputs,
       gaps: [...(hasBackend ? [] : [{ text: 'Backend services needed', key: 'SYS-BE', gap_type: 'system' }]),
              ...(!hasFrontend ? [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }] : []),
              ...(q.observability === 0 ? [{ text: 'No monitoring', key: 'Q-OBS', gap_type: 'quality' }] : [])],
