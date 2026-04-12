@@ -2359,6 +2359,15 @@ router.put('/api/portal/project/target-mode', requireParticipant, async (req: Re
       );
       overridesCleared = affectedCount;
 
+      // Reset completed_steps on all BPs — mode change means re-evaluation
+      await Capability.update(
+        { last_execution: require('sequelize').literal("last_execution - 'completed_steps'") } as any,
+        { where: { project_id: project.id } },
+      ).catch(() => {
+        // Fallback: clear entire last_execution if JSONB operation fails
+        Capability.update({ last_execution: null } as any, { where: { project_id: project.id } }).catch(() => {});
+      });
+
       // Re-prioritize: sort by gap-to-completion for the new mode
       const allCaps = await Capability.findAll({ where: { project_id: project.id } });
       const capGaps: Array<{ id: string; gap: number; unmatched: number }> = [];
