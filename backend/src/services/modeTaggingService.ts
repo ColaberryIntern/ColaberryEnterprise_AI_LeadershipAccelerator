@@ -79,11 +79,19 @@ const AGENT_MODE_SIGNALS: Record<string, Mode> = {
 // Tagging Logic
 // ---------------------------------------------------------------------------
 
-function modesFromMinLevel(minMode: Mode): Mode[] {
-  const idx = MODE_HIERARCHY.indexOf(minMode);
-  return MODE_HIERARCHY.slice(idx);
-}
-
+/**
+ * Tag text with its MINIMUM required mode level.
+ *
+ * Hierarchy: MVP ⊂ PRODUCTION ⊂ ENTERPRISE ⊂ AUTONOMOUS
+ *
+ * A requirement tagged ['mvp'] = basic, needed even in MVP (shows in ALL modes)
+ * A requirement tagged ['production'] = needed starting at Production (shows in Production+)
+ * A requirement tagged ['enterprise'] = only needed in Enterprise+ (NOT in MVP or Production)
+ * A requirement tagged ['autonomous'] = only needed in Autonomous mode
+ *
+ * The modes array stores the MINIMUM level. The filter at query time includes
+ * everything at or below the current mode.
+ */
 function tagText(text: string): { modes: Mode[]; confidence: number; matchedRules: string[] } {
   const lower = (text || '').toLowerCase();
   const matchedRules: string[] = [];
@@ -101,14 +109,10 @@ function tagText(text: string): { modes: Mode[]; confidence: number; matchedRule
     }
   }
 
-  // Confidence: based on number of keyword matches (more = higher confidence)
   const confidence = Math.min(100, matchCount === 0 ? 30 : 40 + matchCount * 10);
 
-  // The modes array includes the matched level and everything above it
-  // Plus MVP is always included (everything is at least MVP)
-  const modes = [...new Set(['mvp' as Mode, ...modesFromMinLevel(highestMode)])];
-
-  return { modes, confidence, matchedRules };
+  // Store ONLY the minimum mode — the filter uses hierarchy comparison
+  return { modes: [highestMode], confidence, matchedRules };
 }
 
 async function getAgentModeSignals(capabilityId: string): Promise<{ agentMode: Mode | null; agents: string[] }> {
@@ -172,8 +176,10 @@ export async function autoTagModes(options: {
     let finalConfidence = confidence;
 
     if (agentMode) {
-      const agentModes = modesFromMinLevel(agentMode);
-      finalModes = [...new Set([...modes, ...agentModes])].sort((a, b) => MODE_HIERARCHY.indexOf(a) - MODE_HIERARCHY.indexOf(b));
+      // If agent signals suggest a higher minimum mode, use that
+      const agentIdx = MODE_HIERARCHY.indexOf(agentMode);
+      const currentIdx = MODE_HIERARCHY.indexOf(finalModes[0]);
+      if (agentIdx > currentIdx) finalModes = [agentMode];
       finalConfidence = Math.min(100, confidence + agents.length * 10);
       matchedRules.push(`agents(${agents.join(',')})`);
     }

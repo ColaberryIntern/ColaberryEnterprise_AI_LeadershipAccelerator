@@ -1105,16 +1105,22 @@ function enrichCapability(cap: any) {
   const features = cap.features || [];
   let allReqs = features.flatMap((f: any) => f.requirements || []);
 
-  // Mode-aware filtering: only include requirements relevant to the effective mode
+  // Mode-aware filtering: only include requirements at or below the effective mode
+  // Hierarchy: mvp(0) < production(1) < enterprise(2) < autonomous(3)
+  // A req tagged ['mvp'] shows in ALL modes. A req tagged ['enterprise'] shows only in enterprise+autonomous.
+  const MODE_LEVEL: Record<string, number> = { mvp: 0, production: 1, enterprise: 2, autonomous: 3 };
   const effectiveModeForFilter = (cap as any)._effectiveMode || (cap as any)._projectMode || 'production';
-  allReqs = allReqs.filter((r: any) => {
-    if (!r.modes || r.modes.length === 0) return true; // null/empty = all modes
-    return r.modes.includes(effectiveModeForFilter);
-  });
-  // Also update feature requirement arrays so gap calculation uses filtered reqs
+  const currentModeLevel = MODE_LEVEL[effectiveModeForFilter] ?? 1;
+  const modeFilter = (r: any) => {
+    if (!r.modes || r.modes.length === 0) return true; // null/empty = all modes (backward compat)
+    const reqMinMode = r.modes[0]; // modes[0] is the minimum required mode
+    const reqLevel = MODE_LEVEL[reqMinMode] ?? 0;
+    return reqLevel <= currentModeLevel; // include if req's min level <= current mode
+  };
+  allReqs = allReqs.filter(modeFilter);
   for (const f of features) {
     if (f.requirements) {
-      f.requirements = f.requirements.filter((r: any) => !r.modes || r.modes.length === 0 || r.modes.includes(effectiveModeForFilter));
+      f.requirements = f.requirements.filter(modeFilter);
     }
   }
   // Auto-promote or demote requirements based on actual file quality
@@ -1394,11 +1400,14 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       }
     });
 
-    // Mode-aware BP filtering: mark BPs not applicable to current mode
+    // Mode-aware BP filtering: include BPs whose minimum mode <= current project mode
+    const MODE_LEVEL: Record<string, number> = { mvp: 0, production: 1, enterprise: 2, autonomous: 3 };
+    const currentProjectModeLevel = MODE_LEVEL[projectMode] ?? 1;
     const modeFilteredHierarchy = hierarchy.filter((cap: any) => {
-      const capModes = execMap.get(cap.id)?.modes;
+      const capModes = execMap.get(cap.id)?.modes as string[] | null;
       if (!capModes || capModes.length === 0) return true; // null = all modes
-      return capModes.includes(projectMode);
+      const capMinLevel = MODE_LEVEL[capModes[0]] ?? 0;
+      return capMinLevel <= currentProjectModeLevel;
     });
 
     const enriched = modeFilteredHierarchy.map(enrichCapability);
