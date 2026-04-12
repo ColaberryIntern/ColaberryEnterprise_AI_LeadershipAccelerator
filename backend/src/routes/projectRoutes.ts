@@ -1247,12 +1247,18 @@ function enrichCapability(cap: any) {
   const lastExec = (cap as any).last_execution;
   const completedSteps: string[] = lastExec?.completed_steps || [];
   const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
-  // Resolve effective mode: BP override > Project target_mode > 'production'
-  const { resolveMode } = require('../intelligence/profiles/modeResolver');
+  // Resolve effective mode: BP override > Campaign override > Project target_mode > 'production'
+  const { resolveMode, getModeSource } = require('../intelligence/profiles/modeResolver');
   const { getProfile } = require('../intelligence/profiles/executionProfiles');
   const { getStrategy } = require('../intelligence/profiles/strategyTemplates');
   const effectiveMode = resolveMode(
     (cap as any)._projectMode || 'production',
+    (cap as any).mode_override,
+    (cap as any)._campaignMode
+  );
+  const modeSource = getModeSource(
+    (cap as any)._projectMode,
+    (cap as any)._campaignMode,
     (cap as any).mode_override
   );
   const profile = getProfile(effectiveMode);
@@ -1292,7 +1298,9 @@ function enrichCapability(cap: any) {
     })(),
     quality: q,
     effective_mode: effectiveMode,
+    mode_source: modeSource,
     mode_override: (cap as any).mode_override || null,
+    campaign_mode: (cap as any)._campaignMode || null,
     applicability_status: (cap as any).applicability_status || 'active',
     mode_completion: {
       target_maturity: profile.completion_maturity_threshold,
@@ -1340,9 +1348,25 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template'] });
     const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template }]));
     const projectMode = (project as any).target_mode || 'production';
+    // Load campaign mode overrides for capabilities that have linked campaigns
+    let campaignModeMap = new Map<string, string>();
+    try {
+      const { Campaign } = await import('../models');
+      const linkedCampaigns = await Campaign.findAll({
+        where: { capability_id: { [require('sequelize').Op.ne]: null }, status: 'active' },
+        attributes: ['capability_id', 'mode_override'],
+      });
+      for (const c of linkedCampaigns) {
+        if ((c as any).mode_override && (c as any).capability_id) {
+          campaignModeMap.set((c as any).capability_id, (c as any).mode_override);
+        }
+      }
+    } catch { /* campaign mode is optional */ }
+
     hierarchy.forEach((cap: any) => {
       cap._repoFileTree = repoFileTree;
       cap._projectMode = projectMode;
+      cap._campaignMode = campaignModeMap.get(cap.id) || null;
       const extra = execMap.get(cap.id);
       if (extra) {
         cap.last_execution = extra.last_execution;

@@ -6,12 +6,24 @@ import { PROFILES, ProfileName } from './executionProfiles';
 
 /**
  * Resolve the effective mode for a business process.
- * Precedence: BP mode_override > Project target_mode > 'production' default
+ * Precedence: BP mode_override > Campaign mode_override > Project target_mode > 'production' default
  */
-export function resolveMode(projectMode: string | null | undefined, bpOverride?: string | null): ProfileName {
+export function resolveMode(projectMode: string | null | undefined, bpOverride?: string | null, campaignMode?: string | null): ProfileName {
   if (bpOverride && bpOverride in PROFILES) return bpOverride as ProfileName;
+  if (campaignMode && campaignMode in PROFILES) return campaignMode as ProfileName;
   if (projectMode && projectMode in PROFILES) return projectMode as ProfileName;
   return 'production';
+}
+
+/**
+ * Identify which layer is providing the effective mode.
+ * Useful for UI display: "Mode: ENTERPRISE (from Campaign)"
+ */
+export function getModeSource(projectMode?: string | null, campaignMode?: string | null, capabilityMode?: string | null): 'capability' | 'campaign' | 'project' | 'default' {
+  if (capabilityMode && capabilityMode in PROFILES) return 'capability';
+  if (campaignMode && campaignMode in PROFILES) return 'campaign';
+  if (projectMode && projectMode in PROFILES) return 'project';
+  return 'default';
 }
 
 /**

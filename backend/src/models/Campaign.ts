@@ -41,6 +41,7 @@ interface CampaignAttributes {
   expected_roi?: number;
   created_by?: string;
   capability_id?: string;
+  mode_override?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -250,6 +251,10 @@ Campaign.init(
       type: DataTypes.UUID,
       allowNull: true,
       references: { model: 'capabilities', key: 'id' },
+    },
+    mode_override: {
+      type: DataTypes.STRING(20),
+      allowNull: true,  // null = inherit from project
     },
     created_at: {
       type: DataTypes.DATE,

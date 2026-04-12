@@ -368,18 +368,24 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
               }}></div>
             ))}
           </div>
-          {p.effective_mode && (
-            <div className="mb-2 d-flex align-items-center gap-2">
-              <span className="badge" style={{ background: 'var(--color-info, #3b82f6)15', color: 'var(--color-info, #3b82f6)', fontSize: 10 }}>
-                {p.effective_mode} mode{p.mode_override ? ' (override)' : ''}
-              </span>
-              {p.mode_completion?.complete_for_mode ? (
-                <span className="text-success small"><i className="bi bi-check-circle me-1"></i>Complete for {p.effective_mode}</span>
-              ) : p.mode_completion?.gap_reason ? (
-                <span className="text-muted small"><i className="bi bi-arrow-right me-1"></i>{p.mode_completion.gap_reason}</span>
-              ) : null}
-            </div>
-          )}
+          {p.effective_mode && (() => {
+            const sourceLabel = p.mode_source === 'capability' ? 'overridden at process' : p.mode_source === 'campaign' ? 'from campaign' : p.mode_source === 'project' ? 'from project' : 'default';
+            const sourceIcon = p.mode_source === 'capability' ? 'bi-gear' : p.mode_source === 'campaign' ? 'bi-megaphone' : 'bi-folder';
+            return (
+              <div className="mb-2 d-flex align-items-center gap-2 flex-wrap">
+                <span className="badge" style={{ background: 'var(--color-info, #3b82f6)15', color: 'var(--color-info, #3b82f6)', fontSize: 10 }}>
+                  <i className={`bi ${sourceIcon} me-1`}></i>
+                  {p.effective_mode.toUpperCase()} mode
+                </span>
+                <span className="text-muted" style={{ fontSize: 9 }}>{sourceLabel}</span>
+                {p.mode_completion?.complete_for_mode ? (
+                  <span className="text-success small"><i className="bi bi-check-circle me-1"></i>Complete</span>
+                ) : p.mode_completion?.gap_reason ? (
+                  <span className="text-muted small"><i className="bi bi-arrow-right me-1"></i>{p.mode_completion.gap_reason}</span>
+                ) : null}
+              </div>
+            );
+          })()}
           {mat.mode_gap && (
             <div className="mb-2 small" style={{ color: 'var(--color-warning)' }}>
               <i className="bi bi-arrow-up-right me-1"></i>{mat.mode_gap}

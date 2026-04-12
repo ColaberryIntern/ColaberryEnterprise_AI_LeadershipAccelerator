@@ -105,6 +105,25 @@ router.post('/api/admin/campaigns/:id/generate-icp', requireAdmin, handleGenerat
 router.post('/api/admin/campaigns/:id/reverse-engineer', requireAdmin, handleReverseEngineer);
 router.post('/api/admin/campaigns/:id/rebuild', requireAdmin, handleRebuildCampaign);
 
+// Campaign Mode Override
+router.patch('/api/admin/campaigns/:id/mode', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { mode } = req.body;
+    // Validate: null (inherit) or valid mode
+    if (mode !== null && mode !== undefined) {
+      const { getProfile } = await import('../../intelligence/profiles/executionProfiles');
+      const profile = getProfile(mode);
+      if (!profile || profile.name !== mode) { res.status(400).json({ error: `Invalid mode: ${mode}` }); return; }
+    }
+    const { Campaign } = await import('../../models');
+    const campaign = await Campaign.findByPk(req.params.id as string);
+    if (!campaign) { res.status(404).json({ error: 'Campaign not found' }); return; }
+    (campaign as any).mode_override = mode || null;
+    await campaign.save();
+    res.json({ id: campaign.id, mode_override: (campaign as any).mode_override });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ICP Profiles
 router.get('/api/admin/icp-profiles', requireAdmin, handleListICPProfiles);
 router.post('/api/admin/icp-profiles', requireAdmin, handleCreateICPProfile);
