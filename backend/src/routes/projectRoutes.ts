@@ -1313,7 +1313,7 @@ function enrichCapability(cap: any) {
              ...(!hasFrontend ? [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }] : []),
              ...(q.observability === 0 ? [{ text: 'No monitoring', key: 'Q-OBS', gap_type: 'quality' }] : [])],
       mode: effectiveMode,
-      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: modelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels },
+      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: modelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels, repoFileTree: repoTree },
       completedSteps,
       maxSteps: 8,
     });
@@ -2461,11 +2461,29 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
       const { fullSync } = await import('../services/githubService');
       await fullSync(req.participant!.sub);
     } catch { /* non-critical */ }
+    const report = req.body.report || '';
+
+    // Detect "already complete" reports — auto-verify all requirements for this BP
+    const reportLower = report.toLowerCase();
+    const isAlreadyComplete = reportLower.includes('status: complete') ||
+      reportLower.includes('all requirements already covered') ||
+      reportLower.includes('no code changes needed') ||
+      (reportLower.includes('previously implemented') && reportLower.includes('complete'));
+
+    if (isAlreadyComplete) {
+      const { RequirementsMap } = await import('../models');
+      const [affectedCount] = await RequirementsMap.update(
+        { status: 'verified', verified_by: 'sync_complete', confidence_score: 1.0 } as any,
+        { where: { project_id: project.id, capability_id: req.params.id as string, status: { [require('sequelize').Op.in]: ['unmatched', 'not_started', 'partial'] } } },
+      );
+      console.log(`[Sync] Auto-verified ${affectedCount} requirements for BP ${req.params.id} — report indicates already complete`);
+    }
+
     const { reconcileAfterExecution } = await import('../intelligence/execution/reconciliationEngine');
     const result = await reconcileAfterExecution(
-      req.participant!.sub, project.id, req.params.id as string, req.body.report || ''
+      req.participant!.sub, project.id, req.params.id as string, report
     );
-    res.json(result);
+    res.json({ ...result, auto_verified: isAlreadyComplete });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

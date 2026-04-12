@@ -57,6 +57,35 @@ interface SystemContext {
   projectHasFrontend?: boolean;
   projectHasAgents?: boolean;
   projectHasModels?: boolean;
+  // Full repo file tree for cross-referencing what's already built
+  repoFileTree?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Repo Cross-Reference: check if a requirement is likely already implemented
+// ---------------------------------------------------------------------------
+
+const STOPWORDS = new Set(['the', 'a', 'an', 'is', 'are', 'and', 'or', 'for', 'to', 'in', 'of', 'on', 'with', 'that', 'this', 'be', 'as', 'by', 'at', 'it', 'must', 'should', 'will', 'can', 'all', 'each', 'from', 'have', 'has', 'not', 'use', 'using', 'need', 'ensure', 'provide', 'support', 'system', 'create', 'manage']);
+
+function isLikelyCoveredByRepo(reqText: string, repoFiles: string[]): boolean {
+  if (!repoFiles || repoFiles.length === 0) return false;
+  const lower = (reqText || '').toLowerCase();
+  // Extract meaningful keywords from requirement (3+ chars, not stopwords)
+  const reqKeywords = lower.split(/\W+/).filter(w => w.length > 3 && !STOPWORDS.has(w));
+  if (reqKeywords.length === 0) return false;
+
+  // Check if repo filenames contain enough matching keywords
+  const fileNames = repoFiles.map(f => (f.split('/').pop() || '').toLowerCase().replace(/\.(ts|tsx|js|jsx)$/, ''));
+  const fileTokens = new Set(fileNames.flatMap(n => n.split(/[_\-./]+/).filter(t => t.length > 3)));
+
+  // Count keyword overlaps
+  const matchedKeywords = reqKeywords.filter(kw =>
+    fileTokens.has(kw) || [...fileTokens].some(ft => (ft.length > 4 && kw.length > 4 && (ft.includes(kw) || kw.includes(ft))))
+  );
+
+  // If 40%+ of requirement keywords match file tokens, it's likely covered
+  const ratio = matchedKeywords.length / reqKeywords.length;
+  return ratio >= 0.4 && matchedKeywords.length >= 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,9 +169,13 @@ export function generateStepsFromRequirements(options: {
   const completed = new Set(completedSteps);
 
   // 1. Filter to unfinished requirements only
-  const unfinished = requirements.filter(r =>
-    r.status === 'unmatched' || r.status === 'not_started' || r.status === 'partial'
-  );
+  const repoFiles = systemContext.repoFileTree || [];
+  const unfinished = requirements.filter(r => {
+    if (r.status !== 'unmatched' && r.status !== 'not_started' && r.status !== 'partial') return false;
+    // Cross-reference with repo: if the requirement text matches existing files, skip it
+    if (repoFiles.length > 0 && isLikelyCoveredByRepo(r.requirement_text, repoFiles)) return false;
+    return true;
+  });
 
   console.log(`[StepService] Input: ${requirements.length} reqs, ${unfinished.length} unfinished, ${gaps.length} gaps, mode=${mode}, completed=[${completedSteps.join(',')}]`);
   if (unfinished.length === 0 && gaps.length === 0) { console.log('[StepService] Empty: no unfinished reqs or gaps'); return []; }
