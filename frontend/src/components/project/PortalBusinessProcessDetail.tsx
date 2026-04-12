@@ -287,7 +287,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
               <div className="p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
                 <i className="bi bi-layout-wtf d-block mb-2" style={{ fontSize: 24, color: 'var(--color-text-light)' }}></i>
                 <div className="fw-medium small mb-2">Frontend files detected — connect a preview URL to see it live</div>
-                <div className="d-flex gap-2 justify-content-center">
+                <div className="d-flex gap-2 justify-content-center align-items-center flex-wrap">
                   <input className="form-control form-control-sm" style={{ maxWidth: 300, fontSize: 11 }}
                     placeholder="https://your-app.vercel.app" value={previewUrlInput}
                     onChange={e => setPreviewUrlInput(e.target.value)} />
@@ -295,11 +295,23 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     try {
                       const portalApi = (await import('../../utils/portalApi')).default;
                       await portalApi.put('/api/portal/project/preview-url', { url: previewUrlInput.trim() });
-                      load(); // reload to get new preview_url
+                      load();
                     } catch {}
                   }}>
                     <i className="bi bi-link-45deg me-1"></i>Connect
                   </button>
+                  {repoUrl && (
+                    <>
+                      <span className="text-muted" style={{ fontSize: 10 }}>or</span>
+                      <a
+                        href={`https://vercel.com/new/clone?repository-url=${encodeURIComponent(repoUrl)}&root-directory=frontend`}
+                        target="_blank" rel="noopener noreferrer"
+                        className="btn btn-sm btn-dark" style={{ fontSize: 10 }}
+                      >
+                        <i className="bi bi-box-arrow-up-right me-1"></i>Deploy to Vercel
+                      </a>
+                    </>
+                  )}
                 </div>
               </div>
             )}
