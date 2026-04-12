@@ -177,7 +177,10 @@ export function generateStepsFromRequirements(options: {
     return true;
   });
 
-  console.log(`[StepService] Input: ${requirements.length} reqs, ${unfinished.length} unfinished, ${gaps.length} gaps, mode=${mode}, completed=[${completedSteps.join(',')}]`);
+  // Check for system-level gaps (missing layers) — these ALWAYS generate steps
+  const systemGaps = gaps.filter(g => g.gap_type === 'system');
+  const qualityGaps = gaps.filter(g => g.gap_type === 'quality');
+  console.log(`[StepService] Input: ${requirements.length} reqs, ${unfinished.length} unfinished, ${systemGaps.length} system gaps, ${qualityGaps.length} quality gaps, mode=${mode}`);
   if (unfinished.length === 0 && gaps.length === 0) { console.log('[StepService] Empty: no unfinished reqs or gaps'); return []; }
 
   // 2. Classify each requirement
@@ -223,7 +226,13 @@ export function generateStepsFromRequirements(options: {
     };
     const stepKey = keyMap[category];
 
-    if (completed.has(stepKey)) continue;
+    // System gaps (missing layers) override completed_steps — if the layer is actually missing,
+    // the step must show even if previously marked completed
+    const hasSystemGap = systemGaps.some(g =>
+      (g.key === 'SYS-BE' && category === 'backend') ||
+      (g.key === 'SYS-FE' && category === 'frontend')
+    );
+    if (completed.has(stepKey) && !hasSystemGap) continue;
 
     // Skip "Build X" steps if the project already has that layer in the repo
     // This prevents recommending "Build Backend" when backend services already exist
