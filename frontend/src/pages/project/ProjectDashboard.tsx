@@ -935,46 +935,96 @@ function ProjectSystemPromptCard() {
 // ---------------------------------------------------------------------------
 // Next Business Process Action — shows top priority process to work on
 // ---------------------------------------------------------------------------
-function NextBusinessProcessAction({ onNavigate }: { onNavigate: () => void }) {
+function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: () => void; onModeChange?: () => void }) {
   const [topProcess, setTopProcess] = useState<any>(null);
+  const [mode, setMode] = useState<string>('production');
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     portalApi.get('/api/portal/project/business-processes')
       .then(res => {
         const procs = res.data || [];
-        // Find first incomplete process (already sorted by priority from backend)
         const next = procs.find((p: any) => !p.is_complete && (p.applicability_status || 'active') === 'active') || procs[0] || null;
         setTopProcess(next);
+        if (procs.length > 0 && procs[0].effective_mode) setMode(procs[0].effective_mode);
       })
       .catch(() => {});
   }, []);
 
-  if (!topProcess) return null;
+  const handleModeChange = async (newMode: string) => {
+    if (newMode === mode) return;
+    setSaving(true);
+    try {
+      await portalApi.put('/api/portal/project/target-mode', { mode: newMode, cascade: true });
+      setMode(newMode);
+      if (onModeChange) onModeChange();
+    } catch {} finally { setSaving(false); }
+  };
 
-  const m = topProcess.metrics || {};
-  const mat = topProcess.maturity || {};
+  const modes = [
+    { value: 'mvp', label: 'MVP', icon: 'bi-lightning' },
+    { value: 'production', label: 'Production', icon: 'bi-server' },
+    { value: 'enterprise', label: 'Enterprise', icon: 'bi-building' },
+    { value: 'autonomous', label: 'Autonomous', icon: 'bi-robot' },
+  ];
+
+  const m = topProcess?.metrics || {};
+  const mat = topProcess?.maturity || {};
   const readiness = m.system_readiness || 0;
-  const u = topProcess.usability || {};
+  const u = topProcess?.usability || {};
 
   return (
-    <div className="card border-0 shadow-sm mb-4">
+    <div className="card border-0 shadow-sm mb-3">
       <div className="card-body p-3">
-        <div className="d-flex justify-content-between align-items-start">
-          <div>
-            <div className="text-muted small mb-1">
-              <i className="bi bi-flag me-1"></i>Next Business Process
-              {topProcess.priority_rank && <span className="badge bg-primary ms-2" style={{ fontSize: 9 }}>#{topProcess.priority_rank}</span>}
+        <div className="row g-3 align-items-center">
+          {/* Left: Next BP */}
+          <div className="col-lg-6">
+            {topProcess ? (
+              <div className="d-flex justify-content-between align-items-start">
+                <div>
+                  <div className="text-muted small mb-1">
+                    <i className="bi bi-flag me-1"></i>Next Business Process
+                    {topProcess.priority_rank && <span className="badge bg-primary ms-2" style={{ fontSize: 9 }}>#{topProcess.priority_rank}</span>}
+                  </div>
+                  <h6 className="fw-bold mb-1" style={{ color: 'var(--color-primary)', fontSize: 14 }}>{topProcess.name}</h6>
+                  <div className="d-flex gap-2 flex-wrap text-muted" style={{ fontSize: 10 }}>
+                    <span>{topProcess.total_requirements || 0} reqs</span>
+                    <span>Readiness: {readiness}%</span>
+                    <span>L{mat.level || 1}</span>
+                    <span style={{ color: u.usable ? '#10b981' : '#ef4444' }}>{u.usable ? 'Ready' : 'Not Ready'}</span>
+                  </div>
+                </div>
+                <button className="btn btn-sm btn-primary" onClick={onNavigate}>
+                  <i className="bi bi-arrow-right me-1"></i>Start Work
+                </button>
+              </div>
+            ) : (
+              <div className="text-muted small">Loading next process...</div>
+            )}
+          </div>
+          {/* Right: Mode Slider */}
+          <div className="col-lg-6">
+            <div className="text-muted mb-1" style={{ fontSize: 10 }}>
+              <i className="bi bi-sliders me-1"></i>Project Target Mode
             </div>
-            <h6 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>{topProcess.name}</h6>
-            <div className="d-flex gap-3 text-muted" style={{ fontSize: 11 }}>
-              <span>{topProcess.total_requirements || 0} requirements</span>
-              <span>Readiness: {readiness}%</span>
-              <span>L{mat.level || 1} {mat.label || 'Prototype'}</span>
-              <span style={{ color: u.usable ? '#10b981' : '#ef4444' }}>{u.usable ? 'Usable' : 'Not Ready'}</span>
+            <div className="d-flex gap-1">
+              {modes.map(md => {
+                const active = mode === md.value;
+                return (
+                  <button
+                    key={md.value}
+                    className={`btn btn-sm flex-fill ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
+                    style={{ fontSize: 10, padding: '4px 6px', lineHeight: 1.2 }}
+                    onClick={() => handleModeChange(md.value)}
+                    disabled={saving}
+                  >
+                    <i className={`bi ${md.icon} me-1`}></i>{md.label}
+                    {active && <i className="bi bi-check-lg ms-1"></i>}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <button className="btn btn-sm btn-primary" onClick={onNavigate}>
-            <i className="bi bi-arrow-right me-1"></i>Start Work
-          </button>
         </div>
       </div>
     </div>
@@ -1056,11 +1106,8 @@ function ProjectDashboard() {
 
       <ProjectProgress currentStage={project.project_stage} />
 
-      {/* Next Action: highest priority business process */}
-      <NextBusinessProcessAction key={`nba-${refreshKey}`} onNavigate={() => setActiveTab('business-processes')} />
-
-      {/* Mode Selector — visible on all tabs */}
-      <ProjectModeSelector onModeChange={triggerRefresh} />
+      {/* Next BP + Mode Slider — visible on all tabs */}
+      <NextBusinessProcessAction key={`nba-${refreshKey}`} onNavigate={() => setActiveTab('business-processes')} onModeChange={triggerRefresh} />
 
       <nav className="nav nav-tabs mb-4">
         {tabs.map(t => (
