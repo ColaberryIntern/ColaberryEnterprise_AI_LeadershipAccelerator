@@ -1898,6 +1898,36 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       }
     }
 
+    // 2c. Smart verification: use LLM to catch what keyword matching missed
+    const stillUnmatched = processReqs.filter(r => r.status === 'unmatched' || r.status === 'partial');
+    if (stillUnmatched.length > 0 && fileTree.length > 0) {
+      try {
+        const { verifyUnmatchedWithLLM } = await import('../services/smartRequirementVerifier');
+        const verification = await verifyUnmatchedWithLLM(
+          stillUnmatched.map(r => ({ id: r.id, requirement_key: r.requirement_key, requirement_text: r.requirement_text || '' })),
+          fileTree,
+          processCap?.name || 'this process',
+        );
+        if (verification.verified.length > 0) {
+          for (const v of verification.verified) {
+            const req2 = processReqs.find(r => r.id === v.id);
+            if (req2 && (req2.status === 'unmatched' || req2.status === 'partial')) {
+              req2.status = 'matched';
+              req2.github_file_paths = v.matched_files.slice(0, 5);
+              req2.confidence_score = 0.85;
+              req2.verified_by = 'llm_verification';
+              await req2.save();
+              if (req2.status === 'unmatched') unmatched--;
+              matched++;
+            }
+          }
+          console.log(`[Resync] LLM verified ${verification.verified.length} additional requirements for "${processCap?.name}"`);
+        }
+      } catch (llmErr: any) {
+        console.error('[Resync] Smart verification failed:', llmErr?.message);
+      }
+    }
+
     // 3. Run reconciliation (without validation report — just graph rebuild + recalculate)
     const { reconcileAfterExecution } = await import('../intelligence/execution/reconciliationEngine');
     const result = await reconcileAfterExecution(
