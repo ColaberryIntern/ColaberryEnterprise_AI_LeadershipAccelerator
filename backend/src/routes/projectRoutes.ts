@@ -1191,8 +1191,30 @@ function enrichCapability(cap: any) {
   // Merge with existing agent detection
   const combinedAgentFiles = [...new Set([...agentFiles, ...processAgentFiles])];
 
+  // Also check FULL repo file tree for frontend files matching this process name
+  // This catches pages like "frontend/app/campaigns/page.tsx" for "Campaign Planning" BP
+  const processFrontendFiles = repoTree.filter((f: string) => {
+    const name = (f.split('/').pop() || '').toLowerCase();
+    if (!name.endsWith('.tsx') && !name.endsWith('.jsx')) return false;
+    if (name === 'layout.tsx' || name === 'globals.css' || name.startsWith('[')) return false;
+    // Must be in frontend/ or app/ or pages/ or components/ directory
+    if (!(f.includes('frontend/') || f.includes('/app/') || f.includes('/pages/') || f.includes('/components/'))) return false;
+    // Match by: process name stems in the file path (not just filename)
+    const pathLower = f.toLowerCase();
+    return processNameStems.some((stem: string) => stem.length >= 4 && pathLower.includes(stem));
+  });
+  // Also include ALL frontend page files if the process name is generic enough
+  // (e.g., for projects with a clear frontend/ directory)
+  const allRepoFrontendFiles = repoTree.filter((f: string) => {
+    const name = (f.split('/').pop() || '').toLowerCase();
+    return (f.includes('frontend/') || f.includes('/app/') || f.includes('/pages/')) &&
+      (name.endsWith('.tsx') || name.endsWith('.jsx')) &&
+      name !== 'layout.tsx' && !name.startsWith('[') && name !== 'globals.css';
+  });
+  const combinedFrontendFiles = [...new Set([...frontendFiles, ...processFrontendFiles])];
+
   const hasBackend = backendFiles.length > 0;
-  const hasFrontend = frontendFiles.length > 0;
+  const hasFrontend = combinedFrontendFiles.length > 0 || allRepoFrontendFiles.length > 0;
   const hasAgents = combinedAgentFiles.length > 0;
 
   // Project-level layer detection from full repo file tree
@@ -1377,7 +1399,7 @@ function enrichCapability(cap: any) {
     is_complete: processComplete,
     execution_plan: executionPlan,
     usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
-    implementation_links: { backend: backendFiles, frontend: frontendFiles, agents: combinedAgentFiles, models: modelFiles },
+    implementation_links: { backend: backendFiles, frontend: combinedFrontendFiles.length > 0 ? combinedFrontendFiles : allRepoFrontendFiles, agents: combinedAgentFiles, models: modelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
   };
 }
