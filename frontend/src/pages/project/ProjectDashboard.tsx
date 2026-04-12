@@ -1004,25 +1004,35 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
           </div>
           {/* Right: Mode Slider */}
           <div className="col-lg-6">
-            <div className="text-muted mb-1" style={{ fontSize: 10 }}>
-              <i className="bi bi-sliders me-1"></i>Project Target Mode
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <span className="text-muted" style={{ fontSize: 10 }}><i className="bi bi-sliders me-1"></i>Project Target Mode</span>
+              <span className="fw-semibold" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                <i className={`bi ${modes.find(md => md.value === mode)?.icon || 'bi-server'} me-1`}></i>
+                {modes.find(md => md.value === mode)?.label || 'Production'}
+              </span>
             </div>
-            <div className="d-flex gap-1">
-              {modes.map(md => {
-                const active = mode === md.value;
-                return (
-                  <button
-                    key={md.value}
-                    className={`btn btn-sm flex-fill ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
-                    style={{ fontSize: 10, padding: '4px 6px', lineHeight: 1.2 }}
-                    onClick={() => handleModeChange(md.value)}
-                    disabled={saving}
-                  >
-                    <i className={`bi ${md.icon} me-1`}></i>{md.label}
-                    {active && <i className="bi bi-check-lg ms-1"></i>}
-                  </button>
-                );
-              })}
+            <div style={{ position: 'relative', padding: '0 4px' }}>
+              <input
+                type="range"
+                min={0}
+                max={3}
+                step={1}
+                value={modes.findIndex(md => md.value === mode)}
+                onChange={(e) => handleModeChange(modes[parseInt(e.target.value)].value)}
+                disabled={saving}
+                style={{ width: '100%', accentColor: 'var(--color-primary)', cursor: saving ? 'wait' : 'pointer' }}
+              />
+              <div className="d-flex justify-content-between" style={{ marginTop: -2 }}>
+                {modes.map((md, i) => {
+                  const active = mode === md.value;
+                  return (
+                    <span key={md.value} style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? 'var(--color-primary)' : 'var(--color-text-light)', cursor: 'pointer', userSelect: 'none' }}
+                      onClick={() => handleModeChange(md.value)}>
+                      {md.label}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
