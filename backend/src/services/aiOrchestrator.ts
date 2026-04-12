@@ -158,6 +158,8 @@ export async function runHealthScans(): Promise<void> {
 async function runAgent(
   agentName: string,
   executor: (agentId: string, config: Record<string, any>) => Promise<AgentExecutionResult>,
+  modeContext?: import('./agentExecutionWrapper').ModeAwareContext,
+  agentCapability?: string,
 ): Promise<AgentExecutionResult | null> {
   const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
   if (!agent) {
@@ -181,7 +183,16 @@ async function runAgent(
   try {
     await agent.update({ status: 'running', updated_at: new Date() });
 
-    const result = await executor(agent.id, agent.config || {});
+    // Mode-aware execution: wrap executor if mode is present
+    let effectiveExecutor = executor;
+    if (modeContext?.mode) {
+      try {
+        const { wrapExecutor } = require('./agentExecutionWrapper');
+        effectiveExecutor = wrapExecutor(executor, modeContext, agentCapability);
+      } catch { /* wrapper is optional — fall back to original */ }
+    }
+
+    const result = await effectiveExecutor(agent.id, agent.config || {});
 
     const durationMs = Date.now() - startTime;
     const newAvg = agent.avg_duration_ms
@@ -218,6 +229,7 @@ async function runAgent(
         trigger: 'cron',
         schedule: agent.schedule,
         campaigns_processed: result.campaigns_processed,
+        ...(modeContext?.mode ? { mode: modeContext.mode, mode_source: modeContext.modeSource || 'default' } : {}),
       },
       details: {
         actions_taken: result.actions_taken.length,
