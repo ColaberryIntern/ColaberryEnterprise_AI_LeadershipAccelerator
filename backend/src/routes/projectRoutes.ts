@@ -1103,7 +1103,20 @@ router.get('/api/portal/project/workstation-context', requireParticipant, async 
 const NOISE_FILES_SET = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md', 'package-lock.json']);
 function enrichCapability(cap: any) {
   const features = cap.features || [];
-  const allReqs = features.flatMap((f: any) => f.requirements || []);
+  let allReqs = features.flatMap((f: any) => f.requirements || []);
+
+  // Mode-aware filtering: only include requirements relevant to the effective mode
+  const effectiveModeForFilter = (cap as any)._effectiveMode || (cap as any)._projectMode || 'production';
+  allReqs = allReqs.filter((r: any) => {
+    if (!r.modes || r.modes.length === 0) return true; // null/empty = all modes
+    return r.modes.includes(effectiveModeForFilter);
+  });
+  // Also update feature requirement arrays so gap calculation uses filtered reqs
+  for (const f of features) {
+    if (f.requirements) {
+      f.requirements = f.requirements.filter((r: any) => !r.modes || r.modes.length === 0 || r.modes.includes(effectiveModeForFilter));
+    }
+  }
   // Auto-promote or demote requirements based on actual file quality
   const IMPL_PATTERNS = [/service/i, /route/i, /controller/i, /models?\//i, /\.tsx$/, /agent/i, /middleware/i, /component/i, /page/i];
   for (const r of allReqs) {
@@ -1345,8 +1358,8 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     } catch {}
     // Inject last_execution from Capability models (hierarchy doesn't include JSONB fields)
     const { Capability: CapabilityModel } = await import('../models');
-    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template'] });
-    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template }]));
+    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes'] });
+    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes }]));
     const projectMode = (project as any).target_mode || 'production';
     // Load campaign mode overrides for capabilities that have linked campaigns
     let campaignModeMap = new Map<string, string>();
@@ -1367,6 +1380,10 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       cap._repoFileTree = repoFileTree;
       cap._projectMode = projectMode;
       cap._campaignMode = campaignModeMap.get(cap.id) || null;
+      // Pre-resolve effective mode for filtering (BP override > Campaign > Project)
+      const capModeOverride = execMap.get(cap.id)?.mode_override;
+      const capCampaignMode = campaignModeMap.get(cap.id);
+      cap._effectiveMode = capModeOverride || capCampaignMode || projectMode || 'production';
       const extra = execMap.get(cap.id);
       if (extra) {
         cap.last_execution = extra.last_execution;
@@ -1376,7 +1393,17 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         cap.strategy_template = extra.strategy_template || 'default';
       }
     });
-    const enriched = hierarchy.map(enrichCapability);
+
+    // Mode-aware BP filtering: mark BPs not applicable to current mode
+    const modeFilteredHierarchy = hierarchy.filter((cap: any) => {
+      const capModes = execMap.get(cap.id)?.modes;
+      if (!capModes || capModes.length === 0) return true; // null = all modes
+      return capModes.includes(projectMode);
+    });
+
+    const enriched = modeFilteredHierarchy.map(enrichCapability);
+    // Track how many were filtered out
+    const filteredOutCount = hierarchy.length - modeFilteredHierarchy.length;
 
     // Graph-based prioritization
     try {
@@ -2398,6 +2425,18 @@ router.post('/api/portal/project/business-processes/reclassify', requireParticip
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { groupRequirements } = await import('../intelligence/requirements/requirementGrouper');
     const result = await groupRequirements(project.id);
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Auto-Tag Modes: assign mode arrays to BPs + requirements ────────
+router.post('/api/portal/project/auto-tag-modes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { dryRun, overwrite } = req.body;
+    const { autoTagModes } = await import('../services/modeTaggingService');
+    const result = await autoTagModes({ projectId: project.id, dryRun: !!dryRun, overwrite: !!overwrite });
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

@@ -31,6 +31,7 @@ export interface CapabilityAttributes {
   mode_override?: string;
   applicability_status?: string;
   department_id?: string;
+  modes?: string[];
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -89,6 +90,7 @@ Capability.init(
     mode_override: { type: DataTypes.STRING(20), allowNull: true },
     applicability_status: { type: DataTypes.STRING(20), defaultValue: 'active' },
     department_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'departments', key: 'id' } },
+    modes: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },  // null = all modes; ['mvp','production'] = only those
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

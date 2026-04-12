@@ -23,6 +23,7 @@ export interface RequirementsMapAttributes {
   capability_id?: string | null;
   feature_id?: string | null;
   is_active?: boolean;
+  modes?: string[];
   created_at?: Date;
   updated_at?: Date;
 }
@@ -142,6 +143,7 @@ RequirementsMap.init(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    modes: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },  // null = all modes
   },
   {
     sequelize,

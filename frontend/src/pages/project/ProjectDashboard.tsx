@@ -1059,6 +1059,9 @@ function ProjectDashboard() {
       {/* Next Action: highest priority business process */}
       <NextBusinessProcessAction key={`nba-${refreshKey}`} onNavigate={() => setActiveTab('business-processes')} />
 
+      {/* Mode Selector — visible on all tabs */}
+      <ProjectModeSelector onModeChange={triggerRefresh} />
+
       <nav className="nav nav-tabs mb-4">
         {tabs.map(t => (
           <button
@@ -1073,8 +1076,6 @@ function ProjectDashboard() {
 
       {activeTab === 'overview' && (
         <>
-          {/* Project Mode Selector */}
-          <ProjectModeSelector onModeChange={triggerRefresh} />
           {/* KPI Bar — merged from Readiness */}
           <ReadinessKPIBar key={`kpi-${refreshKey}`} />
           <ProjectSystemPromptCard />
