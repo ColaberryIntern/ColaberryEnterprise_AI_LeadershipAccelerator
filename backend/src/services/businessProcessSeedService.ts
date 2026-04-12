@@ -89,6 +89,15 @@ const PLATFORM_PROCESSES = [
     strength_scores: { determinism: 65, reliability: 70, observability: 75, ux_exposure: 60, automation: 55, ai_maturity: 50, human_dependency: 40 },
     autonomy_level: 'assisted',
   },
+  {
+    name: 'Analytics and Reporting',
+    description: 'Business intelligence, KPI tracking, insight discovery, executive briefings, campaign analytics, visitor analytics, and predictive forecasting.',
+    linked_agents: ['insight_discovery', 'trend_analysis', 'narrative_agent', 'executive_briefing', 'agent_performance_analytics', 'revenue_opportunity', 'knowledge_graph_builder'],
+    linked_backend_services: ['kpiService', 'insightDiscoveryService', 'narrativeService', 'predictiveAnalyticsService', 'campaignAnalyticsService', 'visitorAnalyticsService', 'dashboardService', 'agentPerformanceService'],
+    linked_frontend_components: ['IntelligenceOSPage', 'IntelligenceAnalyticsGrid', 'ChartRenderer', 'MapsTab'],
+    strength_scores: { determinism: 75, reliability: 80, observability: 90, ux_exposure: 85, automation: 80, ai_maturity: 75, human_dependency: 25 },
+    autonomy_level: 'supervised',
+  },
 ];
 
 export async function seedBusinessProcesses(): Promise<{ created: number; skipped: number }> {
