@@ -107,6 +107,15 @@ const PLATFORM_PROCESSES = [
     strength_scores: { determinism: 80, reliability: 75, observability: 85, ux_exposure: 50, automation: 70, ai_maturity: 55, human_dependency: 35 },
     autonomy_level: 'supervised',
   },
+  {
+    name: 'Marketing and Outreach',
+    description: 'Multi-channel marketing campaigns, cold outreach sequences, ICP-based lead discovery, email/SMS/voice orchestration, LinkedIn engagement, and marketing funnel analytics.',
+    linked_agents: ['campaign_orchestrator', 'content_generation', 'ab_test_agent', 'apollo_lead_intelligence', 'openclaw_supervisor'],
+    linked_backend_services: ['campaignService', 'emailService', 'campaignAnalyticsService', 'leadIntelligenceService', 'contentGenerationService', 'marketingFunnelGraphService'],
+    linked_frontend_components: ['CampaignsPage', 'CampaignDetailPage', 'MarketingFunnelPage', 'OpenclawPage'],
+    strength_scores: { determinism: 75, reliability: 75, observability: 80, ux_exposure: 85, automation: 85, ai_maturity: 70, human_dependency: 25 },
+    autonomy_level: 'supervised',
+  },
 ];
 
 export async function seedBusinessProcesses(): Promise<{ created: number; skipped: number }> {
