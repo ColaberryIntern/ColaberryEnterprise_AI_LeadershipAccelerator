@@ -17,6 +17,7 @@ export interface FeatureNode {
 export interface RequirementNode {
   id: string; key: string; text: string; status: string; is_active: boolean;
   github_file_paths: string[]; confidence_score: number;
+  modes?: string[] | null; verified_by?: string | null;
 }
 
 export async function getCapabilityHierarchy(projectId: string): Promise<CapabilityNode[]> {
@@ -35,6 +36,8 @@ export async function getCapabilityHierarchy(projectId: string): Promise<Capabil
         is_active: r.is_active !== false,
         github_file_paths: r.github_file_paths || [],
         confidence_score: r.confidence_score || 0,
+        modes: (r as any).modes || null,
+        verified_by: (r as any).verified_by || null,
       }));
 
       const active = reqNodes.filter(r => r.is_active);
