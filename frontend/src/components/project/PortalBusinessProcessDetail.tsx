@@ -266,8 +266,8 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           ) : <div className="text-muted small"><i className="bi bi-info-circle me-1"></i>No implementations detected. Run "Match to Repo" on Requirements tab.</div>}
         </Section>
 
-        {/* 3a: Frontend Preview & Feedback */}
-        {(links.frontend?.length > 0 || p.preview_url) && (
+        {/* 3a: Frontend Preview & Feedback — only show when THIS BP has frontend files */}
+        {links.frontend?.length > 0 && (
           <Section num={3.1} title="Frontend Preview" collapsible defaultOpen>
             {p.preview_url ? (
               <>
@@ -379,7 +379,21 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   )}
                   {uiSuggestions.prompt && (
                     <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => {
-                      navigator.clipboard.writeText(uiSuggestions.prompt);
+                      const text = uiSuggestions.prompt;
+                      const copyFallback = () => {
+                        const ta = document.createElement('textarea');
+                        ta.value = text;
+                        ta.style.cssText = 'position:fixed;left:-9999px';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                      };
+                      if (navigator.clipboard?.writeText) {
+                        navigator.clipboard.writeText(text).catch(copyFallback);
+                      } else {
+                        copyFallback();
+                      }
                       const el = document.createElement('div');
                       el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Prompt copied — paste into Claude Code</div>';
                       document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
