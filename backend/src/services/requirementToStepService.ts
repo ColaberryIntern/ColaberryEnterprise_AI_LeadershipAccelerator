@@ -139,8 +139,8 @@ export function generateStepsFromRequirements(options: {
     r.status === 'unmatched' || r.status === 'not_started' || r.status === 'partial'
   );
 
-  console.log(`[StepService] Input: ${requirements.length} reqs, ${unfinished.length} unfinished, ${gaps.length} gaps, mode=${mode}`);
-  if (unfinished.length === 0 && gaps.length === 0) return [];
+  console.log(`[StepService] Input: ${requirements.length} reqs, ${unfinished.length} unfinished, ${gaps.length} gaps, mode=${mode}, completed=[${completedSteps.join(',')}]`);
+  if (unfinished.length === 0 && gaps.length === 0) { console.log('[StepService] Empty: no unfinished reqs or gaps'); return []; }
 
   // 2. Classify each requirement
   const classified = unfinished.map(r => ({
@@ -224,6 +224,17 @@ export function generateStepsFromRequirements(options: {
   // 6. Number steps and limit
   const limited = steps.slice(0, maxSteps);
   limited.forEach((s, i) => { s.step = i + 1; });
+
+  console.log(`[StepService] Output: ${limited.length} steps from ${groups.size} categories`);
+  if (limited.length === 0 && unfinished.length > 0) {
+    console.log(`[StepService] WARNING: ${unfinished.length} unfinished reqs but 0 steps generated. Completed keys: [${completedSteps.join(',')}]`);
+    // List what categories were found
+    for (const [cat, reqs] of groups) {
+      const keyMap: Record<string, string> = { backend: 'build_backend', data: 'add_database', frontend: 'add_frontend', agent: 'add_agents', integration: 'build_backend', quality: 'improve_reliability', intelligence: 'optimize_performance' };
+      const key = keyMap[cat] || cat;
+      console.log(`[StepService]   Category ${cat} (${reqs.length} reqs) -> key=${key}, completed=${completed.has(key)}`);
+    }
+  }
 
   return limited;
 }
