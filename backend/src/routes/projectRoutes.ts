@@ -1234,7 +1234,7 @@ function enrichCapability(cap: any) {
   const combinedBackendFiles = [...new Set([...backendFiles, ...processBackendFiles])];
 
   const hasBackend = combinedBackendFiles.length > 0;
-  const hasFrontend = combinedFrontendFiles.length > 0 || allRepoFrontendFiles.length > 0;
+  const hasFrontend = combinedFrontendFiles.length > 0;
   const hasAgents = combinedAgentFiles.length > 0;
 
   // Project-level layer detection from full repo file tree
@@ -1292,7 +1292,7 @@ function enrichCapability(cap: any) {
   const allReqsFlat = features.flatMap((f: any) => f.requirements || []);
   const systemState = {
     hasBackend, hasFrontend, hasAgents,
-    hasModels: combinedModelFiles.length > 0 || allRepoModelFiles.length > 0,
+    hasModels: combinedModelFiles.length > 0,
     projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels,
     backendCount: backendFiles.length, frontendCount: frontendFiles.length,
     agentCount: combinedAgentFiles.length, modelCount: modelFiles.length,
@@ -1355,7 +1355,7 @@ function enrichCapability(cap: any) {
              ...(!hasFrontend ? [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }] : []),
              ...(q.observability === 0 ? [{ text: 'No monitoring', key: 'Q-OBS', gap_type: 'quality' }] : [])],
       mode: effectiveMode,
-      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: combinedModelFiles.length > 0 || allRepoModelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels, repoFileTree: repoTree },
+      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: combinedModelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels, repoFileTree: repoTree },
       completedSteps,
       maxSteps: 8,
     });
@@ -1419,7 +1419,7 @@ function enrichCapability(cap: any) {
     is_complete: processComplete,
     execution_plan: executionPlan,
     usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
-    implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles.length > 0 ? combinedFrontendFiles : allRepoFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles.length > 0 ? combinedModelFiles : allRepoModelFiles },
+    implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
   };
 }
