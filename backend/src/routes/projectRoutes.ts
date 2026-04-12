@@ -1871,13 +1871,12 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
         if (name.startsWith('.') || /^\d{14}/.test(name) || f.includes('migrations/')) return false;
         if (f.startsWith('.claude/') || f.startsWith('.github/') || f.includes('node_modules/')) return false;
         if (!(f.includes('services/') || f.includes('routes/') || f.includes('agents/') || f.includes('models/'))) return false;
-        // Require at least 2 process name stems to match the filename
-        // This prevents "user" alone from matching AdminUser.ts
-        const matchingStemCount = procStems.filter((stem: string) => name.includes(stem)).length;
-        return matchingStemCount >= Math.min(2, procStems.length);
+        // Require at least 1 process name stem (4+ chars) to match the filename
+        const matchingStemCount = procStems.filter((stem: string) => stem.length >= 4 && name.includes(stem)).length;
+        return matchingStemCount >= 1;
       });
 
-      if (procImplFiles.length >= 2) {
+      if (procImplFiles.length >= 1) {
         // Process has real implementation files — promote unmatched AND partial reqs
         // Confidence 0.75 ensures enrichCapability treats them as auto_verified
         let promoted = 0;
