@@ -262,6 +262,38 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           ) : <div className="text-muted small"><i className="bi bi-info-circle me-1"></i>No implementations detected. Run "Match to Repo" on Requirements tab.</div>}
         </Section>
 
+        {/* 3b: Agent Mappings */}
+        {p.agent_mappings?.length > 0 && (
+          <Section num={3.5} title={`Agents (${p.agent_mappings.length})`} collapsible defaultOpen={false}>
+            <div className="table-responsive">
+              <table className="table table-sm table-hover mb-0" style={{ fontSize: 11 }}>
+                <thead className="table-light">
+                  <tr><th>Agent</th><th>Role</th><th>Status</th><th className="text-end">Runs</th><th className="text-end">Errors</th><th>Last Run</th></tr>
+                </thead>
+                <tbody>
+                  {p.agent_mappings.map((a: any) => {
+                    const statusColor = a.agent_status === 'running' ? 'var(--color-info)' : a.agent_status === 'error' ? 'var(--color-danger)' : a.agent_status === 'idle' ? 'var(--color-accent)' : 'var(--color-text-light)';
+                    return (
+                      <tr key={a.agent_name}>
+                        <td>
+                          <span style={{ color: statusColor, fontSize: 8 }}>&#9679;</span>{' '}
+                          <span className="fw-medium">{a.agent_name}</span>
+                          {a.agent_description && <div className="text-muted" style={{ fontSize: 9 }}>{a.agent_description.substring(0, 60)}</div>}
+                        </td>
+                        <td><span className="badge bg-light text-dark" style={{ fontSize: 9 }}>{a.role}</span></td>
+                        <td><span className="badge" style={{ fontSize: 9, background: `${statusColor}20`, color: statusColor }}>{a.agent_status}</span></td>
+                        <td className="text-end">{a.run_count || 0}</td>
+                        <td className="text-end" style={{ color: a.error_count > 0 ? 'var(--color-danger)' : undefined }}>{a.error_count || 0}</td>
+                        <td className="text-muted" style={{ fontSize: 10 }}>{a.last_run_at ? new Date(a.last_run_at).toLocaleDateString() : 'Never'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        )}
+
         {/* 4: Gaps */}
         <Section num={4} title={`Gaps (${gaps.length})`} collapsible defaultOpen={gaps.length > 0 && gaps.length <= 10}>
           {gaps.length === 0 ? <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>No gaps detected.</div> : (

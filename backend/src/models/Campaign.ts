@@ -40,6 +40,7 @@ interface CampaignAttributes {
   cost_per_lead_target?: number;
   expected_roi?: number;
   created_by?: string;
+  capability_id?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -244,6 +245,11 @@ Campaign.init(
       type: DataTypes.UUID,
       allowNull: true,
       references: { model: 'admin_users', key: 'id' },
+    },
+    capability_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'capabilities', key: 'id' },
     },
     created_at: {
       type: DataTypes.DATE,

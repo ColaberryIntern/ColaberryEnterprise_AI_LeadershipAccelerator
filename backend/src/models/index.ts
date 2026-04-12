@@ -145,6 +145,7 @@ import BposExecutionSnapshot from './BposExecutionSnapshot';
 import BposStepExecution from './BposStepExecution';
 import SteeringAction from './SteeringAction';
 import ArchitectSession from './ArchitectSession';
+import CapabilityAgentMap from './CapabilityAgentMap';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -732,6 +733,20 @@ CampaignDeployment.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 CampaignDeployment.belongsTo(LandingPage, { foreignKey: 'landing_page_id', as: 'landingPage' });
 LandingPage.hasMany(CampaignDeployment, { foreignKey: 'landing_page_id', as: 'deployments' });
 
+// Capability Agent Map associations
+Capability.hasMany(CapabilityAgentMap, { foreignKey: 'capability_id', as: 'agentMaps' });
+CapabilityAgentMap.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capability' });
+Feature.hasMany(CapabilityAgentMap, { foreignKey: 'feature_id', as: 'agentMaps' });
+CapabilityAgentMap.belongsTo(Feature, { foreignKey: 'feature_id', as: 'feature' });
+
+// Capability → Department ownership
+Capability.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
+Department.hasMany(Capability, { foreignKey: 'department_id', as: 'capabilities' });
+
+// Campaign → Capability (which BP does this campaign serve?)
+Campaign.belongsTo(Capability, { foreignKey: 'capability_id', as: 'businessProcess' });
+Capability.hasMany(Campaign, { foreignKey: 'capability_id', as: 'campaigns' });
+
 export {
   Cohort, Enrollment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -857,4 +872,5 @@ export {
   BposStepExecution,
   SteeringAction,
   ArchitectSession,
+  CapabilityAgentMap,
 };

@@ -30,6 +30,7 @@ export interface CapabilityAttributes {
   strategy_template?: string;
   mode_override?: string;
   applicability_status?: string;
+  department_id?: string;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -87,6 +88,7 @@ Capability.init(
     strategy_template: { type: DataTypes.STRING(30), defaultValue: 'default' },
     mode_override: { type: DataTypes.STRING(20), allowNull: true },
     applicability_status: { type: DataTypes.STRING(20), defaultValue: 'active' },
+    department_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'departments', key: 'id' } },
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

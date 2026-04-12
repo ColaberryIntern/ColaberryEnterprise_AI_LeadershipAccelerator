@@ -1428,6 +1428,35 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     // Include project system prompt for Learn context
     const projectVars = (project as any).project_variables || {};
 
+    // Load formal agent mappings
+    let agentMappings: any[] = [];
+    try {
+      const { getAgentsForCapability } = await import('../services/capabilityAgentMapService');
+      const maps = await getAgentsForCapability(req.params.id as string);
+      // Enrich with agent status from AiAgent table
+      const { AiAgent } = await import('../models');
+      const agentNames = maps.map(m => m.agent_name);
+      const agents = agentNames.length > 0 ? await AiAgent.findAll({ where: { agent_name: agentNames }, attributes: ['agent_name', 'status', 'run_count', 'error_count', 'last_run_at', 'category', 'description'] }) : [];
+      const agentMap = new Map(agents.map((a: any) => [a.agent_name, a]));
+      agentMappings = maps.map(m => {
+        const agent = agentMap.get(m.agent_name);
+        return {
+          agent_name: m.agent_name,
+          role: m.role,
+          status: m.status,
+          priority: m.priority,
+          linked_by: m.linked_by,
+          linked_at: m.linked_at,
+          agent_status: agent?.status || 'unknown',
+          agent_category: agent?.category || null,
+          agent_description: agent?.description || null,
+          run_count: agent?.run_count || 0,
+          error_count: agent?.error_count || 0,
+          last_run_at: agent?.last_run_at || null,
+        };
+      });
+    } catch { /* non-critical — mapping table may not exist yet */ }
+
     res.json({
       ...enriched,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
@@ -1442,6 +1471,7 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       last_evaluated_at: capModel?.last_evaluated_at || null,
       flow: flowData?.flow || null,
       broken_connections: flowData?.broken_connections || [],
+      agent_mappings: agentMappings,
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
