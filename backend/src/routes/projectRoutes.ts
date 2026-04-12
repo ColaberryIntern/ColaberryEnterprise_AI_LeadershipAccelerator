@@ -1303,7 +1303,10 @@ function enrichCapability(cap: any) {
       modes: r.modes,
     }));
     const unfinishedCount = reqInputs.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started' || r.status === 'partial').length;
-    if (unfinishedCount > 0) console.log(`[enrichCapability] ${cap.name}: ${reqInputs.length} reqs (${unfinishedCount} unfinished), mode=${effectiveMode}`);
+    if (unfinishedCount > 0) {
+      console.log(`[enrichCapability] ${cap.name}: ${reqInputs.length} reqs (${unfinishedCount} unfinished), mode=${effectiveMode}`);
+      console.log(`[enrichCapability] Sample req:`, JSON.stringify(reqInputs[0]).substring(0, 200));
+    }
     executionPlan = generateStepsFromRequirements({
       requirements: reqInputs,
       gaps: [...(hasBackend ? [] : [{ text: 'Backend services needed', key: 'SYS-BE', gap_type: 'system' }]),

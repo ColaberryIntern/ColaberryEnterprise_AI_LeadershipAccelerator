@@ -139,6 +139,7 @@ export function generateStepsFromRequirements(options: {
     r.status === 'unmatched' || r.status === 'not_started' || r.status === 'partial'
   );
 
+  console.log(`[StepService] Input: ${requirements.length} reqs, ${unfinished.length} unfinished, ${gaps.length} gaps, mode=${mode}`);
   if (unfinished.length === 0 && gaps.length === 0) return [];
 
   // 2. Classify each requirement
