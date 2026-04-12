@@ -98,6 +98,15 @@ const PLATFORM_PROCESSES = [
     strength_scores: { determinism: 75, reliability: 80, observability: 90, ux_exposure: 85, automation: 80, ai_maturity: 75, human_dependency: 25 },
     autonomy_level: 'supervised',
   },
+  {
+    name: 'Deployment and Infrastructure',
+    description: 'Application deployment management, landing page configuration, system health monitoring, scheduler control, and infrastructure observability.',
+    linked_agents: ['orchestration_health', 'self_healing_engine', 'runtime_threat_monitor'],
+    linked_backend_services: ['deploymentController', 'schedulerControlService', 'orchestrationHealthService', 'selfHealingService'],
+    linked_frontend_components: ['DeploymentPage', 'SchedulerControlPanel', 'SystemHealthDashboard'],
+    strength_scores: { determinism: 80, reliability: 75, observability: 85, ux_exposure: 50, automation: 70, ai_maturity: 55, human_dependency: 35 },
+    autonomy_level: 'supervised',
+  },
 ];
 
 export async function seedBusinessProcesses(): Promise<{ created: number; skipped: number }> {
