@@ -1698,6 +1698,57 @@ export function startScheduler(): void {
     });
   });
 
+  // Mandrill open/click poll — webhooks are unreliable because older webhooks
+  // (school system) consume open/click events before ours. Poll API every 30 min.
+  cron.schedule('5,35 * * * *', () => {
+    instrumentCronJob('MandrillOpenClickPoll', async () => {
+      const axios = require('axios');
+      const apiKey = env.mandrillApiKey;
+      if (!apiKey) return;
+      const { InteractionOutcome, Lead } = require('../models');
+      const today = new Date().toISOString().split('T')[0];
+      try {
+        const r = await axios.post('https://mandrillapp.com/api/1.0/messages/search.json', {
+          key: apiKey, query: '*', date_from: today, date_to: today, limit: 100,
+        });
+        let opens = 0, clicks = 0;
+        for (const msg of r.data) {
+          const lead = await Lead.findOne({ where: { email: msg.email.toLowerCase() } });
+          if (!lead) continue;
+          if (msg.opens > 0) {
+            const exists = await InteractionOutcome.findOne({
+              where: { lead_id: lead.id, outcome: 'opened', created_at: { [Op.gte]: new Date(today) } },
+            });
+            if (!exists) {
+              await InteractionOutcome.create({
+                lead_id: lead.id, outcome: 'opened', channel: 'email',
+                metadata: { subject: msg.subject, backfilled: true, source: 'mandrill_poll' },
+              } as any);
+              opens++;
+            }
+          }
+          if (msg.clicks > 0) {
+            const exists = await InteractionOutcome.findOne({
+              where: { lead_id: lead.id, outcome: 'clicked', created_at: { [Op.gte]: new Date(today) } },
+            });
+            if (!exists) {
+              await InteractionOutcome.create({
+                lead_id: lead.id, outcome: 'clicked', channel: 'email',
+                metadata: { subject: msg.subject, backfilled: true, source: 'mandrill_poll' },
+              } as any);
+              clicks++;
+            }
+          }
+        }
+        if (opens > 0 || clicks > 0) {
+          console.log(`[Mandrill Poll] Backfilled ${opens} opens, ${clicks} clicks`);
+        }
+      } catch (err: any) {
+        console.error('[Mandrill Poll] Error:', err.message);
+      }
+    });
+  });
+
   // Visitor data retention: delete page_events older than 90 days
   cron.schedule('0 3 * * *', () => {
     instrumentCronJob('PageEventCleanup', async () => {
