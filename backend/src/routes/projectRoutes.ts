@@ -1213,7 +1213,27 @@ function enrichCapability(cap: any) {
   });
   const combinedFrontendFiles = [...new Set([...frontendFiles, ...processFrontendFiles])];
 
-  const hasBackend = backendFiles.length > 0;
+  // Also check FULL repo file tree for model files matching this process name
+  const processModelFiles = repoTree.filter((f: string) => {
+    const name = (f.split('/').pop() || '').toLowerCase();
+    if (!f.includes('models/') || !name.endsWith('.ts')) return false;
+    if (/^\d{14}/.test(name) || name.includes('index') || name.includes('seed')) return false;
+    return processNameStems.some((stem: string) => stem.length >= 4 && name.includes(stem));
+  });
+  const combinedModelFiles = [...new Set([...modelFiles, ...processModelFiles])];
+  // Project-level: does the repo have ANY models?
+  const allRepoModelFiles = repoTree.filter((f: string) => f.includes('models/') && f.endsWith('.ts') && !(f.split('/').pop() || '').includes('index'));
+
+  // Also check FULL repo file tree for backend service files matching this process name
+  const processBackendFiles = repoTree.filter((f: string) => {
+    const name = (f.split('/').pop() || '').toLowerCase();
+    if (!(f.includes('services/') || f.includes('routes/'))) return false;
+    if (!name.endsWith('.ts') || /^\d{14}/.test(name) || name.includes('seed') || name.includes('index')) return false;
+    return processNameStems.some((stem: string) => stem.length >= 4 && name.includes(stem));
+  });
+  const combinedBackendFiles = [...new Set([...backendFiles, ...processBackendFiles])];
+
+  const hasBackend = combinedBackendFiles.length > 0;
   const hasFrontend = combinedFrontendFiles.length > 0 || allRepoFrontendFiles.length > 0;
   const hasAgents = combinedAgentFiles.length > 0;
 
@@ -1272,7 +1292,7 @@ function enrichCapability(cap: any) {
   const allReqsFlat = features.flatMap((f: any) => f.requirements || []);
   const systemState = {
     hasBackend, hasFrontend, hasAgents,
-    hasModels: modelFiles.length > 0,
+    hasModels: combinedModelFiles.length > 0 || allRepoModelFiles.length > 0,
     projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels,
     backendCount: backendFiles.length, frontendCount: frontendFiles.length,
     agentCount: combinedAgentFiles.length, modelCount: modelFiles.length,
@@ -1335,7 +1355,7 @@ function enrichCapability(cap: any) {
              ...(!hasFrontend ? [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }] : []),
              ...(q.observability === 0 ? [{ text: 'No monitoring', key: 'Q-OBS', gap_type: 'quality' }] : [])],
       mode: effectiveMode,
-      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: modelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels, repoFileTree: repoTree },
+      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: combinedModelFiles.length > 0 || allRepoModelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels, repoFileTree: repoTree },
       completedSteps,
       maxSteps: 8,
     });
@@ -1399,7 +1419,7 @@ function enrichCapability(cap: any) {
     is_complete: processComplete,
     execution_plan: executionPlan,
     usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
-    implementation_links: { backend: backendFiles, frontend: combinedFrontendFiles.length > 0 ? combinedFrontendFiles : allRepoFrontendFiles, agents: combinedAgentFiles, models: modelFiles },
+    implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles.length > 0 ? combinedFrontendFiles : allRepoFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles.length > 0 ? combinedModelFiles : allRepoModelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
   };
 }
