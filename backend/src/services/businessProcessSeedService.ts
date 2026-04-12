@@ -116,6 +116,15 @@ const PLATFORM_PROCESSES = [
     strength_scores: { determinism: 75, reliability: 75, observability: 80, ux_exposure: 85, automation: 85, ai_maturity: 70, human_dependency: 25 },
     autonomy_level: 'supervised',
   },
+  {
+    name: 'Search and Discovery',
+    description: 'Semantic vector search, schema discovery, NLP query engine, Apollo lead search, knowledge graph traversal, and intelligent entity research.',
+    linked_agents: ['insight_discovery', 'knowledge_graph_builder', 'apollo_lead_intelligence'],
+    linked_backend_services: ['apolloService', 'coryKnowledgeGraphService', 'intelligenceMapsService'],
+    linked_frontend_components: ['IntelligenceOSPage', 'KnowledgeGraphPanel'],
+    strength_scores: { determinism: 70, reliability: 75, observability: 70, ux_exposure: 65, automation: 75, ai_maturity: 80, human_dependency: 30 },
+    autonomy_level: 'supervised',
+  },
 ];
 
 export async function seedBusinessProcesses(): Promise<{ created: number; skipped: number }> {
