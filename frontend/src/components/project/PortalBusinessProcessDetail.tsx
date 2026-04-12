@@ -46,6 +46,10 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [resyncing, setResyncing] = useState(false);
   const [resyncModal, setResyncModal] = useState<any>(null);
   const [showSync, setShowSync] = useState(false);
+  const [uiFeedback, setUiFeedback] = useState('');
+  const [uiAnalyzing, setUiAnalyzing] = useState(false);
+  const [uiSuggestions, setUiSuggestions] = useState<any>(null);
+  const [previewUrlInput, setPreviewUrlInput] = useState('');
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
   // Project context comes from the process detail API response (p.project_system_prompt)
@@ -261,6 +265,121 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             </div>
           ) : <div className="text-muted small"><i className="bi bi-info-circle me-1"></i>No implementations detected. Run "Match to Repo" on Requirements tab.</div>}
         </Section>
+
+        {/* 3a: Frontend Preview & Feedback */}
+        {(links.frontend?.length > 0 || p.preview_url) && (
+          <Section num={3.1} title="Frontend Preview" collapsible defaultOpen>
+            {p.preview_url ? (
+              <>
+                <iframe
+                  src={p.preview_url}
+                  title="Frontend Preview"
+                  style={{ width: '100%', height: 400, border: '1px solid var(--color-border)', borderRadius: 8, background: '#fff' }}
+                  sandbox="allow-scripts allow-same-origin allow-forms"
+                />
+                <div className="text-end mt-1">
+                  <a href={p.preview_url} target="_blank" rel="noopener noreferrer" className="text-muted" style={{ fontSize: 10 }}>
+                    <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
+                  </a>
+                </div>
+              </>
+            ) : (
+              <div className="p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
+                <i className="bi bi-layout-wtf d-block mb-2" style={{ fontSize: 24, color: 'var(--color-text-light)' }}></i>
+                <div className="fw-medium small mb-2">Frontend files detected — connect a preview URL to see it live</div>
+                <div className="d-flex gap-2 justify-content-center">
+                  <input className="form-control form-control-sm" style={{ maxWidth: 300, fontSize: 11 }}
+                    placeholder="https://your-app.vercel.app" value={previewUrlInput}
+                    onChange={e => setPreviewUrlInput(e.target.value)} />
+                  <button className="btn btn-sm btn-primary" disabled={!previewUrlInput.trim()} onClick={async () => {
+                    try {
+                      const portalApi = (await import('../../utils/portalApi')).default;
+                      await portalApi.put('/api/portal/project/preview-url', { url: previewUrlInput.trim() });
+                      load(); // reload to get new preview_url
+                    } catch {}
+                  }}>
+                    <i className="bi bi-link-45deg me-1"></i>Connect
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* UI Feedback Panel */}
+            <div className="mt-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
+              <div className="fw-medium small mb-2"><i className="bi bi-chat-dots me-1" style={{ color: 'var(--color-info)' }}></i>UI Feedback</div>
+              <textarea className="form-control form-control-sm mb-2" rows={2} style={{ fontSize: 11 }}
+                placeholder="Describe what you want to improve about the frontend..."
+                value={uiFeedback} onChange={e => setUiFeedback(e.target.value)} />
+              <div className="d-flex gap-1 flex-wrap mb-2">
+                {['Improve Layout', 'Fix UX Issues', 'Make Enterprise Ready', 'Optimize for Conversion'].map(action => (
+                  <button key={action} className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9 }}
+                    disabled={uiAnalyzing}
+                    onClick={async () => {
+                      setUiAnalyzing(true);
+                      try {
+                        const portalApi = (await import('../../utils/portalApi')).default;
+                        const r = await portalApi.post(`/api/portal/project/business-processes/${processId}/ui-feedback`, { feedback: uiFeedback, action });
+                        setUiSuggestions(r.data);
+                      } catch {} finally { setUiAnalyzing(false); }
+                    }}>
+                    {action}
+                  </button>
+                ))}
+                {uiFeedback.trim() && (
+                  <button className="btn btn-sm btn-primary" style={{ fontSize: 9 }} disabled={uiAnalyzing}
+                    onClick={async () => {
+                      setUiAnalyzing(true);
+                      try {
+                        const portalApi = (await import('../../utils/portalApi')).default;
+                        const r = await portalApi.post(`/api/portal/project/business-processes/${processId}/ui-feedback`, { feedback: uiFeedback });
+                        setUiSuggestions(r.data);
+                      } catch {} finally { setUiAnalyzing(false); }
+                    }}>
+                    {uiAnalyzing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Analyzing...</> : <><i className="bi bi-magic me-1"></i>Analyze</>}
+                  </button>
+                )}
+              </div>
+
+              {/* Suggestions */}
+              {uiSuggestions && (
+                <div className="mt-2">
+                  {uiSuggestions.issues?.length > 0 && (
+                    <div className="mb-2">
+                      <div className="fw-medium" style={{ fontSize: 10, color: 'var(--color-danger)' }}>Issues Found</div>
+                      {uiSuggestions.issues.map((issue: any, i: number) => (
+                        <div key={i} className="d-flex gap-2 align-items-start py-1" style={{ fontSize: 10, borderBottom: '1px solid var(--color-border)' }}>
+                          <span className="badge" style={{ fontSize: 8, background: issue.severity === 'high' ? '#ef444420' : issue.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: issue.severity === 'high' ? 'var(--color-danger)' : issue.severity === 'medium' ? 'var(--color-warning)' : 'var(--color-accent)' }}>{issue.severity}</span>
+                          <div><strong>{issue.title}</strong> — {issue.description}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {uiSuggestions.suggestions?.length > 0 && (
+                    <div className="mb-2">
+                      <div className="fw-medium" style={{ fontSize: 10, color: 'var(--color-info)' }}>Suggestions</div>
+                      {uiSuggestions.suggestions.map((s: any, i: number) => (
+                        <div key={i} className="py-1" style={{ fontSize: 10, borderBottom: '1px solid var(--color-border)' }}>
+                          <strong>{s.title}</strong> — {s.description}
+                          <span className="text-muted ms-1">({s.impact})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {uiSuggestions.prompt && (
+                    <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => {
+                      navigator.clipboard.writeText(uiSuggestions.prompt);
+                      const el = document.createElement('div');
+                      el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Prompt copied — paste into Claude Code</div>';
+                      document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+                    }}>
+                      <i className="bi bi-clipboard me-1"></i>Copy Improvement Prompt
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* 3b: Agent Mappings */}
         {p.agent_mappings?.length > 0 && (

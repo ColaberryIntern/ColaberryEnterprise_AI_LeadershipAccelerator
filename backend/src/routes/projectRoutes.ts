@@ -1554,6 +1554,7 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     res.json({
       ...enriched,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
+      preview_url: (project as any).portfolio_url || null,
       project_system_prompt: projectVars.system_prompt || '',
       hitl_config: capModel?.hitl_config || null,
       autonomy_level: capModel?.autonomy_level || 'manual',
@@ -2513,6 +2514,42 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
       req.participant!.sub, project.id, req.params.id as string, report
     );
     res.json({ ...result, auto_verified: isAlreadyComplete });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Frontend Preview URL: set/get preview URL for the project ────────
+router.put('/api/portal/project/preview-url', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { setPreviewUrl } = await import('../services/frontendPreviewService');
+    await setPreviewUrl(req.participant!.sub, req.body.url || '');
+    res.json({ preview_url: req.body.url });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── UI Feedback: analyze frontend and return suggestions ────────
+router.post('/api/portal/project/business-processes/:id/ui-feedback', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { feedback, action } = req.body;
+    if (!feedback && !action) { res.status(400).json({ error: 'feedback or action required' }); return; }
+    const feedbackText = action ? `${action}: ${feedback || ''}` : feedback;
+    // Get frontend files from the capability's implementation links
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const capData = hierarchy.find((c: any) => c.id === req.params.id);
+    const enriched = capData ? enrichCapability(capData) : null;
+    const frontendFiles = enriched?.implementation_links?.frontend || [];
+    const { analyzeUI } = await import('../services/uiAnalysisService');
+    const result = await analyzeUI({
+      processName: cap.name,
+      feedback: feedbackText,
+      frontendFiles,
+      repoUrl: (project as any).github_repo_url || undefined,
+    });
+    res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
