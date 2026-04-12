@@ -52,6 +52,11 @@ interface SystemContext {
   hasModels: boolean;
   reqCoverage: number;
   qualityScore: number;
+  // Project-level layer detection — if the PROJECT has these layers, don't recommend building them
+  projectHasBackend?: boolean;
+  projectHasFrontend?: boolean;
+  projectHasAgents?: boolean;
+  projectHasModels?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,9 +192,39 @@ export function generateStepsFromRequirements(options: {
 
     if (completed.has(stepKey)) continue;
 
+    // Skip "Build X" steps if the project already has that layer in the repo
+    // This prevents recommending "Build Backend" when backend services already exist
+    const alreadyBuilt =
+      (category === 'backend' && (systemContext.hasBackend || systemContext.projectHasBackend)) ||
+      (category === 'frontend' && (systemContext.hasFrontend || systemContext.projectHasFrontend)) ||
+      (category === 'agent' && (systemContext.hasAgents || systemContext.projectHasAgents)) ||
+      (category === 'data' && (systemContext.hasModels || systemContext.projectHasModels));
+
+    if (alreadyBuilt && reqs.length > 0) {
+      // Layer exists — reclassify these reqs as "implement requirements" instead of "build layer"
+      // Change the step to focus on implementing the specific requirements, not building the layer
+      const implStep: ExecutionStep = {
+        step: 0,
+        key: 'implement_requirements',
+        label: `Implement ${category} requirements (${reqs.length})`,
+        impact: '+requirement coverage',
+        depends_on: 'Existing ' + category + ' layer',
+        fixes: reqs.slice(0, 3).map(r => r.requirement_text.substring(0, 60)),
+        enables: [`${reqs.length} requirement${reqs.length > 1 ? 's' : ''} matched to code`],
+        blocked: false,
+        requirements_covered: reqs.map(r => r.requirement_key),
+        prompt_target: 'requirement_implementation',
+        basedOn: reqs.slice(0, 5).map(r => r.requirement_text.substring(0, 80)),
+        category,
+        priorityScore: Math.round(65 * (multipliers[category] || 1) + reqs.length * 3),
+      };
+      if (!completed.has('implement_requirements')) steps.push(implStep);
+      continue;
+    }
+
     // Determine blocking
     const needsBackend = ['frontend', 'agent', 'data', 'integration', 'quality', 'intelligence'].includes(category);
-    const blocked = needsBackend && !systemContext.hasBackend;
+    const blocked = needsBackend && !systemContext.hasBackend && !systemContext.projectHasBackend;
 
     // Fix labels: if the category is mostly about implementing existing requirements, say so
     const reqCount = reqs.length;

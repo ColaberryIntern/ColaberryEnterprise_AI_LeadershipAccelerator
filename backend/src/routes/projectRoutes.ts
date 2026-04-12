@@ -1313,7 +1313,7 @@ function enrichCapability(cap: any) {
              ...(!hasFrontend ? [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }] : []),
              ...(q.observability === 0 ? [{ text: 'No monitoring', key: 'Q-OBS', gap_type: 'quality' }] : [])],
       mode: effectiveMode,
-      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: modelFiles.length > 0, reqCoverage, qualityScore: qualityTotal },
+      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: modelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels },
       completedSteps,
       maxSteps: 8,
     });
