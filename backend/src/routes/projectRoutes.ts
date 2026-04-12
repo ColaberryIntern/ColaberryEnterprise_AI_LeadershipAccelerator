@@ -1288,10 +1288,37 @@ function enrichCapability(cap: any) {
     strategyOverrides: strategy.priority_overrides,
     allowedActionKeys: profile.allowed_action_keys,
   };
-  const executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
   // Mode-aware completion: requires BOTH maturity threshold AND coverage/quality thresholds
   const meetsMaturity = maturityLevel >= (profile.completion_maturity_threshold || 3);
   const processComplete = meetsMaturity && isProcessComplete(systemState, profile.completion_thresholds);
+
+  // Requirement-driven execution plan (primary), with old plan as fallback
+  let executionPlan: any[];
+  try {
+    const { generateStepsFromRequirements } = require('../services/requirementToStepService');
+    executionPlan = generateStepsFromRequirements({
+      requirements: allReqsFlat.map((r: any) => ({
+        requirement_key: r.requirement_key || r.key,
+        requirement_text: r.requirement_text || r.text || '',
+        status: r.status,
+        modes: r.modes,
+      })),
+      gaps: [...(hasBackend ? [] : [{ text: 'Backend services needed', key: 'SYS-BE', gap_type: 'system' }]),
+             ...(!hasFrontend ? [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }] : []),
+             ...(q.observability === 0 ? [{ text: 'No monitoring', key: 'Q-OBS', gap_type: 'quality' }] : [])],
+      mode: effectiveMode,
+      systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: modelFiles.length > 0, reqCoverage, qualityScore: qualityTotal },
+      completedSteps,
+      maxSteps: 8,
+    });
+    // If requirement-driven plan is empty but process isn't complete, fall back to old engine
+    if (executionPlan.length === 0 && !processComplete) {
+      executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
+    }
+  } catch {
+    // Fallback: use old hardcoded plan engine if new one fails
+    executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
+  }
 
   const why_not: string[] = [];
   if (!hasBackend) why_not.push('No backend services or API routes found');
