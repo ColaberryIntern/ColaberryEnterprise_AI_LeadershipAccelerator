@@ -1315,8 +1315,9 @@ function enrichCapability(cap: any) {
     if (executionPlan.length === 0 && !processComplete) {
       executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
     }
-  } catch {
+  } catch (planErr: any) {
     // Fallback: use old hardcoded plan engine if new one fails
+    console.error('[enrichCapability] Requirement-driven plan failed:', planErr?.message || planErr);
     executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
   }
 
