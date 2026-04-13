@@ -422,61 +422,36 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
               </div>
             )}
 
-            {/* UX Improvement Picker — shown for frontend BPs with few/no requirements */}
-            {(p.total_requirements || 0) < 3 && (
-              <div className="mt-3 p-2" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
-                <div className="fw-medium small mb-2"><i className="bi bi-palette me-1" style={{ color: 'var(--color-accent)' }}></i>Add UX Requirements</div>
-                <div className="d-flex flex-wrap gap-1">
-                  {[
-                    { label: 'Navigation & Routing', icon: 'bi-signpost', desc: 'Add breadcrumbs, sidebar navigation, page transitions' },
-                    { label: 'Mobile Responsive', icon: 'bi-phone', desc: 'Make layout work on mobile and tablet' },
-                    { label: 'Loading States', icon: 'bi-hourglass-split', desc: 'Add skeleton loaders, spinners, progress indicators' },
-                    { label: 'Error Handling UI', icon: 'bi-exclamation-triangle', desc: 'Error boundaries, toast notifications, fallback views' },
-                    { label: 'Data Tables', icon: 'bi-table', desc: 'Sortable, filterable, paginated tables' },
-                    { label: 'Form Validation', icon: 'bi-check2-square', desc: 'Inline validation, error messages, required fields' },
-                    { label: 'Charts & Analytics', icon: 'bi-bar-chart', desc: 'Data visualization, dashboards, KPI cards' },
-                    { label: 'Dark Mode', icon: 'bi-moon', desc: 'Theme switching, dark mode support' },
-                    { label: 'Accessibility', icon: 'bi-universal-access', desc: 'WCAG compliance, keyboard nav, screen readers' },
-                    { label: 'Search & Filter', icon: 'bi-search', desc: 'Global search, faceted filters, typeahead' },
-                    { label: 'Export & Print', icon: 'bi-download', desc: 'PDF export, CSV download, print views' },
-                    { label: 'Real-time Updates', icon: 'bi-lightning', desc: 'WebSocket updates, live data refresh' },
-                  ].map(item => (
-                    <button key={item.label} className="btn btn-sm btn-outline-success" style={{ fontSize: 9, padding: '3px 8px' }}
-                      title={item.desc}
-                      onClick={async () => {
-                        try {
-                          const portalApi = (await import('../../utils/portalApi')).default;
-                          await portalApi.post(`/api/portal/project/business-processes/${processId}/ui-feedback`, { feedback: item.desc, action: item.label });
-                          const el = document.createElement('div');
-                          el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-check-circle me-1"></i>"${item.label}" added as UX requirement</div>`;
-                          document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
-                          load();
-                        } catch {}
-                      }}>
-                      <i className={`bi ${item.icon} me-1`}></i>{item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* UI Feedback Panel */}
+            {/* Unified UI Feedback Panel — uses new element-level engine */}
             <div className="mt-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
-              <div className="fw-medium small mb-2"><i className="bi bi-chat-dots me-1" style={{ color: 'var(--color-info)' }}></i>UI Feedback</div>
-              <textarea className="form-control form-control-sm mb-2" rows={2} style={{ fontSize: 11 }}
-                placeholder="Describe what you want to improve about the frontend..."
-                value={uiFeedback} onChange={e => setUiFeedback(e.target.value)} />
+              <div className="fw-medium small mb-2"><i className="bi bi-clipboard2-check me-1" style={{ color: 'var(--color-info)' }}></i>UI Feedback</div>
+
+              {/* Quick analysis actions */}
               <div className="d-flex gap-1 flex-wrap mb-2">
-                {['Improve Layout', 'Fix UX Issues', 'Make Enterprise Ready', 'Optimize for Conversion'].map(action => (
-                  <button key={action} className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9 }}
-                    disabled={uiAnalyzing}
+                {[
+                  { label: 'Improve Layout', icon: 'bi-layout-wtf', feedback: 'Improve the page layout, spacing, and visual hierarchy' },
+                  { label: 'Fix UX Issues', icon: 'bi-exclamation-triangle', feedback: 'Find and fix usability issues, broken interactions, and confusing flows' },
+                  { label: 'Make Enterprise Ready', icon: 'bi-building', feedback: 'Add enterprise features: accessibility, security, error handling, loading states' },
+                  { label: 'Optimize for Conversion', icon: 'bi-graph-up-arrow', feedback: 'Optimize CTAs, user flow, and conversion funnel' },
+                  { label: 'Mobile Responsive', icon: 'bi-phone', feedback: 'Make the layout responsive for mobile and tablet' },
+                  { label: 'Accessibility Audit', icon: 'bi-universal-access', feedback: 'Run WCAG 2.1 AA compliance check: alt text, labels, contrast, keyboard nav' },
+                ].map(action => (
+                  <button key={action.label} className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9 }}
+                    disabled={analyzingPage}
                     onClick={async () => {
-                      setUiAnalyzing(true);
+                      setAnalyzingPage(true);
                       try {
                         const portalApi = (await import('../../utils/portalApi')).default;
-                        const r = await portalApi.post(`/api/portal/project/business-processes/${processId}/ui-feedback`, { feedback: uiFeedback, action });
-                        setUiSuggestions(r.data);
-                      } catch {} finally { setUiAnalyzing(false); }
+                        const feFiles = (p.implementation_links?.frontend || []) as string[];
+                        const elements = feFiles.map((f: string, i: number) => {
+                          const name = f.split('/').pop()?.replace(/\.(tsx|jsx)$/, '') || f;
+                          return { element_id: `component-${i}`, type: 'component', tag: 'div', selector: name, text: name, depth: 0 };
+                        });
+                        await portalApi.post(`/api/portal/project/business-processes/${processId}/element-map`, { elements, route: p.frontend_route || '/' });
+                        await portalApi.post(`/api/portal/project/business-processes/${processId}/analyze-page`, { user_feedback: action.feedback });
+                        const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
+                        setElementFeedback(fbRes.data);
+                      } catch {} finally { setAnalyzingPage(false); }
                     }}>
                     {action}
                   </button>
@@ -489,62 +464,83 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         const portalApi = (await import('../../utils/portalApi')).default;
                         const r = await portalApi.post(`/api/portal/project/business-processes/${processId}/ui-feedback`, { feedback: uiFeedback });
                         setUiSuggestions(r.data);
-                      } catch {} finally { setUiAnalyzing(false); }
+                      } catch {} finally { setAnalyzingPage(false); }
                     }}>
-                    {uiAnalyzing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Analyzing...</> : <><i className="bi bi-magic me-1"></i>Analyze</>}
+                    <i className={`bi ${action.icon} me-1`}></i>{action.label}
                   </button>
-                )}
+                ))}
               </div>
 
-              {/* Suggestions */}
-              {uiSuggestions && (
-                <div className="mt-2">
-                  {uiSuggestions.issues?.length > 0 && (
-                    <div className="mb-2">
-                      <div className="fw-medium" style={{ fontSize: 10, color: 'var(--color-danger)' }}>Issues Found</div>
-                      {uiSuggestions.issues.map((issue: any, i: number) => (
-                        <div key={i} className="d-flex gap-2 align-items-start py-1" style={{ fontSize: 10, borderBottom: '1px solid var(--color-border)' }}>
-                          <span className="badge" style={{ fontSize: 8, background: issue.severity === 'high' ? '#ef444420' : issue.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: issue.severity === 'high' ? 'var(--color-danger)' : issue.severity === 'medium' ? 'var(--color-warning)' : 'var(--color-accent)' }}>{issue.severity}</span>
-                          <div><strong>{issue.title}</strong> — {issue.description}</div>
-                        </div>
-                      ))}
+              {/* Custom feedback input */}
+              <div className="d-flex gap-2 mb-2">
+                <input className="form-control form-control-sm" style={{ fontSize: 11 }}
+                  placeholder="Describe a specific improvement..."
+                  value={uiFeedback} onChange={e => setUiFeedback(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && uiFeedback.trim()) {
+                      setAnalyzingPage(true);
+                      try {
+                        const portalApi = (await import('../../utils/portalApi')).default;
+                        const feFiles = (p.implementation_links?.frontend || []) as string[];
+                        const elements = feFiles.map((f: string, i: number) => {
+                          const name = f.split('/').pop()?.replace(/\.(tsx|jsx)$/, '') || f;
+                          return { element_id: `component-${i}`, type: 'component', tag: 'div', selector: name, text: name, depth: 0 };
+                        });
+                        await portalApi.post(`/api/portal/project/business-processes/${processId}/element-map`, { elements, route: p.frontend_route || '/' });
+                        await portalApi.post(`/api/portal/project/business-processes/${processId}/analyze-page`, { user_feedback: uiFeedback });
+                        const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
+                        setElementFeedback(fbRes.data);
+                        setUiFeedback('');
+                      } catch {} finally { setAnalyzingPage(false); }
+                    }
+                  }} />
+              </div>
+
+              {/* Persistent feedback results */}
+              {elementFeedback?.items?.length > 0 && (
+                <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <span className="fw-medium" style={{ fontSize: 10 }}>
+                      {elementFeedback.items.filter((f: any) => f.status === 'open').length} open issues
+                    </span>
+                    <span className="text-muted" style={{ fontSize: 9 }}>
+                      {elementFeedback.summary?.resolved || 0} resolved
+                    </span>
+                  </div>
+                  {elementFeedback.items.filter((f: any) => f.status !== 'resolved' && f.status !== 'dismissed').map((f: any) => (
+                    <div key={f.id} className="d-flex gap-2 align-items-start py-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
+                      <span className="badge" style={{ fontSize: 8, flexShrink: 0, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981' }}>{f.severity}</span>
+                      <div className="flex-grow-1">
+                        <div className="fw-medium">{f.title}</div>
+                        <div className="text-muted">{f.description?.substring(0, 120)}</div>
+                        {f.suggestion && <div style={{ color: 'var(--color-info)', fontSize: 9 }}><i className="bi bi-lightbulb me-1"></i>{f.suggestion?.substring(0, 120)}</div>}
+                      </div>
+                      <div className="d-flex gap-1 flex-shrink-0">
+                        <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 4px' }} title="Resolve"
+                          onClick={async () => {
+                            try {
+                              const portalApi = (await import('../../utils/portalApi')).default;
+                              await portalApi.put(`/api/portal/project/element-feedback/${f.id}`, { status: 'resolved', resolved_by: 'manual' });
+                              const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
+                              setElementFeedback(fbRes.data);
+                            } catch {}
+                          }}>
+                          <i className="bi bi-check"></i>
+                        </button>
+                        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 4px' }} title="Dismiss"
+                          onClick={async () => {
+                            try {
+                              const portalApi = (await import('../../utils/portalApi')).default;
+                              await portalApi.put(`/api/portal/project/element-feedback/${f.id}`, { status: 'dismissed' });
+                              const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
+                              setElementFeedback(fbRes.data);
+                            } catch {}
+                          }}>
+                          <i className="bi bi-x"></i>
+                        </button>
+                      </div>
                     </div>
-                  )}
-                  {uiSuggestions.suggestions?.length > 0 && (
-                    <div className="mb-2">
-                      <div className="fw-medium" style={{ fontSize: 10, color: 'var(--color-info)' }}>Suggestions</div>
-                      {uiSuggestions.suggestions.map((s: any, i: number) => (
-                        <div key={i} className="py-1" style={{ fontSize: 10, borderBottom: '1px solid var(--color-border)' }}>
-                          <strong>{s.title}</strong> — {s.description}
-                          <span className="text-muted ms-1">({s.impact})</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {uiSuggestions.prompt && (
-                    <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => {
-                      const text = uiSuggestions.prompt;
-                      const copyFallback = () => {
-                        const ta = document.createElement('textarea');
-                        ta.value = text;
-                        ta.style.cssText = 'position:fixed;left:-9999px';
-                        document.body.appendChild(ta);
-                        ta.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(ta);
-                      };
-                      if (navigator.clipboard?.writeText) {
-                        navigator.clipboard.writeText(text).catch(copyFallback);
-                      } else {
-                        copyFallback();
-                      }
-                      const el = document.createElement('div');
-                      el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Prompt copied — paste into Claude Code</div>';
-                      document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
-                    }}>
-                      <i className="bi bi-clipboard me-1"></i>Copy Improvement Prompt
-                    </button>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
