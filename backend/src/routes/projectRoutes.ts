@@ -1192,16 +1192,45 @@ function enrichCapability(cap: any) {
   const combinedAgentFiles = [...new Set([...agentFiles, ...processAgentFiles])];
 
   // Also check FULL repo file tree for frontend files matching this process name
-  // This catches pages like "frontend/app/campaigns/page.tsx" for "Campaign Planning" BP
+  // This catches pages/components matching the business process
+  // Uses stem matching + synonym expansion for better coverage
+  const BP_SYNONYMS: Record<string, string[]> = {
+    analytics: ['analytics', 'chart', 'report', 'dashboard', 'kpi', 'metric', 'insight'],
+    campaign: ['campaign', 'outreach', 'sequence', 'email', 'sms', 'drip'],
+    lead: ['lead', 'prospect', 'contact', 'pipeline', 'capture', 'form'],
+    user: ['user', 'profile', 'account', 'auth', 'login', 'signup', 'role'],
+    content: ['content', 'editor', 'template', 'draft', 'publish', 'cms'],
+    monitoring: ['monitor', 'alert', 'health', 'status', 'log', 'observ'],
+    testing: ['test', 'quality', 'qa', 'validation', 'check'],
+    workflow: ['workflow', 'automation', 'trigger', 'schedule', 'cron', 'pipeline'],
+    deployment: ['deploy', 'build', 'release', 'version', 'ci', 'cd'],
+    search: ['search', 'discover', 'filter', 'browse', 'explore'],
+    integration: ['integrat', 'connect', 'api', 'webhook', 'sync'],
+    feedback: ['feedback', 'survey', 'rating', 'review', 'comment'],
+    notification: ['notif', 'alert', 'bell', 'push', 'toast'],
+    performance: ['perform', 'speed', 'optim', 'cache', 'metric'],
+    security: ['secur', 'auth', 'permission', 'role', 'access', 'encrypt'],
+    onboarding: ['onboard', 'welcome', 'setup', 'wizard', 'getting.started'],
+    error: ['error', 'incident', 'issue', 'ticket', 'bug', 'fault'],
+    data: ['data', 'import', 'export', 'migration', 'backup', 'storage'],
+  };
+  // Build expanded search terms from process name
+  const expandedTerms = new Set<string>();
+  for (const stem of processNameStems) {
+    expandedTerms.add(stem);
+    for (const [_key, synonyms] of Object.entries(BP_SYNONYMS)) {
+      if (synonyms.some(s => stem.includes(s) || s.includes(stem))) {
+        synonyms.forEach(s => expandedTerms.add(s));
+      }
+    }
+  }
   const processFrontendFiles = repoTree.filter((f: string) => {
     const name = (f.split('/').pop() || '').toLowerCase();
     if (!name.endsWith('.tsx') && !name.endsWith('.jsx')) return false;
-    if (name === 'layout.tsx' || name === 'globals.css' || name.startsWith('[')) return false;
-    // Must be in frontend/ or app/ or pages/ or components/ directory
+    if (name === 'layout.tsx' || name === 'globals.css' || name.startsWith('[') || name === 'index.tsx') return false;
     if (!(f.includes('frontend/') || f.includes('/app/') || f.includes('/pages/') || f.includes('/components/'))) return false;
-    // Match by: process name stems in the file path (not just filename)
     const pathLower = f.toLowerCase();
-    return processNameStems.some((stem: string) => stem.length >= 4 && pathLower.includes(stem));
+    return [...expandedTerms].some((term: string) => term.length >= 4 && pathLower.includes(term));
   });
   // Also include ALL frontend page files if the process name is generic enough
   // (e.g., for projects with a clear frontend/ directory)
@@ -1599,24 +1628,25 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       preview_url: (() => {
         const baseUrl = (project as any).portfolio_url;
         if (!baseUrl) return null;
-        // Derive the route path from the BP's matched frontend files
-        // e.g., "frontend/app/campaigns/page.tsx" → "/campaigns"
         const feFiles = enriched.implementation_links?.frontend || [];
         if (feFiles.length > 0) {
-          const firstFile = feFiles[0];
-          // Extract route from Next.js app router path: frontend/app/{route}/page.tsx
-          const appMatch = firstFile.match(/(?:frontend\/)?app\/(.+?)\/page\.tsx$/);
-          if (appMatch) {
-            const route = '/' + appMatch[1].replace(/\[.*?\]/g, ''); // strip dynamic segments
-            return baseUrl.replace(/\/$/, '') + route;
+          // Find the best "page" file (prefer Page files over components)
+          const pageFile = feFiles.find((f: string) => f.toLowerCase().includes('page')) || feFiles[0];
+          // Next.js app router: frontend/app/{route}/page.tsx → /{route}
+          const appMatch = pageFile.match(/(?:frontend\/)?app\/(.+?)\/page\.tsx$/);
+          if (appMatch) return baseUrl.replace(/\/$/, '') + '/' + appMatch[1].replace(/\[.*?\]/g, '');
+          // CRA/React Router pages: src/pages/admin/AdminCampaignsPage.tsx → /admin/campaigns
+          const craMatch = pageFile.match(/pages\/(?:admin\/)?(\w+?)Page\.tsx$/);
+          if (craMatch) {
+            const routeName = craMatch[1].replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+            const isAdmin = pageFile.includes('/admin/');
+            return baseUrl.replace(/\/$/, '') + (isAdmin ? '/admin/' : '/') + routeName;
           }
-          // Extract route from pages router: pages/{route}.tsx or frontend/pages/{route}.tsx
-          const pagesMatch = firstFile.match(/pages\/(.+?)\.tsx$/);
-          if (pagesMatch) {
-            return baseUrl.replace(/\/$/, '') + '/' + pagesMatch[1];
-          }
+          // Generic pages router: pages/{route}.tsx → /{route}
+          const pagesMatch = pageFile.match(/pages\/(.+?)\.tsx$/);
+          if (pagesMatch) return baseUrl.replace(/\/$/, '') + '/' + pagesMatch[1];
         }
-        return baseUrl; // fallback to base URL
+        return baseUrl;
       })(),
       project_system_prompt: projectVars.system_prompt || '',
       hitl_config: capModel?.hitl_config || null,
