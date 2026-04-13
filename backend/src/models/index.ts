@@ -146,6 +146,7 @@ import BposStepExecution from './BposStepExecution';
 import SteeringAction from './SteeringAction';
 import ArchitectSession from './ArchitectSession';
 import CapabilityAgentMap from './CapabilityAgentMap';
+import UIElementFeedback from './UIElementFeedback';
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -743,6 +744,10 @@ CapabilityAgentMap.belongsTo(Feature, { foreignKey: 'feature_id', as: 'feature' 
 Capability.belongsTo(Department, { foreignKey: 'department_id', as: 'department' });
 Department.hasMany(Capability, { foreignKey: 'department_id', as: 'capabilities' });
 
+// UIElementFeedback → Capability
+Capability.hasMany(UIElementFeedback, { foreignKey: 'capability_id', as: 'elementFeedback' });
+UIElementFeedback.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capability' });
+
 // Campaign → Capability (which BP does this campaign serve?)
 Campaign.belongsTo(Capability, { foreignKey: 'capability_id', as: 'businessProcess' });
 Capability.hasMany(Campaign, { foreignKey: 'capability_id', as: 'campaigns' });
@@ -873,4 +878,5 @@ export {
   SteeringAction,
   ArchitectSession,
   CapabilityAgentMap,
+  UIElementFeedback,
 };

@@ -50,6 +50,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
   const [uiSuggestions, setUiSuggestions] = useState<any>(null);
   const [previewUrlInput, setPreviewUrlInput] = useState('');
+  const [elementFeedback, setElementFeedback] = useState<any>(null);
+  const [analyzingPage, setAnalyzingPage] = useState(false);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
   // Project context comes from the process detail API response (p.project_system_prompt)
@@ -308,11 +310,84 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   style={{ width: '100%', height: 400, border: '1px solid var(--color-border)', borderRadius: 8, background: '#fff' }}
                   sandbox="allow-scripts allow-same-origin allow-forms"
                 />
-                <div className="text-end mt-1">
+                <div className="d-flex justify-content-between align-items-center mt-1">
+                  <div className="d-flex gap-2 align-items-center">
+                    <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
+                      disabled={analyzingPage}
+                      onClick={async () => {
+                        setAnalyzingPage(true);
+                        try {
+                          const portalApi = (await import('../../utils/portalApi')).default;
+                          // Send a basic element map from known file structure
+                          const feFiles = (p.implementation_links?.frontend || []) as string[];
+                          const elements = feFiles.map((f: string, i: number) => {
+                            const name = f.split('/').pop()?.replace(/\.(tsx|jsx)$/, '') || f;
+                            return { element_id: `component-${i}`, type: 'component', tag: 'div', selector: name, text: name, depth: 0 };
+                          });
+                          await portalApi.post(`/api/portal/project/business-processes/${processId}/element-map`, { elements, route: p.frontend_route || '/' });
+                          const result = await portalApi.post(`/api/portal/project/business-processes/${processId}/analyze-page`, {});
+                          // Load feedback
+                          const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
+                          setElementFeedback(fbRes.data);
+                        } catch {} finally { setAnalyzingPage(false); }
+                      }}>
+                      {analyzingPage ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Analyzing...</> : <><i className="bi bi-search me-1"></i>Analyze UI</>}
+                    </button>
+                    {elementFeedback?.summary && (
+                      <span style={{ fontSize: 10 }}>
+                        <span className="badge bg-danger me-1">{elementFeedback.summary.open}</span>open
+                        <span className="badge bg-success ms-2 me-1">{elementFeedback.summary.resolved}</span>resolved
+                      </span>
+                    )}
+                  </div>
                   <a href={p.preview_url} target="_blank" rel="noopener noreferrer" className="text-muted" style={{ fontSize: 10 }}>
                     <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
                   </a>
                 </div>
+
+                {/* Element Feedback Results */}
+                {elementFeedback?.items?.length > 0 && (
+                  <div className="mt-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, maxHeight: 300, overflowY: 'auto' }}>
+                    <div className="fw-medium small mb-2">
+                      <i className="bi bi-clipboard2-check me-1" style={{ color: 'var(--color-info)' }}></i>
+                      UI Issues ({elementFeedback.items.filter((f: any) => f.status === 'open').length} open)
+                    </div>
+                    {elementFeedback.items.filter((f: any) => f.status !== 'resolved').map((f: any) => (
+                      <div key={f.id} className="d-flex gap-2 align-items-start py-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
+                        <span className="badge" style={{ fontSize: 8, flexShrink: 0, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981' }}>{f.severity}</span>
+                        <div className="flex-grow-1">
+                          <div className="fw-medium">{f.title}</div>
+                          <div className="text-muted">{f.description?.substring(0, 100)}</div>
+                          {f.suggestion && <div style={{ color: 'var(--color-info)' }}>Fix: {f.suggestion?.substring(0, 100)}</div>}
+                        </div>
+                        <div className="d-flex gap-1 flex-shrink-0">
+                          <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 4px' }}
+                            onClick={async () => {
+                              try {
+                                const portalApi = (await import('../../utils/portalApi')).default;
+                                await portalApi.put(`/api/portal/project/element-feedback/${f.id}`, { status: 'resolved', resolved_by: 'manual' });
+                                const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
+                                setElementFeedback(fbRes.data);
+                              } catch {}
+                            }}>
+                            <i className="bi bi-check"></i>
+                          </button>
+                          <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 4px' }}
+                            onClick={async () => {
+                              try {
+                                const portalApi = (await import('../../utils/portalApi')).default;
+                                await portalApi.put(`/api/portal/project/element-feedback/${f.id}`, { status: 'dismissed' });
+                                const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
+                                setElementFeedback(fbRes.data);
+                              } catch {}
+                            }}>
+                            <i className="bi bi-x"></i>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <div className="p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px dashed var(--color-border)' }}>

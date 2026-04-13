@@ -33,6 +33,7 @@ export interface CapabilityAttributes {
   department_id?: string;
   modes?: string[];
   frontend_route?: string;
+  ui_element_map?: Record<string, any>;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -94,6 +95,7 @@ Capability.init(
     department_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'departments', key: 'id' } },
     modes: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },  // null = all modes; ['mvp','production'] = only those
     frontend_route: { type: DataTypes.STRING(200), allowNull: true },  // e.g. "/admin/campaigns"
+    ui_element_map: { type: DataTypes.JSONB, allowNull: true },  // cached page element structure
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

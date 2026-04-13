@@ -2645,6 +2645,82 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Visual Feedback OS: element-level feedback ────────
+router.post('/api/portal/project/business-processes/:id/element-map', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { elements, route } = req.body;
+    (cap as any).ui_element_map = { page_route: route, scanned_at: new Date().toISOString(), elements: elements || [] };
+    (cap as any).changed('ui_element_map', true);
+    await cap.save();
+    res.json({ stored: (elements || []).length });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/api/portal/project/business-processes/:id/element-feedback', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { getFeedback, getFeedbackSummary } = await import('../services/uiFeedbackStore');
+    const elementId = req.query.element_id as string | undefined;
+    const status = req.query.status as string | undefined;
+    const [items, summary] = await Promise.all([
+      getFeedback(cap.id, { elementId, status }),
+      getFeedbackSummary(cap.id),
+    ]);
+    res.json({ items, summary, element_map: (cap as any).ui_element_map || null });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/business-processes/:id/analyze-page', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const elementMap = (cap as any).ui_element_map;
+    if (!elementMap?.elements?.length) { res.status(400).json({ error: 'No element map. Send element-map first.' }); return; }
+    const { analyzePageElements, augmentWithLLM } = await import('../services/uiFeedbackEngine');
+    const ruleResult = await analyzePageElements({
+      capabilityId: cap.id, projectId: project.id,
+      pageRoute: elementMap.page_route || (cap as any).frontend_route || '/',
+      elements: elementMap.elements,
+      targetElementId: req.body.element_id,
+    });
+    // LLM augment if rules found few issues or user gave feedback
+    let llmResult = { total_issues: 0, new_issues: 0, skipped_duplicates: 0, issues: [] as any[] };
+    if (req.body.user_feedback || ruleResult.total_issues < 3) {
+      llmResult = await augmentWithLLM({
+        capabilityId: cap.id, projectId: project.id,
+        pageRoute: elementMap.page_route || '/',
+        elements: elementMap.elements,
+        userFeedback: req.body.user_feedback,
+        ruleIssueCount: ruleResult.total_issues,
+      });
+    }
+    res.json({
+      rules: ruleResult,
+      llm: llmResult,
+      total_new: ruleResult.new_issues + llmResult.new_issues,
+      total_skipped: ruleResult.skipped_duplicates + llmResult.skipped_duplicates,
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/api/portal/project/element-feedback/:feedbackId', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { status, resolved_by } = req.body;
+    if (!['open', 'in_progress', 'resolved', 'dismissed'].includes(status)) {
+      res.status(400).json({ error: 'Invalid status' }); return;
+    }
+    const { updateFeedbackStatus } = await import('../services/uiFeedbackStore');
+    const item = await updateFeedbackStatus(req.params.feedbackId as string, status, resolved_by);
+    if (!item) { res.status(404).json({ error: 'Feedback not found' }); return; }
+    res.json(item);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Frontend Page Discovery: find orphaned pages + create BPs ────────
 router.post('/api/portal/project/discover-pages', requireParticipant, async (req: Request, res: Response) => {
   try {
