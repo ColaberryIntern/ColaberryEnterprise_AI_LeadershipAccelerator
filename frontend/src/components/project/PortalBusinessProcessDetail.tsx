@@ -347,6 +347,44 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
               </div>
             )}
 
+            {/* UX Improvement Picker — shown for frontend BPs with few/no requirements */}
+            {(p.total_requirements || 0) < 3 && (
+              <div className="mt-3 p-2" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                <div className="fw-medium small mb-2"><i className="bi bi-palette me-1" style={{ color: 'var(--color-accent)' }}></i>Add UX Requirements</div>
+                <div className="d-flex flex-wrap gap-1">
+                  {[
+                    { label: 'Navigation & Routing', icon: 'bi-signpost', desc: 'Add breadcrumbs, sidebar navigation, page transitions' },
+                    { label: 'Mobile Responsive', icon: 'bi-phone', desc: 'Make layout work on mobile and tablet' },
+                    { label: 'Loading States', icon: 'bi-hourglass-split', desc: 'Add skeleton loaders, spinners, progress indicators' },
+                    { label: 'Error Handling UI', icon: 'bi-exclamation-triangle', desc: 'Error boundaries, toast notifications, fallback views' },
+                    { label: 'Data Tables', icon: 'bi-table', desc: 'Sortable, filterable, paginated tables' },
+                    { label: 'Form Validation', icon: 'bi-check2-square', desc: 'Inline validation, error messages, required fields' },
+                    { label: 'Charts & Analytics', icon: 'bi-bar-chart', desc: 'Data visualization, dashboards, KPI cards' },
+                    { label: 'Dark Mode', icon: 'bi-moon', desc: 'Theme switching, dark mode support' },
+                    { label: 'Accessibility', icon: 'bi-universal-access', desc: 'WCAG compliance, keyboard nav, screen readers' },
+                    { label: 'Search & Filter', icon: 'bi-search', desc: 'Global search, faceted filters, typeahead' },
+                    { label: 'Export & Print', icon: 'bi-download', desc: 'PDF export, CSV download, print views' },
+                    { label: 'Real-time Updates', icon: 'bi-lightning', desc: 'WebSocket updates, live data refresh' },
+                  ].map(item => (
+                    <button key={item.label} className="btn btn-sm btn-outline-success" style={{ fontSize: 9, padding: '3px 8px' }}
+                      title={item.desc}
+                      onClick={async () => {
+                        try {
+                          const portalApi = (await import('../../utils/portalApi')).default;
+                          await portalApi.post(`/api/portal/project/business-processes/${processId}/ui-feedback`, { feedback: item.desc, action: item.label });
+                          const el = document.createElement('div');
+                          el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-check-circle me-1"></i>"${item.label}" added as UX requirement</div>`;
+                          document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+                          load();
+                        } catch {}
+                      }}>
+                      <i className={`bi ${item.icon} me-1`}></i>{item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* UI Feedback Panel */}
             <div className="mt-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
               <div className="fw-medium small mb-2"><i className="bi bi-chat-dots me-1" style={{ color: 'var(--color-info)' }}></i>UI Feedback</div>

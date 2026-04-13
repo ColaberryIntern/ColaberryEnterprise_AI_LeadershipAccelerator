@@ -1876,6 +1876,12 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       await fullSync(req.participant!.sub);
     } catch { /* non-critical */ }
 
+    // 1b. Auto-discover orphaned frontend pages and create BPs for them
+    try {
+      const { processOrphanedPages } = await import('../services/frontendPageDiscovery');
+      await processOrphanedPages({ projectId: project.id, fileTree });
+    } catch { /* non-critical — page discovery is additive */ }
+
     // 2. Re-run requirement matching for this process's requirements only
     const { RequirementsMap } = await import('../models');
     const { getConnection } = await import('../services/githubService');
@@ -2601,6 +2607,33 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
       req.participant!.sub, project.id, req.params.id as string, report
     );
     res.json({ ...result, auto_verified: isAlreadyComplete });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Frontend Page Discovery: find orphaned pages + create BPs ────────
+router.post('/api/portal/project/discover-pages', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getConnection } = await import('../services/githubService');
+    const conn = await getConnection(req.participant!.sub);
+    const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
+    if (fileTree.length === 0) { res.status(400).json({ error: 'No repo file tree. Connect GitHub first.' }); return; }
+    const { processOrphanedPages } = await import('../services/frontendPageDiscovery');
+    const result = await processOrphanedPages({ projectId: project.id, fileTree, dryRun: !!req.body.dryRun });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Connect Page to BP: attach a route to an existing BP ────────
+router.put('/api/portal/project/business-processes/:id/connect-page', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { route } = req.body;
+    (cap as any).frontend_route = route || null;
+    await cap.save();
+    res.json({ id: cap.id, name: cap.name, frontend_route: route });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
