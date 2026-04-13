@@ -1876,12 +1876,6 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       await fullSync(req.participant!.sub);
     } catch { /* non-critical */ }
 
-    // 1b. Auto-discover orphaned frontend pages and create BPs for them
-    try {
-      const { processOrphanedPages } = await import('../services/frontendPageDiscovery');
-      await processOrphanedPages({ projectId: project.id, fileTree });
-    } catch { /* non-critical — page discovery is additive */ }
-
     // 2. Re-run requirement matching for this process's requirements only
     const { RequirementsMap } = await import('../models');
     const { getConnection } = await import('../services/githubService');
@@ -1916,6 +1910,12 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       if (name === 'package.json' || name === 'tsconfig.json') return false; // already in noise
       return true;
     });
+
+    // Auto-discover orphaned frontend pages and create BPs for them
+    try {
+      const { processOrphanedPages } = await import('../services/frontendPageDiscovery');
+      await processOrphanedPages({ projectId: project.id, fileTree });
+    } catch { /* non-critical — page discovery is additive */ }
 
     let matched = 0, partial = 0, unmatched = 0, preserved = 0;
 
