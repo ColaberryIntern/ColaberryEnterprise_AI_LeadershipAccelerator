@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
