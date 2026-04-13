@@ -58,6 +58,7 @@ class Capability extends Model<CapabilityAttributes> implements CapabilityAttrib
   declare autonomy_history: any[];
   declare last_evaluated_at: Date;
   declare lifecycle_status: string;
+  declare frontend_route: string;
 }
 
 Capability.init(
