@@ -5,6 +5,42 @@ import { syncNewLeadToGhl } from './ghlService';
 
 const APOLLO_BASE_URL = 'https://api.apollo.io';
 
+// ---------------------------------------------------------------------------
+// Retry helper for external API calls
+// ---------------------------------------------------------------------------
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  { retries = 3, label = 'Apollo' }: { retries?: number; label?: string } = {},
+): Promise<Response> {
+  const delays = [500, 1500, 4000]; // exponential-ish backoff
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      // Retry on 429 (rate limit) and 5xx (server errors), not on 4xx client errors
+      if (response.status === 429 || response.status >= 500) {
+        if (attempt < retries) {
+          const delay = delays[Math.min(attempt, delays.length - 1)];
+          console.warn(`[${label}] HTTP ${response.status} on attempt ${attempt + 1}/${retries + 1}. Retrying in ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+      }
+      return response;
+    } catch (err: any) {
+      if (attempt < retries) {
+        const delay = delays[Math.min(attempt, delays.length - 1)];
+        console.warn(`[${label}] Network error on attempt ${attempt + 1}/${retries + 1}: ${err.message}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        throw new Error(`[${label}] Failed after ${retries + 1} attempts: ${err.message}`);
+      }
+    }
+  }
+  throw new Error(`[${label}] Unreachable — all retry attempts exhausted`);
+}
+
 export interface ApolloSearchParams {
   q_person_title?: string[];
   person_seniorities?: string[];
@@ -62,11 +98,11 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
 
   console.log(`[Apollo] Search request body:`, JSON.stringify(body));
 
-  const response = await fetch(`${APOLLO_BASE_URL}/v1/mixed_people/api_search`, {
+  const response = await fetchWithRetry(`${APOLLO_BASE_URL}/v1/mixed_people/api_search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify(body),
-  });
+  }, { label: 'Apollo Search' });
 
   console.log(`[Apollo] Search response status: ${response.status}`);
 
@@ -119,11 +155,11 @@ async function enrichPersonById(apiKey: string, personId: string, revealPhone = 
     payload.webhook_url = PHONE_REVEAL_WEBHOOK_URL;
   }
 
-  const response = await fetch(`${APOLLO_BASE_URL}/v1/people/match`, {
+  const response = await fetchWithRetry(`${APOLLO_BASE_URL}/v1/people/match`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify(payload),
-  });
+  }, { label: 'Apollo Enrich' });
 
   if (!response.ok) return null;
 
@@ -154,11 +190,11 @@ export async function enrichPerson(email: string): Promise<ApolloPersonResult | 
   const apiKey = env.apolloApiKey;
   if (!apiKey) throw new Error('Apollo API key not configured');
 
-  const response = await fetch(`${APOLLO_BASE_URL}/v1/people/match`, {
+  const response = await fetchWithRetry(`${APOLLO_BASE_URL}/v1/people/match`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify({ email }),
-  });
+  }, { label: 'Apollo Enrich' });
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -362,7 +398,7 @@ export function calculateColdLeadScore(
 
 /** Request async phone number reveal from Apollo — result delivered via webhook */
 export async function requestPhoneReveal(apiKey: string, personId: string): Promise<void> {
-  const response = await fetch(`${APOLLO_BASE_URL}/v1/people/match`, {
+  const response = await fetchWithRetry(`${APOLLO_BASE_URL}/v1/people/match`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify({
@@ -370,7 +406,7 @@ export async function requestPhoneReveal(apiKey: string, personId: string): Prom
       reveal_phone_number: true,
       webhook_url: PHONE_REVEAL_WEBHOOK_URL,
     }),
-  });
+  }, { label: 'Apollo PhoneReveal' });
 
   if (!response.ok) {
     const text = await response.text();
@@ -386,11 +422,11 @@ export async function getApolloQuota(): Promise<{ available: boolean; message: s
 
   try {
     // Simple check — try a minimal search
-    const response = await fetch(`${APOLLO_BASE_URL}/v1/mixed_people/api_search`, {
+    const response = await fetchWithRetry(`${APOLLO_BASE_URL}/v1/mixed_people/api_search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
       body: JSON.stringify({ per_page: 1, page: 1, person_titles: ['CEO'] }),
-    });
+    }, { retries: 1, label: 'Apollo Quota' });
 
     if (response.ok) {
       return { available: true, message: 'Apollo API is available' };
