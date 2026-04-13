@@ -1629,23 +1629,30 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
         const baseUrl = (project as any).portfolio_url;
         if (!baseUrl) return null;
         const feFiles = enriched.implementation_links?.frontend || [];
-        if (feFiles.length > 0) {
-          // Find the best "page" file (prefer Page files over components)
-          const pageFile = feFiles.find((f: string) => f.toLowerCase().includes('page')) || feFiles[0];
-          // Next.js app router: frontend/app/{route}/page.tsx → /{route}
-          const appMatch = pageFile.match(/(?:frontend\/)?app\/(.+?)\/page\.tsx$/);
+        if (feFiles.length === 0) return baseUrl;
+
+        // Strategy 1: Next.js app router — frontend/app/{route}/page.tsx → /{route}
+        const pageFile = feFiles.find((f: string) => /\/app\/.+\/page\.tsx$/.test(f));
+        if (pageFile) {
+          const appMatch = pageFile.match(/app\/(.+?)\/page\.tsx$/);
           if (appMatch) return baseUrl.replace(/\/$/, '') + '/' + appMatch[1].replace(/\[.*?\]/g, '');
-          // CRA/React Router pages: src/pages/admin/AdminCampaignsPage.tsx → /admin/campaigns
-          const craMatch = pageFile.match(/pages\/(?:admin\/)?(\w+?)Page\.tsx$/);
-          if (craMatch) {
-            const routeName = craMatch[1].replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
-            const isAdmin = pageFile.includes('/admin/');
-            return baseUrl.replace(/\/$/, '') + (isAdmin ? '/admin/' : '/') + routeName;
-          }
-          // Generic pages router: pages/{route}.tsx → /{route}
-          const pagesMatch = pageFile.match(/pages\/(.+?)\.tsx$/);
-          if (pagesMatch) return baseUrl.replace(/\/$/, '') + '/' + pagesMatch[1];
         }
+
+        // Strategy 2: Scan matched files for known route patterns in the path
+        // Look for files that ARE in a pages/ directory (actual route pages)
+        const routePageFile = feFiles.find((f: string) => /\/pages\/.*Page\.tsx$/.test(f));
+        if (routePageFile) {
+          // Extract the page name and look up the actual route from file path
+          const pathParts = routePageFile.split('/');
+          const fileName = (pathParts.pop() || '').replace(/Page\.tsx$/, '').replace(/^Admin/, '');
+          // Convert PascalCase to kebab-case route
+          const route = fileName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+          const isAdmin = routePageFile.includes('/admin/') || routePageFile.includes('/Admin');
+          if (route && route.length > 2) {
+            return baseUrl.replace(/\/$/, '') + (isAdmin ? '/admin/' + route : '/' + route);
+          }
+        }
+
         return baseUrl;
       })(),
       project_system_prompt: projectVars.system_prompt || '',
