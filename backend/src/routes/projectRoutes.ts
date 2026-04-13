@@ -1402,9 +1402,13 @@ function enrichCapability(cap: any) {
   if (!hasBackend) why_not.push('No backend services or API routes found');
   if (!hasFrontend) why_not.push('No frontend UI components found');
 
+  // Detect if this is a frontend-page-only BP
+  const isPageBP = cap.source === 'frontend_page';
+
   return {
     ...cap,
-    source: 'requirements',
+    source: isPageBP ? 'frontend_page' : 'requirements',
+    is_page_bp: isPageBP,
     total_requirements: totalR,
     matched_requirements: allReqsFlat.filter((r: any) => r.status === 'matched' || r.status === 'auto_verified' || r.status === 'verified').length,
     verified_requirements: allReqsFlat.filter((r: any) => r.status === 'auto_verified' || r.status === 'verified').length,

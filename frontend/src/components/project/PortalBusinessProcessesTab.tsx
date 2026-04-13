@@ -127,18 +127,26 @@ export default function PortalBusinessProcessesTab() {
           const matColor = matColors[mat.level] || '#9ca3af';
           const statusDot = (s: string) => ({ ready: 'var(--color-success)', partial: 'var(--color-warning)', missing: 'var(--color-danger)' }[s] || '#9ca3af');
 
+          const isPageBP = p.is_page_bp || p.source === 'frontend_page';
+
           return (
             <div key={p.id} className="col-md-6 col-lg-4">
-              <div className="card border-0 shadow-sm h-100"
-                style={{ borderLeft: `4px solid ${matColor}`, cursor: 'pointer', outline: isSelected ? '2px solid var(--color-primary-light)' : 'none' }}
+              <div className={`card border-0 shadow-sm h-100`}
+                style={{
+                  borderLeft: isPageBP ? '4px solid #8b5cf6' : `4px solid ${matColor}`,
+                  background: isPageBP ? '#faf5ff' : undefined,
+                  cursor: 'pointer',
+                  outline: isSelected ? '2px solid var(--color-primary-light)' : 'none',
+                }}
                 onClick={() => setSelected(isSelected ? null : p.id)}>
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div className="d-flex align-items-center gap-2">
                       {p.priority_rank && (
-                        <span className="badge" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10, fontWeight: 700, minWidth: 22, textAlign: 'center' }} title={p.priority_reason || ''}>#{p.priority_rank}</span>
+                        <span className="badge" style={{ background: isPageBP ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontSize: 10, fontWeight: 700, minWidth: 22, textAlign: 'center' }} title={p.priority_reason || ''}>#{p.priority_rank}</span>
                       )}
-                      <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: 'var(--color-primary)' }}>{p.name}</h6>
+                      {isPageBP && <i className="bi bi-layout-wtf" style={{ color: '#8b5cf6', fontSize: 12 }}></i>}
+                      <h6 className="fw-semibold mb-0" style={{ fontSize: 13, color: isPageBP ? '#8b5cf6' : 'var(--color-primary)' }}>{p.name}</h6>
                     </div>
                     <div className="d-flex align-items-center gap-1">
                       {p.effective_mode && p.effective_mode !== 'production' && (
@@ -161,8 +169,12 @@ export default function PortalBusinessProcessesTab() {
                     <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.agent), marginRight: 3 }}></span>Agents</span>
                   </div>
 
-                  {/* 3 metric mini bars */}
-                  {[
+                  {/* 3 metric mini bars — different for page BPs */}
+                  {(isPageBP ? [
+                    { label: 'UX Improvements', val: p.total_requirements > 0 ? Math.round((p.matched_requirements / p.total_requirements) * 100) : 0 },
+                    { label: 'Page Health', val: m.system_readiness || 0 },
+                    { label: 'Visual Quality', val: m.quality_score || 0 },
+                  ] : [
                     { label: 'Matched', val: m.requirements_coverage || 0 },
                     { label: 'Readiness', val: m.system_readiness || 0 },
                     { label: 'Quality', val: m.quality_score || 0 },
