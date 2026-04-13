@@ -82,7 +82,7 @@ UIElementFeedback.init(
       { fields: ['capability_id'] },
       { fields: ['capability_id', 'element_id'] },
       { fields: ['capability_id', 'status'] },
-      { unique: true, fields: ['capability_id', 'feedback_hash'], where: { status: { [DataTypes.STRING as any]: 'open' } }, name: 'ui_feedback_dedup' },
+      { unique: true, fields: ['capability_id', 'feedback_hash'], name: 'ui_feedback_dedup' },
     ],
   }
 );
