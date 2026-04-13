@@ -1596,7 +1596,28 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     res.json({
       ...enriched,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
-      preview_url: (project as any).portfolio_url || null,
+      preview_url: (() => {
+        const baseUrl = (project as any).portfolio_url;
+        if (!baseUrl) return null;
+        // Derive the route path from the BP's matched frontend files
+        // e.g., "frontend/app/campaigns/page.tsx" → "/campaigns"
+        const feFiles = enriched.implementation_links?.frontend || [];
+        if (feFiles.length > 0) {
+          const firstFile = feFiles[0];
+          // Extract route from Next.js app router path: frontend/app/{route}/page.tsx
+          const appMatch = firstFile.match(/(?:frontend\/)?app\/(.+?)\/page\.tsx$/);
+          if (appMatch) {
+            const route = '/' + appMatch[1].replace(/\[.*?\]/g, ''); // strip dynamic segments
+            return baseUrl.replace(/\/$/, '') + route;
+          }
+          // Extract route from pages router: pages/{route}.tsx or frontend/pages/{route}.tsx
+          const pagesMatch = firstFile.match(/pages\/(.+?)\.tsx$/);
+          if (pagesMatch) {
+            return baseUrl.replace(/\/$/, '') + '/' + pagesMatch[1];
+          }
+        }
+        return baseUrl; // fallback to base URL
+      })(),
       project_system_prompt: projectVars.system_prompt || '',
       hitl_config: capModel?.hitl_config || null,
       autonomy_level: capModel?.autonomy_level || 'manual',
