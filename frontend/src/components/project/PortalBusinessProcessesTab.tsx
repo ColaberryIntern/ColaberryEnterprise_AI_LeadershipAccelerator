@@ -178,7 +178,7 @@ export default function PortalBusinessProcessesTab() {
                     { label: 'Matched', val: m.requirements_coverage || 0 },
                     { label: 'Readiness', val: m.system_readiness || 0 },
                     { label: 'Quality', val: m.quality_score || 0 },
-                  ].map(mb => (
+                  ]).map(mb => (
                     <div key={mb.label} className="d-flex align-items-center gap-1 mb-1">
                       <span className="text-muted" style={{ fontSize: 8, width: 50 }}>{mb.label}</span>
                       <div className="progress flex-grow-1" style={{ height: 3 }}>
