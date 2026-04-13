@@ -28,6 +28,40 @@ router.get('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, ha
 router.post('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, handleCreateSession);
 router.get('/api/admin/accelerator/cohorts/:cohortId/dashboard', requireAdmin, handleGetDashboard);
 router.post('/api/admin/accelerator/cohorts/:cohortId/readiness', requireAdmin, handleComputeAllReadiness);
+// Quick-add student: create enrollment + enable portal + send magic link in one call
+router.post('/api/admin/accelerator/quick-add-student', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { full_name, email, company, title, phone, company_size, cohort_id, notes } = req.body;
+    if (!full_name || !email || !cohort_id) {
+      res.status(400).json({ error: 'full_name, email, and cohort_id are required' }); return;
+    }
+
+    // 1. Create enrollment
+    const { createAdminEnrollment } = await import('../../services/enrollmentService');
+    const enrollment = await createAdminEnrollment({ full_name, email, company: company || '', title, phone, company_size, cohort_id, notes });
+
+    // 2. Enable portal access
+    const { setPortalAccess } = await import('../../services/acceleratorService');
+    await setPortalAccess(enrollment.id, true);
+
+    // 3. Send magic link email
+    const { requestMagicLink } = await import('../../services/participantService');
+    await requestMagicLink(email);
+
+    res.json({
+      success: true,
+      enrollment: { id: enrollment.id, full_name: enrollment.full_name, email: enrollment.email },
+      message: `${full_name} enrolled and login link sent to ${email}`,
+    });
+  } catch (err: any) {
+    if (err.message?.includes('already enrolled')) {
+      res.status(409).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
 router.post('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleCreateEnrollment);
 router.get('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleListCohortEnrollments);
 router.patch('/api/admin/accelerator/enrollments/:id/portal-access', requireAdmin, handleSetPortalAccess);

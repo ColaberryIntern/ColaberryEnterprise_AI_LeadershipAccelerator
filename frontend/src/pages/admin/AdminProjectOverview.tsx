@@ -26,6 +26,10 @@ function AdminProjectOverview() {
   const [stats, setStats] = useState<CohortProjectStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ full_name: '', email: '', company: '', title: '', phone: '' });
+  const [adding, setAdding] = useState(false);
+  const [addResult, setAddResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
 
   useEffect(() => {
     api.get('/api/admin/projects/overview')
@@ -69,9 +73,94 @@ function AdminProjectOverview() {
 
   return (
     <>
-      <h1 className="h4 fw-bold mb-4" style={{ color: 'var(--color-primary)' }}>
-        <i className="bi bi-rocket-takeoff me-2"></i>Project Overview
-      </h1>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1 className="h4 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
+          <i className="bi bi-rocket-takeoff me-2"></i>Project Overview
+        </h1>
+        <button className="btn btn-primary btn-sm" onClick={() => { setShowAddModal(true); setAddResult(null); }}>
+          <i className="bi bi-person-plus me-1"></i>Add Student
+        </button>
+      </div>
+
+      {/* Add Student Modal */}
+      {showAddModal && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowAddModal(false)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header py-2">
+                <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
+                  <i className="bi bi-person-plus me-2"></i>Add Student to April Cohort
+                </h6>
+                <button className="btn-close" onClick={() => setShowAddModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                {addResult?.success ? (
+                  <div className="text-center py-3">
+                    <i className="bi bi-check-circle d-block mb-2" style={{ fontSize: 40, color: 'var(--color-accent)' }}></i>
+                    <h6 className="fw-bold">{addResult.message}</h6>
+                    <p className="text-muted small">They will receive a login email at their address. They can access the portal at enterprise.colaberry.ai → Participant Login.</p>
+                    <button className="btn btn-sm btn-primary mt-2" onClick={() => { setShowAddModal(false); setAddForm({ full_name: '', email: '', company: '', title: '', phone: '' }); setAddResult(null); window.location.reload(); }}>
+                      Done
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {addResult?.error && <div className="alert alert-danger small py-2">{addResult.error}</div>}
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">Full Name *</label>
+                      <input className="form-control form-control-sm" value={addForm.full_name} onChange={e => setAddForm({ ...addForm, full_name: e.target.value })} placeholder="John Smith" />
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">Email *</label>
+                      <input className="form-control form-control-sm" type="email" value={addForm.email} onChange={e => setAddForm({ ...addForm, email: e.target.value })} placeholder="john@company.com" />
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small fw-medium">Company</label>
+                      <input className="form-control form-control-sm" value={addForm.company} onChange={e => setAddForm({ ...addForm, company: e.target.value })} placeholder="Company Inc." />
+                    </div>
+                    <div className="row g-2 mb-2">
+                      <div className="col-6">
+                        <label className="form-label small fw-medium">Title</label>
+                        <input className="form-control form-control-sm" value={addForm.title} onChange={e => setAddForm({ ...addForm, title: e.target.value })} placeholder="VP of Engineering" />
+                      </div>
+                      <div className="col-6">
+                        <label className="form-label small fw-medium">Phone</label>
+                        <input className="form-control form-control-sm" value={addForm.phone} onChange={e => setAddForm({ ...addForm, phone: e.target.value })} placeholder="+1 555-0100" />
+                      </div>
+                    </div>
+                    <div className="p-2 mb-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11 }}>
+                      <i className="bi bi-info-circle me-1" style={{ color: 'var(--color-info)' }}></i>
+                      Student will be added to <strong>Cohort — April 2026</strong>, portal access enabled immediately, and a login link emailed to them.
+                    </div>
+                  </>
+                )}
+              </div>
+              {!addResult?.success && (
+                <div className="modal-footer py-2">
+                  <button className="btn btn-sm btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                  <button className="btn btn-sm btn-primary" disabled={adding || !addForm.full_name.trim() || !addForm.email.trim()}
+                    onClick={async () => {
+                      setAdding(true); setAddResult(null);
+                      try {
+                        // Get the first cohort ID (April 2026)
+                        const cohortId = stats[0]?.cohort_id;
+                        if (!cohortId) { setAddResult({ error: 'No cohort found' }); return; }
+                        const res = await api.post('/api/admin/accelerator/quick-add-student', {
+                          ...addForm, cohort_id: cohortId,
+                        });
+                        setAddResult({ success: true, message: res.data.message });
+                      } catch (err: any) {
+                        setAddResult({ error: err.response?.data?.error || 'Failed to add student' });
+                      } finally { setAdding(false); }
+                    }}>
+                    {adding ? <><span className="spinner-border spinner-border-sm me-1"></span>Adding...</> : <><i className="bi bi-person-plus me-1"></i>Add & Send Login Link</>}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="row g-3 mb-4">
