@@ -431,6 +431,34 @@ function UtilityCoopLandingPage() {
         </div>
       </section>
 
+      {/* ── Why Co-Ops Trust Us ── */}
+      <section style={{ background: 'var(--color-bg-alt)', padding: '4rem 1.5rem' }}>
+        <div className="container" style={{ maxWidth: 960 }}>
+          <h2 className="text-center fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 28 }}>Why Co-Ops Trust Colaberry</h2>
+          <p className="text-center text-muted mb-4" style={{ fontSize: 15 }}>We understand what matters to co-op executives: reliability, security, cost control, and working with what you already have.</p>
+          <div className="row g-3">
+            {[
+              { icon: 'bi-building', title: 'Proven Utility Experience', desc: 'We have a history of working with the largest utilities in the United States. Our team understands grid operations, regulatory requirements, and co-op governance.' },
+              { icon: 'bi-puzzle', title: 'Works With What You Have', desc: 'Our solution works in tandem with your existing AI efforts, NISC systems, Azure pipelines, and internal tools. We reduce discovery time and help you get to ROI faster, not start from scratch.' },
+              { icon: 'bi-shield-lock', title: 'Cybersecurity and Compliance', desc: 'SOC 2 aligned audit trails. NERC CIP awareness. Every AI decision is explainable, replayable, and traceable. Your member data stays protected.' },
+              { icon: 'bi-cash-stack', title: 'Cost Control and Transparent ROI', desc: 'No hidden fees. No surprise overruns. Our ROI methodology is fully deterministic and transparent. You see the math before you commit, and you can validate it with your own numbers.' },
+              { icon: 'bi-award', title: 'USDA Grant Eligible', desc: 'USDA Rural Utilities Service (RUS) provides loans and grants for technology improvements. Our solutions can be positioned for grid resilience funding, so you spend grant money you already have, not discretionary O&M budget.' },
+              { icon: 'bi-arrow-left-right', title: 'Flexible Engagement', desc: 'No secure login required at the initial interest stage. Start with a free demo and assessment. NDA and formal agreements come when you are ready for active implementation.' },
+            ].map((item, i) => (
+              <div key={i} className="col-md-6">
+                <div className="d-flex align-items-start gap-3 p-3">
+                  <i className={`bi ${item.icon} fs-4 flex-shrink-0`} style={{ color: 'var(--color-primary)' }} />
+                  <div>
+                    <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{item.title}</h6>
+                    <p className="text-muted mb-0" style={{ fontSize: 13 }}>{item.desc}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Design Your Own ── */}
       <section style={{ padding: '4rem 1.5rem', textAlign: 'center' }}>
         <div className="container" style={{ maxWidth: 600 }}>
