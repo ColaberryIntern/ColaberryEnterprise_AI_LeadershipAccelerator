@@ -453,7 +453,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         setElementFeedback(fbRes.data);
                       } catch {} finally { setAnalyzingPage(false); }
                     }}>
-                    {action}
+                    <i className={`bi ${action.icon} me-1`}></i>{action.label}
                   </button>
                 ))}
               </div>
