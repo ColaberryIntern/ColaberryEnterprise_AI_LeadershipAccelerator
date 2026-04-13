@@ -456,19 +456,6 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     {action}
                   </button>
                 ))}
-                {uiFeedback.trim() && (
-                  <button className="btn btn-sm btn-primary" style={{ fontSize: 9 }} disabled={uiAnalyzing}
-                    onClick={async () => {
-                      setUiAnalyzing(true);
-                      try {
-                        const portalApi = (await import('../../utils/portalApi')).default;
-                        const r = await portalApi.post(`/api/portal/project/business-processes/${processId}/ui-feedback`, { feedback: uiFeedback });
-                        setUiSuggestions(r.data);
-                      } catch {} finally { setAnalyzingPage(false); }
-                    }}>
-                    <i className={`bi ${action.icon} me-1`}></i>{action.label}
-                  </button>
-                ))}
               </div>
 
               {/* Custom feedback input */}
