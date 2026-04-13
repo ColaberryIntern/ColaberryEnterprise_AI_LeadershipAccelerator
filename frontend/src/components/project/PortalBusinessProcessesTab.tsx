@@ -108,7 +108,7 @@ export default function PortalBusinessProcessesTab() {
 
       {/* Detail panel appears here — above the card grid */}
       {selected && (
-        <div className="mb-4">
+        <div className="mb-4" id="bp-detail-panel">
           <PortalBusinessProcessDetail processId={selected} onClose={() => setSelected(null)} onUpdate={() => load(true)} />
         </div>
       )}
@@ -138,7 +138,7 @@ export default function PortalBusinessProcessesTab() {
                   cursor: 'pointer',
                   outline: isSelected ? '2px solid var(--color-primary-light)' : 'none',
                 }}
-                onClick={(e) => { setSelected(isSelected ? null : p.id); if (!isSelected) setTimeout(() => (e.currentTarget as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}>
+                onClick={() => { setSelected(isSelected ? null : p.id); if (!isSelected) setTimeout(() => document.getElementById('bp-detail-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }}>
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div className="d-flex align-items-center gap-2">
