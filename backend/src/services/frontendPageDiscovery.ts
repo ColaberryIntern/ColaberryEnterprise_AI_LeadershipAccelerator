@@ -53,9 +53,12 @@ export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
     const craMatch = f.match(/pages\/(?:admin\/)?(\w+Page)\.tsx$/);
     if (craMatch) {
       const rawName = craMatch[1].replace(/Page$/, '');
-      // Convert PascalCase to route: AdminCampaigns → campaigns, EnrollCancel → enroll-cancel
       const cleanName = rawName.replace(/^Admin/, '');
-      const route = cleanName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+      // Smart kebab: keep known acronyms together (AI, ICP, ROI, API)
+      const route = cleanName
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')  // HTMLParser → HTML-Parser
+        .replace(/([a-z])([A-Z])/g, '$1-$2')          // camelCase → camel-Case
+        .toLowerCase();
       const isAdmin = f.includes('/admin/') || rawName.startsWith('Admin');
       const fullRoute = isAdmin ? '/admin/' + route : '/' + route;
 
@@ -105,6 +108,11 @@ export async function processOrphanedPages(options: {
     attributes: ['id', 'name', 'frontend_route'],
   });
   const mappedRoutes = new Set(existingCaps.map(c => (c as any).frontend_route).filter(Boolean));
+  // Also build a set of existing BP name stems for fuzzy matching
+  const existingNameStems = new Set<string>();
+  existingCaps.forEach(c => {
+    c.name.toLowerCase().split(/\W+/).filter(w => w.length >= 4).forEach(s => existingNameStems.add(s));
+  });
 
   // Skip utility pages that don't need BPs
   const SKIP_ROUTES = new Set(['/admin/login', '/portal/login', '/portal/verify', '/:param', '/enroll/success', '/enroll/cancel']);
@@ -118,6 +126,15 @@ export async function processOrphanedPages(options: {
     if (mappedRoutes.has(page.route)) {
       result.mapped_pages++;
       result.details.push({ route: page.route, status: 'mapped', bp_name: existingCaps.find(c => (c as any).frontend_route === page.route)?.name });
+      continue;
+    }
+
+    // Check if this page's name matches any existing BP (fuzzy)
+    const pageStems = page.pageName.replace(/([A-Z])/g, ' $1').toLowerCase().trim().split(/\W+/).filter(w => w.length >= 4);
+    const matchesExistingBP = pageStems.some(s => existingNameStems.has(s));
+    if (matchesExistingBP) {
+      result.mapped_pages++;
+      result.details.push({ route: page.route, status: 'mapped', bp_name: '(name match)' });
       continue;
     }
 
