@@ -138,7 +138,7 @@ export default function PortalBusinessProcessesTab() {
                   cursor: 'pointer',
                   outline: isSelected ? '2px solid var(--color-primary-light)' : 'none',
                 }}
-                onClick={() => setSelected(isSelected ? null : p.id)}>
+                onClick={(e) => { setSelected(isSelected ? null : p.id); if (!isSelected) setTimeout(() => (e.currentTarget as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}>
                 <div className="card-body p-3">
                   <div className="d-flex justify-content-between align-items-start mb-2">
                     <div className="d-flex align-items-center gap-2">
