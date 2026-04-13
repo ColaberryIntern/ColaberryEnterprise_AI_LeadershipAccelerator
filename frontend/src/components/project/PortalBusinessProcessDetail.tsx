@@ -271,6 +271,37 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           <Section num={3.1} title="Frontend Preview" collapsible defaultOpen>
             {p.preview_url ? (
               <>
+                {/* Route selector */}
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <span className="text-muted" style={{ fontSize: 10 }}><i className="bi bi-signpost me-1"></i>Route:</span>
+                  <span className="fw-medium" style={{ fontSize: 11 }}>{p.frontend_route || '/'}</span>
+                  <select className="form-select form-select-sm" style={{ fontSize: 10, width: 'auto', maxWidth: 200 }}
+                    value={p.frontend_route || ''}
+                    onChange={async (e) => {
+                      try {
+                        const portalApi = (await import('../../utils/portalApi')).default;
+                        await portalApi.put(`/api/portal/project/business-processes/${processId}/frontend-route`, { route: e.target.value || null });
+                        load();
+                      } catch {}
+                    }}>
+                    <option value="">/ (home)</option>
+                    <optgroup label="Admin">
+                      {['/admin/dashboard','/admin/campaigns','/admin/leads','/admin/pipeline','/admin/visitors','/admin/marketing','/admin/tickets','/admin/intelligence','/admin/orchestration','/admin/settings','/admin/revenue','/admin/governance','/admin/communications','/admin/accelerator','/admin/events','/admin/import','/admin/war-room','/admin/projects'].map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Portal">
+                      {['/portal/project','/portal/curriculum','/portal/sessions','/portal/assignments','/portal/progress'].map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Public">
+                      {['/','/program','/pricing','/enroll','/contact','/case-studies','/advisory','/sponsorship'].map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
                 <iframe
                   src={p.preview_url}
                   title="Frontend Preview"

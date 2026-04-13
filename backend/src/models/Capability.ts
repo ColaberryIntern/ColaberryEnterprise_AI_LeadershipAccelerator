@@ -32,6 +32,7 @@ export interface CapabilityAttributes {
   applicability_status?: string;
   department_id?: string;
   modes?: string[];
+  frontend_route?: string;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -91,6 +92,7 @@ Capability.init(
     applicability_status: { type: DataTypes.STRING(20), defaultValue: 'active' },
     department_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'departments', key: 'id' } },
     modes: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },  // null = all modes; ['mvp','production'] = only those
+    frontend_route: { type: DataTypes.STRING(200), allowNull: true },  // e.g. "/admin/campaigns"
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

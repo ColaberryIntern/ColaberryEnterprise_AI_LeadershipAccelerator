@@ -1628,37 +1628,23 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       preview_url: (() => {
         const baseUrl = (project as any).portfolio_url;
         if (!baseUrl) return null;
+        // Use frontend_route if set (direct mapping — most reliable)
+        if (capModel?.frontend_route) {
+          return baseUrl.replace(/\/$/, '') + capModel.frontend_route;
+        }
+        // Fallback: Next.js app router detection from matched files
         const feFiles = enriched.implementation_links?.frontend || [];
-        if (feFiles.length === 0) return baseUrl;
-
-        // Strategy 1: Next.js app router — frontend/app/{route}/page.tsx → /{route}
         const pageFile = feFiles.find((f: string) => /\/app\/.+\/page\.tsx$/.test(f));
         if (pageFile) {
           const appMatch = pageFile.match(/app\/(.+?)\/page\.tsx$/);
           if (appMatch) return baseUrl.replace(/\/$/, '') + '/' + appMatch[1].replace(/\[.*?\]/g, '');
         }
-
-        // Strategy 2: Only derive route from Page files whose name matches BP stems
-        const bpStems = (enriched.name || '').toLowerCase().split(/\W+/).filter((w: string) => w.length >= 4);
-        const routePageFile = feFiles.find((f: string) => {
-          if (!/\/pages\/.*Page\.tsx$/.test(f)) return false;
-          const fName = (f.split('/').pop() || '').toLowerCase();
-          return bpStems.some((stem: string) => fName.includes(stem));
-        });
-        if (routePageFile) {
-          const fileName = (routePageFile.split('/').pop() || '').replace(/Page\.tsx$/, '').replace(/^Admin/, '');
-          const route = fileName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
-          const isAdmin = routePageFile.includes('/admin/');
-          if (route && route.length > 2) {
-            return baseUrl.replace(/\/$/, '') + (isAdmin ? '/admin/' + route : '/' + route);
-          }
-        }
-
         return baseUrl;
       })(),
       project_system_prompt: projectVars.system_prompt || '',
       hitl_config: capModel?.hitl_config || null,
       autonomy_level: capModel?.autonomy_level || 'manual',
+      frontend_route: capModel?.frontend_route || null,
       autonomy_history: capModel?.autonomy_history || [],
       strength_scores: capModel?.strength_scores || null,
       confidence_score: capModel?.confidence_score || null,
@@ -2615,6 +2601,31 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
       req.participant!.sub, project.id, req.params.id as string, report
     );
     res.json({ ...result, auto_verified: isAlreadyComplete });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Frontend Route Mapping: auto-map BPs to routes ────────
+router.post('/api/portal/project/auto-map-routes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { availableRoutes, dryRun } = req.body;
+    if (!availableRoutes?.length) { res.status(400).json({ error: 'availableRoutes array required' }); return; }
+    const { autoMapRoutes } = await import('../services/frontendRouteMapper');
+    const result = await autoMapRoutes({ projectId: project.id, availableRoutes, dryRun: !!dryRun });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Frontend Route: manually set route for a BP ────────
+router.put('/api/portal/project/business-processes/:id/frontend-route', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { route } = req.body;
+    const { setFrontendRoute } = await import('../services/frontendRouteMapper');
+    await setFrontendRoute(cap.id, route || null);
+    res.json({ frontend_route: route || null });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
