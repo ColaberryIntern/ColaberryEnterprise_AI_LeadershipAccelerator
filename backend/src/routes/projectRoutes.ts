@@ -1523,29 +1523,60 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     // Track how many were filtered out
     const filteredOutCount = hierarchy.length - modeFilteredHierarchy.length;
 
-    // Graph-based prioritization
-    try {
-      const { buildProjectGraph } = await import('../intelligence/graph/graphBuilder');
-      const { getProcessPriority } = await import('../intelligence/graph/graphQueryEngine');
-      const graph = await buildProjectGraph(project.id);
-      const priorities = getProcessPriority(graph);
-      // Sort by priority score (highest first)
-      enriched.sort((a: any, b: any) => {
-        const pa = priorities.get(`proc:${a.id}`)?.score || 0;
-        const pb = priorities.get(`proc:${b.id}`)?.score || 0;
-        return pb - pa;
-      });
-      // Add rank + reason
-      enriched.forEach((cap: any, i: number) => {
-        const p = priorities.get(`proc:${cap.id}`);
-        cap.priority_rank = i + 1;
-        cap.priority_reason = p?.reason || 'Standard priority';
-        cap.priority_score = p?.score || 0;
-      });
-    } catch (graphErr) {
-      // Graph is optional — fallback to unsorted
-      enriched.forEach((cap: any, i: number) => { cap.priority_rank = i + 1; cap.priority_reason = 'Default order'; cap.priority_score = 0; });
-    }
+    // Smart priority scoring — different logic for code BPs vs page BPs
+    // Code BPs: highest gap = highest priority (most work needed first)
+    // Page BPs: ranked by page importance tier, always after incomplete code BPs
+    const PAGE_IMPORTANCE: Record<string, number> = {
+      // Critical pages (core user flow)
+      '/': 90, '/admin/dashboard': 88, '/portal/project': 85, '/admin/campaigns': 80,
+      '/admin/leads': 78, '/admin/pipeline': 76, '/admin/intelligence': 75,
+      '/enroll': 72, '/pricing': 70,
+      // Important pages (secondary flow)
+      '/admin/marketing': 60, '/admin/tickets': 58, '/admin/orchestration': 55,
+      '/admin/communications': 52, '/admin/revenue': 50, '/admin/governance': 48,
+      '/admin/visitors': 45, '/admin/settings': 42, '/admin/accelerator': 40,
+      '/portal/curriculum': 38, '/portal/sessions': 35,
+      // Support pages
+      '/program': 30, '/advisory': 28, '/contact': 25, '/case-studies': 22,
+      '/sponsorship': 20, '/strategy-call-prep': 18,
+    };
+
+    enriched.forEach((cap: any) => {
+      const isPageBP = cap.is_page_bp || cap.source === 'frontend_page';
+      const totalReqs = cap.total_requirements || 0;
+      const matchedReqs = cap.matched_requirements || 0;
+      const gapCount = cap.gap_count || 0;
+      const coverage = cap.metrics?.requirements_coverage || 0;
+      const isComplete = cap.is_complete;
+
+      if (isPageBP) {
+        // Page BPs: importance tier (0-90) scaled to fit below incomplete code BPs
+        const pageImportance = PAGE_IMPORTANCE[cap.frontend_route] || 15;
+        const uxReqsPending = totalReqs > 0 ? totalReqs - matchedReqs : 0;
+        // Base: 100 (below code BP max of ~500), + page importance, + pending work
+        cap.priority_score = 100 + pageImportance + uxReqsPending * 5;
+        cap.priority_reason = `Page priority: ${pageImportance}/90`;
+      } else {
+        // Code BPs: gap-driven priority
+        // Complete BPs go to bottom, incomplete sorted by gap size + coverage deficit
+        if (isComplete) {
+          cap.priority_score = 50 - coverage; // complete = low priority
+          cap.priority_reason = 'Complete';
+        } else {
+          const coverageDeficit = 100 - coverage;
+          const reqWeight = totalReqs > 0 ? (totalReqs - matchedReqs) * 3 : 0;
+          const gapWeight = gapCount * 10;
+          // Dependencies: BPs with backend missing get boosted (foundation first)
+          const backendMissing = cap.usability?.backend === 'missing' ? 100 : 0;
+          cap.priority_score = 200 + coverageDeficit + reqWeight + gapWeight + backendMissing;
+          cap.priority_reason = gapCount > 0 ? `${gapCount} gaps, ${coverageDeficit}% to go` : `${coverageDeficit}% coverage needed`;
+        }
+      }
+    });
+
+    // Sort: highest score first
+    enriched.sort((a: any, b: any) => (b.priority_score || 0) - (a.priority_score || 0));
+    enriched.forEach((cap: any, i: number) => { cap.priority_rank = i + 1; });
 
     res.json(enriched);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
