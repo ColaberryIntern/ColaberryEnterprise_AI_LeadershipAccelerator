@@ -1288,7 +1288,7 @@ function enrichCapability(cap: any) {
   const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
   // Readiness = 40% layer existence + 60% requirement coverage
   // A system with all layers but 0% req coverage is only 40% ready, not 100%
-  const layerScore = (hasBackend ? 50 : 0) + (hasFrontend ? 30 : 0) + (hasAgents ? 20 : 0);
+  const layerScore = ((hasBackend || projectHasBackend) ? 50 : 0) + ((hasFrontend || projectHasFrontend) ? 30 : 0) + ((hasAgents || projectHasAgents) ? 20 : 0);
   const readiness = Math.round(layerScore * 0.4 + reqCoverage * 0.6);
   // Quality scoring (each 0-10) — based on what exists + requirements coverage
   const q = {
@@ -1304,10 +1304,13 @@ function enrichCapability(cap: any) {
   // ── MATURITY LEVEL ──
   let maturityLevel = 0, maturityLabel = 'Not Started';
   const nextReqs: string[] = [];
-  if (allFiles.length > 0) { maturityLevel = 1; maturityLabel = 'Prototype'; }
-  if (hasBackend && reqCoverage > 50) { maturityLevel = 2; maturityLabel = 'Functional'; }
-  if (hasBackend && hasFrontend && reqCoverage > 70) { maturityLevel = 3; maturityLabel = 'Production'; }
-  if (hasBackend && hasFrontend && hasAgents && reqCoverage > 85) { maturityLevel = 4; maturityLabel = 'Autonomous'; }
+  const effectiveBackend = hasBackend || projectHasBackend;
+  const effectiveFrontend = hasFrontend || projectHasFrontend;
+  const effectiveAgents = hasAgents || projectHasAgents;
+  if (allFiles.length > 0 || effectiveBackend) { maturityLevel = 1; maturityLabel = 'Prototype'; }
+  if (effectiveBackend && reqCoverage > 50) { maturityLevel = 2; maturityLabel = 'Functional'; }
+  if (effectiveBackend && effectiveFrontend && reqCoverage > 70) { maturityLevel = 3; maturityLabel = 'Production'; }
+  if (effectiveBackend && effectiveFrontend && effectiveAgents && reqCoverage > 85) { maturityLevel = 4; maturityLabel = 'Autonomous'; }
   if (hasBackend && hasFrontend && hasAgents && reqCoverage > 95 && qualityTotal > 70) { maturityLevel = 5; maturityLabel = 'Self-Optimizing'; }
   // Next level requirements
   if (maturityLevel < 2) { if (!hasBackend) nextReqs.push('Build backend services'); if (reqCoverage <= 50) nextReqs.push('Implement >50% of requirements'); }
@@ -1321,8 +1324,8 @@ function enrichCapability(cap: any) {
       .map((r: any) => ({ ...r, feature_name: f.name, gap_type: 'requirement' }))
   );
   const sysGaps: any[] = [];
-  if (!hasBackend) sysGaps.push({ text: 'Backend services needed — no services or API routes detected', key: 'SYS-BE', gap_type: 'system' });
-  if (!hasFrontend) sysGaps.push({ text: 'Frontend UI needed — no React components detected', key: 'SYS-FE', gap_type: 'system' });
+  if (!hasBackend && !projectHasBackend) sysGaps.push({ text: 'Backend services needed — no services or API routes detected', key: 'SYS-BE', gap_type: 'system' });
+  if (!hasFrontend && !projectHasFrontend) sysGaps.push({ text: 'Frontend UI needed — no React components detected', key: 'SYS-FE', gap_type: 'system' });
   const qualGaps: any[] = [];
   if (q.observability === 0) qualGaps.push({ text: 'No monitoring or logging detected', key: 'Q-OBS', gap_type: 'quality' });
   if (q.reliability < 3) qualGaps.push({ text: 'Low reliability — add data models and error handling', key: 'Q-REL', gap_type: 'quality' });
@@ -1331,14 +1334,14 @@ function enrichCapability(cap: any) {
   // ── DYNAMIC EXECUTION PLAN (from nextBestActionEngine) ──
   const allReqsFlat = features.flatMap((f: any) => f.requirements || []);
   const systemState = {
-    hasBackend, hasFrontend, hasAgents,
-    hasModels: combinedModelFiles.length > 0,
+    hasBackend: effectiveBackend, hasFrontend: effectiveFrontend, hasAgents: effectiveAgents,
+    hasModels: combinedModelFiles.length > 0 || projectHasModels,
     projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels,
     backendCount: backendFiles.length, frontendCount: frontendFiles.length,
     agentCount: combinedAgentFiles.length, modelCount: modelFiles.length,
     reqCoverage, readiness, qualityScore: qualityTotal,
     maturityLevel: maturityLevel,
-    gapTypes: [...(hasBackend ? [] : ['system']), ...(q.observability === 0 ? ['quality'] : []), ...(allReqsFlat.some((r: any) => r.status === 'unmatched') ? ['requirement'] : [])],
+    gapTypes: [...(effectiveBackend ? [] : ['system']), ...(q.observability === 0 ? ['quality'] : []), ...(allReqsFlat.some((r: any) => r.status === 'unmatched') ? ['requirement'] : [])],
     unverifiedCount: allReqsFlat.filter((r: any) => r.status === 'matched').length,
     verifiedCount: allReqsFlat.filter((r: any) => r.status === 'verified').length,
     totalRequirements: totalR,
@@ -1396,8 +1399,8 @@ function enrichCapability(cap: any) {
     }
     executionPlan = generateStepsFromRequirements({
       requirements: reqInputs,
-      gaps: [...(hasBackend ? [] : [{ text: 'Backend services needed', key: 'SYS-BE', gap_type: 'system' }]),
-             ...(!hasFrontend ? [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }] : []),
+      gaps: [...(hasBackend || projectHasBackend ? [] : [{ text: 'Backend services needed', key: 'SYS-BE', gap_type: 'system' }]),
+             ...(hasFrontend || projectHasFrontend ? [] : [{ text: 'Frontend UI needed', key: 'SYS-FE', gap_type: 'system' }]),
              ...(q.observability === 0 ? [{ text: 'No monitoring', key: 'Q-OBS', gap_type: 'quality' }] : [])],
       mode: effectiveMode,
       systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: combinedModelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels, repoFileTree: repoTree },
