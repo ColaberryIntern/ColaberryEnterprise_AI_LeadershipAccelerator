@@ -305,15 +305,23 @@ export function generateStepsFromRequirements(options: {
   const limited = steps.slice(0, maxSteps);
   limited.forEach((s, i) => { s.step = i + 1; });
 
-  console.log(`[StepService] Output: ${limited.length} steps from ${groups.size} categories`);
+  // Safety net: if there are unfinished reqs but no steps, create "Implement Requirements"
   if (limited.length === 0 && unfinished.length > 0) {
-    console.log(`[StepService] WARNING: ${unfinished.length} unfinished reqs but 0 steps generated. Completed keys: [${completedSteps.join(',')}]`);
-    // List what categories were found
-    for (const [cat, reqs] of groups) {
-      const keyMap: Record<string, string> = { backend: 'build_backend', data: 'add_database', frontend: 'add_frontend', agent: 'add_agents', integration: 'build_backend', quality: 'improve_reliability', intelligence: 'optimize_performance' };
-      const key = keyMap[cat] || cat;
-      console.log(`[StepService]   Category ${cat} (${reqs.length} reqs) -> key=${key}, completed=${completed.has(key)}`);
-    }
+    limited.push({
+      step: 1,
+      key: 'implement_requirements',
+      label: `Implement ${unfinished.length} unmatched requirement${unfinished.length > 1 ? 's' : ''}`,
+      impact: '+requirement coverage',
+      depends_on: 'Existing codebase',
+      fixes: unfinished.slice(0, 3).map(r => r.requirement_text.substring(0, 60)),
+      enables: ['Higher completion %', 'Requirements matched to code'],
+      blocked: false,
+      requirements_covered: unfinished.map(r => r.requirement_key),
+      prompt_target: 'requirement_implementation',
+      basedOn: unfinished.slice(0, 5).map(r => r.requirement_text.substring(0, 80)),
+      category: 'service' as StepCategory,
+      priorityScore: 200,
+    });
   }
 
   return limited;
