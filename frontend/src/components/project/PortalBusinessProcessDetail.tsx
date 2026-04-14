@@ -52,8 +52,16 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [previewUrlInput, setPreviewUrlInput] = useState('');
   const [elementFeedback, setElementFeedback] = useState<any>(null);
   const [analyzingPage, setAnalyzingPage] = useState(false);
+  const [projectRoutes, setProjectRoutes] = useState<string[]>([]);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
+  // Load project's available routes from all BPs
+  useEffect(() => {
+    bpApi.getProcesses().then(r => {
+      const routes = (r.data || []).map((b: any) => b.frontend_route).filter(Boolean).sort();
+      setProjectRoutes([...new Set(routes)] as string[]);
+    }).catch(() => {});
+  }, []);
   // Project context comes from the process detail API response (p.project_system_prompt)
   const projectContext = p?.project_system_prompt || '';
   useEffect(load, [processId]);
@@ -307,21 +315,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                       } catch {}
                     }}>
                     <option value="">/ (home)</option>
-                    <optgroup label="Admin">
-                      {['/admin/dashboard','/admin/campaigns','/admin/leads','/admin/pipeline','/admin/visitors','/admin/marketing','/admin/tickets','/admin/intelligence','/admin/orchestration','/admin/settings','/admin/revenue','/admin/governance','/admin/communications','/admin/accelerator','/admin/events','/admin/import','/admin/war-room','/admin/projects'].map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Portal">
-                      {['/portal/project','/portal/curriculum','/portal/sessions','/portal/assignments','/portal/progress'].map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Public">
-                      {['/','/program','/pricing','/enroll','/contact','/case-studies','/advisory','/sponsorship'].map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </optgroup>
+                    {projectRoutes.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
                   </select>
                 </div>
                 <iframe
