@@ -242,6 +242,9 @@ export function generateStepsFromRequirements(options: {
       (category === 'agent' && (systemContext.hasAgents || systemContext.projectHasAgents)) ||
       (category === 'data' && (systemContext.hasModels || systemContext.projectHasModels));
 
+    // If layer already exists at project level and no reqs need it, skip entirely
+    if (alreadyBuilt && reqs.length === 0) continue;
+
     if (alreadyBuilt && reqs.length > 0) {
       // Layer exists — reclassify these reqs as "implement requirements" instead of "build layer"
       // Change the step to focus on implementing the specific requirements, not building the layer
