@@ -1361,7 +1361,10 @@ function enrichCapability(cap: any) {
   };
   // Mode-aware completion: requires BOTH maturity threshold AND coverage/quality thresholds
   const meetsMaturity = maturityLevel >= (profile.completion_maturity_threshold || 3);
-  const processComplete = meetsMaturity && isProcessComplete(systemState, profile.completion_thresholds);
+  // Page BPs: complete when they have a frontend_route (page exists and is connected)
+  // They don't have code requirements — completion = page is live and reviewed
+  const isPageBPComplete = isPageBP && !!(cap as any).frontend_route && totalR === 0;
+  const processComplete = isPageBPComplete || (meetsMaturity && isProcessComplete(systemState, profile.completion_thresholds));
 
   // Requirement-driven execution plan (primary), with old plan as fallback
   let executionPlan: any[];
@@ -1451,7 +1454,9 @@ function enrichCapability(cap: any) {
     gaps: allGaps,
     is_complete: processComplete,
     execution_plan: executionPlan,
-    usability: { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
+    usability: isPageBP
+      ? { backend: 'ready', frontend: (cap as any).frontend_route ? 'ready' : 'missing', agent: 'ready', usable: isPageBPComplete, why_not: isPageBPComplete ? [] : ['Connect a frontend route to mark as ready'] }
+      : { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
     implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
   };
