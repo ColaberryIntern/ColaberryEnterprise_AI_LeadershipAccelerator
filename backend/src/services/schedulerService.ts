@@ -1836,12 +1836,15 @@ export function startScheduler(): void {
 
   // -- Accelerator Session Lifecycle --
 
-  // Session reminders: check every 30 minutes
+  // Session reminders: check every 30 minutes (with dedup to prevent spam)
+  const sentReminders = new Set<string>(); // Track "sessionId-type" to prevent re-sending
   cron.schedule('*/30 * * * *', () => {
     instrumentCronJob('SessionReminders', async () => {
       // 24-hour reminders
       const upcoming24h = await getUpcomingSessions(24);
       for (const session of upcoming24h) {
+        const dedupKey = `${session.id}-24h`;
+        if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
@@ -1859,6 +1862,7 @@ export function startScheduler(): void {
           }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${e.email}:`, err.message));
         }
         if (enrollments.length > 0) {
+          sentReminders.add(dedupKey);
           console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
         }
       }
@@ -1866,6 +1870,8 @@ export function startScheduler(): void {
       // 1-hour reminders
       const upcoming1h = await getUpcomingSessions(1);
       for (const session of upcoming1h) {
+        const dedupKey1h = `${session.id}-1h`;
+        if (sentReminders.has(dedupKey1h)) continue; // Already sent this reminder
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
@@ -1883,6 +1889,7 @@ export function startScheduler(): void {
           }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${e.email}:`, err.message));
         }
         if (enrollments.length > 0) {
+          sentReminders.add(dedupKey1h);
           console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
         }
       }
