@@ -199,9 +199,10 @@ export function isProcessComplete(state: SystemState, profile?: { reqCoverage: n
     models: state.hasModels,
     agents: state.hasAgents,
   };
+  // Complete when coverage + layers are met
+  // Quality is an improvement metric, not a completion gate
   return (
     state.reqCoverage >= thresholds.reqCoverage &&
-    state.qualityScore >= thresholds.qualityScore &&
     thresholds.requiredLayers.every(l => layerCheck[l])
   );
 }
