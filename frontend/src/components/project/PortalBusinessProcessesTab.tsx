@@ -15,6 +15,7 @@ export default function PortalBusinessProcessesTab() {
   const [selected, setSelected] = useState<string | null>(null);
   const [reclassifying, setReclassifying] = useState(false);
   const [lifecycleFilter, setLifecycleFilter] = useState<'active' | 'deferred' | 'all'>('active');
+  const [layerFilter, setLayerFilter] = useState<'all' | 'code' | 'pages' | 'backend' | 'frontend' | 'agents'>('all');
 
   const load = (selectTop = false) => {
     setLoading(true);
@@ -40,7 +41,17 @@ export default function PortalBusinessProcessesTab() {
     </div>
   );
 
-  const filteredProcesses = lifecycleFilter === 'all' ? processes : processes.filter((p: any) => (p.applicability_status || p.lifecycle_status || 'active') === lifecycleFilter);
+  const lifecycleFiltered = lifecycleFilter === 'all' ? processes : processes.filter((p: any) => (p.applicability_status || p.lifecycle_status || 'active') === lifecycleFilter);
+  const filteredProcesses = layerFilter === 'all' ? lifecycleFiltered : lifecycleFiltered.filter((p: any) => {
+    const isPage = p.is_page_bp || p.source === 'frontend_page';
+    const u = p.usability || {};
+    if (layerFilter === 'code') return !isPage;
+    if (layerFilter === 'pages') return isPage;
+    if (layerFilter === 'backend') return !isPage && (u.backend === 'ready' || u.backend === 'partial');
+    if (layerFilter === 'frontend') return u.frontend === 'ready' || isPage;
+    if (layerFilter === 'agents') return !isPage && (u.agent === 'ready');
+    return true;
+  });
   const totalReqs = processes.reduce((s: number, p: any) => s + (p.total_requirements || 0), 0);
   const matchedReqs = processes.reduce((s: number, p: any) => s + (p.matched_requirements || 0), 0);
   const overallPct = totalReqs > 0 ? Math.round((matchedReqs / totalReqs) * 100) : 0;
@@ -56,7 +67,22 @@ export default function PortalBusinessProcessesTab() {
             {processes.filter((p: any) => p.usability?.usable).length}/{processes.length} processes completed · {matchedReqs}/{totalReqs} requirements
           </p>
         </div>
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
+          <div className="btn-group btn-group-sm">
+            {([
+              { key: 'all', label: 'All', icon: '' },
+              { key: 'code', label: 'Code', icon: 'bi-code-slash' },
+              { key: 'pages', label: 'Pages', icon: 'bi-layout-wtf' },
+              { key: 'backend', label: 'Backend', icon: 'bi-gear' },
+              { key: 'frontend', label: 'Frontend', icon: 'bi-palette' },
+              { key: 'agents', label: 'Agents', icon: 'bi-cpu' },
+            ] as const).map(f => (
+              <button key={f.key} className={`btn btn-sm ${layerFilter === f.key ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10 }}
+                onClick={() => setLayerFilter(f.key as any)}>
+                {f.icon && <i className={`bi ${f.icon} me-1`}></i>}{f.label}
+              </button>
+            ))}
+          </div>
           <div className="btn-group btn-group-sm">
             {(['active', 'deferred', 'all'] as const).map(f => (
               <button key={f} className={`btn btn-sm ${lifecycleFilter === f ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10 }}
