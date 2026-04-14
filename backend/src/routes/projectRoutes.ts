@@ -68,7 +68,22 @@ router.post('/api/portal/project/setup/github', requireParticipant, async (req: 
       return;
     }
     const { connectGitHub } = await import('../services/projectSetupService');
-    res.json(await connectGitHub(req.participant!.sub, repo_url.trim(), access_token));
+    const result = await connectGitHub(req.participant!.sub, repo_url.trim(), access_token);
+    // Auto-discover frontend pages after GitHub connect
+    try {
+      const { getProjectByEnrollment } = await import('../services/projectService');
+      const project = await getProjectByEnrollment(req.participant!.sub);
+      if (project) {
+        const { getConnection } = await import('../services/githubService');
+        const conn = await getConnection(req.participant!.sub);
+        const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
+        if (fileTree.length > 0) {
+          const { processOrphanedPages } = await import('../services/frontendPageDiscovery');
+          await processOrphanedPages({ projectId: project.id, fileTree });
+        }
+      }
+    } catch { /* page discovery is non-critical */ }
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

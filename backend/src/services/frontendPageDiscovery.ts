@@ -54,10 +54,9 @@ export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
     if (craMatch) {
       const rawName = craMatch[1].replace(/Page$/, '');
       const cleanName = rawName.replace(/^Admin/, '');
-      // Smart kebab: keep known acronyms together (AI, ICP, ROI, API)
       const route = cleanName
-        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')  // HTMLParser → HTML-Parser
-        .replace(/([a-z])([A-Z])/g, '$1-$2')          // camelCase → camel-Case
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+        .replace(/([a-z])([A-Z])/g, '$1-$2')
         .toLowerCase();
       const isAdmin = f.includes('/admin/') || rawName.startsWith('Admin');
       const fullRoute = isAdmin ? '/admin/' + route : '/' + route;
@@ -69,6 +68,54 @@ export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
           filePath: f,
           category: isAdmin ? 'admin' : fullRoute.startsWith('/portal') ? 'portal' : 'public',
           pageName: cleanName,
+        });
+      }
+      continue;
+    }
+
+    // Generic component-as-page: src/components/*Page.tsx or *Console.tsx or *Home.tsx
+    // Also handles: services/web/src/components/AdminPage.tsx
+    const compPageMatch = f.match(/(?:src|web)\/components\/(\w+(?:Page|Console|Home|Dashboard|View))\.tsx$/);
+    if (compPageMatch) {
+      const rawName = compPageMatch[1];
+      const cleanName = rawName.replace(/(?:Page|Console|Home|Dashboard|View)$/, '');
+      const route = '/' + cleanName
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+        .replace(/([a-z])([A-Z])/g, '$1-$2')
+        .toLowerCase();
+
+      if (!seen.has(route)) {
+        seen.add(route);
+        pages.push({
+          route,
+          filePath: f,
+          category: rawName.toLowerCase().includes('admin') ? 'admin' : 'public',
+          pageName: cleanName,
+        });
+      }
+      continue;
+    }
+
+    // Standalone component files that look like pages (Login, Shipments, Carriers, Queue)
+    // Pattern: src/components/{Name}.tsx where Name is PascalCase and not a utility
+    const standaloneMatch = f.match(/(?:src|web)\/components\/([A-Z]\w+)\.tsx$/);
+    if (standaloneMatch) {
+      const name = standaloneMatch[1];
+      // Skip utility components (Drawer, Button, Modal, etc.)
+      if (/^(Drawer|Button|Modal|Header|Footer|Sidebar|Nav|Icon|Spinner|Layout|Provider|Context)/.test(name)) continue;
+      // Skip if it starts with a lowercase letter after the first char (likely a utility)
+      const route = '/' + name
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+        .replace(/([a-z])([A-Z])/g, '$1-$2')
+        .toLowerCase();
+
+      if (!seen.has(route)) {
+        seen.add(route);
+        pages.push({
+          route,
+          filePath: f,
+          category: name.toLowerCase().includes('admin') ? 'admin' : 'public',
+          pageName: name,
         });
       }
     }
