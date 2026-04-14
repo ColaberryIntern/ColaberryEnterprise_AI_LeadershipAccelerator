@@ -365,61 +365,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   </a>
                 </div>
 
-                {/* Element Feedback Results */}
-                {elementFeedback?.items?.length > 0 && (
-                  <div className="mt-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, maxHeight: 300, overflowY: 'auto' }}>
-                    <div className="fw-medium small mb-2">
-                      <i className="bi bi-clipboard2-check me-1" style={{ color: 'var(--color-info)' }}></i>
-                      UI Issues ({elementFeedback.items.filter((f: any) => f.status === 'open').length} open)
-                    </div>
-                    {elementFeedback.items.filter((f: any) => f.status !== 'resolved').map((f: any) => (
-                      <div key={f.id} className="d-flex gap-2 align-items-start py-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
-                        <span className="badge" style={{ fontSize: 8, flexShrink: 0, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981' }}>{f.severity}</span>
-                        <div className="flex-grow-1">
-                          <div className="fw-medium">{f.title}</div>
-                          <div className="text-muted">{f.description?.substring(0, 100)}</div>
-                          {f.suggestion && <div style={{ color: 'var(--color-info)' }}>Fix: {f.suggestion?.substring(0, 100)}</div>}
-                        </div>
-                        <div className="d-flex gap-1 flex-shrink-0">
-                          <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 8, padding: '1px 6px' }} title="Copy fix prompt"
-                            onClick={() => {
-                              const prompt = `Fix this UI issue on the "${p.name}" page (${p.frontend_route || '/'}):\n\nIssue: ${f.title}\n${f.description}\n\nSuggestion: ${f.suggestion || 'Fix the issue.'}\n\nFiles:\n${(links.frontend || []).slice(0, 5).join('\n')}\n\nMake the fix.`;
-                              const ta = document.createElement('textarea');
-                              ta.value = prompt; ta.style.cssText = 'position:fixed;left:-9999px';
-                              document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-                              const el = document.createElement('div');
-                              el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Fix prompt copied — paste into Claude Code</div>';
-                              document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
-                            }}>
-                            <i className="bi bi-wrench me-1"></i>Fix
-                          </button>
-                          <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 4px' }} title="Resolve"
-                            onClick={async () => {
-                              try {
-                                const portalApi = (await import('../../utils/portalApi')).default;
-                                await portalApi.put(`/api/portal/project/element-feedback/${f.id}`, { status: 'resolved', resolved_by: 'manual' });
-                                const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
-                                setElementFeedback(fbRes.data);
-                              } catch {}
-                            }}>
-                            <i className="bi bi-check"></i>
-                          </button>
-                          <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 4px' }} title="Dismiss"
-                            onClick={async () => {
-                              try {
-                                const portalApi = (await import('../../utils/portalApi')).default;
-                                await portalApi.put(`/api/portal/project/element-feedback/${f.id}`, { status: 'dismissed' });
-                                const fbRes = await portalApi.get(`/api/portal/project/business-processes/${processId}/element-feedback`);
-                                setElementFeedback(fbRes.data);
-                              } catch {}
-                            }}>
-                            <i className="bi bi-x"></i>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* Issue list is shown in the unified panel below */}
               </>
             ) : (
               <div className="p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
@@ -514,6 +460,23 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     }
                   }} />
               </div>
+
+              {/* Fix All button — prominent */}
+              {elementFeedback?.items?.filter((f: any) => f.status === 'open').length > 0 && (
+                <button className="btn btn-primary w-100 mb-2" style={{ fontWeight: 700 }}
+                  onClick={() => {
+                    const openIssues = elementFeedback.items.filter((f: any) => f.status === 'open');
+                    const prompt = `Fix ALL ${openIssues.length} UI issues on the "${p.name}" page (${p.frontend_route || '/'}):\n\n${openIssues.map((f: any, i: number) => `${i + 1}. [${f.severity}] ${f.title}\n   ${f.description}\n   Fix: ${f.suggestion || 'Fix as described.'}`).join('\n\n')}\n\nFiles to modify:\n${(links.frontend || []).slice(0, 10).join('\n')}\n\nFix all issues listed above. Make each change carefully.`;
+                    const ta = document.createElement('textarea');
+                    ta.value = prompt; ta.style.cssText = 'position:fixed;left:-9999px';
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                    const el = document.createElement('div');
+                    el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 24px;border-radius:10px;font-size:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2)"><i class="bi bi-clipboard-check me-2"></i>Fix All prompt copied (${openIssues.length} issues) — paste into Claude Code</div>`;
+                    document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
+                  }}>
+                  <i className="bi bi-wrench me-2"></i>Fix All {elementFeedback.items.filter((f: any) => f.status === 'open').length} Issues — Copy Prompt
+                </button>
+              )}
 
               {/* Persistent feedback results */}
               {elementFeedback?.items?.length > 0 && (
