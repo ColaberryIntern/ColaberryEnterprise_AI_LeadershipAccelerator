@@ -43,6 +43,7 @@ export async function createProjectForEnrollment(enrollmentId: string): Promise<
       industry: profile?.industry || undefined,
       project_stage: 'discovery',
       project_variables: {},
+      setup_status: { requirements_loaded: false, claude_md_loaded: false, github_connected: false, activated: false },
     },
   });
 
