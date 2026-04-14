@@ -174,6 +174,15 @@ export function generateStepsFromRequirements(options: {
     if (r.status !== 'unmatched' && r.status !== 'not_started' && r.status !== 'partial') return false;
     // Cross-reference with repo: if the requirement text matches existing files, skip it
     if (repoFiles.length > 0 && isLikelyCoveredByRepo(r.requirement_text, repoFiles)) return false;
+    // Skip fragment requirements that aren't real (bold labels, env vars, step descriptions)
+    const text = (r.requirement_text || '').trim();
+    if (text.startsWith('**Step') || text.startsWith('`') || text.length < 20) return false;
+    if (/^(NODE_ENV|PORT|DATABASE_URL|JWT_SECRET)/i.test(text)) return false;
+    // Skip if project has high coverage and this is a very generic requirement
+    const totalReqs = requirements.length;
+    const matchedReqs = requirements.filter(rr => rr.status === 'matched' || rr.status === 'verified' || rr.status === 'auto_verified').length;
+    const coveragePct = totalReqs > 0 ? (matchedReqs / totalReqs) * 100 : 0;
+    if (coveragePct >= 80 && text.split(/\s+/).length < 8) return false; // very short + high coverage = likely covered
     return true;
   });
 

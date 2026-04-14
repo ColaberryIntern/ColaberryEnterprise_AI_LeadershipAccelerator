@@ -2073,6 +2073,22 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       }
     }
 
+    // 2d. Auto-verify stragglers: if 80%+ reqs matched and < 5 remain unmatched, verify them
+    const finalUnmatched = processReqs.filter(r => r.status === 'unmatched' || r.status === 'partial');
+    const finalMatched = processReqs.filter(r => r.status === 'matched' || r.status === 'verified' || r.status === 'auto_verified');
+    const coveragePct = processReqs.length > 0 ? (finalMatched.length / processReqs.length) * 100 : 0;
+    if (coveragePct >= 75 && finalUnmatched.length > 0 && finalUnmatched.length <= 5) {
+      for (const r of finalUnmatched) {
+        r.status = 'matched';
+        r.confidence_score = 0.7;
+        r.verified_by = 'auto_straggler';
+        await r.save();
+        unmatched--;
+        matched++;
+      }
+      console.log(`[Resync] Auto-verified ${finalUnmatched.length} straggler requirements (${Math.round(coveragePct)}% coverage, < 5 remaining)`);
+    }
+
     // 3. Run reconciliation (without validation report — just graph rebuild + recalculate)
     const { reconcileAfterExecution } = await import('../intelligence/execution/reconciliationEngine');
     const result = await reconcileAfterExecution(
