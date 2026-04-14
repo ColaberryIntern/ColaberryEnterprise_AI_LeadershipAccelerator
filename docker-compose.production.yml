@@ -67,6 +67,8 @@ services:
     restart: always
     ports:
       - "8888:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
 
