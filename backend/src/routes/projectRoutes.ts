@@ -89,6 +89,17 @@ router.post('/api/portal/project/setup/activate', requireParticipant, async (req
       const { activateProject } = await import('../services/projectSetupService');
       const result = await activateProject(enrollmentId);
       activationProgress.set(enrollmentId, { status: 'complete', message: 'Activation complete', capabilities: result.requirements_count || 0 });
+      // Mark project as activated
+      try {
+        const { getProjectByEnrollment } = await import('../services/projectService');
+        const project = await getProjectByEnrollment(enrollmentId);
+        if (project) {
+          const ss = (project as any).setup_status || {};
+          (project as any).setup_status = { ...ss, activated: true };
+          (project as any).changed('setup_status', true);
+          await project.save();
+        }
+      } catch {}
     } catch (err: any) {
       activationProgress.set(enrollmentId, { status: 'failed', message: err.message, error: err.message });
     }

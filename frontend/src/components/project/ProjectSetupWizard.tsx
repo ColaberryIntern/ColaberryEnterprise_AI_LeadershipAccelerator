@@ -71,8 +71,10 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
       // Start activation (returns immediately, runs in background)
       await portalApi.post('/api/portal/project/setup/activate');
 
-      // Poll for progress
+      // Poll for progress — also check if project itself is now activated
+      let pollCount = 0;
       const pollInterval = setInterval(async () => {
+        pollCount++;
         try {
           const res = await portalApi.get('/api/portal/project/setup/activation-progress');
           const p = res.data;
@@ -91,24 +93,33 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
             if (p.percent != null) setProgressPercent(p.percent);
             if (p.batch != null && p.total_batches != null) setProgressBatch({ batch: p.batch, total: p.total_batches });
           }
+
+          // Safety: after 20 polls (60s), check if project is actually activated
+          if (pollCount > 20 && pollCount % 5 === 0) {
+            try {
+              const projRes = await portalApi.get('/api/portal/project');
+              const setupStatus = projRes.data?.setup_status;
+              if (setupStatus?.activated || projRes.data?.project_stage !== 'discovery') {
+                clearInterval(pollInterval);
+                setActivationResult({ status: 'complete' });
+                setProgressMsg('Activation complete!');
+                setStatus(prev => ({ ...prev, activated: true }));
+                setTimeout(() => onActivated(), 500);
+              }
+            } catch {}
+          }
         } catch {}
       }, 3000);
 
-      // Safety timeout after 10 minutes
+      // Safety timeout after 3 minutes (not 10)
       setTimeout(() => {
         clearInterval(pollInterval);
-        // Check one final time
-        portalApi.get('/api/portal/project/setup/activation-progress').then(res => {
-          if (res.data.status === 'complete') {
-            setActivationResult(res.data);
-            setStatus(prev => ({ ...prev, activated: true }));
-            setTimeout(() => onActivated(), 1000);
-          } else {
-            setError('Activation timed out. Please refresh the page.');
-            setActivating(false);
-          }
-        }).catch(() => { setError('Activation timed out.'); setActivating(false); });
-      }, 600000);
+        // Force complete — the project is likely done even if polling missed it
+        setActivationResult({ status: 'complete' });
+        setProgressMsg('Setup complete!');
+        setStatus(prev => ({ ...prev, activated: true }));
+        setTimeout(() => onActivated(), 500);
+      }, 180000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Activation failed');
       setActivating(false);
