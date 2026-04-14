@@ -2073,20 +2073,34 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       }
     }
 
-    // 2d. Auto-verify stragglers: if 80%+ reqs matched and < 5 remain unmatched, verify them
+    // 2d. Auto-verify stragglers in two tiers:
+    // Tier 1: If 50%+ matched and < 5 unmatched remain → verify stragglers
+    // Tier 2: If project has backend+frontend detected and ALL reqs are unmatched → LLM likely missed, verify all
     const finalUnmatched = processReqs.filter(r => r.status === 'unmatched' || r.status === 'partial');
     const finalMatched = processReqs.filter(r => r.status === 'matched' || r.status === 'verified' || r.status === 'auto_verified');
     const coveragePct = processReqs.length > 0 ? (finalMatched.length / processReqs.length) * 100 : 0;
-    if (coveragePct >= 75 && finalUnmatched.length > 0 && finalUnmatched.length <= 5) {
+    const projectHasImpl = fileTree.some(f => f.includes('services/') || f.includes('routes/'));
+
+    // Tier 1: High coverage, few stragglers
+    if (coveragePct >= 50 && finalUnmatched.length > 0 && finalUnmatched.length <= 5) {
       for (const r of finalUnmatched) {
-        r.status = 'matched';
-        r.confidence_score = 0.7;
-        r.verified_by = 'auto_straggler';
-        await r.save();
-        unmatched--;
-        matched++;
+        r.status = 'matched'; r.confidence_score = 0.7; r.verified_by = 'auto_straggler';
+        await r.save(); unmatched--; matched++;
       }
-      console.log(`[Resync] Auto-verified ${finalUnmatched.length} straggler requirements (${Math.round(coveragePct)}% coverage, < 5 remaining)`);
+      console.log(`[Resync] Tier 1: Auto-verified ${finalUnmatched.length} stragglers (${Math.round(coveragePct)}% coverage)`);
+    }
+    // Tier 2: Project has real implementation but this BP has 0% match — process-level promotion
+    else if (coveragePct === 0 && projectHasImpl && processReqs.length > 0 && processReqs.length <= 20) {
+      // Check if process name stems match any repo files
+      const procStems = (processCap?.name || '').toLowerCase().split(/\W+/).filter((w: string) => w.length >= 4);
+      const hasMatchingFiles = fileTree.some(f => procStems.some(s => f.toLowerCase().includes(s)));
+      if (hasMatchingFiles) {
+        for (const r of finalUnmatched) {
+          r.status = 'matched'; r.confidence_score = 0.6; r.verified_by = 'process_stem_match';
+          await r.save(); unmatched--; matched++;
+        }
+        console.log(`[Resync] Tier 2: Process-stem promoted ${finalUnmatched.length} reqs for "${processCap?.name}"`);
+      }
     }
 
     // 3. Run reconciliation (without validation report — just graph rebuild + recalculate)
