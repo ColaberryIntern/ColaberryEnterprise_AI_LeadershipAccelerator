@@ -33,6 +33,8 @@ function AdminProjectOverview() {
   const [expandedCohort, setExpandedCohort] = useState<string | null>(null);
   const [cohortStudents, setCohortStudents] = useState<any[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [loadingProject, setLoadingProject] = useState(false);
 
   useEffect(() => {
     api.get('/api/admin/projects/overview')
@@ -308,11 +310,10 @@ function AdminProjectOverview() {
                                   <thead>
                                     <tr style={{ background: '#f1f5f9' }}>
                                       <th style={{ paddingLeft: 24 }}>Student</th>
-                                      <th>Company</th>
                                       <th>Project</th>
                                       <th className="text-center">Stage</th>
-                                      <th className="text-center">GitHub</th>
-                                      <th className="text-center">Reqs</th>
+                                      <th style={{ width: 140 }}>Progress</th>
+                                      <th className="text-center">BPs</th>
                                       <th className="text-center">Portal</th>
                                       <th className="text-center">Actions</th>
                                     </tr>
@@ -320,68 +321,145 @@ function AdminProjectOverview() {
                                   <tbody>
                                     {cohortStudents.map(s => {
                                       const stageColor = PHASE_COLORS[s.project_stage] || '#9ca3af';
+                                      const progressColor = s.readiness_pct >= 70 ? 'var(--color-accent)' : s.readiness_pct >= 30 ? 'var(--color-warning)' : 'var(--color-danger)';
                                       return (
-                                        <tr key={s.enrollment_id}>
-                                          <td style={{ paddingLeft: 24 }}>
-                                            <div className="fw-medium">{s.full_name}</div>
-                                            <div className="text-muted" style={{ fontSize: 10 }}>{s.email}</div>
-                                          </td>
-                                          <td>{s.company || <span className="text-muted">—</span>}</td>
-                                          <td>{s.organization_name || <span className="text-muted">Not set</span>}</td>
-                                          <td className="text-center">
-                                            {s.project_stage ? (
-                                              <span className="badge" style={{ background: `${stageColor}20`, color: stageColor, fontSize: 9 }}>
-                                                {s.project_stage}
-                                              </span>
-                                            ) : <span className="text-muted">—</span>}
-                                          </td>
-                                          <td className="text-center">
-                                            {s.github_connected ? <i className="bi bi-check-circle" style={{ color: 'var(--color-accent)' }}></i> : <i className="bi bi-x-circle" style={{ color: '#9ca3af' }}></i>}
-                                          </td>
-                                          <td className="text-center">
-                                            {s.requirements_loaded ? <i className="bi bi-check-circle" style={{ color: 'var(--color-accent)' }}></i> : <i className="bi bi-x-circle" style={{ color: '#9ca3af' }}></i>}
-                                          </td>
-                                          <td className="text-center">
-                                            {s.portal_enabled ? (
-                                              <span className="badge bg-success" style={{ fontSize: 9 }}>Active</span>
-                                            ) : (
-                                              <span className="badge bg-secondary" style={{ fontSize: 9 }}>Disabled</span>
-                                            )}
-                                          </td>
-                                          <td className="text-center">
-                                            {!s.portal_enabled && (
-                                              <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 9, padding: '1px 6px' }}
-                                                onClick={async (e) => {
-                                                  e.stopPropagation();
-                                                  try {
-                                                    await api.patch(`/api/admin/accelerator/enrollments/${s.enrollment_id}/portal-access`, { portal_enabled: true });
-                                                    const res = await api.get(`/api/admin/projects/cohort/${cohort.cohort_id}/students`);
-                                                    setCohortStudents(res.data.students || []);
-                                                  } catch {}
-                                                }}>
-                                                Enable Portal
-                                              </button>
-                                            )}
-                                            {s.portal_enabled && s.project_id && (
-                                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9, padding: '1px 6px' }}
-                                                onClick={async (e) => {
-                                                  e.stopPropagation();
-                                                  try {
-                                                    await api.post('/api/admin/accelerator/quick-add-student', { full_name: s.full_name, email: s.email, company: s.company, cohort_id: cohort.cohort_id });
-                                                  } catch {}
-                                                  const el = document.createElement('div');
-                                                  el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-envelope me-1"></i>Login link sent</div>';
-                                                  document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
-                                                }}>
-                                                <i className="bi bi-envelope me-1"></i>Resend Link
-                                              </button>
-                                            )}
-                                          </td>
-                                        </tr>
+                                        <React.Fragment key={s.enrollment_id}>
+                                          <tr style={{ cursor: s.project_id ? 'pointer' : 'default' }}
+                                            onClick={async () => {
+                                              if (!s.project_id) return;
+                                              if (selectedProject?.project?.id === s.project_id) { setSelectedProject(null); return; }
+                                              setLoadingProject(true);
+                                              try {
+                                                const res = await api.get(`/api/admin/projects/${s.project_id}/detail`);
+                                                setSelectedProject(res.data);
+                                              } catch {} finally { setLoadingProject(false); }
+                                            }}>
+                                            <td style={{ paddingLeft: 24 }}>
+                                              <div className="fw-medium">{s.full_name}</div>
+                                              <div className="text-muted" style={{ fontSize: 10 }}>{s.email}{s.company ? ` · ${s.company}` : ''}</div>
+                                            </td>
+                                            <td>{s.organization_name || <span className="text-muted">Not set</span>}</td>
+                                            <td className="text-center">
+                                              {s.project_stage ? (
+                                                <span className="badge" style={{ background: `${stageColor}20`, color: stageColor, fontSize: 9 }}>{s.project_stage}</span>
+                                              ) : <span className="text-muted">—</span>}
+                                            </td>
+                                            <td>
+                                              {s.project_id ? (
+                                                <div>
+                                                  <div className="d-flex justify-content-between" style={{ fontSize: 9 }}>
+                                                    <span>{s.req_matched}/{s.req_total} reqs</span>
+                                                    <span style={{ color: progressColor, fontWeight: 700 }}>{s.readiness_pct}%</span>
+                                                  </div>
+                                                  <div className="progress" style={{ height: 4 }}>
+                                                    <div className="progress-bar" style={{ width: `${s.readiness_pct}%`, background: progressColor }}></div>
+                                                  </div>
+                                                </div>
+                                              ) : <span className="text-muted" style={{ fontSize: 10 }}>No project</span>}
+                                            </td>
+                                            <td className="text-center" style={{ fontSize: 10 }}>{s.bp_count || 0}</td>
+                                            <td className="text-center">
+                                              {s.portal_enabled ? <span className="badge bg-success" style={{ fontSize: 8 }}>Active</span> : <span className="badge bg-secondary" style={{ fontSize: 8 }}>Off</span>}
+                                            </td>
+                                            <td className="text-center">
+                                              <div className="d-flex gap-1 justify-content-center">
+                                                {!s.portal_enabled && (
+                                                  <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 8, padding: '1px 5px' }}
+                                                    onClick={async (e) => { e.stopPropagation(); try { await api.patch(`/api/admin/accelerator/enrollments/${s.enrollment_id}/portal-access`, { portal_enabled: true }); const r = await api.get(`/api/admin/projects/cohort/${cohort.cohort_id}/students`); setCohortStudents(r.data.students || []); } catch {} }}>
+                                                    Enable
+                                                  </button>
+                                                )}
+                                                {s.project_id && (
+                                                  <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 5px' }}
+                                                    onClick={(e) => { e.stopPropagation(); }}>
+                                                    <i className="bi bi-eye"></i>
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                          {/* Project drill-down */}
+                                          {selectedProject?.project?.id === s.project_id && (
+                                            <tr>
+                                              <td colSpan={7} style={{ padding: 0, background: '#f8fafc' }}>
+                                                {loadingProject ? (
+                                                  <div className="text-center py-3"><span className="spinner-border spinner-border-sm"></span></div>
+                                                ) : (
+                                                  <div className="p-3">
+                                                    <div className="d-flex justify-content-between align-items-start mb-3">
+                                                      <div>
+                                                        <h6 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>{selectedProject.project.organization_name || 'Untitled Project'}</h6>
+                                                        <div className="text-muted" style={{ fontSize: 11 }}>
+                                                          {selectedProject.project.industry && <span className="me-3"><i className="bi bi-building me-1"></i>{selectedProject.project.industry}</span>}
+                                                          <span className="me-3"><i className="bi bi-sliders me-1"></i>{selectedProject.project.target_mode}</span>
+                                                          {selectedProject.github?.repo_url && <a href={selectedProject.github.repo_url} target="_blank" rel="noopener noreferrer" className="text-decoration-none"><i className="bi bi-github me-1"></i>Repo</a>}
+                                                        </div>
+                                                      </div>
+                                                      <button className="btn btn-sm btn-outline-secondary" onClick={(e) => { e.stopPropagation(); setSelectedProject(null); }}>
+                                                        <i className="bi bi-x-lg"></i>
+                                                      </button>
+                                                    </div>
+
+                                                    {/* Summary cards */}
+                                                    <div className="row g-2 mb-3">
+                                                      {[
+                                                        { label: 'Coverage', value: `${selectedProject.summary.overall_coverage}%`, color: selectedProject.summary.overall_coverage >= 70 ? 'var(--color-accent)' : 'var(--color-warning)' },
+                                                        { label: 'BPs', value: selectedProject.summary.total_bps, color: 'var(--color-primary)' },
+                                                        { label: 'Requirements', value: `${selectedProject.summary.matched_reqs}/${selectedProject.summary.total_reqs}`, color: 'var(--color-info)' },
+                                                        { label: 'Artifacts', value: selectedProject.artifacts?.length || 0, color: 'var(--color-primary-light)' },
+                                                      ].map(card => (
+                                                        <div key={card.label} className="col-3">
+                                                          <div className="text-center p-2" style={{ background: '#fff', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+                                                            <div className="fw-bold" style={{ color: card.color, fontSize: 16 }}>{card.value}</div>
+                                                            <div className="text-muted" style={{ fontSize: 9 }}>{card.label}</div>
+                                                          </div>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+
+                                                    {/* Business Processes */}
+                                                    <div className="fw-medium small mb-2"><i className="bi bi-diagram-3 me-1"></i>Business Processes</div>
+                                                    <div className="table-responsive">
+                                                      <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
+                                                        <thead className="table-light">
+                                                          <tr><th>Process</th><th className="text-center">Reqs</th><th style={{ width: 120 }}>Coverage</th><th className="text-center">Type</th></tr>
+                                                        </thead>
+                                                        <tbody>
+                                                          {selectedProject.business_processes.map((bp: any) => (
+                                                            <tr key={bp.id}>
+                                                              <td>
+                                                                {bp.name}
+                                                                {bp.frontend_route && <span className="text-muted ms-1" style={{ fontSize: 9 }}>{bp.frontend_route}</span>}
+                                                              </td>
+                                                              <td className="text-center">{bp.req_matched}/{bp.req_total}</td>
+                                                              <td>
+                                                                <div className="d-flex align-items-center gap-1">
+                                                                  <div className="progress flex-grow-1" style={{ height: 4 }}>
+                                                                    <div className="progress-bar" style={{ width: `${bp.coverage_pct}%`, background: bp.coverage_pct >= 70 ? 'var(--color-accent)' : bp.coverage_pct >= 30 ? 'var(--color-warning)' : 'var(--color-danger)' }}></div>
+                                                                  </div>
+                                                                  <span style={{ fontSize: 9, width: 28 }}>{bp.coverage_pct}%</span>
+                                                                </div>
+                                                              </td>
+                                                              <td className="text-center">
+                                                                <span className="badge" style={{ fontSize: 8, background: bp.source === 'frontend_page' ? '#8b5cf620' : '#3b82f620', color: bp.source === 'frontend_page' ? '#8b5cf6' : '#3b82f6' }}>
+                                                                  {bp.source === 'frontend_page' ? 'Page' : 'Code'}
+                                                                </span>
+                                                              </td>
+                                                            </tr>
+                                                          ))}
+                                                        </tbody>
+                                                      </table>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </React.Fragment>
                                       );
                                     })}
                                     {cohortStudents.length === 0 && (
-                                      <tr><td colSpan={8} className="text-center text-muted py-3">No students in this cohort</td></tr>
+                                      <tr><td colSpan={7} className="text-center text-muted py-3">No students in this cohort</td></tr>
                                     )}
                                   </tbody>
                                 </table>
