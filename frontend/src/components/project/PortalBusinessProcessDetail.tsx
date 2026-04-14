@@ -87,13 +87,21 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   };
 
   const matColor = MATURITY_COLORS[mat.level] || '#9ca3af';
+  const isPageBP = p.is_page_bp || p.source === 'frontend_page';
+  const accentColor = isPageBP ? '#8b5cf6' : 'var(--color-primary)';
 
   return (
-    <div className="card border-0 shadow">
-      <div className="card-header bg-white py-3 d-flex justify-content-between align-items-start" style={{ borderBottom: `3px solid ${u.usable ? 'var(--color-success)' : 'var(--color-danger)'}` }}>
+    <div className="card border-0 shadow" style={isPageBP ? { background: '#faf5ff' } : undefined}>
+      <div className="card-header bg-white py-3 d-flex justify-content-between align-items-start" style={{ borderBottom: `3px solid ${isPageBP ? '#8b5cf6' : u.usable ? 'var(--color-success)' : 'var(--color-danger)'}` }}>
         <div>
-          <h5 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>{p.name}</h5>
-          <span className="text-muted" style={{ fontSize: 12 }}>{p.total_requirements} requirements</span>
+          <h5 className="fw-bold mb-1" style={{ color: accentColor }}>
+            {isPageBP && <i className="bi bi-layout-wtf me-2"></i>}
+            {p.name}
+          </h5>
+          <span className="text-muted" style={{ fontSize: 12 }}>
+            {isPageBP ? (p.frontend_route || 'Frontend page') : `${p.total_requirements} requirements`}
+            {isPageBP && <span className="badge ms-2" style={{ fontSize: 9, background: '#8b5cf620', color: '#8b5cf6' }}>Page BP</span>}
+          </span>
         </div>
         <div className="d-flex align-items-center gap-2">
           <button className="btn btn-sm" style={{ background: '#3b82f620', color: 'var(--color-info)', fontSize: 10, fontWeight: 700, border: '1px solid #3b82f640' }}
@@ -222,14 +230,23 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
 
       <div className="card-body p-3">
        <div className="d-flex gap-3">
-        {/* Left: Intelligence Panel (70%) */}
-        <div style={{ flex: '1 1 70%', minWidth: 0 }}>
+        {/* Left: Intelligence Panel (70% for code BPs, 100% for page BPs) */}
+        <div style={{ flex: isPageBP ? '1 1 100%' : '1 1 70%', minWidth: 0 }}>
         {/* 1: Overview */}
         <Section num={1} title="Process Overview">
           <p className="text-muted small mb-0">{p.description || 'No description available.'}</p>
         </Section>
 
         {/* 2: System Truth — 3 metrics + usability */}
+        {isPageBP ? (
+          <Section num={2} title="Page Status">
+            <div className="d-flex gap-3 mb-2" style={{ fontSize: 11 }}>
+              <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: u.frontend === 'ready' ? '#10b981' : '#ef4444', marginRight: 4 }}></span>Frontend: {u.frontend === 'ready' ? 'Ready' : 'Missing'}</span>
+              {p.frontend_route && <span className="text-muted"><i className="bi bi-signpost me-1"></i>{p.frontend_route}</span>}
+              {p.preview_url && <span className="text-muted"><i className="bi bi-eye me-1"></i>Preview connected</span>}
+            </div>
+          </Section>
+        ) : (
         <Section num={2} title="System Truth">
           <div className="row g-3 mb-3">
             <div className="col-md-4"><MetricBar label="Req. Matched (auto)" value={m.requirements_coverage || 0} color={m.requirements_coverage >= 70 ? 'var(--color-success)' : m.requirements_coverage >= 30 ? 'var(--color-warning)' : 'var(--color-danger)'} /></div>
@@ -245,8 +262,10 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             <div className="mt-1">{(u.why_not || []).map((w: string, i: number) => <div key={i} className="text-muted small"><i className="bi bi-arrow-right me-1" style={{ color: 'var(--color-danger)' }}></i>{w}</div>)}</div>
           )}
         </Section>
+        )}
 
-        {/* 3: What Exists */}
+        {/* 3: What Exists — hidden for page BPs */}
+        {!isPageBP && (
         <Section num={3} title="What Exists" collapsible defaultOpen={false}>
           {(links.backend?.length > 0 || links.frontend?.length > 0 || links.agents?.length > 0 || links.models?.length > 0) ? (
             <div className="row g-3">
@@ -267,6 +286,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             </div>
           ) : <div className="text-muted small"><i className="bi bi-info-circle me-1"></i>No implementations detected. Run "Match to Repo" on Requirements tab.</div>}
         </Section>
+        )}
 
         {/* 3a: Frontend Preview & Feedback — only show when THIS BP has frontend files */}
         {links.frontend?.length > 0 && (
@@ -534,7 +554,8 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           </Section>
         )}
 
-        {/* 3b: Agent Mappings */}
+        {/* 3b: Agent Mappings — hidden for page BPs */}
+        {!isPageBP && (
         {p.agent_mappings?.length > 0 && (
           <Section num={3.5} title={`Agents (${p.agent_mappings.length})`} collapsible defaultOpen={false}>
             {p.effective_mode && (
@@ -573,6 +594,10 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           </Section>
         )}
 
+        )}
+
+        {/* 4-8: Code BP sections — hidden for page BPs */}
+        {!isPageBP && (<>
         {/* 4: Gaps */}
         <Section num={4} title={`Gaps (${gaps.length})`} collapsible defaultOpen={gaps.length > 0 && gaps.length <= 10}>
           {gaps.length === 0 ? <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>No gaps detected.</div> : (
@@ -715,6 +740,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             );});
           })()}
         </Section>
+        </>)}
 
         {/* Resync Results Modal */}
         {resyncModal && (
@@ -836,10 +862,12 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           }} />
         )}
         </div>
-        {/* Right: System Intelligence Panel (30%) */}
-        <div style={{ flex: '0 0 30%', minWidth: 280 }} className="d-none d-lg-block">
-          <SystemIntelligencePanel links={links} usability={u} metrics={m} repoUrl={repoUrl} />
-        </div>
+        {/* Right: System Intelligence Panel (30%) — hidden for page BPs */}
+        {!isPageBP && (
+          <div style={{ flex: '0 0 30%', minWidth: 280 }} className="d-none d-lg-block">
+            <SystemIntelligencePanel links={links} usability={u} metrics={m} repoUrl={repoUrl} />
+          </div>
+        )}
        </div>
       </div>
     </div>

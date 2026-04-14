@@ -136,7 +136,7 @@ export default function PortalBusinessProcessesTab() {
                   borderLeft: isPageBP ? '4px solid #8b5cf6' : `4px solid ${matColor}`,
                   background: isPageBP ? '#faf5ff' : undefined,
                   cursor: 'pointer',
-                  outline: isSelected ? '2px solid var(--color-primary-light)' : 'none',
+                  outline: isSelected ? `2px solid ${isPageBP ? '#8b5cf6' : 'var(--color-primary-light)'}` : 'none',
                 }}
                 onClick={() => { setSelected(isSelected ? null : p.id); if (!isSelected) setTimeout(() => document.getElementById('bp-detail-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }}>
                 <div className="card-body p-3">
