@@ -93,7 +93,8 @@ Respond:
       confidence,
     });
 
-    if (!dryRun && route) {
+    // Post-LLM validation: only save routes that exist in the valid set
+    if (!dryRun && route && availableRoutes.includes(route)) {
       (cap as any).frontend_route = route;
       await cap.save();
       applied++;

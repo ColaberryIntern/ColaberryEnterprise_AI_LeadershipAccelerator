@@ -55,12 +55,13 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [projectRoutes, setProjectRoutes] = useState<string[]>([]);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
-  // Load project's available routes from all BPs
+  // Load project's available routes from repo file tree (not from BPs — prevents cross-project contamination)
   useEffect(() => {
-    bpApi.getProcesses().then(r => {
-      const routes = (r.data || []).map((b: any) => b.frontend_route).filter(Boolean).sort();
-      setProjectRoutes([...new Set(routes)] as string[]);
-    }).catch(() => {});
+    import('../../utils/portalApi').then(mod => {
+      mod.default.get('/api/portal/project/frontend-routes')
+        .then((r: any) => setProjectRoutes(r.data.routes || []))
+        .catch(() => {});
+    });
   }, []);
   // Project context comes from the process detail API response (p.project_system_prompt)
   const projectContext = p?.project_system_prompt || '';

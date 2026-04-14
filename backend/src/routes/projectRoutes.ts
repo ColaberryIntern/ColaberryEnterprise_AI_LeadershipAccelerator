@@ -2855,25 +2855,61 @@ router.put('/api/portal/project/business-processes/:id/connect-page', requirePar
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── Frontend Route Mapping: auto-map BPs to routes ────────
+// ─── Frontend Routes: get valid routes from project's repo file tree ────────
+router.get('/api/portal/project/frontend-routes', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getConnection } = await import('../services/githubService');
+    const conn = await getConnection(req.participant!.sub);
+    const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
+    if (fileTree.length === 0) { res.json({ routes: [] }); return; }
+    const { discoverFrontendPages } = await import('../services/frontendPageDiscovery');
+    const pages = discoverFrontendPages(fileTree);
+    const routes = [...new Set(pages.map(p => p.route))].sort();
+    res.json({ routes });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Frontend Route Mapping: auto-map BPs to routes (derived from repo) ────────
 router.post('/api/portal/project/auto-map-routes', requireParticipant, async (req: Request, res: Response) => {
   try {
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
-    const { availableRoutes, dryRun } = req.body;
-    if (!availableRoutes?.length) { res.status(400).json({ error: 'availableRoutes array required' }); return; }
+    // Derive available routes from the project's own repo — never trust client input
+    const { getConnection } = await import('../services/githubService');
+    const conn = await getConnection(req.participant!.sub);
+    const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
+    if (fileTree.length === 0) { res.status(400).json({ error: 'No repo file tree. Connect GitHub first.' }); return; }
+    const { discoverFrontendPages } = await import('../services/frontendPageDiscovery');
+    const pages = discoverFrontendPages(fileTree);
+    const availableRoutes = pages.map(p => p.route);
+    if (availableRoutes.length === 0) { res.status(400).json({ error: 'No frontend pages found in repo.' }); return; }
+    const { dryRun } = req.body;
     const { autoMapRoutes } = await import('../services/frontendRouteMapper');
     const result = await autoMapRoutes({ projectId: project.id, availableRoutes, dryRun: !!dryRun });
     res.json(result);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── Frontend Route: manually set route for a BP ────────
+// ─── Frontend Route: manually set route for a BP (validated against repo) ────────
 router.put('/api/portal/project/business-processes/:id/frontend-route', requireParticipant, async (req: Request, res: Response) => {
   try {
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { route } = req.body;
+    // Validate route exists in project's repo (allow null to clear)
+    if (route) {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
+      if (fileTree.length > 0) {
+        const { discoverFrontendPages } = await import('../services/frontendPageDiscovery');
+        const pages = discoverFrontendPages(fileTree);
+        const validRoutes = new Set(pages.map(p => p.route));
+        if (!validRoutes.has(route)) { res.status(400).json({ error: 'Route not found in project repo' }); return; }
+      }
+    }
     const { setFrontendRoute } = await import('../services/frontendRouteMapper');
     await setFrontendRoute(cap.id, route || null);
     res.json({ frontend_route: route || null });
