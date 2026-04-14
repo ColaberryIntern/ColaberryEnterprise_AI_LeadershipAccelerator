@@ -555,8 +555,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         )}
 
         {/* 3b: Agent Mappings — hidden for page BPs */}
-        {!isPageBP && (
-        {p.agent_mappings?.length > 0 && (
+        {!isPageBP && p.agent_mappings?.length > 0 && (
           <Section num={3.5} title={`Agents (${p.agent_mappings.length})`} collapsible defaultOpen={false}>
             {p.effective_mode && (
               <div className="mb-2 p-2 d-flex align-items-center gap-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 10 }}>
@@ -592,8 +591,6 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
               </table>
             </div>
           </Section>
-        )}
-
         )}
 
         {/* 4-8: Code BP sections — hidden for page BPs */}
