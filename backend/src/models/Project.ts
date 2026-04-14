@@ -17,6 +17,7 @@ export interface ProjectAttributes {
   project_variables?: any;
   github_repo_url?: string;
   portfolio_url?: string;
+  system_model?: Record<string, any>;
   executive_summary?: string;
   portfolio_cache?: any;
   portfolio_updated_at?: Date;
@@ -131,6 +132,10 @@ Project.init(
     },
     portfolio_url: {
       type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    system_model: {
+      type: DataTypes.JSONB,
       allowNull: true,
     },
     executive_summary: {

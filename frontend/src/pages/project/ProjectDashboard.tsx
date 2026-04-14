@@ -13,6 +13,7 @@ import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import CapabilityGrid from '../../components/project/CapabilityGrid';
 import RepoComponentsPanel from '../../components/project/RepoComponentsPanel';
 import PortalBusinessProcessesTab from '../../components/project/PortalBusinessProcessesTab';
+import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
 
 // Execution Overview — capability grid + repo analysis
 function ExecutionOverview() {
@@ -1135,6 +1136,8 @@ function ProjectDashboard() {
         <>
           {/* KPI Bar — merged from Readiness */}
           <ReadinessKPIBar key={`kpi-${refreshKey}`} />
+          {/* System Architecture Visualization */}
+          <SystemArchitectureCard key={`arch-${refreshKey}`} />
           <ProjectSystemPromptCard />
           <ExecutionOverview />
         </>

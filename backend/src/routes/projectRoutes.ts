@@ -2650,6 +2650,48 @@ router.post('/api/portal/project/business-processes/:id/sync', requireParticipan
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── System Architecture Model: repo-agnostic scanning ────────
+router.get('/api/portal/project/system-model', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    // Return cached model if fresh (< 1 hour old)
+    const cached = (project as any).system_model;
+    if (cached?.scanned_at) {
+      const age = Date.now() - new Date(cached.scanned_at).getTime();
+      if (age < 3600000) { res.json(cached); return; }
+    }
+    // Build fresh model from GitHub file tree
+    const { getConnection } = await import('../services/githubService');
+    const conn = await getConnection(req.participant!.sub);
+    const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
+    if (fileTree.length === 0) { res.json({ error: 'no_repo', message: 'Connect GitHub to see system architecture' }); return; }
+    const { buildSystemModel } = await import('../services/systemModelScanner');
+    const model = buildSystemModel(fileTree);
+    // Cache on project
+    (project as any).system_model = model;
+    await project.save();
+    res.json(model);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/portal/project/system-model/refresh', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getConnection } = await import('../services/githubService');
+    const conn = await getConnection(req.participant!.sub);
+    const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
+    if (fileTree.length === 0) { res.json({ error: 'no_repo' }); return; }
+    const { buildSystemModel } = await import('../services/systemModelScanner');
+    const model = buildSystemModel(fileTree);
+    (project as any).system_model = model;
+    (project as any).changed('system_model', true);
+    await project.save();
+    res.json(model);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Visual Feedback OS: element-level feedback ────────
 router.post('/api/portal/project/business-processes/:id/element-map', requireParticipant, async (req: Request, res: Response) => {
   try {
