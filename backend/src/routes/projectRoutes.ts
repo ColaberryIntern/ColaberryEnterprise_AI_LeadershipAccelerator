@@ -2084,8 +2084,9 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
     const coveragePct = processReqs.length > 0 ? (finalMatched.length / processReqs.length) * 100 : 0;
     const projectHasImpl = fileTree.some(f => f.includes('services/') || f.includes('routes/'));
 
-    // Tier 1: High coverage, few stragglers
-    if (coveragePct >= 50 && finalUnmatched.length > 0 && finalUnmatched.length <= 5) {
+    // Tier 1: Few stragglers remaining (< 5 unmatched, or small BP with < 10 total reqs)
+    const isSmallBP = processReqs.length <= 10;
+    if ((coveragePct >= 50 || isSmallBP) && finalUnmatched.length > 0 && finalUnmatched.length <= 5) {
       for (const r of finalUnmatched) {
         r.status = 'matched'; r.confidence_score = 0.7; r.verified_by = 'auto_straggler';
         await r.save(); unmatched--; matched++;
