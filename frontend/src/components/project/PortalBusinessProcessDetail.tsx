@@ -381,7 +381,19 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                           {f.suggestion && <div style={{ color: 'var(--color-info)' }}>Fix: {f.suggestion?.substring(0, 100)}</div>}
                         </div>
                         <div className="d-flex gap-1 flex-shrink-0">
-                          <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 4px' }}
+                          <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 8, padding: '1px 6px' }} title="Copy fix prompt"
+                            onClick={() => {
+                              const prompt = `Fix this UI issue on the "${p.name}" page (${p.frontend_route || '/'}):\n\nIssue: ${f.title}\n${f.description}\n\nSuggestion: ${f.suggestion || 'Fix the issue.'}\n\nFiles:\n${(links.frontend || []).slice(0, 5).join('\n')}\n\nMake the fix.`;
+                              const ta = document.createElement('textarea');
+                              ta.value = prompt; ta.style.cssText = 'position:fixed;left:-9999px';
+                              document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                              const el = document.createElement('div');
+                              el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Fix prompt copied — paste into Claude Code</div>';
+                              document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+                            }}>
+                            <i className="bi bi-wrench me-1"></i>Fix
+                          </button>
+                          <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 4px' }} title="Resolve"
                             onClick={async () => {
                               try {
                                 const portalApi = (await import('../../utils/portalApi')).default;
@@ -392,7 +404,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                             }}>
                             <i className="bi bi-check"></i>
                           </button>
-                          <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 4px' }}
+                          <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 4px' }} title="Dismiss"
                             onClick={async () => {
                               try {
                                 const portalApi = (await import('../../utils/portalApi')).default;
@@ -523,7 +535,19 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         {f.suggestion && <div style={{ color: 'var(--color-info)', fontSize: 9 }}><i className="bi bi-lightbulb me-1"></i>{f.suggestion?.substring(0, 120)}</div>}
                       </div>
                       <div className="d-flex gap-1 flex-shrink-0">
-                        <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 4px' }} title="Resolve"
+                        <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 8, padding: '1px 6px' }} title="Copy fix prompt for Claude Code"
+                          onClick={() => {
+                            const prompt = `Fix this UI issue on the "${p.name}" page (${p.frontend_route || '/'}):\n\nIssue: ${f.title}\n${f.description}\n\nSuggestion: ${f.suggestion || 'Fix the issue as described above.'}\n\nFiles to check:\n${(links.frontend || []).slice(0, 5).join('\n')}\n\nMake the fix. Do not change unrelated code.`;
+                            const ta = document.createElement('textarea');
+                            ta.value = prompt; ta.style.cssText = 'position:fixed;left:-9999px';
+                            document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                            const el = document.createElement('div');
+                            el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-clipboard-check me-1"></i>Fix prompt copied — paste into Claude Code</div>';
+                            document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+                          }}>
+                          <i className="bi bi-wrench me-1"></i>Fix
+                        </button>
+                        <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 4px' }} title="Mark resolved"
                           onClick={async () => {
                             try {
                               const portalApi = (await import('../../utils/portalApi')).default;
