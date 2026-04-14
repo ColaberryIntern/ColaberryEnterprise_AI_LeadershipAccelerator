@@ -164,9 +164,18 @@ export default function PortalBusinessProcessesTab() {
                   {/* Layer status dots */}
                   {/* Layer dots */}
                   <div className="d-flex gap-3 mb-2" style={{ fontSize: 9 }}>
-                    <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.backend), marginRight: 3 }}></span>Backend</span>
-                    <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.frontend), marginRight: 3 }}></span>Frontend</span>
-                    <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.agent), marginRight: 3 }}></span>Agents</span>
+                    {isPageBP ? (
+                      <>
+                        <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.frontend), marginRight: 3 }}></span>Frontend</span>
+                        <span className="text-muted">Page BP</span>
+                      </>
+                    ) : (
+                      <>
+                        <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.backend), marginRight: 3 }}></span>Backend</span>
+                        <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.frontend), marginRight: 3 }}></span>Frontend</span>
+                        <span><span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: statusDot(u.agent), marginRight: 3 }}></span>Agents</span>
+                      </>
+                    )}
                   </div>
 
                   {/* 3 metric mini bars — different for page BPs */}
