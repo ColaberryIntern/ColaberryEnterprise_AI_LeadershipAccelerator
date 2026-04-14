@@ -92,6 +92,48 @@ router.get('/api/admin/projects/overview', requireAdmin, async (_req: Request, r
 });
 
 /**
+ * GET /api/admin/projects/cohort/:cohortId/students
+ * List all students in a cohort with their project details.
+ */
+router.get('/api/admin/projects/cohort/:cohortId/students', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const enrollments = await Enrollment.findAll({
+      where: { cohort_id: req.params.cohortId },
+      order: [['created_at', 'DESC']],
+    });
+
+    const students = [];
+    for (const e of enrollments) {
+      const project = await Project.findOne({ where: { enrollment_id: e.id } });
+      const artifactCount = project ? await ProjectArtifact.count({ where: { project_id: project.id } }) : 0;
+
+      students.push({
+        enrollment_id: e.id,
+        full_name: (e as any).full_name,
+        email: (e as any).email,
+        company: (e as any).company || '',
+        title: (e as any).title || '',
+        status: (e as any).status,
+        portal_enabled: (e as any).portal_enabled,
+        payment_status: (e as any).payment_status,
+        project_id: project?.id || null,
+        project_stage: project ? (project as any).project_stage : null,
+        organization_name: project ? (project as any).organization_name : null,
+        github_connected: project ? !!(project as any).github_repo_url : false,
+        requirements_loaded: project ? !!(project as any).requirements_document : false,
+        maturity_score: project ? (project as any).maturity_score : null,
+        artifact_count: artifactCount,
+        created_at: (e as any).created_at,
+      });
+    }
+
+    res.json({ students });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * POST /api/admin/projects/:id/import
  * Import project state (admin only).
  */

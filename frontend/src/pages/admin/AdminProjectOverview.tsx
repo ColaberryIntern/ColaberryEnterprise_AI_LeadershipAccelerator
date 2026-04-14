@@ -30,6 +30,9 @@ function AdminProjectOverview() {
   const [addForm, setAddForm] = useState({ full_name: '', email: '', company: '', title: '', phone: '' });
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
+  const [expandedCohort, setExpandedCohort] = useState<string | null>(null);
+  const [cohortStudents, setCohortStudents] = useState<any[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   useEffect(() => {
     api.get('/api/admin/projects/overview')
@@ -255,40 +258,138 @@ function AdminProjectOverview() {
                 <tbody>
                   {stats.map(cohort => {
                     const phaseTotal = Object.values(cohort.phase_distribution).reduce((a, b) => a + b, 0) || 1;
+                    const isExpanded = expandedCohort === cohort.cohort_id;
                     return (
-                      <tr key={cohort.cohort_id}>
-                        <td className="small fw-medium">{cohort.cohort_name}</td>
-                        <td className="small text-center">{cohort.total_students}</td>
-                        <td className="small text-center">{cohort.students_with_projects}</td>
-                        <td className="small text-center">{cohort.total_artifacts}</td>
-                        <td className="small text-center">{cohort.requirements_generated}</td>
-                        <td className="small text-center">
-                          {cohort.avg_maturity_score != null ? (
-                            <span style={{ color: cohort.avg_maturity_score >= 70 ? 'var(--color-accent)' : 'var(--color-secondary)' }}>
-                              {Math.round(cohort.avg_maturity_score)}%
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td>
-                          <div className="d-flex" style={{ height: 14 }}>
-                            {PHASES.map(phase => {
-                              const count = cohort.phase_distribution[phase] || 0;
-                              if (count === 0) return null;
-                              return (
-                                <div
-                                  key={phase}
-                                  title={`${phase}: ${count}`}
-                                  style={{
-                                    width: `${(count / phaseTotal) * 100}%`,
-                                    background: PHASE_COLORS[phase],
-                                    minWidth: count > 0 ? 4 : 0,
-                                  }}
-                                ></div>
-                              );
-                            })}
-                          </div>
-                        </td>
-                      </tr>
+                      <React.Fragment key={cohort.cohort_id}>
+                        <tr style={{ cursor: 'pointer' }} onClick={async () => {
+                          if (isExpanded) { setExpandedCohort(null); return; }
+                          setExpandedCohort(cohort.cohort_id);
+                          setLoadingStudents(true);
+                          try {
+                            const res = await api.get(`/api/admin/projects/cohort/${cohort.cohort_id}/students`);
+                            setCohortStudents(res.data.students || []);
+                          } catch {} finally { setLoadingStudents(false); }
+                        }}>
+                          <td className="small fw-medium">
+                            <i className={`bi ${isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} me-1`} style={{ fontSize: 10 }}></i>
+                            {cohort.cohort_name}
+                          </td>
+                          <td className="small text-center">{cohort.total_students}</td>
+                          <td className="small text-center">{cohort.students_with_projects}</td>
+                          <td className="small text-center">{cohort.total_artifacts}</td>
+                          <td className="small text-center">{cohort.requirements_generated}</td>
+                          <td className="small text-center">
+                            {cohort.avg_maturity_score != null ? (
+                              <span style={{ color: cohort.avg_maturity_score >= 70 ? 'var(--color-accent)' : 'var(--color-secondary)' }}>
+                                {Math.round(cohort.avg_maturity_score)}%
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td>
+                            <div className="d-flex" style={{ height: 14 }}>
+                              {PHASES.map(phase => {
+                                const count = cohort.phase_distribution[phase] || 0;
+                                if (count === 0) return null;
+                                return (
+                                  <div key={phase} title={`${phase}: ${count}`}
+                                    style={{ width: `${(count / phaseTotal) * 100}%`, background: PHASE_COLORS[phase], minWidth: count > 0 ? 4 : 0 }}></div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={7} style={{ background: 'var(--color-bg-alt)', padding: 0 }}>
+                              {loadingStudents ? (
+                                <div className="text-center py-3"><span className="spinner-border spinner-border-sm"></span></div>
+                              ) : (
+                                <table className="table table-sm mb-0" style={{ fontSize: 12 }}>
+                                  <thead>
+                                    <tr style={{ background: '#f1f5f9' }}>
+                                      <th style={{ paddingLeft: 24 }}>Student</th>
+                                      <th>Company</th>
+                                      <th>Project</th>
+                                      <th className="text-center">Stage</th>
+                                      <th className="text-center">GitHub</th>
+                                      <th className="text-center">Reqs</th>
+                                      <th className="text-center">Portal</th>
+                                      <th className="text-center">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {cohortStudents.map(s => {
+                                      const stageColor = PHASE_COLORS[s.project_stage] || '#9ca3af';
+                                      return (
+                                        <tr key={s.enrollment_id}>
+                                          <td style={{ paddingLeft: 24 }}>
+                                            <div className="fw-medium">{s.full_name}</div>
+                                            <div className="text-muted" style={{ fontSize: 10 }}>{s.email}</div>
+                                          </td>
+                                          <td>{s.company || <span className="text-muted">—</span>}</td>
+                                          <td>{s.organization_name || <span className="text-muted">Not set</span>}</td>
+                                          <td className="text-center">
+                                            {s.project_stage ? (
+                                              <span className="badge" style={{ background: `${stageColor}20`, color: stageColor, fontSize: 9 }}>
+                                                {s.project_stage}
+                                              </span>
+                                            ) : <span className="text-muted">—</span>}
+                                          </td>
+                                          <td className="text-center">
+                                            {s.github_connected ? <i className="bi bi-check-circle" style={{ color: 'var(--color-accent)' }}></i> : <i className="bi bi-x-circle" style={{ color: '#9ca3af' }}></i>}
+                                          </td>
+                                          <td className="text-center">
+                                            {s.requirements_loaded ? <i className="bi bi-check-circle" style={{ color: 'var(--color-accent)' }}></i> : <i className="bi bi-x-circle" style={{ color: '#9ca3af' }}></i>}
+                                          </td>
+                                          <td className="text-center">
+                                            {s.portal_enabled ? (
+                                              <span className="badge bg-success" style={{ fontSize: 9 }}>Active</span>
+                                            ) : (
+                                              <span className="badge bg-secondary" style={{ fontSize: 9 }}>Disabled</span>
+                                            )}
+                                          </td>
+                                          <td className="text-center">
+                                            {!s.portal_enabled && (
+                                              <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 9, padding: '1px 6px' }}
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  try {
+                                                    await api.patch(`/api/admin/accelerator/enrollments/${s.enrollment_id}/portal-access`, { portal_enabled: true });
+                                                    const res = await api.get(`/api/admin/projects/cohort/${cohort.cohort_id}/students`);
+                                                    setCohortStudents(res.data.students || []);
+                                                  } catch {}
+                                                }}>
+                                                Enable Portal
+                                              </button>
+                                            )}
+                                            {s.portal_enabled && s.project_id && (
+                                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9, padding: '1px 6px' }}
+                                                onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  try {
+                                                    await api.post('/api/admin/accelerator/quick-add-student', { full_name: s.full_name, email: s.email, company: s.company, cohort_id: cohort.cohort_id });
+                                                  } catch {}
+                                                  const el = document.createElement('div');
+                                                  el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-envelope me-1"></i>Login link sent</div>';
+                                                  document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+                                                }}>
+                                                <i className="bi bi-envelope me-1"></i>Resend Link
+                                              </button>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                    {cohortStudents.length === 0 && (
+                                      <tr><td colSpan={8} className="text-center text-muted py-3">No students in this cohort</td></tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
