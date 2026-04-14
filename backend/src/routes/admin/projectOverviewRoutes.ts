@@ -207,7 +207,7 @@ router.get('/api/admin/projects/:id/detail', requireAdmin, async (req: Request, 
     const gh = await GitHubConnection.findOne({ where: { enrollment_id: (project as any).enrollment_id } });
 
     // Artifacts
-    const artifacts = await ProjectArtifact.findAll({ where: { project_id: project.id }, attributes: ['id', 'artifact_definition_id', 'title', 'status', 'score', 'created_at'] });
+    const artifacts = await ProjectArtifact.findAll({ where: { project_id: project.id } });
 
     res.json({
       project: {
