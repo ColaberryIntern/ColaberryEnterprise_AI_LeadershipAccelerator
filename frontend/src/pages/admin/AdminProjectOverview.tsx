@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/api';
+import AdminPreviewStackPanel from '../../components/admin/AdminPreviewStackPanel';
 
 interface CohortProjectStats {
   cohort_id: string;
@@ -417,8 +418,11 @@ function AdminProjectOverview() {
                                                       ))}
                                                     </div>
 
+                                                    {/* Preview Stack Panel */}
+                                                    <AdminPreviewStackPanel projectId={s.project_id} />
+
                                                     {/* Business Processes */}
-                                                    <div className="fw-medium small mb-2"><i className="bi bi-diagram-3 me-1"></i>Business Processes</div>
+                                                    <div className="fw-medium small mt-3 mb-2"><i className="bi bi-diagram-3 me-1"></i>Business Processes</div>
                                                     <div className="table-responsive">
                                                       <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
                                                         <thead className="table-light">
