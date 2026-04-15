@@ -28,6 +28,10 @@ services:
       POSTGRES_DB: accelerator_preview
     volumes:
       - dbdata:/var/lib/postgresql/data
+      # Init scripts run once on first boot (fresh data dir). Needed to
+      # enable the pgvector extension before the backend sync creates
+      # tables with vector() columns.
+      - ./preview-db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U accelerator"]
       interval: 5s
