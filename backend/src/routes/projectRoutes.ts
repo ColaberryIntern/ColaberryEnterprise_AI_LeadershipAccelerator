@@ -1612,6 +1612,50 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     enriched.sort((a: any, b: any) => (b.priority_score || 0) - (a.priority_score || 0));
     enriched.forEach((cap: any, i: number) => { cap.priority_rank = i + 1; });
 
+    // ── Cross-BP dedup of "Recommended Next Step" ──
+    // Each BP's execution_plan is generated independently, so multiple BPs often surface
+    // the same generic first step (e.g. two BPs both recommending "Implement backend
+    // requirements"). The frontend treats the first non-blocked step as "Recommended Next
+    // Step", so we reorder each plan to promote a step whose key+label hasn't been used by
+    // an earlier BP, and also avoid steps whose label overlaps with an existing BP name
+    // (work already represented by another BP in the project).
+    const normalize = (s: string) => (s || '').toLowerCase().replace(/\s*\(\d+[^)]*\)\s*$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const existingBpNames = new Set(enriched.map((c: any) => normalize(c.name || '')).filter(Boolean));
+    const stepCollidesWithBp = (label: string) => {
+      const n = normalize(label);
+      if (!n) return false;
+      for (const bpName of existingBpNames) {
+        if (!bpName || bpName.length < 6) continue;
+        // Only flag when the step label CONTAINS a whole BP name (word-boundary-ish).
+        // Generic labels like "Build Backend Services" won't match BP names like
+        // "User Management and Role Assignment", but a step "Implement lead generation
+        // and management" would match the "Lead Generation and Management" BP.
+        if (n.includes(bpName)) return true;
+      }
+      return false;
+    };
+    const usedFirstKeys = new Set<string>();
+    const usedFirstLabels = new Set<string>();
+    for (const cap of enriched) {
+      const plan: any[] = cap.execution_plan || [];
+      if (plan.length === 0) continue;
+      const isUnique = (s: any) => !s.blocked
+        && !usedFirstKeys.has(s.key)
+        && !usedFirstLabels.has(normalize(s.label))
+        && !stepCollidesWithBp(s.label);
+      const firstUniqueIdx = plan.findIndex(isUnique);
+      if (firstUniqueIdx > 0) {
+        // Promote the first unique non-blocked step to index 0
+        const [unique] = plan.splice(firstUniqueIdx, 1);
+        plan.unshift(unique);
+      }
+      const first = plan.find((s: any) => !s.blocked);
+      if (first && isUnique(first)) {
+        usedFirstKeys.add(first.key);
+        usedFirstLabels.add(normalize(first.label));
+      }
+    }
+
     res.json(enriched);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
