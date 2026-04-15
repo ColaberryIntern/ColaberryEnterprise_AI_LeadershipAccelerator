@@ -2969,6 +2969,31 @@ router.put('/api/portal/project/preview-url', requireParticipant, async (req: Re
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Preview Stack status for the portal iframe overlay ────────
+// Returns the current user's project's preview_stack status so the portal
+// can show a "Booting preview…" overlay while the stack is provisioning
+// or waking up. Safe for the participant (only their own stack).
+router.get('/api/portal/project/preview-status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project' }); return; }
+    const { getStackByProject } = await import('../services/previewStackService');
+    const stack: any = await getStackByProject(project.id);
+    if (!stack) {
+      res.json({ status: 'none', slug: null });
+      return;
+    }
+    res.json({
+      status: stack.status,
+      slug: stack.slug,
+      failure_reason: stack.failure_reason || null,
+      last_started_at: stack.last_started_at,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── UI Feedback: analyze frontend and return suggestions ────────
 router.post('/api/portal/project/business-processes/:id/ui-feedback', requireParticipant, async (req: Request, res: Response) => {
   try {

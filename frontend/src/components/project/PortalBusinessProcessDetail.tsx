@@ -53,8 +53,30 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [elementFeedback, setElementFeedback] = useState<any>(null);
   const [analyzingPage, setAnalyzingPage] = useState(false);
   const [projectRoutes, setProjectRoutes] = useState<string[]>([]);
+  const [previewStatus, setPreviewStatus] = useState<{ status: string; failure_reason?: string | null } | null>(null);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
+
+  // Poll the preview stack status so we can dim the iframe while it boots.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: any;
+    const check = async () => {
+      try {
+        const mod = await import('../../utils/portalApi');
+        const res = await mod.default.get('/api/portal/project/preview-status');
+        if (cancelled) return;
+        setPreviewStatus(res.data);
+        const s = res.data?.status;
+        // Keep polling fast while booting; slow down once running.
+        timer = setTimeout(check, s === 'running' || s === 'none' ? 15000 : 3000);
+      } catch {
+        if (!cancelled) timer = setTimeout(check, 10000);
+      }
+    };
+    check();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [processId]);
   // Load project's available routes from repo file tree (not from BPs — prevents cross-project contamination)
   useEffect(() => {
     import('../../utils/portalApi').then(mod => {
@@ -321,12 +343,64 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     ))}
                   </select>
                 </div>
-                <iframe
-                  src={p.preview_url}
-                  title="Frontend Preview"
-                  style={{ width: '100%', height: 400, border: '1px solid var(--color-border)', borderRadius: 8, background: '#fff' }}
-                  sandbox="allow-scripts allow-same-origin allow-forms"
-                />
+                <div style={{ position: 'relative' }}>
+                  <iframe
+                    src={p.preview_url}
+                    title="Frontend Preview"
+                    style={{
+                      width: '100%',
+                      height: 400,
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 8,
+                      background: '#fff',
+                      opacity: previewStatus && previewStatus.status !== 'running' && previewStatus.status !== 'none' ? 0.35 : 1,
+                      pointerEvents: previewStatus && previewStatus.status !== 'running' && previewStatus.status !== 'none' ? 'none' : 'auto',
+                      transition: 'opacity 200ms ease',
+                    }}
+                    sandbox="allow-scripts allow-same-origin allow-forms"
+                  />
+                  {previewStatus && previewStatus.status !== 'running' && previewStatus.status !== 'none' && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      style={{
+                        position: 'absolute', inset: 0,
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        background: 'rgba(26, 54, 93, 0.08)',
+                        borderRadius: 8, pointerEvents: 'none',
+                      }}
+                    >
+                      <div className="card shadow-sm" style={{ maxWidth: 380, pointerEvents: 'auto' }}>
+                        <div className="card-body text-center py-3 px-4">
+                          {previewStatus.status === 'failed' ? (
+                            <>
+                              <i className="bi bi-exclamation-triangle" style={{ fontSize: 24, color: 'var(--color-secondary)' }}></i>
+                              <div className="fw-semibold mt-2" style={{ color: 'var(--color-primary)' }}>Preview failed to start</div>
+                              <div className="text-muted small mt-1" style={{ fontSize: 11 }}>{previewStatus.failure_reason || 'Check the admin preview panel for details.'}</div>
+                            </>
+                          ) : previewStatus.status === 'archived' ? (
+                            <>
+                              <i className="bi bi-archive" style={{ fontSize: 24, color: 'var(--color-text-light)' }}></i>
+                              <div className="fw-semibold mt-2" style={{ color: 'var(--color-primary)' }}>Preview archived</div>
+                              <div className="text-muted small mt-1" style={{ fontSize: 11 }}>Ask an admin to restore this preview before continuing.</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="spinner-border" style={{ color: 'var(--color-primary-light)' }} role="status">
+                                <span className="visually-hidden">Booting preview…</span>
+                              </div>
+                              <div className="fw-semibold mt-2" style={{ color: 'var(--color-primary)' }}>Booting your preview</div>
+                              <div className="text-muted small mt-1" style={{ fontSize: 11 }}>
+                                This takes 10–30 seconds on first access. We'll unlock it as soon as it's ready.
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="d-flex justify-content-between align-items-center mt-1">
                   <div className="d-flex gap-2 align-items-center">
                     <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
