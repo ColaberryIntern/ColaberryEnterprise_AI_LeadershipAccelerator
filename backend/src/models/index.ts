@@ -147,6 +147,14 @@ import SteeringAction from './SteeringAction';
 import ArchitectSession from './ArchitectSession';
 import CapabilityAgentMap from './CapabilityAgentMap';
 import UIElementFeedback from './UIElementFeedback';
+import PreviewStack from './PreviewStack';
+import PreviewEvent from './PreviewEvent';
+
+// --- Preview Stack associations ---
+Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
+PreviewStack.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+PreviewStack.hasMany(PreviewEvent, { foreignKey: 'preview_stack_id', as: 'events' });
+PreviewEvent.belongsTo(PreviewStack, { foreignKey: 'preview_stack_id', as: 'stack' });
 
 // --- Maya Conversation Outcome associations ---
 Lead.hasMany(MayaConversationOutcome, { foreignKey: 'lead_id', as: 'conversationOutcomes' });
@@ -879,4 +887,6 @@ export {
   ArchitectSession,
   CapabilityAgentMap,
   UIElementFeedback,
+  PreviewStack,
+  PreviewEvent,
 };
