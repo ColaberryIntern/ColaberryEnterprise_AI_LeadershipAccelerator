@@ -1609,6 +1609,19 @@ export function startScheduler(): void {
     });
   });
 
+  // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const { reapIdlePreviewStacks } = await import('./previewStackReaper');
+      const result = await reapIdlePreviewStacks();
+      if (result.stopped.length > 0) {
+        console.log(`[PreviewReaper] Stopped ${result.stopped.length} idle stacks:`, result.stopped.join(', '));
+      }
+    } catch (err: any) {
+      console.error('[PreviewReaper] error:', err?.message);
+    }
+  });
+
   // Recover stale processing actions every 15 minutes
   cron.schedule('*/15 * * * *', () => {
     recoverStaleActions().catch((err) => {
