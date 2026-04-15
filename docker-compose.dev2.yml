@@ -19,9 +19,22 @@ services:
       ENABLE_EXPERIMENTAL_FEATURES: "true"
       ENABLE_CONTEXT_GRAPH_V2: "true"
       ENABLE_EXECUTION_ENGINE: "true"
+      # Preview stack provisioning (separate port pool from dev1 + prod)
+      PREVIEW_STACKS_ROOT: /var/preview-stacks
+      PREVIEW_PORT_POOL_START: "12000"
+      PREVIEW_PORT_POOL_END: "12999"
+      PREVIEW_IDLE_TIMEOUT_MS: "1800000"
+      PREVIEW_CPU_LIMIT: "0.5"
+      PREVIEW_MEM_LIMIT: "512m"
+      PREVIEW_PROXY_HOST: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - default
       - prod_network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/preview-stacks-dev2:/var/preview-stacks
     expose:
       - "3001"
     ports:

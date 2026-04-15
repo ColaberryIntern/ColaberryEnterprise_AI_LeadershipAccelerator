@@ -29,6 +29,16 @@ services:
       INTELLIGENCE_ENGINE_URL: http://intelligence:5000
       NODE_OPTIONS: "--max-old-space-size=512"
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      # Preview stack provisioning — see directives/per-user-project-previews.md
+      PREVIEW_STACKS_ROOT: /var/preview-stacks
+      PREVIEW_PORT_POOL_START: "10000"
+      PREVIEW_PORT_POOL_END: "10999"
+      PREVIEW_IDLE_TIMEOUT_MS: "1800000"
+      PREVIEW_CPU_LIMIT: "0.5"
+      PREVIEW_MEM_LIMIT: "512m"
+      PREVIEW_PROXY_HOST: host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +46,11 @@ services:
       - uploads:/app/uploads
       - screenshots:/data/screenshots
       - browser_profiles:/data/browser-profiles
+      # Docker socket + stacks dir for preview provisioning.
+      # NOTE: mounting the docker socket gives this container effective root on
+      # the host. Accepted per directives/per-user-project-previews.md sign-off.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/preview-stacks:/var/preview-stacks
     expose:
       - "3001"
 
