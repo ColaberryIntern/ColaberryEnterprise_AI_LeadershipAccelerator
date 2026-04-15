@@ -15,6 +15,7 @@ import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
+import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
 import { seedProgramCurriculum } from './seeds/seedProgramCurriculum';
@@ -37,6 +38,10 @@ app.use(cors());
 
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);
+
+// Preview proxy — mounted BEFORE the JSON parser so request bodies pass through
+// raw to upstream preview stacks.
+app.use('/preview', previewProxyMiddleware());
 
 // Global JSON parser for all other routes
 app.use(express.json({ limit: '5mb' }));
