@@ -234,6 +234,20 @@ export async function provisionStack(opts: ProvisionOptions): Promise<any> {
       );
     }
 
+    // 3a. Seed .env.preview from .env.preview.example if the former is missing.
+    // Preview compose files commonly reference env_file: .env.preview; keeping the
+    // real file out of the repo avoids leaking secrets but requires a seed step.
+    const envPath = path.join(repoDir, '.env.preview');
+    const envExamplePath = path.join(repoDir, '.env.preview.example');
+    const envExists = await fs.stat(envPath).then(() => true).catch(() => false);
+    if (!envExists) {
+      const hasExample = await fs.stat(envExamplePath).then(() => true).catch(() => false);
+      if (hasExample) {
+        await fs.copyFile(envExamplePath, envPath);
+        await logEvent(stack.id, 'provision', { phase: 'seeded_env_preview' });
+      }
+    }
+
     // 4. Allocate ports (if not already set)
     if (!stack.frontend_port) stack.frontend_port = await allocatePort('frontend');
     if (!stack.backend_port) stack.backend_port = await allocatePort('backend');
