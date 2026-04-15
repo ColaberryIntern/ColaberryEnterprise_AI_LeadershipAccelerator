@@ -1,0 +1,82 @@
+# Preview stack for the Colaberry Enterprise AI Accelerator repo itself.
+#
+# This file is the D5 contract: the repo's own `docker-compose.preview.yml`.
+# The provisioning service (backend/src/services/previewStackService.ts)
+# runs `docker compose -p preview-<slug> -f docker-compose.preview.yml up -d`
+# from a clone of this repo, passing the following env vars:
+#
+#   PREVIEW_SLUG            — unique slug; used as a suffix on container/volume names
+#   PREVIEW_FRONTEND_PORT   — host port for the nginx (frontend) service
+#   PREVIEW_BACKEND_PORT    — host port for the backend service (optional, not always exposed)
+#   PREVIEW_DB_VOLUME       — named volume for the isolated Postgres
+#   PREVIEW_CPU_LIMIT       — per-service CPU cap (e.g. "0.5")
+#   PREVIEW_MEM_LIMIT       — per-service memory cap (e.g. "512m")
+#
+# Key differences from docker-compose.production.yml:
+#   - No host-level port publishing on backend/db/intelligence (frontend only).
+#   - Uses a fresh Postgres volume per stack (PREVIEW_DB_VOLUME).
+#   - Applies CPU + memory caps so a runaway preview can't starve the host.
+#   - Intelligence service is omitted by default (can be added per-project).
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: accelerator
+      POSTGRES_PASSWORD: accelerator
+      POSTGRES_DB: accelerator_preview
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accelerator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "${PREVIEW_CPU_LIMIT:-0.5}"
+          memory: "${PREVIEW_MEM_LIMIT:-512m}"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.preview
+    environment:
+      DATABASE_URL: postgres://accelerator:accelerator@postgres:5432/accelerator_preview
+      NODE_OPTIONS: "--max-old-space-size=384"
+      NODE_ENV: preview
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "3001"
+    deploy:
+      resources:
+        limits:
+          cpus: "${PREVIEW_CPU_LIMIT:-0.5}"
+          memory: "${PREVIEW_MEM_LIMIT:-512m}"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PREVIEW_FRONTEND_PORT:-10000}:80"
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "${PREVIEW_CPU_LIMIT:-0.5}"
+          memory: "${PREVIEW_MEM_LIMIT:-256m}"
+
+volumes:
+  dbdata:
+    name: ${PREVIEW_DB_VOLUME:-preview-default-db}
+    external: false
