@@ -39,7 +39,9 @@ services:
           cpus: "${PREVIEW_CPU_LIMIT:-0.5}"
           memory: "${PREVIEW_MEM_LIMIT:-512m}"
 
-  backend:
+  # Service name matches prod so the nginx.conf upstream (accelerator-backend)
+  # resolves inside the preview network.
+  accelerator-backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -71,7 +73,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - backend
+      - accelerator-backend
     deploy:
       resources:
         limits:
