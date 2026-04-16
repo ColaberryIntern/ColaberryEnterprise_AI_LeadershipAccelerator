@@ -9,6 +9,7 @@ import Pagination from '../../../components/ui/Pagination';
 interface Decision {
   id: string;
   email: {
+    id: string;
     from_name: string;
     from_address: string;
     subject: string;
@@ -16,8 +17,11 @@ interface Decision {
     received_at: string;
     provider: string;
     has_attachments: boolean;
+    headers?: any;
   };
   classification: {
+    id: string;
+    email_id: string;
     state: 'INBOX' | 'AUTOMATION' | 'SILENT_HOLD' | 'ASK_USER';
     confidence: number;
     reasoning: string;
