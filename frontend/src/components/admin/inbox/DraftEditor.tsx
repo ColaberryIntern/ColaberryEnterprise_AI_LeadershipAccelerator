@@ -60,7 +60,7 @@ export default function DraftEditor({ originalEmail, draft, onApprove, onReject 
             </div>
             <div className="mb-2">
               <span className="small fw-medium">Subject:</span>{' '}
-              <span className="small">{draft?.subject || `Re: ${originalEmail?.subject || ''}`}</span>
+              <span className="small">{draft?.draft_subject || draft?.subject || `Re: ${originalEmail?.subject || ''}`}</span>
             </div>
             <hr />
             <div className="flex-grow-1 mb-3">

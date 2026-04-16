@@ -35,6 +35,41 @@ export default function InboxDraftApprovalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.length === drafts.length) setSelectedIds([]);
+    else setSelectedIds(drafts.map(d => d.draft.id));
+  };
+  const handleBatchReject = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      for (const id of selectedIds) {
+        await api.post(`/api/admin/inbox/drafts/${id}/reject`, {});
+      }
+      showToast(`${selectedIds.length} drafts rejected`, 'success');
+      setSelectedIds([]);
+      fetchDrafts();
+    } catch (err: any) {
+      showToast('Batch reject failed', 'error');
+    }
+  };
+  const handleBatchApprove = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      for (const id of selectedIds) {
+        await api.post(`/api/admin/inbox/drafts/${id}/approve`, {});
+      }
+      showToast(`${selectedIds.length} drafts approved & sent`, 'success');
+      setSelectedIds([]);
+      fetchDrafts();
+    } catch (err: any) {
+      showToast('Batch approve failed', 'error');
+    }
+  };
   const [pendingCount, setPendingCount] = useState(0);
 
   const fetchDrafts = useCallback(async () => {
@@ -135,11 +170,21 @@ export default function InboxDraftApprovalPage() {
       ) : drafts.length === 0 ? (
         <div className="text-center py-5 text-muted">No drafts found.</div>
       ) : (
+        {selectedIds.length > 0 && (
+          <div className="d-flex gap-2 mb-3 align-items-center">
+            <span className="badge bg-primary">{selectedIds.length} selected</span>
+            <button className="btn btn-sm btn-success" onClick={handleBatchApprove}>Approve & Send All</button>
+            <button className="btn btn-sm btn-outline-danger" onClick={handleBatchReject}>Reject All</button>
+          </div>
+        )}
         <div className="card border-0 shadow-sm">
           <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
+                  <th style={{ width: 40 }}>
+                    <input type="checkbox" className="form-check-input" checked={selectedIds.length === drafts.length && drafts.length > 0} onChange={toggleSelectAll} />
+                  </th>
                   <th>Original Subject</th>
                   <th>From</th>
                   <th>Draft Preview</th>
@@ -154,6 +199,9 @@ export default function InboxDraftApprovalPage() {
                       onClick={() => setExpandedId(expandedId === d.draft.id ? null : d.draft.id)}
                       className={expandedId === d.draft.id ? 'table-active' : ''}
                     >
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" className="form-check-input" checked={selectedIds.includes(d.draft.id)} onChange={() => toggleSelect(d.draft.id)} />
+                      </td>
                       <td className="small fw-medium">{d.email?.subject || d.draft.draft_subject}</td>
                       <td className="small">{d.email?.from_name || d.draft.reply_to_address}</td>
                       <td className="small text-muted text-truncate" style={{ maxWidth: 300 }}>
@@ -164,7 +212,7 @@ export default function InboxDraftApprovalPage() {
                     </tr>
                     {expandedId === d.draft.id && (
                       <tr>
-                        <td colSpan={4} className="p-3 bg-light">
+                        <td colSpan={5} className="p-3 bg-light">
                           <DraftEditor
                             originalEmail={d.email}
                             draft={d.draft}
