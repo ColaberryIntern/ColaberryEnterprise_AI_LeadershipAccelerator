@@ -94,7 +94,9 @@ export async function fetchRecentEmails(
             msg.once('end', async () => {
               try {
                 const parsed: ParsedMail = await simpleParser(buffer);
-                const fromAddr = parsed.from?.value?.[0];
+                const fromObj = parsed.from;
+                const fromArr = fromObj ? (Array.isArray(fromObj) ? fromObj[0] : fromObj) : null;
+                const fromAddr = fromArr?.value?.[0];
                 const headers: Record<string, string> = {};
                 if (parsed.headers) {
                   parsed.headers.forEach((value: any, key: string) => {
@@ -103,12 +105,17 @@ export async function fetchRecentEmails(
                   });
                 }
 
+                const toObj = parsed.to;
+                const toArr = toObj ? (Array.isArray(toObj) ? toObj : [toObj]) : [];
+                const ccObj = parsed.cc;
+                const ccArr = ccObj ? (Array.isArray(ccObj) ? ccObj : [ccObj]) : [];
+
                 emails.push({
                   provider_message_id: parsed.messageId || `imap-${Date.now()}-${Math.random()}`,
                   from_address: fromAddr?.address || '',
                   from_name: fromAddr?.name || null,
-                  to_addresses: (parsed.to?.value || []).map((a: any) => a.address),
-                  cc_addresses: (parsed.cc?.value || []).map((a: any) => a.address),
+                  to_addresses: toArr.flatMap((a: any) => (a.value || []).map((v: any) => v.address)),
+                  cc_addresses: ccArr.flatMap((a: any) => (a.value || []).map((v: any) => v.address)),
                   subject: parsed.subject || '(no subject)',
                   body_text: parsed.text || null,
                   body_html: parsed.html || null,
