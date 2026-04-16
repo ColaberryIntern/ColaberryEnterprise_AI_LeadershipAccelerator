@@ -1924,8 +1924,24 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
       extraContext = { unmappedRequirements: reqs.map((r: any) => ({ requirement_text: r.requirement_text })) };
     }
 
+    // Build project-specific context so prompts reference THIS project's repo,
+    // not hardcoded Accelerator paths.
+    let repoFileTree: string[] = [];
+    try {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) repoFileTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+    } catch {}
+    const projectVars = (project as any).project_variables || {};
+    const projectContext = {
+      repoFileTree,
+      systemPrompt: projectVars.system_prompt || '',
+      repoUrl: (project as any).github_repo_url || '',
+      projectName: (project as any).organization_name || '',
+    };
+
     const { generateImprovementPrompt } = await import('../intelligence/promptGenerator');
-    const prompt = await generateImprovementPrompt(req.params.id as string, target, extraContext);
+    const prompt = await generateImprovementPrompt(req.params.id as string, target, extraContext, projectContext);
 
     // Save what this prompt promises to build (for post-resync comparison)
     const { Capability } = await import('../models');
