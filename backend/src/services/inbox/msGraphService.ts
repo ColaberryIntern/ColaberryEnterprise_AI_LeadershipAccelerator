@@ -46,9 +46,9 @@ export function isConfigured(): boolean {
 
 // ─── MSAL Token Management ─────────────────────────────────────────────────
 
-let msalApp: ConfidentialClientApplication | null = null;
+let msalApp: any = null;
 
-function getMsalApp(): ConfidentialClientApplication {
+function getMsalApp(): any {
   if (msalApp) return msalApp;
 
   if (!CLIENT_ID || !CLIENT_SECRET || !TENANT_ID) {
@@ -111,7 +111,7 @@ async function getAccessToken(): Promise<string> {
 /**
  * Creates an authenticated Microsoft Graph client.
  */
-export function getGraphClient(): Client {
+export function getGraphClient(): any {
   return Client.init({
     authProvider: async (done: any) => {
       try {
