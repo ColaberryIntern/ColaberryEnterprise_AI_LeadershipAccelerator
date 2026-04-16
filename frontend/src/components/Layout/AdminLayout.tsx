@@ -34,13 +34,8 @@ const adminNavSections: NavSection[] = [
     { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
     { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },
   ]},
-  { label: 'Inbox COS', links: [
-    { path: '/admin/inbox/decisions', label: 'Decisions', icon: 'inbox' },
-    { path: '/admin/inbox/drafts', label: 'Drafts', icon: 'pencil-square' },
-    { path: '/admin/inbox/rules', label: 'Rules', icon: 'funnel' },
-    { path: '/admin/inbox/vips', label: 'VIPs', icon: 'star' },
-    { path: '/admin/inbox/learning', label: 'Learning', icon: 'book' },
-    { path: '/admin/inbox/audit', label: 'Audit Log', icon: 'journal-text' },
+  { label: null, links: [
+    { path: '/admin/inbox', label: 'Inbox COS', icon: 'envelope-open' },
   ]},
   { label: 'System', links: [
     { path: '/admin/tickets', label: 'Tickets', icon: 'clipboard-check' },

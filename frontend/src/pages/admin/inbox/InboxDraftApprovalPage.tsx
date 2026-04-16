@@ -40,9 +40,9 @@ export default function InboxDraftApprovalPage() {
       setLoading(true);
       setError('');
       const res = await api.get('/api/admin/inbox/drafts', { params: { status: tab } });
-      setDrafts(res.data.drafts || []);
+      setDrafts(res.data.results || res.data.drafts || []);
       if (tab === 'pending_approval') {
-        setPendingCount(res.data.drafts?.length || 0);
+        setPendingCount(res.data.total || res.data.results?.length || 0);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load drafts');
@@ -59,7 +59,7 @@ export default function InboxDraftApprovalPage() {
   useEffect(() => {
     if (tab !== 'pending_approval') {
       api.get('/api/admin/inbox/drafts', { params: { status: 'pending_approval' } })
-        .then((res) => setPendingCount(res.data.drafts?.length || 0))
+        .then((res) => setPendingCount(res.data.total || res.data.results?.length || 0))
         .catch(() => {});
     }
   }, [tab]);

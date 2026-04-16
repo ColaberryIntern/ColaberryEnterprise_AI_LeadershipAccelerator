@@ -38,9 +38,9 @@ export default function InboxLearningPage() {
         setLoading(true);
         setError('');
         const res = await api.get('/api/admin/inbox/learning');
-        setMetrics(res.data.metrics || null);
+        setMetrics(res.data || null);
         setProfiles(res.data.style_profiles || []);
-        setEvents(res.data.learning_events || []);
+        setEvents(res.data.recent_events || res.data.learning_events || []);
       } catch (err: any) {
         setError(err.response?.data?.error || 'Failed to load learning data');
       } finally {

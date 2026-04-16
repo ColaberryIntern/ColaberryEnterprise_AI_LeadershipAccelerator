@@ -72,8 +72,8 @@ export default function InboxDecisionsPage() {
       if (dateTo) params.date_to = dateTo;
 
       const res = await api.get('/api/admin/inbox/decisions', { params });
-      setDecisions(res.data.decisions || []);
-      setTotalPages(res.data.totalPages || 1);
+      setDecisions(res.data.results || res.data.decisions || []);
+      setTotalPages(Math.ceil((res.data.total || 0) / 50) || 1);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load decisions');
     } finally {

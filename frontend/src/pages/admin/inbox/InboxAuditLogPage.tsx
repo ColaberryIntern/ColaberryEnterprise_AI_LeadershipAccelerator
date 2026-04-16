@@ -66,8 +66,8 @@ export default function InboxAuditLogPage() {
       if (dateTo) params.date_to = dateTo;
 
       const res = await api.get('/api/admin/inbox/audit', { params });
-      setEntries(res.data.entries || []);
-      setTotalPages(res.data.totalPages || 1);
+      setEntries(res.data.results || res.data.entries || []);
+      setTotalPages(Math.ceil((res.data.total || 0) / 50) || 1);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load audit log');
     } finally {
