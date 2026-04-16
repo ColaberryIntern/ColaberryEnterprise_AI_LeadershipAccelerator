@@ -92,14 +92,15 @@ async function archiveGmail(
   providerMessageId: string,
   account: 'colaberry' | 'personal'
 ): Promise<void> {
+  // Use COS-specific tokens (gmail.modify scope) when available, fall back to standard
   const clientId = account === 'colaberry'
-    ? process.env.GMAIL_CLIENT_ID
+    ? (process.env.GMAIL_COS_CLIENT_ID || process.env.GMAIL_CLIENT_ID)
     : process.env.GMAIL_PERSONAL_CLIENT_ID;
   const clientSecret = account === 'colaberry'
-    ? process.env.GMAIL_CLIENT_SECRET
+    ? (process.env.GMAIL_COS_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET)
     : process.env.GMAIL_PERSONAL_CLIENT_SECRET;
   const refreshToken = account === 'colaberry'
-    ? process.env.GMAIL_REFRESH_TOKEN
+    ? (process.env.GMAIL_COS_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN)
     : process.env.GMAIL_PERSONAL_REFRESH_TOKEN;
 
   if (!clientId || !clientSecret || !refreshToken) {
