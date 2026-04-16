@@ -1292,36 +1292,48 @@ function enrichCapability(cap: any) {
   const hasFrontend = combinedFrontendFiles.length > 0;
   const hasAgents = combinedAgentFiles.length > 0;
 
-  // Project-level layer detection from full repo file tree
-  // If the PROJECT has backend/frontend/agents, don't tell each process to "Build Backend" etc.
-  const projectHasBackend = repoTree.some((f: string) => f.includes('service') || f.includes('route') || f.includes('controller'));
-  const projectHasFrontend = repoTree.some((f: string) => (f.includes('component') || f.includes('page') || f.includes('Page')) && f.endsWith('.tsx'));
-  const projectHasAgents = repoTree.some((f: string) => (f.includes('agents/') || f.includes('intelligence/')) && f.endsWith('.ts') && f.toLowerCase().includes('agent'));
-  const projectHasModels = repoTree.some((f: string) => f.includes('models/') && f.endsWith('.ts'));
+  // Project-level layer detection from full repo file tree.
+  // Patterns are broad to recognize diverse architectures (monolith, microservices,
+  // Next.js, Python/Django, Go, etc.) — not just the Accelerator's own layout.
+  const projectHasBackend = repoTree.some((f: string) => /\/(service|route|controller|handler|gateway|api|server|resolver)\b/i.test(f) && /\.(ts|js|py|go|rs|java)$/.test(f));
+  const projectHasFrontend = repoTree.some((f: string) => /\/(component|page|view|screen|layout)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f));
+  const projectHasAgents = repoTree.some((f: string) => /(agent|intelligence|automation|worker|bot)\b/i.test(f) && /\.(ts|js|py)$/.test(f));
+  const projectHasModels = repoTree.some((f: string) => /\/(model|schema|entity|migration)\b/i.test(f) && /\.(ts|js|py|go|rs|java)$/.test(f));
+  // Count project-level files per layer for quality scoring (when per-BP matches are empty)
+  const projectBackendCount = repoTree.filter((f: string) => /\/(service|route|controller|handler|gateway|api)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f)).length;
+  const projectFrontendCount = repoTree.filter((f: string) => /\/(component|page|view|screen)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f)).length;
+  const projectAgentCount = repoTree.filter((f: string) => /(agent|intelligence|automation)\b/i.test(f) && /\.(ts|js|py)$/.test(f)).length;
+  const projectModelCount = repoTree.filter((f: string) => /\/(model|schema|entity)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f)).length;
+
+  // Effective layer detection: per-BP files || project-level detection
+  const effectiveBackend = hasBackend || projectHasBackend;
+  const effectiveFrontend = hasFrontend || projectHasFrontend;
+  const effectiveAgents = hasAgents || projectHasAgents;
+  const effectiveModels = combinedModelFiles.length > 0 || projectHasModels;
+  const effectiveBackendCount = backendFiles.length || Math.min(projectBackendCount, 20);
+  const effectiveFrontendCount = frontendFiles.length || Math.min(projectFrontendCount, 20);
+  const effectiveAgentCount = combinedAgentFiles.length || Math.min(projectAgentCount, 10);
+  const effectiveModelCount = modelFiles.length || Math.min(projectModelCount, 10);
 
   // ── 3 SEPARATE METRICS ──
   const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
-  // Readiness = 40% layer existence + 60% requirement coverage
-  // A system with all layers but 0% req coverage is only 40% ready, not 100%
-  const layerScore = ((hasBackend || projectHasBackend) ? 50 : 0) + ((hasFrontend || projectHasFrontend) ? 30 : 0) + ((hasAgents || projectHasAgents) ? 20 : 0);
+  const layerScore = (effectiveBackend ? 50 : 0) + (effectiveFrontend ? 30 : 0) + (effectiveAgents ? 20 : 0);
   const readiness = Math.round(layerScore * 0.4 + reqCoverage * 0.6);
-  // Quality scoring (each 0-10) — based on what exists + requirements coverage
+  // Quality scoring uses effective (project-level) counts so BPs in projects with
+  // recognized architecture don't score 0 just because per-BP file matches are empty.
   const q = {
-    determinism: hasBackend ? Math.min(10, 5 + backendFiles.length) : (reqCoverage > 50 ? 2 : 0),
-    reliability: modelFiles.length > 0 ? Math.min(10, 4 + modelFiles.length) : (hasBackend ? 2 : 0),
-    observability: 0, // honest — no monitoring detected
-    ux_exposure: hasFrontend ? Math.min(10, 6 + frontendFiles.length) : 0,
-    automation: hasAgents ? Math.min(10, 6 + agentFiles.length) : (reqCoverage > 70 ? 1 : 0),
-    production_readiness: Math.min(10, (hasBackend ? 3 : 0) + (hasFrontend ? 3 : 0) + (hasAgents ? 2 : 0) + (modelFiles.length > 0 ? 2 : 0)),
+    determinism: effectiveBackend ? Math.min(10, 5 + effectiveBackendCount) : (reqCoverage > 50 ? 2 : 0),
+    reliability: effectiveModels ? Math.min(10, 4 + effectiveModelCount) : (effectiveBackend ? 2 : 0),
+    observability: 0,
+    ux_exposure: effectiveFrontend ? Math.min(10, 6 + effectiveFrontendCount) : 0,
+    automation: effectiveAgents ? Math.min(10, 6 + effectiveAgentCount) : (reqCoverage > 70 ? 1 : 0),
+    production_readiness: Math.min(10, (effectiveBackend ? 3 : 0) + (effectiveFrontend ? 3 : 0) + (effectiveAgents ? 2 : 0) + (effectiveModels ? 2 : 0)),
   };
-  const qualityTotal = Math.round(Object.values(q).reduce((s, v) => s + v, 0) * 100 / 60); // normalize to 0-100
+  const qualityTotal = Math.round(Object.values(q).reduce((s, v) => s + v, 0) * 100 / 60);
 
   // ── MATURITY LEVEL ──
   let maturityLevel = 0, maturityLabel = 'Not Started';
   const nextReqs: string[] = [];
-  const effectiveBackend = hasBackend || projectHasBackend;
-  const effectiveFrontend = hasFrontend || projectHasFrontend;
-  const effectiveAgents = hasAgents || projectHasAgents;
   if (allFiles.length > 0 || effectiveBackend) { maturityLevel = 1; maturityLabel = 'Prototype'; }
   if (effectiveBackend && reqCoverage > 50) { maturityLevel = 2; maturityLabel = 'Functional'; }
   if (effectiveBackend && effectiveFrontend && reqCoverage > 70) { maturityLevel = 3; maturityLabel = 'Production'; }
