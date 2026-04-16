@@ -50,6 +50,7 @@ import userJourneyMapsRoutes from './admin/userJourneyMapsRoutes';
 import roleRoutes from './admin/roleRoutes';
 import implementationStrategyRoutes from './admin/implementationStrategyRoutes';
 import visitorAnalyticsRoutes from './admin/visitorAnalyticsRoutes';
+import inboxRoutes from './admin/inboxRoutes';
 
 const router = Router();
 
@@ -104,5 +105,6 @@ router.use(userJourneyMapsRoutes);
 router.use(roleRoutes);
 router.use(implementationStrategyRoutes);
 router.use(visitorAnalyticsRoutes);
+router.use(inboxRoutes);
 
 export default router;

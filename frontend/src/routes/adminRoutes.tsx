@@ -31,6 +31,12 @@ import AdminCommunicationsPage from '../pages/admin/AdminCommunicationsPage';
 import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
 import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
 import AdminProjectOverview from '../pages/admin/AdminProjectOverview';
+import InboxDecisionsPage from '../pages/admin/inbox/InboxDecisionsPage';
+import InboxDraftApprovalPage from '../pages/admin/inbox/InboxDraftApprovalPage';
+import InboxRuleBuilderPage from '../pages/admin/inbox/InboxRuleBuilderPage';
+import InboxVipManagerPage from '../pages/admin/inbox/InboxVipManagerPage';
+import InboxLearningPage from '../pages/admin/inbox/InboxLearningPage';
+import InboxAuditLogPage from '../pages/admin/inbox/InboxAuditLogPage';
 const adminRoutes = (
   <>
     <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -65,6 +71,12 @@ const adminRoutes = (
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
+        <Route path="/admin/inbox/decisions" element={<InboxDecisionsPage />} />
+        <Route path="/admin/inbox/drafts" element={<InboxDraftApprovalPage />} />
+        <Route path="/admin/inbox/rules" element={<InboxRuleBuilderPage />} />
+        <Route path="/admin/inbox/vips" element={<InboxVipManagerPage />} />
+        <Route path="/admin/inbox/learning" element={<InboxLearningPage />} />
+        <Route path="/admin/inbox/audit" element={<InboxAuditLogPage />} />
       </Route>
     </Route>
   </>

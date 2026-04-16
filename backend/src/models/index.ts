@@ -150,6 +150,25 @@ import UIElementFeedback from './UIElementFeedback';
 import PreviewStack from './PreviewStack';
 import PreviewEvent from './PreviewEvent';
 
+// Inbox Chief of Staff models
+import InboxEmail from './InboxEmail';
+import InboxClassification from './InboxClassification';
+import InboxVip from './InboxVip';
+import InboxRule from './InboxRule';
+import InboxReplyDraft from './InboxReplyDraft';
+import InboxStyleProfile from './InboxStyleProfile';
+import InboxLearningEvent from './InboxLearningEvent';
+import InboxDigestLog from './InboxDigestLog';
+import InboxAuditLog from './InboxAuditLog';
+
+// --- Inbox COS associations ---
+InboxEmail.hasOne(InboxClassification, { foreignKey: 'email_id', as: 'classification' });
+InboxClassification.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+InboxEmail.hasMany(InboxReplyDraft, { foreignKey: 'email_id', as: 'drafts' });
+InboxReplyDraft.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+InboxEmail.hasMany(InboxAuditLog, { foreignKey: 'email_id', as: 'auditLogs' });
+InboxAuditLog.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
 PreviewStack.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
@@ -889,4 +908,13 @@ export {
   UIElementFeedback,
   PreviewStack,
   PreviewEvent,
+  InboxEmail,
+  InboxClassification,
+  InboxVip,
+  InboxRule,
+  InboxReplyDraft,
+  InboxStyleProfile,
+  InboxLearningEvent,
+  InboxDigestLog,
+  InboxAuditLog,
 };
