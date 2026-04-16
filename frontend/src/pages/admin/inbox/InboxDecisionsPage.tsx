@@ -7,7 +7,7 @@ import InboxBatchActionBar from '../../../components/admin/inbox/InboxBatchActio
 import Pagination from '../../../components/ui/Pagination';
 
 interface Decision {
-  id: number;
+  id: string;
   email: {
     from_name: string;
     from_address: string;
@@ -46,7 +46,7 @@ export default function InboxDecisionsPage() {
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   // Filters

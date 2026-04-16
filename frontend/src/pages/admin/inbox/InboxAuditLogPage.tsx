@@ -44,7 +44,7 @@ export default function InboxAuditLogPage() {
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Filters
   const [actionFilter, setActionFilter] = useState<string[]>([]);
