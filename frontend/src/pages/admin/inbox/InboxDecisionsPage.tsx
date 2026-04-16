@@ -91,7 +91,7 @@ export default function InboxDecisionsPage() {
     return () => clearInterval(interval);
   }, [fetchDecisions]);
 
-  const handleReclassify = async (emailId: number, newState: string) => {
+  const handleReclassify = async (emailId: string, newState: string) => {
     try {
       await api.patch(`/api/admin/inbox/decisions/${emailId}/reclassify`, { new_state: newState });
       showToast(`Email moved to ${newState}`, 'success');

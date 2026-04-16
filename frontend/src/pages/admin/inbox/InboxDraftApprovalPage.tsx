@@ -66,7 +66,7 @@ export default function InboxDraftApprovalPage() {
     }
   }, [tab]);
 
-  const handleApprove = async (draftId: number, editedBody?: string) => {
+  const handleApprove = async (draftId: string, editedBody?: string) => {
     try {
       const payload: Record<string, string> = {};
       if (editedBody) payload.edited_body = editedBody;
@@ -79,7 +79,7 @@ export default function InboxDraftApprovalPage() {
     }
   };
 
-  const handleReject = async (draftId: number) => {
+  const handleReject = async (draftId: string) => {
     try {
       await api.post(`/api/admin/inbox/drafts/${draftId}/reject`, {});
       showToast('Draft rejected', 'success');
