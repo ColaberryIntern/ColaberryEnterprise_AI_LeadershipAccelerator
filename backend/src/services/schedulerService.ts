@@ -1847,6 +1847,15 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Email digest: hourly check (sends at configured hour/day)');
 
+  // -- Inbox Chief of Staff --
+  try {
+    const { startInboxScheduler } = require('./inbox/inboxScheduler');
+    startInboxScheduler();
+    console.log('[Scheduler] Inbox COS scheduler started (sync 60s, classify 65s, digest 4h, learning 24h)');
+  } catch (err: any) {
+    console.error('[Scheduler] Inbox COS scheduler failed to start:', err.message);
+  }
+
   // -- Accelerator Session Lifecycle --
 
   // Session reminders: check every 30 minutes (with dedup to prevent spam)
