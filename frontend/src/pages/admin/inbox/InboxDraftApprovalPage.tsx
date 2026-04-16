@@ -6,8 +6,18 @@ import DraftEditor from '../../../components/admin/inbox/DraftEditor';
 type DraftStatus = 'pending_approval' | 'sent' | 'rejected';
 
 interface Draft {
-  id: number;
+  draft: {
+    id: string;
+    email_id: string;
+    draft_body: string;
+    draft_subject: string;
+    reply_to_address: string;
+    status: DraftStatus;
+    created_at: string;
+    edited_body?: string;
+  };
   email: {
+    id: string;
     from_name: string;
     from_address: string;
     subject: string;
@@ -15,15 +25,7 @@ interface Draft {
     received_at: string;
     provider: string;
     has_attachments: boolean;
-  };
-  draft: {
-    subject: string;
-    body: string;
-    to_address: string;
-    tone: string;
-  };
-  status: DraftStatus;
-  created_at: string;
+  } | null;
 }
 
 export default function InboxDraftApprovalPage() {
@@ -32,7 +34,7 @@ export default function InboxDraftApprovalPage() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
 
   const fetchDrafts = useCallback(async () => {
@@ -146,28 +148,28 @@ export default function InboxDraftApprovalPage() {
               </thead>
               <tbody>
                 {drafts.map((d) => (
-                  <React.Fragment key={d.id}>
+                  <React.Fragment key={d.draft.id}>
                     <tr
                       style={{ cursor: 'pointer' }}
-                      onClick={() => setExpandedId(expandedId === d.id ? null : d.id)}
-                      className={expandedId === d.id ? 'table-active' : ''}
+                      onClick={() => setExpandedId(expandedId === d.draft.id ? null : d.draft.id)}
+                      className={expandedId === d.draft.id ? 'table-active' : ''}
                     >
-                      <td className="small fw-medium">{d.email.subject}</td>
-                      <td className="small">{d.email.from_name}</td>
+                      <td className="small fw-medium">{d.email?.subject || d.draft.draft_subject}</td>
+                      <td className="small">{d.email?.from_name || d.draft.reply_to_address}</td>
                       <td className="small text-muted text-truncate" style={{ maxWidth: 300 }}>
-                        {d.draft.body?.slice(0, 100)}
-                        {(d.draft.body?.length || 0) > 100 ? '...' : ''}
+                        {d.draft.draft_body?.slice(0, 100)}
+                        {(d.draft.draft_body?.length || 0) > 100 ? '...' : ''}
                       </td>
-                      <td className="small text-muted">{new Date(d.created_at).toLocaleString()}</td>
+                      <td className="small text-muted">{d.draft.created_at ? new Date(d.draft.created_at).toLocaleString() : '--'}</td>
                     </tr>
-                    {expandedId === d.id && (
+                    {expandedId === d.draft.id && (
                       <tr>
                         <td colSpan={4} className="p-3 bg-light">
                           <DraftEditor
                             originalEmail={d.email}
                             draft={d.draft}
-                            onApprove={(editedBody) => handleApprove(d.id, editedBody)}
-                            onReject={() => handleReject(d.id)}
+                            onApprove={(editedBody) => handleApprove(d.draft.id, editedBody)}
+                            onReject={() => handleReject(d.draft.id)}
                           />
                         </td>
                       </tr>

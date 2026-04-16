@@ -3,11 +3,11 @@ import api from '../../../utils/api';
 import Pagination from '../../../components/ui/Pagination';
 
 interface AuditEntry {
-  id: number;
-  timestamp: string;
+  id: string;
+  created_at: string;
   action: string;
-  email_subject: string;
-  email_id?: number;
+  email_id?: string;
+  email_subject?: string;
   old_state: string;
   new_state: string;
   confidence: number | null;
@@ -177,7 +177,7 @@ export default function InboxAuditLogPage() {
                         className={expandedId === entry.id ? 'table-active' : ''}
                       >
                         <td className="small text-muted text-nowrap">
-                          {new Date(entry.timestamp).toLocaleString()}
+                          {entry.created_at ? new Date(entry.created_at).toLocaleString() : '--'}
                         </td>
                         <td>
                           <span className={`badge bg-${ACTION_COLORS[entry.action] || 'secondary'}`}>
@@ -185,7 +185,7 @@ export default function InboxAuditLogPage() {
                           </span>
                         </td>
                         <td className="small fw-medium text-truncate" style={{ maxWidth: 200 }}>
-                          {entry.email_subject}
+                          {entry.email_subject || (entry.email_id ? `(email ${entry.email_id.slice(0,8)}...)` : '--')}
                         </td>
                         <td className="small">
                           {entry.old_state && entry.new_state ? (
@@ -201,7 +201,7 @@ export default function InboxAuditLogPage() {
                           )}
                         </td>
                         <td className="small">
-                          {entry.confidence != null ? `${Math.round(entry.confidence * 100)}%` : '--'}
+                          {entry.confidence != null ? `${Math.round(entry.confidence)}%` : '--'}
                         </td>
                         <td className="small">{entry.actor}</td>
                         <td className="small text-muted text-truncate" style={{ maxWidth: 200 }}>

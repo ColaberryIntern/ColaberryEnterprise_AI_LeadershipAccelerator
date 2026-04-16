@@ -389,7 +389,19 @@ export async function handleGetAuditLogs(req: Request, res: Response) {
       offset,
     });
 
-    res.json({ total: count, page: parseInt(page as string, 10), results: rows.map((r: any) => r.toJSON()) });
+    const emailIds = rows.map((r: any) => r.email_id).filter(Boolean);
+    const emails = emailIds.length > 0
+      ? await InboxEmail.findAll({ where: { id: emailIds }, attributes: ['id', 'subject'] })
+      : [];
+    const subjectMap = new Map(emails.map((e: any) => [e.id, e.subject]));
+
+    const results = rows.map((r: any) => {
+      const json = r.toJSON();
+      json.email_subject = subjectMap.get(json.email_id) || null;
+      return json;
+    });
+
+    res.json({ total: count, page: parseInt(page as string, 10), results });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

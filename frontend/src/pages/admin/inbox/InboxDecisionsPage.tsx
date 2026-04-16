@@ -127,7 +127,7 @@ export default function InboxDecisionsPage() {
   };
 
   const confidenceBadge = (confidence: number) => {
-    const pct = Math.round(confidence * 100);
+    const pct = Math.round(confidence);
     const color = pct >= 80 ? 'success' : pct >= 50 ? 'warning' : 'danger';
     return <span className={`badge bg-${color}`}>{pct}%</span>;
   };

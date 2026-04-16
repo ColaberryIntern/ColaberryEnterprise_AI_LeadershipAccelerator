@@ -49,7 +49,7 @@ export default function EmailPreviewCard({ email, classification, compact }: Ema
     );
   }
 
-  const confidencePct = classification ? Math.round(classification.confidence * 100) : 0;
+  const confidencePct = classification ? Math.round(classification.confidence) : 0;
 
   return (
     <div className="card border-0 shadow-sm">
