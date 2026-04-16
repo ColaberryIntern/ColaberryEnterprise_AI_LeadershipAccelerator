@@ -358,20 +358,50 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
     console.log(`${LOG_PREFIX} [gmail_personal] Skipped — not configured`);
   }
 
-  // --- Hotmail ---
+  // --- Hotmail (IMAP fallback if MS Graph not configured) ---
   if (isMsGraphConfigured()) {
     try {
       const emails = await syncHotmail();
       const newCount = await upsertEmails(emails);
       totalNew += newCount;
-      console.log(`${LOG_PREFIX} [hotmail] Synced ${emails.length} messages, ${newCount} new`);
+      console.log(`${LOG_PREFIX} [hotmail] Synced ${emails.length} messages via Graph, ${newCount} new`);
     } catch (error: any) {
       const msg = `hotmail: ${error.message}`;
       console.error(`${LOG_PREFIX} ${msg}`);
       errors.push(msg);
     }
   } else {
-    console.log(`${LOG_PREFIX} [hotmail] Skipped — not configured`);
+    try {
+      const { isHotmailConfigured, getHotmailConfig, fetchRecentEmails } = require('./imapSyncService');
+      if (isHotmailConfigured()) {
+        const config = getHotmailConfig();
+        const rawEmails = await fetchRecentEmails(config, 2);
+        const normalized = rawEmails.map((e: any) => ({
+          provider: 'hotmail' as const,
+          provider_message_id: e.provider_message_id,
+          provider_thread_id: null,
+          from_address: e.from_address,
+          from_name: e.from_name,
+          to_addresses: e.to_addresses,
+          cc_addresses: e.cc_addresses,
+          subject: e.subject,
+          body_text: e.body_text,
+          body_html: e.body_html,
+          headers: e.headers,
+          received_at: e.received_at,
+          has_attachments: e.has_attachments,
+        }));
+        const newCount = await upsertEmails(normalized);
+        totalNew += newCount;
+        console.log(`${LOG_PREFIX} [hotmail] Synced ${rawEmails.length} messages via IMAP, ${newCount} new`);
+      } else {
+        console.log(`${LOG_PREFIX} [hotmail] Skipped — not configured`);
+      }
+    } catch (error: any) {
+      const msg = `hotmail_imap: ${error.message}`;
+      console.error(`${LOG_PREFIX} ${msg}`);
+      errors.push(msg);
+    }
   }
 
   // Persist sync state for crash recovery
