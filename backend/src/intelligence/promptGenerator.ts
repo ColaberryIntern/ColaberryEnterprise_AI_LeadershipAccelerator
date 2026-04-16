@@ -205,17 +205,23 @@ export async function generateImprovementPrompt(
 
   const result = generators[target]();
 
-  try {
-    const { getApplicableBlocks } = require('./acceleration/systemBlocks');
-    const blocks = getApplicableBlocks(target);
-    if (blocks.length > 0) {
-      const blockText = blocks.map((b: any) => b.prompt_fragment).join('\n\n');
-      result.prompt_text = result.prompt_text.replace(
-        '# CONSTRAINTS',
-        `${blockText}\n\n# CONSTRAINTS`
-      );
-    }
-  } catch { /* acceleration layer not loaded — non-critical */ }
+  // System blocks are Accelerator-specific patterns (Sequelize, Op.iLike,
+  // Accelerator file paths). Only inject for the Accelerator project itself;
+  // for other projects they cause cross-contamination.
+  const isAcceleratorRepo = (ctx.repoUrl || '').includes('ColaberryEnterprise_AI_LeadershipAccelerator');
+  if (isAcceleratorRepo) {
+    try {
+      const { getApplicableBlocks } = require('./acceleration/systemBlocks');
+      const blocks = getApplicableBlocks(target);
+      if (blocks.length > 0) {
+        const blockText = blocks.map((b: any) => b.prompt_fragment).join('\n\n');
+        result.prompt_text = result.prompt_text.replace(
+          '# CONSTRAINTS',
+          `${blockText}\n\n# CONSTRAINTS`
+        );
+      }
+    } catch { /* acceleration layer not loaded — non-critical */ }
+  }
 
   return result;
 }
