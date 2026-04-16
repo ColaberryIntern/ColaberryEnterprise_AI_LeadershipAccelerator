@@ -41,11 +41,12 @@ export async function verifyUnmatchedWithLLM(
   }
 
   // Filter repo files to implementation files only (not configs, migrations, etc.)
+  // Supports diverse architectures: Node, Python, Go, Rust, Java, Ruby
   const implFiles = repoFiles.filter(f => {
     const name = (f.split('/').pop() || '').toLowerCase();
     if (name.startsWith('.') || /^\d{14}/.test(name)) return false;
-    if (f.includes('migrations/') || f.includes('node_modules/') || f.includes('scripts/')) return false;
-    return /\.(ts|tsx|js|jsx)$/.test(name);
+    if (f.includes('migrations/') || f.includes('node_modules/') || f.includes('dist/') || f.includes('.github/')) return false;
+    return /\.(ts|tsx|js|jsx|py|go|rs|java|rb|cs)$/.test(name);
   });
 
   // Limit to avoid token overflow

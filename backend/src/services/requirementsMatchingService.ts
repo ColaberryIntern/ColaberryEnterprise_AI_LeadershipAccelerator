@@ -98,23 +98,29 @@ export async function matchRequirementsToRepo(projectId: string): Promise<{
   let unmatched = 0;
 
   // Noise files that should NOT count as real implementations
-  const NOISE = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', 'package.json', 'tsconfig.json', 'README.md', 'package-lock.json']);
+  const NOISE = new Set(['[id]', 'next-env.d.ts', '.gitignore', '.prettierrc', '.sequelizerc', '.env.example', '.env.production.example', 'package.json', 'tsconfig.json', 'README.md', 'package-lock.json', '.eslintrc.cjs', '.prettierignore', '.dockerignore']);
   const isRealImpl = (f: string) => {
     const name = f.split('/').pop() || f;
     if (NOISE.has(name) || name.startsWith('.')) return false;
     if (/^\d{14}/.test(name)) return false; // migration files
-    // Must be a real implementation file (service, model, component, route, agent)
-    return (f.includes('service') || f.includes('Service') || f.includes('models/') ||
-            f.includes('component') || f.includes('page') || f.includes('Page') ||
-            f.includes('route') || f.includes('agent') || f.includes('Agent') ||
-            f.includes('controller') || f.includes('middleware')) &&
-           (name.endsWith('.ts') || name.endsWith('.tsx'));
+    if (f.includes('node_modules/') || f.includes('dist/') || f.includes('.github/')) return false;
+    // Real implementation: source code in recognized patterns across ANY architecture
+    // (monolith, microservices, Next.js, Python, Go, etc.)
+    const isImplPath = /\/(service|route|controller|handler|gateway|api|server|resolver|model|schema|entity|component|page|view|screen|agent|intelligence|automation|worker|middleware|util|helper|lib|src)\b/i.test(f);
+    const isSourceFile = /\.(ts|tsx|js|jsx|py|go|rs|java|rb|cs)$/.test(name);
+    return isImplPath && isSourceFile;
   };
 
   let verified = 0;
 
+  // Pre-filter to implementation files BEFORE keyword matching.
+  // This prevents noise files (.gitignore, .eslintrc) from matching on
+  // keywords like "error" or "config" and drowning out real matches.
+  const implFileTree = fileTree.filter(isRealImpl);
+  console.log(`[ReqMatch] ${requirements.length} reqs, ${fileTree.length} total files, ${implFileTree.length} impl files`);
+
   for (const req of requirements) {
-    const { matchedFiles, score } = matchRequirementToFiles(req.requirement_text, fileTree);
+    const { matchedFiles, score } = matchRequirementToFiles(req.requirement_text, implFileTree);
 
     req.github_file_paths = matchedFiles;
     req.confidence_score = score;

@@ -1149,18 +1149,19 @@ function enrichCapability(cap: any) {
       f.requirements = f.requirements.filter(modeFilter);
     }
   }
-  // Auto-promote or demote requirements based on actual file quality
-  const IMPL_PATTERNS = [/service/i, /route/i, /controller/i, /models?\//i, /\.tsx$/, /agent/i, /middleware/i, /component/i, /page/i];
+  // Auto-promote or demote requirements based on actual file quality.
+  // Patterns are architecture-agnostic (recognizes monolith, microservices, Python, Go, etc.)
+  const IMPL_PATTERNS = [/\/(service|route|controller|handler|gateway|api|server|resolver)\b/i, /\/(model|schema|entity)\b/i, /\.(tsx|jsx|vue|svelte)$/, /\/(agent|intelligence|automation|worker)\b/i, /\/(middleware|util|helper|lib|src)\b/i, /\/(component|page|view|screen)\b/i];
   for (const r of allReqs) {
     if (r.status === 'matched' || r.status === 'partial') {
       const files = (r.github_file_paths || []) as string[];
-      // Filter to only real implementation files (not noise)
       const realFiles = files.filter((f: string) => {
         const name = f.split('/').pop() || '';
         if (NOISE_FILES_SET.has(name)) return false;
         if (/^\d{14}/.test(name)) return false;
         if (name.startsWith('.')) return false;
-        return IMPL_PATTERNS.some(p => p.test(f));
+        if (f.includes('node_modules/') || f.includes('dist/') || f.includes('.github/')) return false;
+        return IMPL_PATTERNS.some(p => p.test(f)) && /\.(ts|tsx|js|jsx|py|go|rs|java|rb)$/.test(name);
       });
       if (realFiles.length > 0 && r.confidence_score >= 0.7) {
         r.status = 'auto_verified';
