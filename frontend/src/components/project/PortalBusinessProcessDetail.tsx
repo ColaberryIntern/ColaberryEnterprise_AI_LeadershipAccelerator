@@ -57,21 +57,23 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
 
-  // Poll the preview stack status so we can dim the iframe while it boots.
+  // Check the preview stack status once on mount so we can overlay the iframe
+  // while it boots. Polls only while NOT running; stops once running to avoid
+  // re-renders that could disrupt the iframe's in-memory auth state.
   useEffect(() => {
     let cancelled = false;
     let timer: any;
     const check = async () => {
       try {
         const mod = await import('../../utils/portalApi');
-        const res = await mod.default.get('/api/portal/project/preview-status');
-        if (cancelled) return;
+        const res = await mod.default.get('/api/portal/project/preview-status').catch(() => null);
+        if (cancelled || !res) return;
         setPreviewStatus(res.data);
         const s = res.data?.status;
-        // Keep polling fast while booting; slow down once running.
-        timer = setTimeout(check, s === 'running' || s === 'none' ? 15000 : 3000);
+        if (s === 'running' || s === 'none') return; // done — no more polling
+        timer = setTimeout(check, 3000);
       } catch {
-        if (!cancelled) timer = setTimeout(check, 10000);
+        // silently stop on error — don't let a 401 trigger an interceptor redirect
       }
     };
     check();

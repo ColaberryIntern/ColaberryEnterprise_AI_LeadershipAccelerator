@@ -17,6 +17,29 @@ import { bootStack, getStackBySlug, touchStack } from '../services/previewStackS
 const PREVIEW_HOST = process.env.PREVIEW_PROXY_HOST || 'host.docker.internal';
 const BOOT_WAIT_MS = parseInt(process.env.PREVIEW_BOOT_WAIT_MS || '60000', 10);
 
+// Cache proxy instances per slug+port so we don't create one per request.
+// createProxyMiddleware is designed to be instantiated once and reused.
+const proxyCache = new Map<string, any>();
+function getOrCreateProxy(slug: string, port: number) {
+  const key = `${slug}:${port}`;
+  let proxy = proxyCache.get(key);
+  if (proxy) return proxy;
+  const target = `http://${PREVIEW_HOST}:${port}`;
+  proxy = createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    ws: true,
+    pathRewrite: (reqPath: string) => reqPath.replace(new RegExp(`^/preview/${slug}`), '') || '/',
+    selfHandleResponse: false,
+    onError: (err: any, _req: any, resp: any) => {
+      console.error(`[previewProxy] upstream error for ${slug}:`, err?.message);
+      if (resp && !resp.headersSent) resp.status(502).json({ error: 'Preview upstream error', slug });
+    },
+  } as any);
+  proxyCache.set(key, proxy);
+  return proxy;
+}
+
 function extractSlug(url: string): string | null {
   const m = url.match(/^\/preview\/([^/?#]+)/);
   return m ? m[1] : null;
@@ -95,20 +118,7 @@ export function previewProxyMiddleware() {
       return;
     }
 
-    const target = `http://${PREVIEW_HOST}:${port}`;
-    const proxy = createProxyMiddleware({
-      target,
-      changeOrigin: true,
-      ws: true,
-      pathRewrite: (reqPath: string) => reqPath.replace(new RegExp(`^/preview/${slug}`), '') || '/',
-      // Rewrite absolute asset/API paths in HTML so they flow back through /preview/{slug}/
-      selfHandleResponse: false,
-      onError: (err: any, _req: Request, resp: Response) => {
-        console.error(`[previewProxy] upstream error for ${slug}:`, err?.message);
-        if (!resp.headersSent) resp.status(502).json({ error: 'Preview upstream error', slug });
-      },
-    } as any);
-
+    const proxy = getOrCreateProxy(slug, port);
     return (proxy as any)(req, res, next);
   };
 }
