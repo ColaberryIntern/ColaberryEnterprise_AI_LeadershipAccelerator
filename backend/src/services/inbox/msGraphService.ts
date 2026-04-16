@@ -2,9 +2,17 @@
  * Microsoft Graph API client for Hotmail inbox (ali_muwwakkil@hotmail.com).
  * Uses MSAL ConfidentialClientApplication for token management.
  */
-import { Client } from '@microsoft/microsoft-graph-client';
-import { ConfidentialClientApplication } from '@azure/msal-node';
-import 'isomorphic-fetch';
+let Client: any;
+let ConfidentialClientApplication: any;
+let _moduleAvailable = false;
+
+try {
+  Client = require('@microsoft/microsoft-graph-client').Client;
+  ConfidentialClientApplication = require('@azure/msal-node').ConfidentialClientApplication;
+  _moduleAvailable = true;
+} catch {
+  // MS Graph packages not installed — Hotmail sync will be skipped gracefully
+}
 
 const LOG_PREFIX = '[InboxCOS][MSGraph]';
 
@@ -33,7 +41,7 @@ const REFRESH_TOKEN = process.env.MS_GRAPH_REFRESH_TOKEN;
  * Services should check this before calling any Graph methods.
  */
 export function isConfigured(): boolean {
-  return !!(CLIENT_ID && CLIENT_SECRET && TENANT_ID && REFRESH_TOKEN);
+  return _moduleAvailable && !!(CLIENT_ID && CLIENT_SECRET && TENANT_ID && REFRESH_TOKEN);
 }
 
 // ─── MSAL Token Management ─────────────────────────────────────────────────

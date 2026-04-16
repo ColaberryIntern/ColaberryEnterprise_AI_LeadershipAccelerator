@@ -5,7 +5,15 @@
 import { google, gmail_v1 } from 'googleapis';
 import InboxEmail, { InboxProvider } from '../../models/InboxEmail';
 import SystemSetting from '../../models/SystemSetting';
-import { fetchNewMessages, isConfigured as isMsGraphConfigured, GraphMessage } from './msGraphService';
+let fetchNewMessages: any;
+let isMsGraphConfigured: () => boolean = () => false;
+try {
+  const msGraph = require('./msGraphService');
+  fetchNewMessages = msGraph.fetchNewMessages;
+  isMsGraphConfigured = msGraph.isConfigured;
+} catch {
+  // MS Graph packages not installed — Hotmail sync skipped
+}
 
 const LOG_PREFIX = '[InboxCOS][Sync]';
 

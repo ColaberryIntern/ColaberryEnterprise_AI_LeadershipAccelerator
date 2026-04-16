@@ -3,7 +3,15 @@
  * Archive is non-critical: failures are logged but never thrown.
  */
 import { google } from 'googleapis';
-import { archiveMessage as graphArchiveMessage, isConfigured as isMsGraphConfigured } from './msGraphService';
+let graphArchiveMessage: any;
+let isMsGraphConfigured: () => boolean = () => false;
+try {
+  const msGraph = require('./msGraphService');
+  graphArchiveMessage = msGraph.archiveMessage;
+  isMsGraphConfigured = msGraph.isConfigured;
+} catch {
+  // MS Graph not available
+}
 import { logAuditEvent } from './inboxAuditService';
 
 const LOG_PREFIX = '[InboxCOS][Archive]';
