@@ -2164,7 +2164,46 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
       }
     }
 
-    // 2d. Auto-verify stragglers in two tiers:
+    // 2d. Content-aware verification: read actual source code for remaining unmatched.
+    // Goes beyond filename matching — sends file contents to LLM so it can see
+    // whether "Return appropriate error codes" is implemented in auth.ts etc.
+    const stillUnmatched2 = processReqs.filter(r => r.status === 'unmatched' || r.status === 'partial');
+    if (stillUnmatched2.length > 0 && fileTree.length > 0) {
+      try {
+        const { verifyWithFileContent } = await import('../services/contentAwareVerifier');
+        const implFiles = fileTree.filter(f => {
+          const name = (f.split('/').pop() || '').toLowerCase();
+          if (name.startsWith('.') || /^\d{14}/.test(name)) return false;
+          if (f.includes('node_modules/') || f.includes('dist/') || f.includes('.github/') || f.includes('migrations/')) return false;
+          return /\.(ts|tsx|js|jsx|py|go|rs|java|rb)$/.test(name);
+        });
+        const contentResult = await verifyWithFileContent(
+          req.participant!.sub,
+          stillUnmatched2.map(r => ({ id: r.id, requirement_key: r.requirement_key, requirement_text: r.requirement_text || '' })),
+          implFiles,
+          processCap?.name || 'this process',
+        );
+        if (contentResult.verified.length > 0) {
+          for (const v of contentResult.verified) {
+            const req2 = processReqs.find(r => r.id === v.id);
+            if (req2 && (req2.status === 'unmatched' || req2.status === 'partial')) {
+              req2.status = 'matched';
+              req2.github_file_paths = v.matched_files.slice(0, 5);
+              req2.confidence_score = 0.9;
+              req2.verified_by = 'content_verification';
+              await req2.save();
+              if (req2.status === 'unmatched') unmatched--;
+              matched++;
+            }
+          }
+          console.log(`[Resync] Content-aware verified ${contentResult.verified.length} additional requirements for "${processCap?.name}" (read ${contentResult.files_read} files)`);
+        }
+      } catch (contentErr: any) {
+        console.error('[Resync] Content-aware verification failed:', contentErr?.message);
+      }
+    }
+
+    // 2e. Auto-verify stragglers in two tiers:
     // Tier 1: If 50%+ matched and < 5 unmatched remain → verify stragglers
     // Tier 2: If project has backend+frontend detected and ALL reqs are unmatched → LLM likely missed, verify all
     const finalUnmatched = processReqs.filter(r => r.status === 'unmatched' || r.status === 'partial');
