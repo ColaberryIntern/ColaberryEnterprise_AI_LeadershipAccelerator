@@ -9,10 +9,10 @@ interface DraftEditorProps {
 
 export default function DraftEditor({ originalEmail, draft, onApprove, onReject }: DraftEditorProps) {
   const [editing, setEditing] = useState(false);
-  const [editedBody, setEditedBody] = useState<string>(draft?.body || '');
+  const [editedBody, setEditedBody] = useState<string>(draft?.draft_body || '');
 
   const handleApprove = () => {
-    if (editing && editedBody !== draft?.body) {
+    if (editing && editedBody !== draft?.draft_body) {
       onApprove(editedBody);
     } else {
       onApprove();
@@ -56,7 +56,7 @@ export default function DraftEditor({ originalEmail, draft, onApprove, onReject 
           <div className="card-body d-flex flex-column">
             <div className="mb-2">
               <span className="small fw-medium">To:</span>{' '}
-              <span className="small">{draft?.to_address || originalEmail?.from_address}</span>
+              <span className="small">{draft?.reply_to_address || draft?.to_address || originalEmail?.from_address}</span>
             </div>
             <div className="mb-2">
               <span className="small fw-medium">Subject:</span>{' '}
@@ -74,7 +74,7 @@ export default function DraftEditor({ originalEmail, draft, onApprove, onReject 
                 />
               ) : (
                 <div className="small" style={{ whiteSpace: 'pre-wrap', maxHeight: 400, overflowY: 'auto' }}>
-                  {draft?.body || 'No draft content'}
+                  {draft?.draft_body || 'No draft content'}
                 </div>
               )}
             </div>
@@ -86,7 +86,7 @@ export default function DraftEditor({ originalEmail, draft, onApprove, onReject 
               <button
                 className="btn btn-sm btn-outline-secondary"
                 onClick={() => {
-                  if (!editing) setEditedBody(draft?.body || '');
+                  if (!editing) setEditedBody(draft?.draft_body || '');
                   setEditing(!editing);
                 }}
               >

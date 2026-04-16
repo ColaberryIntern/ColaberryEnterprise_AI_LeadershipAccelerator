@@ -122,7 +122,7 @@ export default function InboxDecisionsPage() {
     if (selectedIds.length === decisions.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(decisions.map((d) => d.id));
+      setSelectedIds(decisions.map((d) => d.classification.email_id));
     }
   };
 
@@ -130,6 +130,21 @@ export default function InboxDecisionsPage() {
     const pct = Math.round(confidence);
     const color = pct >= 80 ? 'success' : pct >= 50 ? 'warning' : 'danger';
     return <span className={`badge bg-${color}`}>{pct}%</span>;
+  };
+
+  const providerBadge = (email: any) => {
+    if (!email) return <span className="badge bg-secondary">unknown</span>;
+    const isForwarded = email.provider === 'gmail_colaberry' &&
+      (email.from_address?.includes('hotmail.com') || email.from_address?.includes('outlook.com') ||
+       email.subject?.includes('Fwd:') || email.headers?.['x-forwarded-to']);
+    if (isForwarded) return <span className="badge" style={{ backgroundColor: '#0078d4', color: 'white' }}>hotmail (fwd)</span>;
+    const colors: Record<string, { bg: string; label: string }> = {
+      gmail_colaberry: { bg: '#ea4335', label: 'Colaberry' },
+      gmail_personal: { bg: '#34a853', label: 'Personal' },
+      hotmail: { bg: '#0078d4', label: 'Hotmail' },
+    };
+    const p = colors[email.provider] || { bg: '#6c757d', label: email.provider };
+    return <span className="badge" style={{ backgroundColor: p.bg, color: 'white' }}>{p.label}</span>;
   };
 
   return (
@@ -246,18 +261,18 @@ export default function InboxDecisionsPage() {
                 </thead>
                 <tbody>
                   {decisions.map((d) => (
-                    <React.Fragment key={d.id}>
+                    <React.Fragment key={d.classification.email_id}>
                       <tr
                         style={{ cursor: 'pointer' }}
-                        onClick={() => setExpandedId(expandedId === d.id ? null : d.id)}
-                        className={expandedId === d.id ? 'table-active' : ''}
+                        onClick={() => setExpandedId(expandedId === d.classification.email_id ? null : d.classification.email_id)}
+                        className={expandedId === d.classification.email_id ? 'table-active' : ''}
                       >
                         <td onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             className="form-check-input"
-                            checked={selectedIds.includes(d.id)}
-                            onChange={() => toggleSelect(d.id)}
+                            checked={selectedIds.includes(d.classification.email_id)}
+                            onChange={() => toggleSelect(d.classification.email_id)}
                           />
                         </td>
                         <td className="small">{d.email.from_name}</td>
@@ -265,19 +280,19 @@ export default function InboxDecisionsPage() {
                         <td className="small text-muted">{formatRelativeTime(d.email.received_at)}</td>
                         <td>{confidenceBadge(d.classification.confidence)}</td>
                         <td className="small text-muted text-truncate" style={{ maxWidth: 200 }}>{d.classification.reasoning}</td>
-                        <td><span className="badge bg-secondary">{d.email.provider}</span></td>
+                        <td>{providerBadge(d.email)}</td>
                         <td onClick={(e) => e.stopPropagation()}>
                           <div className="d-flex gap-1">
                             <button
                               className="btn btn-sm btn-success"
-                              onClick={() => handleReclassify(d.id, 'INBOX')}
+                              onClick={() => handleReclassify(d.classification.email_id, 'INBOX')}
                               title="Promote to Inbox"
                             >
                               Promote
                             </button>
                             <button
                               className="btn btn-sm btn-outline-secondary"
-                              onClick={() => handleReclassify(d.id, 'AUTOMATION')}
+                              onClick={() => handleReclassify(d.classification.email_id, 'AUTOMATION')}
                               title="Dismiss to Automation"
                             >
                               Dismiss
@@ -285,7 +300,7 @@ export default function InboxDecisionsPage() {
                           </div>
                         </td>
                       </tr>
-                      {expandedId === d.id && (
+                      {expandedId === d.classification.email_id && (
                         <tr>
                           <td colSpan={8} className="p-3 bg-light">
                             <EmailPreviewCard email={d.email} classification={d.classification} />

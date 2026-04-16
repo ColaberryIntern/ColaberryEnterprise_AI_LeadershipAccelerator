@@ -131,6 +131,16 @@ export async function handleReclassify(req: Request, res: Response) {
       reasoning: `User override: ${oldState} → ${new_state}`,
     });
 
+    // Generate a reply draft when promoting to INBOX
+    if (new_state === 'INBOX') {
+      try {
+        const { generateDraft } = await import('../services/inbox/replyDraftService');
+        await generateDraft(emailId);
+      } catch (draftErr: any) {
+        console.log(`[InboxCOS] Draft generation after promote: ${draftErr.message}`);
+      }
+    }
+
     res.json({ success: true, classification: classification.toJSON() });
   } catch (err: any) {
     console.error('[InboxCOS] Reclassify error:', err.message);
