@@ -3,7 +3,7 @@
  * Used for Hotmail/Outlook and any future IMAP accounts.
  */
 import { simpleParser, ParsedMail } from 'mailparser';
-import * as Imap from 'imap';
+import Imap = require('imap');
 
 const LOG_PREFIX = '[InboxCOS][IMAP]';
 
