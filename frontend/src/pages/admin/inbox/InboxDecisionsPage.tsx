@@ -114,7 +114,7 @@ export default function InboxDecisionsPage() {
     }
   };
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: string) => {
     setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
 
