@@ -170,6 +170,7 @@ export default function InboxDraftApprovalPage() {
       ) : drafts.length === 0 ? (
         <div className="text-center py-5 text-muted">No drafts found.</div>
       ) : (
+        <>
         {selectedIds.length > 0 && (
           <div className="d-flex gap-2 mb-3 align-items-center">
             <span className="badge bg-primary">{selectedIds.length} selected</span>
@@ -228,6 +229,7 @@ export default function InboxDraftApprovalPage() {
             </table>
           </div>
         </div>
+        </>
       )}
     </div>
   );
