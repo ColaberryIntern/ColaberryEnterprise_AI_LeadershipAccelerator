@@ -164,8 +164,10 @@ export function generateStepsFromRequirements(options: {
   systemContext: SystemContext;
   completedSteps?: string[];
   maxSteps?: number;
+  /** Categories of work already done (from build history / validation reports) */
+  builtCategories?: Set<string>;
 }): ExecutionStep[] {
-  const { requirements, gaps, mode, systemContext, completedSteps = [], maxSteps = 8 } = options;
+  const { requirements, gaps, mode, systemContext, completedSteps = [], maxSteps = 8, builtCategories } = options;
   const completed = new Set(completedSteps);
 
   // 1. Filter to unfinished requirements only
@@ -302,6 +304,28 @@ export function generateStepsFromRequirements(options: {
       category,
       priorityScore,
     });
+  }
+
+  // 4b. Suppress steps for categories already built (from validation report history)
+  // If build history shows "tracking" was built, don't recommend "Add user tracking"
+  if (builtCategories && builtCategories.size > 0) {
+    const categoryMatchMap: Record<StepCategory, string[]> = {
+      backend: ['backend'],
+      frontend: ['frontend', 'reporting'],
+      agent: ['agent', 'intelligence'],
+      data: ['data'],
+      integration: ['backend'],
+      quality: ['monitoring', 'optimization'],
+      intelligence: ['intelligence', 'agent'],
+    };
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const step = steps[i];
+      const targetCats = categoryMatchMap[step.category] || [];
+      if (targetCats.some(c => builtCategories.has(c))) {
+        // Demote rather than remove — lower priority so other steps rank higher
+        steps[i].priorityScore = Math.max(0, steps[i].priorityScore - 100);
+      }
+    }
   }
 
   // 5. Sort by priority (highest first), blocked items last

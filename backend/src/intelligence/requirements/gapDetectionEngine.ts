@@ -263,17 +263,27 @@ function detectReportingGaps(bp: EnrichedBP, repoTree: string[], existingAutoKey
 // Main entry point
 // ---------------------------------------------------------------------------
 
+/**
+ * @param addressedGapIds — gaps that were already built per build history.
+ *   Gaps in this set are suppressed even if quality scores suggest they're missing.
+ */
 export function detectGaps(
   enrichedBP: EnrichedBP,
   repoFileTree: string[],
   existingAutoKeys: Set<string>,
+  addressedGapIds?: Set<string>,
 ): DetectedGap[] {
-  return [
+  const allGaps = [
     ...detectBehaviorGaps(enrichedBP, repoFileTree, existingAutoKeys),
     ...detectIntelligenceGaps(enrichedBP, repoFileTree, existingAutoKeys),
     ...detectOptimizationGaps(enrichedBP, repoFileTree, existingAutoKeys),
     ...detectReportingGaps(enrichedBP, repoFileTree, existingAutoKeys),
   ];
+  // Suppress gaps that build history shows are already addressed
+  if (addressedGapIds && addressedGapIds.size > 0) {
+    return allGaps.filter(g => !addressedGapIds.has(g.gap_id));
+  }
+  return allGaps;
 }
 
 function slugify(name: string): string {

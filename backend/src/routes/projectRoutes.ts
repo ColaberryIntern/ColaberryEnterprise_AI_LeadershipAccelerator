@@ -1447,6 +1447,7 @@ function enrichCapability(cap: any) {
       systemContext: { hasBackend, hasFrontend, hasAgents, hasModels: combinedModelFiles.length > 0, reqCoverage, qualityScore: qualityTotal, projectHasBackend, projectHasFrontend, projectHasAgents, projectHasModels, repoFileTree: repoTree },
       completedSteps,
       maxSteps: 8,
+      builtCategories: (cap as any)._builtCategories,
     });
     // If requirement-driven plan is empty but process isn't complete, fall back to old engine
     if (executionPlan.length === 0 && !processComplete) {
@@ -1571,10 +1572,20 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       }
     } catch { /* campaign mode is optional */ }
 
+    // Load build history once for the project — used by execution plan to
+    // suppress steps for work already reported via validation reports.
+    let projectBuiltCategories: Set<string> | undefined;
+    try {
+      const { loadBuildHistory } = await import('../services/buildHistoryService');
+      const history = await loadBuildHistory(project.id);
+      if (history.builtCategories.size > 0) projectBuiltCategories = history.builtCategories;
+    } catch {}
+
     hierarchy.forEach((cap: any) => {
       cap._repoFileTree = repoFileTree;
       cap._projectMode = projectMode;
       cap._campaignMode = campaignModeMap.get(cap.id) || null;
+      cap._builtCategories = projectBuiltCategories;
       // Pre-resolve effective mode for filtering (BP override > Campaign > Project)
       const capModeOverride = execMap.get(cap.id)?.mode_override;
       const capCampaignMode = campaignModeMap.get(cap.id);
@@ -2100,8 +2111,15 @@ router.post('/api/portal/project/business-processes/:id/validation-report', requ
           const { RequirementsMap: RM } = await import('../models');
           const existingAutoReqs = await RM.findAll({ where: { project_id: project.id, capability_id: req.params.id, verified_by: 'AUTONOMOUS_ENGINE' }, attributes: ['requirement_key'] });
           const existingKeys = new Set(existingAutoReqs.map((r: any) => r.requirement_key));
+          // Load build history to suppress gaps for work already done
+          const { loadBuildHistory, isGapAddressed } = await import('../services/buildHistoryService');
+          const buildHistory = await loadBuildHistory(project.id);
+          const addressedIds = new Set<string>();
+          // Merge addressed gap IDs from build history
+          for (const gid of buildHistory.addressedGapIds) addressedIds.add(gid);
           const { detectGaps } = await import('../intelligence/requirements/gapDetectionEngine');
-          const gaps = detectGaps(enriched as any, repoTree, existingKeys);
+          const gaps = detectGaps(enriched as any, repoTree, existingKeys, addressedIds)
+            .filter(g => !isGapAddressed(g.gap_id, g.gap_type, buildHistory));
           return gaps.map(g => ({
             gap_id: g.gap_id,
             gap_type: g.gap_type,
