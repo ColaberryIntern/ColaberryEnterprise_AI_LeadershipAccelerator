@@ -575,6 +575,20 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 </div>
               )}
             </div>
+
+            {/* Submit Report for Page BPs — same flow as code BPs but accessible here */}
+            <div className="mt-3 p-3" style={{ background: '#10b98108', borderRadius: 8, border: '1px solid #10b98120' }}>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                  <div className="fw-medium small" style={{ color: 'var(--color-accent)' }}><i className="bi bi-clipboard-check me-1"></i>Done building? Submit your results</div>
+                  <div className="text-muted" style={{ fontSize: 10 }}>Paste Claude Code's output to verify requirements and see what's next</div>
+                </div>
+                <button className="btn btn-sm" style={{ background: '#10b98120', color: '#059669', border: '1px solid #10b98140', fontWeight: 600, fontSize: 11 }}
+                  onClick={() => { setShowReportModal(true); setReportResult(null); setReportText(''); }}>
+                  <i className="bi bi-clipboard-check me-1"></i>Submit Report
+                </button>
+              </div>
+            </div>
           </Section>
         )}
 
@@ -869,19 +883,55 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         <strong>{reportResult.requirementsVerified}</strong> of {reportResult.requirementsTotal} requirements verified from report
                       </div>
                       {reportResult.parsed && (
-                        <div className="small">
-                          {reportResult.parsed.filesCreated.length > 0 && (
-                            <div className="mb-2"><strong>Files Created:</strong> {reportResult.parsed.filesCreated.map((f: string, i: number) => <div key={i} className="text-muted ms-2" style={{ fontSize: 10 }}>- {f}</div>)}</div>
-                          )}
-                          {reportResult.parsed.filesModified.length > 0 && (
-                            <div className="mb-2"><strong>Files Modified:</strong> {reportResult.parsed.filesModified.map((f: string, i: number) => <div key={i} className="text-muted ms-2" style={{ fontSize: 10 }}>- {f}</div>)}</div>
-                          )}
-                          {reportResult.parsed.routes.length > 0 && (
-                            <div className="mb-2"><strong>Routes:</strong> {reportResult.parsed.routes.map((r: string, i: number) => <div key={i} className="text-muted ms-2" style={{ fontSize: 10 }}>- {r}</div>)}</div>
-                          )}
-                          {reportResult.parsed.duplicatesNoted.length > 0 && (
+                        <div className="small mb-3">
+                          {[
+                            { label: 'Files Created', items: reportResult.parsed.filesCreated },
+                            { label: 'Files Modified', items: reportResult.parsed.filesModified },
+                            { label: 'Routes', items: reportResult.parsed.routes },
+                          ].filter((s: any) => s.items?.length > 0).map((section: any) => (
+                            <div key={section.label} className="mb-2">
+                              <strong>{section.label}:</strong>
+                              {section.items.map((f: string, i: number) => <div key={i} className="text-muted ms-2" style={{ fontSize: 10 }}>- {f}</div>)}
+                            </div>
+                          ))}
+                          {reportResult.parsed.duplicatesNoted?.length > 0 && (
                             <div className="mb-2"><strong className="text-warning">Duplicates Noted:</strong> {reportResult.parsed.duplicatesNoted.map((d: string, i: number) => <div key={i} className="text-warning ms-2" style={{ fontSize: 10 }}>- {d}</div>)}</div>
                           )}
+                        </div>
+                      )}
+                      {/* Path to Autonomous — gap suggestions from the report response */}
+                      {(reportResult.autonomous_suggestions || []).length > 0 && (
+                        <div className="mb-3 p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
+                          <h6 className="fw-semibold small mb-2" style={{ color: '#8b5cf6' }}>
+                            <i className="bi bi-rocket-takeoff me-2"></i>Path to Autonomous
+                          </h6>
+                          <p className="text-muted mb-2" style={{ fontSize: 10 }}>Gaps detected after your update. Add them as requirements to move toward autonomous.</p>
+                          {reportResult.autonomous_suggestions.map((gap: any) => {
+                            const icons: Record<string, string> = { behavior: 'bi-person-lines-fill', intelligence: 'bi-lightbulb', optimization: 'bi-speedometer2', reporting: 'bi-bar-chart-line' };
+                            const accepted = reportResult._acceptedGaps?.includes(gap.gap_id);
+                            return (
+                              <div key={gap.gap_id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: accepted ? '#10b98110' : '#fff', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+                                <i className={`bi ${icons[gap.gap_type] || 'bi-gear'}`} style={{ color: '#8b5cf6', marginTop: 2 }}></i>
+                                <div className="flex-grow-1">
+                                  <div className="fw-medium" style={{ fontSize: 11 }}>{gap.title}</div>
+                                  <div className="text-muted" style={{ fontSize: 10 }}>{gap.description}</div>
+                                  <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>{gap.gap_type}</span>
+                                </div>
+                                <button className={`btn btn-sm ${accepted ? 'btn-success' : ''}`}
+                                  style={accepted ? { fontSize: 10 } : { background: '#8b5cf620', color: '#8b5cf6', border: '1px solid #8b5cf640', fontSize: 10 }}
+                                  disabled={accepted || submittingReport}
+                                  onClick={async () => {
+                                    try {
+                                      const portalApi = (await import('../../utils/portalApi')).default;
+                                      await portalApi.post(`/api/portal/project/business-processes/${processId}/accept-suggestion`, { gap_id: gap.gap_id });
+                                      setReportResult((prev: any) => ({ ...prev, _acceptedGaps: [...(prev?._acceptedGaps || []), gap.gap_id] }));
+                                    } catch {}
+                                  }}>
+                                  {accepted ? <><i className="bi bi-check-circle me-1"></i>Added</> : <><i className="bi bi-plus-circle me-1"></i>Add</>}
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                       {reportResult.metrics_after && (
