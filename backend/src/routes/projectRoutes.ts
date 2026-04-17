@@ -2030,6 +2030,46 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Submit Validation Report: user pastes Claude Code's output to verify requirements ────────
+router.post('/api/portal/project/business-processes/:id/validation-report', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { reportText, commitSha } = req.body;
+    if (!reportText || typeof reportText !== 'string') {
+      res.status(400).json({ error: 'reportText is required' });
+      return;
+    }
+    const { parseValidationReport, applyReportToBP } = await import('../services/validationReportParser');
+    const parsed = parseValidationReport(reportText);
+    const result = await applyReportToBP(req.params.id as string, parsed, commitSha);
+    // Re-enrich BP to get updated metrics
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const updatedCap = hierarchy.find((c: any) => c.id === req.params.id);
+    const enriched = updatedCap ? enrichCapability(updatedCap) : null;
+    res.json({
+      ...result,
+      parsed: {
+        filesCreated: parsed.filesCreated,
+        filesModified: parsed.filesModified,
+        routes: parsed.routes,
+        database: parsed.database,
+        status: parsed.status,
+        duplicatesNoted: parsed.duplicatesNoted,
+      },
+      metrics_after: enriched ? {
+        reqCoverage: enriched.metrics?.requirements_coverage,
+        readiness: enriched.metrics?.system_readiness,
+        qualityScore: enriched.metrics?.quality_score,
+        maturityLevel: enriched.maturity?.level,
+      } : null,
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Resync: re-match requirements to repo for a specific process ────────
 router.post('/api/portal/project/business-processes/:id/resync', requireParticipant, async (req: Request, res: Response) => {
   try {

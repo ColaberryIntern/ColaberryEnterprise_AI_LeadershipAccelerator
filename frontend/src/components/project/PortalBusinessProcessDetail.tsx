@@ -45,6 +45,11 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [syncing, setSyncing] = useState(false);
   const [resyncing, setResyncing] = useState(false);
   const [resyncModal, setResyncModal] = useState<any>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportText, setReportText] = useState('');
+  const [reportCommitSha, setReportCommitSha] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportResult, setReportResult] = useState<any>(null);
   const [showSync, setShowSync] = useState(false);
   const [uiFeedback, setUiFeedback] = useState('');
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
@@ -176,6 +181,10 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
               } finally { setResyncing(false); }
             }}>
             {resyncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Syncing...</> : <><i className="bi bi-arrow-repeat me-1"></i>Resync</>}
+          </button>
+          <button className="btn btn-sm" style={{ background: '#10b98120', color: 'var(--color-accent)', fontSize: 10, fontWeight: 700, border: '1px solid #10b98140' }}
+            onClick={() => { setShowReportModal(true); setReportResult(null); setReportText(''); setReportCommitSha(''); }}>
+            <i className="bi bi-clipboard-check me-1"></i>Submit Report
           </button>
           <span className="badge px-2 py-1" style={{ background: `${matColor}20`, color: matColor, fontSize: 10, fontWeight: 700 }}>L{mat.level} {mat.label}</span>
           <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', fontSize: 10, fontWeight: 700, border: '1px solid #6366f140' }} onClick={async () => {
@@ -800,6 +809,104 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         </>)}
 
         {/* Resync Results Modal */}
+        {/* Validation Report Modal */}
+        {showReportModal && (
+          <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowReportModal(false)}>
+            <div className="modal-dialog modal-lg modal-dialog-centered" onClick={e => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header py-2" style={{ borderBottom: '3px solid var(--color-accent)' }}>
+                  <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
+                    <i className="bi bi-clipboard-check me-2"></i>Submit Validation Report
+                  </h6>
+                  <button className="btn-close" onClick={() => setShowReportModal(false)}></button>
+                </div>
+                <div className="modal-body">
+                  {!reportResult ? (
+                    <>
+                      <p className="text-muted small mb-2">
+                        Paste the <strong>VALIDATION REPORT</strong> from Claude Code below. This tells the portal exactly what was built so it can mark requirements as verified.
+                      </p>
+                      <textarea
+                        className="form-control form-control-sm mb-3"
+                        rows={12}
+                        placeholder={`VALIDATION REPORT\n\nFiles Created:\n- path/to/file1.ts\n- path/to/file2.ts\n\nRoutes:\n- GET /api/...\n- POST /api/...\n\nDatabase:\n- TableName\n\nStatus: COMPLETE`}
+                        value={reportText}
+                        onChange={e => setReportText(e.target.value)}
+                        style={{ fontFamily: 'monospace', fontSize: 11 }}
+                      />
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <label className="small fw-medium text-muted" style={{ whiteSpace: 'nowrap' }}>Commit SHA (optional):</label>
+                        <input
+                          className="form-control form-control-sm"
+                          style={{ maxWidth: 200, fontSize: 11, fontFamily: 'monospace' }}
+                          placeholder="e.g. 215e5ff"
+                          value={reportCommitSha}
+                          onChange={e => setReportCommitSha(e.target.value)}
+                        />
+                      </div>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        disabled={!reportText.trim() || submittingReport}
+                        onClick={async () => {
+                          setSubmittingReport(true);
+                          try {
+                            const portalApi = (await import('../../utils/portalApi')).default;
+                            const res = await portalApi.post(`/api/portal/project/business-processes/${processId}/validation-report`, {
+                              reportText: reportText.trim(),
+                              commitSha: reportCommitSha.trim() || undefined,
+                            });
+                            setReportResult(res.data);
+                            load();
+                          } catch (err: any) {
+                            setReportResult({ error: err.response?.data?.error || 'Submission failed' });
+                          } finally { setSubmittingReport(false); }
+                        }}
+                      >
+                        {submittingReport ? <><span className="spinner-border spinner-border-sm me-1"></span>Processing...</> : <><i className="bi bi-check-circle me-1"></i>Submit & Verify</>}
+                      </button>
+                    </>
+                  ) : reportResult.error ? (
+                    <div className="alert alert-danger">{reportResult.error}</div>
+                  ) : (
+                    <div>
+                      <div className="alert alert-success py-2">
+                        <i className="bi bi-check-circle-fill me-2"></i>
+                        <strong>{reportResult.requirementsVerified}</strong> of {reportResult.requirementsTotal} requirements verified from report
+                      </div>
+                      {reportResult.parsed && (
+                        <div className="small">
+                          {reportResult.parsed.filesCreated.length > 0 && (
+                            <div className="mb-2"><strong>Files Created:</strong> {reportResult.parsed.filesCreated.map((f: string, i: number) => <div key={i} className="text-muted ms-2" style={{ fontSize: 10 }}>- {f}</div>)}</div>
+                          )}
+                          {reportResult.parsed.filesModified.length > 0 && (
+                            <div className="mb-2"><strong>Files Modified:</strong> {reportResult.parsed.filesModified.map((f: string, i: number) => <div key={i} className="text-muted ms-2" style={{ fontSize: 10 }}>- {f}</div>)}</div>
+                          )}
+                          {reportResult.parsed.routes.length > 0 && (
+                            <div className="mb-2"><strong>Routes:</strong> {reportResult.parsed.routes.map((r: string, i: number) => <div key={i} className="text-muted ms-2" style={{ fontSize: 10 }}>- {r}</div>)}</div>
+                          )}
+                          {reportResult.parsed.duplicatesNoted.length > 0 && (
+                            <div className="mb-2"><strong className="text-warning">Duplicates Noted:</strong> {reportResult.parsed.duplicatesNoted.map((d: string, i: number) => <div key={i} className="text-warning ms-2" style={{ fontSize: 10 }}>- {d}</div>)}</div>
+                          )}
+                        </div>
+                      )}
+                      {reportResult.metrics_after && (
+                        <div className="d-flex gap-3 mt-2">
+                          <span className="small"><strong style={{ color: 'var(--color-accent)' }}>{reportResult.metrics_after.reqCoverage}%</strong> coverage</span>
+                          <span className="small"><strong>L{reportResult.metrics_after.maturityLevel}</strong> maturity</span>
+                          <span className="small"><strong>{reportResult.metrics_after.readiness}%</strong> readiness</span>
+                        </div>
+                      )}
+                      <button className="btn btn-sm btn-outline-primary mt-3" onClick={() => { setShowReportModal(false); onUpdate(); }}>
+                        <i className="bi bi-check me-1"></i>Done
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {resyncModal && (
           <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => { setResyncModal(null); onUpdate(); }}>
             <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
