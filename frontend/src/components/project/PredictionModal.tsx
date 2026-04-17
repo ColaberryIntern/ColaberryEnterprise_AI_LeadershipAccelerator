@@ -82,7 +82,13 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
       const reportRes = await portalApi.post(`/api/portal/project/business-processes/${processId}/validation-report`, {
         reportText: reportText.trim(),
       });
-      // 2. Get updated process data (metrics reflect the verified requirements)
+      // 2. Run resync to get narrative summary + what_changed
+      let resyncData: any = null;
+      try {
+        const resyncRes = await bpApi.resyncProcess(processId);
+        resyncData = resyncRes.data;
+      } catch {}
+      // 3. Get updated process data (metrics reflect verified + resync)
       const updatedProc = await bpApi.getProcess(processId);
       setSubmitResult({
         report: reportRes.data,
@@ -91,6 +97,10 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
         updatedMetrics: updatedProc.data?.metrics,
         updatedMaturity: updatedProc.data?.maturity,
         processName: updatedProc.data?.name,
+        // Resync narrative + detailed changes
+        resyncSummary: resyncData?.summary || null,
+        whatChanged: resyncData?.what_changed || null,
+        resyncMetrics: resyncData?.verification?.metrics_after || null,
       });
     } catch (err: any) {
       setSubmitResult({ error: err.response?.data?.error || 'Submission failed' });
@@ -202,6 +212,50 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                       </div>
                     )}
 
+                    {/* Resync narrative summary */}
+                    {submitResult.resyncSummary && (
+                      <div className="mb-3 p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                        <h6 className="fw-semibold small mb-2"><i className="bi bi-journal-text me-1"></i>Summary</h6>
+                        <div className="text-muted small" style={{ whiteSpace: 'pre-line', lineHeight: 1.6 }}>{submitResult.resyncSummary}</div>
+                      </div>
+                    )}
+
+                    {/* Detailed before/after metrics table */}
+                    {submitResult.whatChanged && (
+                      <div className="mb-3">
+                        <h6 className="fw-semibold small mb-2"><i className="bi bi-arrow-left-right me-1"></i>What Changed</h6>
+                        <div className="table-responsive">
+                          <table className="table table-sm mb-0" style={{ fontSize: 11 }}>
+                            <thead className="table-light">
+                              <tr><th>Metric</th><th className="text-center">Before</th><th className="text-center">After</th><th className="text-center">Change</th></tr>
+                            </thead>
+                            <tbody>
+                              {[
+                                { label: 'Matched Reqs', before: submitResult.whatChanged.matched_before, after: submitResult.whatChanged.matched_after },
+                                { label: 'Verified Reqs', before: submitResult.whatChanged.verified_before, after: submitResult.whatChanged.verified_after },
+                                { label: 'System Readiness', before: submitResult.beforeMetrics?.system_readiness, after: submitResult.updatedMetrics?.system_readiness, unit: '%' },
+                                { label: 'Quality Score', before: submitResult.beforeMetrics?.quality_score, after: submitResult.updatedMetrics?.quality_score, unit: '%' },
+                                { label: 'Maturity', before: submitResult.beforeMaturity?.level, after: submitResult.updatedMaturity?.level, prefix: 'L' },
+                              ].map(row => {
+                                const delta = (row.after || 0) - (row.before || 0);
+                                const color = delta > 0 ? 'var(--color-success)' : delta < 0 ? 'var(--color-danger)' : '#9ca3af';
+                                return (
+                                  <tr key={row.label}>
+                                    <td className="text-muted">{row.label}</td>
+                                    <td className="text-center">{row.prefix || ''}{row.before ?? '—'}{row.unit || ''}</td>
+                                    <td className="text-center fw-medium" style={{ color }}>{row.prefix || ''}{row.after ?? '—'}{row.unit || ''}</td>
+                                    <td className="text-center">
+                                      {delta !== 0 && <span className="badge" style={{ background: `${color}20`, color, fontSize: 9 }}>{delta > 0 ? '+' : ''}{row.prefix || ''}{delta}{row.unit || ''}</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Path to Autonomous: suggested next requirements from gap detection */}
                     {(submitResult.report?.autonomous_suggestions || []).length > 0 && (
                       <div className="mb-3 p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
@@ -245,7 +299,7 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                       </div>
                     )}
 
-                    <button className="btn btn-primary btn-sm" onClick={() => { onClose(); if (onResync) onResync(); }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => { onClose(); }}>
                       <i className="bi bi-check me-1"></i>Continue
                     </button>
                   </div>
