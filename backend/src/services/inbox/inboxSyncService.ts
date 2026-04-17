@@ -358,19 +358,41 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
     console.log(`${LOG_PREFIX} [gmail_personal] Skipped — not configured`);
   }
 
-  // --- Hotmail (IMAP fallback if MS Graph not configured) ---
-  if (isMsGraphConfigured()) {
-    try {
+  // --- Hotmail (Microsoft Graph API → IMAP fallback) ---
+  try {
+    const graphMail = require('./graphMailService');
+    if (graphMail.isConfigured()) {
+      const messages = await graphMail.fetchInboxMessages(200);
+      const normalized = messages.map((m: any) => ({
+        provider: 'hotmail' as const,
+        provider_message_id: m.id,
+        provider_thread_id: m.conversationId || null,
+        from_address: m.from?.emailAddress?.address || '',
+        from_name: m.from?.emailAddress?.name || null,
+        to_addresses: (m.toRecipients || []).map((r: any) => r.emailAddress?.address),
+        cc_addresses: (m.ccRecipients || []).map((r: any) => r.emailAddress?.address),
+        subject: m.subject || '(no subject)',
+        body_text: m.body?.contentType === 'text' ? m.body.content : (m.body?.content || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 50000),
+        body_html: m.body?.contentType === 'html' ? m.body.content : null,
+        headers: Object.fromEntries((m.internetMessageHeaders || []).map((h: any) => [h.name.toLowerCase(), h.value])),
+        received_at: new Date(m.receivedDateTime),
+        has_attachments: m.hasAttachments || false,
+      }));
+      const newCount = await upsertEmails(normalized);
+      totalNew += newCount;
+      console.log(`${LOG_PREFIX} [hotmail] Synced ${messages.length} messages via Graph API, ${newCount} new`);
+    } else if (isMsGraphConfigured()) {
       const emails = await syncHotmail();
       const newCount = await upsertEmails(emails);
       totalNew += newCount;
-      console.log(`${LOG_PREFIX} [hotmail] Synced ${emails.length} messages via Graph, ${newCount} new`);
-    } catch (error: any) {
-      const msg = `hotmail: ${error.message}`;
-      console.error(`${LOG_PREFIX} ${msg}`);
-      errors.push(msg);
+      console.log(`${LOG_PREFIX} [hotmail] Synced ${emails.length} messages via MS Graph SDK, ${newCount} new`);
     }
-  } else {
+  } catch (error: any) {
+    const msg = `hotmail_graph: ${error.message}`;
+    console.error(`${LOG_PREFIX} ${msg}`);
+    errors.push(msg);
+  }
+  if (!require('./graphMailService').isConfigured() && !isMsGraphConfigured()) {
     try {
       const { isHotmailConfigured, getHotmailConfig, fetchRecentEmails } = require('./imapSyncService');
       if (isHotmailConfigured()) {
