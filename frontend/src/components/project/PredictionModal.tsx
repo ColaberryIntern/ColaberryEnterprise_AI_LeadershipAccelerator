@@ -72,20 +72,25 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
     if (!reportText.trim()) return;
     setSubmitting(true);
     try {
+      // Capture BEFORE metrics so we can show the delta
+      const beforeProc = await bpApi.getProcess(processId);
+      const beforeMetrics = beforeProc.data?.metrics || {};
+      const beforeMaturity = beforeProc.data?.maturity || {};
+
       const portalApi = (await import('../../utils/portalApi')).default;
-      // 1. Submit the validation report
+      // 1. Submit the validation report (marks requirements as verified)
       const reportRes = await portalApi.post(`/api/portal/project/business-processes/${processId}/validation-report`, {
         reportText: reportText.trim(),
       });
-      // 2. Run resync to update metrics
-      const resyncRes = await bpApi.resyncProcess(processId);
-      // 3. Get updated process data
+      // 2. Get updated process data (metrics reflect the verified requirements)
       const updatedProc = await bpApi.getProcess(processId);
       setSubmitResult({
         report: reportRes.data,
-        resync: resyncRes.data,
+        beforeMetrics,
+        beforeMaturity,
         updatedMetrics: updatedProc.data?.metrics,
         updatedMaturity: updatedProc.data?.maturity,
+        processName: updatedProc.data?.name,
       });
     } catch (err: any) {
       setSubmitResult({ error: err.response?.data?.error || 'Submission failed' });
@@ -135,41 +140,36 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                   <div className="alert alert-danger">{submitResult.error}</div>
                 ) : (
                   <div>
-                    <div className="alert alert-success py-3">
-                      <i className="bi bi-check-circle-fill me-2"></i>
-                      <strong>{submitResult.report?.requirementsVerified || 0}</strong> of {submitResult.report?.requirementsTotal || 0} requirements verified from your report
+                    {/* Unified summary: what was done + how it changed */}
+                    <div className="alert py-3 mb-3" style={{ background: '#10b98115', borderColor: '#10b98140', color: 'var(--color-text)' }}>
+                      <h6 className="fw-bold mb-2" style={{ color: 'var(--color-accent)' }}>
+                        <i className="bi bi-check-circle-fill me-2"></i>
+                        {submitResult.processName || actionLabel} — Verified
+                      </h6>
+                      <div className="small">
+                        <strong>{submitResult.report?.requirementsVerified || 0}</strong> of {submitResult.report?.requirementsTotal || 0} requirements matched to your implementation.
+                      </div>
                     </div>
 
-                    {/* Parsed evidence */}
+                    {/* What was built */}
                     {submitResult.report?.parsed && (
                       <div className="mb-3 p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
                         <h6 className="fw-semibold small mb-2"><i className="bi bi-file-earmark-code me-1"></i>What Was Built</h6>
-                        {submitResult.report.parsed.filesCreated?.length > 0 && (
-                          <div className="mb-2">
-                            <span className="fw-medium" style={{ fontSize: 11 }}>Files Created:</span>
-                            {submitResult.report.parsed.filesCreated.map((f: string, i: number) => (
+                        {[
+                          { label: 'Files Created', items: submitResult.report.parsed.filesCreated },
+                          { label: 'Files Modified', items: submitResult.report.parsed.filesModified },
+                          { label: 'Routes', items: submitResult.report.parsed.routes },
+                          { label: 'Database', items: submitResult.report.parsed.database },
+                        ].filter((s: any) => s.items?.length > 0).map((section: any) => (
+                          <div key={section.label} className="mb-2">
+                            <span className="fw-medium" style={{ fontSize: 11 }}>{section.label}:</span>
+                            {section.items.map((f: string, i: number) => (
                               <div key={i} className="text-muted ms-2" style={{ fontSize: 10, fontFamily: 'monospace' }}>- {f}</div>
                             ))}
                           </div>
-                        )}
-                        {submitResult.report.parsed.filesModified?.length > 0 && (
-                          <div className="mb-2">
-                            <span className="fw-medium" style={{ fontSize: 11 }}>Files Modified:</span>
-                            {submitResult.report.parsed.filesModified.map((f: string, i: number) => (
-                              <div key={i} className="text-muted ms-2" style={{ fontSize: 10, fontFamily: 'monospace' }}>- {f}</div>
-                            ))}
-                          </div>
-                        )}
-                        {submitResult.report.parsed.routes?.length > 0 && (
-                          <div className="mb-2">
-                            <span className="fw-medium" style={{ fontSize: 11 }}>Routes:</span>
-                            {submitResult.report.parsed.routes.map((r: string, i: number) => (
-                              <div key={i} className="text-muted ms-2" style={{ fontSize: 10, fontFamily: 'monospace' }}>- {r}</div>
-                            ))}
-                          </div>
-                        )}
+                        ))}
                         {submitResult.report.parsed.duplicatesNoted?.length > 0 && (
-                          <div className="mb-2">
+                          <div className="mt-2 p-2" style={{ background: '#f59e0b10', borderRadius: 6 }}>
                             <span className="fw-medium text-warning" style={{ fontSize: 11 }}><i className="bi bi-exclamation-triangle me-1"></i>Duplicates Noted:</span>
                             {submitResult.report.parsed.duplicatesNoted.map((d: string, i: number) => (
                               <div key={i} className="text-warning ms-2" style={{ fontSize: 10 }}>- {d}</div>
@@ -179,35 +179,31 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                       </div>
                     )}
 
-                    {/* Updated metrics */}
+                    {/* Before → After impact */}
                     {submitResult.updatedMetrics && (
                       <div className="mb-3">
-                        <h6 className="fw-semibold small mb-2"><i className="bi bi-speedometer2 me-1"></i>Updated Metrics</h6>
-                        <div className="d-flex gap-3 flex-wrap">
-                          <div className="text-center p-2" style={{ background: '#fff', borderRadius: 6, border: '1px solid var(--color-border)', minWidth: 80 }}>
-                            <div className="fw-bold" style={{ color: 'var(--color-accent)', fontSize: 16 }}>{submitResult.updatedMetrics.requirements_coverage || 0}%</div>
-                            <div className="text-muted" style={{ fontSize: 9 }}>Coverage</div>
+                        <h6 className="fw-semibold small mb-2"><i className="bi bi-graph-up-arrow me-1"></i>Impact</h6>
+                        <MetricDelta label="Coverage" before={submitResult.beforeMetrics?.requirements_coverage || 0} after={submitResult.updatedMetrics.requirements_coverage || 0} />
+                        <MetricDelta label="Readiness" before={submitResult.beforeMetrics?.system_readiness || 0} after={submitResult.updatedMetrics.system_readiness || 0} />
+                        <MetricDelta label="Quality" before={submitResult.beforeMetrics?.quality_score || 0} after={submitResult.updatedMetrics.quality_score || 0} />
+                        {submitResult.updatedMaturity && submitResult.beforeMaturity && (
+                          <div className="d-flex align-items-center gap-2 mt-2 p-2" style={{ background: submitResult.updatedMaturity.level > submitResult.beforeMaturity.level ? '#10b98110' : 'transparent', borderRadius: 6 }}>
+                            <span className="text-muted" style={{ fontSize: 11 }}>Maturity</span>
+                            <span style={{ fontSize: 11 }}>L{submitResult.beforeMaturity.level} {submitResult.beforeMaturity.label}</span>
+                            <i className="bi bi-arrow-right" style={{ fontSize: 10, color: '#9ca3af' }}></i>
+                            <strong style={{ fontSize: 11, color: submitResult.updatedMaturity.level > submitResult.beforeMaturity.level ? 'var(--color-success)' : 'var(--color-primary)' }}>
+                              L{submitResult.updatedMaturity.level} {submitResult.updatedMaturity.label}
+                            </strong>
+                            {submitResult.updatedMaturity.level > submitResult.beforeMaturity.level && (
+                              <span className="badge bg-success" style={{ fontSize: 9 }}>LEVEL UP</span>
+                            )}
                           </div>
-                          <div className="text-center p-2" style={{ background: '#fff', borderRadius: 6, border: '1px solid var(--color-border)', minWidth: 80 }}>
-                            <div className="fw-bold" style={{ color: 'var(--color-primary)', fontSize: 16 }}>{submitResult.updatedMetrics.system_readiness || 0}%</div>
-                            <div className="text-muted" style={{ fontSize: 9 }}>Readiness</div>
-                          </div>
-                          <div className="text-center p-2" style={{ background: '#fff', borderRadius: 6, border: '1px solid var(--color-border)', minWidth: 80 }}>
-                            <div className="fw-bold" style={{ color: 'var(--color-info)', fontSize: 16 }}>{submitResult.updatedMetrics.quality_score || 0}%</div>
-                            <div className="text-muted" style={{ fontSize: 9 }}>Quality</div>
-                          </div>
-                          {submitResult.updatedMaturity && (
-                            <div className="text-center p-2" style={{ background: '#fff', borderRadius: 6, border: '1px solid var(--color-border)', minWidth: 80 }}>
-                              <div className="fw-bold" style={{ color: 'var(--color-primary)', fontSize: 16 }}>L{submitResult.updatedMaturity.level}</div>
-                              <div className="text-muted" style={{ fontSize: 9 }}>{submitResult.updatedMaturity.label}</div>
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
                     )}
 
                     <button className="btn btn-primary btn-sm" onClick={() => { onClose(); if (onResync) onResync(); }}>
-                      <i className="bi bi-check me-1"></i>Done
+                      <i className="bi bi-check me-1"></i>Continue
                     </button>
                   </div>
                 )

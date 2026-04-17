@@ -142,51 +142,6 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
           </span>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <button className="btn btn-sm" style={{ background: '#3b82f620', color: 'var(--color-info)', fontSize: 10, fontWeight: 700, border: '1px solid #3b82f640' }}
-            disabled={resyncing}
-            onClick={async () => {
-              setResyncing(true);
-              // Capture before state
-              const before = {
-                matched: p.matched_requirements || 0,
-                verified: p.verified_requirements || 0,
-                readiness: p.metrics?.system_readiness || 0,
-                quality: p.metrics?.quality_score || 0,
-                maturity: p.maturity?.level || 1,
-                gaps: p.gap_count || 0,
-              };
-              try {
-                const r = await bpApi.resyncProcess(processId);
-                const rs = r.data?.resync;
-                const wc = r.data?.what_changed;
-                // Reload to get after state
-                const afterRes = await bpApi.getProcess(processId);
-                const after = afterRes.data;
-                const afterMetrics = {
-                  matched: after.matched_requirements || 0,
-                  verified: after.verified_requirements || 0,
-                  readiness: after.metrics?.system_readiness || 0,
-                  quality: after.metrics?.quality_score || 0,
-                  maturity: after.maturity?.level || 1,
-                  gaps: after.gap_count || 0,
-                };
-                setResyncModal({ before, after: afterMetrics, resync: rs, what_changed: wc, summary: r.data?.summary });
-                setP(after);
-                // Don't call onUpdate() here — it triggers parent reload which unmounts this component
-                // and loses the modal state. onUpdate will be called when modal is dismissed.
-              } catch {
-                const el = document.createElement('div');
-                el.innerHTML = '<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;font-size:12px">Resync failed</div>';
-                document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
-              } finally { setResyncing(false); }
-            }}>
-            {resyncing ? <><span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>Syncing...</> : <><i className="bi bi-arrow-repeat me-1"></i>Resync</>}
-          </button>
-          <button className="btn btn-sm" style={{ background: '#10b98120', color: 'var(--color-accent)', fontSize: 10, fontWeight: 700, border: '1px solid #10b98140' }}
-            onClick={() => { setShowReportModal(true); setReportResult(null); setReportText(''); setReportCommitSha(''); }}>
-            <i className="bi bi-clipboard-check me-1"></i>Submit Report
-          </button>
-          <span className="badge px-2 py-1" style={{ background: `${matColor}20`, color: matColor, fontSize: 10, fontWeight: 700 }}>L{mat.level} {mat.label}</span>
           <button className="btn btn-sm" style={{ background: '#6366f120', color: '#6366f1', fontSize: 10, fontWeight: 700, border: '1px solid #6366f140' }} onClick={async () => {
             const featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
             const gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
