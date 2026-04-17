@@ -193,30 +193,30 @@ export async function checkConflicts(): Promise<CalendarEvent[]> {
   }
 }
 
+// Track what we've already sent so we don't spam
+const sentPrepIds = new Set<string>();
+let conflictAlertSentToday: string | null = null;
+
 /**
- * Send meeting prep texts 15 min before each meeting.
+ * Send meeting prep texts 15 min before each meeting. Once per meeting, once per day for conflicts.
  */
 export async function sendUpcomingMeetingPreps(): Promise<void> {
   try {
     const events = await getTodaysEvents();
     const now = Date.now();
+    const today = new Date().toISOString().split('T')[0];
 
     for (const event of events) {
       const start = new Date(event.start).getTime();
       const minsUntil = (start - now) / 60000;
+      const eventKey = `${event.summary}-${event.start}`;
 
-      if (minsUntil > 10 && minsUntil <= 15) {
-        let msg = `Meeting in 15 min: ${event.summary}\n${formatTime(event.start)}`;
+      if (minsUntil > 10 && minsUntil <= 15 && !sentPrepIds.has(eventKey)) {
+        sentPrepIds.add(eventKey);
+
+        let msg = `In 15 min: ${event.summary}`;
         if (event.attendees.length > 0) {
           msg += `\nWith: ${event.attendees.slice(0, 3).join(', ')}`;
-        }
-        if (event.meetLink) {
-          msg += `\n${event.meetLink}`;
-        }
-
-        const prep = await getMeetingPrep(event);
-        if (prep) {
-          msg += `\n${prep.slice(0, 60)}`;
         }
 
         await sendSms(msg);
@@ -224,10 +224,13 @@ export async function sendUpcomingMeetingPreps(): Promise<void> {
       }
     }
 
-    // Conflict check — summary only
-    const conflicts = await checkConflicts();
-    if (conflicts.length > 0) {
-      await sendSms(`${conflicts.length} calendar conflicts today. Check your calendar.`);
+    // Conflict check — once per day only
+    if (conflictAlertSentToday !== today) {
+      const conflicts = await checkConflicts();
+      if (conflicts.length > 0) {
+        conflictAlertSentToday = today;
+        await sendSms(`${conflicts.length} calendar conflicts today.`);
+      }
     }
   } catch (err: any) {
     console.error(`${LOG_PREFIX} Meeting prep failed: ${err.message}`);
