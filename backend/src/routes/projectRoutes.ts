@@ -1647,17 +1647,13 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       }
       return false;
     };
-    // Strict dedup on top 10 visible BPs (where "Recommended Next Step" matters most).
-    // Beyond top 10, duplicates are acceptable — there are only ~7 unique step categories
-    // for potentially 50+ BPs, so full dedup is mathematically impossible.
-    const DEDUP_TOP_N = 10;
+    // Cross-BP dedup: top BPs get unique step categories; the rest get BP-specific
+    // labels so the user sees distinct actionable text even when categories repeat.
     const usedFirstKeys = new Set<string>();
     const usedFirstLabels = new Set<string>();
-    for (let i = 0; i < enriched.length; i++) {
-      const cap = enriched[i];
+    for (const cap of enriched) {
       const plan: any[] = cap.execution_plan || [];
       if (plan.length === 0) continue;
-      if (i >= DEDUP_TOP_N) break; // only dedup top N
       const isUnique = (s: any) => !s.blocked
         && !usedFirstKeys.has(s.key)
         && !usedFirstLabels.has(normalize(s.label))
@@ -1668,9 +1664,21 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         plan.unshift(unique);
       }
       const first = plan.find((s: any) => !s.blocked);
-      if (first && isUnique(first)) {
-        usedFirstKeys.add(first.key);
-        usedFirstLabels.add(normalize(first.label));
+      if (first) {
+        if (isUnique(first)) {
+          usedFirstKeys.add(first.key);
+          usedFirstLabels.add(normalize(first.label));
+        } else {
+          // No unique alternative — make label BP-specific so the user sees
+          // distinct text even when the underlying category is the same.
+          const baseLabelNorm = normalize(first.label);
+          const bpSuffix = ` for ${cap.name}`;
+          if (!first.label.includes(' for ')) {
+            first.label = first.label.replace(/\s*\(\d+[^)]*\)$/, '') + bpSuffix;
+          }
+          const specificLabel = normalize(first.label);
+          usedFirstLabels.add(specificLabel);
+        }
       }
     }
 
