@@ -67,15 +67,13 @@ export async function getCalendarBrief(): Promise<string> {
     const events = await getTodaysEvents();
     if (events.length === 0) return 'No meetings today.';
 
-    let brief = `${events.length} meeting${events.length > 1 ? 's' : ''} today:\n`;
-    for (const e of events.slice(0, 5)) {
-      brief += `${formatTime(e.start)} ${e.summary}\n`;
-    }
-    if (events.length > 5) brief += `+${events.length - 5} more`;
-    return brief.trim();
+    const firstStart = formatTime(events[0].start);
+    const lastEnd = formatTime(events[events.length - 1].end);
+
+    return `${events.length} meetings today (${firstStart}-${lastEnd}). Next: ${events[0].summary} at ${firstStart}`;
   } catch (err: any) {
     console.error(`${LOG_PREFIX} Calendar brief failed: ${err.message}`);
-    return 'Calendar unavailable.';
+    return '';
   }
 }
 
