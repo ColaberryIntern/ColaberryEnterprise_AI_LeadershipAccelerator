@@ -109,6 +109,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'OrchestrationAutoRepairAgent', hardcodedSchedule: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *', runner: runOrchestrationRepair, label: 'Orchestration auto-repair' },
 
   // Intelligence layer
+  { agentName: 'AutonomousRequirementExpansion', hardcodedSchedule: '3,18,33,48 * * * *', runner: async () => { const { runExpansionCycle } = await import('./autonomousRequirementExpansionService'); return runExpansionCycle(); }, label: 'Autonomous requirement expansion' },
   { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAutonomousCycle, label: 'Autonomous engine' },
   { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runCoryStrategicCycle, label: 'Cory Brain strategic cycle' },
   { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },

@@ -721,6 +721,46 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           )}
         </Section>
 
+        {/* 7.5: Autonomous Enhancements — system-generated requirements (only in autonomous mode) */}
+        {p.autonomous_enhancements?.count > 0 && (
+          <Section num={7.5} title={`Autonomous Enhancements (${p.autonomous_enhancements.count})`} collapsible defaultOpen>
+            <div className="mb-2 d-flex align-items-center gap-2">
+              <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 10 }}>
+                <i className="bi bi-robot me-1"></i>System Generated
+              </span>
+              <span className="text-muted" style={{ fontSize: 10 }}>
+                {p.autonomous_enhancements.completed} completed · {p.autonomous_enhancements.pending} pending
+              </span>
+            </div>
+            {p.autonomous_enhancements.requirements.map((r: any) => {
+              const statusColors: Record<string, string> = {
+                verified: 'var(--color-success)', auto_verified: 'var(--color-success)', matched: 'var(--color-success)',
+                not_started: '#9ca3af', unmatched: 'var(--color-warning)', partial: 'var(--color-warning)',
+              };
+              const gapTypeIcons: Record<string, string> = {
+                behavior: 'bi-person-lines-fill', intelligence: 'bi-lightbulb', optimization: 'bi-speedometer2', reporting: 'bi-bar-chart-line',
+              };
+              return (
+                <div key={r.key} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: '#faf5ff', borderRadius: 6, borderLeft: '3px solid #8b5cf6' }}>
+                  <i className={`bi ${gapTypeIcons[r.gap_type] || 'bi-gear'}`} style={{ color: '#8b5cf6', fontSize: 14, marginTop: 2 }}></i>
+                  <div className="flex-grow-1">
+                    <div className="d-flex justify-content-between align-items-start">
+                      <div style={{ fontSize: 11 }}>{r.text}</div>
+                      <div className="d-flex align-items-center gap-1 ms-2" style={{ flexShrink: 0 }}>
+                        {r.impact_score > 0 && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>Impact: {r.impact_score}/10</span>}
+                        <span className="badge" style={{ background: `${statusColors[r.status] || '#9ca3af'}20`, color: statusColors[r.status] || '#9ca3af', fontSize: 9 }}>{r.status}</span>
+                      </div>
+                    </div>
+                    <div className="text-muted" style={{ fontSize: 9 }}>
+                      <span className="text-capitalize">{r.gap_type}</span> gap · {r.category} · {r.generated_at ? new Date(r.generated_at).toLocaleDateString() : ''}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </Section>
+        )}
+
         {/* 8: Execution Plan (dynamic from backend) */}
         <Section num={8} title="Execution Plan">
           {(() => {

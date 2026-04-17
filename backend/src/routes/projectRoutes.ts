@@ -1513,6 +1513,27 @@ function enrichCapability(cap: any) {
       : { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
     implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
+    // Autonomous Enhancements — separate layer for system-generated requirements
+    // Only populated when the BP has AUTO-* requirements (modes=['autonomous'])
+    autonomous_enhancements: (() => {
+      const autoReqs = allReqsFlat.filter((r: any) => r.verified_by === 'AUTONOMOUS_ENGINE');
+      if (autoReqs.length === 0) return null;
+      return {
+        count: autoReqs.length,
+        completed: autoReqs.filter((r: any) => r.status === 'verified' || r.status === 'auto_verified' || r.status === 'matched').length,
+        pending: autoReqs.filter((r: any) => r.status === 'not_started' || r.status === 'unmatched').length,
+        requirements: autoReqs.map((r: any) => ({
+          id: r.id,
+          key: r.requirement_key,
+          text: r.requirement_text,
+          status: r.status,
+          gap_type: r.metadata?.autonomous_generation?.gap_type || null,
+          impact_score: r.metadata?.autonomous_generation?.impact_score || 0,
+          generated_at: r.metadata?.autonomous_generation?.generated_at || null,
+          category: r.metadata?.autonomous_generation?.category || null,
+        })),
+      };
+    })(),
   };
 }
 
