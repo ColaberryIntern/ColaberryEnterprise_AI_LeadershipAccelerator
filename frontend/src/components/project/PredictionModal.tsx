@@ -296,6 +296,78 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                             </div>
                           );
                         })}
+
+                        {/* Build These — consolidated prompt for all accepted gaps */}
+                        {(submitResult._acceptedGaps || []).length > 0 && (
+                          <div className="mt-3 pt-3" style={{ borderTop: '1px solid #8b5cf620' }}>
+                            <button className="btn btn-sm w-100" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 700 }}
+                              onClick={async () => {
+                                const accepted = submitResult._acceptedGaps || [];
+                                const gaps = submitResult.report.autonomous_suggestions.filter((g: any) => accepted.includes(g.gap_id));
+                                const reqList = gaps.map((g: any, i: number) => `${i + 1}. **${g.title}** (${g.gap_type})\n   ${g.description}`).join('\n\n');
+                                const buildPrompt = `You are operating in Claude Code PLAN MODE.
+
+DO NOT start coding immediately. Study the codebase first, then produce a detailed implementation plan.
+
+# OBJECTIVE
+
+Implement the following autonomous enhancements for the "${submitResult.processName || actionLabel}" business process. These are system-detected gaps that need to be filled to move toward autonomous operation.
+
+# REQUIREMENTS TO IMPLEMENT
+
+${reqList}
+
+# APPROACH
+
+1. Study the existing codebase structure first
+2. For each requirement, identify where it fits in the existing architecture
+3. Follow existing patterns — do not introduce new frameworks
+4. Each requirement should result in working, testable code
+5. Add appropriate logging and error handling
+
+# CONSTRAINTS
+- Follow existing patterns in the codebase
+- DO NOT break existing functionality
+- All changes must be additive
+- Match the language, style, and conventions already used
+
+# VALIDATION REPORT (REQUIRED AT END)
+
+After implementation, output this EXACT format:
+
+\`\`\`
+VALIDATION REPORT
+
+Files Created:
+- path/to/file1
+- path/to/file2
+
+Files Modified:
+- path/to/file3
+
+Routes:
+- GET /api/...
+- POST /api/...
+
+Database:
+- TableName (if any)
+
+Status: COMPLETE
+\`\`\`
+
+Then commit and push.`;
+                                await copyToClipboard(buildPrompt);
+                                const el = document.createElement('div');
+                                el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#8b5cf6;color:#fff;padding:12px 20px;border-radius:10px;font-size:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2)"><i class="bi bi-clipboard-check me-2"></i>Build prompt copied (${accepted.length} enhancements) — paste into Claude Code</div>`;
+                                document.body.appendChild(el); setTimeout(() => el.remove(), 4000);
+                              }}>
+                              <i className="bi bi-terminal me-1"></i>Build {(submitResult._acceptedGaps || []).length} Enhancement{(submitResult._acceptedGaps || []).length > 1 ? 's' : ''} — Copy Prompt
+                            </button>
+                            <div className="text-muted text-center mt-1" style={{ fontSize: 9 }}>
+                              Copies a consolidated prompt for Claude Code. After building, come back and Submit Report again.
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
