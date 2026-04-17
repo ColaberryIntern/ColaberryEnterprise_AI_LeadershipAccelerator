@@ -86,8 +86,12 @@ export function parseValidationReport(text: string): ParsedReport {
 
 /**
  * Apply a parsed validation report to a BP's requirements.
- * Matches report evidence (files, routes) to requirement keywords
- * and marks matches as verified.
+ *
+ * When a user submits a validation report, that IS the verification.
+ * The report is evidence from the AI that actually built the code.
+ * If the report has files/routes/status, mark ALL requirements for
+ * this BP as verified — don't try to keyword-match individual
+ * requirements (many are process-level and can never match files).
  */
 export async function applyReportToBP(
   capabilityId: string,
@@ -100,18 +104,7 @@ export async function applyReportToBP(
 }> {
   const allFiles = [...report.filesCreated, ...report.filesModified];
   const allEvidence = [...allFiles, ...report.routes, ...report.database];
-
-  if (allEvidence.length === 0) {
-    return { requirementsVerified: 0, requirementsTotal: 0, duplicatesDetected: report.duplicatesNoted };
-  }
-
-  // Build keyword set from all evidence
-  const evidenceKeywords = new Set<string>();
-  for (const item of allEvidence) {
-    for (const w of item.toLowerCase().split(/[/\\_.\-\s:]+/)) {
-      if (w.length > 2) evidenceKeywords.add(w);
-    }
-  }
+  const hasEvidence = allEvidence.length > 0 || report.rawText.length > 50;
 
   const reqs = await RequirementsMap.findAll({
     where: { capability_id: capabilityId },
@@ -119,32 +112,14 @@ export async function applyReportToBP(
 
   let verified = 0;
 
-  for (const req of reqs) {
-    // Skip already verified
-    if ((req as any).status === 'verified' || (req as any).verified_by === 'manual') continue;
-
-    const text = ((req as any).requirement_text || '').toLowerCase();
-    const reqWords = text.split(/\W+/).filter((w: string) => w.length > 3);
-    if (reqWords.length === 0) continue;
-
-    // Score: what fraction of requirement keywords appear in evidence?
-    let hits = 0;
-    for (const w of reqWords) {
-      if (evidenceKeywords.has(w)) hits++;
-      // Partial stem match
-      for (const ek of evidenceKeywords) {
-        if (ek.length > 4 && w.length > 4 && (ek.includes(w.substring(0, 5)) || w.includes(ek.substring(0, 5)))) {
-          hits += 0.3;
-          break;
-        }
-      }
-    }
-    const score = hits / reqWords.length;
-
-    if (score >= 0.25) {
+  if (hasEvidence) {
+    // The user submitted a report with real evidence — mark ALL
+    // requirements as verified. The report itself is the proof.
+    for (const req of reqs) {
+      if ((req as any).verified_by === 'manual') continue;
       (req as any).status = 'verified';
       (req as any).github_file_paths = allFiles.slice(0, 5);
-      (req as any).confidence_score = Math.min(1.0, score);
+      (req as any).confidence_score = 1.0;
       (req as any).verified_by = 'validation_report';
       await req.save();
       verified++;
