@@ -1669,6 +1669,18 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       }
     }
 
+    // Strip internal properties that bloat the response (e.g. _repoFileTree
+    // is 356 paths × 70 BPs = ~500KB of repeated data the frontend doesn't need).
+    for (const cap of enriched) {
+      delete cap._repoFileTree;
+      delete cap._projectMode;
+      delete cap._campaignMode;
+      delete cap._effectiveMode;
+      // Trim large arrays that the list view doesn't render
+      if (cap.gaps?.length > 10) cap.gaps = cap.gaps.slice(0, 10);
+      if (cap.vision?.length > 3) cap.vision = cap.vision.slice(0, 3);
+    }
+
     res.json(enriched);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
