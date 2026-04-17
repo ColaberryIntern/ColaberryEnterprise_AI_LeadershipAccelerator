@@ -224,10 +224,10 @@ export async function sendUpcomingMeetingPreps(): Promise<void> {
       }
     }
 
-    // Conflict check
+    // Conflict check — summary only
     const conflicts = await checkConflicts();
     if (conflicts.length > 0) {
-      await sendSms(`CONFLICT: You have overlapping meetings today:\n${conflicts.map(c => `- ${formatTime(c.start)} ${c.summary}`).join('\n')}`);
+      await sendSms(`${conflicts.length} calendar conflicts today. Check your calendar.`);
     }
   } catch (err: any) {
     console.error(`${LOG_PREFIX} Meeting prep failed: ${err.message}`);
