@@ -202,6 +202,49 @@ export default function PredictionModal({ processId, actionType, actionLabel, on
                       </div>
                     )}
 
+                    {/* Path to Autonomous: suggested next requirements from gap detection */}
+                    {(submitResult.report?.autonomous_suggestions || []).length > 0 && (
+                      <div className="mb-3 p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
+                        <h6 className="fw-semibold small mb-2" style={{ color: '#8b5cf6' }}>
+                          <i className="bi bi-rocket-takeoff me-2"></i>Path to Autonomous
+                        </h6>
+                        <p className="text-muted mb-2" style={{ fontSize: 10 }}>
+                          These gaps were detected after your update. Add them as requirements to move this process toward autonomous operation.
+                        </p>
+                        {submitResult.report.autonomous_suggestions.map((gap: any) => {
+                          const gapIcons: Record<string, string> = { behavior: 'bi-person-lines-fill', intelligence: 'bi-lightbulb', optimization: 'bi-speedometer2', reporting: 'bi-bar-chart-line' };
+                          const accepted = submitResult._acceptedGaps?.includes(gap.gap_id);
+                          return (
+                            <div key={gap.gap_id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: accepted ? '#10b98110' : '#fff', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+                              <i className={`bi ${gapIcons[gap.gap_type] || 'bi-gear'}`} style={{ color: '#8b5cf6', marginTop: 2 }}></i>
+                              <div className="flex-grow-1">
+                                <div className="fw-medium" style={{ fontSize: 11 }}>{gap.title}</div>
+                                <div className="text-muted" style={{ fontSize: 10 }}>{gap.description}</div>
+                                <div className="d-flex gap-1 mt-1">
+                                  <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>{gap.gap_type}</span>
+                                  <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 8 }}>Severity: {gap.severity}/10</span>
+                                </div>
+                              </div>
+                              <button
+                                className={`btn btn-sm ${accepted ? 'btn-success' : ''}`}
+                                style={accepted ? { fontSize: 10 } : { background: '#8b5cf620', color: '#8b5cf6', border: '1px solid #8b5cf640', fontSize: 10 }}
+                                disabled={accepted || submitting}
+                                onClick={async () => {
+                                  try {
+                                    const portalApi = (await import('../../utils/portalApi')).default;
+                                    await portalApi.post(`/api/portal/project/business-processes/${processId}/accept-suggestion`, { gap_id: gap.gap_id });
+                                    setSubmitResult((prev: any) => ({ ...prev, _acceptedGaps: [...(prev._acceptedGaps || []), gap.gap_id] }));
+                                  } catch {}
+                                }}
+                              >
+                                {accepted ? <><i className="bi bi-check-circle me-1"></i>Added</> : <><i className="bi bi-plus-circle me-1"></i>Add</>}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     <button className="btn btn-primary btn-sm" onClick={() => { onClose(); if (onResync) onResync(); }}>
                       <i className="bi bi-check me-1"></i>Continue
                     </button>

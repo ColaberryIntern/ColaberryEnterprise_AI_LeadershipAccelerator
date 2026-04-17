@@ -2087,7 +2087,78 @@ router.post('/api/portal/project/business-processes/:id/validation-report', requ
         qualityScore: enriched.metrics?.quality_score,
         maturityLevel: enriched.maturity?.level,
       } : null,
+      // Path to Autonomous: detect remaining gaps and suggest next requirements
+      autonomous_suggestions: await (async () => {
+        try {
+          if (!enriched) return [];
+          let repoTree: string[] = [];
+          try {
+            const { getConnection: gc } = await import('../services/githubService');
+            const conn = await gc(req.participant!.sub);
+            if (conn?.file_tree_json?.tree) repoTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+          } catch {}
+          const { RequirementsMap: RM } = await import('../models');
+          const existingAutoReqs = await RM.findAll({ where: { project_id: project.id, capability_id: req.params.id, verified_by: 'AUTONOMOUS_ENGINE' }, attributes: ['requirement_key'] });
+          const existingKeys = new Set(existingAutoReqs.map((r: any) => r.requirement_key));
+          const { detectGaps } = await import('../intelligence/requirements/gapDetectionEngine');
+          const gaps = detectGaps(enriched as any, repoTree, existingKeys);
+          return gaps.map(g => ({
+            gap_id: g.gap_id,
+            gap_type: g.gap_type,
+            title: g.title,
+            description: g.description,
+            severity: g.severity,
+            suggested_category: g.suggested_category,
+          }));
+        } catch { return []; }
+      })(),
     });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Accept autonomous suggestion: create requirements from a detected gap ────────
+router.post('/api/portal/project/business-processes/:id/accept-suggestion', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { gap_id } = req.body;
+    if (!gap_id) { res.status(400).json({ error: 'gap_id required' }); return; }
+    // Get feature for this capability
+    const { Feature: FeatureModel } = await import('../models');
+    let feature = await FeatureModel.findOne({ where: { capability_id: req.params.id } });
+    if (!feature) {
+      feature = await FeatureModel.create({ capability_id: req.params.id, name: 'Autonomous Enhancements', description: 'System-suggested requirements for autonomous operation', status: 'active', priority: 'medium' } as any);
+    }
+    // Generate requirements from the specific gap
+    const { detectGaps } = await import('../intelligence/requirements/gapDetectionEngine');
+    const { generateFromGaps } = await import('../intelligence/requirements/requirementGenerationEngine');
+    // Create a minimal enriched BP to detect the specific gap
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const capData = hierarchy.find((c: any) => c.id === req.params.id);
+    if (!capData) { res.status(404).json({ error: 'Capability not found' }); return; }
+    let repoTree: string[] = [];
+    try {
+      const { getConnection: gc } = await import('../services/githubService');
+      const conn = await gc(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) repoTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+    } catch {}
+    const { RequirementsMap: RM } = await import('../models');
+    const existingAutoReqs = await RM.findAll({ where: { project_id: project.id, capability_id: req.params.id, verified_by: 'AUTONOMOUS_ENGINE' }, attributes: ['requirement_key'] });
+    const existingKeys = new Set(existingAutoReqs.map((r: any) => r.requirement_key));
+    const enriched = enrichCapability(capData);
+    const allGaps = detectGaps(enriched as any, repoTree, existingKeys);
+    const targetGap = allGaps.find(g => g.gap_id === gap_id);
+    if (!targetGap) { res.status(400).json({ error: `Gap ${gap_id} not detected for this BP` }); return; }
+    const cycleId = `user-accepted-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    const allReqs = (capData.features || []).flatMap((f: any) => f.requirements || []);
+    const totalR = allReqs.length;
+    const matchedR = allReqs.filter((r: any) => ['matched', 'verified', 'auto_verified'].includes(r.status)).length;
+    const reqCoverage = totalR > 0 ? Math.round((matchedR / totalR) * 100) : 0;
+    const genResult = await generateFromGaps([targetGap], project.id, req.params.id as string, (feature as any).id, cycleId, { reqCoverage, qualityScore: 0, readiness: 0 });
+    res.json({ created: genResult.created, gap: { gap_id: targetGap.gap_id, title: targetGap.title } });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
