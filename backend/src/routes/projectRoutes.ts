@@ -643,6 +643,19 @@ router.post('/api/portal/project/github/sync', requireParticipant, async (req: R
       console.error('[CodeDiscovery] Auto-discovery error:', discErr.message);
     }
 
+    // Auto-match recent commits to BPs (non-blocking — fires after response)
+    try {
+      const { getProjectByEnrollment: getProjForMatch } = await import('../services/projectService');
+      const proj = await getProjForMatch(enrollmentId);
+      if (proj) {
+        const { matchRecentCommitsToBPs } = await import('../services/commitDrivenMatcher');
+        // Fire and don't await — runs in background so sync response is fast
+        matchRecentCommitsToBPs(enrollmentId, proj.id).catch((e: any) =>
+          console.error('[CommitMatcher] Background match failed:', e?.message)
+        );
+      }
+    } catch {}
+
     res.json(result);
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /github/sync error:', err.message);
