@@ -118,7 +118,21 @@ export async function processNewEmails(): Promise<ProcessResult> {
         },
       });
 
-      // Step 5: Dispatch by state
+      // Step 5: SMS alerts (VIP + urgent keywords)
+      try {
+        const sms = require('./smsAlertService');
+        // VIP alert
+        if (classifiedBy === 'hard_rule' && reasoning.includes('VIP sender')) {
+          await sms.alertVipEmail(email.from_name || email.from_address, email.subject, email.provider);
+        }
+        // Urgent keyword alert
+        const urgentKw = sms.detectUrgentKeywords(email.subject, email.body_text);
+        if (urgentKw && state === 'INBOX') {
+          await sms.alertUrgentEmail(email.from_name || email.from_address, email.subject, urgentKw);
+        }
+      } catch {}
+
+      // Step 6: Dispatch by state
       await dispatchByState(state, email, replyNeeded);
 
       breakdown[state] = (breakdown[state] || 0) + 1;
