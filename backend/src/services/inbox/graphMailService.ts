@@ -59,7 +59,7 @@ export async function fetchInboxMessages(top: number = 100): Promise<GraphMessag
   let url: string | null = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=${Math.min(top, 50)}&$orderby=receivedDateTime desc&$select=id,conversationId,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders`;
 
   while (url && messages.length < top) {
-    const res = await axios.get(url, {
+    const res: any = await axios.get(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
     messages.push(...(res.data.value || []));
