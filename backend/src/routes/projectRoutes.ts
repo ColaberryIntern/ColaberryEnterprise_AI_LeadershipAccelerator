@@ -1647,18 +1647,23 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
       }
       return false;
     };
+    // Strict dedup on top 10 visible BPs (where "Recommended Next Step" matters most).
+    // Beyond top 10, duplicates are acceptable — there are only ~7 unique step categories
+    // for potentially 50+ BPs, so full dedup is mathematically impossible.
+    const DEDUP_TOP_N = 10;
     const usedFirstKeys = new Set<string>();
     const usedFirstLabels = new Set<string>();
-    for (const cap of enriched) {
+    for (let i = 0; i < enriched.length; i++) {
+      const cap = enriched[i];
       const plan: any[] = cap.execution_plan || [];
       if (plan.length === 0) continue;
+      if (i >= DEDUP_TOP_N) break; // only dedup top N
       const isUnique = (s: any) => !s.blocked
         && !usedFirstKeys.has(s.key)
         && !usedFirstLabels.has(normalize(s.label))
         && !stepCollidesWithBp(s.label);
       const firstUniqueIdx = plan.findIndex(isUnique);
       if (firstUniqueIdx > 0) {
-        // Promote the first unique non-blocked step to index 0
         const [unique] = plan.splice(firstUniqueIdx, 1);
         plan.unshift(unique);
       }
