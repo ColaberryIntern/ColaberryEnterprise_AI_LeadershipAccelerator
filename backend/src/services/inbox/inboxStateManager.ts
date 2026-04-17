@@ -132,6 +132,15 @@ export async function processNewEmails(): Promise<ProcessResult> {
         }
       } catch {}
 
+      // Step 5b: Detect meeting requests — flag for slot inclusion in draft
+      try {
+        const { detectMeetingIntent } = require('./calendarIntelligenceService');
+        if (state === 'INBOX' && detectMeetingIntent(email.subject, email.body_text)) {
+          replyNeeded = true;
+          (email as any)._meetingRequest = true;
+        }
+      } catch {}
+
       // Step 6: Dispatch by state
       await dispatchByState(state, email, replyNeeded);
 

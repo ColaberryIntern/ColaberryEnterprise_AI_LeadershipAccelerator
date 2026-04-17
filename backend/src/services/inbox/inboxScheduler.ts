@@ -13,6 +13,7 @@ const PROCESS_INTERVAL = 65_000;        // 1 min 5 sec (offset from sync)
 const DIGEST_INTERVAL = 14_400_000;     // 4 hours
 const LEARNING_INTERVAL = 86_400_000;   // 24 hours
 const DAILY_SUMMARY_INTERVAL = 3_600_000; // Check every hour (sends at 7 AM)
+const MEETING_PREP_INTERVAL = 300_000;    // Check every 5 min for upcoming meetings
 
 // Active interval handles for cleanup
 let intervalIds: ReturnType<typeof setInterval>[] = [];
@@ -124,7 +125,15 @@ export function startInboxScheduler(): void {
         const stateMap: Record<string, number> = {};
         states.forEach((s: any) => { stateMap[s.state] = s.c; });
 
-        const { sendDailySummary } = await import('./smsAlertService');
+        const { sendDailySummary, sendSms } = await import('./smsAlertService');
+
+        // Include calendar brief
+        try {
+          const { getCalendarBrief } = await import('./calendarIntelligenceService');
+          const brief = await getCalendarBrief();
+          await sendSms(brief);
+        } catch {}
+
         await sendDailySummary({
           newEmails: newCount[0]?.c || 0,
           inbox: stateMap['INBOX'] || 0,
@@ -139,8 +148,20 @@ export function startInboxScheduler(): void {
     }, DAILY_SUMMARY_INTERVAL)
   );
 
+  // Timer 7: Meeting prep texts (every 5 min — checks for meetings starting in 15 min)
+  intervalIds.push(
+    setInterval(async () => {
+      try {
+        const { sendUpcomingMeetingPreps } = await import('./calendarIntelligenceService');
+        await sendUpcomingMeetingPreps();
+      } catch (error: any) {
+        console.error(`${LOG_PREFIX} Meeting prep error: ${error.message}`);
+      }
+    }, MEETING_PREP_INTERVAL)
+  );
+
   isRunning = true;
-  console.log(`${LOG_PREFIX} Started with 6 timers (sync, process, digest, learning, sms-alerts, daily-summary)`);
+  console.log(`${LOG_PREFIX} Started with 7 timers (sync, process, digest, learning, sms-alerts, daily-summary, meeting-prep)`);
 }
 
 /**
