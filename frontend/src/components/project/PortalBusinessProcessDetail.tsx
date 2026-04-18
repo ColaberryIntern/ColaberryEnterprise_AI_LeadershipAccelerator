@@ -290,23 +290,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           <Section num={3.1} title="Frontend Preview" collapsible defaultOpen>
             {(p.preview_url || p.direct_preview_url) ? (
               <>
-                {/* Deployed URL setting */}
-                {!p.direct_preview_url && (
-                  <div className="alert alert-warning py-2 mb-2" style={{ fontSize: 10 }}>
-                    <i className="bi bi-exclamation-triangle me-1"></i>
-                    Preview uses proxy path which may have login issues.
-                    <button className="btn btn-sm btn-link p-0 ms-1" style={{ fontSize: 10 }} onClick={async () => {
-                      const url = prompt('Enter the direct URL where this project runs (e.g., http://95.216.199.47:8889):');
-                      if (url) {
-                        try {
-                          const portalApi = (await import('../../utils/portalApi')).default;
-                          await portalApi.put('/api/portal/project/settings', { direct_preview_url: url.trim() });
-                          load();
-                        } catch {}
-                      }
-                    }}>Set deployed URL</button>
-                  </div>
-                )}
+                {/* Deployed URL — editable setting for "Open in new tab" */}
                 {/* Route selector */}
                 <div className="d-flex align-items-center gap-2 mb-2">
                   <span className="text-muted" style={{ fontSize: 10 }}><i className="bi bi-signpost me-1"></i>Route:</span>
@@ -327,35 +311,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   </select>
                 </div>
                 <div style={{ position: 'relative' }}>
-                  {/* If direct URL is HTTP and we're on HTTPS, iframe will be blocked by mixed content.
-                      Show a prominent "Open App" card instead of a broken iframe. */}
-                  {p.direct_preview_url && p.direct_preview_url.startsWith('http://') && window.location.protocol === 'https:' ? (
-                    <div className="d-flex flex-column align-items-center justify-content-center p-4" style={{ height: 400, background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
-                      <i className="bi bi-box-arrow-up-right" style={{ fontSize: 32, color: 'var(--color-primary-light)' }}></i>
-                      <div className="fw-semibold mt-2" style={{ color: 'var(--color-primary)' }}>Preview runs on HTTP</div>
-                      <div className="text-muted small mt-1 mb-3 text-center" style={{ maxWidth: 350 }}>
-                        The app is running at <code>{p.direct_preview_url}</code> which can't be embedded in this HTTPS page. Click below to open it directly.
-                      </div>
-                      <a href={p.direct_preview_url + (p.frontend_route || '')} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                        <i className="bi bi-box-arrow-up-right me-1"></i>Open {p.name || 'App'}
-                      </a>
-                      <button className="btn btn-link btn-sm text-muted mt-2" style={{ fontSize: 10 }} onClick={async () => {
-                        const url = prompt('Enter an HTTPS URL to enable iframe preview, or leave blank to keep HTTP:', p.direct_preview_url);
-                        if (url !== null) {
-                          try {
-                            const portalApi = (await import('../../utils/portalApi')).default;
-                            await portalApi.put('/api/portal/project/settings', { direct_preview_url: url.trim() || null });
-                            load();
-                          } catch {}
-                        }
-                      }}>
-                        <i className="bi bi-gear me-1"></i>Change deployed URL
-                      </button>
-                    </div>
-                  ) : (
                   <>
                   <iframe
-                    src={p.direct_preview_url ? (p.direct_preview_url + (p.frontend_route || '')) : p.preview_url}
+                    src={p.preview_url}
                     title="Frontend Preview"
                     style={{
                       width: '100%',
@@ -411,7 +369,6 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                     </div>
                   )}
                   </>
-                  )}
                 </div>
                 <div className="d-flex justify-content-between align-items-center mt-1">
                   <div className="d-flex gap-2 align-items-center">
