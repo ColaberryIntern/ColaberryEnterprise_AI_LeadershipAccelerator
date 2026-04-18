@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "seed:admin": "ts-node src/seeds/seedAdmin.ts",
     "seed:sequence": "ts-node src/seeds/seedDefaultSequence.ts",
+    "seed:sources": "ts-node src/seeds/seedLeadSources.ts",
     "lint": "eslint src --ext .ts",
     "test": "jest"
   },

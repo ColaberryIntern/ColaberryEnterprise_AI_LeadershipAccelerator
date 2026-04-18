@@ -2408,6 +2408,19 @@ export function startScheduler(): void {
   startAIOpsScheduler().catch((err: any) => {
     console.error('[Scheduler] AI Ops scheduler startup error:', err.message);
   });
+
+  // Autonomous ingest insights — regenerate suggestion cards every 6 hours.
+  // Never auto-applies; an admin must click Apply unless AUTONOMOUS_AUTOAPPLY=true.
+  cron.schedule('0 */6 * * *', () => {
+    (async () => {
+      try {
+        const { runInsightsJob } = require('../jobs/autonomousIngestInsights');
+        await runInsightsJob();
+      } catch (err: any) {
+        console.error('[Scheduler] Autonomous ingest insights error:', err?.message);
+      }
+    })();
+  });
 }
 
 // ---------------------------------------------------------------------------

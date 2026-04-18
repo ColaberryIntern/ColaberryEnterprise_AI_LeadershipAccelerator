@@ -51,6 +51,12 @@ import roleRoutes from './admin/roleRoutes';
 import implementationStrategyRoutes from './admin/implementationStrategyRoutes';
 import visitorAnalyticsRoutes from './admin/visitorAnalyticsRoutes';
 import inboxRoutes from './admin/inboxRoutes';
+import sourceRoutes from './admin/sourceRoutes';
+import formDefinitionRoutes from './admin/formDefinitionRoutes';
+import routingRuleRoutes from './admin/routingRuleRoutes';
+import ingestLogRoutes from './admin/ingestLogRoutes';
+import generatorRoutes from './admin/generatorRoutes';
+import autonomousIngestRoutes from './admin/autonomousRoutes';
 
 const router = Router();
 
@@ -106,5 +112,11 @@ router.use(roleRoutes);
 router.use(implementationStrategyRoutes);
 router.use(visitorAnalyticsRoutes);
 router.use(inboxRoutes);
+router.use(sourceRoutes);
+router.use(formDefinitionRoutes);
+router.use(routingRuleRoutes);
+router.use(ingestLogRoutes);
+router.use(generatorRoutes);
+router.use(autonomousIngestRoutes);
 
 export default router;

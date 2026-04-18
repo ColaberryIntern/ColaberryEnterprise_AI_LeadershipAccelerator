@@ -57,6 +57,8 @@ interface LeadAttributes {
   departments_impacted?: any | null;
   selected_systems?: any | null;
   advisory_report_url?: string | null;
+  source_id?: string | null;
+  entry_point_id?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -117,6 +119,8 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare departments_impacted: any | null;
   declare selected_systems: any | null;
   declare advisory_report_url: string | null;
+  declare source_id: string | null;
+  declare entry_point_id: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -354,6 +358,14 @@ Lead.init(
     },
     advisory_report_url: {
       type: DataTypes.STRING,
+      allowNull: true,
+    },
+    source_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    entry_point_id: {
+      type: DataTypes.UUID,
       allowNull: true,
     },
     created_at: {

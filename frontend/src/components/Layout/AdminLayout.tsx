@@ -24,6 +24,12 @@ const adminNavSections: NavSection[] = [
     { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast' },
     { path: '/admin/visitors', label: 'Visitors', icon: 'eye' },
   ]},
+  { label: 'Lead Ingestion', links: [
+    { path: '/admin/sources', label: 'Sources', icon: 'cloud-upload' },
+    { path: '/admin/ingest-logs', label: 'Ingest Logs', icon: 'list-check' },
+    { path: '/admin/routing-rules', label: 'Routing Rules', icon: 'diagram-3' },
+    { path: '/admin/autonomous', label: 'Autonomous', icon: 'lightbulb' },
+  ]},
   { label: 'Program', links: [
     { path: '/admin/accelerator', label: 'Accelerator', icon: 'mortarboard' },
     { path: '/admin/orchestration', label: 'Orchestration', icon: 'diagram-3' },

@@ -150,6 +150,13 @@ import UIElementFeedback from './UIElementFeedback';
 import PreviewStack from './PreviewStack';
 import PreviewEvent from './PreviewEvent';
 
+// Universal Lead Ingestion models
+import LeadSource from './LeadSource';
+import EntryPoint from './EntryPoint';
+import FormDefinition from './FormDefinition';
+import RoutingRule from './RoutingRule';
+import RawLeadPayload from './RawLeadPayload';
+
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
 import InboxClassification from './InboxClassification';
@@ -160,6 +167,22 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+
+// --- Universal Lead Ingestion associations ---
+LeadSource.hasMany(EntryPoint, { foreignKey: 'source_id', as: 'entryPoints', onDelete: 'CASCADE' });
+EntryPoint.belongsTo(LeadSource, { foreignKey: 'source_id', as: 'source' });
+
+EntryPoint.hasMany(FormDefinition, { foreignKey: 'entry_point_id', as: 'formDefinitions', onDelete: 'CASCADE' });
+FormDefinition.belongsTo(EntryPoint, { foreignKey: 'entry_point_id', as: 'entryPoint' });
+
+Lead.belongsTo(LeadSource, { foreignKey: 'source_id', as: 'leadSource', onDelete: 'SET NULL' });
+LeadSource.hasMany(Lead, { foreignKey: 'source_id', as: 'leads' });
+
+Lead.belongsTo(EntryPoint, { foreignKey: 'entry_point_id', as: 'entryPoint', onDelete: 'SET NULL' });
+EntryPoint.hasMany(Lead, { foreignKey: 'entry_point_id', as: 'leads' });
+
+RawLeadPayload.belongsTo(Lead, { foreignKey: 'resulting_lead_id', as: 'lead', onDelete: 'SET NULL' });
+Lead.hasMany(RawLeadPayload, { foreignKey: 'resulting_lead_id', as: 'rawPayloads' });
 
 // --- Inbox COS associations ---
 InboxEmail.hasOne(InboxClassification, { foreignKey: 'email_id', as: 'classification' });
@@ -917,4 +940,9 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  LeadSource,
+  EntryPoint,
+  FormDefinition,
+  RoutingRule,
+  RawLeadPayload,
 };

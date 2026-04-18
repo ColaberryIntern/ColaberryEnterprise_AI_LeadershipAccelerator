@@ -32,6 +32,11 @@ import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
 import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
 import AdminProjectOverview from '../pages/admin/AdminProjectOverview';
 import InboxCOSPage from '../pages/admin/inbox/InboxCOSPage';
+import AdminSourcesPage from '../pages/admin/AdminSourcesPage';
+import AdminGeneratorPage from '../pages/admin/AdminGeneratorPage';
+import AdminIngestLogsPage from '../pages/admin/AdminIngestLogsPage';
+import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
+import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
 const adminRoutes = (
   <>
     <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -67,6 +72,11 @@ const adminRoutes = (
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
+        <Route path="/admin/sources" element={<AdminSourcesPage />} />
+        <Route path="/admin/generator/:sourceSlug/:entrySlug" element={<AdminGeneratorPage />} />
+        <Route path="/admin/ingest-logs" element={<AdminIngestLogsPage />} />
+        <Route path="/admin/routing-rules" element={<AdminRoutingRulesPage />} />
+        <Route path="/admin/autonomous" element={<AdminAutonomousPage />} />
       </Route>
     </Route>
   </>

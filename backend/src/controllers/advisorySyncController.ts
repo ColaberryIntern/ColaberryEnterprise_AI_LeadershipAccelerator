@@ -1,14 +1,8 @@
 import { Request, Response } from 'express';
-import crypto from 'crypto';
 import { logActivity } from '../services/activityService';
+import { verifyHmacSignature } from '../utils/hmac';
 
 const ADVISORY_WEBHOOK_SECRET = process.env.ADVISORY_WEBHOOK_SECRET || '';
-
-function verifySignature(payload: string, signature: string, secret: string): boolean {
-  if (!secret) return true; // Skip verification if no secret configured
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-}
 
 export async function handleAdvisoryWebhook(req: Request, res: Response): Promise<void> {
   try {
@@ -16,7 +10,7 @@ export async function handleAdvisoryWebhook(req: Request, res: Response): Promis
     const eventType = req.headers['x-webhook-event'] as string || '';
     const rawBody = JSON.stringify(req.body);
 
-    if (ADVISORY_WEBHOOK_SECRET && !verifySignature(rawBody, signature, ADVISORY_WEBHOOK_SECRET)) {
+    if (ADVISORY_WEBHOOK_SECRET && !verifyHmacSignature(rawBody, signature, ADVISORY_WEBHOOK_SECRET)) {
       console.warn('[AdvisorySync] Invalid webhook signature');
       res.status(403).json({ error: 'Invalid signature' });
       return;
