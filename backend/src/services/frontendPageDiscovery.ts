@@ -101,9 +101,12 @@ export function discoverFrontendPages(fileTree: string[]): DiscoveredPage[] {
     const standaloneMatch = f.match(/(?:src|web)\/components\/([A-Z]\w+)\.tsx$/);
     if (standaloneMatch) {
       const name = standaloneMatch[1];
-      // Skip utility components (Drawer, Button, Modal, etc.)
-      if (/^(Drawer|Button|Modal|Header|Footer|Sidebar|Nav|Icon|Spinner|Layout|Provider|Context)/.test(name)) continue;
-      // Skip if it starts with a lowercase letter after the first char (likely a utility)
+      // Skip utility/non-page components — comprehensive exclusion list
+      if (/^(Drawer|Button|Modal|Header|Footer|Sidebar|Nav|Icon|Spinner|Layout|Provider|Context|Form|Input|Select|Table|Card|Badge|Alert|Toast|Tooltip|Popover|Dropdown|Tab|Accordion|Collapse|Pagination|Breadcrumb|Avatar|Chip|Tag|Divider|Skeleton|Loading|Progress|Stepper|Timeline|Rating|Toggle|Switch|Radio|Checkbox|Slider|Search|Filter|Sort|Upload|Download|Preview|Embed|Wrapper|Container|Grid|Row|Col|Flex|Stack|Box|List|Item|Cell|Section|Panel|Pane|Split|Resize|Scroll|Drag|Drop|Dnd|Animate|Transition|Fade|Slide|Zoom|Scale|Rotate|Flip)/i.test(name)) continue;
+      // Skip drawers, pills, modals, login/auth screens, and component variants
+      if (/drawer|pill|modal|dialog|popup|overlay|sheet|snackbar|banner|widget|chip|login|signin|signup|register|auth|forgot|reset|verify|callback|oauth|sso/i.test(name)) continue;
+      // Skip if the filename is clearly a sub-component (contains "Item", "Cell", "Row", "Entry")
+      if (/Item$|Cell$|Row$|Entry$|Slot$|Tile$|Chip$|Pill$/.test(name)) continue;
       const route = '/' + name
         .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
         .replace(/([a-z])([A-Z])/g, '$1-$2')
@@ -161,11 +164,16 @@ export async function processOrphanedPages(options: {
     c.name.toLowerCase().split(/\W+/).filter(w => w.length >= 4).forEach(s => existingNameStems.add(s));
   });
 
-  // Skip utility pages that don't need BPs
-  const SKIP_ROUTES = new Set(['/admin/login', '/portal/login', '/portal/verify', '/:param', '/enroll/success', '/enroll/cancel']);
+  // Skip utility pages and non-page components that don't need BPs
+  const SKIP_ROUTES = new Set(['/admin/login', '/portal/login', '/portal/verify', '/:param', '/enroll/success', '/enroll/cancel', '/', '/login', '/signin', '/signup', '/register', '/forgot-password', '/reset-password', '/callback', '/oauth']);
+  // Skip routes that look like sub-components, drawers, or modals
+  const isNonPageRoute = (route: string, name: string) => {
+    const lower = (name || route).toLowerCase();
+    return /drawer|pill|modal|dialog|popup|overlay|sheet|widget|login|signin|signup|auth/i.test(lower);
+  };
 
   for (const page of pages) {
-    if (SKIP_ROUTES.has(page.route)) {
+    if (SKIP_ROUTES.has(page.route) || isNonPageRoute(page.route, page.pageName)) {
       result.details.push({ route: page.route, status: 'skipped' });
       continue;
     }
