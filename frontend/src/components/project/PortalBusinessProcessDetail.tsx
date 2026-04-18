@@ -55,6 +55,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
   const [uiSuggestions, setUiSuggestions] = useState<any>(null);
   const [previewUrlInput, setPreviewUrlInput] = useState('');
+  const [backendCtx, setBackendCtx] = useState<any>(null);
+  const [loadingBackend, setLoadingBackend] = useState(false);
   const [elementFeedback, setElementFeedback] = useState<any>(null);
   const [analyzingPage, setAnalyzingPage] = useState(false);
   const [projectRoutes, setProjectRoutes] = useState<string[]>([]);
@@ -598,6 +600,101 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                 </button>
               </div>
             </div>
+          </Section>
+        )}
+
+        {/* 3.2: Backend Stack — full-stack visibility */}
+        {(links.backend?.length > 0 || links.models?.length > 0 || links.agents?.length > 0) && (
+          <Section num={3.2} title={`Backend Stack${backendCtx ? ` (${backendCtx.api_routes?.length || 0} endpoints, ${backendCtx.models?.length || 0} models, ${backendCtx.agents?.length || 0} agents)` : ''}`} collapsible defaultOpen={false}>
+            {!backendCtx && !loadingBackend && (
+              <button className="btn btn-sm btn-outline-primary" onClick={async () => {
+                setLoadingBackend(true);
+                try {
+                  const portalApi = (await import('../../utils/portalApi')).default;
+                  const r = await portalApi.get(`/api/portal/project/business-processes/${processId}/backend-context`);
+                  setBackendCtx(r.data);
+                } catch {} finally { setLoadingBackend(false); }
+              }}>
+                <i className="bi bi-diagram-3 me-1"></i>Load Backend Context
+              </button>
+            )}
+            {loadingBackend && <div className="text-muted small"><span className="spinner-border spinner-border-sm me-2"></span>Reading source files from repo...</div>}
+            {backendCtx && (
+              <div>
+                {/* API Endpoints */}
+                {backendCtx.api_routes?.length > 0 && (
+                  <div className="mb-3">
+                    <div className="fw-medium small mb-1"><i className="bi bi-signpost me-1" style={{ color: 'var(--color-info)' }}></i>API Endpoints</div>
+                    <div className="table-responsive">
+                      <table className="table table-sm mb-0" style={{ fontSize: 10 }}>
+                        <thead className="table-light"><tr><th style={{ width: 60 }}>Method</th><th>Path</th><th>File</th></tr></thead>
+                        <tbody>
+                          {backendCtx.api_routes.slice(0, 20).map((r: any, i: number) => {
+                            const methodColors: Record<string, string> = { GET: '#10b981', POST: '#3b82f6', PUT: '#f59e0b', DELETE: '#ef4444', PATCH: '#8b5cf6' };
+                            return (
+                              <tr key={i}>
+                                <td><span className="badge" style={{ background: `${methodColors[r.method] || '#6b7280'}20`, color: methodColors[r.method] || '#6b7280', fontSize: 9 }}>{r.method}</span></td>
+                                <td style={{ fontFamily: 'monospace' }}>{r.path}</td>
+                                <td className="text-muted">{r.source_file?.split('/').pop()}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Data Models */}
+                {backendCtx.models?.length > 0 && (
+                  <div className="mb-3">
+                    <div className="fw-medium small mb-1"><i className="bi bi-database me-1" style={{ color: 'var(--color-accent)' }}></i>Data Models</div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {backendCtx.models.map((m: any, i: number) => (
+                        <div key={i} className="p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, border: '1px solid var(--color-border)', fontSize: 10 }}>
+                          <div className="fw-semibold" style={{ color: 'var(--color-primary)' }}>{m.name} <span className="text-muted fw-normal">({m.table_name})</span></div>
+                          <div className="text-muted mt-1" style={{ fontFamily: 'monospace', fontSize: 9 }}>{m.fields?.slice(0, 10).join(', ')}{m.fields?.length > 10 ? ` +${m.fields.length - 10}` : ''}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Agents */}
+                {backendCtx.agents?.length > 0 && (
+                  <div className="mb-3">
+                    <div className="fw-medium small mb-1"><i className="bi bi-cpu me-1" style={{ color: '#8b5cf6' }}></i>Agents</div>
+                    {backendCtx.agents.map((a: any, i: number) => (
+                      <div key={i} className="d-flex align-items-center gap-2 mb-1" style={{ fontSize: 10 }}>
+                        <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 9 }}>{a.name}</span>
+                        {a.capabilities?.length > 0 && <span className="text-muted">{a.capabilities.slice(0, 5).join(', ')}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* What's Possible */}
+                {backendCtx.possibilities?.length > 0 && (
+                  <div className="p-2" style={{ background: '#eff6ff', borderRadius: 6, border: '1px solid #bfdbfe' }}>
+                    <div className="fw-medium small mb-1" style={{ color: '#1e40af' }}><i className="bi bi-lightbulb me-1"></i>What's Possible</div>
+                    {backendCtx.possibilities.map((s: string, i: number) => (
+                      <div key={i} className="text-muted small"><i className="bi bi-arrow-right me-1" style={{ color: '#3b82f6' }}></i>{s}</div>
+                    ))}
+                  </div>
+                )}
+
+                <button className="btn btn-link btn-sm text-muted mt-2 p-0" style={{ fontSize: 9 }} onClick={async () => {
+                  setLoadingBackend(true);
+                  try {
+                    const portalApi = (await import('../../utils/portalApi')).default;
+                    const r = await portalApi.get(`/api/portal/project/business-processes/${processId}/backend-context`);
+                    setBackendCtx(r.data);
+                  } catch {} finally { setLoadingBackend(false); }
+                }}>
+                  <i className="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
+              </div>
+            )}
           </Section>
         )}
 

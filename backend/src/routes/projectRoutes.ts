@@ -3061,6 +3061,64 @@ router.post('/api/portal/project/system-model/refresh', requireParticipant, asyn
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Backend Context: full-stack visibility for BPs ────────
+router.get('/api/portal/project/business-processes/:id/backend-context', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { Capability: CapModel } = await import('../models');
+    const cap = await CapModel.findOne({ where: { id: req.params.id, project_id: project.id } });
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+
+    // Check cache
+    const { isCacheFresh } = await import('../services/backendContextService');
+    const cached = (cap as any).backend_context;
+    if (cached && isCacheFresh(cached)) {
+      res.json(cached);
+      return;
+    }
+
+    // Extract fresh context from repo files
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const capData = hierarchy.find((c: any) => c.id === req.params.id);
+
+    // Build implementation_links (simplified from enrichCapability)
+    let repoTree: string[] = [];
+    try {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) repoTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+    } catch {}
+
+    const enriched = capData ? enrichCapability(capData) : null;
+    const links = enriched?.implementation_links || { backend: [], models: [], agents: [], frontend: [] };
+
+    // If no implementation files detected, try project-wide files relevant to this BP
+    if (links.backend.length === 0 && links.models.length === 0) {
+      const bpName = (cap as any).name?.toLowerCase() || '';
+      const stems = bpName.split(/\W+/).filter((w: string) => w.length > 3);
+      const relevantFiles = repoTree.filter(f => {
+        const fl = f.toLowerCase();
+        return stems.some((s: string) => fl.includes(s)) && /\.(ts|js|py|go)$/.test(f);
+      });
+      if (links.backend.length === 0) links.backend = relevantFiles.filter(f => /\/(route|service|controller|handler|api)\b/i.test(f)).slice(0, 10);
+      if (links.models.length === 0) links.models = relevantFiles.filter(f => /\/(model|schema|entity)\b/i.test(f)).slice(0, 10);
+      if (links.agents.length === 0) links.agents = relevantFiles.filter(f => /agent/i.test(f)).slice(0, 5);
+    }
+
+    const { extractBackendContext } = await import('../services/backendContextService');
+    const ctx = await extractBackendContext(req.participant!.sub, links);
+
+    // Cache on the capability
+    (cap as any).backend_context = ctx;
+    (cap as any).changed('backend_context', true);
+    await cap.save();
+
+    res.json(ctx);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Visual Feedback OS: element-level feedback ────────
 router.post('/api/portal/project/business-processes/:id/element-map', requireParticipant, async (req: Request, res: Response) => {
   try {
@@ -3107,11 +3165,21 @@ router.post('/api/portal/project/business-processes/:id/analyze-page', requirePa
     // LLM augment if rules found few issues or user gave feedback
     let llmResult = { total_issues: 0, new_issues: 0, skipped_duplicates: 0, issues: [] as any[] };
     if (req.body.user_feedback || ruleResult.total_issues < 3) {
+      // Inject backend context into LLM prompt so suggestions know what data/APIs are available
+      let backendPrompt = '';
+      try {
+        const { Capability: CapCtx } = await import('../models');
+        const capCtx = await CapCtx.findByPk(cap.id, { attributes: ['backend_context'] });
+        if ((capCtx as any)?.backend_context) {
+          const { formatForPrompt } = await import('../services/backendContextService');
+          backendPrompt = formatForPrompt((capCtx as any).backend_context);
+        }
+      } catch {}
       llmResult = await augmentWithLLM({
         capabilityId: cap.id, projectId: project.id,
         pageRoute: elementMap.page_route || '/',
         elements: elementMap.elements,
-        userFeedback: req.body.user_feedback,
+        userFeedback: req.body.user_feedback ? (req.body.user_feedback + (backendPrompt ? '\n\n' + backendPrompt : '')) : backendPrompt || undefined,
         ruleIssueCount: ruleResult.total_issues,
       });
     }
