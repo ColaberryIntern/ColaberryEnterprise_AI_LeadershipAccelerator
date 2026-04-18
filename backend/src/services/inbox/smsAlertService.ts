@@ -33,9 +33,10 @@ async function sendSms(message: string): Promise<boolean> {
     await transporter.sendMail({
       from: process.env.EMAIL_FROM || 'info@colaberry.com',
       to,
-      subject: ' ',
       text: message.slice(0, 160),
-      headers: { 'X-Mailer': 'InboxCOS' },
+      encoding: 'binary',
+      textEncoding: 'base64',
+      raw: `From: ${process.env.EMAIL_FROM || 'info@colaberry.com'}\r\nTo: ${to}\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\n${message.slice(0, 160)}`,
     });
     console.log(`${LOG_PREFIX} SMS sent: ${message.slice(0, 50)}...`);
     return true;
