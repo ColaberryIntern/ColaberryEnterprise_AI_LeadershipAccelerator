@@ -305,9 +305,15 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                       } catch {}
                     }}>
                     <option value="">/ (home)</option>
-                    {projectRoutes.map(r => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
+                    {(() => {
+                      // Ensure the BP's own route appears in the dropdown even if format differs
+                      const routes = [...projectRoutes];
+                      const bpRoute = p.frontend_route || '';
+                      if (bpRoute && !routes.includes(bpRoute)) routes.push(bpRoute);
+                      return routes.sort().map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ));
+                    })()}
                   </select>
                 </div>
                 <div style={{ position: 'relative' }}>
