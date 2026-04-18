@@ -1837,6 +1837,15 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
         }
         return baseUrl;
       })(),
+      // Direct URL for "Open in new tab" — bypasses the proxy so the user gets
+      // the real running app (e.g., http://95.216.199.47:8889/) instead of the
+      // proxy path (/preview/shipces/) which has mixed-content/login issues.
+      direct_preview_url: (() => {
+        const directBase = projectVars.direct_preview_url || null;
+        if (!directBase) return null;
+        const route = capModel?.frontend_route || '';
+        return directBase.replace(/\/$/, '') + route;
+      })(),
       project_system_prompt: projectVars.system_prompt || '',
       hitl_config: capModel?.hitl_config || null,
       autonomy_level: capModel?.autonomy_level || 'manual',

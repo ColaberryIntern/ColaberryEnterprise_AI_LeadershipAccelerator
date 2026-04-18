@@ -397,7 +397,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                       </span>
                     )}
                   </div>
-                  <a href={p.preview_url} target="_blank" rel="noopener noreferrer" className="text-muted" style={{ fontSize: 10 }}>
+                  <a href={p.direct_preview_url || p.preview_url} target="_blank" rel="noopener noreferrer" className="text-muted" style={{ fontSize: 10 }}>
                     <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
                   </a>
                 </div>
