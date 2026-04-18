@@ -3234,6 +3234,24 @@ router.put('/api/portal/project/preview-url', requireParticipant, async (req: Re
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Project settings: update project_variables fields ────────
+// Allows the student to set direct_preview_url and other project-level settings.
+router.put('/api/portal/project/settings', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { direct_preview_url } = req.body;
+    const vars = (project as any).project_variables || {};
+    if (direct_preview_url !== undefined) {
+      vars.direct_preview_url = direct_preview_url || null;
+    }
+    (project as any).project_variables = vars;
+    (project as any).changed('project_variables', true);
+    await project.save();
+    res.json({ direct_preview_url: vars.direct_preview_url || null });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Preview Stack status for the portal iframe overlay ────────
 // Returns the current user's project's preview_stack status so the portal
 // can show a "Booting preview…" overlay while the stack is provisioning
