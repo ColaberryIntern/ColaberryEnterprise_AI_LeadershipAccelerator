@@ -53,11 +53,8 @@ export async function verifyMagicLink(token: string): Promise<{ jwt: string; enr
 
   if (!enrollment) return null;
 
-  // Clear token (single-use)
-  await enrollment.update({
-    portal_token: undefined as any,
-    portal_token_expires_at: undefined as any,
-  });
+  // Keep token reusable — don't clear it. The token expires naturally
+  // via portal_token_expires_at. This lets users bookmark their portal link.
 
   const jwtToken = jwt.sign(
     {
