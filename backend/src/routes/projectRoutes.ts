@@ -3098,17 +3098,39 @@ router.get('/api/portal/project/business-processes/:id/backend-context', require
     const enriched = capData ? enrichCapability(capData) : null;
     const links = enriched?.implementation_links || { backend: [], models: [], agents: [], frontend: [] };
 
-    // If no implementation files detected, try project-wide files relevant to this BP
-    if (links.backend.length === 0 && links.models.length === 0) {
-      const bpName = (cap as any).name?.toLowerCase() || '';
-      const stems = bpName.split(/\W+/).filter((w: string) => w.length > 3);
-      const relevantFiles = repoTree.filter(f => {
+    // Always ensure we have backend files to analyze. Every frontend page has
+    // a backend — if BP-specific matching found nothing, search project-wide.
+    const bpName = (cap as any).name?.toLowerCase() || '';
+    const stems = bpName.split(/\W+/).filter((w: string) => w.length > 3);
+
+    // 1. Try BP-specific keyword match
+    if (links.backend.length === 0) {
+      const bpFiles = repoTree.filter(f => {
         const fl = f.toLowerCase();
-        return stems.some((s: string) => fl.includes(s)) && /\.(ts|js|py|go)$/.test(f);
+        return stems.some((s: string) => fl.includes(s)) && /\.(ts|js|py|go)$/.test(f) && /\/(route|service|controller|handler|api)\b/i.test(f);
       });
-      if (links.backend.length === 0) links.backend = relevantFiles.filter(f => /\/(route|service|controller|handler|api)\b/i.test(f)).slice(0, 10);
-      if (links.models.length === 0) links.models = relevantFiles.filter(f => /\/(model|schema|entity)\b/i.test(f)).slice(0, 10);
-      if (links.agents.length === 0) links.agents = relevantFiles.filter(f => /agent/i.test(f)).slice(0, 5);
+      links.backend = bpFiles.slice(0, 10);
+    }
+    if (links.models.length === 0) {
+      const bpModels = repoTree.filter(f => {
+        const fl = f.toLowerCase();
+        return stems.some((s: string) => fl.includes(s)) && /\.(ts|js|py|go)$/.test(f) && /\/(model|schema|entity)\b/i.test(f);
+      });
+      links.models = bpModels.slice(0, 10);
+    }
+    if (links.agents.length === 0) {
+      links.agents = repoTree.filter(f => stems.some((s: string) => f.toLowerCase().includes(s)) && /agent/i.test(f) && /\.(ts|js|py)$/.test(f)).slice(0, 5);
+    }
+
+    // 2. If STILL empty, grab ALL project backend/model/agent files (every page has a backend)
+    if (links.backend.length === 0) {
+      links.backend = repoTree.filter(f => /\/(route|service|controller|handler|gateway)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f) && !f.includes('node_modules')).slice(0, 10);
+    }
+    if (links.models.length === 0) {
+      links.models = repoTree.filter(f => /\/(model|schema|entity)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f) && !f.includes('node_modules')).slice(0, 10);
+    }
+    if (links.agents.length === 0) {
+      links.agents = repoTree.filter(f => /agent/i.test(f) && /\.(ts|js|py)$/.test(f) && !f.includes('node_modules') && !f.includes('migration')).slice(0, 5);
     }
 
     const { extractBackendContext } = await import('../services/backendContextService');

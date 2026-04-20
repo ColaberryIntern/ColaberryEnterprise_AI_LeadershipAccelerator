@@ -621,8 +621,8 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           </Section>
         )}
 
-        {/* 3.2: Backend Stack — full-stack visibility */}
-        {(links.backend?.length > 0 || links.models?.length > 0 || links.agents?.length > 0) && (
+        {/* 3.2: Backend Stack — always available. Every page has a backend. */}
+        {(
           <Section num={3.2} title={`Backend Stack${backendCtx ? ` (${backendCtx.api_routes?.length || 0} endpoints, ${backendCtx.models?.length || 0} models, ${backendCtx.agents?.length || 0} agents)` : ''}`} collapsible defaultOpen={false}>
             {!backendCtx && !loadingBackend && (
               <button className="btn btn-sm btn-outline-primary" onClick={async () => {
