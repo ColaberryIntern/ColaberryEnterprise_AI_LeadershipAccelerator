@@ -1847,6 +1847,20 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Email digest: hourly check (sends at configured hour/day)');
 
+  // -- Campaign Graduation (Phase 1 → 2 → 3) every 6 hours --
+  cron.schedule('0 */6 * * *', () => {
+    instrumentCronJob('CampaignGraduation', async () => {
+      const { runGraduationCycle } = require('./campaignGraduationService');
+      const result = await runGraduationCycle();
+      if (result.phase1_to_2 > 0 || result.phase2_to_3 > 0) {
+        console.log(`[Scheduler] Campaign graduation: ${result.phase1_to_2} Phase1→2, ${result.phase2_to_3} Phase2→3`);
+      }
+    }).catch((err: any) => {
+      console.error('[Scheduler] Campaign graduation error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Campaign graduation: every 6 hours');
+
   // -- Inbox Chief of Staff --
   try {
     const { startInboxScheduler } = require('./inbox/inboxScheduler');
