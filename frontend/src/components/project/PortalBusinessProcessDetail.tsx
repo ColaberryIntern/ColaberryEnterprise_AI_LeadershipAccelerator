@@ -287,8 +287,11 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         </Section>
         )}
 
-        {/* 3a: Frontend Preview & Feedback — only show when THIS BP has frontend files */}
-        {links.frontend?.length > 0 && (
+        {/* 3a: Frontend Preview & Feedback — only show for:
+            - Page BPs (source='frontend_page')
+            - BPs with an explicitly set frontend_route
+            NOT for code BPs with incidental keyword matches to frontend files */}
+        {(isPageBP || p.frontend_route) && (
           <Section num={3.1} title="Frontend Preview" collapsible defaultOpen>
             {(p.preview_url || p.direct_preview_url) ? (
               <>
