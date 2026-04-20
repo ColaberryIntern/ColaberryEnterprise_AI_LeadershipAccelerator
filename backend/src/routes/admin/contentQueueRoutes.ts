@@ -29,16 +29,16 @@ router.get('/api/admin/content-queue', requireAdmin, async (req: Request, res: R
     const signals = signalIds.length > 0
       ? await OpenclawSignal.findAll({ where: { id: signalIds }, attributes: ['id', 'title', 'source_url'] })
       : [];
-    const signalMap = new Map(signals.map((s: any) => [s.id, s]));
+    const signalMap = new Map(signals.map((s: any) => [s.id, s.toJSON()]));
 
     const items = responses.map((r: any) => {
-      const signal = signalMap.get(r.signal_id);
+      const signal: any = signalMap.get(r.signal_id) || {};
       return {
         id: r.id,
         platform: r.platform,
         content: r.content,
-        signal_title: signal?.title || '',
-        signal_url: signal?.source_url || '',
+        signal_title: signal.title || '',
+        signal_url: signal.source_url || '',
         tracked_url: r.tracked_url || '',
         created_at: r.created_at,
         post_status: r.post_status,
