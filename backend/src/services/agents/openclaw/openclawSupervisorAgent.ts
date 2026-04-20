@@ -175,6 +175,26 @@ export async function runOpenclawSupervisorAgent(
       });
     }
 
+    // 4b. Expire stale responses (>72h in ready_to_post/approved) — source articles
+    // are likely deleted by then. Prevents backlog of unpostable content.
+    const staleResponseCutoff = new Date(Date.now() - 72 * 3600000);
+    const [staleResponseCount] = await OpenclawResponse.update(
+      { post_status: 'rejected', updated_at: new Date() } as any,
+      { where: { post_status: { [Op.in]: ['ready_to_post', 'approved'] }, created_at: { [Op.lt]: staleResponseCutoff } } },
+    );
+    if (staleResponseCount > 0) {
+      actions.push({
+        campaign_id: '',
+        action: 'expire_stale_responses',
+        reason: `Expired ${staleResponseCount} responses older than 72h (source articles likely deleted)`,
+        confidence: 1,
+        before_state: null,
+        after_state: { expired: staleResponseCount },
+        result: 'success',
+        entity_type: 'system',
+      });
+    }
+
     // 5. Circuit breaker status summary
     try {
       const circuitStatuses = await getAllCircuitStatus();
