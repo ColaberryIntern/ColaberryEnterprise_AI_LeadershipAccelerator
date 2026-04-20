@@ -1509,13 +1509,28 @@ function enrichCapability(cap: any) {
     gaps: allGaps,
     is_complete: processComplete,
     execution_plan: executionPlan,
-    usability: isPageBP
-      ? { backend: 'n/a', frontend: (cap as any).frontend_route ? 'ready' : 'missing', agent: 'n/a', usable: isPageBPComplete, why_not: isPageBPComplete ? [] : ['Connect a frontend route to mark as ready'] }
-      // Frontend status: for code BPs, only mark as 'ready' if the BP has an
-      // explicit frontend_route (verified mapping) — not just keyword-matched files.
-      // This prevents code BPs like "SLAs" from showing green Frontend when they
-      // don't have a dedicated page.
-      : { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: ((cap as any).frontend_route || (cap as any).source === 'frontend_page') ? 'ready' : (hasFrontend || effectiveFrontend) ? 'partial' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
+    // Use backend_context (from actual source code reading) as the source of truth
+    // when available, falling back to keyword-matched file detection.
+    usability: (() => {
+      const bCtx = (cap as any).backend_context;
+      const ctxHasBackend = bCtx?.api_routes?.length > 0;
+      const ctxHasAgents = bCtx?.agents?.length > 0;
+      const ctxHasModels = bCtx?.models?.length > 0;
+      const realBackend = hasBackend || effectiveBackend || ctxHasBackend;
+      const realAgents = hasAgents || effectiveAgents || ctxHasAgents;
+      const realFrontend = (cap as any).frontend_route || (cap as any).source === 'frontend_page';
+
+      if (isPageBP) {
+        return { backend: ctxHasBackend ? 'ready' : 'n/a', frontend: realFrontend ? 'ready' : 'missing', agent: ctxHasAgents ? 'ready' : 'n/a', usable: isPageBPComplete, why_not: isPageBPComplete ? [] : ['Connect a frontend route to mark as ready'] };
+      }
+      return {
+        backend: realBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing',
+        frontend: realFrontend ? 'ready' : (hasFrontend || effectiveFrontend) ? 'partial' : 'missing',
+        agent: realAgents ? 'ready' : 'missing',
+        usable: processComplete,
+        why_not,
+      };
+    })(),
     implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
     // Autonomous Enhancements — separate layer for system-generated requirements
@@ -1558,8 +1573,8 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     } catch {}
     // Inject last_execution from Capability models (hierarchy doesn't include JSONB fields)
     const { Capability: CapabilityModel } = await import('../models');
-    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route'] });
-    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route }]));
+    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context'] });
+    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context }]));
     const projectMode = (project as any).target_mode || 'production';
     // Load campaign mode overrides for capabilities that have linked campaigns
     let campaignModeMap = new Map<string, string>();
@@ -1602,6 +1617,7 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         cap.execution_profile = extra.execution_profile || 'production';
         cap.strategy_template = extra.strategy_template || 'default';
         if ((extra as any).frontend_route) cap.frontend_route = (extra as any).frontend_route;
+        if ((extra as any).backend_context) cap.backend_context = (extra as any).backend_context;
       }
     });
 
