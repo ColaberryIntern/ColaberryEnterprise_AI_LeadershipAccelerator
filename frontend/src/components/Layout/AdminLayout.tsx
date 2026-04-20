@@ -42,6 +42,7 @@ const adminNavSections: NavSection[] = [
   ]},
   { label: null, links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'envelope-open' },
+    { path: '/admin/content-queue', label: 'Content Queue', icon: 'clipboard2-check' },
   ]},
   { label: 'System', links: [
     { path: '/admin/tickets', label: 'Tickets', icon: 'clipboard-check' },
