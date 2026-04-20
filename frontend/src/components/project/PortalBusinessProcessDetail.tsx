@@ -640,19 +640,24 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
             {backendCtx && (
               <div>
                 {/* API Endpoints */}
+                {/* API Endpoints — with descriptions + middleware */}
                 {backendCtx.api_routes?.length > 0 && (
                   <div className="mb-3">
-                    <div className="fw-medium small mb-1"><i className="bi bi-signpost me-1" style={{ color: 'var(--color-info)' }}></i>API Endpoints</div>
+                    <div className="fw-medium small mb-1"><i className="bi bi-signpost me-1" style={{ color: 'var(--color-info)' }}></i>API Endpoints ({backendCtx.api_routes.length})</div>
                     <div className="table-responsive">
                       <table className="table table-sm mb-0" style={{ fontSize: 10 }}>
-                        <thead className="table-light"><tr><th style={{ width: 60 }}>Method</th><th>Path</th><th>File</th></tr></thead>
+                        <thead className="table-light"><tr><th style={{ width: 60 }}>Method</th><th>Path</th><th>Details</th><th>File</th></tr></thead>
                         <tbody>
-                          {backendCtx.api_routes.slice(0, 20).map((r: any, i: number) => {
+                          {backendCtx.api_routes.slice(0, 25).map((r: any, i: number) => {
                             const methodColors: Record<string, string> = { GET: '#10b981', POST: '#3b82f6', PUT: '#f59e0b', DELETE: '#ef4444', PATCH: '#8b5cf6' };
                             return (
                               <tr key={i}>
                                 <td><span className="badge" style={{ background: `${methodColors[r.method] || '#6b7280'}20`, color: methodColors[r.method] || '#6b7280', fontSize: 9 }}>{r.method}</span></td>
                                 <td style={{ fontFamily: 'monospace' }}>{r.path}</td>
+                                <td>
+                                  {r.description && <div className="text-muted" style={{ fontSize: 9 }}>{r.description}</div>}
+                                  {r.middleware?.length > 0 && <div style={{ fontSize: 8 }}>{r.middleware.map((mw: string, j: number) => <span key={j} className="badge me-1" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 8 }}>{mw}</span>)}</div>}
+                                </td>
                                 <td className="text-muted">{r.source_file?.split('/').pop()}</td>
                               </tr>
                             );
@@ -663,29 +668,64 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   </div>
                 )}
 
-                {/* Data Models */}
+                {/* Data Models — full table schema */}
                 {backendCtx.models?.length > 0 && (
                   <div className="mb-3">
-                    <div className="fw-medium small mb-1"><i className="bi bi-database me-1" style={{ color: 'var(--color-accent)' }}></i>Data Models</div>
-                    <div className="d-flex flex-wrap gap-2">
-                      {backendCtx.models.map((m: any, i: number) => (
-                        <div key={i} className="p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, border: '1px solid var(--color-border)', fontSize: 10 }}>
-                          <div className="fw-semibold" style={{ color: 'var(--color-primary)' }}>{m.name} <span className="text-muted fw-normal">({m.table_name})</span></div>
-                          <div className="text-muted mt-1" style={{ fontFamily: 'monospace', fontSize: 9 }}>{m.fields?.slice(0, 10).join(', ')}{m.fields?.length > 10 ? ` +${m.fields.length - 10}` : ''}</div>
+                    <div className="fw-medium small mb-1"><i className="bi bi-database me-1" style={{ color: 'var(--color-accent)' }}></i>Data Models ({backendCtx.models.length})</div>
+                    {backendCtx.models.map((m: any, i: number) => (
+                      <div key={i} className="mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <span className="fw-semibold" style={{ fontSize: 11, color: 'var(--color-primary)' }}>{m.name}</span>
+                            <span className="text-muted ms-1" style={{ fontSize: 10 }}>({m.table_name})</span>
+                          </div>
+                          <span className="text-muted" style={{ fontSize: 9 }}>{m.source_file?.split('/').pop()}</span>
                         </div>
-                      ))}
-                    </div>
+                        {m.description && <div className="text-muted mb-1" style={{ fontSize: 9 }}>{m.description}</div>}
+                        {m.associations?.length > 0 && <div className="mb-1">{m.associations.map((a: string, j: number) => <span key={j} className="badge me-1" style={{ background: '#3b82f620', color: '#3b82f6', fontSize: 8 }}>{a}</span>)}</div>}
+                        <table className="table table-sm mb-0" style={{ fontSize: 9 }}>
+                          <thead><tr style={{ borderBottom: '1px solid var(--color-border)' }}><th style={{ padding: '2px 4px' }}>Field</th><th style={{ padding: '2px 4px' }}>Type</th><th style={{ padding: '2px 4px' }}>Details</th></tr></thead>
+                          <tbody>
+                            {(m.fields || []).slice(0, 20).map((f: any, j: number) => (
+                              <tr key={j}>
+                                <td style={{ padding: '1px 4px', fontFamily: 'monospace' }}>{typeof f === 'string' ? f : f.name}{f.primary_key ? ' 🔑' : ''}</td>
+                                <td style={{ padding: '1px 4px', color: 'var(--color-info)' }}>{typeof f === 'string' ? '' : f.type}</td>
+                                <td style={{ padding: '1px 4px' }} className="text-muted">
+                                  {typeof f !== 'string' && <>
+                                    {f.nullable === false && <span className="me-1">NOT NULL</span>}
+                                    {f.default_value && <span className="me-1">default: {f.default_value}</span>}
+                                    {f.references && <span>→ {f.references}</span>}
+                                  </>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* Agents */}
+                {/* Agents — with descriptions + method details */}
                 {backendCtx.agents?.length > 0 && (
                   <div className="mb-3">
-                    <div className="fw-medium small mb-1"><i className="bi bi-cpu me-1" style={{ color: '#8b5cf6' }}></i>Agents</div>
+                    <div className="fw-medium small mb-1"><i className="bi bi-cpu me-1" style={{ color: '#8b5cf6' }}></i>Agents ({backendCtx.agents.length})</div>
                     {backendCtx.agents.map((a: any, i: number) => (
-                      <div key={i} className="d-flex align-items-center gap-2 mb-1" style={{ fontSize: 10 }}>
-                        <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 9 }}>{a.name}</span>
-                        {a.capabilities?.length > 0 && <span className="text-muted">{a.capabilities.slice(0, 5).join(', ')}</span>}
+                      <div key={i} className="mb-2 p-2" style={{ background: '#faf5ff', borderRadius: 6, border: '1px solid #8b5cf620' }}>
+                        <div className="fw-semibold" style={{ fontSize: 11, color: '#8b5cf6' }}>{a.name}</div>
+                        {a.description && <div className="text-muted mb-1" style={{ fontSize: 9 }}>{a.description}</div>}
+                        <span className="text-muted" style={{ fontSize: 9 }}>{a.source_file?.split('/').pop()}</span>
+                        {a.methods?.length > 0 && (
+                          <div className="mt-1">
+                            {a.methods.slice(0, 8).map((m2: any, j: number) => (
+                              <div key={j} style={{ fontSize: 9, fontFamily: 'monospace' }} className="d-flex gap-1">
+                                <span style={{ color: '#8b5cf6' }}>{m2.name}</span>
+                                <span className="text-muted">({m2.params || ''})</span>
+                                {m2.description && <span className="text-muted ms-1">— {m2.description}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

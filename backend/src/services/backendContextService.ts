@@ -17,19 +17,34 @@ export interface ApiRoute {
   method: string;
   path: string;
   source_file: string;
+  middleware?: string[];    // e.g. ['requireAdmin', 'validateBody']
+  description?: string;    // from inline comments
+}
+
+export interface ModelField {
+  name: string;
+  type: string;            // e.g. 'UUID', 'STRING(255)', 'JSONB', 'BOOLEAN'
+  nullable?: boolean;
+  default_value?: string;
+  primary_key?: boolean;
+  references?: string;     // FK reference
 }
 
 export interface DataModel {
   name: string;
   table_name: string;
-  fields: string[];
+  fields: ModelField[];
   source_file: string;
+  description?: string;
+  associations?: string[]; // e.g. ['hasMany(Feature)', 'belongsTo(Project)']
 }
 
 export interface AgentInfo {
   name: string;
   capabilities: string[];
   source_file: string;
+  description?: string;    // from class/file comments
+  methods?: Array<{ name: string; params: string; description?: string }>;
 }
 
 export interface BackendContext {
@@ -52,28 +67,49 @@ const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 function extractRoutes(content: string, filePath: string): ApiRoute[] {
   const routes: ApiRoute[] = [];
   const seen = new Set<string>();
+  const lines = content.split('\n');
 
-  // Express: router.get('/path', ...) or app.post('/path', ...)
-  const expressRe = /(?:router|app|r)\.(get|post|put|delete|patch)\(\s*['"`]([^'"`]+)['"`]/gi;
-  let m;
-  while ((m = expressRe.exec(content)) !== null) {
-    const key = `${m[1].toUpperCase()} ${m[2]}`;
-    if (!seen.has(key)) { seen.add(key); routes.push({ method: m[1].toUpperCase(), path: m[2], source_file: filePath }); }
-  }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
 
-  // FastAPI / Flask: @app.get("/path") or @router.post("/path")
-  const pyRe = /@(?:app|router)\.(get|post|put|delete|patch)\(\s*['"]([^'"]+)['"]/gi;
-  while ((m = pyRe.exec(content)) !== null) {
-    const key = `${m[1].toUpperCase()} ${m[2]}`;
-    if (!seen.has(key)) { seen.add(key); routes.push({ method: m[1].toUpperCase(), path: m[2], source_file: filePath }); }
-  }
+    // Express: router.get('/path', middleware1, middleware2, async (req, res) => {
+    const expressMatch = line.match(/(?:router|app|r)\.(get|post|put|delete|patch)\(\s*['"`]([^'"`]+)['"`](?:\s*,\s*([^{]+))?\s*/i);
+    if (expressMatch) {
+      const method = expressMatch[1].toUpperCase();
+      const path = expressMatch[2];
+      const key = `${method} ${path}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // Extract middleware from the handler chain
+      const middlewareStr = expressMatch[3] || '';
+      const middleware = middlewareStr.split(',').map(s => s.trim()).filter(s => s && !s.startsWith('async') && !s.startsWith('(') && !s.startsWith('function'));
+      // Look for comment above the route (description)
+      let description = '';
+      for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+        const prev = lines[j].trim();
+        if (prev.startsWith('//') || prev.startsWith('*') || prev.startsWith('/**')) {
+          description = prev.replace(/^\/\*\*?\s*|\*\/\s*$|^\*\s*|^\/\/\s*/g, '').trim();
+          if (description) break;
+        } else if (prev && !prev.startsWith('*')) break;
+      }
+      routes.push({ method, path, source_file: filePath, middleware: middleware.length > 0 ? middleware : undefined, description: description || undefined });
+      continue;
+    }
 
-  // Go: http.HandleFunc("/path", handler) or r.GET("/path", ...)
-  const goRe = /(?:HandleFunc|Handle|GET|POST|PUT|DELETE|PATCH)\(\s*['"]([^'"]+)['"]/gi;
-  while ((m = goRe.exec(content)) !== null) {
-    const method = m[0].match(/GET|POST|PUT|DELETE|PATCH/i)?.[0]?.toUpperCase() || 'GET';
-    const key = `${method} ${m[1]}`;
-    if (!seen.has(key)) { seen.add(key); routes.push({ method, path: m[1], source_file: filePath }); }
+    // FastAPI / Flask
+    const pyMatch = line.match(/@(?:app|router)\.(get|post|put|delete|patch)\(\s*['"]([^'"]+)['"]/i);
+    if (pyMatch) {
+      const key = `${pyMatch[1].toUpperCase()} ${pyMatch[2]}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        let desc = '';
+        if (i + 2 < lines.length) {
+          const docLine = lines[i + 2]?.trim();
+          if (docLine?.startsWith('"""') || docLine?.startsWith("'''")) desc = docLine.replace(/['"]{3}/g, '').trim();
+        }
+        routes.push({ method: pyMatch[1].toUpperCase(), path: pyMatch[2], source_file: filePath, description: desc || undefined });
+      }
+    }
   }
 
   return routes;
@@ -87,61 +123,77 @@ function extractModels(content: string, filePath: string): DataModel[] {
   const models: DataModel[] = [];
   const fileName = filePath.split('/').pop()?.replace(/\.(ts|js|py|go)$/, '') || '';
 
-  // Sequelize: tableName + DataTypes fields
+  // Extract file-level description from first comment block
+  const descMatch = content.match(/^\/\*\*\s*\n\s*\*\s*(.+?)(?:\n|\*\/)/);
+  const fileDesc = descMatch ? descMatch[1].trim() : undefined;
+
+  // Extract associations (Sequelize)
+  const associations: string[] = [];
+  const assocRe = /(?:hasMany|hasOne|belongsTo|belongsToMany)\((\w+)/g;
+  let am;
+  while ((am = assocRe.exec(content)) !== null) associations.push(am[0]);
+
+  // Sequelize: tableName + DataTypes fields with full detail
   const tableMatch = content.match(/tableName:\s*['"]([^'"]+)['"]/);
   if (tableMatch) {
-    const fields: string[] = [];
-    const fieldRe = /(\w+):\s*\{?\s*type:\s*DataTypes\.\w+/g;
-    let m;
-    while ((m = fieldRe.exec(content)) !== null) fields.push(m[1]);
-    // Also catch simple field definitions: fieldName: DataTypes.STRING
-    const simpleRe = /(\w+):\s*DataTypes\.\w+/g;
-    while ((m = simpleRe.exec(content)) !== null) {
-      if (!fields.includes(m[1])) fields.push(m[1]);
+    const fields: ModelField[] = [];
+    // Match field definitions: fieldName: { type: DataTypes.TYPE, allowNull: ..., defaultValue: ... }
+    const fieldBlockRe = /(\w+):\s*\{([^}]+)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = fieldBlockRe.exec(content)) !== null) {
+      const fieldName = m[1];
+      const block = m[2];
+      const typeMatch = block.match(/type:\s*DataTypes\.(\w+(?:\([^)]*\))?)/);
+      if (!typeMatch) continue;
+      const field: ModelField = { name: fieldName, type: typeMatch[1] };
+      if (/allowNull:\s*true/i.test(block)) field.nullable = true;
+      if (/allowNull:\s*false/i.test(block)) field.nullable = false;
+      if (/primaryKey:\s*true/i.test(block)) field.primary_key = true;
+      const defMatch = block.match(/defaultValue:\s*(?:DataTypes\.)?(\w+(?:\([^)]*\))?|'[^']*'|"[^"]*"|\d+|true|false|null)/);
+      if (defMatch) field.default_value = defMatch[1];
+      const refMatch = block.match(/references:\s*\{[^}]*model:\s*['"](\w+)['"]/);
+      if (refMatch) field.references = refMatch[1];
+      fields.push(field);
     }
-    models.push({ name: fileName, table_name: tableMatch[1], fields: fields.slice(0, 20), source_file: filePath });
+    // Also catch simple: fieldName: DataTypes.TYPE
+    const simpleRe = /(\w+):\s*DataTypes\.(\w+(?:\([^)]*\))?)\s*[,\n]/g;
+    while ((m = simpleRe.exec(content)) !== null) {
+      if (!fields.find(f => f.name === m[1])) {
+        fields.push({ name: m[1], type: m[2] });
+      }
+    }
+    models.push({ name: fileName, table_name: tableMatch[1], fields: fields.slice(0, 30), source_file: filePath, description: fileDesc, associations: associations.length > 0 ? associations : undefined });
     return models;
   }
 
-  // Prisma: model Name { field Type }
+  // Prisma: model Name { field Type @attributes }
   const prismaRe = /model\s+(\w+)\s*\{([^}]+)\}/g;
   let pm;
   while ((pm = prismaRe.exec(content)) !== null) {
-    const fields = pm[2].split('\n').map(l => l.trim().split(/\s+/)[0]).filter(f => f && !f.startsWith('//') && !f.startsWith('@'));
-    models.push({ name: pm[1], table_name: pm[1].toLowerCase() + 's', fields: fields.slice(0, 20), source_file: filePath });
+    const fields: ModelField[] = pm[2].split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//') && !l.startsWith('@')).map(l => {
+      const parts = l.split(/\s+/);
+      const field: ModelField = { name: parts[0], type: parts[1] || 'unknown' };
+      if (l.includes('@id')) field.primary_key = true;
+      if (l.includes('?')) field.nullable = true;
+      if (l.includes('@default')) { const dm = l.match(/@default\(([^)]+)\)/); if (dm) field.default_value = dm[1]; }
+      if (l.includes('@relation')) { const rm = l.match(/@relation.*references:\s*\[(\w+)\]/); if (rm) field.references = rm[1]; }
+      return field;
+    });
+    models.push({ name: pm[1], table_name: pm[1].toLowerCase() + 's', fields: fields.slice(0, 30), source_file: filePath, description: fileDesc });
   }
 
-  // Django: class Name(models.Model)
-  const djangoRe = /class\s+(\w+)\((?:models\.Model|Base)\)/g;
-  let dm;
-  while ((dm = djangoRe.exec(content)) !== null) {
-    const fields: string[] = [];
-    const fieldRe = /(\w+)\s*=\s*(?:models\.|Column\()/g;
-    let fm;
-    while ((fm = fieldRe.exec(content)) !== null) fields.push(fm[1]);
-    models.push({ name: dm[1], table_name: dm[1].toLowerCase() + 's', fields: fields.slice(0, 20), source_file: filePath });
-  }
-
-  // SQLAlchemy: __tablename__
-  const saMatch = content.match(/__tablename__\s*=\s*['"]([^'"]+)['"]/);
-  if (saMatch) {
-    const fields: string[] = [];
-    const colRe = /(\w+)\s*=\s*(?:db\.)?Column\(/g;
-    let cm;
-    while ((cm = colRe.exec(content)) !== null) fields.push(cm[1]);
-    models.push({ name: fileName, table_name: saMatch[1], fields: fields.slice(0, 20), source_file: filePath });
-  }
-
-  // Fallback: if file is in models/ dir and has class/interface with fields
-  if (models.length === 0 && filePath.includes('model')) {
+  // Fallback: TypeScript interface/class with typed fields
+  if (models.length === 0) {
     const classMatch = content.match(/(?:class|interface)\s+(\w+)/);
     if (classMatch) {
-      const fields: string[] = [];
-      const declRe = /(?:declare\s+)?(\w+)(?:\?)?:\s*(?:string|number|boolean|Date|any|Record|Array)/g;
+      const fields: ModelField[] = [];
+      const declRe = /(?:declare\s+)?(\w+)(\?)?\s*:\s*(string|number|boolean|Date|any|Record<[^>]+>|Array<[^>]+>|\w+(?:\[\])?)/g;
       let dm2;
-      while ((dm2 = declRe.exec(content)) !== null) fields.push(dm2[1]);
+      while ((dm2 = declRe.exec(content)) !== null) {
+        fields.push({ name: dm2[1], type: dm2[3], nullable: dm2[2] === '?' });
+      }
       if (fields.length > 0) {
-        models.push({ name: classMatch[1], table_name: classMatch[1].toLowerCase().replace(/model$/, '') + 's', fields: fields.slice(0, 20), source_file: filePath });
+        models.push({ name: classMatch[1], table_name: classMatch[1].toLowerCase().replace(/model$/, '') + 's', fields: fields.slice(0, 30), source_file: filePath, description: fileDesc });
       }
     }
   }
@@ -157,27 +209,72 @@ function extractAgents(content: string, filePath: string): AgentInfo[] {
   const agents: AgentInfo[] = [];
   const fileName = filePath.split('/').pop()?.replace(/\.(ts|js|py)$/, '') || '';
 
+  // Extract file-level description from first comment block
+  let fileDesc = '';
+  const descMatch = content.match(/^\/\*\*\s*\n\s*\*\s*(.+?)(?:\n|\*\/)/);
+  if (descMatch) fileDesc = descMatch[1].trim();
+  // Also try single-line comment at top
+  if (!fileDesc) {
+    const lineDesc = content.match(/^\/\/\s*(.+)/);
+    if (lineDesc) fileDesc = lineDesc[1].trim();
+  }
+
+  const lines = content.split('\n');
+
   // Class-based agents
   const classRe = /(?:class|function)\s+(\w*Agent\w*)/g;
   let m;
   while ((m = classRe.exec(content)) !== null) {
-    const caps: string[] = [];
-    // Extract method names as capabilities
-    const methodRe = /(?:async\s+)?(\w+)\s*\([^)]*\)\s*(?::\s*\w+\s*)?\{/g;
-    let mm;
-    while ((mm = methodRe.exec(content)) !== null) {
-      if (!['constructor', 'toString', 'valueOf'].includes(mm[1])) caps.push(mm[1]);
+    const methods: Array<{ name: string; params: string; description?: string }> = [];
+    // Extract method definitions with parameters
+    for (let i = 0; i < lines.length; i++) {
+      const methodMatch = lines[i].match(/(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*(?::\s*[^{]+)?\s*\{/);
+      if (methodMatch && !['constructor', 'toString', 'valueOf', 'if', 'for', 'while', 'switch', 'catch'].includes(methodMatch[1])) {
+        let methodDesc = '';
+        for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+          const prev = lines[j].trim();
+          if (prev.startsWith('//') || prev.startsWith('*')) {
+            methodDesc = prev.replace(/^\/\*\*?\s*|\*\/\s*$|^\*\s*|^\/\/\s*/g, '').trim();
+            if (methodDesc) break;
+          } else if (prev && !prev.startsWith('*')) break;
+        }
+        methods.push({ name: methodMatch[1], params: methodMatch[2].trim().substring(0, 80), description: methodDesc || undefined });
+      }
     }
-    agents.push({ name: m[1], capabilities: caps.slice(0, 10), source_file: filePath });
+    agents.push({
+      name: m[1],
+      capabilities: methods.map(m2 => m2.name).slice(0, 10),
+      source_file: filePath,
+      description: fileDesc || undefined,
+      methods: methods.slice(0, 10),
+    });
   }
 
   // Exported functions in agent files
   if (agents.length === 0 && /agent/i.test(filePath)) {
-    const exportRe = /export\s+(?:async\s+)?function\s+(\w+)/g;
-    const caps: string[] = [];
-    while ((m = exportRe.exec(content)) !== null) caps.push(m[1]);
-    if (caps.length > 0) {
-      agents.push({ name: fileName, capabilities: caps.slice(0, 10), source_file: filePath });
+    const methods: Array<{ name: string; params: string; description?: string }> = [];
+    for (let i = 0; i < lines.length; i++) {
+      const exportMatch = lines[i].match(/export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/);
+      if (exportMatch) {
+        let methodDesc = '';
+        for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+          const prev = lines[j].trim();
+          if (prev.startsWith('//') || prev.startsWith('*')) {
+            methodDesc = prev.replace(/^\/\*\*?\s*|\*\/\s*$|^\*\s*|^\/\/\s*/g, '').trim();
+            if (methodDesc) break;
+          } else if (prev) break;
+        }
+        methods.push({ name: exportMatch[1], params: exportMatch[2].trim().substring(0, 80), description: methodDesc || undefined });
+      }
+    }
+    if (methods.length > 0) {
+      agents.push({
+        name: fileName,
+        capabilities: methods.map(m2 => m2.name),
+        source_file: filePath,
+        description: fileDesc || undefined,
+        methods: methods.slice(0, 10),
+      });
     }
   }
 
