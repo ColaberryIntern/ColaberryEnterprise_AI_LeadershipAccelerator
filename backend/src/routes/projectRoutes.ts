@@ -3275,18 +3275,9 @@ router.put('/api/portal/project/business-processes/:id/frontend-route', requireP
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { route } = req.body;
-    // Validate route exists in project's repo (allow null to clear)
-    if (route) {
-      const { getConnection } = await import('../services/githubService');
-      const conn = await getConnection(req.participant!.sub);
-      const fileTree: string[] = conn?.file_tree_json?.tree?.filter((t: any) => t.type === 'blob').map((t: any) => t.path) || [];
-      if (fileTree.length > 0) {
-        const { discoverFrontendPages } = await import('../services/frontendPageDiscovery');
-        const pages = discoverFrontendPages(fileTree);
-        const validRoutes = new Set(pages.map(p => p.route));
-        if (!validRoutes.has(route)) { res.status(400).json({ error: 'Route not found in project repo' }); return; }
-      }
-    }
+    // Accept any route the user sets — this is a manual override.
+    // Previously validated against discovered routes, but that blocked
+    // legitimate hash routes (/#/security) and custom paths.
     const { setFrontendRoute } = await import('../services/frontendRouteMapper');
     await setFrontendRoute(cap.id, route || null);
     res.json({ frontend_route: route || null });

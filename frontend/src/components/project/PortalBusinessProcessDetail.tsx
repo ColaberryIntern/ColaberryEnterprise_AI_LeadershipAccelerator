@@ -300,15 +300,28 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                   <select className="form-select form-select-sm" style={{ fontSize: 10, width: 'auto', maxWidth: 200 }}
                     value={p.frontend_route || ''}
                     onChange={async (e) => {
+                      let newRoute = e.target.value;
+                      if (newRoute === '__custom__') {
+                        const custom = prompt('Enter the route path (e.g., /#/security or /admin/dashboard):');
+                        if (!custom) return;
+                        newRoute = custom.trim();
+                      }
                       try {
                         const portalApi = (await import('../../utils/portalApi')).default;
-                        await portalApi.put(`/api/portal/project/business-processes/${processId}/frontend-route`, { route: e.target.value || null });
+                        await portalApi.put(`/api/portal/project/business-processes/${processId}/frontend-route`, { route: newRoute || null });
+                        // Show confirmation
+                        const el = document.createElement('div');
+                        el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:var(--color-primary);color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-check-circle me-1"></i>Route saved: ${newRoute || '/'}</div>`;
+                        document.body.appendChild(el); setTimeout(() => el.remove(), 2000);
                         load();
-                      } catch {}
+                      } catch (err: any) {
+                        const el = document.createElement('div');
+                        el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#ef4444;color:#fff;padding:8px 16px;border-radius:8px;font-size:11px"><i class="bi bi-x-circle me-1"></i>Failed to save route</div>`;
+                        document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+                      }
                     }}>
                     <option value="">/ (home)</option>
                     {(() => {
-                      // Ensure the BP's own route appears in the dropdown even if format differs
                       const routes = [...projectRoutes];
                       const bpRoute = p.frontend_route || '';
                       if (bpRoute && !routes.includes(bpRoute)) routes.push(bpRoute);
@@ -316,7 +329,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                         <option key={r} value={r}>{r}</option>
                       ));
                     })()}
+                    <option value="__custom__">Custom route...</option>
                   </select>
+                  {p.frontend_route === '__custom__' || false ? null : null /* custom handled in onChange */}
                 </div>
                 <div style={{ position: 'relative' }}>
                   <>
