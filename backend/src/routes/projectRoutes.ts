@@ -1511,7 +1511,11 @@ function enrichCapability(cap: any) {
     execution_plan: executionPlan,
     usability: isPageBP
       ? { backend: 'n/a', frontend: (cap as any).frontend_route ? 'ready' : 'missing', agent: 'n/a', usable: isPageBPComplete, why_not: isPageBPComplete ? [] : ['Connect a frontend route to mark as ready'] }
-      : { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: hasFrontend ? 'ready' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
+      // Frontend status: for code BPs, only mark as 'ready' if the BP has an
+      // explicit frontend_route (verified mapping) — not just keyword-matched files.
+      // This prevents code BPs like "SLAs" from showing green Frontend when they
+      // don't have a dedicated page.
+      : { backend: hasBackend ? (reqCoverage > 70 ? 'ready' : 'partial') : 'missing', frontend: ((cap as any).frontend_route || (cap as any).source === 'frontend_page') ? 'ready' : (hasFrontend || effectiveFrontend) ? 'partial' : 'missing', agent: hasAgents ? 'ready' : 'missing', usable: processComplete, why_not },
     implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
     // Autonomous Enhancements — separate layer for system-generated requirements
