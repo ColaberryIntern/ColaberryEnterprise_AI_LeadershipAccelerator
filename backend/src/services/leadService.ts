@@ -32,8 +32,21 @@ async function findLeadByNormalizedPhone(phone: string | undefined, excludeId?: 
 
 const TEST_BYPASS_PHONES = ['6825975784'];
 
+// Sources that should NOT auto-enroll in campaigns — external sites
+// with their own marketing flows. Only enterprise.colaberry.ai leads
+// get auto-enrolled. Add source slugs here to exclude.
+const EXTERNAL_SOURCES = ['colaberry', 'trustbeforeintelligence'];
+
 async function tryEnrollInWarmCampaign(lead: any) {
   if (!lead.phone || !lead.phone.trim()) return;
+
+  // Don't auto-enroll leads from external website sources
+  const leadSource = (lead.source || '').toLowerCase();
+  if (EXTERNAL_SOURCES.some(s => leadSource.includes(s))) {
+    console.log(`[LeadService] Skipping auto-enrollment for external source lead ${lead.id} (${leadSource})`);
+    return;
+  }
+
   try {
     const { CampaignLead } = require('../models');
     const warmCampaign = await Campaign.findOne({
