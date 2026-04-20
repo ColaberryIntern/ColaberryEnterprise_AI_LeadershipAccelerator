@@ -90,10 +90,13 @@ export function evaluateResponseQuality(
     score -= 20;
   }
 
-  // Sign-off check: all comment-platform responses must have LinkedIn sign-off
-  if (!content.includes('ali-muwwakkil on LinkedIn') && !content.includes('LinkedIn: ali-muwwakkil')) {
-    reasons.push('Missing LinkedIn sign-off');
-    score -= 30;
+  // Sign-off check: only LinkedIn responses need a LinkedIn sign-off.
+  // Medium, Dev.to, Hashnode, Product Hunt should NOT require this.
+  if (platform === 'linkedin' || platform === 'linkedin_comments') {
+    if (!content.includes('ali-muwwakkil on LinkedIn') && !content.includes('LinkedIn: ali-muwwakkil')) {
+      reasons.push('Missing LinkedIn sign-off');
+      score -= 30;
+    }
   }
 
   // Value check: response should have substance beyond just a tracked link
@@ -142,10 +145,12 @@ export function evaluateArticleQuality(content: string, platform: string): Quali
     score -= 20;
   }
 
-  // Sign-off check
-  if (!content.includes('ali-muwwakkil on LinkedIn') && !content.includes('LinkedIn: ali-muwwakkil')) {
-    reasons.push('Missing LinkedIn sign-off');
-    score -= 15;
+  // Sign-off check — only for LinkedIn articles
+  if (platform === 'linkedin' || platform === 'linkedin_comments') {
+    if (!content.includes('ali-muwwakkil on LinkedIn') && !content.includes('LinkedIn: ali-muwwakkil')) {
+      reasons.push('Missing LinkedIn sign-off');
+      score -= 15;
+    }
   }
 
   // Spam patterns

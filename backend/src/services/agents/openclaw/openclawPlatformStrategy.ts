@@ -84,10 +84,18 @@ export function getStrategy(platform: string): PlatformStrategyType {
 // ─── Link Control ────────────────────────────────────────────────────────────
 
 export function isLinkAllowed(platform: string): boolean {
-  // Only allow links on AUTHORITY_BROADCAST platforms (LinkedIn, Medium, YouTube)
-  // where we publish our own content. Comment-based platforms (HYBRID + PASSIVE)
-  // hide or spam-filter comments with promotional links from new accounts.
-  return getStrategy(platform) === 'AUTHORITY_BROADCAST';
+  // Allow links on AUTHORITY_BROADCAST (LinkedIn, Medium, YouTube) and
+  // HYBRID_ENGAGEMENT platforms that support articles (Dev.to, Hashnode).
+  // Articles from our own account can include a CTA link without being
+  // flagged as spam. Comments on other people's posts stay link-free.
+  const strategy = getStrategy(platform);
+  if (strategy === 'AUTHORITY_BROADCAST') return true;
+  if (strategy === 'HYBRID_ENGAGEMENT') {
+    // These platforms support articles where links are acceptable
+    const articlePlatforms = ['devto', 'hashnode', 'medium'];
+    return articlePlatforms.includes(platform);
+  }
+  return false;
 }
 
 // ─── LLM Prompt Instructions Per Strategy ────────────────────────────────────
