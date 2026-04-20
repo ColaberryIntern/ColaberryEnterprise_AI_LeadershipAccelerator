@@ -22,8 +22,8 @@ export async function runOpenclawBrowserWorkerAgent(
   const start = Date.now();
   const actions: AgentAction[] = [];
   const errors: string[] = [];
-  const minDelay = config.min_delay_ms || 2000;
-  const maxDelay = config.max_delay_ms || 8000;
+  const minDelay = config.min_delay_ms || 5000;
+  const maxDelay = config.max_delay_ms || 15000;
 
   try {
     // ── Recovery sweep: re-queue orphaned ready_to_post responses on auto platforms ──
@@ -155,6 +155,11 @@ export async function runOpenclawBrowserWorkerAgent(
           });
 
           if (signal) await signal.update({ status: 'responded', responded_at: new Date(), updated_at: new Date() });
+        } else if (postResult.error?.includes('404') || postResult.error?.includes('no longer exists')) {
+          // Article deleted — cancel, don't retry
+          console.warn(`[OpenClaw Posting] Article gone for ${response.platform}: ${postResult.error}`);
+          await response.update({ post_status: 'rejected', updated_at: new Date() });
+          await task.update({ status: 'cancelled', error_message: `Article deleted: ${postResult.error}`, completed_at: new Date(), updated_at: new Date() });
         } else if (retryCount < MAX_RETRIES) {
           // Posting failed but retries remaining — keep task pending for next cycle
           console.warn(`[OpenClaw Posting] Failed attempt ${retryCount + 1}/${MAX_RETRIES} for ${response.platform}: ${postResult.error}`);

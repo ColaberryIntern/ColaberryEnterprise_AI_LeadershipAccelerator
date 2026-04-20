@@ -18,6 +18,19 @@ export async function postToDevTo(
   const apiKey = process.env.DEVTO_API_KEY;
   if (!apiKey) throw new Error('DEVTO_API_KEY not configured');
 
+  // First verify the article still exists
+  try {
+    await axios.get(`https://dev.to/api/v1/articles/${articleId}`, {
+      headers: { 'api-key': apiKey },
+      timeout: 10000,
+    });
+  } catch (checkErr: any) {
+    if (checkErr.response?.status === 404) {
+      throw new Error(`Dev.to article ${articleId} no longer exists (404)`);
+    }
+    // Other errors (rate limit etc.) — proceed anyway
+  }
+
   const resp = await axios.post(
     'https://dev.to/api/v1/comments',
     {
@@ -34,7 +47,13 @@ export async function postToDevTo(
       },
       timeout: 15000,
     },
-  );
+  ).catch((err: any) => {
+    if (err.response?.status === 429) {
+      const retryAfter = err.response.headers['retry-after'] || 60;
+      throw new Error(`Dev.to rate limited — retry after ${retryAfter}s`);
+    }
+    throw err;
+  });
 
   const comment = resp.data;
   const commentId = comment.id_code || comment.id;
@@ -71,20 +90,25 @@ export async function postToHashnode(
     }
   }`;
 
+  // Validate postId format (Hashnode uses MongoDB ObjectIds — 24 hex chars)
+  if (!postId || !/^[a-f0-9]{24}$/i.test(postId)) {
+    throw new Error(`Invalid Hashnode postId format: ${postId}`);
+  }
+
   const resp = await axios.post(
     'https://gql.hashnode.com',
     {
       query: mutation,
       variables: {
         input: {
-          postId,
-          contentMarkdown,
+          postId: String(postId),
+          contentMarkdown: String(contentMarkdown),
         },
       },
     },
     {
       headers: {
-        Authorization: token,
+        Authorization: token.startsWith('Bearer ') ? token : token,
         'Content-Type': 'application/json',
       },
       timeout: 15000,
@@ -93,7 +117,9 @@ export async function postToHashnode(
 
   const errors = resp.data?.errors;
   if (errors && errors.length > 0) {
-    throw new Error(`Hashnode API error: ${errors[0].message}`);
+    const errMsg = errors[0].message;
+    const extensions = errors[0].extensions ? JSON.stringify(errors[0].extensions) : '';
+    throw new Error(`Hashnode API error: ${errMsg} ${extensions}`);
   }
 
   const commentId = resp.data?.data?.addComment?.comment?.id;
