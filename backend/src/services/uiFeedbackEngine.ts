@@ -252,16 +252,26 @@ export async function augmentWithLLM(options: {
       response_format: { type: 'json_object' },
       messages: [{
         role: 'system',
-        content: 'You analyze UI elements for UX issues. Return specific, actionable feedback per element. Respond with valid JSON only.',
+        content: `You analyze a SINGLE frontend page for UX issues. You must ONLY analyze the specific page shown — do NOT reference or suggest changes to other pages in the application.
+
+CRITICAL RULES:
+- ONLY analyze elements on THIS page (${pageRoute})
+- Do NOT suggest changes to pages you cannot see
+- Do NOT mention other pages by name unless the user asked about navigation
+- Every issue must reference a specific element_id from the list provided
+- Suggestions must be implementable on THIS page only
+
+Respond with valid JSON only.`,
       }, {
         role: 'user',
-        content: `Page: ${pageRoute}
+        content: `Analyzing ONLY this page: ${pageRoute}
 ${userFeedback ? `User feedback: "${userFeedback}"` : ''}
-Elements:
+
+Elements on THIS page:
 ${elementSummary}
 
-Find UX issues NOT covered by these basic rules: missing alt text, missing labels, heading hierarchy, navigation landmarks.
-Focus on: layout, spacing, visual hierarchy, user flow, conversion optimization, enterprise readiness.
+Find UX issues for THIS page only. Do NOT suggest changes to other pages.
+Focus on: layout, spacing, visual hierarchy, user flow, data presentation, enterprise readiness.
 
 Respond: {"issues": [{"element_id": "...", "issue_type": "...", "title": "...", "description": "...", "suggestion": "...", "severity": "low|medium|high"}]}`,
       }],

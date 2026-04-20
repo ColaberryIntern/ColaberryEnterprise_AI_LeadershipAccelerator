@@ -3191,14 +3191,38 @@ router.post('/api/portal/project/business-processes/:id/analyze-page', requirePa
     // LLM augment if rules found few issues or user gave feedback
     let llmResult = { total_issues: 0, new_issues: 0, skipped_duplicates: 0, issues: [] as any[] };
     if (req.body.user_feedback || ruleResult.total_issues < 3) {
-      // Inject backend context into LLM prompt so suggestions know what data/APIs are available
+      // Auto-load backend context for LLM prompt — extract on-the-fly if not cached
       let backendPrompt = '';
       try {
         const { Capability: CapCtx } = await import('../models');
         const capCtx = await CapCtx.findByPk(cap.id, { attributes: ['backend_context'] });
-        if ((capCtx as any)?.backend_context) {
+        let ctx = (capCtx as any)?.backend_context;
+        // Auto-extract if not cached
+        if (!ctx) {
+          try {
+            const { getCapabilityHierarchy: getH } = await import('../services/projectScopeService');
+            const hier = await getH(project.id);
+            const cData = hier.find((c: any) => c.id === cap.id);
+            let repoTree2: string[] = [];
+            try {
+              const { getConnection: gc2 } = await import('../services/githubService');
+              const conn2 = await gc2(req.participant!.sub);
+              if (conn2?.file_tree_json?.tree) repoTree2 = conn2.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+            } catch {}
+            const enriched2 = cData ? enrichCapability(cData) : null;
+            const lnks = enriched2?.implementation_links || { backend: [], models: [], agents: [] };
+            // Fallback to project-wide files
+            if (lnks.backend.length === 0) lnks.backend = repoTree2.filter((f: string) => /\/(route|service|controller|handler)\b/i.test(f) && /\.(ts|js|py)$/.test(f)).slice(0, 10);
+            if (lnks.models.length === 0) lnks.models = repoTree2.filter((f: string) => /\/(model|schema|entity)\b/i.test(f) && /\.(ts|js|py)$/.test(f)).slice(0, 10);
+            if (lnks.agents.length === 0) lnks.agents = repoTree2.filter((f: string) => /agent/i.test(f) && /\.(ts|js|py)$/.test(f)).slice(0, 5);
+            const { extractBackendContext } = await import('../services/backendContextService');
+            ctx = await extractBackendContext(req.participant!.sub, lnks);
+            if (capCtx) { (capCtx as any).backend_context = ctx; (capCtx as any).changed('backend_context', true); await capCtx.save(); }
+          } catch {}
+        }
+        if (ctx) {
           const { formatForPrompt } = await import('../services/backendContextService');
-          backendPrompt = formatForPrompt((capCtx as any).backend_context);
+          backendPrompt = formatForPrompt(ctx);
         }
       } catch {}
       llmResult = await augmentWithLLM({
