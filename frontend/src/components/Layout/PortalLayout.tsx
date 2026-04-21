@@ -15,6 +15,7 @@ function PortalLayout() {
   const navItems = [
     { to: '/portal/project/blueprint', label: 'Blueprint', icon: 'bi-map' },
     { to: '/portal/project/system', label: 'System View', icon: 'bi-grid-3x3-gap' },
+    { to: '/portal/project/system-v2', label: 'V2', icon: 'bi-stars' },
     { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
   ];
 
