@@ -258,6 +258,97 @@ function generateCorySuggestions(components: SystemComponent[], systemLayers: { 
   return suggestions.slice(0, 3);
 }
 
+// ---------------------------------------------------------------------------
+// Cory Plan Engine (deterministic, from existing data)
+// ---------------------------------------------------------------------------
+
+interface CoryPlanStep {
+  id: string;
+  title: string;
+  explanation: string;
+  impact: 'High' | 'Medium' | 'Low';
+  componentId: string;
+  promptTarget: string;
+  done: boolean;
+}
+
+interface CoryPhase {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  steps: CoryPlanStep[];
+}
+
+function generateCoryPlan(components: SystemComponent[], systemLayers: { backend: boolean; frontend: boolean; agents: boolean }): CoryPhase[] {
+  const phases: CoryPhase[] = [];
+  const incomplete = components.filter(c => c.status !== 'complete');
+  if (incomplete.length === 0) return [];
+
+  // Phase 1: Foundation — backend, database, core requirements
+  const foundationSteps: CoryPlanStep[] = [];
+  if (!systemLayers.backend) {
+    const comp = incomplete[0];
+    foundationSteps.push({ id: 'plan-backend', title: 'Build backend services', explanation: 'Create API routes, services, and data processing logic.', impact: 'High', componentId: comp.id, promptTarget: 'backend_improvement', done: false });
+  }
+  const needsDb = incomplete.find(c => c.layers.backend === 'ready' && c.promptTarget === 'add_database');
+  if (needsDb) {
+    foundationSteps.push({ id: 'plan-database', title: 'Add database models', explanation: 'Set up persistent data storage for your system.', impact: 'High', componentId: needsDb.id, promptTarget: 'add_database', done: false });
+  }
+  const lowCov = incomplete.filter(c => c.completion < 50 && c.completion > 0).slice(0, 2);
+  for (const lc of lowCov) {
+    foundationSteps.push({ id: `plan-reqs-${lc.id}`, title: `Implement requirements for ${lc.name}`, explanation: `${lc.completion}% complete — fill critical functionality gaps.`, impact: 'High', componentId: lc.id, promptTarget: lc.promptTarget || 'requirement_implementation', done: false });
+  }
+  // Mark steps done if layer already exists
+  for (const s of foundationSteps) {
+    if (s.promptTarget === 'backend_improvement' && systemLayers.backend) s.done = true;
+  }
+  if (foundationSteps.length > 0) {
+    phases.push({ id: 'phase-foundation', title: 'Foundation', description: 'Core backend, data layer, and essential requirements', icon: 'bi-bricks', color: '#3b82f6', steps: foundationSteps });
+  }
+
+  // Phase 2: Usability — frontend, UI improvements
+  const usabilitySteps: CoryPlanStep[] = [];
+  if (!systemLayers.frontend) {
+    const comp = incomplete.find(c => !c.isPageBP) || incomplete[0];
+    usabilitySteps.push({ id: 'plan-frontend', title: 'Create user interface', explanation: 'Build the frontend so users can interact with your system.', impact: 'High', componentId: comp.id, promptTarget: 'frontend_exposure', done: false });
+  }
+  const pageComps = incomplete.filter(c => c.isPageBP && c.completion < 80).slice(0, 2);
+  for (const pc of pageComps) {
+    usabilitySteps.push({ id: `plan-ui-${pc.id}`, title: `Improve ${pc.name}`, explanation: 'Enhance page layout, accessibility, and user experience.', impact: 'Medium', componentId: pc.id, promptTarget: 'frontend_exposure', done: false });
+  }
+  if (systemLayers.frontend) {
+    for (const s of usabilitySteps) { if (s.promptTarget === 'frontend_exposure' && s.id === 'plan-frontend') s.done = true; }
+  }
+  if (usabilitySteps.length > 0) {
+    phases.push({ id: 'phase-usability', title: 'Usability', description: 'User interface, UX improvements, and accessibility', icon: 'bi-layout-wtf', color: '#10b981', steps: usabilitySteps });
+  }
+
+  // Phase 3: Intelligence — agents, automation, monitoring
+  const intelligenceSteps: CoryPlanStep[] = [];
+  if (!systemLayers.agents && systemLayers.backend) {
+    const comp = incomplete[0];
+    intelligenceSteps.push({ id: 'plan-agents', title: 'Add AI agents', explanation: 'Enable autonomous operation with intelligent automation.', impact: 'Medium', componentId: comp.id, promptTarget: 'agent_enhancement', done: false });
+  }
+  const needsReliability = incomplete.find(c => c.promptTarget === 'improve_reliability');
+  if (needsReliability) {
+    intelligenceSteps.push({ id: 'plan-reliability', title: 'Improve reliability', explanation: 'Add error handling, retries, and graceful failure recovery.', impact: 'Medium', componentId: needsReliability.id, promptTarget: 'improve_reliability', done: false });
+  }
+  const needsMonitoring = incomplete.find(c => c.promptTarget === 'monitoring_gap');
+  if (needsMonitoring) {
+    intelligenceSteps.push({ id: 'plan-monitoring', title: 'Add monitoring', explanation: 'Track KPIs, detect anomalies, and alert on issues.', impact: 'Low', componentId: needsMonitoring.id, promptTarget: 'monitoring_gap', done: false });
+  }
+  if (systemLayers.agents) {
+    for (const s of intelligenceSteps) { if (s.id === 'plan-agents') s.done = true; }
+  }
+  if (intelligenceSteps.length > 0) {
+    phases.push({ id: 'phase-intelligence', title: 'Intelligence', description: 'Agents, automation, monitoring, and self-improvement', icon: 'bi-cpu', color: '#8b5cf6', steps: intelligenceSteps });
+  }
+
+  return phases;
+}
+
 function transformCapabilities(bps: any[]): SystemComponent[] {
   return bps
     .filter((bp: any) => (bp.applicability_status || 'active') === 'active')
@@ -425,9 +516,11 @@ export default function SystemBlueprint() {
   // Banner state (persisted via localStorage)
   const [bannerDismissed, setBannerDismissed] = useState(() => localStorage.getItem('blueprint_banner_dismissed') === 'true');
 
-  // Autonomous mode + Cory suggestions
+  // Autonomous mode + Cory suggestions/plan
   const [autonomousMode, setAutonomousMode] = useState(false);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const [coryView, setCoryView] = useState<'plan' | 'suggestions'>('plan');
+  const [completedPlanSteps, setCompletedPlanSteps] = useState<Set<string>>(new Set());
 
   // Demo state
   const [demoActive, setDemoActive] = useState(false);
@@ -644,9 +737,36 @@ export default function SystemBlueprint() {
     || project.selected_use_case
     || 'Your AI system is being built. Select components below to view details and generate implementation prompts.';
 
-  // Cory suggestions (filtered by dismissals)
+  // Cory suggestions + plan (filtered by dismissals/completions)
   const allSuggestions = generateCorySuggestions(components, systemLayers);
   const corySuggestions = allSuggestions.filter(s => !dismissedSuggestions.has(s.id));
+  const coryPlan = generateCoryPlan(components, systemLayers).map(phase => ({
+    ...phase,
+    steps: phase.steps.map(s => ({ ...s, done: s.done || completedPlanSteps.has(s.id) })),
+  })).filter(phase => phase.steps.some(s => !s.done));
+  const totalPlanSteps = coryPlan.reduce((sum, p) => sum + p.steps.length, 0);
+  const donePlanSteps = coryPlan.reduce((sum, p) => sum + p.steps.filter(s => s.done).length, 0);
+
+  const handleApplyPlanStep = async (step: CoryPlanStep) => {
+    const beforeMetrics = { coverage: 0, maturityLevel: 0, readiness: 0 };
+    const comp = components.find(c => c.id === step.componentId);
+    if (comp) { beforeMetrics.coverage = comp.completion; beforeMetrics.maturityLevel = comp.maturityLevel; beforeMetrics.readiness = comp.completion; }
+    setBuild(prev => ({ ...prev, phase: 'generating', prompt: null, validationResult: null, beforeMetrics, pasteDetected: false }));
+    try {
+      const res = await bpApi.generatePrompt(step.componentId, step.promptTarget);
+      const promptText = res.data?.prompt_text || '';
+      await copyText(promptText);
+      showToast('Prompt copied — paste into Claude Code');
+      setBuild(prev => ({ ...prev, phase: 'waiting_for_execution', prompt: promptText }));
+      setShowPrompt(false);
+      prevReportLen.current = 0;
+      // Mark step as completed when build flow starts
+      setCompletedPlanSteps(prev => new Set([...prev, step.id]));
+    } catch {
+      showToast('Failed to generate prompt', '#ef4444');
+      setBuild(prev => ({ ...prev, phase: 'idle' }));
+    }
+  };
 
   const handleApplySuggestion = async (suggestion: CorySuggestion) => {
     const comp = components.find(c => c.id === suggestion.componentId);
@@ -778,52 +898,125 @@ export default function SystemBlueprint() {
         </>
       )}
 
-      {/* ── Cory Panel — AI Suggestions ── */}
-      {!isInFlow && corySuggestions.length > 0 && !demoActive && (
+      {/* ── Cory Panel — Plan + Suggestions ── */}
+      {!isInFlow && (coryPlan.length > 0 || corySuggestions.length > 0) && !demoActive && (
         <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
           <div className="card-body p-4">
-            <div className="d-flex align-items-center gap-2 mb-1">
-              <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 16 }}></i>
-              <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>
-                Cory — Your AI System Architect
-              </h6>
+            {/* Header */}
+            <div className="d-flex align-items-center justify-content-between mb-1">
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 16 }}></i>
+                <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>
+                  Cory — Your AI System Architect
+                </h6>
+              </div>
+              {/* Plan / Suggestions toggle */}
+              <div className="btn-group" style={{ fontSize: 10 }}>
+                <button className={`btn btn-sm ${coryView === 'plan' ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '2px 10px' }} onClick={() => setCoryView('plan')}>
+                  <i className="bi bi-map me-1"></i>Plan
+                </button>
+                <button className={`btn btn-sm ${coryView === 'suggestions' ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '2px 10px' }} onClick={() => setCoryView('suggestions')}>
+                  <i className="bi bi-lightbulb me-1"></i>Suggestions
+                </button>
+              </div>
             </div>
             {autonomousMode && (
               <div className="mb-2" style={{ fontSize: 10, color: '#8b5cf6' }}>
                 <i className="bi bi-lightning-fill me-1"></i>System is actively improving itself
               </div>
             )}
-            <p className="text-muted mb-3" style={{ fontSize: 11 }}>
-              {autonomousMode ? 'I\'ve analyzed your system and recommend these upgrades:' : 'Based on your system\'s current state, I suggest:'}
-            </p>
-            {corySuggestions.map(s => {
-              const impactColors: Record<string, { bg: string; text: string }> = {
-                High: { bg: '#ef444420', text: '#ef4444' },
-                Medium: { bg: '#f59e0b20', text: '#92400e' },
-                Low: { bg: '#10b98120', text: '#059669' },
-              };
-              const ic = impactColors[s.impact] || impactColors.Medium;
-              return (
-                <div key={s.id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
-                  <div className="flex-grow-1">
-                    <div className="d-flex align-items-center gap-2">
-                      <span className="fw-semibold" style={{ fontSize: 12 }}>{s.title}</span>
-                      <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 8 }}>{s.impact}</span>
-                    </div>
-                    <div className="text-muted" style={{ fontSize: 10 }}>{s.explanation}</div>
-                  </div>
-                  <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
-                    <button className="btn btn-sm btn-primary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => handleApplySuggestion(s)}>
-                      Apply
-                    </button>
-                    <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10, padding: '2px 8px' }}
-                      onClick={() => setDismissedSuggestions(prev => new Set([...prev, s.id]))}>
-                      Dismiss
-                    </button>
-                  </div>
+
+            {/* ── Plan View ── */}
+            {coryView === 'plan' && coryPlan.length > 0 && (
+              <div>
+                <div className="d-flex align-items-center justify-content-between mb-3">
+                  <p className="text-muted mb-0" style={{ fontSize: 11 }}>
+                    Recommended evolution plan — {totalPlanSteps - donePlanSteps} steps remaining
+                  </p>
                 </div>
-              );
-            })}
+                {coryPlan.map((phase, pi) => {
+                  const incompleteSteps = phase.steps.filter(s => !s.done);
+                  const phaseProgress = phase.steps.length > 0 ? Math.round((phase.steps.filter(s => s.done).length / phase.steps.length) * 100) : 0;
+                  return (
+                    <div key={phase.id} className="mb-3">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 22, height: 22, background: phase.color, color: '#fff', fontSize: 10 }}>{pi + 1}</span>
+                        <div>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="fw-semibold" style={{ fontSize: 12 }}><i className={`bi ${phase.icon} me-1`}></i>{phase.title}</span>
+                            {phaseProgress > 0 && phaseProgress < 100 && <span className="badge" style={{ background: `${phase.color}20`, color: phase.color, fontSize: 8 }}>{phaseProgress}%</span>}
+                            {phaseProgress === 100 && <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 11 }}></i>}
+                          </div>
+                          <div className="text-muted" style={{ fontSize: 10 }}>{phase.description}</div>
+                        </div>
+                      </div>
+                      {phase.steps.map(step => {
+                        const impactColors: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
+                        const ic = impactColors[step.impact] || impactColors.Medium;
+                        return (
+                          <div key={step.id} className="d-flex align-items-start gap-2 mb-1 ms-4 p-2" style={{ background: step.done ? '#10b98110' : 'var(--color-bg-alt)', borderRadius: 6, opacity: step.done ? 0.6 : 1 }}>
+                            <i className={`bi ${step.done ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ color: step.done ? '#10b981' : '#9ca3af', fontSize: 12, marginTop: 1, flexShrink: 0 }}></i>
+                            <div className="flex-grow-1">
+                              <div className="d-flex align-items-center gap-2">
+                                <span className={`${step.done ? '' : 'fw-semibold'}`} style={{ fontSize: 11, textDecoration: step.done ? 'line-through' : 'none' }}>{step.title}</span>
+                                <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 7 }}>{step.impact}</span>
+                              </div>
+                              {!step.done && <div className="text-muted" style={{ fontSize: 9 }}>{step.explanation}</div>}
+                            </div>
+                            {!step.done && (
+                              <button className="btn btn-sm btn-primary" style={{ fontSize: 9, padding: '1px 7px', flexShrink: 0 }} onClick={() => handleApplyPlanStep(step)}>
+                                Apply
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {/* Apply Phase button */}
+                      {incompleteSteps.length > 1 && (
+                        <div className="ms-4 mt-1">
+                          <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 9 }} onClick={() => handleApplyPlanStep(incompleteSteps[0])}>
+                            <i className="bi bi-play-fill me-1"></i>Start Phase {pi + 1}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {coryView === 'plan' && coryPlan.length === 0 && (
+              <p className="text-muted small mb-0"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>All plan phases complete.</p>
+            )}
+
+            {/* ── Suggestions View ── */}
+            {coryView === 'suggestions' && (
+              <div>
+                <p className="text-muted mb-3" style={{ fontSize: 11 }}>
+                  {autonomousMode ? 'I\'ve analyzed your system and recommend these upgrades:' : 'Based on your system\'s current state, I suggest:'}
+                </p>
+                {corySuggestions.length > 0 ? corySuggestions.map(s => {
+                  const impactColors: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
+                  const ic = impactColors[s.impact] || impactColors.Medium;
+                  return (
+                    <div key={s.id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                      <div className="flex-grow-1">
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="fw-semibold" style={{ fontSize: 12 }}>{s.title}</span>
+                          <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 8 }}>{s.impact}</span>
+                        </div>
+                        <div className="text-muted" style={{ fontSize: 10 }}>{s.explanation}</div>
+                      </div>
+                      <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                        <button className="btn btn-sm btn-primary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => handleApplySuggestion(s)}>Apply</button>
+                        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setDismissedSuggestions(prev => new Set([...prev, s.id]))}>Dismiss</button>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <p className="text-muted small mb-0">No suggestions at this time — your system is on track.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

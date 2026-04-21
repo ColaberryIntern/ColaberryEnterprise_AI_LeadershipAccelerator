@@ -1043,6 +1043,90 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
 }
 
 // ---------------------------------------------------------------------------
+// Cory Plan Section (Improve Tab)
+// ---------------------------------------------------------------------------
+
+function CoryPlanSection() {
+  const [bps, setBPs] = useState<any[]>([]);
+  const [loadingBPs, setLoadingBPs] = useState(true);
+
+  useEffect(() => {
+    portalApi.get('/api/portal/project/business-processes')
+      .then((res: any) => setBPs(res.data || []))
+      .catch(() => {})
+      .finally(() => setLoadingBPs(false));
+  }, []);
+
+  if (loadingBPs) return null;
+
+  const active = bps.filter((bp: any) => (bp.applicability_status || 'active') === 'active');
+  const incomplete = active.filter((bp: any) => !bp.is_complete);
+  if (incomplete.length === 0) return null;
+
+  const hasBackend = active.some((bp: any) => (bp.usability?.backend || 'missing') !== 'missing');
+  const hasFrontend = active.some((bp: any) => (bp.usability?.frontend || 'missing') !== 'missing');
+  const hasAgents = active.some((bp: any) => (bp.usability?.agent || 'missing') !== 'missing');
+
+  // Build phases
+  const phases: Array<{ title: string; icon: string; color: string; steps: Array<{ title: string; done: boolean }> }> = [];
+
+  // Foundation
+  const foundationSteps: Array<{ title: string; done: boolean }> = [];
+  foundationSteps.push({ title: 'Build backend services', done: hasBackend });
+  const lowCov = incomplete.filter((bp: any) => (bp.metrics?.requirements_coverage || 0) < 50 && (bp.metrics?.requirements_coverage || 0) > 0);
+  for (const lc of lowCov.slice(0, 2)) {
+    foundationSteps.push({ title: `Implement requirements for ${lc.name}`, done: false });
+  }
+  if (foundationSteps.some(s => !s.done)) {
+    phases.push({ title: 'Foundation', icon: 'bi-bricks', color: '#3b82f6', steps: foundationSteps });
+  }
+
+  // Usability
+  const usabilitySteps: Array<{ title: string; done: boolean }> = [];
+  usabilitySteps.push({ title: 'Create user interface', done: hasFrontend });
+  if (usabilitySteps.some(s => !s.done)) {
+    phases.push({ title: 'Usability', icon: 'bi-layout-wtf', color: '#10b981', steps: usabilitySteps });
+  }
+
+  // Intelligence
+  const intelligenceSteps: Array<{ title: string; done: boolean }> = [];
+  if (hasBackend) intelligenceSteps.push({ title: 'Add AI agents', done: hasAgents });
+  intelligenceSteps.push({ title: 'Add monitoring & observability', done: false });
+  if (intelligenceSteps.some(s => !s.done)) {
+    phases.push({ title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', steps: intelligenceSteps });
+  }
+
+  if (phases.length === 0) return null;
+
+  return (
+    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #3b82f6' }}>
+      <div className="card-body p-4">
+        <h6 className="fw-semibold mb-1" style={{ fontSize: 14, color: 'var(--color-primary)' }}>
+          <i className="bi bi-map me-2"></i>Cory's Recommended Plan
+        </h6>
+        <p className="text-muted mb-3" style={{ fontSize: 11 }}>
+          A structured evolution path for your system.
+        </p>
+        {phases.map((phase, pi) => (
+          <div key={phase.title} className="mb-3">
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 20, height: 20, background: phase.color, color: '#fff', fontSize: 9 }}>{pi + 1}</span>
+              <span className="fw-semibold" style={{ fontSize: 12 }}><i className={`bi ${phase.icon} me-1`}></i>{phase.title}</span>
+            </div>
+            {phase.steps.map((step, si) => (
+              <div key={si} className="d-flex align-items-center gap-2 ms-4 mb-1" style={{ fontSize: 11, opacity: step.done ? 0.5 : 1 }}>
+                <i className={`bi ${step.done ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ color: step.done ? '#10b981' : '#9ca3af', fontSize: 11 }}></i>
+                <span style={{ textDecoration: step.done ? 'line-through' : 'none' }}>{step.title}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // AI Suggestions Section (Improve Tab)
 // ---------------------------------------------------------------------------
 
@@ -1652,6 +1736,9 @@ function ProjectDashboard() {
             vbValidating={vbValidating} setVbValidating={setVbValidating}
             vbValidationResult={vbValidationResult} setVbValidationResult={setVbValidationResult}
           />
+
+          {/* ── Cory Plan ── */}
+          <CoryPlanSection />
 
           {/* ── AI Suggestions ── */}
           <AISuggestionsSection />
