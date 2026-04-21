@@ -173,17 +173,35 @@ export async function getMeetingPrep(event: CalendarEvent): Promise<string> {
 export async function checkConflicts(): Promise<CalendarEvent[]> {
   try {
     const events = await getTodaysEvents();
-    const conflicts: CalendarEvent[] = [];
 
-    for (let i = 0; i < events.length; i++) {
-      for (let j = i + 1; j < events.length; j++) {
-        const aStart = new Date(events[i].start);
-        const aEnd = new Date(events[i].end);
-        const bStart = new Date(events[j].start);
-        const bEnd = new Date(events[j].end);
+    // Filter out all-day events (no time component) and multi-day spans
+    const timedEvents = events.filter(e => {
+      if (!e.start || !e.end) return false;
+      const start = new Date(e.start);
+      const end = new Date(e.end);
+      const durationMin = (end.getTime() - start.getTime()) / 60000;
+      return durationMin > 0 && durationMin <= 480; // max 8 hours
+    });
+
+    const conflicts: CalendarEvent[] = [];
+    const seen = new Set<string>();
+
+    for (let i = 0; i < timedEvents.length; i++) {
+      for (let j = i + 1; j < timedEvents.length; j++) {
+        // Skip if same event title (recurring instances)
+        if (timedEvents[i].summary === timedEvents[j].summary) continue;
+
+        const aStart = new Date(timedEvents[i].start);
+        const aEnd = new Date(timedEvents[i].end);
+        const bStart = new Date(timedEvents[j].start);
+        const bEnd = new Date(timedEvents[j].end);
 
         if (aStart < bEnd && bStart < aEnd) {
-          conflicts.push(events[j]);
+          const key = `${timedEvents[j].summary}-${timedEvents[j].start}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            conflicts.push(timedEvents[j]);
+          }
         }
       }
     }
