@@ -158,7 +158,7 @@ function extractModels(content: string, filePath: string): DataModel[] {
     // Also catch simple: fieldName: DataTypes.TYPE
     const simpleRe = /(\w+):\s*DataTypes\.(\w+(?:\([^)]*\))?)\s*[,\n]/g;
     while ((m = simpleRe.exec(content)) !== null) {
-      if (!fields.find(f => f.name === m[1])) {
+      if (m && !fields.find(f => f.name === m![1])) {
         fields.push({ name: m[1], type: m[2] });
       }
     }
