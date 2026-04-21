@@ -5,7 +5,7 @@
  * Uses mock data only — no backend calls
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
@@ -324,6 +324,7 @@ const INITIAL_BUILD: BuildState = { phase: 'idle', prompt: null, reportText: '',
 
 export default function SystemBlueprint() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [components, setComponents] = useState<SystemComponent[]>([]);
   const [progress, setProgress] = useState<ProgressData | null>(null);
@@ -868,7 +869,8 @@ export default function SystemBlueprint() {
               const isActive = recommended?.id === comp.id;
               return (
                 <div key={comp.id} className="col-md-6 col-lg-4">
-                  <div className="card border-0 shadow-sm h-100" style={{ borderTop: `3px solid ${isActive ? 'var(--color-primary)' : mc}`, outline: isActive ? '2px solid var(--color-primary)' : 'none', outlineOffset: -1 }}>
+                  <div className="card border-0 shadow-sm h-100" style={{ borderTop: `3px solid ${isActive ? 'var(--color-primary)' : mc}`, outline: isActive ? '2px solid var(--color-primary)' : 'none', outlineOffset: -1, cursor: 'pointer' }}
+                    onClick={() => navigate(`/portal/project/system?componentId=${comp.id}#build`)}>
                     <div className="card-body p-3">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div className="fw-semibold" style={{ fontSize: 13, color: 'var(--color-text)' }}>

@@ -9,10 +9,11 @@ function completionColor(pct: number): string {
   return 'var(--color-secondary)';
 }
 
-export default function PortalBusinessProcessesTab() {
+export default function PortalBusinessProcessesTab({ initialSelectedId }: { initialSelectedId?: string | null } = {}) {
   const [processes, setProcesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelectedRaw] = useState<string | null>(initialSelectedId || localStorage.getItem('active_component_id') || null);
+  const setSelected = (id: string | null) => { setSelectedRaw(id); if (id) localStorage.setItem('active_component_id', id); };
   const [reclassifying, setReclassifying] = useState(false);
   const [lifecycleFilter, setLifecycleFilter] = useState<'active' | 'deferred' | 'all'>('active');
   const [layerFilter, setLayerFilter] = useState<'all' | 'code' | 'pages' | 'backend' | 'frontend' | 'agents'>('all');

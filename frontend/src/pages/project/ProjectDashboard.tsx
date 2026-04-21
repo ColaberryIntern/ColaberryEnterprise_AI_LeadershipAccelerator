@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-// react-router-dom Link removed — no longer used in this file
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import ProjectHeader from '../../components/project/ProjectHeader';
 import ProjectProgress from '../../components/project/ProjectProgress';
@@ -64,7 +64,7 @@ interface ProjectData {
   updated_at: string;
 }
 
-type TabKey = 'overview' | 'business-processes' | 'execution' | 'code-intelligence' | 'system-evolution';
+type TabKey = 'understand' | 'build' | 'improve' | 'overview' | 'business-processes' | 'execution' | 'code-intelligence' | 'system-evolution';
 
 function formatTimeAgo(dateStr: string): string {
   const now = new Date();
@@ -1043,19 +1043,329 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
 }
 
 // ---------------------------------------------------------------------------
+// Visual Builder Section (Improve Tab)
+// ---------------------------------------------------------------------------
+
+const VB_ACTIONS = [
+  { label: 'Improve Layout', icon: 'bi-layout-wtf', feedback: 'Improve the page layout, spacing, and visual hierarchy' },
+  { label: 'Fix UX Issues', icon: 'bi-exclamation-triangle', feedback: 'Find and fix usability issues, broken interactions, and confusing flows' },
+  { label: 'Make Enterprise Ready', icon: 'bi-building', feedback: 'Add enterprise features: accessibility, security, error handling, loading states' },
+  { label: 'Mobile Responsive', icon: 'bi-phone', feedback: 'Make the layout responsive for mobile and tablet' },
+  { label: 'Accessibility Audit', icon: 'bi-universal-access', feedback: 'Run WCAG 2.1 AA compliance check: alt text, labels, contrast, keyboard nav' },
+];
+
+function VisualBuilderSection(props: any) {
+  const {
+    pageBPs, pageBPsLoaded, setPageBPs,
+    vbProcessId, setVbProcessId,
+    vbProcessData, setVbProcessData,
+    vbAnalyzing, setVbAnalyzing,
+    vbFeedback, setVbFeedback,
+    vbPreviewKey, setVbPreviewKey,
+    vbFixText, setVbFixText,
+    vbValidating, setVbValidating,
+    vbValidationResult, setVbValidationResult,
+  } = props;
+
+  // Load page BPs once
+  useEffect(() => {
+    if (pageBPsLoaded.current) return;
+    pageBPsLoaded.current = true;
+    portalApi.get('/api/portal/project/business-processes')
+      .then((res: any) => {
+        const bps = (res.data || []).filter((bp: any) =>
+          (bp.source === 'frontend_page' || bp.is_page_bp) && bp.preview_url
+        );
+        setPageBPs(bps);
+        if (bps.length > 0 && !vbProcessId) {
+          setVbProcessId(bps[0].id);
+        }
+      }).catch(() => {});
+  }, [pageBPsLoaded, setPageBPs, vbProcessId, setVbProcessId]);
+
+  // Load process data when selection changes
+  useEffect(() => {
+    if (!vbProcessId) return;
+    portalApi.get(`/api/portal/project/business-processes/${vbProcessId}`)
+      .then((res: any) => setVbProcessData(res.data))
+      .catch(() => setVbProcessData(null));
+  }, [vbProcessId, setVbProcessData]);
+
+  const handleAnalyze = async (feedback: string) => {
+    if (!vbProcessId || !vbProcessData) return;
+    setVbAnalyzing(true);
+    try {
+      const feFiles = (vbProcessData.implementation_links?.frontend || []) as string[];
+      const elements = feFiles.map((f: string, i: number) => {
+        const name = f.split('/').pop()?.replace(/\.(tsx|jsx)$/, '') || f;
+        return { element_id: `component-${i}`, type: 'component', tag: 'div', selector: name, text: name, depth: 0 };
+      });
+      await portalApi.post(`/api/portal/project/business-processes/${vbProcessId}/element-map`, { elements, route: vbProcessData.frontend_route || '/' });
+      await portalApi.post(`/api/portal/project/business-processes/${vbProcessId}/analyze-page`, { user_feedback: feedback });
+      const fbRes = await portalApi.get(`/api/portal/project/business-processes/${vbProcessId}/element-feedback`);
+      setVbFeedback(fbRes.data);
+    } catch {} finally { setVbAnalyzing(false); }
+  };
+
+  const handleFixAll = () => {
+    if (!vbFeedback?.items || !vbProcessData) return;
+    const openIssues = vbFeedback.items.filter((f: any) => f.status === 'open');
+    if (openIssues.length === 0) return;
+    const feFiles = (vbProcessData.implementation_links?.frontend || []) as string[];
+    const prompt = `Fix ALL ${openIssues.length} UI issues on the "${vbProcessData.name}" page (${vbProcessData.frontend_route || '/'}):\n\n${openIssues.map((f: any, i: number) => `${i + 1}. [${f.severity}] ${f.title}\n   ${f.description}\n   Fix: ${f.suggestion || 'Fix as described.'}`).join('\n\n')}\n\nFiles to modify:\n${feFiles.slice(0, 10).join('\n')}\n\nFix all issues listed above. Make each change carefully.\n\nVALIDATION REPORT (REQUIRED AT END)\n\nAfter implementation, output:\n\nVALIDATION REPORT\n\nFiles Created:\n- ...\n\nFiles Modified:\n- ...\n\nStatus: COMPLETE`;
+    copyToClipboardFallback(prompt);
+    showToastMsg(`Fix All prompt copied (${openIssues.length} issues) — paste into Claude Code`);
+  };
+
+  const handleFixSingle = (f: any) => {
+    if (!vbProcessData) return;
+    const feFiles = (vbProcessData.implementation_links?.frontend || []) as string[];
+    const prompt = `Fix this UI issue on the "${vbProcessData.name}" page (${vbProcessData.frontend_route || '/'}):\n\nIssue: ${f.title}\n${f.description}\n\nSuggestion: ${f.suggestion || 'Fix the issue as described above.'}\n\nFiles to check:\n${feFiles.slice(0, 5).join('\n')}\n\nMake the fix. Do not change unrelated code.`;
+    copyToClipboardFallback(prompt);
+    showToastMsg('Fix prompt copied — paste into Claude Code');
+  };
+
+  const handleDismiss = async (feedbackId: string) => {
+    try {
+      await portalApi.put(`/api/portal/project/element-feedback/${feedbackId}`, { status: 'dismissed' });
+      if (vbProcessId) {
+        const fbRes = await portalApi.get(`/api/portal/project/business-processes/${vbProcessId}/element-feedback`);
+        setVbFeedback(fbRes.data);
+      }
+    } catch {}
+  };
+
+  const handleValidate = async () => {
+    if (!vbFixText.trim() || !vbProcessId) return;
+    setVbValidating(true);
+    try {
+      const res = await portalApi.post(`/api/portal/project/business-processes/${vbProcessId}/validation-report`, { reportText: vbFixText.trim() });
+      setVbValidationResult({ _applying: true });
+      // Brief delay for feedback before refreshing
+      await new Promise(r => setTimeout(r, 400));
+      setVbPreviewKey((k: number) => k + 1);
+      const fbRes = await portalApi.get(`/api/portal/project/business-processes/${vbProcessId}/element-feedback`);
+      setVbFeedback(fbRes.data);
+      setVbValidationResult(res.data);
+    } catch (err: any) {
+      setVbValidationResult({ error: err.response?.data?.error || 'Validation failed' });
+    } finally { setVbValidating(false); }
+  };
+
+  if (pageBPs.length === 0) {
+    return (
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-body p-4">
+          <h6 className="fw-semibold small mb-2"><i className="bi bi-palette me-2" style={{ color: '#8b5cf6' }}></i>Visual Builder</h6>
+          <p className="text-muted small mb-0">No page components with preview available. Build some frontend pages first.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const previewUrl = vbProcessData?.preview_url || null;
+  const openIssues = (vbFeedback?.items || []).filter((f: any) => f.status === 'open');
+
+  return (
+    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #8b5cf6' }}>
+      <div className="card-body p-4">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h6 className="fw-semibold mb-0" style={{ fontSize: 14, color: '#8b5cf6' }}>
+            <i className="bi bi-palette me-2"></i>Visual Builder
+          </h6>
+          {pageBPs.length > 1 && (
+            <select className="form-select form-select-sm" style={{ maxWidth: 220, fontSize: 11 }}
+              value={vbProcessId || ''} onChange={e => { setVbProcessId(e.target.value); setVbFeedback(null); setVbValidationResult(null); setVbFixText(''); }}>
+              {pageBPs.map((bp: any) => <option key={bp.id} value={bp.id}>{bp.name}</option>)}
+            </select>
+          )}
+        </div>
+
+        {/* Preview iframe */}
+        {previewUrl ? (
+          <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+            <iframe
+              key={vbPreviewKey}
+              src={previewUrl}
+              title="Page Preview"
+              style={{ width: '100%', height: 350, border: 'none', background: '#fff' }}
+              sandbox="allow-scripts allow-same-origin allow-forms"
+            />
+          </div>
+        ) : (
+          <div className="mb-3 p-4 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
+            <i className="bi bi-display" style={{ fontSize: 28, color: '#9ca3af' }}></i>
+            <h6 className="fw-semibold mt-2 mb-1" style={{ fontSize: 13, color: 'var(--color-text)' }}>Preview not available yet</h6>
+            <p className="text-muted small mb-3">Your system needs a frontend route before we can render a live preview.</p>
+            {vbProcessId && (
+              <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={async () => {
+                try {
+                  const { generatePrompt } = await import('../../services/portalBusinessProcessApi');
+                  const res = await generatePrompt(vbProcessId, 'frontend_exposure');
+                  const text = res.data?.prompt_text || '';
+                  copyToClipboardFallback(text);
+                  showToastMsg('Frontend build prompt copied — paste into Claude Code');
+                } catch { showToastMsg('Failed to generate prompt'); }
+              }}>
+                <i className="bi bi-layout-wtf me-1"></i>Build Frontend for this Component
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Quick action buttons */}
+        <div className="d-flex flex-wrap gap-2 mb-3">
+          {VB_ACTIONS.map(action => (
+            <button key={action.label} className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }}
+              disabled={vbAnalyzing} onClick={() => handleAnalyze(action.feedback)}>
+              <i className={`bi ${action.icon} me-1`}></i>{action.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Analyzing spinner */}
+        {vbAnalyzing && (
+          <div className="d-flex align-items-center gap-2 mb-3" style={{ fontSize: 12, color: '#8b5cf6' }}>
+            <span className="spinner-border spinner-border-sm"></span>Analyzing page...
+          </div>
+        )}
+
+        {/* Fix All button */}
+        {openIssues.length > 0 && (
+          <button className="btn btn-sm w-100 mb-3" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleFixAll}>
+            <i className="bi bi-wrench me-1"></i>Fix All {openIssues.length} Issues — Copy Prompt
+          </button>
+        )}
+
+        {/* Detected issues */}
+        {vbFeedback?.items?.length > 0 && (
+          <div className="mb-3">
+            <div className="fw-semibold small mb-2" style={{ color: 'var(--color-text)' }}>Detected Issues</div>
+            {(vbFeedback.items as any[]).filter((f: any) => f.status !== 'dismissed').map((f: any) => {
+              const sevColors: Record<string, { bg: string; text: string }> = {
+                high: { bg: '#ef444420', text: '#ef4444' },
+                medium: { bg: '#f59e0b20', text: '#f59e0b' },
+                low: { bg: '#10b98120', text: '#10b981' },
+              };
+              const sc = sevColors[f.severity] || sevColors.low;
+              return (
+                <div key={f.id} className="d-flex gap-2 align-items-start py-2" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 11 }}>
+                  <span className="badge" style={{ fontSize: 8, flexShrink: 0, background: sc.bg, color: sc.text }}>{f.severity}</span>
+                  <div className="flex-grow-1">
+                    <div className="fw-medium">{f.title}</div>
+                    <div className="text-muted" style={{ fontSize: 10 }}>{f.description?.substring(0, 120)}</div>
+                    {f.suggestion && <div style={{ color: 'var(--color-info)', fontSize: 9 }}><i className="bi bi-lightbulb me-1"></i>{f.suggestion?.substring(0, 120)}</div>}
+                  </div>
+                  <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                    <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 9, padding: '1px 6px' }} onClick={() => handleFixSingle(f)}>Fix</button>
+                    <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9, padding: '1px 6px' }} onClick={() => handleDismiss(f.id)}>Dismiss</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Validation input — after fixes */}
+        {openIssues.length > 0 && (
+          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+            <label className="form-label fw-medium" style={{ fontSize: 11, color: 'var(--color-text)' }}>
+              <i className="bi bi-clipboard-check me-1"></i>Paste fix result to validate
+            </label>
+            <textarea className="form-control form-control-sm" rows={4} value={vbFixText}
+              onChange={e => setVbFixText(e.target.value)}
+              placeholder="VALIDATION REPORT&#10;&#10;Files Modified:&#10;- ..."
+              style={{ fontFamily: 'monospace', fontSize: 10 }} />
+            <button className="btn btn-sm mt-2" style={{ background: '#10b981', color: '#fff', fontWeight: 600, fontSize: 11 }}
+              disabled={!vbFixText.trim() || vbValidating} onClick={handleValidate}>
+              {vbValidating ? <><span className="spinner-border spinner-border-sm me-1"></span>Validating...</> : <><i className="bi bi-check-circle me-1"></i>Validate Fix</>}
+            </button>
+          </div>
+        )}
+
+        {/* Validation result */}
+        {vbValidationResult?._applying && (
+          <div className="mt-3 p-3 d-flex align-items-center gap-2" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
+            <span className="spinner-border spinner-border-sm" style={{ color: '#10b981' }}></span>
+            <span style={{ fontSize: 12, color: '#059669', fontWeight: 500 }}>Applying improvements and refreshing your UI...</span>
+          </div>
+        )}
+        {vbValidationResult && !vbValidationResult.error && !vbValidationResult._applying && (
+          <div className="mt-3 p-3" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
+            <div className="fw-bold small mb-1" style={{ color: '#059669' }}>
+              <i className="bi bi-check-circle-fill me-1"></i>Your UI just improved
+            </div>
+            <div className="small text-muted">
+              <strong>{vbValidationResult.requirementsVerified || 0}</strong> requirements verified. Preview has been refreshed.
+            </div>
+            <div className="d-flex gap-2 mt-2">
+              <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}
+                onClick={() => { setVbValidationResult(null); setVbFixText(''); }}>
+                <i className="bi bi-arrow-repeat me-1"></i>Continue Improving
+              </button>
+              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }}
+                onClick={() => { setVbValidationResult(null); setVbFixText(''); setVbFeedback(null); }}>
+                Back to Build
+              </button>
+            </div>
+          </div>
+        )}
+        {vbValidationResult?.error && (
+          <div className="alert alert-danger py-2 mt-3" style={{ fontSize: 11 }}>{vbValidationResult.error}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function copyToClipboardFallback(text: string) {
+  try { navigator.clipboard.writeText(text); } catch {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  }
+}
+
+function showToastMsg(msg: string) {
+  const el = document.createElement('div');
+  el.innerHTML = `<div style="position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a365d;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);font-size:13px"><i class="bi bi-clipboard-check me-2"></i>${msg}</div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ---------------------------------------------------------------------------
 // Main Dashboard Component
 // ---------------------------------------------------------------------------
 function ProjectDashboard() {
+  const [searchParams] = useSearchParams();
+  const componentId = searchParams.get('componentId');
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const triggerRefresh = () => setRefreshKey(k => k + 1);
-  // Persist active tab in URL hash
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Visual Builder state (Improve tab)
+  const [vbProcessId, setVbProcessId] = useState<string | null>(null);
+  const [vbProcessData, setVbProcessData] = useState<any>(null);
+  const [vbAnalyzing, setVbAnalyzing] = useState(false);
+  const [vbFeedback, setVbFeedback] = useState<any>(null);
+  const [vbPreviewKey, setVbPreviewKey] = useState(0);
+  const [vbFixText, setVbFixText] = useState('');
+  const [vbValidating, setVbValidating] = useState(false);
+  const [vbValidationResult, setVbValidationResult] = useState<any>(null);
+  const [pageBPs, setPageBPs] = useState<any[]>([]);
+  const pageBPsLoaded = useRef(false);
+
+  // Persist active tab in URL hash — map legacy tabs to new structure
   const getInitialTab = (): TabKey => {
     const hash = window.location.hash.replace('#', '');
-    const valid: TabKey[] = ['overview', 'business-processes', 'execution', 'code-intelligence', 'system-evolution'];
-    return valid.includes(hash as TabKey) ? (hash as TabKey) : 'overview';
+    const legacyMap: Record<string, TabKey> = { 'overview': 'understand', 'business-processes': 'build', 'execution': 'build', 'code-intelligence': 'understand', 'system-evolution': 'improve' };
+    if (legacyMap[hash]) return legacyMap[hash];
+    const valid: TabKey[] = ['understand', 'build', 'improve'];
+    // If componentId is passed, default to Build tab
+    if (componentId) return 'build';
+    return valid.includes(hash as TabKey) ? (hash as TabKey) : 'understand';
   };
   const [activeTab, setActiveTabState] = useState<TabKey>(getInitialTab);
   const setActiveTab = (tab: TabKey) => { setActiveTabState(tab); window.location.hash = tab; };
@@ -1096,13 +1406,10 @@ function ProjectDashboard() {
     return <ProjectSetupWizard initialStatus={project.setup_status} onActivated={() => window.location.reload()} />;
   }
 
-  const variables = project.project_variables || {};
   const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
-    { key: 'overview', label: 'Overview', icon: 'bi-speedometer2' },
-    { key: 'business-processes', label: 'Business Processes', icon: 'bi-diagram-3' },
-    { key: 'execution', label: 'Execution', icon: 'bi-activity' },
-    { key: 'code-intelligence', label: 'Code Intelligence', icon: 'bi-code-slash' },
-    { key: 'system-evolution', label: 'System Evolution', icon: 'bi-rocket-takeoff' },
+    { key: 'understand', label: 'Understand', icon: 'bi-eye' },
+    { key: 'build', label: 'Build', icon: 'bi-hammer' },
+    { key: 'improve', label: 'Improve', icon: 'bi-graph-up-arrow' },
   ];
 
   return (
@@ -1118,7 +1425,7 @@ function ProjectDashboard() {
       <ProjectProgress currentStage={project.project_stage} />
 
       {/* Next BP + Mode Slider — visible on all tabs */}
-      <NextBusinessProcessAction key={`nba-${refreshKey}`} onNavigate={() => setActiveTab('business-processes')} onModeChange={triggerRefresh} />
+      <NextBusinessProcessAction key={`nba-${refreshKey}`} onNavigate={() => setActiveTab('build')} onModeChange={triggerRefresh} />
 
       <nav className="nav nav-tabs mb-4">
         {tabs.map(t => (
@@ -1132,38 +1439,130 @@ function ProjectDashboard() {
         ))}
       </nav>
 
-      {activeTab === 'overview' && (
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TAB 1: UNDERSTAND — "See how your system is structured"
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'understand' && (
         <>
-          {/* KPI Bar — merged from Readiness */}
+          <p className="text-muted small mb-4" style={{ lineHeight: 1.6 }}>
+            <i className="bi bi-info-circle me-1"></i>
+            See how your system is structured — architecture, components, and code repository.
+          </p>
+
+          {/* KPI Bar */}
           <ReadinessKPIBar key={`kpi-${refreshKey}`} />
-          {/* System Architecture Visualization */}
+
+          {/* System Architecture */}
           <SystemArchitectureCard key={`arch-${refreshKey}`} />
-          <ProjectSystemPromptCard />
-          <ExecutionOverview />
+
+          {/* Component Breakdown — simplified BP grid */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white fw-semibold small py-2">
+              <i className="bi bi-grid-3x3-gap me-2"></i>Component Breakdown
+            </div>
+            <div className="card-body p-0">
+              <PortalBusinessProcessesTab key={`bp-understand-${refreshKey}`} />
+            </div>
+          </div>
+
+          {/* GitHub — repo overview */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-header bg-white fw-semibold small py-2">
+              <i className="bi bi-github me-2"></i>Repository
+            </div>
+            <div className="card-body">
+              <GitHubTab />
+            </div>
+          </div>
+
+          {/* Advanced: System Prompt, Execution Overview */}
+          <div className="mb-3">
+            <button className="btn btn-sm btn-link text-muted p-0" style={{ fontSize: 11 }} onClick={() => setShowAdvanced(!showAdvanced)}>
+              <i className={`bi bi-chevron-${showAdvanced ? 'up' : 'down'} me-1`}></i>
+              {showAdvanced ? 'Hide Advanced Details' : 'Show Advanced Details'}
+            </button>
+          </div>
+          {showAdvanced && (
+            <>
+              <ProjectSystemPromptCard />
+              <ExecutionOverview />
+            </>
+          )}
         </>
       )}
 
-      {activeTab === 'business-processes' && <PortalBusinessProcessesTab key={`bp-${refreshKey}`} />}
-
-      {activeTab === 'execution' && <WarRoomTab />}
-
-      {activeTab === 'code-intelligence' && (
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TAB 2: BUILD — "Manually control what gets built"
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'build' && (
         <>
-          <GitHubTab />
-          <div className="mt-4"><RequirementsTab /></div>
+          <p className="text-muted small mb-4" style={{ lineHeight: 1.6 }}>
+            <i className="bi bi-hammer me-1"></i>
+            Manually control what gets built — select components, generate prompts, and validate builds.
+          </p>
+
+          {/* Full BP list with detail panels */}
+          <PortalBusinessProcessesTab key={`bp-build-${refreshKey}`} initialSelectedId={componentId} />
+
+          {/* Advanced: Execution War Room + Requirements */}
+          <div className="mt-4 mb-3">
+            <button className="btn btn-sm btn-link text-muted p-0" style={{ fontSize: 11 }} onClick={() => setShowAdvanced(!showAdvanced)}>
+              <i className={`bi bi-chevron-${showAdvanced ? 'up' : 'down'} me-1`}></i>
+              {showAdvanced ? 'Hide Advanced Details' : 'Show Advanced Details'}
+            </button>
+          </div>
+          {showAdvanced && (
+            <>
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-header bg-white fw-semibold small py-2">
+                  <i className="bi bi-activity me-2"></i>Execution Monitor
+                </div>
+                <div className="card-body">
+                  <WarRoomTab />
+                </div>
+              </div>
+              <div className="card border-0 shadow-sm mb-4">
+                <div className="card-header bg-white fw-semibold small py-2">
+                  <i className="bi bi-list-check me-2"></i>Requirements Map
+                </div>
+                <div className="card-body">
+                  <RequirementsTab />
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
 
-      {activeTab === 'system-evolution' && (
-        <div>
-          <h6 className="fw-bold mb-3" style={{ color: 'var(--color-primary)' }}><i className="bi bi-rocket-takeoff me-2"></i>System Evolution</h6>
-          <p className="text-muted small mb-4">Grow your system by adding new capabilities or managing existing documents.</p>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          TAB 3: IMPROVE — "Enhance your system with AI and UX improvements"
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'improve' && (
+        <>
+          <p className="text-muted small mb-4" style={{ lineHeight: 1.6 }}>
+            <i className="bi bi-graph-up-arrow me-1"></i>
+            Enhance your system with AI and UX improvements — add new capabilities, manage documents, and evolve.
+          </p>
+
+          {/* ── Visual Builder ── */}
+          <VisualBuilderSection
+            pageBPs={pageBPs} pageBPsLoaded={pageBPsLoaded}
+            setPageBPs={setPageBPs}
+            vbProcessId={vbProcessId} setVbProcessId={setVbProcessId}
+            vbProcessData={vbProcessData} setVbProcessData={setVbProcessData}
+            vbAnalyzing={vbAnalyzing} setVbAnalyzing={setVbAnalyzing}
+            vbFeedback={vbFeedback} setVbFeedback={setVbFeedback}
+            vbPreviewKey={vbPreviewKey} setVbPreviewKey={setVbPreviewKey}
+            vbFixText={vbFixText} setVbFixText={setVbFixText}
+            vbValidating={vbValidating} setVbValidating={setVbValidating}
+            vbValidationResult={vbValidationResult} setVbValidationResult={setVbValidationResult}
+          />
 
           {/* Add Business Process */}
-          <AddBusinessProcessCard onAdded={() => setActiveTab('business-processes')} />
+          <AddBusinessProcessCard onAdded={() => setActiveTab('build')} />
 
           {/* System Documents */}
-          <div className="card border-0 shadow-sm mb-3">
+          <div className="card border-0 shadow-sm mb-4">
             <div className="card-body">
               <h6 className="fw-semibold small mb-2"><i className="bi bi-file-earmark-code me-2"></i>System Documents</h6>
               <p className="text-muted small mb-3">Compile and manage your project documents.</p>
@@ -1181,8 +1580,21 @@ function ProjectDashboard() {
               </div>
             </div>
           </div>
-        </div>
+
+          {/* Mode Selector */}
+          <ProjectModeSelector onModeChange={triggerRefresh} />
+
+          {/* Advanced: Readiness details */}
+          <div className="mb-3">
+            <button className="btn btn-sm btn-link text-muted p-0" style={{ fontSize: 11 }} onClick={() => setShowAdvanced(!showAdvanced)}>
+              <i className={`bi bi-chevron-${showAdvanced ? 'up' : 'down'} me-1`}></i>
+              {showAdvanced ? 'Hide Advanced Details' : 'Show Advanced Details'}
+            </button>
+          </div>
+          {showAdvanced && <ReadinessTab />}
+        </>
       )}
+
       {/* Floating AI Architect Chat */}
       <ArchitectChat />
     </>
