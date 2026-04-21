@@ -172,6 +172,92 @@ function getImprovements(result: any, before: { coverage: number; maturityLevel:
   return items;
 }
 
+// ---------------------------------------------------------------------------
+// Cory Suggestion Engine (deterministic, from existing data)
+// ---------------------------------------------------------------------------
+
+interface CorySuggestion {
+  id: string;
+  title: string;
+  explanation: string;
+  impact: 'High' | 'Medium' | 'Low';
+  componentId: string;
+  promptTarget: string;
+}
+
+function generateCorySuggestions(components: SystemComponent[], systemLayers: { backend: boolean; frontend: boolean; agents: boolean }): CorySuggestion[] {
+  const suggestions: CorySuggestion[] = [];
+  const incomplete = components.filter(c => c.status !== 'complete');
+  if (incomplete.length === 0) return [];
+
+  // 1. No backend anywhere → highest priority
+  if (!systemLayers.backend) {
+    const comp = incomplete[0];
+    suggestions.push({
+      id: 'suggest-backend',
+      title: 'Build your backend foundation',
+      explanation: 'Your system has no backend yet. This is the foundation everything else depends on.',
+      impact: 'High',
+      componentId: comp.id,
+      promptTarget: 'backend_improvement',
+    });
+  }
+
+  // 2. No frontend anywhere
+  if (systemLayers.backend && !systemLayers.frontend) {
+    const comp = incomplete.find(c => !c.isPageBP) || incomplete[0];
+    suggestions.push({
+      id: 'suggest-frontend',
+      title: 'Add a user interface',
+      explanation: 'Your system has logic but no UI. Users need an interface to interact with it.',
+      impact: 'High',
+      componentId: comp.id,
+      promptTarget: 'frontend_exposure',
+    });
+  }
+
+  // 3. No agents
+  if (systemLayers.backend && systemLayers.frontend && !systemLayers.agents) {
+    const comp = incomplete[0];
+    suggestions.push({
+      id: 'suggest-agents',
+      title: 'Add intelligent automation',
+      explanation: 'Your system works manually. Adding agents enables autonomous operation.',
+      impact: 'Medium',
+      componentId: comp.id,
+      promptTarget: 'agent_enhancement',
+    });
+  }
+
+  // 4. Low coverage component
+  const lowCoverage = incomplete.find(c => c.completion < 30 && c.completion > 0);
+  if (lowCoverage && suggestions.length < 3) {
+    suggestions.push({
+      id: `suggest-coverage-${lowCoverage.id}`,
+      title: `Complete ${lowCoverage.name}`,
+      explanation: `Only ${lowCoverage.completion}% complete. Implementing core requirements will close critical gaps.`,
+      impact: 'High',
+      componentId: lowCoverage.id,
+      promptTarget: lowCoverage.promptTarget || 'requirement_implementation',
+    });
+  }
+
+  // 5. Component with next step ready
+  const readyStep = incomplete.find(c => c.promptTarget && !suggestions.some(s => s.componentId === c.id));
+  if (readyStep && suggestions.length < 3) {
+    suggestions.push({
+      id: `suggest-next-${readyStep.id}`,
+      title: readyStep.nextStep || `Build ${readyStep.name}`,
+      explanation: `This is the next recommended step for "${readyStep.name}" based on system analysis.`,
+      impact: 'Medium',
+      componentId: readyStep.id,
+      promptTarget: readyStep.promptTarget || 'backend_improvement',
+    });
+  }
+
+  return suggestions.slice(0, 3);
+}
+
 function transformCapabilities(bps: any[]): SystemComponent[] {
   return bps
     .filter((bp: any) => (bp.applicability_status || 'active') === 'active')
@@ -338,6 +424,10 @@ export default function SystemBlueprint() {
 
   // Banner state (persisted via localStorage)
   const [bannerDismissed, setBannerDismissed] = useState(() => localStorage.getItem('blueprint_banner_dismissed') === 'true');
+
+  // Autonomous mode + Cory suggestions
+  const [autonomousMode, setAutonomousMode] = useState(false);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
   // Demo state
   const [demoActive, setDemoActive] = useState(false);
@@ -554,6 +644,30 @@ export default function SystemBlueprint() {
     || project.selected_use_case
     || 'Your AI system is being built. Select components below to view details and generate implementation prompts.';
 
+  // Cory suggestions (filtered by dismissals)
+  const allSuggestions = generateCorySuggestions(components, systemLayers);
+  const corySuggestions = allSuggestions.filter(s => !dismissedSuggestions.has(s.id));
+
+  const handleApplySuggestion = async (suggestion: CorySuggestion) => {
+    const comp = components.find(c => c.id === suggestion.componentId);
+    if (!comp) return;
+    // Trigger the build flow with this component's prompt target
+    const beforeMetrics = { coverage: comp.completion, maturityLevel: comp.maturityLevel, readiness: comp.completion };
+    setBuild(prev => ({ ...prev, phase: 'generating', prompt: null, validationResult: null, beforeMetrics, pasteDetected: false }));
+    try {
+      const res = await bpApi.generatePrompt(suggestion.componentId, suggestion.promptTarget);
+      const promptText = res.data?.prompt_text || '';
+      await copyText(promptText);
+      showToast('Prompt copied — paste into Claude Code');
+      setBuild(prev => ({ ...prev, phase: 'waiting_for_execution', prompt: promptText }));
+      setShowPrompt(false);
+      prevReportLen.current = 0;
+    } catch {
+      showToast('Failed to generate prompt', '#ef4444');
+      setBuild(prev => ({ ...prev, phase: 'idle' }));
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -580,11 +694,22 @@ export default function SystemBlueprint() {
             </span>
           </div>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 align-items-center">
           {!demoActive && !isInFlow && (
-            <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={startDemo}>
-              <i className="bi bi-play-circle me-1"></i>Watch 60s Demo
-            </button>
+            <>
+              <div className="d-flex align-items-center gap-1" style={{ fontSize: 10 }}>
+                <span className="text-muted" style={{ fontWeight: autonomousMode ? 400 : 600 }}>Manual</span>
+                <div className="form-check form-switch mb-0" style={{ minHeight: 0 }}>
+                  <input className="form-check-input" type="checkbox" role="switch" checked={autonomousMode}
+                    onChange={() => setAutonomousMode(!autonomousMode)}
+                    style={{ cursor: 'pointer', width: 28, height: 14 }} />
+                </div>
+                <span style={{ fontWeight: autonomousMode ? 600 : 400, color: autonomousMode ? '#8b5cf6' : '#9ca3af', fontSize: 10 }}>Autonomous</span>
+              </div>
+              <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={startDemo}>
+                <i className="bi bi-play-circle me-1"></i>Watch 60s Demo
+              </button>
+            </>
           )}
           <Link to="/portal/project/system" className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }}>
             <i className="bi bi-grid-3x3-gap me-1"></i>Full System View
@@ -651,6 +776,56 @@ export default function SystemBlueprint() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── Cory Panel — AI Suggestions ── */}
+      {!isInFlow && corySuggestions.length > 0 && !demoActive && (
+        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
+          <div className="card-body p-4">
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 16 }}></i>
+              <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>
+                Cory — Your AI System Architect
+              </h6>
+            </div>
+            {autonomousMode && (
+              <div className="mb-2" style={{ fontSize: 10, color: '#8b5cf6' }}>
+                <i className="bi bi-lightning-fill me-1"></i>System is actively improving itself
+              </div>
+            )}
+            <p className="text-muted mb-3" style={{ fontSize: 11 }}>
+              {autonomousMode ? 'I\'ve analyzed your system and recommend these upgrades:' : 'Based on your system\'s current state, I suggest:'}
+            </p>
+            {corySuggestions.map(s => {
+              const impactColors: Record<string, { bg: string; text: string }> = {
+                High: { bg: '#ef444420', text: '#ef4444' },
+                Medium: { bg: '#f59e0b20', text: '#92400e' },
+                Low: { bg: '#10b98120', text: '#059669' },
+              };
+              const ic = impactColors[s.impact] || impactColors.Medium;
+              return (
+                <div key={s.id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                  <div className="flex-grow-1">
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="fw-semibold" style={{ fontSize: 12 }}>{s.title}</span>
+                      <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 8 }}>{s.impact}</span>
+                    </div>
+                    <div className="text-muted" style={{ fontSize: 10 }}>{s.explanation}</div>
+                  </div>
+                  <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                    <button className="btn btn-sm btn-primary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => handleApplySuggestion(s)}>
+                      Apply
+                    </button>
+                    <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10, padding: '2px 8px' }}
+                      onClick={() => setDismissedSuggestions(prev => new Set([...prev, s.id]))}>
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* ── Build Flow Card ── */}

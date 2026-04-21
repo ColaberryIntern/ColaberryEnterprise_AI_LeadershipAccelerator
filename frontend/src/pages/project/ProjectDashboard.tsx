@@ -1043,6 +1043,101 @@ function NextBusinessProcessAction({ onNavigate, onModeChange }: { onNavigate: (
 }
 
 // ---------------------------------------------------------------------------
+// AI Suggestions Section (Improve Tab)
+// ---------------------------------------------------------------------------
+
+const GAP_CATEGORIES = [
+  { type: 'behavior', label: 'Behavior', icon: 'bi-person-lines-fill', color: '#3b82f6' },
+  { type: 'intelligence', label: 'Intelligence', icon: 'bi-lightbulb', color: '#f59e0b' },
+  { type: 'optimization', label: 'Optimization', icon: 'bi-speedometer2', color: '#10b981' },
+  { type: 'reporting', label: 'Reporting', icon: 'bi-bar-chart-line', color: '#8b5cf6' },
+];
+
+function AISuggestionsSection() {
+  const [gaps, setGaps] = useState<any[]>([]);
+  const [loadingGaps, setLoadingGaps] = useState(true);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Load all BPs, then fetch detail for top 3 incomplete to get autonomy_gaps
+    portalApi.get('/api/portal/project/business-processes')
+      .then(async (res: any) => {
+        const bps = (res.data || []).filter((bp: any) => !bp.is_complete && (bp.applicability_status || 'active') === 'active');
+        const topBPs = bps.slice(0, 3);
+        const allGaps: any[] = [];
+        for (const bp of topBPs) {
+          try {
+            const detail = await portalApi.get(`/api/portal/project/business-processes/${bp.id}`);
+            const bpGaps = (detail.data?.autonomy_gaps || []).map((g: any) => ({ ...g, bp_name: bp.name, bp_id: bp.id }));
+            allGaps.push(...bpGaps);
+          } catch {}
+        }
+        setGaps(allGaps);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingGaps(false));
+  }, []);
+
+  const visibleGaps = gaps.filter(g => !dismissed.has(g.gap_id + g.bp_id));
+  const grouped = GAP_CATEGORIES.map(cat => ({
+    ...cat,
+    items: visibleGaps.filter(g => g.gap_type === cat.type),
+  })).filter(g => g.items.length > 0);
+
+  if (loadingGaps) {
+    return (
+      <div className="card border-0 shadow-sm mb-4">
+        <div className="card-body p-4">
+          <div className="d-flex align-items-center gap-2" style={{ fontSize: 12, color: '#9ca3af' }}>
+            <span className="spinner-border spinner-border-sm"></span>Loading AI suggestions...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (grouped.length === 0) return null;
+
+  return (
+    <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #8b5cf6' }}>
+      <div className="card-body p-4">
+        <h6 className="fw-semibold mb-1" style={{ fontSize: 14, color: '#8b5cf6' }}>
+          <i className="bi bi-robot me-2"></i>AI Suggestions
+        </h6>
+        <p className="text-muted mb-3" style={{ fontSize: 11 }}>
+          System-detected gaps grouped by category. These improvements move your system toward autonomous operation.
+        </p>
+        {grouped.map(cat => (
+          <div key={cat.type} className="mb-3">
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <i className={`bi ${cat.icon}`} style={{ color: cat.color, fontSize: 13 }}></i>
+              <span className="fw-semibold" style={{ fontSize: 12, color: cat.color }}>{cat.label}</span>
+              <span className="badge" style={{ background: `${cat.color}20`, color: cat.color, fontSize: 8 }}>{cat.items.length}</span>
+            </div>
+            {cat.items.map((gap: any) => (
+              <div key={gap.gap_id + gap.bp_id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11 }}>
+                <div className="flex-grow-1">
+                  <div className="fw-medium">{gap.title}</div>
+                  <div className="text-muted" style={{ fontSize: 10 }}>{gap.description?.substring(0, 120)}</div>
+                  <span className="text-muted" style={{ fontSize: 9 }}>{gap.bp_name}</span>
+                </div>
+                <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                  <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 8 }}>{gap.severity}/10</span>
+                  <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 5px' }}
+                    onClick={() => setDismissed(prev => new Set([...prev, gap.gap_id + gap.bp_id]))}>
+                    <i className="bi bi-x"></i>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Visual Builder Section (Improve Tab)
 // ---------------------------------------------------------------------------
 
@@ -1557,6 +1652,9 @@ function ProjectDashboard() {
             vbValidating={vbValidating} setVbValidating={setVbValidating}
             vbValidationResult={vbValidationResult} setVbValidationResult={setVbValidationResult}
           />
+
+          {/* ── AI Suggestions ── */}
+          <AISuggestionsSection />
 
           {/* Add Business Process */}
           <AddBusinessProcessCard onAdded={() => setActiveTab('build')} />
