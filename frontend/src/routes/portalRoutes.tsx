@@ -13,6 +13,7 @@ import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
 import PortalAssignmentsPage from '../pages/portal/PortalAssignmentsPage';
 import PortalProgressPage from '../pages/portal/PortalProgressPage';
 import ProjectDashboard from '../pages/project/ProjectDashboard';
+import SystemBlueprint from '../pages/project/SystemBlueprint';
 import ProjectArtifacts from '../pages/project/ProjectArtifacts';
 import ProjectPortfolio from '../pages/project/ProjectPortfolio';
 import ExecutiveDeliverable from '../pages/project/ExecutiveDeliverable';
@@ -30,7 +31,9 @@ const portalRoutes = (
         <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
-        <Route path="/portal/project" element={<ProjectDashboard />} />
+        <Route path="/portal/project" element={<Navigate to="/portal/project/blueprint" replace />} />
+        <Route path="/portal/project/blueprint" element={<SystemBlueprint />} />
+        <Route path="/portal/project/system" element={<ProjectDashboard />} />
         <Route path="/portal/project/artifacts" element={<ProjectArtifacts />} />
         <Route path="/portal/project/portfolio" element={<ProjectPortfolio />} />
         <Route path="/portal/project/executive" element={<ExecutiveDeliverable />} />

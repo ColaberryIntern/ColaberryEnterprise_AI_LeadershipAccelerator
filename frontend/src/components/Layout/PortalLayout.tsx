@@ -13,7 +13,8 @@ function PortalLayout() {
   };
 
   const navItems = [
-    { to: '/portal/project', label: 'Project', icon: 'bi-rocket-takeoff' },
+    { to: '/portal/project/blueprint', label: 'Blueprint', icon: 'bi-map' },
+    { to: '/portal/project/system', label: 'System View', icon: 'bi-grid-3x3-gap' },
     { to: '/portal/sessions', label: 'Sessions', icon: 'bi-calendar-event' },
   ];
 
@@ -47,6 +48,7 @@ function PortalLayout() {
                 <li className="nav-item" key={item.to}>
                   <NavLink
                     to={item.to}
+                    end
                     className={({ isActive }) =>
                       `nav-link ${isActive ? 'fw-semibold' : ''}`
                     }
