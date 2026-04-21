@@ -226,6 +226,82 @@ export async function generateImprovementPrompt(
   return result;
 }
 
+export interface CombinedPromptInput {
+  execution_steps: string[];   // prompt_target values from execution plan
+  autonomy_gaps: Array<{ gap_id: string; gap_type: string; title: string; description: string; suggested_agent?: { name: string; description: string; type: string } | null }>;
+  include_agents: string[];    // agent names from suggested_agent
+}
+
+export async function generateCombinedPrompt(
+  processId: string,
+  input: CombinedPromptInput,
+  projectContext?: ProjectContext,
+): Promise<GeneratedPrompt> {
+  const process = await Capability.findByPk(processId);
+  if (!process) throw new Error('Process not found');
+
+  const ctx = projectContext || {};
+  const preamble = buildPreamble();
+  const project = buildProjectSection(ctx);
+  const codebase = buildCodebaseSection(ctx);
+  const constraints = buildConstraints();
+  const validation = buildValidation(process.name);
+  const backend = process.linked_backend_services || [];
+  const frontend = process.linked_frontend_components || [];
+  const agents = process.linked_agents || [];
+  const existing = describeExisting(backend, frontend, agents);
+
+  const sections: string[] = [];
+  let stepCount = 0;
+
+  // Execution steps
+  if (input.execution_steps.length > 0) {
+    const stepLines: string[] = [];
+    for (const target of input.execution_steps) {
+      stepCount++;
+      try {
+        const gen = await generateImprovementPrompt(processId, target as PromptTarget, undefined, ctx);
+        // Extract just the objective and what-to-build from the full prompt
+        const objectiveMatch = gen.prompt_text.match(/# OBJECTIVE\n([\s\S]*?)(?=\n# (?:CONSTRAINTS|VALIDATION|WHAT TO|DO NOT|UI GUIDE))/);
+        stepLines.push(`### Step ${stepCount}: ${gen.title}\n\n${objectiveMatch ? objectiveMatch[1].trim() : gen.title}`);
+      } catch {
+        stepLines.push(`### Step ${stepCount}: ${target}\n\nImplement ${target.replace(/_/g, ' ')} for "${process.name}".`);
+      }
+    }
+    sections.push(`# EXECUTION STEPS\n\n${stepLines.join('\n\n')}`);
+  }
+
+  // Autonomy gaps
+  if (input.autonomy_gaps.length > 0) {
+    const gapLines = input.autonomy_gaps.map((g, i) =>
+      `${i + 1}. **${g.title}** (${g.gap_type})\n   ${g.description}`
+    ).join('\n\n');
+    sections.push(`# AUTONOMY ENHANCEMENTS\n\nThese are system-detected gaps that need to be filled to move toward autonomous operation.\n\n${gapLines}`);
+  }
+
+  // Agent creation
+  if (input.include_agents.length > 0) {
+    const agentGaps = input.autonomy_gaps.filter(g => g.suggested_agent && input.include_agents.includes(g.suggested_agent.name));
+    const agentLines = agentGaps.map((g, i) => {
+      const a = g.suggested_agent!;
+      return `${i + 1}. **${a.name}** (${a.type} agent)\n   ${a.description}\n   - Register in any existing agent registry\n   - Log all activity for observability\n   - Implement scheduled or event-driven triggers\n   - Add error handling and retry logic`;
+    }).join('\n\n');
+    sections.push(`# AGENT CREATION\n\nCreate the following monitoring/alerting agents:\n\n${agentLines}\n\nFollow existing agent patterns in the repo. Each agent should be idempotent and safe to rerun.`);
+  }
+
+  const totalItems = input.execution_steps.length + input.autonomy_gaps.length + input.include_agents.length;
+
+  const promptText = `${preamble}${project}${codebase}# CURRENT STATE\n\n${existing}\n\n${sections.join('\n\n')}\n\n# APPROACH\n\n1. Study the existing codebase structure first\n2. For each item, identify where it fits in the existing architecture\n3. Follow existing patterns — do not introduce new frameworks\n4. Each item should result in working, testable code\n5. Add appropriate logging and error handling${constraints}${validation}`;
+
+  return {
+    target: 'backend_improvement' as PromptTarget,
+    title: `Combined Enhancement: ${totalItems} items for ${process.name}`,
+    prompt_text: promptText,
+    estimated_complexity: totalItems > 3 ? 'large' : totalItems > 1 ? 'medium' : 'small',
+    affected_files: [],
+  };
+}
+
 export async function generateAllPrompts(processId: string, projectContext?: ProjectContext): Promise<GeneratedPrompt[]> {
   const targets: PromptTarget[] = ['backend_improvement', 'frontend_exposure', 'agent_enhancement', 'hitl_adjustment', 'autonomy_upgrade', 'monitoring_gap'];
   const prompts: GeneratedPrompt[] = [];

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import SystemIntelligencePanel from './SystemIntelligencePanel';
 import PredictionModal from './PredictionModal';
+import EnhancementPromptBuilder from './EnhancementPromptBuilder';
 
 interface Props { processId: string; onClose: () => void; onUpdate: () => void; }
 
@@ -97,6 +98,16 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   // Project context comes from the process detail API response (p.project_system_prompt)
   const projectContext = p?.project_system_prompt || '';
   useEffect(load, [processId]);
+  // Auto-load backend context on mount (runs in background)
+  useEffect(() => {
+    setLoadingBackend(true);
+    import('../../utils/portalApi').then(mod => {
+      mod.default.get(`/api/portal/project/business-processes/${processId}/backend-context`)
+        .then((r: any) => setBackendCtx(r.data))
+        .catch(() => {})
+        .finally(() => setLoadingBackend(false));
+    });
+  }, [processId]);
   if (!p) return <div className="text-center py-3"><div className="spinner-border spinner-border-sm"></div></div>;
 
   const m = p.metrics || {};
@@ -625,16 +636,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         {(
           <Section num={3.2} title={`Backend Stack${backendCtx ? ` (${backendCtx.api_routes?.length || 0} endpoints, ${backendCtx.models?.length || 0} models, ${backendCtx.agents?.length || 0} agents)` : ''}`} collapsible defaultOpen={false}>
             {!backendCtx && !loadingBackend && (
-              <button className="btn btn-sm btn-outline-primary" onClick={async () => {
-                setLoadingBackend(true);
-                try {
-                  const portalApi = (await import('../../utils/portalApi')).default;
-                  const r = await portalApi.get(`/api/portal/project/business-processes/${processId}/backend-context`);
-                  setBackendCtx(r.data);
-                } catch {} finally { setLoadingBackend(false); }
-              }}>
-                <i className="bi bi-diagram-3 me-1"></i>Load Backend Context
-              </button>
+              <div className="text-muted small"><i className="bi bi-info-circle me-1"></i>No backend context detected for this process.</div>
             )}
             {loadingBackend && <div className="text-muted small"><span className="spinner-border spinner-border-sm me-2"></span>Reading source files from repo...</div>}
             {backendCtx && (
@@ -939,45 +941,15 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           </Section>
         )}
 
-        {/* 8: Execution Plan (dynamic from backend) */}
-        <Section num={8} title="Execution Plan">
-          {(() => {
-            const steps = p.execution_plan || [];
-            if (steps.length === 0) return <div className="text-muted small"><i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>No actions needed — system is fully built.</div>;
-            const firstAvailable = steps.findIndex((s: any) => !s.blocked);
-            return steps.map((s: any, i: number) => {
-              const isNext = i === firstAvailable;
-              return (
-              <div key={s.key} className="mb-3 pb-3" style={{ borderBottom: i < steps.length - 1 ? '1px dashed var(--color-border)' : 'none', background: isNext ? '#eff6ff' : 'transparent', borderRadius: isNext ? 8 : 0, padding: isNext ? 12 : 0 }}>
-                {isNext && <div className="mb-2"><span className="badge" style={{ background: 'var(--color-info)', color: '#fff', fontSize: 9 }}><i className="bi bi-star-fill me-1"></i>Recommended Next Step</span></div>}
-                <div className="d-flex align-items-start gap-3">
-                  <div className="text-center" style={{ flexShrink: 0 }}>
-                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 28, height: 28, background: s.blocked ? '#e2e8f0' : isNext ? 'var(--color-info)' : 'var(--color-primary)', color: s.blocked ? '#9ca3af' : '#fff', fontSize: 12 }}>{s.step}</span>
-                    {i < steps.length - 1 && <div style={{ width: 2, height: 20, background: '#e2e8f0', margin: '4px auto' }}></div>}
-                  </div>
-                  <div className="flex-grow-1">
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div>
-                        <div className="fw-semibold" style={{ fontSize: 13, color: s.blocked ? '#9ca3af' : 'var(--color-primary)' }}>
-                          {s.label}
-                          <span className="badge ms-2" style={{ background: '#10b98120', color: 'var(--color-success)', fontSize: 9 }}>{s.impact}</span>
-                        </div>
-                        <div className="text-muted" style={{ fontSize: 10 }}>Depends on: {s.depends_on}</div>
-                      </div>
-                      <button className="btn btn-sm btn-outline-primary" disabled={s.blocked} onClick={() => setPredictionAction({ type: s.prompt_target, label: s.label })} style={{ fontSize: 10, padding: '2px 8px' }}>
-                        <i className="bi bi-eye me-1"></i>Preview
-                      </button>
-                    </div>
-                    <div className="d-flex gap-3 mt-1" style={{ fontSize: 10 }}>
-                      <span style={{ color: 'var(--color-success)' }}><i className="bi bi-check-circle me-1"></i>Fixes: {s.fixes.join(', ')}</span>
-                      <span style={{ color: 'var(--color-info)' }}><i className="bi bi-unlock me-1"></i>Enables: {s.enables.join(', ')}</span>
-                    </div>
-                    {s.blocked && <div style={{ fontSize: 9, color: 'var(--color-danger)' }} className="mt-1"><i className="bi bi-lock me-1"></i>{s.block_reason || 'Blocked'}</div>}
-                  </div>
-                </div>
-              </div>
-            );});
-          })()}
+        {/* 8: Enhancement Prompt Builder (execution steps + autonomy gaps combined) */}
+        <Section num={8} title="Enhancement Prompt Builder">
+          <EnhancementPromptBuilder
+            executionPlan={p.execution_plan || []}
+            autonomyGaps={p.autonomy_gaps || []}
+            processId={processId}
+            processName={p.name}
+            onPreview={(type, label) => setPredictionAction({ type, label })}
+          />
         </Section>
         </>)}
 
@@ -1063,41 +1035,7 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
                           )}
                         </div>
                       )}
-                      {/* Path to Autonomous — gap suggestions from the report response */}
-                      {(reportResult.autonomous_suggestions || []).length > 0 && (
-                        <div className="mb-3 p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
-                          <h6 className="fw-semibold small mb-2" style={{ color: '#8b5cf6' }}>
-                            <i className="bi bi-rocket-takeoff me-2"></i>Path to Autonomous
-                          </h6>
-                          <p className="text-muted mb-2" style={{ fontSize: 10 }}>Gaps detected after your update. Add them as requirements to move toward autonomous.</p>
-                          {reportResult.autonomous_suggestions.map((gap: any) => {
-                            const icons: Record<string, string> = { behavior: 'bi-person-lines-fill', intelligence: 'bi-lightbulb', optimization: 'bi-speedometer2', reporting: 'bi-bar-chart-line' };
-                            const accepted = reportResult._acceptedGaps?.includes(gap.gap_id);
-                            return (
-                              <div key={gap.gap_id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: accepted ? '#10b98110' : '#fff', borderRadius: 6, border: '1px solid var(--color-border)' }}>
-                                <i className={`bi ${icons[gap.gap_type] || 'bi-gear'}`} style={{ color: '#8b5cf6', marginTop: 2 }}></i>
-                                <div className="flex-grow-1">
-                                  <div className="fw-medium" style={{ fontSize: 11 }}>{gap.title}</div>
-                                  <div className="text-muted" style={{ fontSize: 10 }}>{gap.description}</div>
-                                  <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>{gap.gap_type}</span>
-                                </div>
-                                <button className={`btn btn-sm ${accepted ? 'btn-success' : ''}`}
-                                  style={accepted ? { fontSize: 10 } : { background: '#8b5cf620', color: '#8b5cf6', border: '1px solid #8b5cf640', fontSize: 10 }}
-                                  disabled={accepted || submittingReport}
-                                  onClick={async () => {
-                                    try {
-                                      const portalApi = (await import('../../utils/portalApi')).default;
-                                      await portalApi.post(`/api/portal/project/business-processes/${processId}/accept-suggestion`, { gap_id: gap.gap_id });
-                                      setReportResult((prev: any) => ({ ...prev, _acceptedGaps: [...(prev?._acceptedGaps || []), gap.gap_id] }));
-                                    } catch {}
-                                  }}>
-                                  {accepted ? <><i className="bi bi-check-circle me-1"></i>Added</> : <><i className="bi bi-plus-circle me-1"></i>Add</>}
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                      {/* Path to Autonomous gaps now shown in Section 8 Enhancement Prompt Builder */}
                       {reportResult.metrics_after && (
                         <div className="d-flex gap-3 mt-2">
                           <span className="small"><strong style={{ color: 'var(--color-accent)' }}>{reportResult.metrics_after.reqCoverage}%</strong> coverage</span>

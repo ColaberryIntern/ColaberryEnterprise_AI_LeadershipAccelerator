@@ -14,6 +14,12 @@
  * Only runs when effective mode = 'autonomous'.
  */
 
+export interface SuggestedAgent {
+  name: string;
+  description: string;
+  type: 'monitoring' | 'alerting' | 'analytics';
+}
+
 export interface DetectedGap {
   gap_id: string;
   gap_type: 'behavior' | 'intelligence' | 'optimization' | 'reporting';
@@ -23,6 +29,7 @@ export interface DetectedGap {
   severity: number; // 0-10
   target: 'BP' | 'REPORTING';
   suggested_category: string;
+  suggested_agent?: SuggestedAgent;
 }
 
 interface EnrichedBP {
@@ -193,6 +200,7 @@ function detectOptimizationGaps(bp: EnrichedBP, repoTree: string[], existingAuto
         severity: 6,
         target: 'BP',
         suggested_category: 'backend',
+        suggested_agent: { name: 'Feedback Collection Agent', description: `Collects outcome data and user feedback for "${bp.name}" to measure effectiveness and drive iterative improvement.`, type: 'analytics' },
       });
     }
   }
@@ -209,6 +217,7 @@ function detectOptimizationGaps(bp: EnrichedBP, repoTree: string[], existingAuto
         severity: 5,
         target: 'BP',
         suggested_category: 'backend',
+        suggested_agent: { name: 'KPI Tracking Agent', description: `Monitors performance metrics and KPIs for "${bp.name}", alerting when thresholds are breached or trends shift.`, type: 'alerting' },
       });
     }
   }
@@ -236,6 +245,7 @@ function detectReportingGaps(bp: EnrichedBP, repoTree: string[], existingAutoKey
         severity: 5,
         target: 'REPORTING',
         suggested_category: 'frontend',
+        suggested_agent: { name: 'Process Health Monitor', description: `Continuously monitors "${bp.name}" health metrics and generates periodic status reports for stakeholders.`, type: 'monitoring' },
       });
     }
   }
@@ -252,6 +262,7 @@ function detectReportingGaps(bp: EnrichedBP, repoTree: string[], existingAutoKey
         severity: 4,
         target: 'REPORTING',
         suggested_category: 'frontend',
+        suggested_agent: { name: 'Agent Performance Monitor', description: `Tracks AI agent effectiveness for "${bp.name}", reporting on response quality, latency, and error rates.`, type: 'monitoring' },
       });
     }
   }

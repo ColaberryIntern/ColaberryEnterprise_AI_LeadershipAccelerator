@@ -1838,8 +1838,26 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       });
     } catch { /* non-critical — mapping table may not exist yet */ }
 
+    // Detect autonomy gaps eagerly so the frontend can show them without a validation report
+    let autonomyGaps: any[] = [];
+    try {
+      const repoTree = (cap as any)._repoFileTree || [];
+      const { RequirementsMap: RM } = await import('../models');
+      const existingAutoReqs = await RM.findAll({ where: { project_id: project.id, capability_id: req.params.id, verified_by: 'AUTONOMOUS_ENGINE' }, attributes: ['requirement_key'] });
+      const existingKeys = new Set(existingAutoReqs.map((r: any) => r.requirement_key));
+      const { loadBuildHistory, isGapAddressed } = await import('../services/buildHistoryService');
+      const buildHistory = await loadBuildHistory(project.id);
+      const addressedIds = new Set<string>();
+      for (const gid of buildHistory.addressedGapIds) addressedIds.add(gid);
+      const { detectGaps } = await import('../intelligence/requirements/gapDetectionEngine');
+      autonomyGaps = detectGaps(enriched as any, repoTree, existingKeys, addressedIds)
+        .filter(g => !isGapAddressed(g.gap_id, g.gap_type, buildHistory))
+        .map(g => ({ gap_id: g.gap_id, gap_type: g.gap_type, title: g.title, description: g.description, severity: g.severity, suggested_category: g.suggested_category, suggested_agent: g.suggested_agent || null }));
+    } catch { /* non-critical — gaps are supplementary */ }
+
     res.json({
       ...enriched,
+      autonomy_gaps: autonomyGaps,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
       preview_url: (() => {
         const baseUrl = (project as any).portfolio_url;
@@ -2087,6 +2105,37 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
       await cap.save();
     }
 
+    res.json(prompt);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Combined Prompt: generates a single prompt from selected execution steps + autonomy gaps ────────
+router.post('/api/portal/project/business-processes/:id/combined-prompt', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { execution_steps = [], autonomy_gaps = [], include_agents = [] } = req.body;
+    if (execution_steps.length === 0 && autonomy_gaps.length === 0) { res.status(400).json({ error: 'Select at least one step or gap' }); return; }
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { Capability: CapCheck } = await import('../models');
+    const ownerCheck = await CapCheck.findOne({ where: { id: req.params.id as string, project_id: project.id } });
+    if (!ownerCheck) { res.status(404).json({ error: 'Process not found' }); return; }
+
+    let repoFileTree: string[] = [];
+    try {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) repoFileTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+    } catch {}
+    const projectVars = (project as any).project_variables || {};
+    const projectContext = {
+      repoFileTree,
+      systemPrompt: projectVars.system_prompt || '',
+      repoUrl: (project as any).github_repo_url || '',
+      projectName: (project as any).organization_name || '',
+    };
+
+    const { generateCombinedPrompt } = await import('../intelligence/promptGenerator');
+    const prompt = await generateCombinedPrompt(req.params.id as string, { execution_steps, autonomy_gaps, include_agents }, projectContext);
     res.json(prompt);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
