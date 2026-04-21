@@ -522,6 +522,12 @@ export default function SystemBlueprint() {
   const [coryView, setCoryView] = useState<'plan' | 'suggestions'>('plan');
   const [completedPlanSteps, setCompletedPlanSteps] = useState<Set<string>>(new Set());
 
+  // Execution queue state
+  const [execQueue, setExecQueue] = useState<CoryPlanStep[]>([]);
+  const [execIndex, setExecIndex] = useState(0);
+  const [execPaused, setExecPaused] = useState(false);
+  const isExecuting = execQueue.length > 0;
+
   // Demo state
   const [demoActive, setDemoActive] = useState(false);
   const [demoStep, setDemoStep] = useState(0);
@@ -789,7 +795,57 @@ export default function SystemBlueprint() {
   };
 
   // ---------------------------------------------------------------------------
-  // Render
+  // Execution queue handlers
+  // ---------------------------------------------------------------------------
+
+  const handleStartExecution = async () => {
+    const allIncomplete = coryPlan.flatMap(p => p.steps.filter(s => !s.done));
+    if (allIncomplete.length === 0) return;
+    setExecQueue(allIncomplete);
+    setExecIndex(0);
+    setExecPaused(false);
+    await handleApplyPlanStep(allIncomplete[0]);
+  };
+
+  const handleExecAdvance = async () => {
+    const nextIdx = execIndex + 1;
+    if (nextIdx >= execQueue.length) {
+      setExecQueue([]);
+      setExecIndex(0);
+      setBuild(INITIAL_BUILD);
+      setShowPrompt(false);
+      showToast('Plan execution complete! Your system has evolved.', '#059669');
+      await loadData();
+      return;
+    }
+    setExecIndex(nextIdx);
+    setBuild(INITIAL_BUILD);
+    setShowPrompt(false);
+    setTimeout(async () => {
+      await handleApplyPlanStep(execQueue[nextIdx]);
+    }, 500);
+  };
+
+  const handleExecPause = () => { setExecPaused(true); };
+
+  const handleExecResume = async () => {
+    setExecPaused(false);
+    const current = execQueue[execIndex];
+    if (current && build.phase === 'idle') {
+      await handleApplyPlanStep(current);
+    }
+  };
+
+  const handleExecExit = () => {
+    setExecQueue([]);
+    setExecIndex(0);
+    setExecPaused(false);
+    setBuild(INITIAL_BUILD);
+    setShowPrompt(false);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Render (main)
   // ---------------------------------------------------------------------------
 
   return (
@@ -984,6 +1040,13 @@ export default function SystemBlueprint() {
                 })}
               </div>
             )}
+            {coryView === 'plan' && coryPlan.length > 0 && totalPlanSteps - donePlanSteps > 0 && !isExecuting && (
+              <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                <button className="btn btn-sm w-100" style={{ background: autonomousMode ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleStartExecution}>
+                  <i className="bi bi-play-fill me-1"></i>Execute Plan ({totalPlanSteps - donePlanSteps} steps)
+                </button>
+              </div>
+            )}
             {coryView === 'plan' && coryPlan.length === 0 && (
               <p className="text-muted small mb-0"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>All plan phases complete.</p>
             )}
@@ -1015,6 +1078,59 @@ export default function SystemBlueprint() {
                 }) : (
                   <p className="text-muted small mb-0">No suggestions at this time — your system is on track.</p>
                 )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Execution Mode Header ── */}
+      {isExecuting && (
+        <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #1a365d08, #8b5cf608)', border: '1px solid #8b5cf620' }}>
+          <div className="card-body py-3 px-4">
+            <div className="d-flex align-items-center justify-content-between">
+              <div>
+                <div className="d-flex align-items-center gap-2 mb-1">
+                  <i className="bi bi-lightning-fill" style={{ color: '#8b5cf6' }}></i>
+                  <span className="fw-bold" style={{ fontSize: 13, color: 'var(--color-primary)' }}>
+                    Executing Your System Plan
+                  </span>
+                </div>
+                <div className="d-flex align-items-center gap-3" style={{ fontSize: 11 }}>
+                  <span className="text-muted">Step {execIndex + 1} of {execQueue.length}</span>
+                  {execQueue[execIndex] && (
+                    <span style={{ color: '#8b5cf6', fontWeight: 500 }}>{execQueue[execIndex].title}</span>
+                  )}
+                  {execPaused && <span className="badge bg-warning text-dark" style={{ fontSize: 8 }}>Paused</span>}
+                </div>
+              </div>
+              <div className="d-flex gap-2">
+                {!execPaused ? (
+                  <button className="btn btn-sm btn-outline-warning" style={{ fontSize: 10 }} onClick={handleExecPause}>
+                    <i className="bi bi-pause-fill me-1"></i>Pause
+                  </button>
+                ) : (
+                  <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={handleExecResume}>
+                    <i className="bi bi-play-fill me-1"></i>Resume
+                  </button>
+                )}
+                <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={handleExecExit}>
+                  <i className="bi bi-x-circle me-1"></i>Exit Plan
+                </button>
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div className="progress mt-2" style={{ height: 4, borderRadius: 2 }}>
+              <div className="progress-bar" style={{ width: `${((execIndex + (build.phase === 'validated' ? 1 : 0)) / execQueue.length) * 100}%`, background: '#8b5cf6', borderRadius: 2, transition: 'width 0.5s ease' }} />
+            </div>
+            {/* Completed steps */}
+            {execIndex > 0 && (
+              <div className="mt-2 d-flex flex-wrap gap-1">
+                {execQueue.slice(0, execIndex).map((s, i) => (
+                  <span key={i} className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 8 }}>
+                    <i className="bi bi-check me-1"></i>{s.title}
+                  </span>
+                ))}
               </div>
             )}
           </div>
@@ -1184,9 +1300,19 @@ export default function SystemBlueprint() {
                         {nextAfter && <span className="text-muted ms-2">Next: {nextAfter.name}</span>}
                       </div>
                       {!demoActive && (
-                        <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={handleStartNext}>
-                          <i className="bi bi-arrow-right me-1"></i>Continue to Next Step
-                        </button>
+                        isExecuting ? (
+                          <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleExecAdvance}>
+                            {execIndex + 1 < execQueue.length ? (
+                              <><i className="bi bi-arrow-right me-1"></i>Next Step ({execIndex + 2}/{execQueue.length})</>
+                            ) : (
+                              <><i className="bi bi-check-circle me-1"></i>Complete Plan</>
+                            )}
+                          </button>
+                        ) : (
+                          <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={handleStartNext}>
+                            <i className="bi bi-arrow-right me-1"></i>Continue to Next Step
+                          </button>
+                        )
                       )}
                     </div>
                   </div>
