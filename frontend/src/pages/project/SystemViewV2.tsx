@@ -5,7 +5,7 @@
  * Reuses existing APIs — no new backend endpoints
  * componentId sync via URL param + local state
  */
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
@@ -258,6 +258,7 @@ function SystemViewV2Inner() {
   const [selectedId, setSelectedId] = useState<string | null>(urlComponentId || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const workAreaRef = useRef<HTMLDivElement>(null);
 
   // Sync URL param → state
   useEffect(() => {
@@ -301,7 +302,6 @@ function SystemViewV2Inner() {
     return <div className="alert alert-danger">{error || 'Failed to load project'}</div>;
   }
 
-  const workAreaRef = useRef<HTMLDivElement>(null);
   const selectedComponent = selectedId ? components.find(c => c.id === selectedId) : null;
   const completedCount = components.filter(c => c.status === 'complete').length;
   const systemLayers = {
@@ -310,9 +310,9 @@ function SystemViewV2Inner() {
     agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
   };
 
-  // Memoized grouping + next badges
-  const groups = useMemo(() => groupComponents(components), [components]);
-  const nextIds = useMemo(() => getNextComponents(components), [components]);
+  // Grouping + next badges
+  const groups = groupComponents(components);
+  const nextIds = getNextComponents(components);
 
   const handleTileClick = (id: string) => {
     const isDeselect = id === selectedId;
