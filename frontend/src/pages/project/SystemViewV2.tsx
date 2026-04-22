@@ -26,6 +26,8 @@ interface SystemComponent {
   nextStep: string | null;
   promptTarget: string | null;
   isPageBP: boolean;
+  isDiscovered: boolean;
+  source: string;
   layers: { backend: string; frontend: string; agent: string };
 }
 
@@ -65,6 +67,8 @@ function transformBPs(bps: any[]): SystemComponent[] {
       const maturityLevel = bp.maturity?.level || 0;
       const isComplete = bp.is_complete === true;
       const isPageBP = bp.source === 'frontend_page' || bp.is_page_bp === true;
+      const bpSource = bp.source || 'unknown';
+      const hasExecPlan = (bp.execution_plan || []).length > 0;
       const u = bp.usability || {};
 
       let status: 'complete' | 'in_progress' | 'not_started';
@@ -86,6 +90,8 @@ function transformBPs(bps: any[]): SystemComponent[] {
         nextStep: firstStep?.label || null,
         promptTarget: firstStep?.prompt_target || null,
         isPageBP,
+        isDiscovered: bpSource === 'repo_discovered' || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
+        source: bpSource,
         layers: {
           backend: u.backend || 'missing',
           frontend: u.frontend || 'missing',
@@ -121,8 +127,11 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
   const foundation: SystemComponent[] = [];
   const usability: SystemComponent[] = [];
   const intelligence: SystemComponent[] = [];
+  const discovered: SystemComponent[] = [];
 
   for (const c of components) {
+    // Discovered/unmapped go to their own group first
+    if (c.isDiscovered) { discovered.push(c); continue; }
     const name = c.name.toLowerCase();
     // Page BPs always go to Usability
     if (c.isPageBP) { usability.push(c); continue; }
@@ -141,6 +150,7 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
   if (foundation.length > 0) groups.push({ key: 'foundation', title: 'Foundation', icon: 'bi-bricks', color: '#3b82f6', items: foundation, completion: calcCompletion(foundation) });
   if (usability.length > 0) groups.push({ key: 'usability', title: 'Usability', icon: 'bi-layout-wtf', color: '#10b981', items: usability, completion: calcCompletion(usability) });
   if (intelligence.length > 0) groups.push({ key: 'intelligence', title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', items: intelligence, completion: calcCompletion(intelligence) });
+  if (discovered.length > 0) groups.push({ key: 'discovered', title: 'Discovered (Unmapped)', icon: 'bi-search', color: '#a855f7', items: discovered, completion: calcCompletion(discovered) });
 
   return groups;
 }
@@ -258,6 +268,7 @@ function SystemViewV2Inner() {
   const [selectedId, setSelectedId] = useState<string | null>(urlComponentId || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
   const workAreaRef = useRef<HTMLDivElement>(null);
 
   // Sync URL param → state
@@ -310,9 +321,10 @@ function SystemViewV2Inner() {
     agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
   };
 
-  // Grouping + next badges
-  const groups = groupComponents(components);
-  const nextIds = getNextComponents(components);
+  // Filter ignored, then group + next badges
+  const visibleComponents = components.filter(c => !ignoredIds.has(c.id));
+  const groups = groupComponents(visibleComponents);
+  const nextIds = getNextComponents(visibleComponents);
 
   const handleTileClick = (id: string) => {
     const isDeselect = id === selectedId;
@@ -381,11 +393,15 @@ function SystemViewV2Inner() {
 
           {/* Grouped component tiles */}
           {groups.length > 0 ? groups.map(group => (
-            <div key={group.key} className="mb-3">
+            <div key={group.key} className="mb-3" style={{ opacity: group.key === 'discovered' ? 0.7 : 1 }}>
               <div className="d-flex align-items-center gap-2 mb-2">
                 <i className={`bi ${group.icon}`} style={{ color: group.color, fontSize: 13 }}></i>
                 <span className="fw-semibold" style={{ fontSize: 12, color: group.color }}>{group.title}</span>
-                <span className="badge" style={{ background: `${group.color}20`, color: group.color, fontSize: 8 }}>{group.completion}%</span>
+                {group.key === 'discovered' ? (
+                  <span className="badge" style={{ background: `${group.color}20`, color: group.color, fontSize: 8 }}>Discovered from repo</span>
+                ) : (
+                  <span className="badge" style={{ background: `${group.color}20`, color: group.color, fontSize: 8 }}>{group.completion}%</span>
+                )}
                 <span className="text-muted" style={{ fontSize: 9 }}>{group.items.length} components</span>
               </div>
               <div className="d-flex flex-wrap gap-2">
@@ -418,7 +434,34 @@ function SystemViewV2Inner() {
             <i className="bi bi-hammer me-2"></i>Work Area
           </h6>
 
-          {selectedComponent ? (
+          {selectedComponent?.isDiscovered ? (
+            /* ── Discovered / Unmapped Component View ── */
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <i className="bi bi-search" style={{ color: '#a855f7', fontSize: 14 }}></i>
+                <span className="fw-bold" style={{ fontSize: 15, color: 'var(--color-text)' }}>{selectedComponent.name}</span>
+                <span className="badge" style={{ background: '#a855f720', color: '#a855f7', fontSize: 9 }}>Unmapped</span>
+              </div>
+              <div className="p-3 mb-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #a855f720' }}>
+                <p className="mb-2 fw-medium" style={{ fontSize: 13, color: '#7c3aed' }}>
+                  <i className="bi bi-info-circle me-1"></i>This component is not mapped to your system
+                </p>
+                <p className="text-muted mb-0" style={{ fontSize: 11 }}>
+                  It was discovered in your repository but hasn't been assigned to a system blueprint group. You can map it to a group or ignore it.
+                </p>
+              </div>
+              <div className="d-flex gap-2">
+                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }}
+                  onClick={() => window.location.href = `/portal/project/system?componentId=${selectedComponent.id}#build`}>
+                  <i className="bi bi-diagram-3 me-1"></i>Map to System
+                </button>
+                <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }}
+                  onClick={() => { setIgnoredIds(prev => new Set([...prev, selectedComponent.id])); setSelectedId(null); }}>
+                  <i className="bi bi-eye-slash me-1"></i>Ignore
+                </button>
+              </div>
+            </div>
+          ) : selectedComponent ? (
             <div>
               <div className="d-flex align-items-center gap-2 mb-2">
                 <span className="fw-bold" style={{ fontSize: 15, color: 'var(--color-text)' }}>

@@ -20,6 +20,8 @@ function makeBP(overrides: any = {}) {
     nextStep: overrides.nextStep || null,
     promptTarget: overrides.promptTarget || null,
     isPageBP: overrides.isPageBP || false,
+    isDiscovered: overrides.isDiscovered || false,
+    source: overrides.source || 'auto',
     layers: overrides.layers || { backend: 'missing', frontend: 'missing', agent: 'missing' },
   };
 }
@@ -105,6 +107,53 @@ describe('SystemViewV2 — Component Grouping', () => {
     const groups = groupComponents(comps);
     expect(groups).toHaveLength(3);
     expect(groups.map(g => g.key).sort()).toEqual(['foundation', 'intelligence', 'usability']);
+  });
+
+  test('discovered components go to Discovered group', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'Unknown Module', isDiscovered: true }),
+      makeBP({ id: '2', name: 'Repo Widget', isDiscovered: true }),
+    ];
+    const groups = groupComponents(comps);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].key).toBe('discovered');
+    expect(groups[0].items).toHaveLength(2);
+  });
+
+  test('discovered components are NOT mixed into other groups', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'API Backend' }),
+      makeBP({ id: '2', name: 'Mystery Component', isDiscovered: true }),
+      makeBP({ id: '3', name: 'AI Agent', isDiscovered: true }),
+    ];
+    const groups = groupComponents(comps);
+    const foundation = groups.find(g => g.key === 'foundation');
+    const discovered = groups.find(g => g.key === 'discovered');
+    expect(foundation!.items).toHaveLength(1);
+    expect(discovered!.items).toHaveLength(2);
+    // Ensure discovered items are NOT in foundation or intelligence
+    expect(foundation!.items.some(c => c.isDiscovered)).toBe(false);
+  });
+
+  test('all 4 groups created with discovered components', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'API Backend' }),
+      makeBP({ id: '2', name: 'Landing Page', isPageBP: true }),
+      makeBP({ id: '3', name: 'AI Agent Automation' }),
+      makeBP({ id: '4', name: 'Repo Discovery', isDiscovered: true }),
+    ];
+    const groups = groupComponents(comps);
+    expect(groups).toHaveLength(4);
+    expect(groups.map(g => g.key).sort()).toEqual(['discovered', 'foundation', 'intelligence', 'usability']);
+  });
+
+  test('discovered group appears last', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'API Backend' }),
+      makeBP({ id: '2', name: 'Unknown', isDiscovered: true }),
+    ];
+    const groups = groupComponents(comps);
+    expect(groups[groups.length - 1].key).toBe('discovered');
   });
 });
 
