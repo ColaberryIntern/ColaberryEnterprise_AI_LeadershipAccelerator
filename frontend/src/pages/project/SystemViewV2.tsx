@@ -1384,7 +1384,7 @@ function SystemViewV2Inner() {
                     <div className="d-flex gap-2 mt-3">
                       <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} disabled={!defineTarget} onClick={() => {
                         if (!defineTarget) return;
-                        const page: UIPage = { name: defineModal.discoveredComp.name, route: defineModal.discoveredComp.frontendRoute || '/', source: 'discovered', verified: true, bpId: defineModal.discoveredComp.id };
+                        const page: UIPage = { name: defineModal.discoveredComp.name, route: defineModal.discoveredComp.frontendRoute || '/', source: 'discovered', verified: true, confidence: 100, bpId: defineModal.discoveredComp.id };
                         setPageAttachments(prev => ({ ...prev, [defineTarget]: [...(prev[defineTarget] || []), page] }));
                         setIgnoredIds(prev => new Set([...prev, defineModal.discoveredComp.id]));
                         setDefineStep('done');
