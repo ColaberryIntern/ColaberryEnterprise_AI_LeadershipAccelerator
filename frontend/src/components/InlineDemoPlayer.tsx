@@ -12,9 +12,11 @@ interface InlineDemoPlayerProps {
   replayScenario?: string;
   /** Auto-play immediately without requiring "Watch It Build" click */
   autoPlay?: boolean;
+  /** Presenter mode: pauses at each step boundary, shows Next/Back controls */
+  presenterMode?: boolean;
 }
 
-export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDemoComplete, replayScenario, autoPlay }: InlineDemoPlayerProps) {
+export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDemoComplete, replayScenario, autoPlay, presenterMode }: InlineDemoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'initial' | 'playing' | 'done'>('initial');
   const autoPlayedRef = useRef(false);
@@ -38,11 +40,39 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
   const graphRef = useRef<any>(null);
   const runIdRef = useRef(0);
 
+  // Presenter mode: gate that pauses demo until "Next" is clicked
+  const presenterResolveRef = useRef<(() => void) | null>(null);
+  const [presenterStep, setPresenterStep] = useState('');
+  const [presenterWaiting, setPresenterWaiting] = useState(false);
+  const presenterStepIndexRef = useRef(0);
+  const PRESENTER_STEP_LABELS = ['Describe Challenge', 'Answer Questions', 'AI Design', 'Results & Agents', 'Live Simulation', 'Complete'];
+
+  function presenterGate(stepLabel: string): Promise<boolean> {
+    if (!presenterMode) return Promise.resolve(true);
+    return new Promise(resolve => {
+      presenterStepIndexRef.current = PRESENTER_STEP_LABELS.indexOf(stepLabel);
+      setPresenterStep(stepLabel);
+      setPresenterWaiting(true);
+      presenterResolveRef.current = () => {
+        setPresenterWaiting(false);
+        presenterResolveRef.current = null;
+        resolve(runIdRef.current === runIdRef.current);
+      };
+    });
+  }
+
+  function presenterNext() {
+    if (presenterResolveRef.current) presenterResolveRef.current();
+  }
+
   function stopAll() {
     runIdRef.current++;
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
     if (graphRef.current) { graphRef.current.destroy(); graphRef.current = null; }
+    // Clean up presenter gate
+    if (presenterResolveRef.current) { presenterResolveRef.current = null; }
+    setPresenterWaiting(false);
   }
 
   useEffect(() => { return () => stopAll(); }, []);
@@ -285,6 +315,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     if (!ideaEl) { console.warn('[Demo] DOM not ready'); return; }
 
     // Step 1: Idea typing — the business problem
+    await presenterGate('Describe Challenge');
     narr(data.narr.idea);
     ideaEl.innerHTML = '<div class="card border-0 shadow-sm"><div class="card-body p-3"><label class="form-label fw-semibold small">Describe your business challenge:</label><textarea class="form-control" id="ep-ta" rows="5" readonly style="resize:none;font-size:.85rem;border-radius:8px;"></textarea></div></div>';
     showStep('idea');
@@ -295,6 +326,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     if (!ok(await delay(2500, rid))) return;
 
     // Step 2: Questions
+    await presenterGate('Answer Questions');
     narr(data.narr.questions);
     const qEl = document.getElementById('ep-step-questions');
     if (qEl) qEl.innerHTML = '<div id="ep-chat" style="max-height:280px;overflow-y:auto;"></div>';
@@ -327,6 +359,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     if (!ok(await delay(600, rid))) return;
 
     // Step 3: Design
+    await presenterGate('AI Design');
     narr(data.narr.design);
     let dHTML = '<div class="row g-3"><div class="col-md-6"><h6 class="fw-semibold small mb-2"><i class="bi bi-bullseye me-1"></i>Outcomes</h6>';
     data.design.outcomes.forEach((o: any) => { dHTML += '<div class="ep-card mb-2 d-flex align-items-center gap-2" id="epc-' + o.id + '"><i class="bi ' + o.icon + ' text-primary"></i><span style="font-size:.85rem;">' + o.label + '</span></div>'; });
@@ -342,6 +375,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     if (!ok(await delay(800, rid))) return;
 
     // Step 4: Results
+    await presenterGate('Results & Agents');
     narr(data.narr.results);
     const kp = data.kpis;
     const rHTML = '<div class="row g-2 mb-3"><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-success" id="ek1">$0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Savings</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-primary" id="ek2">$0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Revenue</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-warning" id="ek3">0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">ROI</div></div></div><div class="col"><div class="card shadow-sm border-0 text-center py-2"><div class="ep-kpi text-info" id="ek4">0</div><div style="font-size:.65rem;color:#64748b;text-transform:uppercase;">Agents</div></div></div></div><div class="row g-2"><div class="col-lg-7"><div class="ep-graph" id="ep-graph-res"></div></div><div class="col-lg-5"><div class="small text-muted mb-2"><i class="bi bi-robot me-1"></i>Agent Details</div><div id="ep-agent-card"></div></div></div>';
@@ -373,6 +407,7 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     if (!ok(await delay(800, rid))) return;
 
     // Step 5: Simulation
+    await presenterGate('Live Simulation');
     narr(data.narr.sim);
     const simHTML = '<div class="row g-2"><div class="col-lg-7"><div class="ep-graph" id="ep-graph-sim"></div></div><div class="col-lg-5"><div class="card border-0 shadow-sm"><div class="card-header py-2 small fw-semibold"><i class="bi bi-activity me-1"></i>Live Activity</div><div class="card-body p-2" id="ep-feed" style="max-height:280px;overflow-y:auto;"></div></div></div></div>';
     const sEl = document.getElementById('ep-step-sim');
@@ -516,6 +551,29 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
           <div id="ep-step-design" className="ep-step" />
           <div id="ep-step-results" className="ep-step" />
           <div id="ep-step-sim" className="ep-step" />
+
+          {/* Presenter mode controls */}
+          {presenterMode && presenterWaiting && (
+            <div className="d-flex align-items-center justify-content-between mt-3 p-3" style={{ background: 'linear-gradient(135deg, #1e293b, #334155)', borderRadius: 10, border: '1px solid #475569' }}>
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-easel2 text-warning" />
+                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Presenter Mode</span>
+                <span style={{ color: '#e2e8f0', fontSize: 13 }}>
+                  Step {presenterStepIndexRef.current + 1} of {PRESENTER_STEP_LABELS.length - 1}
+                </span>
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <span style={{ color: '#cbd5e1', fontSize: 13, fontWeight: 600 }}>{presenterStep}</span>
+                <button
+                  className="btn btn-warning btn-sm fw-bold px-4"
+                  onClick={presenterNext}
+                  style={{ fontSize: 14, borderRadius: 20 }}
+                >
+                  Next Step <i className="bi bi-arrow-right ms-1" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

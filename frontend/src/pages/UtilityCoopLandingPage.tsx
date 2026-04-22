@@ -220,6 +220,7 @@ function UtilityCoopLandingPage() {
             trackContext="utility_landing"
             onDemoComplete={onDemoComplete}
             autoPlay={!!selectedScenario}
+            presenterMode={new URLSearchParams(window.location.search).has('presenter')}
           />
 
           {/* 8 Scenario Picker — shows after demo completes */}
