@@ -75,7 +75,7 @@ function PilotAITeamPage() {
               </span>
             </h1>
             <p style={{ fontSize: 'clamp(16px, 2.2vw, 20px)', color: '#94a3b8', lineHeight: 1.7, marginBottom: 36, maxWidth: 640, margin: '0 auto 36px' }}>
-              Lower cost. Higher output. Zero sick days. Deployed in 14 days.
+              For less than one junior salary, get an entire AI team that never sleeps.
             </p>
             <button onClick={openBooking} style={{ ...btnPrimary, padding: '18px 48px', fontSize: 20 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
@@ -100,7 +100,7 @@ function PilotAITeamPage() {
                 <h3 style={{ fontSize: 22, fontWeight: 700, color: TEXT, marginBottom: 20, marginTop: 8 }}>Junior Developer</h3>
                 <div style={{ display: 'grid', gap: 12 }}>
                   {[
-                    { label: 'Annual Cost', value: '$65,000/yr', sub: 'Plus benefits, taxes, equipment' },
+                    { label: 'Annual Cost', value: '$65K+', sub: 'Plus benefits, taxes, equipment, management' },
                     { label: 'Availability', value: '40 hrs/week', sub: 'Minus vacation, sick days, meetings' },
                     { label: 'Ramp Time', value: '3 months', sub: 'Before meaningful output' },
                     { label: 'Parallel Tasks', value: '1 at a time', sub: 'Context switching kills quality' },
@@ -123,7 +123,7 @@ function PilotAITeamPage() {
                 <h3 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 20, marginTop: 8 }}>AI Agent</h3>
                 <div style={{ display: 'grid', gap: 12 }}>
                   {[
-                    { label: 'Annual Cost', value: '$36,000/yr', sub: 'All-in. No benefits, no overhead.' },
+                    { label: 'Annual Cost', value: 'Less Than 1 Hire', sub: 'Fraction of a junior salary. Scales without adding headcount.' },
                     { label: 'Availability', value: '24/7/365', sub: 'No downtime. No breaks.' },
                     { label: 'Ramp Time', value: 'Instant', sub: 'Deployed in 14 days, productive Day 1' },
                     { label: 'Parallel Tasks', value: 'Unlimited', sub: 'Handles hundreds simultaneously' },
@@ -175,7 +175,7 @@ function PilotAITeamPage() {
           <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
               {[
-                { stat: '$36K/yr', label: 'All-In Cost', color: GREEN },
+                { stat: '<1 Hire', label: 'Total Cost', color: GREEN },
                 { stat: '24/7', label: 'Availability', color: ACCENT },
                 { stat: '10x', label: 'Output vs Human', color: PURPLE },
                 { stat: '0', label: 'Sick Days', color: RED },
@@ -199,7 +199,7 @@ function PilotAITeamPage() {
               In a 20-minute scoping call, we identify the 2-3 processes in your company where an AI agent would have the highest impact. You'll walk away with a concrete plan, whether or not you move forward.
             </p>
             <p style={{ color: '#cbd5e1', fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
-              Founding rate: $3K/month. Full price after this round: $5K/month.
+              Founding clients get locked-in rates and priority access. Pricing is scoped to your needs on the call.
             </p>
             <button onClick={openBooking} style={{ ...btnPrimary, padding: '20px 56px', fontSize: 22 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}

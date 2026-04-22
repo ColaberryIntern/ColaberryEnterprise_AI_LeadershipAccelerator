@@ -106,14 +106,14 @@ const COST_REPLACEMENT_SEQUENCE = {
       channel: 'email' as const,
       subject: 'Your next hire should be an AI system, not a person',
       body_template: '',
-      ai_instructions: `Write a pragmatic email comparing AI systems to junior hires. A junior hire costs $3-5K per month, takes 3 months to ramp, works 40 hours a week, calls in sick, and quits after 18 months. An AI system costs $3K per month, works 24/7, deploys in 14 days, never calls in sick, and gets better over time. This is not about replacing people. It is about putting AI systems on the repetitive, high-volume work so your team can focus on judgment calls and strategy. We are building these systems for 10 founding clients right now. CTA: See what we would build for your team at https://enterprise.colaberry.ai/pilot/ai-team
+      ai_instructions: `Write a pragmatic email comparing AI systems to junior hires. A junior hire costs $65K+ per year loaded (salary, benefits, taxes, equipment, management overhead), takes 3 months to ramp, works 40 hours a week, calls in sick, and quits after 18 months. An AI system costs less than one junior salary for the entire first year, works 24/7, deploys in 14 days, never calls in sick, and gets better over time. Do NOT quote specific monthly pricing. This is not about replacing people. It is about putting AI systems on the repetitive, high-volume work so your team can focus on judgment calls and strategy. We are building these systems for 10 founding clients right now. CTA: See what we would build for your team at https://enterprise.colaberry.ai/pilot/ai-team
 
 CRITICAL FORMATTING RULES:
 - Do NOT include ANY sign-off. The signature block is appended automatically.
 - Write in plain text style. No HTML formatting, no bold.
 - No opt-out language. No emdashes.`,
       ai_tone: 'pragmatic',
-      step_goal: '$3-5K/month comparison, 24/7, zero ramp',
+      step_goal: 'Less than 1 junior hire comparison, 24/7, zero ramp',
       max_attempts: 1,
       fallback_channel: null,
     },
@@ -154,14 +154,14 @@ CRITICAL FORMATTING RULES:
       channel: 'email' as const,
       subject: 'We are closing the founding round this week',
       body_template: '',
-      ai_instructions: `Write a direct email about the founding rate closing. The founding client rate is $3K per month. After this week, the rate goes to $5K per month. The founding rate includes: the 14-day build, ongoing maintenance, priority support, and quarterly optimization reviews. The full rate includes the same scope but at $5K. We are closing the founding round because we have nearly filled all 10 spots and need to focus our build capacity on delivering for those clients. If the lead wants to lock in the founding rate, the next step is a 20-minute scoping call this week.
+      ai_instructions: `Write a direct email about the founding round closing. The founding client program is closing this week. Founding clients get locked-in rates, priority access to our build team, and quarterly optimization reviews. Do NOT quote specific monthly pricing. After this round closes, pricing increases and engagements become less hands-on. We are closing because we have nearly filled all 10 spots and need to focus our build capacity on delivering for those clients. If the lead wants to lock in the founding rate, the next step is a 20-minute scoping call this week.
 
 CRITICAL FORMATTING RULES:
 - Do NOT include ANY sign-off. The signature block is appended automatically.
 - Write in plain text style. No HTML formatting, no bold.
 - No opt-out language. No emdashes.`,
       ai_tone: 'direct',
-      step_goal: 'Founding rate $3K vs $5K/month',
+      step_goal: 'Close with founding benefits and deadline',
       max_attempts: 1,
       fallback_channel: null,
     },
@@ -173,11 +173,11 @@ const COST_REPLACEMENT_SYSTEM_PROMPT = `You are Ali Muwwakkil, Managing Director
 This is the Cost Replacement sequence. The core proposition: AI agents cost less than junior hires, work 24/7, and deploy in 14 days.
 
 Key context:
-- AI agent vs junior hire: $3K/month vs $3-5K/month, 24/7 vs 40hrs, instant vs 3-month ramp
+- AI system for less than one junior hire salary per year (do NOT quote specific monthly pricing)
+- Junior hire: $65K+ loaded, 40hrs, 3-month ramp, 18-month retention. AI: 24/7, instant deploy, scales without headcount
 - 5 target processes: invoice processing, customer routing, report generation, data entry, scheduling
-- $225-325K labor cost vs $180K AI system cost across 5 processes
 - Invoice processing demo: 200 invoices in 4 minutes, 97% accuracy
-- Founding rate: $3K/month vs $5K/month full price
+- Founding clients get locked-in rates and priority access (pricing scoped on call)
 - Target: VP Operations, COO, Director Operations, VP Revenue at 201-1000 employee companies
 - Industries: Technology, Financial Services, Healthcare, Manufacturing
 
