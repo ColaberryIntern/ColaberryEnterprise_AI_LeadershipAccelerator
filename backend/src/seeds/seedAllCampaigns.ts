@@ -5,6 +5,7 @@ import { seedClassReadinessCampaign } from './seedClassReadinessCampaign';
 import { seedAliOutreachCampaign } from './seedAliOutreachCampaign';
 import { seedColdOutboundPhases } from './seedColdOutboundPhases';
 import { seedOfferCampaigns } from './seedOfferCampaigns';
+import { seedPilotProgramCampaigns } from './seedPilotProgramCampaigns';
 
 /**
  * Idempotent seed for all core campaigns.
@@ -163,6 +164,13 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     await seedOfferCampaigns();
   } catch (err: any) {
     console.warn('[Seed] Offer pipeline campaigns seed skipped:', err?.message);
+  }
+
+  // ─── 17-19. AI System Pilot Program ─────────────────────────────────
+  try {
+    await seedPilotProgramCampaigns();
+  } catch (err: any) {
+    console.warn('[Seed] Pilot program campaigns seed skipped:', err?.message);
   }
 
   console.log('[Seed] All core campaigns seeded.');

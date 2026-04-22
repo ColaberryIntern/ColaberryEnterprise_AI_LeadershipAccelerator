@@ -16,6 +16,9 @@ import ExecutiveROICalculatorPage from '../pages/ExecutiveROICalculatorPage';
 import AIArchitectLandingPage from '../pages/AIArchitectLandingPage';
 import InstructorPage from '../pages/InstructorPage';
 import NotFoundPage from '../pages/NotFoundPage';
+import PilotZeroRiskPage from '../pages/PilotZeroRiskPage';
+import PilotAITeamPage from '../pages/PilotAITeamPage';
+import PilotExclusivePage from '../pages/PilotExclusivePage';
 
 const publicRoutes = (
   <>
@@ -34,6 +37,9 @@ const publicRoutes = (
     <Route path="/executive-roi-calculator" element={<ExecutiveROICalculatorPage />} />
     <Route path="/ai-architect" element={<AIArchitectLandingPage />} />
     <Route path="/ai-architect/instructor" element={<InstructorPage />} />
+    <Route path="/pilot/zero-risk" element={<PilotZeroRiskPage />} />
+    <Route path="/pilot/ai-team" element={<PilotAITeamPage />} />
+    <Route path="/pilot/exclusive" element={<PilotExclusivePage />} />
     <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="*" element={<NotFoundPage />} />
   </>
