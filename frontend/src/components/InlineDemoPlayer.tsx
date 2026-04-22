@@ -438,7 +438,8 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
     }
     if (!ok(await delay(1000, rid))) return;
 
-    // Done
+    // Done — in presenter mode, pause so presenter can discuss final results
+    await presenterGate('Complete');
     narr("See what AI could look like for your business.");
     try { (window as any).trackBookingEvent?.('demo_complete', { scenario: data.id, industry: data.industry, context: trackContext }); } catch {}
     if (!ok(await delay(1500, rid))) return;
@@ -565,11 +566,11 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
               <div className="d-flex align-items-center gap-2">
                 <span style={{ color: '#cbd5e1', fontSize: 13, fontWeight: 600 }}>{presenterStep}</span>
                 <button
-                  className="btn btn-warning btn-sm fw-bold px-4"
+                  className={`btn ${presenterStep === 'Complete' ? 'btn-success' : 'btn-warning'} btn-sm fw-bold px-4`}
                   onClick={presenterNext}
                   style={{ fontSize: 14, borderRadius: 20 }}
                 >
-                  Next Step <i className="bi bi-arrow-right ms-1" />
+                  {presenterStep === 'Complete' ? 'Finish Demo' : 'Next Step'} <i className="bi bi-arrow-right ms-1" />
                 </button>
               </div>
             </div>
