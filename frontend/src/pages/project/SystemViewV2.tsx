@@ -20,6 +20,7 @@ interface UIPage {
   route: string;
   source: 'mapped' | 'discovered';
   verified: boolean;
+  confidence: number; // 0-100
   bpId: string;
 }
 
@@ -114,6 +115,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
             route: bp.frontend_route,
             source: 'mapped' as const,
             verified: true,
+            confidence: 100,
             bpId: bp.id,
           }] : [],
         },
@@ -233,7 +235,13 @@ function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: {
         <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor, flexShrink: 0 }}></div>
         <span className="fw-medium" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#8b5cf6', fontSize: 9 }}></i>}
-          {comp.ui.pages.length > 0 && !comp.isPageBP && <i className="bi bi-display me-1" style={{ color: '#3b82f6', fontSize: 9 }}></i>}
+          {comp.ui.pages.length > 0 && !comp.isPageBP && (
+            comp.ui.pages.some(p => !p.verified)
+              ? <i className="bi bi-exclamation-triangle me-1" style={{ color: '#f59e0b', fontSize: 9 }} title="Unverified page"></i>
+              : comp.ui.pages.length > 1
+                ? <i className="bi bi-link-45deg me-1" style={{ color: '#3b82f6', fontSize: 9 }} title={`${comp.ui.pages.length} pages`}></i>
+                : <i className="bi bi-display me-1" style={{ color: '#3b82f6', fontSize: 9 }}></i>
+          )}
           {comp.name}
         </span>
       </div>
@@ -327,6 +335,10 @@ function SystemViewV2Inner() {
   const [defineModal, setDefineModal] = useState<{ discoveredComp: SystemComponent } | null>(null);
   const [defineStep, setDefineStep] = useState<'confirm' | 'action' | 'select' | 'done'>('confirm');
   const [defineTarget, setDefineTarget] = useState<string | null>(null);
+  const [verifiedPages, setVerifiedPages] = useState<Set<string>>(new Set()); // route keys
+  const [detachedPages, setDetachedPages] = useState<Set<string>>(new Set()); // route keys
+  const [verifyModal, setVerifyModal] = useState<{ page: UIPage; compId: string } | null>(null);
+  const [mergeModal, setMergeModal] = useState<{ page: UIPage; existingCompId: string; targetCompId: string } | null>(null);
 
   // Cory Command Center state
   type CoryMode = 'suggestions' | 'plan' | 'execute' | 'r-insights' | 'r-gaps' | 'r-recommendations';
@@ -406,19 +418,24 @@ function SystemViewV2Inner() {
   const enrichedComponents = components.map(c => {
     const attached = pageAttachments[c.id] || [];
     const autoPages: UIPage[] = [];
-    // Auto-detect: try to match discovered page BPs to code BPs by name similarity
+    // Auto-detect: match discovered page BPs to code BPs by name similarity with confidence
     if (!c.isPageBP && !c.isDiscovered) {
-      const nameWords = c.name.toLowerCase().split(/\s+/);
+      const nameWords = c.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
       for (const d of components) {
         if (!d.isDiscovered || !d.frontendRoute) continue;
-        const dWords = d.name.toLowerCase().split(/\s+/);
-        const overlap = nameWords.filter(w => w.length > 3 && dWords.some(dw => dw.includes(w) || w.includes(dw)));
-        if (overlap.length >= 1 && !attached.some(a => a.route === d.frontendRoute)) {
-          autoPages.push({ name: d.name, route: d.frontendRoute, source: 'discovered', verified: false, bpId: d.id });
+        const dWords = d.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        if (nameWords.length === 0 || dWords.length === 0) continue;
+        const overlap = nameWords.filter(w => dWords.some(dw => dw.includes(w) || w.includes(dw)));
+        const confidence = Math.round((overlap.length / Math.max(nameWords.length, dWords.length)) * 100);
+        if (overlap.length >= 1 && confidence >= 30 && !attached.some(a => a.route === d.frontendRoute)) {
+          autoPages.push({ name: d.name, route: d.frontendRoute, source: 'discovered', verified: false, confidence, bpId: d.id });
         }
       }
     }
-    return { ...c, ui: { pages: [...c.ui.pages, ...attached, ...autoPages] } };
+    const allPages = [...c.ui.pages, ...attached, ...autoPages]
+      .filter(p => !detachedPages.has(`${c.id}:${p.route}`))
+      .map(p => ({ ...p, verified: p.verified || verifiedPages.has(`${c.id}:${p.route}`) }));
+    return { ...c, ui: { pages: allPages } };
   });
   const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
   const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
@@ -704,8 +721,33 @@ function SystemViewV2Inner() {
                 <span className="badge" style={{ background: '#a855f720', color: '#a855f7', fontSize: 9 }}>Unmapped</span>
               </div>
               <div className="p-3 mb-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #a855f720' }}>
-                <p className="mb-2 fw-medium" style={{ fontSize: 13, color: '#7c3aed' }}><i className="bi bi-info-circle me-1"></i>This component is not mapped to your system</p>
-                <p className="text-muted mb-0" style={{ fontSize: 11 }}>It was discovered in your repository but hasn't been assigned to a system blueprint group.</p>
+                <p className="mb-2 fw-medium" style={{ fontSize: 13, color: '#7c3aed' }}><i className="bi bi-info-circle me-1"></i>Unmapped UI Layer</p>
+                {selectedComponent.frontendRoute && (
+                  <div className="mb-2" style={{ fontSize: 10, fontFamily: 'monospace', color: '#64748b' }}>Route: {selectedComponent.frontendRoute}</div>
+                )}
+                {/* Show suggested BP match */}
+                {(() => {
+                  const nameWords = selectedComponent.name.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+                  let bestMatch: { name: string; confidence: number } | null = null;
+                  for (const c of visibleComponents) {
+                    if (c.isDiscovered || c.isPageBP) continue;
+                    const cWords = c.name.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+                    const overlap = nameWords.filter((w: string) => cWords.some((cw: string) => cw.includes(w) || w.includes(cw)));
+                    const conf = cWords.length > 0 ? Math.round((overlap.length / Math.max(nameWords.length, cWords.length)) * 100) : 0;
+                    if (conf > 0 && (!bestMatch || conf > bestMatch.confidence)) bestMatch = { name: c.name, confidence: conf };
+                  }
+                  return bestMatch ? (
+                    <div className="d-flex align-items-center gap-2 mb-2" style={{ fontSize: 10, color: '#7c3aed' }}>
+                      <i className="bi bi-link-45deg"></i>
+                      Suggested match: <strong>{bestMatch.name}</strong>
+                      <span className="badge" style={{ background: bestMatch.confidence >= 70 ? '#10b98120' : '#f59e0b20', color: bestMatch.confidence >= 70 ? '#059669' : '#92400e', fontSize: 8 }}>
+                        {bestMatch.confidence}% confidence
+                      </span>
+                      {bestMatch.confidence < 70 && <i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b', fontSize: 9 }}></i>}
+                    </div>
+                  ) : null;
+                })()}
+                <p className="text-muted mb-0" style={{ fontSize: 11 }}>This page was discovered in your repo but isn't linked to a system component.</p>
               </div>
               <div className="d-flex gap-2">
                 <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal({ discoveredComp: selectedComponent }); setDefineStep('confirm'); setDefineTarget(null); }}>
@@ -763,10 +805,49 @@ function SystemViewV2Inner() {
                     <i className="bi bi-lightbulb me-1" style={{ color: '#3b82f6' }}></i>{getWhyMatters(selectedComponent)}
                   </div>
                   {selectedComponent.nextStep && (
-                    <div className="p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11 }}>
+                    <div className="p-2 mb-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11 }}>
                       <i className="bi bi-arrow-right-circle me-1" style={{ color: 'var(--color-primary)' }}></i>Next step: <strong>{selectedComponent.nextStep}</strong>
                     </div>
                   )}
+
+                  {/* Connected UI section */}
+                  {selectedComponent.ui.pages.length > 0 ? (
+                    <div>
+                      <div className="fw-semibold small mb-2"><i className="bi bi-display me-1" style={{ color: '#3b82f6' }}></i>Connected UI</div>
+                      {selectedComponent.ui.pages.map((pg, i) => (
+                        <div key={pg.route + i} className="d-flex align-items-center gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                          <i className="bi bi-display" style={{ color: pg.verified ? '#10b981' : '#f59e0b', fontSize: 12 }}></i>
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="fw-medium" style={{ fontSize: 11 }}>{pg.name}</span>
+                              {pg.confidence < 70 && pg.source === 'discovered' && <i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b', fontSize: 10 }} title="Low confidence match"></i>}
+                            </div>
+                            <div className="d-flex gap-2" style={{ fontSize: 9 }}>
+                              <span className="text-muted" style={{ fontFamily: 'monospace' }}>{pg.route}</span>
+                              <span style={{ color: pg.verified ? '#059669' : '#f59e0b' }}>{pg.verified ? 'Verified' : 'Unverified'}</span>
+                              <span className="text-muted">{pg.source === 'mapped' ? 'Mapped' : `Auto-detected (${pg.confidence}%)`}</span>
+                            </div>
+                          </div>
+                          <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                            {!pg.verified && (
+                              <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 5px' }} onClick={() => setVerifyModal({ page: pg, compId: selectedComponent.id })}>
+                                Verify
+                              </button>
+                            )}
+                            <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 5px' }} onClick={() => setDetachedPages(prev => new Set([...prev, `${selectedComponent.id}:${pg.route}`]))}>
+                              Detach
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : selectedComponent.layers.frontend !== 'missing' ? (
+                    <div className="p-2" style={{ background: '#fef3c7', borderRadius: 6, fontSize: 11, border: '1px solid #fde68a' }}>
+                      <i className="bi bi-exclamation-triangle me-1" style={{ color: '#f59e0b' }}></i>
+                      Frontend detected, but no UI page is linked.
+                      <button className="btn btn-link btn-sm p-0 ms-2" style={{ fontSize: 10 }} onClick={() => setWorkTab('ui')}>Find Matching Page</button>
+                    </div>
+                  ) : null}
                 </div>
               )}
 
@@ -1324,6 +1405,64 @@ function SystemViewV2Inner() {
                     <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal(null); setSelectedId(null); }}>Close</button>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verify Page Modal */}
+      {verifyModal && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={() => setVerifyModal(null)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header py-2" style={{ borderBottom: '3px solid #10b981' }}>
+                <h6 className="modal-title fw-bold" style={{ color: '#059669' }}><i className="bi bi-check-circle me-2"></i>Verify Page</h6>
+                <button className="btn-close" onClick={() => setVerifyModal(null)}></button>
+              </div>
+              <div className="modal-body p-4">
+                <p className="fw-medium mb-2" style={{ fontSize: 13 }}>Does this page represent this component?</p>
+                <div className="p-3 mb-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
+                  <div className="fw-medium" style={{ fontSize: 12 }}>{verifyModal.page.name}</div>
+                  <div className="text-muted" style={{ fontSize: 10, fontFamily: 'monospace' }}>{verifyModal.page.route}</div>
+                  {verifyModal.page.confidence < 100 && <div className="mt-1" style={{ fontSize: 10, color: verifyModal.page.confidence >= 70 ? '#059669' : '#f59e0b' }}>Match confidence: {verifyModal.page.confidence}%</div>}
+                </div>
+                <div className="d-flex gap-2">
+                  <button className="btn btn-sm btn-success" style={{ fontSize: 11 }} onClick={() => { setVerifiedPages(prev => new Set([...prev, `${verifyModal.compId}:${verifyModal.page.route}`])); setVerifyModal(null); }}>
+                    <i className="bi bi-check me-1"></i>Yes — Verify
+                  </button>
+                  <button className="btn btn-sm btn-outline-danger" style={{ fontSize: 11 }} onClick={() => { setDetachedPages(prev => new Set([...prev, `${verifyModal.compId}:${verifyModal.page.route}`])); setVerifyModal(null); }}>
+                    <i className="bi bi-x me-1"></i>No — Detach
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Detection Modal */}
+      {mergeModal && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={() => setMergeModal(null)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header py-2" style={{ borderBottom: '3px solid #f59e0b' }}>
+                <h6 className="modal-title fw-bold" style={{ color: '#92400e' }}><i className="bi bi-exclamation-triangle me-2"></i>Page Overlap Detected</h6>
+                <button className="btn-close" onClick={() => setMergeModal(null)}></button>
+              </div>
+              <div className="modal-body p-4">
+                <p className="mb-3" style={{ fontSize: 12 }}>This page may already belong to another component.</p>
+                <div className="d-flex flex-column gap-2">
+                  <button className="btn btn-outline-primary btn-sm text-start p-2" style={{ fontSize: 11 }} onClick={() => { setMergeModal(null); }}>
+                    <i className="bi bi-link me-2"></i>Attach to both components
+                  </button>
+                  <button className="btn btn-outline-warning btn-sm text-start p-2" style={{ fontSize: 11 }} onClick={() => { setDetachedPages(prev => new Set([...prev, `${mergeModal.existingCompId}:${mergeModal.page.route}`])); setMergeModal(null); }}>
+                    <i className="bi bi-arrow-right me-2"></i>Move to this component only
+                  </button>
+                  <button className="btn btn-outline-secondary btn-sm text-start p-2" style={{ fontSize: 11 }} onClick={() => setMergeModal(null)}>
+                    <i className="bi bi-x me-2"></i>Cancel
+                  </button>
+                </div>
               </div>
             </div>
           </div>

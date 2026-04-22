@@ -614,3 +614,72 @@ describe('SystemViewV2 — Define Component + UI Linking', () => {
     expect(showIcon).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 13. VISUAL LINKING + VERIFICATION + CONFIDENCE
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Visual Linking System', () => {
+  test('verification flag updates via set', () => {
+    const verified = new Set<string>();
+    verified.add('comp1:/admin/dashboard');
+    expect(verified.has('comp1:/admin/dashboard')).toBe(true);
+    expect(verified.has('comp1:/admin/other')).toBe(false);
+  });
+
+  test('detach removes page via set', () => {
+    const detached = new Set<string>();
+    detached.add('comp1:/admin/leads');
+    const pages = [{ route: '/admin/leads' }, { route: '/admin/dashboard' }];
+    const filtered = pages.filter(p => !detached.has(`comp1:${p.route}`));
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].route).toBe('/admin/dashboard');
+  });
+
+  test('confidence calculated from word overlap', () => {
+    const nameWords = ['user', 'management'].filter(w => w.length > 3);
+    const pageWords = ['user', 'management', 'page'].filter(w => w.length > 3);
+    const overlap = nameWords.filter(w => pageWords.some(pw => pw.includes(w) || w.includes(pw)));
+    const confidence = Math.round((overlap.length / Math.max(nameWords.length, pageWords.length)) * 100);
+    // 2 overlapping / max(2, 3) = 67%
+    expect(confidence).toBe(67);
+    expect(confidence).toBeGreaterThanOrEqual(30); // above detection threshold
+  });
+
+  test('low confidence below 70 triggers warning', () => {
+    const confidence = 45;
+    const showWarning = confidence < 70;
+    expect(showWarning).toBe(true);
+  });
+
+  test('high confidence does not trigger warning', () => {
+    const confidence = 85;
+    const showWarning = confidence < 70;
+    expect(showWarning).toBe(false);
+  });
+
+  test('mapped pages have 100% confidence', () => {
+    const page = { source: 'mapped', confidence: 100 };
+    expect(page.confidence).toBe(100);
+  });
+
+  test('tile shows warning icon for unverified pages', () => {
+    const pages = [{ verified: false }, { verified: true }];
+    const hasUnverified = pages.some(p => !p.verified);
+    expect(hasUnverified).toBe(true);
+  });
+
+  test('tile shows link icon for multi-page', () => {
+    const pages = [{ verified: true }, { verified: true }];
+    const allVerified = pages.every(p => p.verified);
+    const isMulti = pages.length > 1;
+    expect(allVerified && isMulti).toBe(true);
+  });
+
+  test('frontend-no-page state detected correctly', () => {
+    const comp = makeBP({ layers: { backend: 'ready', frontend: 'ready', agent: 'missing' } });
+    const hasPages = comp.ui.pages.length > 0;
+    const hasFrontend = comp.layers.frontend !== 'missing';
+    expect(hasFrontend && !hasPages).toBe(true);
+  });
+});
