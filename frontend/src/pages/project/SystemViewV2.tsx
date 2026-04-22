@@ -15,6 +15,14 @@ import ProjectSelectionScreen from '../../components/project/ProjectSelectionScr
 // Types (reused from SystemBlueprint pattern)
 // ---------------------------------------------------------------------------
 
+interface UIPage {
+  name: string;
+  route: string;
+  source: 'mapped' | 'discovered';
+  verified: boolean;
+  bpId: string;
+}
+
 interface SystemComponent {
   id: string;
   name: string;
@@ -28,7 +36,9 @@ interface SystemComponent {
   isPageBP: boolean;
   isDiscovered: boolean;
   source: string;
+  frontendRoute: string | null;
   layers: { backend: string; frontend: string; agent: string };
+  ui: { pages: UIPage[] };
 }
 
 interface ProjectData {
@@ -92,10 +102,20 @@ function transformBPs(bps: any[]): SystemComponent[] {
         isPageBP,
         isDiscovered: bpSource === 'repo_discovered' || (isPageBP && bpSource === 'frontend_page') || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
         source: bpSource,
+        frontendRoute: bp.frontend_route || null,
         layers: {
           backend: u.backend || 'missing',
           frontend: u.frontend || 'missing',
           agent: u.agent || 'missing',
+        },
+        ui: {
+          pages: isPageBP && bp.frontend_route ? [{
+            name: bp.name,
+            route: bp.frontend_route,
+            source: 'mapped' as const,
+            verified: true,
+            bpId: bp.id,
+          }] : [],
         },
       };
     })
@@ -213,6 +233,7 @@ function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: {
         <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor, flexShrink: 0 }}></div>
         <span className="fw-medium" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#8b5cf6', fontSize: 9 }}></i>}
+          {comp.ui.pages.length > 0 && !comp.isPageBP && <i className="bi bi-display me-1" style={{ color: '#3b82f6', fontSize: 9 }}></i>}
           {comp.name}
         </span>
       </div>
@@ -301,6 +322,12 @@ function SystemViewV2Inner() {
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
   const [uiFeedback, setUiFeedback] = useState<any>(null);
 
+  // Page attachment state
+  const [pageAttachments, setPageAttachments] = useState<Record<string, UIPage[]>>({});
+  const [defineModal, setDefineModal] = useState<{ discoveredComp: SystemComponent } | null>(null);
+  const [defineStep, setDefineStep] = useState<'confirm' | 'action' | 'select' | 'done'>('confirm');
+  const [defineTarget, setDefineTarget] = useState<string | null>(null);
+
   // Cory Command Center state
   type CoryMode = 'suggestions' | 'plan' | 'execute' | 'r-insights' | 'r-gaps' | 'r-recommendations';
   const [coryMode, setCoryMode] = useState<CoryMode>('suggestions');
@@ -368,7 +395,7 @@ function SystemViewV2Inner() {
     return <div className="alert alert-danger">{error || 'Failed to load project'}</div>;
   }
 
-  const selectedComponent = selectedId ? components.find(c => c.id === selectedId) : null;
+  const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
   const completedCount = components.filter(c => c.status === 'complete').length;
   const systemLayers = {
     backend: components.some(c => c.layers.backend === 'ready' || c.layers.backend === 'partial'),
@@ -377,7 +404,25 @@ function SystemViewV2Inner() {
   };
 
   // Filter ignored, then group + next badges
-  const visibleComponents = components.filter(c => !ignoredIds.has(c.id));
+  // Merge page attachments + auto-detect page matches into components
+  const enrichedComponents = components.map(c => {
+    const attached = pageAttachments[c.id] || [];
+    const autoPages: UIPage[] = [];
+    // Auto-detect: try to match discovered page BPs to code BPs by name similarity
+    if (!c.isPageBP && !c.isDiscovered) {
+      const nameWords = c.name.toLowerCase().split(/\s+/);
+      for (const d of components) {
+        if (!d.isDiscovered || !d.frontendRoute) continue;
+        const dWords = d.name.toLowerCase().split(/\s+/);
+        const overlap = nameWords.filter(w => w.length > 3 && dWords.some(dw => dw.includes(w) || w.includes(dw)));
+        if (overlap.length >= 1 && !attached.some(a => a.route === d.frontendRoute)) {
+          autoPages.push({ name: d.name, route: d.frontendRoute, source: 'discovered', verified: false, bpId: d.id });
+        }
+      }
+    }
+    return { ...c, ui: { pages: [...c.ui.pages, ...attached, ...autoPages] } };
+  });
+  const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
   const groups = groupComponents(visibleComponents);
   const nextIds = getNextComponents(visibleComponents);
 
@@ -664,8 +709,8 @@ function SystemViewV2Inner() {
                 <p className="text-muted mb-0" style={{ fontSize: 11 }}>It was discovered in your repository but hasn't been assigned to a system blueprint group.</p>
               </div>
               <div className="d-flex gap-2">
-                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => window.location.href = `/portal/project/system?componentId=${selectedComponent.id}#build`}>
-                  <i className="bi bi-diagram-3 me-1"></i>Map to System
+                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal({ discoveredComp: selectedComponent }); setDefineStep('confirm'); setDefineTarget(null); }}>
+                  <i className="bi bi-plus-circle me-1"></i>Define Component
                 </button>
                 <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => { setIgnoredIds(prev => new Set([...prev, selectedComponent.id])); setSelectedId(null); }}>
                   <i className="bi bi-eye-slash me-1"></i>Ignore
@@ -699,9 +744,9 @@ function SystemViewV2Inner() {
                     <i className={`bi ${t.icon} me-1`}></i>{t.label}
                   </button>
                 ))}
-                {!isReporting && selectedComponent.isPageBP && (
+                {!isReporting && selectedComponent.ui.pages.length > 0 && (
                   <button className={`nav-link py-1 px-3 ${workTab === 'ui' ? 'active' : ''}`} style={{ fontSize: 11 }} onClick={() => setWorkTab('ui')}>
-                    <i className="bi bi-palette me-1"></i>UI
+                    <i className="bi bi-palette me-1"></i>UI ({selectedComponent.ui.pages.length})
                   </button>
                 )}
               </nav>
@@ -803,8 +848,8 @@ function SystemViewV2Inner() {
                 </div>
               )}
 
-              {/* ── TAB: UI (Page BPs only) ── */}
-              {workTab === 'ui' && selectedComponent.isPageBP && (
+              {/* ── TAB: UI (any component with pages) ── */}
+              {workTab === 'ui' && selectedComponent.ui.pages.length > 0 && (
                 <div>
                   {/* Preview iframe */}
                   {compDetail?.preview_url ? (
@@ -1188,6 +1233,103 @@ function SystemViewV2Inner() {
           </div>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          DEFINE COMPONENT MODAL
+          ═══════════════════════════════════════════════════════════════════ */}
+      {defineModal && (
+        <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={() => setDefineModal(null)}>
+          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header py-2" style={{ borderBottom: '3px solid #8b5cf6' }}>
+                <h6 className="modal-title fw-bold" style={{ color: '#8b5cf6' }}>
+                  <i className="bi bi-plus-circle me-2"></i>Define Component
+                </h6>
+                <button className="btn-close" onClick={() => setDefineModal(null)}></button>
+              </div>
+              <div className="modal-body p-4">
+                {/* Step 1: Confirm page */}
+                {defineStep === 'confirm' && (
+                  <div>
+                    <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Is this the correct page?</p>
+                    <div className="p-3 mb-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
+                      <div className="fw-medium" style={{ fontSize: 12 }}>{defineModal.discoveredComp.name}</div>
+                      {defineModal.discoveredComp.frontendRoute && (
+                        <div className="text-muted" style={{ fontSize: 10, fontFamily: 'monospace' }}>{defineModal.discoveredComp.frontendRoute}</div>
+                      )}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => setDefineStep('action')}>
+                        <i className="bi bi-check me-1"></i>Yes, this is correct
+                      </button>
+                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => setDefineModal(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2: Choose action */}
+                {defineStep === 'action' && (
+                  <div>
+                    <p className="fw-semibold mb-3" style={{ fontSize: 13 }}>What would you like to do?</p>
+                    <div className="d-flex flex-column gap-2">
+                      <button className="btn btn-outline-primary text-start p-3" style={{ fontSize: 12 }} onClick={() => {
+                        // Attach to itself as a standalone
+                        setIgnoredIds(prev => { const n = new Set(prev); n.delete(defineModal.discoveredComp.id); return n; });
+                        setDefineStep('done');
+                      }}>
+                        <i className="bi bi-plus-lg me-2"></i><strong>Keep as Standalone Component</strong>
+                        <div className="text-muted" style={{ fontSize: 10 }}>Keep this page as its own system component</div>
+                      </button>
+                      <button className="btn btn-outline-secondary text-start p-3" style={{ fontSize: 12 }} onClick={() => setDefineStep('select')}>
+                        <i className="bi bi-link-45deg me-2"></i><strong>Attach to Existing Component</strong>
+                        <div className="text-muted" style={{ fontSize: 10 }}>Add this page's UI to an existing system component</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Select target */}
+                {defineStep === 'select' && (
+                  <div>
+                    <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Select a component to attach to:</p>
+                    <div style={{ maxHeight: 250, overflowY: 'auto' }}>
+                      {visibleComponents.filter(c => !c.isDiscovered && !c.isPageBP).map(c => (
+                        <div key={c.id} className="d-flex align-items-center gap-2 p-2 mb-1" style={{ background: defineTarget === c.id ? '#eff6ff' : 'var(--color-bg-alt)', borderRadius: 6, cursor: 'pointer', border: defineTarget === c.id ? '2px solid var(--color-primary)' : '2px solid transparent' }} onClick={() => setDefineTarget(c.id)}>
+                          <i className="bi bi-circle" style={{ color: defineTarget === c.id ? 'var(--color-primary)' : '#9ca3af', fontSize: 10 }}></i>
+                          <span style={{ fontSize: 11 }}>{c.name}</span>
+                          <span className="badge ms-auto" style={{ background: STATUS_STYLES[c.status].bg, color: STATUS_STYLES[c.status].text, fontSize: 8 }}>{c.completion}%</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="d-flex gap-2 mt-3">
+                      <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} disabled={!defineTarget} onClick={() => {
+                        if (!defineTarget) return;
+                        const page: UIPage = { name: defineModal.discoveredComp.name, route: defineModal.discoveredComp.frontendRoute || '/', source: 'discovered', verified: true, bpId: defineModal.discoveredComp.id };
+                        setPageAttachments(prev => ({ ...prev, [defineTarget]: [...(prev[defineTarget] || []), page] }));
+                        setIgnoredIds(prev => new Set([...prev, defineModal.discoveredComp.id]));
+                        setDefineStep('done');
+                      }}>
+                        <i className="bi bi-link me-1"></i>Attach
+                      </button>
+                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => setDefineStep('action')}>Back</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4: Done */}
+                {defineStep === 'done' && (
+                  <div className="text-center py-3">
+                    <i className="bi bi-check-circle-fill d-block mb-2" style={{ fontSize: 28, color: '#10b981' }}></i>
+                    <p className="fw-semibold mb-1" style={{ fontSize: 13 }}>Component defined</p>
+                    <p className="text-muted mb-3" style={{ fontSize: 11 }}>The page has been mapped to your system.</p>
+                    <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal(null); setSelectedId(null); }}>Close</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

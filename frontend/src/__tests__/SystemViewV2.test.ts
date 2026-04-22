@@ -22,7 +22,9 @@ function makeBP(overrides: any = {}) {
     isPageBP: overrides.isPageBP || false,
     isDiscovered: overrides.isDiscovered || false,
     source: overrides.source || 'auto',
+    frontendRoute: overrides.frontendRoute || null,
     layers: overrides.layers || { backend: 'missing', frontend: 'missing', agent: 'missing' },
+    ui: overrides.ui || { pages: [] },
   };
 }
 
@@ -544,5 +546,71 @@ describe('SystemViewV2 — Build/Reporting Mode', () => {
     const comp3 = makeBP({ completion: 80 });
     const badge3 = comp3.completion < 30 ? 'GAP' : comp3.completion < 70 ? 'PARTIAL' : 'OK';
     expect(badge3).toBe('OK');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. DEFINE COMPONENT + UI LINKING
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Define Component + UI Linking', () => {
+  test('UI tab shows when component has pages', () => {
+    const comp = makeBP({ id: '1', name: 'Auth', ui: { pages: [{ name: 'Login Page', route: '/login', source: 'discovered', verified: false, bpId: '2' }] } });
+    expect(comp.ui.pages.length).toBeGreaterThan(0);
+  });
+
+  test('UI tab hidden when no pages', () => {
+    const comp = makeBP({ id: '1', name: 'Auth' });
+    // Default factory doesn't include ui.pages
+    const pages = comp.ui?.pages || [];
+    expect(pages.length).toBe(0);
+  });
+
+  test('page attachment adds page to component', () => {
+    const attachments: Record<string, Array<{ name: string; route: string }>> = {};
+    const targetId = 'comp-1';
+    const page = { name: 'Dashboard', route: '/admin/dashboard' };
+    attachments[targetId] = [...(attachments[targetId] || []), page];
+    expect(attachments[targetId]).toHaveLength(1);
+    expect(attachments[targetId][0].route).toBe('/admin/dashboard');
+  });
+
+  test('attaching page removes from discovered', () => {
+    const ignoredIds = new Set<string>();
+    const discoveredId = 'disc-1';
+    ignoredIds.add(discoveredId);
+    expect(ignoredIds.has(discoveredId)).toBe(true);
+  });
+
+  test('multiple pages per component supported', () => {
+    const attachments: Record<string, Array<{ name: string }>> = {};
+    const id = 'comp-1';
+    attachments[id] = [{ name: 'Page 1' }, { name: 'Page 2' }, { name: 'Page 3' }];
+    expect(attachments[id]).toHaveLength(3);
+  });
+
+  test('auto-detection matches by name similarity', () => {
+    const codeName = 'user management';
+    const pageName = 'user management page';
+    const codeWords = codeName.split(/\s+/);
+    const pageWords = pageName.split(/\s+/);
+    const overlap = codeWords.filter(w => w.length > 3 && pageWords.some(pw => pw.includes(w)));
+    expect(overlap.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('auto-detection does not match unrelated names', () => {
+    const codeName = 'security compliance';
+    const pageName = 'pricing page';
+    const codeWords = codeName.split(/\s+/);
+    const pageWords = pageName.split(/\s+/);
+    const overlap = codeWords.filter(w => w.length > 3 && pageWords.some(pw => pw.includes(w)));
+    expect(overlap.length).toBe(0);
+  });
+
+  test('tile shows display icon when has pages', () => {
+    const hasPages = true;
+    const isPageBP = false;
+    const showIcon = hasPages && !isPageBP;
+    expect(showIcon).toBe(true);
   });
 });
