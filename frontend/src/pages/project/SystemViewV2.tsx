@@ -395,7 +395,6 @@ function SystemViewV2Inner() {
     return <div className="alert alert-danger">{error || 'Failed to load project'}</div>;
   }
 
-  const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
   const completedCount = components.filter(c => c.status === 'complete').length;
   const systemLayers = {
     backend: components.some(c => c.layers.backend === 'ready' || c.layers.backend === 'partial'),
@@ -403,7 +402,6 @@ function SystemViewV2Inner() {
     agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
   };
 
-  // Filter ignored, then group + next badges
   // Merge page attachments + auto-detect page matches into components
   const enrichedComponents = components.map(c => {
     const attached = pageAttachments[c.id] || [];
@@ -423,6 +421,7 @@ function SystemViewV2Inner() {
     return { ...c, ui: { pages: [...c.ui.pages, ...attached, ...autoPages] } };
   });
   const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
+  const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
   const groups = groupComponents(visibleComponents);
   const nextIds = getNextComponents(visibleComponents);
 
