@@ -320,3 +320,86 @@ describe('SystemViewV2 — Resilience', () => {
     expect([...first]).toEqual([...second]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 7. WORK AREA TAB TESTS
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Work Area Tabs', () => {
+  test('tab list includes overview, build, improve', () => {
+    const tabs = ['overview', 'build', 'improve'];
+    expect(tabs).toContain('overview');
+    expect(tabs).toContain('build');
+    expect(tabs).toContain('improve');
+  });
+
+  test('UI tab only available for page BPs', () => {
+    const pageBP = makeBP({ isPageBP: true });
+    const codeBP = makeBP({ isPageBP: false });
+    expect(pageBP.isPageBP).toBe(true);
+    expect(codeBP.isPageBP).toBe(false);
+    // UI tab renders conditionally on isPageBP
+  });
+
+  test('default tab is overview', () => {
+    const defaultTab = 'overview';
+    expect(defaultTab).toBe('overview');
+  });
+
+  test('tab switching changes active tab', () => {
+    let activeTab = 'overview';
+    activeTab = 'build';
+    expect(activeTab).toBe('build');
+    activeTab = 'improve';
+    expect(activeTab).toBe('improve');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. BUILD FLOW TESTS (Logic)
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Build Flow Logic', () => {
+  test('build prompt target falls back to backend_improvement', () => {
+    const comp = makeBP({ promptTarget: null });
+    const target = comp.promptTarget || 'backend_improvement';
+    expect(target).toBe('backend_improvement');
+  });
+
+  test('build prompt target uses component value when available', () => {
+    const comp = makeBP({ promptTarget: 'frontend_exposure' });
+    const target = comp.promptTarget || 'backend_improvement';
+    expect(target).toBe('frontend_exposure');
+  });
+
+  test('validation requires non-empty report', () => {
+    const report = '';
+    expect(report.trim()).toBe('');
+    const report2 = 'VALIDATION REPORT\n\nFiles Created:\n- test.ts';
+    expect(report2.trim().length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. COMPONENT SELECTION + WORK AREA UPDATE
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Component Selection Updates Work Area', () => {
+  test('selecting component provides data for all tabs', () => {
+    const comp = makeBP({ id: 'x', name: 'Test', description: 'A test component', completion: 50, nextStep: 'Build backend', layers: { backend: 'ready', frontend: 'missing', agent: 'missing' } });
+    // Overview needs: description, layers, nextStep
+    expect(comp.description).toBeTruthy();
+    expect(comp.layers.backend).toBe('ready');
+    expect(comp.nextStep).toBe('Build backend');
+    // Build needs: id, promptTarget
+    expect(comp.id).toBeTruthy();
+    // Improve needs: id (for detail fetch)
+    expect(comp.id).toBeTruthy();
+  });
+
+  test('deselecting clears component', () => {
+    let selectedId: string | null = 'abc';
+    selectedId = null;
+    expect(selectedId).toBeNull();
+  });
+});

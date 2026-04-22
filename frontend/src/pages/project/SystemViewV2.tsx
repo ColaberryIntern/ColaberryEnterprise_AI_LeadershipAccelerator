@@ -272,10 +272,43 @@ function SystemViewV2Inner() {
   const [discoveredExpanded, setDiscoveredExpanded] = useState(false);
   const workAreaRef = useRef<HTMLDivElement>(null);
 
+  // Work Area state
+  type WorkTab = 'overview' | 'build' | 'improve' | 'ui';
+  const [workTab, setWorkTab] = useState<WorkTab>('overview');
+  const [compDetail, setCompDetail] = useState<any>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Build flow state
+  const [buildPrompt, setBuildPrompt] = useState<string | null>(null);
+  const [buildGenerating, setBuildGenerating] = useState(false);
+  const [buildReport, setBuildReport] = useState('');
+  const [buildValidating, setBuildValidating] = useState(false);
+  const [buildResult, setBuildResult] = useState<any>(null);
+
+  // UI feedback state
+  const [uiAnalyzing, setUiAnalyzing] = useState(false);
+  const [uiFeedback, setUiFeedback] = useState<any>(null);
+
   // Sync URL param → state
   useEffect(() => {
     if (urlComponentId) setSelectedId(urlComponentId);
   }, [urlComponentId]);
+
+  // Fetch detail + reset work area when component changes
+  useEffect(() => {
+    setCompDetail(null);
+    setBuildPrompt(null);
+    setBuildReport('');
+    setBuildResult(null);
+    setUiFeedback(null);
+    setWorkTab('overview');
+    if (!selectedId) return;
+    setLoadingDetail(true);
+    portalApi.get(`/api/portal/project/business-processes/${selectedId}`)
+      .then((r: any) => setCompDetail(r.data))
+      .catch(() => {})
+      .finally(() => setLoadingDetail(false));
+  }, [selectedId]);
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -326,6 +359,62 @@ function SystemViewV2Inner() {
   const visibleComponents = components.filter(c => !ignoredIds.has(c.id));
   const groups = groupComponents(visibleComponents);
   const nextIds = getNextComponents(visibleComponents);
+
+  // Intelligence helper
+  const getWhyMatters = (c: SystemComponent): string => {
+    const t = c.promptTarget;
+    if (t === 'backend_improvement' || (!systemLayers.backend && c.status === 'not_started')) return 'Your system currently has no backend logic. Without this, nothing can process data or handle user actions.';
+    if (t === 'frontend_exposure' || (systemLayers.backend && !systemLayers.frontend && !c.isPageBP)) return 'Your system has logic but no user interface. Users cannot interact with it yet.';
+    if (t === 'agent_enhancement' || (systemLayers.backend && systemLayers.frontend && !systemLayers.agents)) return 'Your system works, but lacks automation. Adding agents will allow it to operate independently.';
+    if (c.completion < 50) return 'Core capabilities are incomplete. This step fills critical gaps in your system functionality.';
+    return `Completing this step advances "${c.name}" toward production readiness.`;
+  };
+
+  // Build handlers
+  const handleGeneratePrompt = async (comp: SystemComponent) => {
+    setBuildGenerating(true);
+    setBuildPrompt(null);
+    setBuildResult(null);
+    try {
+      let target = comp.promptTarget;
+      if (!target && compDetail) {
+        const firstStep = (compDetail.execution_plan || []).find((s: any) => !s.blocked);
+        target = firstStep?.prompt_target || 'backend_improvement';
+      }
+      const res = await portalApi.post(`/api/portal/project/business-processes/${comp.id}/prompt`, { target: target || 'backend_improvement' });
+      const text = res.data?.prompt_text || '';
+      setBuildPrompt(text);
+      try { await navigator.clipboard.writeText(text); } catch {}
+    } catch {} finally { setBuildGenerating(false); }
+  };
+
+  const handleValidateBuild = async (compId: string) => {
+    if (!buildReport.trim()) return;
+    setBuildValidating(true);
+    try {
+      const res = await portalApi.post(`/api/portal/project/business-processes/${compId}/validation-report`, { reportText: buildReport.trim() });
+      setBuildResult(res.data);
+      await loadData(); // refresh components
+    } catch (err: any) {
+      setBuildResult({ error: err.response?.data?.error || 'Validation failed' });
+    } finally { setBuildValidating(false); }
+  };
+
+  // UI feedback handlers
+  const handleUIAnalyze = async (compId: string, feedback: string) => {
+    setUiAnalyzing(true);
+    try {
+      const feFiles = (compDetail?.implementation_links?.frontend || []) as string[];
+      const elements = feFiles.map((f: string, i: number) => {
+        const name = f.split('/').pop()?.replace(/\.(tsx|jsx)$/, '') || f;
+        return { element_id: `component-${i}`, type: 'component', tag: 'div', selector: name, text: name, depth: 0 };
+      });
+      await portalApi.post(`/api/portal/project/business-processes/${compId}/element-map`, { elements, route: compDetail?.frontend_route || '/' });
+      await portalApi.post(`/api/portal/project/business-processes/${compId}/analyze-page`, { user_feedback: feedback });
+      const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
+      setUiFeedback(fbRes.data);
+    } catch {} finally { setUiAnalyzing(false); }
+  };
 
   const handleTileClick = (id: string) => {
     const isDeselect = id === selectedId;
@@ -435,88 +524,211 @@ function SystemViewV2Inner() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 2: WORK AREA
+          SECTION 2: WORK AREA (Tabbed Workspace)
           ═══════════════════════════════════════════════════════════════════ */}
       <div ref={workAreaRef} className="card border-0 shadow-sm mb-3" data-testid="work-area-section" style={{ minHeight: 200 }}>
         <div className="card-body p-4">
-          <h6 className="fw-bold mb-3" style={{ fontSize: 14, color: 'var(--color-primary)' }}>
-            <i className="bi bi-hammer me-2"></i>Work Area
-          </h6>
 
           {selectedComponent?.isDiscovered ? (
-            /* ── Discovered / Unmapped Component View ── */
+            /* ── Discovered / Unmapped ── */
             <div>
               <div className="d-flex align-items-center gap-2 mb-2">
                 <i className="bi bi-search" style={{ color: '#a855f7', fontSize: 14 }}></i>
-                <span className="fw-bold" style={{ fontSize: 15, color: 'var(--color-text)' }}>{selectedComponent.name}</span>
+                <span className="fw-bold" style={{ fontSize: 15 }}>{selectedComponent.name}</span>
                 <span className="badge" style={{ background: '#a855f720', color: '#a855f7', fontSize: 9 }}>Unmapped</span>
               </div>
               <div className="p-3 mb-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #a855f720' }}>
-                <p className="mb-2 fw-medium" style={{ fontSize: 13, color: '#7c3aed' }}>
-                  <i className="bi bi-info-circle me-1"></i>This component is not mapped to your system
-                </p>
-                <p className="text-muted mb-0" style={{ fontSize: 11 }}>
-                  It was discovered in your repository but hasn't been assigned to a system blueprint group. You can map it to a group or ignore it.
-                </p>
+                <p className="mb-2 fw-medium" style={{ fontSize: 13, color: '#7c3aed' }}><i className="bi bi-info-circle me-1"></i>This component is not mapped to your system</p>
+                <p className="text-muted mb-0" style={{ fontSize: 11 }}>It was discovered in your repository but hasn't been assigned to a system blueprint group.</p>
               </div>
               <div className="d-flex gap-2">
-                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }}
-                  onClick={() => window.location.href = `/portal/project/system?componentId=${selectedComponent.id}#build`}>
+                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => window.location.href = `/portal/project/system?componentId=${selectedComponent.id}#build`}>
                   <i className="bi bi-diagram-3 me-1"></i>Map to System
                 </button>
-                <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }}
-                  onClick={() => { setIgnoredIds(prev => new Set([...prev, selectedComponent.id])); setSelectedId(null); }}>
+                <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => { setIgnoredIds(prev => new Set([...prev, selectedComponent.id])); setSelectedId(null); }}>
                   <i className="bi bi-eye-slash me-1"></i>Ignore
                 </button>
               </div>
             </div>
+
           ) : selectedComponent ? (
             <div>
-              <div className="d-flex align-items-center gap-2 mb-2">
-                <span className="fw-bold" style={{ fontSize: 15, color: 'var(--color-text)' }}>
-                  {selectedComponent.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#8b5cf6' }}></i>}
-                  {selectedComponent.name}
-                </span>
-                <span className="badge" style={{ background: STATUS_STYLES[selectedComponent.status].bg, color: STATUS_STYLES[selectedComponent.status].text, fontSize: 9 }}>
-                  {STATUS_STYLES[selectedComponent.status].label}
-                </span>
-                <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>
-                  {selectedComponent.maturity}
-                </span>
+              {/* ── Header: Name + Status + Metrics ── */}
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <div className="d-flex align-items-center gap-2">
+                  {selectedComponent.isPageBP && <i className="bi bi-layout-wtf" style={{ color: '#8b5cf6' }}></i>}
+                  <span className="fw-bold" style={{ fontSize: 15 }}>{selectedComponent.name}</span>
+                  <span className="badge" style={{ background: STATUS_STYLES[selectedComponent.status].bg, color: STATUS_STYLES[selectedComponent.status].text, fontSize: 9 }}>{STATUS_STYLES[selectedComponent.status].label}</span>
+                  <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
+                </div>
+                <div className="d-flex gap-3" style={{ fontSize: 10 }}>
+                  <span>Coverage <strong>{selectedComponent.completion}%</strong></span>
+                  <span>Readiness <strong>{selectedComponent.completion}%</strong></span>
+                </div>
               </div>
 
-              {selectedComponent.description && (
-                <p className="text-muted mb-2" style={{ fontSize: 12 }}>{selectedComponent.description}</p>
+              {/* ── Tabs ── */}
+              <nav className="nav nav-tabs mb-3" style={{ fontSize: 12 }}>
+                {(['overview', 'build', 'improve'] as WorkTab[]).map(t => (
+                  <button key={t} className={`nav-link py-1 px-3 ${workTab === t ? 'active' : ''}`} style={{ fontSize: 11 }} onClick={() => setWorkTab(t)}>
+                    {t === 'overview' && <i className="bi bi-eye me-1"></i>}
+                    {t === 'build' && <i className="bi bi-hammer me-1"></i>}
+                    {t === 'improve' && <i className="bi bi-graph-up-arrow me-1"></i>}
+                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+                {selectedComponent.isPageBP && (
+                  <button className={`nav-link py-1 px-3 ${workTab === 'ui' ? 'active' : ''}`} style={{ fontSize: 11 }} onClick={() => setWorkTab('ui')}>
+                    <i className="bi bi-palette me-1"></i>UI
+                  </button>
+                )}
+              </nav>
+
+              {/* ── TAB: Overview ── */}
+              {workTab === 'overview' && (
+                <div>
+                  {selectedComponent.description && <p className="text-muted mb-3" style={{ fontSize: 12 }}>{selectedComponent.description}</p>}
+                  <div className="d-flex gap-3 mb-3" style={{ fontSize: 11 }}>
+                    <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.backend] }}></div> Backend: <strong>{selectedComponent.layers.backend}</strong></span>
+                    <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.frontend] }}></div> Frontend: <strong>{selectedComponent.layers.frontend}</strong></span>
+                    <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.agent] }}></div> Agents: <strong>{selectedComponent.layers.agent}</strong></span>
+                  </div>
+                  <div className="p-2 mb-3" style={{ background: '#eff6ff', borderRadius: 6, fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>
+                    <i className="bi bi-lightbulb me-1" style={{ color: '#3b82f6' }}></i>{getWhyMatters(selectedComponent)}
+                  </div>
+                  {selectedComponent.nextStep && (
+                    <div className="p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11 }}>
+                      <i className="bi bi-arrow-right-circle me-1" style={{ color: 'var(--color-primary)' }}></i>Next step: <strong>{selectedComponent.nextStep}</strong>
+                    </div>
+                  )}
+                </div>
               )}
 
-              <div className="mb-3">
-                <div className="d-flex justify-content-between mb-1" style={{ fontSize: 10 }}>
-                  <span className="text-muted">Completion</span>
-                  <span className="fw-semibold">{selectedComponent.completion}%</span>
-                </div>
-                <div className="progress" style={{ height: 6, borderRadius: 3 }}>
-                  <div className="progress-bar" style={{ width: `${selectedComponent.completion}%`, background: MATURITY_COLORS[selectedComponent.maturityLevel], borderRadius: 3 }}></div>
-                </div>
-              </div>
-
-              <div className="d-flex gap-3 mb-3" style={{ fontSize: 11 }}>
-                <span>Backend: <strong style={{ color: selectedComponent.layers.backend === 'ready' ? '#059669' : '#9ca3af' }}>{selectedComponent.layers.backend}</strong></span>
-                <span>Frontend: <strong style={{ color: selectedComponent.layers.frontend === 'ready' ? '#059669' : '#9ca3af' }}>{selectedComponent.layers.frontend}</strong></span>
-                <span>Agents: <strong style={{ color: selectedComponent.layers.agent === 'ready' ? '#059669' : '#9ca3af' }}>{selectedComponent.layers.agent}</strong></span>
-              </div>
-
-              {selectedComponent.nextStep && (
-                <div className="p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11 }}>
-                  <i className="bi bi-arrow-right-circle me-1" style={{ color: 'var(--color-primary)' }}></i>
-                  Next step: <strong>{selectedComponent.nextStep}</strong>
+              {/* ── TAB: Build ── */}
+              {workTab === 'build' && (
+                <div>
+                  {!buildPrompt && !buildGenerating && (
+                    <div>
+                      <p className="text-muted mb-3" style={{ fontSize: 11 }}>Generate a build prompt for this component. The prompt will be tailored to your codebase and copied to clipboard.</p>
+                      <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt(selectedComponent)}>
+                        <i className="bi bi-terminal me-1"></i>Generate Build Prompt
+                      </button>
+                    </div>
+                  )}
+                  {buildGenerating && <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: 12 }}><span className="spinner-border spinner-border-sm"></span>Generating prompt...</div>}
+                  {buildPrompt && (
+                    <div>
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <span className="badge bg-success" style={{ fontSize: 9 }}>Copied to clipboard</span>
+                        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => { navigator.clipboard.writeText(buildPrompt).catch(() => {}); }}>
+                          <i className="bi bi-clipboard me-1"></i>Copy Again
+                        </button>
+                        <a href="https://claude.ai/" target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}>
+                          <i className="bi bi-box-arrow-up-right me-1"></i>Open Claude
+                        </a>
+                      </div>
+                      <div className="mb-3 p-3" style={{ background: '#1e293b', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>
+                        <pre style={{ color: '#e2e8f0', fontSize: 10, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>{buildPrompt}</pre>
+                      </div>
+                      {!buildResult && (
+                        <div>
+                          <label className="form-label fw-medium" style={{ fontSize: 11 }}><i className="bi bi-clipboard-check me-1"></i>Paste Claude Code Response</label>
+                          <textarea className="form-control form-control-sm" rows={5} value={buildReport} onChange={e => setBuildReport(e.target.value)}
+                            placeholder="VALIDATION REPORT&#10;&#10;Files Created:&#10;- ..." style={{ fontFamily: 'monospace', fontSize: 10 }} />
+                          <button className="btn btn-sm mt-2" style={{ background: '#10b981', color: '#fff', fontWeight: 600, fontSize: 11 }}
+                            disabled={!buildReport.trim() || buildValidating} onClick={() => handleValidateBuild(selectedComponent.id)}>
+                            {buildValidating ? <><span className="spinner-border spinner-border-sm me-1"></span>Validating...</> : <><i className="bi bi-check-circle me-1"></i>Validate Build</>}
+                          </button>
+                        </div>
+                      )}
+                      {buildResult && !buildResult.error && (
+                        <div className="p-3" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
+                          <div className="fw-bold small mb-1" style={{ color: '#059669' }}><i className="bi bi-check-circle-fill me-1"></i>Build Validated</div>
+                          <div style={{ fontSize: 11 }}><strong>{buildResult.requirementsVerified || 0}</strong> of {buildResult.requirementsTotal || 0} requirements verified</div>
+                          <button className="btn btn-sm btn-outline-primary mt-2" style={{ fontSize: 10 }} onClick={() => { setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}>
+                            <i className="bi bi-arrow-repeat me-1"></i>Build Again
+                          </button>
+                        </div>
+                      )}
+                      {buildResult?.error && <div className="alert alert-danger py-2" style={{ fontSize: 11 }}>{buildResult.error}</div>}
+                    </div>
+                  )}
                 </div>
               )}
 
-              <div className="mt-3 text-muted" style={{ fontSize: 10, fontStyle: 'italic' }}>
-                Full build + execution controls coming in V2 Phase 2
-              </div>
+              {/* ── TAB: Improve ── */}
+              {workTab === 'improve' && (
+                <div>
+                  {compDetail?.autonomy_gaps?.length > 0 ? (
+                    <div>
+                      <p className="text-muted mb-2" style={{ fontSize: 11 }}>System-detected gaps for this component:</p>
+                      {compDetail.autonomy_gaps.slice(0, 3).map((g: any) => (
+                        <div key={g.gap_id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11 }}>
+                          <i className={`bi ${g.gap_type === 'behavior' ? 'bi-person-lines-fill' : g.gap_type === 'intelligence' ? 'bi-lightbulb' : g.gap_type === 'optimization' ? 'bi-speedometer2' : 'bi-bar-chart-line'}`} style={{ color: '#8b5cf6', marginTop: 2 }}></i>
+                          <div>
+                            <div className="fw-medium">{g.title}</div>
+                            <div className="text-muted" style={{ fontSize: 10 }}>{g.description?.substring(0, 120)}</div>
+                            <span className="badge mt-1" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>{g.gap_type}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : loadingDetail ? (
+                    <div className="text-muted" style={{ fontSize: 11 }}><span className="spinner-border spinner-border-sm me-1"></span>Loading suggestions...</div>
+                  ) : (
+                    <p className="text-muted mb-0" style={{ fontSize: 11 }}>No improvement suggestions at this time — this component is on track.</p>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB: UI (Page BPs only) ── */}
+              {workTab === 'ui' && selectedComponent.isPageBP && (
+                <div>
+                  {/* Preview iframe */}
+                  {compDetail?.preview_url ? (
+                    <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                      <iframe src={compDetail.preview_url} title="Page Preview" style={{ width: '100%', height: 300, border: 'none', background: '#fff' }} sandbox="allow-scripts allow-same-origin allow-forms" />
+                    </div>
+                  ) : (
+                    <div className="mb-3 p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
+                      <p className="text-muted small mb-0">Preview not available for this page.</p>
+                    </div>
+                  )}
+                  {/* Quick actions */}
+                  <div className="d-flex flex-wrap gap-2 mb-3">
+                    {[
+                      { label: 'Improve Layout', feedback: 'Improve the page layout, spacing, and visual hierarchy' },
+                      { label: 'Fix UX Issues', feedback: 'Find and fix usability issues and broken interactions' },
+                      { label: 'Mobile Responsive', feedback: 'Make the layout responsive for mobile and tablet' },
+                    ].map(a => (
+                      <button key={a.label} className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} disabled={uiAnalyzing}
+                        onClick={() => handleUIAnalyze(selectedComponent.id, a.feedback)}>
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                  {uiAnalyzing && <div className="text-muted" style={{ fontSize: 11 }}><span className="spinner-border spinner-border-sm me-1"></span>Analyzing page...</div>}
+                  {/* Issues */}
+                  {uiFeedback?.items?.length > 0 && (
+                    <div>
+                      <div className="fw-semibold small mb-2">Detected Issues</div>
+                      {uiFeedback.items.filter((f: any) => f.status !== 'dismissed').slice(0, 5).map((f: any) => (
+                        <div key={f.id} className="d-flex gap-2 align-items-start py-1 mb-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
+                          <span className="badge" style={{ fontSize: 8, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981' }}>{f.severity}</span>
+                          <div className="flex-grow-1">
+                            <div className="fw-medium">{f.title}</div>
+                            {f.suggestion && <div className="text-muted" style={{ fontSize: 9 }}>{f.suggestion.substring(0, 80)}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+
           ) : (
+            /* ── Empty State ── */
             <div className="text-center py-4" data-testid="work-area-empty">
               <i className="bi bi-cursor-fill d-block mb-2" style={{ fontSize: 24, color: '#9ca3af' }}></i>
               <p className="text-muted mb-0" style={{ fontSize: 12 }}>Select a component from the System Map to begin</p>
