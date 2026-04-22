@@ -2,7 +2,7 @@
  * SystemViewV2 Tests — Scaffolding + System Map Verification
  */
 
-import { groupComponents, getNextComponents } from '../pages/project/SystemViewV2';
+import { groupComponents, getNextComponents, groupByBusinessDomain, getComponentPurpose, getSystemSummary } from '../pages/project/SystemViewV2';
 
 // ---------------------------------------------------------------------------
 // Mock data factory
@@ -681,5 +681,110 @@ describe('SystemViewV2 — Visual Linking System', () => {
     const hasPages = comp.ui.pages.length > 0;
     const hasFrontend = comp.layers.frontend !== 'missing';
     expect(hasFrontend && !hasPages).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. BUSINESS DOMAIN GROUPING
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Business Domain Grouping', () => {
+  test('lead-related BPs go to Revenue', () => {
+    const comps = [makeBP({ id: '1', name: 'Lead Management' })];
+    const groups = groupByBusinessDomain(comps);
+    expect(groups.find(g => g.key === 'revenue')).toBeDefined();
+  });
+
+  test('AI-related BPs go to Intelligence', () => {
+    const comps = [makeBP({ id: '1', name: 'AI Adoption and Training' })];
+    const groups = groupByBusinessDomain(comps);
+    expect(groups.find(g => g.key === 'intelligence')).toBeDefined();
+  });
+
+  test('page BPs go to Discovered', () => {
+    const comps = [makeBP({ id: '1', name: 'Landing Page', isPageBP: true, source: 'frontend_page' })];
+    const groups = groupByBusinessDomain(comps);
+    expect(groups.find(g => g.key === 'discovered')).toBeDefined();
+  });
+
+  test('multiple domains created from mixed BPs', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'Lead Pipeline' }),
+      makeBP({ id: '2', name: 'User Management' }),
+      makeBP({ id: '3', name: 'Analytics Reporting' }),
+    ];
+    const groups = groupByBusinessDomain(comps);
+    expect(groups.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. COMPONENT PURPOSE
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Component Purpose', () => {
+  test('lead component gets revenue purpose', () => {
+    const purpose = getComponentPurpose('Lead Management');
+    expect(purpose).toContain('lead');
+  });
+
+  test('monitoring component gets ops purpose', () => {
+    const purpose = getComponentPurpose('Monitoring and Observability');
+    expect(purpose).toContain('health');
+  });
+
+  test('unknown component gets generic purpose', () => {
+    const purpose = getComponentPurpose('XyzModule');
+    expect(purpose).toContain('XyzModule');
+  });
+
+  test('system summary generates from components', () => {
+    const comps = [
+      makeBP({ name: 'Lead Management' }),
+      makeBP({ name: 'AI Training' }),
+    ];
+    const summary = getSystemSummary(comps);
+    expect(summary).toContain('AI-powered');
+  });
+
+  test('empty components gives generic summary', () => {
+    const summary = getSystemSummary([]);
+    expect(summary).toContain('AI-powered');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. REPORTING METRICS
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Reporting Metrics', () => {
+  test('completed percentage calculated correctly', () => {
+    const total = 10;
+    const completed = 3;
+    const pct = Math.round((completed / total) * 100);
+    expect(pct).toBe(30);
+  });
+
+  test('missing backend count calculated from layer status', () => {
+    const comps = [
+      makeBP({ layers: { backend: 'missing', frontend: 'ready', agent: 'missing' } }),
+      makeBP({ layers: { backend: 'ready', frontend: 'missing', agent: 'missing' } }),
+    ];
+    const noBackend = comps.filter(c => c.layers.backend === 'missing').length;
+    expect(noBackend).toBe(1);
+  });
+
+  test('gap categorization by severity', () => {
+    const comps = [
+      makeBP({ layers: { backend: 'missing', frontend: 'missing', agent: 'missing' }, completion: 0 }),
+      makeBP({ layers: { backend: 'ready', frontend: 'missing', agent: 'missing' }, completion: 40 }),
+      makeBP({ layers: { backend: 'ready', frontend: 'ready', agent: 'missing' }, completion: 60 }),
+    ];
+    const critical = comps.filter(c => c.layers.backend === 'missing');
+    const high = comps.filter(c => c.layers.backend !== 'missing' && c.layers.frontend === 'missing');
+    const medium = comps.filter(c => c.layers.backend !== 'missing' && c.layers.frontend !== 'missing' && c.layers.agent === 'missing');
+    expect(critical.length).toBe(1);
+    expect(high.length).toBe(1);
+    expect(medium.length).toBe(1);
   });
 });

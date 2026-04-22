@@ -177,6 +177,97 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
   return groups;
 }
 
+// ---------------------------------------------------------------------------
+// Business Domain Grouping (enterprise-oriented alternative)
+// ---------------------------------------------------------------------------
+
+const BIZ_REVENUE = /lead|pipeline|campaign|enrollment|enroll|sales|revenue|opportunity|pricing|sponsor/i;
+const BIZ_MARKETING = /landing|outreach|engagement|content|marketing|case.stud|advisory|champion|program/i;
+const BIZ_OPERATIONS = /user.manage|workflow|onboard|ticket|deploy|error|resilien|security|auth/i;
+const BIZ_PRODUCT = /dashboard|page|ui|setting|detail|management|overview|contact|strategy/i;
+const BIZ_INTELLIGENCE = /ai\b|agent|automat|monitor|analytics|report|intel|train|adopt|feedback|performance|observ|search|data.*integrat/i;
+
+export function groupByBusinessDomain(components: SystemComponent[]): ComponentGroup[] {
+  const revenue: SystemComponent[] = [];
+  const marketing: SystemComponent[] = [];
+  const operations: SystemComponent[] = [];
+  const product: SystemComponent[] = [];
+  const intelligence: SystemComponent[] = [];
+  const discovered: SystemComponent[] = [];
+
+  for (const c of components) {
+    if (c.isDiscovered || (c.isPageBP && c.source === 'frontend_page')) { discovered.push(c); continue; }
+    const name = c.name.toLowerCase();
+    if (BIZ_REVENUE.test(name)) { revenue.push(c); continue; }
+    if (BIZ_INTELLIGENCE.test(name)) { intelligence.push(c); continue; }
+    if (BIZ_MARKETING.test(name)) { marketing.push(c); continue; }
+    if (BIZ_OPERATIONS.test(name)) { operations.push(c); continue; }
+    if (BIZ_PRODUCT.test(name)) { product.push(c); continue; }
+    // Fallback
+    if (c.layers.backend === 'ready' || c.layers.backend === 'partial') operations.push(c);
+    else product.push(c);
+  }
+
+  const groups: ComponentGroup[] = [];
+  const calc = (items: SystemComponent[]) => items.length > 0 ? Math.round(items.reduce((s, c) => s + c.completion, 0) / items.length) : 0;
+  if (revenue.length > 0) groups.push({ key: 'revenue', title: 'Revenue', icon: 'bi-currency-dollar', color: '#10b981', items: revenue, completion: calc(revenue) });
+  if (operations.length > 0) groups.push({ key: 'operations', title: 'Operations', icon: 'bi-gear', color: '#3b82f6', items: operations, completion: calc(operations) });
+  if (marketing.length > 0) groups.push({ key: 'marketing', title: 'Marketing', icon: 'bi-megaphone', color: '#f59e0b', items: marketing, completion: calc(marketing) });
+  if (product.length > 0) groups.push({ key: 'product', title: 'Product', icon: 'bi-box', color: '#8b5cf6', items: product, completion: calc(product) });
+  if (intelligence.length > 0) groups.push({ key: 'intelligence', title: 'Intelligence', icon: 'bi-cpu', color: '#06b6d4', items: intelligence, completion: calc(intelligence) });
+  if (discovered.length > 0) groups.push({ key: 'discovered', title: `Discovered Pages (${discovered.length})`, icon: 'bi-search', color: '#a855f7', items: discovered, completion: calc(discovered) });
+  return groups;
+}
+
+// ---------------------------------------------------------------------------
+// Component Purpose (deterministic, keyword-based)
+// ---------------------------------------------------------------------------
+
+export function getComponentPurpose(name: string): string {
+  const n = name.toLowerCase();
+  if (/lead/i.test(n)) return 'Collect and qualify incoming leads to drive revenue growth.';
+  if (/campaign/i.test(n)) return 'Design, execute, and track marketing campaigns to reach your audience.';
+  if (/pipeline|opportunity/i.test(n)) return 'Manage sales pipeline stages to convert prospects into customers.';
+  if (/enroll/i.test(n)) return 'Handle enrollment workflows from signup to activation.';
+  if (/user.*(manage|role)/i.test(n)) return 'Manage user accounts, roles, and permissions across the system.';
+  if (/engag|feedback/i.test(n)) return 'Capture and act on user feedback to improve retention and product quality.';
+  if (/ai.*adopt|train/i.test(n)) return 'Guide AI adoption and training across your organization.';
+  if (/monitor|observ/i.test(n)) return 'Track system health, detect anomalies, and ensure reliable operation.';
+  if (/analytics|report/i.test(n)) return 'Generate insights and reports to inform strategic decisions.';
+  if (/workflow|automat/i.test(n)) return 'Automate repetitive processes to reduce manual effort.';
+  if (/security|compliance/i.test(n)) return 'Protect data and ensure regulatory compliance.';
+  if (/error|resilien/i.test(n)) return 'Handle failures gracefully and ensure system reliability.';
+  if (/performance|optim/i.test(n)) return 'Optimize system speed and resource efficiency.';
+  if (/content/i.test(n)) return 'Create, manage, and deliver content to your audience.';
+  if (/onboard/i.test(n)) return 'Guide new users through setup and first-time experience.';
+  if (/search|discover/i.test(n)) return 'Enable users to find information quickly and efficiently.';
+  if (/deploy|infra/i.test(n)) return 'Manage deployment pipelines and infrastructure.';
+  if (/test|quality/i.test(n)) return 'Ensure code quality through testing and validation.';
+  if (/api|integrat/i.test(n)) return 'Connect systems through well-defined API interfaces.';
+  if (/data.*manage/i.test(n)) return 'Organize, store, and process data reliably.';
+  if (/market|outreach/i.test(n)) return 'Reach potential customers through targeted outreach.';
+  if (/dashboard/i.test(n)) return 'Provide visual overview of key metrics and system state.';
+  return `Enable ${name} capabilities within your system.`;
+}
+
+export function getSystemSummary(components: SystemComponent[]): string {
+  const mapped = components.filter(c => !c.isDiscovered && !c.isPageBP);
+  if (mapped.length === 0) return 'an AI-powered system';
+  const domains = new Set<string>();
+  for (const c of mapped) {
+    const n = c.name.toLowerCase();
+    if (/lead|pipeline|campaign|sales|revenue/i.test(n)) domains.add('lead generation');
+    if (/train|adopt|learn|curriculum/i.test(n)) domains.add('training');
+    if (/monitor|analytics|report/i.test(n)) domains.add('analytics');
+    if (/automat|workflow|agent/i.test(n)) domains.add('automation');
+    if (/engag|feedback|user/i.test(n)) domains.add('user engagement');
+    if (/content|market/i.test(n)) domains.add('content delivery');
+  }
+  const domainList = [...domains].slice(0, 3);
+  if (domainList.length === 0) return 'an AI-powered enterprise system';
+  return `an AI-powered ${domainList.join(', ')} platform`;
+}
+
 export function getNextComponents(components: SystemComponent[], max: number = 3): Set<string> {
   return new Set(
     components
@@ -271,9 +362,9 @@ function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: {
       </div>
 
       {/* Hover tooltip */}
-      {hovered && !isSelected && (comp.nextStep || comp.description) && (
+      {hovered && !isSelected && (
         <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--color-border)', fontSize: 9, color: '#64748b', lineHeight: 1.4 }}>
-          {comp.nextStep ? <><i className="bi bi-arrow-right me-1"></i>{comp.nextStep}</> : comp.description?.substring(0, 60)}
+          {getComponentPurpose(comp.name)}
         </div>
       )}
     </div>
@@ -337,6 +428,7 @@ function SystemViewV2Inner() {
   const [defineTarget, setDefineTarget] = useState<string | null>(null);
   const [verifiedPages, setVerifiedPages] = useState<Set<string>>(new Set()); // route keys
   const [detachedPages, setDetachedPages] = useState<Set<string>>(new Set()); // route keys
+  const [groupMode, setGroupMode] = useState<'business' | 'technical'>('business');
   const [verifyModal, setVerifyModal] = useState<{ page: UIPage; compId: string } | null>(null);
   const [mergeModal, setMergeModal] = useState<{ page: UIPage; existingCompId: string; targetCompId: string } | null>(null);
 
@@ -439,7 +531,7 @@ function SystemViewV2Inner() {
   });
   const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
   const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
-  const groups = groupComponents(visibleComponents);
+  const groups = groupMode === 'business' ? groupByBusinessDomain(visibleComponents) : groupComponents(visibleComponents);
   const nextIds = getNextComponents(visibleComponents);
 
   // Intelligence helper
@@ -640,12 +732,22 @@ function SystemViewV2Inner() {
           ═══════════════════════════════════════════════════════════════════ */}
       <div className="card border-0 shadow-sm mb-3" data-testid="system-map-section" style={{ minHeight: 280 }}>
         <div className="card-body p-4">
+          {/* Orientation header */}
+          <div className="mb-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11, color: '#64748b' }}>
+            <i className="bi bi-rocket-takeoff me-1" style={{ color: 'var(--color-primary)' }}></i>
+            You are building <strong style={{ color: 'var(--color-text)' }}>{getSystemSummary(visibleComponents)}</strong>
+          </div>
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div>
               <h6 className="fw-bold mb-1" style={{ fontSize: 14, color: 'var(--color-primary)' }}>
-                <i className="bi bi-diagram-3 me-2"></i>System Map
+                <i className="bi bi-diagram-3 me-2"></i>Your AI Business System
               </h6>
-              <p className="text-muted mb-0" style={{ fontSize: 11 }}>Visual representation of your system components</p>
+              <p className="text-muted mb-0 d-flex align-items-center gap-2" style={{ fontSize: 11 }}>
+                <span>{visibleComponents.filter(c => !c.isDiscovered).length} components</span>
+                <span className="text-muted">|</span>
+                <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10, color: groupMode === 'business' ? 'var(--color-primary)' : '#9ca3af' }} onClick={() => setGroupMode('business')}>Business</button>
+                <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10, color: groupMode === 'technical' ? 'var(--color-primary)' : '#9ca3af' }} onClick={() => setGroupMode('technical')}>Technical</button>
+              </p>
             </div>
             <div className="d-flex gap-2">
               <div className="d-flex align-items-center gap-1" style={{ fontSize: 10 }}>
@@ -795,7 +897,11 @@ function SystemViewV2Inner() {
               {/* ── TAB: Overview ── */}
               {workTab === 'overview' && (
                 <div>
-                  {selectedComponent.description && <p className="text-muted mb-3" style={{ fontSize: 12 }}>{selectedComponent.description}</p>}
+                  {/* Purpose */}
+                  <p className="mb-3" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>
+                    <i className="bi bi-info-circle me-1" style={{ color: '#3b82f6' }}></i>{getComponentPurpose(selectedComponent.name)}
+                  </p>
+                  {selectedComponent.description && <p className="text-muted mb-3" style={{ fontSize: 11 }}>{selectedComponent.description}</p>}
                   <div className="d-flex gap-3 mb-3" style={{ fontSize: 11 }}>
                     <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.backend] }}></div> Backend: <strong>{selectedComponent.layers.backend}</strong></span>
                     <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.frontend] }}></div> Frontend: <strong>{selectedComponent.layers.frontend}</strong></span>
@@ -1009,7 +1115,27 @@ function SystemViewV2Inner() {
                       ))}
                     </div>
                   </div>
-                  {selectedComponent.description && <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.description}</p>}
+                  {selectedComponent.description && <p className="text-muted mb-2" style={{ fontSize: 11 }}>{selectedComponent.description}</p>}
+                  {/* System-wide metrics */}
+                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                    <div className="fw-semibold small mb-2">System Overview</div>
+                    <div className="row g-2">
+                      {[
+                        { label: 'Total', value: visibleComponents.filter(c => !c.isDiscovered).length, color: 'var(--color-primary)' },
+                        { label: 'Completed', value: `${Math.round((completedCount / Math.max(visibleComponents.filter(c => !c.isDiscovered).length, 1)) * 100)}%`, color: '#059669' },
+                        { label: 'No Backend', value: visibleComponents.filter(c => !c.isDiscovered && !c.isPageBP && c.layers.backend === 'missing').length, color: '#ef4444' },
+                        { label: 'No UI', value: visibleComponents.filter(c => !c.isDiscovered && !c.isPageBP && c.layers.frontend === 'missing').length, color: '#f59e0b' },
+                        { label: 'No Agents', value: visibleComponents.filter(c => !c.isDiscovered && !c.isPageBP && c.layers.agent === 'missing').length, color: '#9ca3af' },
+                      ].map(k => (
+                        <div key={k.label} className="col">
+                          <div className="text-center p-1" style={{ background: 'var(--color-bg-alt)', borderRadius: 4 }}>
+                            <div className="fw-bold" style={{ fontSize: 13, color: k.color }}>{k.value}</div>
+                            <div className="text-muted" style={{ fontSize: 8 }}>{k.label}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
