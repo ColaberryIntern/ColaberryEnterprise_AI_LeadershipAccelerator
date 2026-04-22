@@ -5,7 +5,7 @@
  * Reuses existing APIs — no new backend endpoints
  * componentId sync via URL param + local state
  */
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
@@ -38,6 +38,8 @@ interface SystemComponent {
   isDiscovered: boolean;
   source: string;
   frontendRoute: string | null;
+  coverageRaw: number;
+  readinessRaw: number;
   layers: { backend: string; frontend: string; agent: string };
   ui: { pages: UIPage[] };
 }
@@ -104,6 +106,8 @@ function transformBPs(bps: any[]): SystemComponent[] {
         isDiscovered: bpSource === 'repo_discovered' || (isPageBP && bpSource === 'frontend_page') || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
         source: bpSource,
         frontendRoute: bp.frontend_route || null,
+        coverageRaw: Math.round(coverage),
+        readinessRaw: Math.round(readiness),
         layers: {
           backend: u.backend || 'missing',
           frontend: u.frontend || 'missing',
@@ -400,7 +404,8 @@ function SystemViewV2Inner() {
   const [selectedId, setSelectedId] = useState<string | null>(urlComponentId || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
+  const [ignoredIds, setIgnoredIdsRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_ignored_ids') || '[]')); } catch { return new Set(); } });
+  const setIgnoredIds = (fn: (prev: Set<string>) => Set<string>) => { setIgnoredIdsRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_ignored_ids', JSON.stringify([...next])); return next; }); };
   const [discoveredExpanded, setDiscoveredExpanded] = useState(false);
   const workAreaRef = useRef<HTMLDivElement>(null);
 
@@ -420,14 +425,18 @@ function SystemViewV2Inner() {
   // UI feedback state
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
   const [uiFeedback, setUiFeedback] = useState<any>(null);
+  const [selectedPageIdx, setSelectedPageIdx] = useState(0);
 
   // Page attachment state
-  const [pageAttachments, setPageAttachments] = useState<Record<string, UIPage[]>>({});
+  const [pageAttachments, setPageAttachmentsRaw] = useState<Record<string, UIPage[]>>(() => { try { return JSON.parse(localStorage.getItem('system_v2_page_attachments') || '{}'); } catch { return {}; } });
+  const setPageAttachments = (fn: (prev: Record<string, UIPage[]>) => Record<string, UIPage[]>) => { setPageAttachmentsRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_page_attachments', JSON.stringify(next)); return next; }); };
   const [defineModal, setDefineModal] = useState<{ discoveredComp: SystemComponent } | null>(null);
   const [defineStep, setDefineStep] = useState<'confirm' | 'action' | 'select' | 'done'>('confirm');
   const [defineTarget, setDefineTarget] = useState<string | null>(null);
-  const [verifiedPages, setVerifiedPages] = useState<Set<string>>(new Set()); // route keys
-  const [detachedPages, setDetachedPages] = useState<Set<string>>(new Set()); // route keys
+  const [verifiedPages, setVerifiedPagesRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_verified_pages') || '[]')); } catch { return new Set(); } });
+  const setVerifiedPages = (fn: (prev: Set<string>) => Set<string>) => { setVerifiedPagesRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_verified_pages', JSON.stringify([...next])); return next; }); };
+  const [detachedPages, setDetachedPagesRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_detached_pages') || '[]')); } catch { return new Set(); } });
+  const setDetachedPages = (fn: (prev: Set<string>) => Set<string>) => { setDetachedPagesRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_detached_pages', JSON.stringify([...next])); return next; }); };
   const [groupMode, setGroupMode] = useState<'business' | 'technical'>('business');
   const [verifyModal, setVerifyModal] = useState<{ page: UIPage; compId: string } | null>(null);
   const [mergeModal, setMergeModal] = useState<{ page: UIPage; existingCompId: string; targetCompId: string } | null>(null);
@@ -461,6 +470,12 @@ function SystemViewV2Inner() {
       .catch(() => {})
       .finally(() => setLoadingDetail(false));
   }, [selectedId]);
+
+  // Sync coryMode when systemMode changes
+  useEffect(() => {
+    if (isReporting && !coryMode.startsWith('r-')) setCoryMode('r-insights');
+    if (!isReporting && coryMode.startsWith('r-')) setCoryMode('suggestions');
+  }, [isReporting, coryMode]);
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -506,8 +521,8 @@ function SystemViewV2Inner() {
     agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
   };
 
-  // Merge page attachments + auto-detect page matches into components
-  const enrichedComponents = components.map(c => {
+  // Merge page attachments + auto-detect page matches into components (memoized)
+  const enrichedComponents = useMemo(() => components.map(c => {
     const attached = pageAttachments[c.id] || [];
     const autoPages: UIPage[] = [];
     // Auto-detect: match discovered page BPs to code BPs by name similarity with confidence
@@ -528,7 +543,7 @@ function SystemViewV2Inner() {
       .filter(p => !detachedPages.has(`${c.id}:${p.route}`))
       .map(p => ({ ...p, verified: p.verified || verifiedPages.has(`${c.id}:${p.route}`) }));
     return { ...c, ui: { pages: allPages } };
-  });
+  }), [components, pageAttachments, detachedPages, verifiedPages]);
   const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
   const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
   const groups = groupMode === 'business' ? groupByBusinessDomain(visibleComponents) : groupComponents(visibleComponents);
@@ -568,7 +583,12 @@ function SystemViewV2Inner() {
     try {
       const res = await portalApi.post(`/api/portal/project/business-processes/${compId}/validation-report`, { reportText: buildReport.trim() });
       setBuildResult(res.data);
-      await loadData(); // refresh components
+      await loadData(); // refresh components list
+      // Refresh component detail to update gaps + metrics
+      try {
+        const detailRes = await portalApi.get(`/api/portal/project/business-processes/${compId}`);
+        setCompDetail(detailRes.data);
+      } catch {}
     } catch (err: any) {
       setBuildResult({ error: err.response?.data?.error || 'Validation failed' });
     } finally { setBuildValidating(false); }
@@ -872,8 +892,8 @@ function SystemViewV2Inner() {
                   <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
                 </div>
                 <div className="d-flex gap-3" style={{ fontSize: 10 }}>
-                  <span>Coverage <strong>{selectedComponent.completion}%</strong></span>
-                  <span>Readiness <strong>{selectedComponent.completion}%</strong></span>
+                  <span>Coverage <strong>{selectedComponent.coverageRaw}%</strong></span>
+                  <span>Readiness <strong>{selectedComponent.readinessRaw}%</strong></span>
                 </div>
               </div>
 
@@ -1035,12 +1055,26 @@ function SystemViewV2Inner() {
               )}
 
               {/* ── TAB: UI (any component with pages) ── */}
-              {workTab === 'ui' && selectedComponent.ui.pages.length > 0 && (
+              {workTab === 'ui' && selectedComponent.ui.pages.length > 0 && (() => {
+                const pages = selectedComponent.ui.pages;
+                const safeIdx = Math.min(selectedPageIdx, pages.length - 1);
+                const activePage = pages[safeIdx];
+                const previewUrl = compDetail?.preview_url || (activePage?.route ? undefined : undefined);
+                return (
                 <div>
+                  {/* Page selector (multi-page) */}
+                  {pages.length > 1 && (
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <span className="text-muted" style={{ fontSize: 10 }}>Page:</span>
+                      <select className="form-select form-select-sm" style={{ maxWidth: 220, fontSize: 10 }} value={safeIdx} onChange={e => setSelectedPageIdx(parseInt(e.target.value))}>
+                        {pages.map((pg: UIPage, i: number) => <option key={pg.route + i} value={i}>{pg.name} ({pg.route})</option>)}
+                      </select>
+                    </div>
+                  )}
                   {/* Preview iframe */}
-                  {compDetail?.preview_url ? (
+                  {previewUrl ? (
                     <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
-                      <iframe src={compDetail.preview_url} title="Page Preview" style={{ width: '100%', height: 300, border: 'none', background: '#fff' }} sandbox="allow-scripts allow-same-origin allow-forms" />
+                      <iframe key={`preview-${safeIdx}`} src={previewUrl} title="Page Preview" style={{ width: '100%', height: 300, border: 'none', background: '#fff' }} sandbox="allow-scripts allow-same-origin allow-forms" />
                     </div>
                   ) : (
                     <div className="mb-3 p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
@@ -1077,7 +1111,8 @@ function SystemViewV2Inner() {
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* ── REPORTING TABS ── */}
 
@@ -1085,19 +1120,25 @@ function SystemViewV2Inner() {
               {workTab === 'insights' && (
                 <div>
                   <div className="row g-3 mb-3">
-                    <div className="col-4">
+                    <div className="col-3">
                       <div className="p-2 text-center" style={{ background: '#eff6ff', borderRadius: 6 }}>
-                        <div className="fw-bold" style={{ fontSize: 16, color: 'var(--color-primary)' }}>{selectedComponent.completion}%</div>
+                        <div className="fw-bold" style={{ fontSize: 16, color: 'var(--color-primary)' }}>{selectedComponent.coverageRaw}%</div>
                         <div className="text-muted" style={{ fontSize: 9 }}>Coverage</div>
                       </div>
                     </div>
-                    <div className="col-4">
+                    <div className="col-3">
+                      <div className="p-2 text-center" style={{ background: '#e0f2fe', borderRadius: 6 }}>
+                        <div className="fw-bold" style={{ fontSize: 16, color: '#0284c7' }}>{selectedComponent.readinessRaw}%</div>
+                        <div className="text-muted" style={{ fontSize: 9 }}>Readiness</div>
+                      </div>
+                    </div>
+                    <div className="col-3">
                       <div className="p-2 text-center" style={{ background: '#f0fdf4', borderRadius: 6 }}>
                         <div className="fw-bold" style={{ fontSize: 16, color: '#059669' }}>{selectedComponent.maturity}</div>
                         <div className="text-muted" style={{ fontSize: 9 }}>Maturity</div>
                       </div>
                     </div>
-                    <div className="col-4">
+                    <div className="col-3">
                       <div className="p-2 text-center" style={{ background: selectedComponent.status === 'complete' ? '#f0fdf4' : '#fef3c7', borderRadius: 6 }}>
                         <div className="fw-bold" style={{ fontSize: 16, color: selectedComponent.status === 'complete' ? '#059669' : '#92400e' }}>{STATUS_STYLES[selectedComponent.status].label}</div>
                         <div className="text-muted" style={{ fontSize: 9 }}>Status</div>

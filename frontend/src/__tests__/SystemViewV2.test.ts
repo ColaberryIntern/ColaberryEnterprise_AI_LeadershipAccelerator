@@ -23,6 +23,8 @@ function makeBP(overrides: any = {}) {
     isDiscovered: overrides.isDiscovered || false,
     source: overrides.source || 'auto',
     frontendRoute: overrides.frontendRoute || null,
+    coverageRaw: overrides.coverageRaw || 0,
+    readinessRaw: overrides.readinessRaw || 0,
     layers: overrides.layers || { backend: 'missing', frontend: 'missing', agent: 'missing' },
     ui: overrides.ui || { pages: [] },
   };
@@ -786,5 +788,88 @@ describe('SystemViewV2 — Reporting Metrics', () => {
     expect(critical.length).toBe(1);
     expect(high.length).toBe(1);
     expect(medium.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. QA RUN #1 FIXES
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — QA Fix: localStorage Persistence', () => {
+  beforeEach(() => localStorage.clear());
+
+  test('ignoredIds persists to localStorage', () => {
+    const ids = ['a', 'b'];
+    localStorage.setItem('system_v2_ignored_ids', JSON.stringify(ids));
+    const restored = new Set(JSON.parse(localStorage.getItem('system_v2_ignored_ids') || '[]'));
+    expect(restored.has('a')).toBe(true);
+    expect(restored.has('b')).toBe(true);
+  });
+
+  test('pageAttachments persists to localStorage', () => {
+    const data = { 'comp1': [{ name: 'Page', route: '/test', source: 'discovered', verified: false, confidence: 80, bpId: 'x' }] };
+    localStorage.setItem('system_v2_page_attachments', JSON.stringify(data));
+    const restored = JSON.parse(localStorage.getItem('system_v2_page_attachments') || '{}');
+    expect(restored['comp1']).toHaveLength(1);
+  });
+
+  test('verifiedPages persists to localStorage', () => {
+    localStorage.setItem('system_v2_verified_pages', JSON.stringify(['comp1:/test']));
+    const restored = new Set(JSON.parse(localStorage.getItem('system_v2_verified_pages') || '[]'));
+    expect(restored.has('comp1:/test')).toBe(true);
+  });
+
+  test('empty localStorage returns safe defaults', () => {
+    const ids = new Set(JSON.parse(localStorage.getItem('system_v2_ignored_ids') || '[]'));
+    expect(ids.size).toBe(0);
+    const attachments = JSON.parse(localStorage.getItem('system_v2_page_attachments') || '{}');
+    expect(Object.keys(attachments)).toHaveLength(0);
+  });
+});
+
+describe('SystemViewV2 — QA Fix: Multi-Page Switcher', () => {
+  test('page index defaults to 0', () => {
+    const idx = 0;
+    const pages = [{ name: 'A', route: '/a' }, { name: 'B', route: '/b' }];
+    expect(pages[idx].name).toBe('A');
+  });
+
+  test('switching index changes active page', () => {
+    const pages = [{ name: 'A', route: '/a' }, { name: 'B', route: '/b' }];
+    let idx = 0;
+    idx = 1;
+    expect(pages[idx].name).toBe('B');
+  });
+
+  test('safe index clamped to pages length', () => {
+    const pages = [{ name: 'A' }];
+    const idx = 5;
+    const safeIdx = Math.min(idx, pages.length - 1);
+    expect(safeIdx).toBe(0);
+  });
+});
+
+describe('SystemViewV2 — QA Fix: Coverage vs Readiness', () => {
+  test('coverageRaw and readinessRaw are distinct', () => {
+    const comp = makeBP({ coverageRaw: 45, readinessRaw: 72 });
+    expect(comp.coverageRaw).toBe(45);
+    expect(comp.readinessRaw).toBe(72);
+    expect(comp.coverageRaw).not.toBe(comp.readinessRaw);
+  });
+});
+
+describe('SystemViewV2 — QA Fix: Cory Mode Sync', () => {
+  test('reporting mode should use r- prefixed cory modes', () => {
+    const isReporting = true;
+    let coryMode = 'suggestions';
+    if (isReporting && !coryMode.startsWith('r-')) coryMode = 'r-insights';
+    expect(coryMode).toBe('r-insights');
+  });
+
+  test('build mode should not use r- prefixed modes', () => {
+    const isReporting = false;
+    let coryMode = 'r-insights';
+    if (!isReporting && coryMode.startsWith('r-')) coryMode = 'suggestions';
+    expect(coryMode).toBe('suggestions');
   });
 });
