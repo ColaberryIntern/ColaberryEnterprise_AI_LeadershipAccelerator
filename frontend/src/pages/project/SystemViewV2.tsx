@@ -239,7 +239,17 @@ function SystemMapTile({ comp, isSelected, isNext, onClick }: { comp: SystemComp
 // System View V2 Page
 // ---------------------------------------------------------------------------
 
-export default function SystemViewV2() {
+// Error boundary for debugging
+class V2ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: string | null }> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(err: Error) { return { error: err.message + '\n' + err.stack }; }
+  render() {
+    if (this.state.error) return <div className="alert alert-danger m-4"><h6>System View V2 Error</h6><pre style={{ fontSize: 11, whiteSpace: 'pre-wrap' }}>{this.state.error}</pre></div>;
+    return this.props.children;
+  }
+}
+
+function SystemViewV2Inner() {
   const [searchParams] = useSearchParams();
   const urlComponentId = searchParams.get('componentId');
 
@@ -498,4 +508,8 @@ export default function SystemViewV2() {
       </div>
     </div>
   );
+}
+
+export default function SystemViewV2() {
+  return <V2ErrorBoundary><SystemViewV2Inner /></V2ErrorBoundary>;
 }
