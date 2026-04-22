@@ -90,7 +90,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
         nextStep: firstStep?.label || null,
         promptTarget: firstStep?.prompt_target || null,
         isPageBP,
-        isDiscovered: bpSource === 'repo_discovered' || (isPageBP && completion === 0) || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
+        isDiscovered: bpSource === 'repo_discovered' || (isPageBP && bpSource === 'frontend_page') || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
         source: bpSource,
         layers: {
           backend: u.backend || 'missing',
@@ -133,8 +133,8 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
     // Discovered/unmapped go to their own group first
     if (c.isDiscovered) { discovered.push(c); continue; }
     const name = c.name.toLowerCase();
-    // Page BPs with progress go to Usability; zero-progress pages are discovered
-    if (c.isPageBP) { if (c.completion > 0) usability.push(c); else discovered.push(c); continue; }
+    // All auto-discovered page BPs go to discovered regardless of completion
+    if (c.isPageBP) { discovered.push(c); continue; }
     // Keyword matching with priority
     if (INTELLIGENCE_KEYWORDS.test(name)) { intelligence.push(c); continue; }
     if (FOUNDATION_KEYWORDS.test(name)) { foundation.push(c); continue; }

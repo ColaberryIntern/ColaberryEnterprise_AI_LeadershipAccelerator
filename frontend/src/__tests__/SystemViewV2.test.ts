@@ -42,21 +42,10 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(foundation!.items).toHaveLength(2);
   });
 
-  test('groups page BPs with progress into Usability', () => {
+  test('all page BPs go to Discovered regardless of completion', () => {
     const comps = [
       makeBP({ id: '1', name: 'Dashboard Page', isPageBP: true, completion: 40 }),
-      makeBP({ id: '2', name: 'Settings Management', isPageBP: true, completion: 20 }),
-    ];
-    const groups = groupComponents(comps);
-    const usability = groups.find(g => g.key === 'usability');
-    expect(usability).toBeDefined();
-    expect(usability!.items).toHaveLength(2);
-  });
-
-  test('groups zero-progress page BPs into Discovered', () => {
-    const comps = [
-      makeBP({ id: '1', name: 'Pricing Page', isPageBP: true, completion: 0 }),
-      makeBP({ id: '2', name: 'Contact Page', isPageBP: true, completion: 0 }),
+      makeBP({ id: '2', name: 'Pricing Page', isPageBP: true, completion: 0 }),
     ];
     const groups = groupComponents(comps);
     const discovered = groups.find(g => g.key === 'discovered');
@@ -110,7 +99,7 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(usability).toBeDefined();
   });
 
-  test('all 3 mapped groups created when mixed components have progress', () => {
+  test('page BPs with progress still go to Discovered, not Usability', () => {
     const comps = [
       makeBP({ id: '1', name: 'API Backend' }),
       makeBP({ id: '2', name: 'Landing Page', isPageBP: true, completion: 30 }),
@@ -118,7 +107,7 @@ describe('SystemViewV2 — Component Grouping', () => {
     ];
     const groups = groupComponents(comps);
     expect(groups).toHaveLength(3);
-    expect(groups.map(g => g.key).sort()).toEqual(['foundation', 'intelligence', 'usability']);
+    expect(groups.map(g => g.key).sort()).toEqual(['discovered', 'foundation', 'intelligence']);
   });
 
   test('discovered components go to Discovered group', () => {
@@ -147,7 +136,7 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(foundation!.items.some(c => c.isDiscovered)).toBe(false);
   });
 
-  test('all 4 groups created with discovered + progressed page BPs', () => {
+  test('page BPs and discovered components merge into single Discovered group', () => {
     const comps = [
       makeBP({ id: '1', name: 'API Backend' }),
       makeBP({ id: '2', name: 'Landing Page', isPageBP: true, completion: 50 }),
@@ -155,8 +144,9 @@ describe('SystemViewV2 — Component Grouping', () => {
       makeBP({ id: '4', name: 'Repo Discovery', isDiscovered: true }),
     ];
     const groups = groupComponents(comps);
-    expect(groups).toHaveLength(4);
-    expect(groups.map(g => g.key).sort()).toEqual(['discovered', 'foundation', 'intelligence', 'usability']);
+    expect(groups).toHaveLength(3);
+    const discovered = groups.find(g => g.key === 'discovered');
+    expect(discovered!.items).toHaveLength(2); // page BP + explicitly discovered
   });
 
   test('discovered group appears last', () => {
