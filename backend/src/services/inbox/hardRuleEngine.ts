@@ -32,6 +32,13 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   const bodyLower = (email.body_text || '').toLowerCase();
   const headers = email.headers || {};
 
+  // --- 0. System Alert Emails → AUTOMATION ---
+  if (fromLower.includes('ali@colaberry.com') && /^\[alert\]/i.test(email.subject || '')) {
+    const reason = 'System-generated alert email (self-sent [Alert])';
+    console.log(`${LOG_PREFIX} System alert: ${reason}`);
+    return { matched: true, state: 'AUTOMATION', reason, classified_by: 'hard_rule' };
+  }
+
   // --- 1. VIP Check ---
   try {
     const vip = await InboxVip.findOne({
