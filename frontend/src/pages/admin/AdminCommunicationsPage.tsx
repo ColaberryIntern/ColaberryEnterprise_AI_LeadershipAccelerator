@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import Pagination from '../../components/ui/Pagination';
+import useDebounce from '../../hooks/useDebounce';
 
 /* ------------------------------------------------------------------ */
 /*  Interfaces                                                         */
@@ -153,12 +154,15 @@ function AdminCommunicationsPage() {
     return {};
   };
 
+  // Debounce free-text search so typing "john" fires 1 request, not 4.
+  const debouncedSearch = useDebounce(searchInput, 300);
+
   const fetchRows = useCallback(async () => {
     try {
       const params: Record<string, string> = { page: String(page), limit: '25' };
       if (channelFilter) params.channel = channelFilter;
       if (campaignFilter) params.campaign_id = campaignFilter;
-      if (searchInput) params.search = searchInput;
+      if (debouncedSearch) params.search = debouncedSearch;
       const dateRange = getDateRange();
       if (dateRange.dateFrom) params.dateFrom = dateRange.dateFrom;
       const res = await api.get('/api/admin/communications', { params });
@@ -169,7 +173,7 @@ function AdminCommunicationsPage() {
       console.error('Failed to fetch communications:', err);
     }
   // eslint-disable-next-line
-  }, [page, channelFilter, datePreset, campaignFilter, searchInput]);
+  }, [page, channelFilter, datePreset, campaignFilter, debouncedSearch]);
 
   useEffect(() => {
     api.get('/api/admin/communications/campaigns').then(res => {

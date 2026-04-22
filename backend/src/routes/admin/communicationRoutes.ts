@@ -120,58 +120,55 @@ router.get('/api/admin/communications/:id/detail', requireAdmin, async (req: Req
     }
     const comm = (commRows as any[])[0];
 
-    // All interaction outcomes for this lead around this time
-    const outcomes = await sequelize.query(`
-      SELECT outcome, channel, step_index, metadata, created_at
-      FROM interaction_outcomes
-      WHERE lead_id = :leadId
-      AND created_at BETWEEN :from::timestamp - interval '1 hour' AND :from::timestamp + interval '48 hours'
-      ORDER BY created_at ASC
-    `, {
-      replacements: { leadId: comm.lead_id, from: comm.created_at },
-      type: QueryTypes.SELECT,
-    });
-
-    // Temperature history around this communication
-    const tempHistory = await sequelize.query(`
-      SELECT previous_temperature, new_temperature, trigger_type, trigger_detail, created_at
-      FROM lead_temperature_history
-      WHERE lead_id = :leadId
-      AND created_at BETWEEN :from::timestamp - interval '1 day' AND :from::timestamp + interval '2 days'
-      ORDER BY created_at ASC
-    `, {
-      replacements: { leadId: comm.lead_id, from: comm.created_at },
-      type: QueryTypes.SELECT,
-    });
-
-    // Campaign enrollment context (only if communication has a campaign)
-    let enrollment: any[] = [];
-    if (comm.campaign_id) {
-      enrollment = await sequelize.query(`
-        SELECT cl.status as enrollment_status, cl.enrolled_at,
-          (SELECT COUNT(*) FROM scheduled_emails se WHERE se.lead_id = :leadId AND se.campaign_id = cl.campaign_id AND se.status = 'sent') as steps_completed,
-          (SELECT jsonb_array_length(fs.steps) FROM follow_up_sequences fs WHERE fs.id = c.sequence_id) as total_steps
-        FROM campaign_leads cl
-        JOIN campaigns c ON c.id = cl.campaign_id
-        WHERE cl.lead_id = :leadId AND cl.campaign_id = :campaignId
-        LIMIT 1
-      `, {
-        replacements: { leadId: comm.lead_id, campaignId: comm.campaign_id },
-        type: QueryTypes.SELECT,
-      }) as any[];
-    }
-
-    // Scheduled email context (if linked via metadata)
-    let scheduledAction = null;
+    // Fire the 4 context queries in parallel — they only depend on
+    // comm (from query 1), not on each other. Cuts detail load ~2-4x.
     const seId = comm.metadata?.scheduled_email_id;
-    if (seId) {
-      const seRows = await sequelize.query(`
-        SELECT id, step_index, channel, subject, body, ai_generated, ai_instructions,
-          scheduled_for, sent_at, status
-        FROM scheduled_emails WHERE id = :seId
-      `, { replacements: { seId }, type: QueryTypes.SELECT });
-      scheduledAction = (seRows as any)[0] || null;
-    }
+    const [outcomes, tempHistory, enrollmentRows, scheduledRows] = await Promise.all([
+      sequelize.query(`
+        SELECT outcome, channel, step_index, metadata, created_at
+        FROM interaction_outcomes
+        WHERE lead_id = :leadId
+        AND created_at BETWEEN :from::timestamp - interval '1 hour' AND :from::timestamp + interval '48 hours'
+        ORDER BY created_at ASC
+      `, {
+        replacements: { leadId: comm.lead_id, from: comm.created_at },
+        type: QueryTypes.SELECT,
+      }),
+      sequelize.query(`
+        SELECT previous_temperature, new_temperature, trigger_type, trigger_detail, created_at
+        FROM lead_temperature_history
+        WHERE lead_id = :leadId
+        AND created_at BETWEEN :from::timestamp - interval '1 day' AND :from::timestamp + interval '2 days'
+        ORDER BY created_at ASC
+      `, {
+        replacements: { leadId: comm.lead_id, from: comm.created_at },
+        type: QueryTypes.SELECT,
+      }),
+      comm.campaign_id
+        ? sequelize.query(`
+            SELECT cl.status as enrollment_status, cl.enrolled_at,
+              (SELECT COUNT(*) FROM scheduled_emails se WHERE se.lead_id = :leadId AND se.campaign_id = cl.campaign_id AND se.status = 'sent') as steps_completed,
+              (SELECT jsonb_array_length(fs.steps) FROM follow_up_sequences fs WHERE fs.id = c.sequence_id) as total_steps
+            FROM campaign_leads cl
+            JOIN campaigns c ON c.id = cl.campaign_id
+            WHERE cl.lead_id = :leadId AND cl.campaign_id = :campaignId
+            LIMIT 1
+          `, {
+            replacements: { leadId: comm.lead_id, campaignId: comm.campaign_id },
+            type: QueryTypes.SELECT,
+          })
+        : Promise.resolve([] as any[]),
+      seId
+        ? sequelize.query(`
+            SELECT id, step_index, channel, subject, body, ai_generated, ai_instructions,
+              scheduled_for, sent_at, status
+            FROM scheduled_emails WHERE id = :seId
+          `, { replacements: { seId }, type: QueryTypes.SELECT })
+        : Promise.resolve([] as any[]),
+    ]);
+
+    const enrollment = enrollmentRows as any[];
+    const scheduledAction = (scheduledRows as any[])[0] || null;
 
     res.json({
       communication: comm,

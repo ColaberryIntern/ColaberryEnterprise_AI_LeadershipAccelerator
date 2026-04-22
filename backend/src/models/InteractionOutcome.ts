@@ -122,6 +122,10 @@ InteractionOutcome.init(
       { fields: ['lead_company_size_bucket'] },
       { fields: ['lead_source_type'] },
       { fields: ['created_at'] },
+      // Composite — supports the outcomes-per-row subquery in the
+      // /api/admin/communications list endpoint (filters by lead_id +
+      // channel, sorted by created_at).
+      { fields: ['lead_id', 'channel', 'created_at'], name: 'idx_interaction_outcomes_lead_channel_created' },
     ],
   }
 );

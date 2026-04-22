@@ -184,6 +184,23 @@ async function ensureIngestionSchema() {
   console.log('[DB] Ingestion schema ensured');
 }
 
+// Explicit migration: ensure composite index for the admin communications
+// list endpoint's outcomes subquery. Sync-based index creation is unreliable
+// on prod (alter sync hits out-of-shared-memory on 170+ models).
+async function ensureCommunicationIndexes() {
+  // CONCURRENTLY avoids locking the table during index build — important on
+  // prod where interaction_outcomes is write-heavy.
+  try {
+    await sequelize.query(
+      `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_interaction_outcomes_lead_channel_created
+       ON interaction_outcomes (lead_id, channel, created_at)`
+    );
+    console.log('[DB] Communication indexes ensured');
+  } catch (err: any) {
+    console.warn('[DB] Communication index ensure failed:', err?.message);
+  }
+}
+
 // Explicit migration: ensure Campaign Link Registry columns exist even if alter sync fails
 async function ensureCampaignLinkColumns() {
   const columns = [
@@ -247,6 +264,7 @@ async function start(): Promise<void> {
     }
   }
   await ensureCampaignLinkColumns();
+  await ensureCommunicationIndexes();
   await seedProgramCurriculum();
   await seedDepartments();
   await seedCurriculumTypeDefinitions();
