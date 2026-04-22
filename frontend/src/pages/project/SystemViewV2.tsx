@@ -90,7 +90,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
         nextStep: firstStep?.label || null,
         promptTarget: firstStep?.prompt_target || null,
         isPageBP,
-        isDiscovered: bpSource === 'repo_discovered' || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
+        isDiscovered: bpSource === 'repo_discovered' || (isPageBP && completion === 0) || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
         source: bpSource,
         layers: {
           backend: u.backend || 'missing',
@@ -133,8 +133,8 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
     // Discovered/unmapped go to their own group first
     if (c.isDiscovered) { discovered.push(c); continue; }
     const name = c.name.toLowerCase();
-    // Page BPs always go to Usability
-    if (c.isPageBP) { usability.push(c); continue; }
+    // Page BPs with progress go to Usability; zero-progress pages are discovered
+    if (c.isPageBP) { if (c.completion > 0) usability.push(c); else discovered.push(c); continue; }
     // Keyword matching with priority
     if (INTELLIGENCE_KEYWORDS.test(name)) { intelligence.push(c); continue; }
     if (FOUNDATION_KEYWORDS.test(name)) { foundation.push(c); continue; }
@@ -150,7 +150,7 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
   if (foundation.length > 0) groups.push({ key: 'foundation', title: 'Foundation', icon: 'bi-bricks', color: '#3b82f6', items: foundation, completion: calcCompletion(foundation) });
   if (usability.length > 0) groups.push({ key: 'usability', title: 'Usability', icon: 'bi-layout-wtf', color: '#10b981', items: usability, completion: calcCompletion(usability) });
   if (intelligence.length > 0) groups.push({ key: 'intelligence', title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', items: intelligence, completion: calcCompletion(intelligence) });
-  if (discovered.length > 0) groups.push({ key: 'discovered', title: 'Discovered (Unmapped)', icon: 'bi-search', color: '#a855f7', items: discovered, completion: calcCompletion(discovered) });
+  if (discovered.length > 0) groups.push({ key: 'discovered', title: `Discovered Pages (${discovered.length})`, icon: 'bi-search', color: '#a855f7', items: discovered, completion: calcCompletion(discovered) });
 
   return groups;
 }
@@ -269,6 +269,7 @@ function SystemViewV2Inner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
+  const [discoveredExpanded, setDiscoveredExpanded] = useState(false);
   const workAreaRef = useRef<HTMLDivElement>(null);
 
   // Sync URL param → state
@@ -392,31 +393,39 @@ function SystemViewV2Inner() {
           </div>
 
           {/* Grouped component tiles */}
-          {groups.length > 0 ? groups.map(group => (
-            <div key={group.key} className="mb-3" style={{ opacity: group.key === 'discovered' ? 0.7 : 1 }}>
-              <div className="d-flex align-items-center gap-2 mb-2">
+          {groups.length > 0 ? groups.map(group => {
+            const isDiscoveredGroup = group.key === 'discovered';
+            const isCollapsed = isDiscoveredGroup && !discoveredExpanded;
+            return (
+            <div key={group.key} className="mb-3" style={{ opacity: isDiscoveredGroup ? 0.7 : 1 }}>
+              <div className="d-flex align-items-center gap-2 mb-2" style={{ cursor: isDiscoveredGroup ? 'pointer' : 'default' }}
+                onClick={isDiscoveredGroup ? () => setDiscoveredExpanded(!discoveredExpanded) : undefined}>
+                {isDiscoveredGroup && <i className={`bi bi-chevron-${discoveredExpanded ? 'down' : 'right'}`} style={{ color: group.color, fontSize: 10 }}></i>}
                 <i className={`bi ${group.icon}`} style={{ color: group.color, fontSize: 13 }}></i>
                 <span className="fw-semibold" style={{ fontSize: 12, color: group.color }}>{group.title}</span>
-                {group.key === 'discovered' ? (
-                  <span className="badge" style={{ background: `${group.color}20`, color: group.color, fontSize: 8 }}>Discovered from repo</span>
+                {isDiscoveredGroup ? (
+                  <span className="badge" style={{ background: `${group.color}20`, color: group.color, fontSize: 8 }}>Auto-discovered from repo</span>
                 ) : (
                   <span className="badge" style={{ background: `${group.color}20`, color: group.color, fontSize: 8 }}>{group.completion}%</span>
                 )}
-                <span className="text-muted" style={{ fontSize: 9 }}>{group.items.length} components</span>
+                {!isDiscoveredGroup && <span className="text-muted" style={{ fontSize: 9 }}>{group.items.length} components</span>}
               </div>
-              <div className="d-flex flex-wrap gap-2">
-                {group.items.map(comp => (
-                  <SystemMapTile
-                    key={comp.id}
-                    comp={comp}
-                    isSelected={comp.id === selectedId}
-                    isNext={nextIds.has(comp.id)}
-                    onClick={() => handleTileClick(comp.id)}
-                  />
-                ))}
-              </div>
+              {!isCollapsed && (
+                <div className="d-flex flex-wrap gap-2">
+                  {group.items.map(comp => (
+                    <SystemMapTile
+                      key={comp.id}
+                      comp={comp}
+                      isSelected={comp.id === selectedId}
+                      isNext={nextIds.has(comp.id)}
+                      onClick={() => handleTileClick(comp.id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          )) : (
+            );
+          }) : (
             <div className="text-center py-4" data-testid="system-map-empty">
               <i className="bi bi-inbox d-block mb-2" style={{ fontSize: 24, color: '#9ca3af' }}></i>
               <p className="text-muted mb-0" style={{ fontSize: 12 }}>No system components available</p>

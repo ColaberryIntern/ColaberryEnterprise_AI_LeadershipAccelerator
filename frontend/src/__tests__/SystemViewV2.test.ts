@@ -42,15 +42,27 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(foundation!.items).toHaveLength(2);
   });
 
-  test('groups page BPs into Usability', () => {
+  test('groups page BPs with progress into Usability', () => {
     const comps = [
-      makeBP({ id: '1', name: 'Dashboard Page', isPageBP: true }),
-      makeBP({ id: '2', name: 'Settings Management', isPageBP: true }),
+      makeBP({ id: '1', name: 'Dashboard Page', isPageBP: true, completion: 40 }),
+      makeBP({ id: '2', name: 'Settings Management', isPageBP: true, completion: 20 }),
     ];
     const groups = groupComponents(comps);
     const usability = groups.find(g => g.key === 'usability');
     expect(usability).toBeDefined();
     expect(usability!.items).toHaveLength(2);
+  });
+
+  test('groups zero-progress page BPs into Discovered', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'Pricing Page', isPageBP: true, completion: 0 }),
+      makeBP({ id: '2', name: 'Contact Page', isPageBP: true, completion: 0 }),
+    ];
+    const groups = groupComponents(comps);
+    const discovered = groups.find(g => g.key === 'discovered');
+    expect(discovered).toBeDefined();
+    expect(discovered!.items).toHaveLength(2);
+    expect(groups.find(g => g.key === 'usability')).toBeUndefined();
   });
 
   test('groups agent/automation components into Intelligence', () => {
@@ -98,10 +110,10 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(usability).toBeDefined();
   });
 
-  test('all 3 groups created when mixed components exist', () => {
+  test('all 3 mapped groups created when mixed components have progress', () => {
     const comps = [
       makeBP({ id: '1', name: 'API Backend' }),
-      makeBP({ id: '2', name: 'Landing Page', isPageBP: true }),
+      makeBP({ id: '2', name: 'Landing Page', isPageBP: true, completion: 30 }),
       makeBP({ id: '3', name: 'AI Agent Automation' }),
     ];
     const groups = groupComponents(comps);
@@ -135,10 +147,10 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(foundation!.items.some(c => c.isDiscovered)).toBe(false);
   });
 
-  test('all 4 groups created with discovered components', () => {
+  test('all 4 groups created with discovered + progressed page BPs', () => {
     const comps = [
       makeBP({ id: '1', name: 'API Backend' }),
-      makeBP({ id: '2', name: 'Landing Page', isPageBP: true }),
+      makeBP({ id: '2', name: 'Landing Page', isPageBP: true, completion: 50 }),
       makeBP({ id: '3', name: 'AI Agent Automation' }),
       makeBP({ id: '4', name: 'Repo Discovery', isDiscovered: true }),
     ];
