@@ -65,17 +65,21 @@ function PilotAITeamPage() {
         {/* HERO */}
         <section style={{ background: `linear-gradient(135deg, ${HERO_BG} 0%, #1a2744 100%)`, padding: '80px 20px 70px', textAlign: 'center' }}>
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
-            <div style={{ display: 'inline-block', background: 'rgba(139,92,246,0.15)', borderRadius: 20, padding: '6px 18px', fontSize: 13, color: PURPLE, marginBottom: 24, fontWeight: 500 }}>
-              For Operations & Revenue Leaders
+            <div style={{ display: 'inline-block', background: 'rgba(56,161,105,0.15)', borderRadius: 20, padding: '6px 18px', fontSize: 13, color: GREEN, marginBottom: 24, fontWeight: 600 }}>
+              Free 14-Day Build &bull; 10 Founding Clients Only
             </div>
             <h1 style={{ fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800, lineHeight: 1.1, marginBottom: 20, color: '#fff' }}>
-              Replace a Junior Developer With an{' '}
-              <span style={{ background: `linear-gradient(135deg, ${ACCENT}, ${PURPLE})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                AI System That Works 24/7
+              We'll Build Your First AI System{' '}
+              <span style={{ background: `linear-gradient(135deg, ${GREEN}, #2f855a)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                Free
+              </span>
+              <br />
+              <span style={{ fontSize: 'clamp(24px, 3.5vw, 38px)', color: '#94a3b8', fontWeight: 600 }}>
+                It Costs Less Than a Junior Hire to Keep It Running
               </span>
             </h1>
-            <p style={{ fontSize: 'clamp(16px, 2.2vw, 20px)', color: '#94a3b8', lineHeight: 1.7, marginBottom: 36, maxWidth: 640, margin: '0 auto 36px' }}>
-              For less than one junior salary, get an entire AI team that never sleeps.
+            <p style={{ fontSize: 'clamp(16px, 2.2vw, 20px)', color: '#94a3b8', lineHeight: 1.7, marginBottom: 36, maxWidth: 660, margin: '0 auto 36px' }}>
+              We build a real AI system inside your company in 14 days. You see it working before you pay anything. If it doesn't deliver, you walk away with zero cost.
             </p>
             <button onClick={openBooking} style={{ ...btnPrimary, padding: '18px 48px', fontSize: 20 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
@@ -141,6 +145,37 @@ function PilotAITeamPage() {
           </div>
         </section>
 
+        {/* FREE PILOT - HOW IT WORKS */}
+        <section style={{ background: `linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)`, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 800, margin: '0 auto', textAlign: 'center' }}>
+            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, color: '#fff' }}>
+              The Free 14-Day Build
+            </h2>
+            <p style={{ color: '#94a3b8', fontSize: 16, marginBottom: 40, maxWidth: 600, margin: '0 auto 40px' }}>
+              We invest in building your system first — because we only win if it works.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20 }}>
+              {[
+                { step: '1', title: 'Discovery Call', desc: '20 minutes. We identify the 2-3 processes where AI would have the biggest impact in your business.', days: 'Day 0' },
+                { step: '2', title: 'System Design', desc: 'Our team architects your custom AI system — scoped to your actual workflows, data, and team.', days: 'Days 1-3' },
+                { step: '3', title: 'Live Build', desc: 'We build and deploy a working AI system inside your company. Real data, real results.', days: 'Days 4-10' },
+                { step: '4', title: 'You Decide', desc: 'See it running. Review the results. If it delivers — keep it. If not — walk away. Zero cost.', days: 'Days 11-14' },
+              ].map((s, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '28px 20px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: 11, color: GREEN, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>{s.days}</div>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: `linear-gradient(135deg, ${GREEN}, #2f855a)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, margin: '0 auto 12px' }}>{s.step}</div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginBottom: 8 }}>{s.title}</h3>
+                  <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>{s.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 32, padding: '16px 24px', background: 'rgba(56,161,105,0.1)', borderRadius: 8, border: `1px solid rgba(56,161,105,0.3)`, display: 'inline-block' }}>
+              <span style={{ color: GREEN, fontWeight: 700, fontSize: 15 }}>You only pay if it works.</span>
+              <span style={{ color: '#94a3b8', fontSize: 14 }}> &nbsp;Founding clients get locked-in rates for life.</span>
+            </div>
+          </div>
+        </section>
+
         {/* USE CASES */}
         <section style={{ background: BG_ALT, padding: '70px 20px' }}>
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -175,10 +210,10 @@ function PilotAITeamPage() {
           <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
               {[
-                { stat: '<1 Hire', label: 'Total Cost', color: GREEN },
-                { stat: '24/7', label: 'Availability', color: ACCENT },
-                { stat: '10x', label: 'Output vs Human', color: PURPLE },
-                { stat: '0', label: 'Sick Days', color: RED },
+                { stat: '$0', label: 'To Start', color: GREEN },
+                { stat: '14 Days', label: 'To Deploy', color: ACCENT },
+                { stat: '24/7', label: 'Availability', color: PURPLE },
+                { stat: '10', label: 'Founding Spots', color: RED },
               ].map((s, i) => (
                 <div key={i} style={{ background: BG, borderRadius: 10, padding: '28px 16px', textAlign: 'center', border: `1px solid ${BORDER}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: 32, fontWeight: 800, color: s.color, marginBottom: 6 }}>{s.stat}</div>
@@ -193,13 +228,13 @@ function PilotAITeamPage() {
         <section style={{ background: HERO_BG, padding: '70px 20px' }}>
           <div style={{ maxWidth: 620, margin: '0 auto', textAlign: 'center' }}>
             <h2 style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 700, marginBottom: 12, color: '#fff' }}>
-              See What We'd Build for Your Team
+              Start Your Free 14-Day Build
             </h2>
             <p style={{ color: '#94a3b8', fontSize: 16, lineHeight: 1.7, marginBottom: 20 }}>
-              In a 20-minute scoping call, we identify the 2-3 processes in your company where an AI agent would have the highest impact. You'll walk away with a concrete plan, whether or not you move forward.
+              In a 20-minute discovery call, we identify the highest-impact AI system for your business. Then we build it — free. You see it working before you decide anything.
             </p>
-            <p style={{ color: '#cbd5e1', fontSize: 15, lineHeight: 1.7, marginBottom: 32 }}>
-              Founding clients get locked-in rates and priority access. Pricing is scoped to your needs on the call.
+            <p style={{ color: GREEN, fontSize: 17, fontWeight: 600, lineHeight: 1.7, marginBottom: 32 }}>
+              Only 10 founding client spots. 7 are claimed.
             </p>
             <button onClick={openBooking} style={{ ...btnPrimary, padding: '20px 56px', fontSize: 22 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
