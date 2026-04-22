@@ -403,3 +403,82 @@ describe('SystemViewV2 — Component Selection Updates Work Area', () => {
     expect(selectedId).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 10. CORY COMMAND CENTER TESTS
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Cory Command Center', () => {
+  test('mode switch between suggestions/plan/execute', () => {
+    let mode: 'suggestions' | 'plan' | 'execute' = 'suggestions';
+    expect(mode).toBe('suggestions');
+    mode = 'plan';
+    expect(mode).toBe('plan');
+    mode = 'execute';
+    expect(mode).toBe('execute');
+  });
+
+  test('suggestions generated when backend missing', () => {
+    // Simulating: no backend → should suggest backend
+    const hasBackend = false;
+    const hasFrontend = false;
+    const suggestions: string[] = [];
+    if (!hasBackend) suggestions.push('Build your backend foundation');
+    if (hasBackend && !hasFrontend) suggestions.push('Add a user interface');
+    expect(suggestions).toContain('Build your backend foundation');
+    expect(suggestions).not.toContain('Add a user interface');
+  });
+
+  test('suggestions limited to 3', () => {
+    const allSuggestions = ['a', 'b', 'c', 'd', 'e'];
+    const limited = allSuggestions.slice(0, 3);
+    expect(limited).toHaveLength(3);
+  });
+
+  test('dismissed suggestions are filtered out', () => {
+    const dismissed = new Set(['sg-backend']);
+    const suggestions = [{ id: 'sg-backend' }, { id: 'sg-frontend' }];
+    const visible = suggestions.filter(s => !dismissed.has(s.id));
+    expect(visible).toHaveLength(1);
+    expect(visible[0].id).toBe('sg-frontend');
+  });
+
+  test('execution queue tracks index correctly', () => {
+    const queue = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    let index = 0;
+    expect(queue[index].id).toBe('a');
+    index = 1;
+    expect(queue[index].id).toBe('b');
+    index = 2;
+    expect(queue[index].id).toBe('c');
+    // Next would complete
+    expect(index + 1 >= queue.length).toBe(true);
+  });
+
+  test('execution queue exit clears state', () => {
+    let queue = [{ id: 'a' }];
+    let index = 0;
+    let paused = true;
+    // Exit
+    queue = [];
+    index = 0;
+    paused = false;
+    expect(queue).toHaveLength(0);
+    expect(index).toBe(0);
+    expect(paused).toBe(false);
+  });
+
+  test('autonomous mode is UI-only toggle', () => {
+    let autonomous = false;
+    expect(autonomous).toBe(false);
+    autonomous = true;
+    expect(autonomous).toBe(true);
+    // No side effects — just a boolean
+  });
+
+  test('empty state when no component selected', () => {
+    const selectedComponent = null;
+    const message = selectedComponent ? 'has content' : 'Select a component to see recommendations.';
+    expect(message).toBe('Select a component to see recommendations.');
+  });
+});

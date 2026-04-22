@@ -289,6 +289,15 @@ function SystemViewV2Inner() {
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
   const [uiFeedback, setUiFeedback] = useState<any>(null);
 
+  // Cory Command Center state
+  type CoryMode = 'suggestions' | 'plan' | 'execute';
+  const [coryMode, setCoryMode] = useState<CoryMode>('suggestions');
+  const [autonomousMode, setAutonomousMode] = useState(false);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const [execQueue, setExecQueue] = useState<Array<{ id: string; title: string; componentId: string; promptTarget: string }>>([]);
+  const [execIndex, setExecIndex] = useState(0);
+  const [execPaused, setExecPaused] = useState(false);
+
   // Sync URL param → state
   useEffect(() => {
     if (urlComponentId) setSelectedId(urlComponentId);
@@ -415,6 +424,101 @@ function SystemViewV2Inner() {
       setUiFeedback(fbRes.data);
     } catch {} finally { setUiAnalyzing(false); }
   };
+
+  // Cory suggestions (deterministic)
+  const corySuggestions = (() => {
+    const s: Array<{ id: string; title: string; explanation: string; impact: 'High' | 'Medium' | 'Low'; componentId: string; promptTarget: string }> = [];
+    const inc = visibleComponents.filter(c => c.status !== 'complete');
+    if (inc.length === 0) return s;
+    if (!systemLayers.backend) s.push({ id: 'sg-backend', title: 'Build your backend foundation', explanation: 'No backend detected. This is the foundation everything depends on.', impact: 'High', componentId: inc[0].id, promptTarget: 'backend_improvement' });
+    if (systemLayers.backend && !systemLayers.frontend) { const c = inc.find(x => !x.isPageBP) || inc[0]; s.push({ id: 'sg-frontend', title: 'Add a user interface', explanation: 'Backend exists but no UI. Users need an interface.', impact: 'High', componentId: c.id, promptTarget: 'frontend_exposure' }); }
+    if (systemLayers.backend && systemLayers.frontend && !systemLayers.agents) s.push({ id: 'sg-agents', title: 'Add intelligent automation', explanation: 'System works manually. Agents enable autonomous operation.', impact: 'Medium', componentId: inc[0].id, promptTarget: 'agent_enhancement' });
+    const low = inc.find(c => c.completion < 30 && c.completion > 0);
+    if (low && s.length < 3) s.push({ id: `sg-low-${low.id}`, title: `Complete ${low.name}`, explanation: `Only ${low.completion}% complete. Fill critical gaps.`, impact: 'High', componentId: low.id, promptTarget: low.promptTarget || 'requirement_implementation' });
+    return s.filter(x => !dismissedSuggestions.has(x.id)).slice(0, 3);
+  })();
+
+  // Cory plan (deterministic phases)
+  const coryPlanPhases = (() => {
+    const inc = visibleComponents.filter(c => c.status !== 'complete');
+    const phases: Array<{ title: string; icon: string; color: string; steps: Array<{ id: string; title: string; componentId: string; promptTarget: string; done: boolean }> }> = [];
+    // Foundation
+    const fSteps: typeof phases[0]['steps'] = [];
+    if (!systemLayers.backend) fSteps.push({ id: 'p-backend', title: 'Build backend services', componentId: inc[0]?.id || '', promptTarget: 'backend_improvement', done: systemLayers.backend });
+    const lowCov = inc.filter(c => c.completion < 50 && c.completion > 0).slice(0, 2);
+    for (const lc of lowCov) fSteps.push({ id: `p-req-${lc.id}`, title: `Implement ${lc.name}`, componentId: lc.id, promptTarget: lc.promptTarget || 'requirement_implementation', done: false });
+    if (fSteps.some(s => !s.done)) phases.push({ title: 'Foundation', icon: 'bi-bricks', color: '#3b82f6', steps: fSteps });
+    // Usability
+    const uSteps: typeof phases[0]['steps'] = [];
+    if (!systemLayers.frontend) uSteps.push({ id: 'p-frontend', title: 'Create user interface', componentId: (inc.find(c => !c.isPageBP) || inc[0])?.id || '', promptTarget: 'frontend_exposure', done: systemLayers.frontend });
+    if (uSteps.some(s => !s.done)) phases.push({ title: 'Usability', icon: 'bi-layout-wtf', color: '#10b981', steps: uSteps });
+    // Intelligence
+    const iSteps: typeof phases[0]['steps'] = [];
+    if (!systemLayers.agents && systemLayers.backend) iSteps.push({ id: 'p-agents', title: 'Add AI agents', componentId: inc[0]?.id || '', promptTarget: 'agent_enhancement', done: systemLayers.agents });
+    if (iSteps.some(s => !s.done)) phases.push({ title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', steps: iSteps });
+    return phases;
+  })();
+
+  const allPlanSteps = coryPlanPhases.flatMap(p => p.steps.filter(s => !s.done));
+
+  // Cory apply suggestion → generate prompt + switch to Build tab
+  const handleApplySuggestion = async (sg: typeof corySuggestions[0]) => {
+    setSelectedId(sg.componentId);
+    setWorkTab('build');
+    setBuildGenerating(true);
+    setBuildPrompt(null);
+    setBuildResult(null);
+    try {
+      const res = await portalApi.post(`/api/portal/project/business-processes/${sg.componentId}/prompt`, { target: sg.promptTarget });
+      const text = res.data?.prompt_text || '';
+      setBuildPrompt(text);
+      try { await navigator.clipboard.writeText(text); } catch {}
+    } catch {} finally { setBuildGenerating(false); }
+    setTimeout(() => workAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+  };
+
+  // Execution queue
+  const handleStartExec = async () => {
+    if (allPlanSteps.length === 0) return;
+    setExecQueue(allPlanSteps);
+    setExecIndex(0);
+    setExecPaused(false);
+    setCoryMode('execute');
+    // Start first step
+    const first = allPlanSteps[0];
+    setSelectedId(first.componentId);
+    setWorkTab('build');
+    setBuildGenerating(true);
+    setBuildPrompt(null);
+    setBuildResult(null);
+    try {
+      const res = await portalApi.post(`/api/portal/project/business-processes/${first.componentId}/prompt`, { target: first.promptTarget });
+      const text = res.data?.prompt_text || '';
+      setBuildPrompt(text);
+      try { await navigator.clipboard.writeText(text); } catch {}
+    } catch {} finally { setBuildGenerating(false); }
+  };
+
+  const handleExecNext = async () => {
+    const next = execIndex + 1;
+    if (next >= execQueue.length) { setExecQueue([]); setExecIndex(0); setCoryMode('suggestions'); await loadData(); return; }
+    setExecIndex(next);
+    const step = execQueue[next];
+    setSelectedId(step.componentId);
+    setWorkTab('build');
+    setBuildPrompt(null);
+    setBuildReport('');
+    setBuildResult(null);
+    setBuildGenerating(true);
+    try {
+      const res = await portalApi.post(`/api/portal/project/business-processes/${step.componentId}/prompt`, { target: step.promptTarget });
+      const text = res.data?.prompt_text || '';
+      setBuildPrompt(text);
+      try { await navigator.clipboard.writeText(text); } catch {}
+    } catch {} finally { setBuildGenerating(false); }
+  };
+
+  const handleExecExit = () => { setExecQueue([]); setExecIndex(0); setExecPaused(false); setCoryMode('suggestions'); };
 
   const handleTileClick = (id: string) => {
     const isDeselect = id === selectedId;
@@ -738,36 +842,159 @@ function SystemViewV2Inner() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 3: CONTROL PANEL
+          SECTION 3: CORY COMMAND CENTER
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="card border-0 shadow-sm mb-4" data-testid="control-panel-section" style={{ minHeight: 220, borderLeft: '4px solid #8b5cf6' }}>
+      <div className="card border-0 shadow-sm mb-4" data-testid="control-panel-section" style={{ minHeight: 220, borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
         <div className="card-body p-4">
-          <div className="d-flex align-items-center gap-2 mb-3">
-            <i className="bi bi-robot" style={{ color: '#8b5cf6', fontSize: 16 }}></i>
-            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#8b5cf6' }}>
-              Cory Command Center
-            </h6>
-            <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>V2</span>
-          </div>
-          <p className="text-muted mb-3" style={{ fontSize: 11 }}>
-            Suggestions and execution controls will appear here. This panel will integrate Cory's plan engine, autonomous execution, and real-time system feedback.
-          </p>
-
-          {selectedComponent ? (
-            <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
-              <div className="d-flex align-items-center gap-2" style={{ fontSize: 11, color: '#8b5cf6' }}>
-                <i className="bi bi-lightning-fill"></i>
-                <span>
-                  Ready to assist with <strong>{selectedComponent.name}</strong>
-                  {selectedComponent.nextStep && <> — next: {selectedComponent.nextStep}</>}
-                </span>
-              </div>
+          {/* Header + Mode Tabs */}
+          <div className="d-flex align-items-center justify-content-between mb-3">
+            <div className="d-flex align-items-center gap-2">
+              <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 16 }}></i>
+              <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>Cory Command Center</h6>
             </div>
-          ) : (
-            <div className="p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
-              <span className="text-muted" style={{ fontSize: 11 }}>Select a component to see recommendations</span>
+            <div className="btn-group" style={{ fontSize: 10 }}>
+              {(['suggestions', 'plan', 'execute'] as CoryMode[]).map(m => (
+                <button key={m} className={`btn btn-sm ${coryMode === m ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '2px 10px' }} onClick={() => setCoryMode(m)}>
+                  {m === 'suggestions' && <i className="bi bi-lightbulb me-1"></i>}
+                  {m === 'plan' && <i className="bi bi-map me-1"></i>}
+                  {m === 'execute' && <i className="bi bi-play-fill me-1"></i>}
+                  {m.charAt(0).toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {autonomousMode && (
+            <div className="mb-2" style={{ fontSize: 10, color: '#8b5cf6' }}>
+              <i className="bi bi-lightning-fill me-1"></i>Cory is actively guiding your system
             </div>
           )}
+
+          {/* ── SUGGESTIONS MODE ── */}
+          {coryMode === 'suggestions' && (
+            <div>
+              {corySuggestions.length > 0 ? corySuggestions.map(sg => {
+                const ic: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
+                const c = ic[sg.impact] || ic.Medium;
+                return (
+                  <div key={sg.id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                    <div className="flex-grow-1">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fw-semibold" style={{ fontSize: 11 }}>{sg.title}</span>
+                        <span className="badge" style={{ background: c.bg, color: c.text, fontSize: 8 }}>{sg.impact}</span>
+                      </div>
+                      <div className="text-muted" style={{ fontSize: 10 }}>{sg.explanation}</div>
+                    </div>
+                    <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                      <button className="btn btn-sm btn-primary" style={{ fontSize: 9, padding: '2px 8px' }} onClick={() => handleApplySuggestion(sg)}>Apply</button>
+                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9, padding: '2px 8px' }} onClick={() => setDismissedSuggestions(prev => new Set([...prev, sg.id]))}>Dismiss</button>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <p className="text-muted mb-0" style={{ fontSize: 11 }}>
+                  {selectedComponent ? 'No suggestions — this component is on track.' : 'Select a component to see recommendations.'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── PLAN MODE ── */}
+          {coryMode === 'plan' && (
+            <div>
+              {coryPlanPhases.length > 0 ? (
+                <div>
+                  <p className="text-muted mb-2" style={{ fontSize: 10 }}>{allPlanSteps.length} steps remaining</p>
+                  {coryPlanPhases.map((phase, pi) => (
+                    <div key={phase.title} className="mb-3">
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: phase.color, color: '#fff', fontSize: 9 }}>{pi + 1}</span>
+                        <span className="fw-semibold" style={{ fontSize: 11 }}><i className={`bi ${phase.icon} me-1`}></i>{phase.title}</span>
+                      </div>
+                      {phase.steps.map(step => (
+                        <div key={step.id} className="d-flex align-items-center gap-2 ms-4 mb-1" style={{ fontSize: 10, opacity: step.done ? 0.5 : 1 }}>
+                          <i className={`bi ${step.done ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ color: step.done ? '#10b981' : '#9ca3af', fontSize: 10 }}></i>
+                          <span style={{ textDecoration: step.done ? 'line-through' : 'none' }}>{step.title}</span>
+                          {!step.done && (
+                            <button className="btn btn-sm btn-outline-primary ms-auto" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleApplySuggestion({ id: step.id, title: step.title, explanation: '', impact: 'High', componentId: step.componentId, promptTarget: step.promptTarget })}>
+                              Apply
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {allPlanSteps.length > 0 && (
+                    <button className="btn btn-sm w-100 mt-2" style={{ background: autonomousMode ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 11 }} onClick={handleStartExec}>
+                      <i className="bi bi-play-fill me-1"></i>Execute Plan ({allPlanSteps.length} steps)
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <p className="text-muted mb-0" style={{ fontSize: 11 }}><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>All plan phases complete.</p>
+              )}
+            </div>
+          )}
+
+          {/* ── EXECUTE MODE ── */}
+          {coryMode === 'execute' && (
+            <div>
+              {execQueue.length > 0 ? (
+                <div>
+                  <div className="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                      <div className="fw-semibold" style={{ fontSize: 12 }}>Executing Plan — Step {execIndex + 1} of {execQueue.length}</div>
+                      <div className="text-muted" style={{ fontSize: 10 }}>{execQueue[execIndex]?.title}</div>
+                    </div>
+                    <div className="d-flex gap-1">
+                      {!execPaused ? (
+                        <button className="btn btn-sm btn-outline-warning" style={{ fontSize: 9 }} onClick={() => setExecPaused(true)}><i className="bi bi-pause-fill me-1"></i>Pause</button>
+                      ) : (
+                        <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 9 }} onClick={() => setExecPaused(false)}><i className="bi bi-play-fill me-1"></i>Resume</button>
+                      )}
+                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 9 }} onClick={handleExecExit}><i className="bi bi-x-circle me-1"></i>Exit</button>
+                    </div>
+                  </div>
+                  <div className="progress mb-2" style={{ height: 4, borderRadius: 2 }}>
+                    <div className="progress-bar" style={{ width: `${((execIndex + (buildResult ? 1 : 0)) / execQueue.length) * 100}%`, background: '#8b5cf6', borderRadius: 2, transition: 'width 0.5s' }}></div>
+                  </div>
+                  {execIndex > 0 && (
+                    <div className="d-flex flex-wrap gap-1 mb-2">
+                      {execQueue.slice(0, execIndex).map((s, i) => (
+                        <span key={i} className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 8 }}><i className="bi bi-check me-1"></i>{s.title}</span>
+                      ))}
+                    </div>
+                  )}
+                  {buildResult && !buildResult.error && (
+                    <button className="btn btn-sm w-100" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 600, fontSize: 11 }} onClick={handleExecNext}>
+                      {execIndex + 1 < execQueue.length ? <><i className="bi bi-arrow-right me-1"></i>Next Step ({execIndex + 2}/{execQueue.length})</> : <><i className="bi bi-check-circle me-1"></i>Complete Plan</>}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-3">
+                  <p className="text-muted mb-2" style={{ fontSize: 11 }}>No execution in progress.</p>
+                  <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => setCoryMode('plan')}>
+                    <i className="bi bi-map me-1"></i>View Plan
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Footer: Mode Toggle */}
+          <div className="mt-3 pt-3 d-flex align-items-center justify-content-between" style={{ borderTop: '1px solid var(--color-border)' }}>
+            <div className="d-flex align-items-center gap-1" style={{ fontSize: 10 }}>
+              <span style={{ fontWeight: autonomousMode ? 400 : 600, color: autonomousMode ? '#9ca3af' : 'var(--color-text)' }}>Manual</span>
+              <div className="form-check form-switch mb-0" style={{ minHeight: 0 }}>
+                <input className="form-check-input" type="checkbox" role="switch" checked={autonomousMode} onChange={() => setAutonomousMode(!autonomousMode)} style={{ cursor: 'pointer', width: 28, height: 14 }} />
+              </div>
+              <span style={{ fontWeight: autonomousMode ? 600 : 400, color: autonomousMode ? '#8b5cf6' : '#9ca3af', fontSize: 10 }}>Autonomous</span>
+            </div>
+            {selectedComponent && (
+              <span className="text-muted" style={{ fontSize: 9 }}>Context: {selectedComponent.name}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
