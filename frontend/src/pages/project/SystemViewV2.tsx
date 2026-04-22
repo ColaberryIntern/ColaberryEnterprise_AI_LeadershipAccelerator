@@ -171,7 +171,7 @@ export function getNextComponents(components: SystemComponent[], max: number = 3
 
 const LAYER_COLORS: Record<string, string> = { ready: '#10b981', partial: '#f59e0b', missing: '#e2e8f0', 'n/a': '#e2e8f0' };
 
-function SystemMapTile({ comp, isSelected, isNext, onClick }: { comp: SystemComponent; isSelected: boolean; isNext: boolean; onClick: () => void }) {
+function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: { comp: SystemComponent; isSelected: boolean; isNext: boolean; isReportingMode?: boolean; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
   const statusColor = comp.status === 'complete' ? '#10b981' : comp.status === 'in_progress' ? '#f59e0b' : '#ef4444';
 
@@ -195,10 +195,16 @@ function SystemMapTile({ comp, isSelected, isNext, onClick }: { comp: SystemComp
         position: 'relative' as const,
       }}
     >
-      {/* NEXT badge */}
-      {isNext && !isSelected && (
+      {/* NEXT badge (build mode) */}
+      {isNext && !isSelected && !isReportingMode && (
         <div style={{ position: 'absolute', top: -6, right: -6, background: '#3b82f6', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 6px', borderRadius: 4, letterSpacing: 0.5 }}>
           NEXT
+        </div>
+      )}
+      {/* Reporting overlay: gap/risk indicator */}
+      {isReportingMode && comp.status !== 'complete' && (
+        <div style={{ position: 'absolute', top: -6, right: -6, background: comp.completion < 30 ? '#ef4444' : comp.completion < 70 ? '#f59e0b' : '#10b981', color: '#fff', fontSize: 7, fontWeight: 700, padding: '1px 5px', borderRadius: 4 }}>
+          {comp.completion < 30 ? 'GAP' : comp.completion < 70 ? 'PARTIAL' : 'OK'}
         </div>
       )}
 
@@ -263,6 +269,12 @@ function SystemViewV2Inner() {
   const [searchParams] = useSearchParams();
   const urlComponentId = searchParams.get('componentId');
 
+  // Global mode
+  type SystemMode = 'build' | 'reporting';
+  const [systemMode, setSystemModeState] = useState<SystemMode>(() => (localStorage.getItem('system_mode') as SystemMode) || 'build');
+  const setSystemMode = (m: SystemMode) => { setSystemModeState(m); localStorage.setItem('system_mode', m); };
+  const isReporting = systemMode === 'reporting';
+
   const [project, setProject] = useState<ProjectData | null>(null);
   const [components, setComponents] = useState<SystemComponent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(urlComponentId || null);
@@ -273,7 +285,7 @@ function SystemViewV2Inner() {
   const workAreaRef = useRef<HTMLDivElement>(null);
 
   // Work Area state
-  type WorkTab = 'overview' | 'build' | 'improve' | 'ui';
+  type WorkTab = 'overview' | 'build' | 'improve' | 'ui' | 'insights' | 'gaps' | 'trends';
   const [workTab, setWorkTab] = useState<WorkTab>('overview');
   const [compDetail, setCompDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -290,7 +302,7 @@ function SystemViewV2Inner() {
   const [uiFeedback, setUiFeedback] = useState<any>(null);
 
   // Cory Command Center state
-  type CoryMode = 'suggestions' | 'plan' | 'execute';
+  type CoryMode = 'suggestions' | 'plan' | 'execute' | 'r-insights' | 'r-gaps' | 'r-recommendations';
   const [coryMode, setCoryMode] = useState<CoryMode>('suggestions');
   const [autonomousMode, setAutonomousMode] = useState(false);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
@@ -547,10 +559,15 @@ function SystemViewV2Inner() {
             <span className="text-muted" style={{ fontSize: 10 }}>{completedCount}/{components.length} components complete</span>
           </div>
         </div>
-        <div className="d-flex gap-2">
-          <Link to="/portal/project/system" className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }}>
-            <i className="bi bi-arrow-left me-1"></i>Back to V1
-          </Link>
+        <div className="d-flex gap-2 align-items-center">
+          <div className="btn-group">
+            <button className={`btn btn-sm ${!isReporting ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '3px 10px' }} onClick={() => { setSystemMode('build'); setWorkTab('overview'); setCoryMode('suggestions'); }}>
+              <i className="bi bi-hammer me-1"></i>Build
+            </button>
+            <button className={`btn btn-sm ${isReporting ? '' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '3px 10px', ...(isReporting ? { background: '#8b5cf6', borderColor: '#8b5cf6', color: '#fff' } : {}) }} onClick={() => { setSystemMode('reporting'); setWorkTab('overview'); setCoryMode('r-insights'); }}>
+              <i className="bi bi-bar-chart-line me-1"></i>Reporting
+            </button>
+          </div>
           <Link to="/portal/project/blueprint" className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }}>
             <i className="bi bi-map me-1"></i>Blueprint
           </Link>
@@ -611,6 +628,7 @@ function SystemViewV2Inner() {
                       comp={comp}
                       isSelected={comp.id === selectedId}
                       isNext={nextIds.has(comp.id)}
+                      isReportingMode={isReporting}
                       onClick={() => handleTileClick(comp.id)}
                     />
                   ))}
@@ -671,17 +689,17 @@ function SystemViewV2Inner() {
                 </div>
               </div>
 
-              {/* ── Tabs ── */}
+              {/* ── Tabs (mode-dependent) ── */}
               <nav className="nav nav-tabs mb-3" style={{ fontSize: 12 }}>
-                {(['overview', 'build', 'improve'] as WorkTab[]).map(t => (
-                  <button key={t} className={`nav-link py-1 px-3 ${workTab === t ? 'active' : ''}`} style={{ fontSize: 11 }} onClick={() => setWorkTab(t)}>
-                    {t === 'overview' && <i className="bi bi-eye me-1"></i>}
-                    {t === 'build' && <i className="bi bi-hammer me-1"></i>}
-                    {t === 'improve' && <i className="bi bi-graph-up-arrow me-1"></i>}
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                {(isReporting
+                  ? [{ key: 'overview' as WorkTab, icon: 'bi-eye', label: 'Overview' }, { key: 'insights' as WorkTab, icon: 'bi-graph-up', label: 'Insights' }, { key: 'gaps' as WorkTab, icon: 'bi-exclamation-triangle', label: 'Gaps' }, { key: 'trends' as WorkTab, icon: 'bi-activity', label: 'Trends' }]
+                  : [{ key: 'overview' as WorkTab, icon: 'bi-eye', label: 'Overview' }, { key: 'build' as WorkTab, icon: 'bi-hammer', label: 'Build' }, { key: 'improve' as WorkTab, icon: 'bi-graph-up-arrow', label: 'Improve' }]
+                ).map(t => (
+                  <button key={t.key} className={`nav-link py-1 px-3 ${workTab === t.key ? 'active' : ''}`} style={{ fontSize: 11 }} onClick={() => setWorkTab(t.key)}>
+                    <i className={`bi ${t.icon} me-1`}></i>{t.label}
                   </button>
                 ))}
-                {selectedComponent.isPageBP && (
+                {!isReporting && selectedComponent.isPageBP && (
                   <button className={`nav-link py-1 px-3 ${workTab === 'ui' ? 'active' : ''}`} style={{ fontSize: 11 }} onClick={() => setWorkTab('ui')}>
                     <i className="bi bi-palette me-1"></i>UI
                   </button>
@@ -829,6 +847,93 @@ function SystemViewV2Inner() {
                   )}
                 </div>
               )}
+
+              {/* ── REPORTING TABS ── */}
+
+              {/* TAB: Insights */}
+              {workTab === 'insights' && (
+                <div>
+                  <div className="row g-3 mb-3">
+                    <div className="col-4">
+                      <div className="p-2 text-center" style={{ background: '#eff6ff', borderRadius: 6 }}>
+                        <div className="fw-bold" style={{ fontSize: 16, color: 'var(--color-primary)' }}>{selectedComponent.completion}%</div>
+                        <div className="text-muted" style={{ fontSize: 9 }}>Coverage</div>
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="p-2 text-center" style={{ background: '#f0fdf4', borderRadius: 6 }}>
+                        <div className="fw-bold" style={{ fontSize: 16, color: '#059669' }}>{selectedComponent.maturity}</div>
+                        <div className="text-muted" style={{ fontSize: 9 }}>Maturity</div>
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="p-2 text-center" style={{ background: selectedComponent.status === 'complete' ? '#f0fdf4' : '#fef3c7', borderRadius: 6 }}>
+                        <div className="fw-bold" style={{ fontSize: 16, color: selectedComponent.status === 'complete' ? '#059669' : '#92400e' }}>{STATUS_STYLES[selectedComponent.status].label}</div>
+                        <div className="text-muted" style={{ fontSize: 9 }}>Status</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <div className="fw-semibold small mb-1">Layer Health</div>
+                    <div className="d-flex gap-3" style={{ fontSize: 11 }}>
+                      {[{ label: 'Backend', val: selectedComponent.layers.backend }, { label: 'Frontend', val: selectedComponent.layers.frontend }, { label: 'Agents', val: selectedComponent.layers.agent }].map(l => (
+                        <span key={l.label} className="d-flex align-items-center gap-1">
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[l.val] }}></div>
+                          {l.label}: <strong style={{ color: l.val === 'ready' ? '#059669' : '#9ca3af' }}>{l.val}</strong>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {selectedComponent.description && <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.description}</p>}
+                </div>
+              )}
+
+              {/* TAB: Gaps */}
+              {workTab === 'gaps' && (
+                <div>
+                  {compDetail?.autonomy_gaps?.length > 0 ? (() => {
+                    const gaps = compDetail.autonomy_gaps;
+                    const high = gaps.filter((g: any) => g.severity >= 7);
+                    const medium = gaps.filter((g: any) => g.severity >= 4 && g.severity < 7);
+                    const low = gaps.filter((g: any) => g.severity < 4);
+                    const renderGroup = (label: string, items: any[], color: string) => items.length > 0 ? (
+                      <div className="mb-3">
+                        <div className="fw-semibold small mb-1" style={{ color }}>{label} ({items.length})</div>
+                        {items.map((g: any) => (
+                          <div key={g.gap_id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 10 }}>
+                            <span className="badge" style={{ background: `${color}20`, color, fontSize: 8 }}>{g.severity}/10</span>
+                            <div><div className="fw-medium">{g.title}</div><div className="text-muted" style={{ fontSize: 9 }}>{g.description?.substring(0, 100)}</div></div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                    return <>{renderGroup('High Severity', high, '#ef4444')}{renderGroup('Medium Severity', medium, '#f59e0b')}{renderGroup('Low Severity', low, '#10b981')}</>;
+                  })() : (
+                    <div>
+                      {/* Layer gaps */}
+                      {(selectedComponent.layers.backend === 'missing' || selectedComponent.layers.frontend === 'missing' || selectedComponent.layers.agent === 'missing') ? (
+                        <div>
+                          <div className="fw-semibold small mb-2">Missing Layers</div>
+                          {selectedComponent.layers.backend === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fef2f2', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-circle" style={{ color: '#ef4444' }}></i><span>Backend layer not detected</span></div>}
+                          {selectedComponent.layers.frontend === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fef2f2', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-circle" style={{ color: '#ef4444' }}></i><span>Frontend layer not detected</span></div>}
+                          {selectedComponent.layers.agent === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fffbeb', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b' }}></i><span>Agent layer not detected</span></div>}
+                        </div>
+                      ) : (
+                        <p className="text-muted mb-0" style={{ fontSize: 11 }}>No gaps detected for this component.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: Trends */}
+              {workTab === 'trends' && (
+                <div className="text-center py-4">
+                  <i className="bi bi-activity d-block mb-2" style={{ fontSize: 24, color: '#9ca3af' }}></i>
+                  <p className="fw-medium mb-1" style={{ fontSize: 12, color: 'var(--color-text)' }}>Trend data will appear as your system evolves</p>
+                  <p className="text-muted mb-0" style={{ fontSize: 10 }}>Build and validate components to start tracking coverage, readiness, and maturity over time.</p>
+                </div>
+              )}
             </div>
 
           ) : (
@@ -844,7 +949,7 @@ function SystemViewV2Inner() {
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 3: CORY COMMAND CENTER
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="card border-0 shadow-sm mb-4" data-testid="control-panel-section" style={{ minHeight: 220, borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
+      <div className="card border-0 shadow-sm mb-4" data-testid="control-panel-section" style={{ minHeight: 220, borderLeft: `4px solid ${isReporting || autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
         <div className="card-body p-4">
           {/* Header + Mode Tabs */}
           <div className="d-flex align-items-center justify-content-between mb-3">
@@ -853,12 +958,14 @@ function SystemViewV2Inner() {
               <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>Cory Command Center</h6>
             </div>
             <div className="btn-group" style={{ fontSize: 10 }}>
-              {(['suggestions', 'plan', 'execute'] as CoryMode[]).map(m => (
-                <button key={m} className={`btn btn-sm ${coryMode === m ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '2px 10px' }} onClick={() => setCoryMode(m)}>
-                  {m === 'suggestions' && <i className="bi bi-lightbulb me-1"></i>}
-                  {m === 'plan' && <i className="bi bi-map me-1"></i>}
-                  {m === 'execute' && <i className="bi bi-play-fill me-1"></i>}
-                  {m.charAt(0).toUpperCase() + m.slice(1)}
+              {(isReporting
+                ? [{ key: 'r-insights' as CoryMode, icon: 'bi-graph-up', label: 'Insights' }, { key: 'r-gaps' as CoryMode, icon: 'bi-exclamation-triangle', label: 'Gaps' }, { key: 'r-recommendations' as CoryMode, icon: 'bi-lightbulb', label: 'Recommendations' }]
+                : [{ key: 'suggestions' as CoryMode, icon: 'bi-lightbulb', label: 'Suggestions' }, { key: 'plan' as CoryMode, icon: 'bi-map', label: 'Plan' }, { key: 'execute' as CoryMode, icon: 'bi-play-fill', label: 'Execute' }]
+              ).map(m => (
+                <button key={m.key} className={`btn btn-sm ${coryMode === m.key ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  style={{ fontSize: 10, padding: '2px 10px', ...(coryMode === m.key && isReporting ? { background: '#8b5cf6', borderColor: '#8b5cf6' } : {}) }}
+                  onClick={() => setCoryMode(m.key)}>
+                  <i className={`bi ${m.icon} me-1`}></i>{m.label}
                 </button>
               ))}
             </div>
@@ -978,6 +1085,90 @@ function SystemViewV2Inner() {
                     <i className="bi bi-map me-1"></i>View Plan
                   </button>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── REPORTING: INSIGHTS ── */}
+          {coryMode === 'r-insights' && (
+            <div>
+              <div className="row g-2 mb-3">
+                {[
+                  { label: 'Components', value: visibleComponents.length, color: 'var(--color-primary)' },
+                  { label: 'Complete', value: completedCount, color: '#059669' },
+                  { label: 'In Progress', value: visibleComponents.filter(c => c.status === 'in_progress').length, color: '#f59e0b' },
+                  { label: 'Not Started', value: visibleComponents.filter(c => c.status === 'not_started').length, color: '#ef4444' },
+                ].map(k => (
+                  <div key={k.label} className="col-3">
+                    <div className="text-center p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                      <div className="fw-bold" style={{ fontSize: 14, color: k.color }}>{k.value}</div>
+                      <div className="text-muted" style={{ fontSize: 8 }}>{k.label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11 }}>
+                <div className="fw-semibold small mb-1">System Health</div>
+                <div className="d-flex gap-3 text-muted">
+                  <span>Backend: <strong style={{ color: systemLayers.backend ? '#059669' : '#ef4444' }}>{systemLayers.backend ? 'Ready' : 'Missing'}</strong></span>
+                  <span>Frontend: <strong style={{ color: systemLayers.frontend ? '#059669' : '#ef4444' }}>{systemLayers.frontend ? 'Ready' : 'Missing'}</strong></span>
+                  <span>Agents: <strong style={{ color: systemLayers.agents ? '#059669' : '#ef4444' }}>{systemLayers.agents ? 'Ready' : 'Missing'}</strong></span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── REPORTING: GAPS ── */}
+          {coryMode === 'r-gaps' && (
+            <div>
+              {(() => {
+                const gapComponents = visibleComponents.filter(c => c.status !== 'complete');
+                const missingLayers = visibleComponents.filter(c => c.layers.backend === 'missing' && !c.isPageBP && !c.isDiscovered);
+                return gapComponents.length > 0 ? (
+                  <div>
+                    {missingLayers.length > 0 && (
+                      <div className="mb-2">
+                        <div className="fw-semibold small mb-1" style={{ color: '#ef4444' }}>Missing Backend ({missingLayers.length})</div>
+                        {missingLayers.slice(0, 3).map(c => (
+                          <div key={c.id} className="d-flex align-items-center gap-2 mb-1 p-1" style={{ background: '#fef2f2', borderRadius: 4, fontSize: 10 }}>
+                            <i className="bi bi-exclamation-circle" style={{ color: '#ef4444', fontSize: 9 }}></i>
+                            <span>{c.name} — {c.completion}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="fw-semibold small mb-1">Low Coverage ({gapComponents.filter(c => c.completion < 50).length})</div>
+                    {gapComponents.filter(c => c.completion < 50).slice(0, 5).map(c => (
+                      <div key={c.id} className="d-flex align-items-center justify-content-between mb-1 p-1" style={{ background: 'var(--color-bg-alt)', borderRadius: 4, fontSize: 10 }}>
+                        <span>{c.name}</span>
+                        <span className="fw-semibold" style={{ color: c.completion < 20 ? '#ef4444' : '#f59e0b' }}>{c.completion}%</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted mb-0" style={{ fontSize: 11 }}>No gaps detected — all components are on track.</p>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ── REPORTING: RECOMMENDATIONS ── */}
+          {coryMode === 'r-recommendations' && (
+            <div>
+              {corySuggestions.length > 0 ? corySuggestions.map(sg => {
+                const ic: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
+                const c = ic[sg.impact] || ic.Medium;
+                return (
+                  <div key={sg.id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                    <div className="flex-grow-1">
+                      <div className="d-flex align-items-center gap-2"><span className="fw-semibold" style={{ fontSize: 11 }}>{sg.title}</span><span className="badge" style={{ background: c.bg, color: c.text, fontSize: 8 }}>{sg.impact}</span></div>
+                      <div className="text-muted" style={{ fontSize: 10 }}>{sg.explanation}</div>
+                    </div>
+                    <button className="btn btn-sm btn-primary" style={{ fontSize: 9, padding: '2px 8px', flexShrink: 0 }} onClick={() => { setSystemMode('build'); setCoryMode('suggestions'); handleApplySuggestion(sg); }}>Apply</button>
+                  </div>
+                );
+              }) : (
+                <p className="text-muted mb-0" style={{ fontSize: 11 }}>No recommendations at this time — system is on track.</p>
               )}
             </div>
           )}

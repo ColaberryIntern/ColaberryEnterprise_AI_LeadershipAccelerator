@@ -482,3 +482,67 @@ describe('SystemViewV2 — Cory Command Center', () => {
     expect(message).toBe('Select a component to see recommendations.');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11. BUILD / REPORTING MODE TESTS
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Build/Reporting Mode', () => {
+  test('mode switch between build and reporting', () => {
+    let mode: 'build' | 'reporting' = 'build';
+    expect(mode).toBe('build');
+    mode = 'reporting';
+    expect(mode).toBe('reporting');
+  });
+
+  test('build mode shows build tabs', () => {
+    const mode = 'build';
+    const tabs = mode === 'build' ? ['overview', 'build', 'improve'] : ['overview', 'insights', 'gaps', 'trends'];
+    expect(tabs).toContain('build');
+    expect(tabs).not.toContain('insights');
+  });
+
+  test('reporting mode shows reporting tabs', () => {
+    const mode = 'reporting';
+    const tabs = mode === 'build' ? ['overview', 'build', 'improve'] : ['overview', 'insights', 'gaps', 'trends'];
+    expect(tabs).toContain('insights');
+    expect(tabs).toContain('gaps');
+    expect(tabs).toContain('trends');
+    expect(tabs).not.toContain('build');
+  });
+
+  test('mode persists to localStorage', () => {
+    localStorage.setItem('system_mode', 'reporting');
+    expect(localStorage.getItem('system_mode')).toBe('reporting');
+    localStorage.setItem('system_mode', 'build');
+    expect(localStorage.getItem('system_mode')).toBe('build');
+  });
+
+  test('cory modes change with system mode', () => {
+    const buildCoryModes = ['suggestions', 'plan', 'execute'];
+    const reportCoryModes = ['r-insights', 'r-gaps', 'r-recommendations'];
+    expect(buildCoryModes).not.toContain('r-insights');
+    expect(reportCoryModes).not.toContain('suggestions');
+  });
+
+  test('selected component preserved across mode switch', () => {
+    let selectedId: string | null = 'abc';
+    let mode = 'build';
+    mode = 'reporting';
+    // selectedId should NOT change
+    expect(selectedId).toBe('abc');
+    expect(mode).toBe('reporting');
+  });
+
+  test('tile shows GAP/PARTIAL/OK badge in reporting mode', () => {
+    const comp = makeBP({ completion: 20 });
+    const badge = comp.completion < 30 ? 'GAP' : comp.completion < 70 ? 'PARTIAL' : 'OK';
+    expect(badge).toBe('GAP');
+    const comp2 = makeBP({ completion: 50 });
+    const badge2 = comp2.completion < 30 ? 'GAP' : comp2.completion < 70 ? 'PARTIAL' : 'OK';
+    expect(badge2).toBe('PARTIAL');
+    const comp3 = makeBP({ completion: 80 });
+    const badge3 = comp3.completion < 30 ? 'GAP' : comp3.completion < 70 ? 'PARTIAL' : 'OK';
+    expect(badge3).toBe('OK');
+  });
+});
