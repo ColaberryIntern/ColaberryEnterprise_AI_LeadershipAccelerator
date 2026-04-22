@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'; // eslint-disable-line
 import SEOHead from '../components/SEOHead';
+import StrategyCallModal from '../components/StrategyCallModal';
 import { captureUTMFromURL } from '../services/utmService';
 import { initTracker, trackEvent } from '../utils/tracker';
 
@@ -29,20 +30,9 @@ const btnGreen: React.CSSProperties = {
   transition: 'transform 0.2s, box-shadow 0.2s',
 };
 
-interface FormData {
-  name: string;
-  email: string;
-  company: string;
-  title: string;
-  phone: string;
-  company_size: string;
-}
-
 function PilotExclusivePage() {
-  const [form, setForm] = useState<FormData>({ name: '', email: '', company: '', title: '', phone: '', company_size: '' });
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
+  const [showBooking, setShowBooking] = useState(false);
+  const [prefill, setPrefill] = useState<{ name: string; email: string; company: string; phone: string }>({ name: '', email: '', company: '', phone: '' });
 
   useEffect(() => {
     captureUTMFromURL();
@@ -50,47 +40,24 @@ function PilotExclusivePage() {
     const params = new URLSearchParams(window.location.search);
     const lid = params.get('lid');
     if (lid) { try { localStorage.setItem('cb_lead_id', lid); } catch {} }
+    if (lid) {
+      fetch((process.env.REACT_APP_API_URL || '') + '/api/calendar/prefill/' + lid)
+        .then(r => r.json())
+        .then(data => { if (data.name || data.email) setPrefill(data); })
+        .catch(() => {});
+    }
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSubmitting(true);
-    trackEvent('form_submit', { form_name: 'pilot_exclusive_apply', page: '/pilot/exclusive' });
-
-    try {
-      const res = await fetch((process.env.REACT_APP_API_URL || '') + '/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          company: form.company,
-          title: form.title,
-          phone: form.phone,
-          company_size: form.company_size,
-          form_type: 'pilot_exclusive_apply',
-          source: 'pilot_program',
-        }),
-      });
-      if (!res.ok) throw new Error('Submission failed');
-      setSubmitted(true);
-    } catch {
-      setError('Something went wrong. Please try again or email ali@colaberry.com directly.');
-    } finally {
-      setSubmitting(false);
-    }
+  const openBooking = () => {
+    trackEvent('cta_click', { cta_name: 'pilot_exclusive_booking', page: '/pilot/exclusive' });
+    setShowBooking(true);
   };
 
   return (
     <>
       <SEOHead
         title="Exclusive AI Build Program - 10 Companies Selected"
-        description="We're selecting 10 companies to build AI into from the inside. 12-week embedded engagement. Apply now."
+        description="We're selecting 10 companies to build AI into from the inside. Long-term partnership, not a one-off project. Book a strategy call."
       />
 
       <div style={{ background: HERO_BG, color: WHITE, fontFamily: "'Inter', -apple-system, sans-serif", minHeight: '100vh' }}>
@@ -98,7 +65,7 @@ function PilotExclusivePage() {
         {/* HERO */}
         <section style={{ background: HERO_BG, padding: '80px 20px 70px', textAlign: 'center' }}>
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
-            <div style={{ display: 'inline-block', background: GOLD_LIGHT, borderRadius: 20, padding: '6px 18px', fontSize: 13, color: GOLD, marginBottom: 24, fontWeight: 500, border: `1px solid rgba(212,165,116,0.3)` }}>
+            <div style={{ display: 'inline-block', background: GOLD_LIGHT, borderRadius: 20, padding: '6px 18px', fontSize: 13, color: GOLD, marginBottom: 24, fontWeight: 500, border: '1px solid rgba(212,165,116,0.3)' }}>
               Exclusive Build Program
             </div>
             <h1 style={{ fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800, lineHeight: 1.1, marginBottom: 20, color: '#fff' }}>
@@ -107,17 +74,17 @@ function PilotExclusivePage() {
               {' '}-- Want In?
             </h1>
             <p style={{ fontSize: 'clamp(16px, 2.2vw, 20px)', color: '#94a3b8', lineHeight: 1.7, marginBottom: 36, maxWidth: 640, margin: '0 auto 36px' }}>
-              This is not a service. It's a 12-week embedded partnership that transforms how your company operates.
+              This is not a one-off project. We embed with your team and build AI systems that compound over time. Long-term partnership, starting with a free 14-day build.
             </p>
-            <a href="#apply" style={{ ...btnGreen, display: 'inline-block', textDecoration: 'none', padding: '18px 48px', fontSize: 20 }}
+            <button onClick={openBooking} style={{ ...btnGreen, padding: '18px 48px', fontSize: 20 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(56,161,105,0.4)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-              APPLY FOR A SPOT
-            </a>
+              BOOK A STRATEGY CALL
+            </button>
           </div>
         </section>
 
-        {/* SELECTION / DIFFERENTIATORS */}
+        {/* PARTNERSHIP MODEL */}
         <section style={{ background: DARK_CARD, padding: '70px 20px' }}>
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
             <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, textAlign: 'center', color: '#fff' }}>
@@ -131,17 +98,22 @@ function PilotExclusivePage() {
                 {
                   icon: '\u{1F3AF}',
                   title: 'We Embed With Your Team',
-                  desc: 'Our engineers and AI architects work alongside your leadership for 12 weeks. Not outsourced. Not consultants dropping off a report. Embedded.',
+                  desc: 'Our engineers and AI architects work alongside your leadership. Not outsourced. Not consultants dropping off a report. Embedded partners who understand your business.',
                 },
                 {
                   icon: '\u{1F527}',
-                  title: 'We Build 3-5 AI Systems',
-                  desc: 'Not POCs. Not demos. Production AI systems running on your infrastructure, solving your specific operational bottlenecks.',
+                  title: 'We Build Real AI Systems',
+                  desc: 'Not POCs. Not demos. Production AI systems running on your infrastructure, solving your specific operational bottlenecks. Starting with a free 14-day build.',
                 },
                 {
-                  icon: '\u{1F91D}',
-                  title: 'We Transfer Full Ownership',
-                  desc: 'Documentation, runbooks, training. Your team manages and extends the systems independently. Zero vendor lock-in.',
+                  icon: '\u{1F4C8}',
+                  title: 'We Grow With You',
+                  desc: 'AI is doubling in capability every 4 months. We keep improving your existing systems and building new ones so you stay ahead of the curve.',
+                },
+                {
+                  icon: '\u{1F393}',
+                  title: 'We Train + Hire',
+                  desc: 'We train your employees to work with AI and offer hiring solutions for AI-capable talent. Build internal capability alongside external systems.',
                 },
               ].map((item, i) => (
                 <div key={i} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '32px 24px', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -154,26 +126,26 @@ function PilotExclusivePage() {
           </div>
         </section>
 
-        {/* TIMELINE */}
+        {/* HOW IT STARTS */}
         <section style={{ background: HERO_BG, padding: '70px 20px' }}>
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
             <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, textAlign: 'center', color: '#fff' }}>
-              The 12-Week Transformation
+              How It Starts
             </h2>
             <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 15, marginBottom: 40 }}>
-              Four phases. One outcome: an AI-capable company.
+              A 30-minute conversation to see if there's a fit. Then we build.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
               {[
-                { phase: 'Weeks 1-2', title: 'Audit', desc: 'Map every process. Identify highest-impact automation targets. Build the business case.', color: ACCENT },
-                { phase: 'Weeks 3-6', title: 'Build', desc: 'Deploy 3-5 AI systems targeting the processes identified in the audit. Daily standups.', color: GOLD },
-                { phase: 'Weeks 7-10', title: 'Train', desc: 'Train your team to manage, monitor, and extend the AI systems independently.', color: GREEN },
-                { phase: 'Weeks 11-12', title: 'Transfer', desc: 'Full ownership transfer. Documentation, runbooks, and ongoing advisory access.', color: '#e53e3e' },
-              ].map((step, i) => (
-                <div key={i} style={{ background: DARK_CARD, borderRadius: 12, padding: '28px 20px', border: `1px solid rgba(255,255,255,0.08)`, borderTop: `3px solid ${step.color}` }}>
-                  <div style={{ fontSize: 12, color: step.color, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>{step.phase}</div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 8 }}>{step.title}</h3>
-                  <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>{step.desc}</p>
+                { step: '1', title: 'Strategy Call', desc: '30-minute conversation. We learn your business, identify the highest-impact AI opportunities, and see if there is a mutual fit.', color: ACCENT },
+                { step: '2', title: 'Free 14-Day Build', desc: 'We build your first AI system at zero cost. Real data, real workflows, real results. You see it working before any commitment.', color: GOLD },
+                { step: '3', title: 'Prove the Value', desc: 'The system runs in your environment. You measure the impact. If it delivers, we scope a long-term partnership. If not, you walk away.', color: GREEN },
+                { step: '4', title: 'Long-Term Partnership', desc: 'Founding partners get their first year locked in at the cost of a junior developer. We keep building AI systems that compound your competitive advantage.', color: '#e53e3e' },
+              ].map((s, i) => (
+                <div key={i} style={{ background: DARK_CARD, borderRadius: 12, padding: '28px 20px', border: '1px solid rgba(255,255,255,0.08)', borderTop: `3px solid ${s.color}` }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: s.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, marginBottom: 12 }}>{s.step}</div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#fff', marginBottom: 8 }}>{s.title}</h3>
+                  <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, margin: 0 }}>{s.desc}</p>
                 </div>
               ))}
             </div>
@@ -183,10 +155,10 @@ function PilotExclusivePage() {
         {/* FOUNDER STORY */}
         <section style={{ background: DARK_CARD, padding: '70px 20px' }}>
           <div style={{ maxWidth: 700, margin: '0 auto' }}>
-            <div style={{ background: 'rgba(212,165,116,0.05)', borderRadius: 12, padding: '40px 32px', border: `1px solid rgba(212,165,116,0.2)`, borderLeft: `4px solid ${GOLD}` }}>
+            <div style={{ background: 'rgba(212,165,116,0.05)', borderRadius: 12, padding: '40px 32px', border: '1px solid rgba(212,165,116,0.2)', borderLeft: `4px solid ${GOLD}` }}>
               <div style={{ fontSize: 48, color: GOLD, marginBottom: 16, lineHeight: 1, fontFamily: 'Georgia, serif' }}>"</div>
               <p style={{ fontSize: 18, color: '#e2e8f0', lineHeight: 1.8, marginBottom: 20, fontStyle: 'italic' }}>
-                We invested $36K in the build program. In 12 weeks, we deployed AI systems that reduced route planning time by 85% and automated customer quoting from 45 minutes to 90 seconds per quote. The annualized operational savings: $2M. That is not a typo.
+                We started with a single AI system that automated route planning. It saved us $1.2M in the first year. That success turned into a long-term partnership where we've now deployed AI across quoting, exception handling, and customer operations. The compounding effect has been transformative.
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: `linear-gradient(135deg, ${GOLD}, #b8956a)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 700, color: '#fff' }}>
@@ -201,95 +173,50 @@ function PilotExclusivePage() {
           </div>
         </section>
 
-        {/* APPLICATION FORM */}
-        <section id="apply" style={{ background: HERO_BG, padding: '70px 20px' }}>
-          <div style={{ maxWidth: 560, margin: '0 auto' }}>
-            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 12, textAlign: 'center', color: '#fff' }}>
-              Apply for a Spot
+        {/* WHO WE'RE LOOKING FOR */}
+        <section style={{ background: HERO_BG, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 700, margin: '0 auto' }}>
+            <h2 style={{ fontSize: 'clamp(24px, 3.5vw, 36px)', fontWeight: 700, marginBottom: 32, textAlign: 'center', color: '#fff' }}>
+              Who We're Looking For
             </h2>
-            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 15, marginBottom: 36 }}>
-              3 of 10 founding spots remaining. We review every application.
-            </p>
-
-            {submitted ? (
-              <div style={{ background: 'rgba(56,161,105,0.1)', borderRadius: 12, padding: '40px 32px', border: `1px solid rgba(56,161,105,0.3)`, textAlign: 'center' }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>{'\u2705'}</div>
-                <h3 style={{ fontSize: 22, fontWeight: 700, color: GREEN, marginBottom: 12 }}>Application Received</h3>
-                <p style={{ fontSize: 15, color: '#94a3b8', lineHeight: 1.7 }}>
-                  Ali Muwwakkil will personally review your application and reach out within 48 hours.
-                </p>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} style={{ background: DARK_CARD, borderRadius: 12, padding: '36px 28px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ display: 'grid', gap: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>Full Name *</label>
-                    <input
-                      type="text" name="name" required value={form.name} onChange={handleChange}
-                      style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
-                    />
+            <div style={{ display: 'grid', gap: 14 }}>
+              {[
+                { text: 'CEOs and founders who want AI built into their company, not bolted on' },
+                { text: 'Companies with $5M-$50M in revenue and 51-200 employees' },
+                { text: 'Leaders who think in terms of long-term competitive advantage, not quick fixes' },
+                { text: 'Teams with real operational processes that AI can transform' },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', background: DARK_CARD, borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: `linear-gradient(135deg, ${GREEN}, #2f855a)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
+                    {'\u2713'}
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>Work Email *</label>
-                    <input
-                      type="email" name="email" required value={form.email} onChange={handleChange}
-                      style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>Company *</label>
-                    <input
-                      type="text" name="company" required value={form.company} onChange={handleChange}
-                      style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>Title *</label>
-                    <input
-                      type="text" name="title" required value={form.title} onChange={handleChange}
-                      style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>Phone</label>
-                    <input
-                      type="tel" name="phone" value={form.phone} onChange={handleChange}
-                      style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: '#fff', fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>Company Size *</label>
-                    <select
-                      name="company_size" required value={form.company_size} onChange={handleChange}
-                      style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.05)', color: form.company_size ? '#fff' : '#94a3b8', fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
-                    >
-                      <option value="" disabled>Select company size</option>
-                      <option value="11-50">11-50 employees</option>
-                      <option value="51-100">51-100 employees</option>
-                      <option value="101-200">101-200 employees</option>
-                      <option value="201-500">201-500 employees</option>
-                      <option value="500+">500+ employees</option>
-                    </select>
-                  </div>
+                  <span style={{ fontSize: 15, color: '#e2e8f0', lineHeight: 1.6 }}>{item.text}</span>
                 </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-                {error && (
-                  <div style={{ marginTop: 16, padding: '12px 16px', borderRadius: 8, background: 'rgba(229,62,62,0.1)', border: '1px solid rgba(229,62,62,0.3)', color: '#fc8181', fontSize: 14 }}>
-                    {error}
-                  </div>
-                )}
-
-                <button type="submit" disabled={submitting} style={{ ...btnGreen, width: '100%', marginTop: 24, opacity: submitting ? 0.7 : 1 }}
-                  onMouseEnter={e => { if (!submitting) { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(56,161,105,0.4)'; } }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                  {submitting ? 'SUBMITTING...' : 'APPLY FOR A SPOT'}
-                </button>
-
-                <p style={{ textAlign: 'center', color: '#475569', fontSize: 12, marginTop: 12 }}>
-                  We review every application. Ali Muwwakkil responds personally within 48 hours.
-                </p>
-              </form>
-            )}
+        {/* BOTTOM CTA */}
+        <section style={{ background: DARK_CARD, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 620, margin: '0 auto', textAlign: 'center' }}>
+            <h2 style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 700, marginBottom: 12, color: '#fff' }}>
+              Let's See If There's a Fit
+            </h2>
+            <p style={{ color: '#94a3b8', fontSize: 16, lineHeight: 1.7, marginBottom: 20 }}>
+              30-minute strategy call. We learn your business, identify the highest-impact AI opportunity, and determine if a long-term partnership makes sense for both sides.
+            </p>
+            <p style={{ color: GOLD, fontSize: 17, fontWeight: 600, lineHeight: 1.7, marginBottom: 32 }}>
+              Only 10 founding partner spots. 3 remaining.
+            </p>
+            <button onClick={openBooking} style={{ ...btnGreen, padding: '20px 56px', fontSize: 22 }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(56,161,105,0.4)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}>
+              BOOK A STRATEGY CALL
+            </button>
+            <p style={{ color: '#475569', fontSize: 13, marginTop: 14 }}>
+              Free 30-minute conversation. Zero obligations.
+            </p>
           </div>
         </section>
 
@@ -300,6 +227,16 @@ function PilotExclusivePage() {
           </p>
         </footer>
       </div>
+
+      <StrategyCallModal
+        show={showBooking}
+        onClose={() => setShowBooking(false)}
+        pageOrigin="/pilot/exclusive"
+        initialName={prefill.name}
+        initialEmail={prefill.email}
+        initialCompany={prefill.company}
+        initialPhone={prefill.phone}
+      />
     </>
   );
 }

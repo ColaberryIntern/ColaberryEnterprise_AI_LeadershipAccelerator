@@ -186,7 +186,10 @@ function PilotZeroRiskPage() {
                 <span style={{ color: RED, fontWeight: 600 }}>3 remaining</span>
               </div>
               <p style={{ fontSize: 15, color: TEXT2, lineHeight: 1.7, marginBottom: 8 }}>
-                The founding rate locks in pricing that increases significantly at general availability.
+                Founding clients get their first year locked in at approximately the cost of a junior developer. That rate increases significantly at general availability.
+              </p>
+              <p style={{ fontSize: 15, color: TEXT2, lineHeight: 1.7, marginBottom: 12 }}>
+                AI capabilities are doubling every 4 months. Companies that start building now will have compounding advantages their competitors cannot catch up to.
               </p>
               <p style={{ fontSize: 15, color: TEXT2, lineHeight: 1.7, marginBottom: 24 }}>
                 Once all 10 spots are filled, the next cohort opens at full price.
@@ -206,8 +209,11 @@ function PilotZeroRiskPage() {
             <h2 style={{ fontSize: 'clamp(26px, 4vw, 40px)', fontWeight: 700, marginBottom: 12, color: '#fff' }}>
               Let's Scope Your AI System
             </h2>
-            <p style={{ color: '#94a3b8', fontSize: 16, lineHeight: 1.7, marginBottom: 32 }}>
-              20-minute scoping call. We identify the highest-impact process in your company to automate first. No pitch, no pressure. If there's a fit, we'll outline the 14-day build plan.
+            <p style={{ color: '#94a3b8', fontSize: 16, lineHeight: 1.7, marginBottom: 16 }}>
+              30-minute scoping call. We identify the highest-impact process in your company to automate first. No pitch, no pressure. If there's a fit, we'll outline the 14-day build plan.
+            </p>
+            <p style={{ color: '#94a3b8', fontSize: 14, lineHeight: 1.7, marginBottom: 32 }}>
+              This is the start of a long-term partnership. Beyond building AI systems, we train your team to work with AI and offer hiring solutions for AI-capable talent.
             </p>
             <button onClick={openBooking} style={{ ...btnPrimary, padding: '20px 56px', fontSize: 22 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
@@ -215,7 +221,7 @@ function PilotZeroRiskPage() {
               BOOK A DISCOVERY CALL
             </button>
             <p style={{ color: '#475569', fontSize: 13, marginTop: 14 }}>
-              Free 20-minute scoping session. Zero obligations.
+              Free 30-minute scoping session. Zero obligations.
             </p>
           </div>
         </section>

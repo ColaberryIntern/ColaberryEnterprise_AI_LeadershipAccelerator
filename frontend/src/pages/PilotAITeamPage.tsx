@@ -156,7 +156,7 @@ function PilotAITeamPage() {
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20 }}>
               {[
-                { step: '1', title: 'Discovery Call', desc: '20 minutes. We identify the 2-3 processes where AI would have the biggest impact in your business.', days: 'Day 0' },
+                { step: '1', title: 'Discovery Call', desc: '30 minutes. We identify the 2-3 processes where AI would have the biggest impact in your business.', days: 'Day 0' },
                 { step: '2', title: 'System Design', desc: 'Our team architects your custom AI system — scoped to your actual workflows, data, and team.', days: 'Days 1-3' },
                 { step: '3', title: 'Live Build', desc: 'We build and deploy a working AI system inside your company. Real data, real results.', days: 'Days 4-10' },
                 { step: '4', title: 'You Decide', desc: 'See it running. Review the results. If it delivers — keep it. If not — walk away. Zero cost.', days: 'Days 11-14' },
@@ -171,7 +171,7 @@ function PilotAITeamPage() {
             </div>
             <div style={{ marginTop: 32, padding: '16px 24px', background: 'rgba(56,161,105,0.1)', borderRadius: 8, border: `1px solid rgba(56,161,105,0.3)`, display: 'inline-block' }}>
               <span style={{ color: GREEN, fontWeight: 700, fontSize: 15 }}>You only pay if it works.</span>
-              <span style={{ color: '#94a3b8', fontSize: 14 }}> &nbsp;Founding clients get locked-in rates for life.</span>
+              <span style={{ color: '#94a3b8', fontSize: 14 }}> &nbsp;Founding clients get locked-in rates for the first year.</span>
             </div>
           </div>
         </section>
@@ -205,8 +205,35 @@ function PilotAITeamPage() {
           </div>
         </section>
 
-        {/* STATS */}
+        {/* WHY NOW */}
         <section style={{ background: WHITE, padding: '70px 20px' }}>
+          <div style={{ maxWidth: 800, margin: '0 auto' }}>
+            <div style={{ background: `linear-gradient(135deg, ${HERO_BG} 0%, #1a2744 100%)`, borderRadius: 12, padding: '36px 32px', marginBottom: 32 }}>
+              <h3 style={{ fontSize: 20, fontWeight: 700, color: '#fff', marginBottom: 12, textAlign: 'center' }}>
+                AI Is Doubling Every 4 Months
+              </h3>
+              <p style={{ color: '#94a3b8', fontSize: 15, lineHeight: 1.7, textAlign: 'center', margin: '0 auto', maxWidth: 600 }}>
+                The system you build today will be significantly more capable in 6 months. Companies that start now will have compounding advantages. Companies that wait will be multiple generations behind by this time next year. This is not a one-off project. We build long-term partnerships where we keep improving your AI systems and building new ones as the technology advances.
+              </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+              {[
+                { icon: '\u{1F393}', title: 'We Train Your Team', desc: 'Your employees learn to work alongside AI systems. We build internal capability, not dependency.' },
+                { icon: '\u{1F465}', title: 'We Help You Hire', desc: 'Need AI-capable talent? We offer hiring solutions to staff the roles that manage and extend your AI systems.' },
+                { icon: '\u{1F504}', title: 'We Keep Building', desc: 'First system is just the start. As a long-term partner, we continuously improve existing systems and build new ones.' },
+              ].map((item, i) => (
+                <div key={i} style={{ background: BG, borderRadius: 10, padding: '24px 20px', border: `1px solid ${BORDER}` }}>
+                  <div style={{ fontSize: 28, marginBottom: 10 }}>{item.icon}</div>
+                  <h4 style={{ fontSize: 15, fontWeight: 700, color: TEXT, marginBottom: 6 }}>{item.title}</h4>
+                  <p style={{ fontSize: 13, color: TEXT2, lineHeight: 1.6, margin: 0 }}>{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* STATS */}
+        <section style={{ background: BG_ALT, padding: '70px 20px' }}>
           <div style={{ maxWidth: 800, margin: '0 auto' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
               {[
@@ -215,7 +242,7 @@ function PilotAITeamPage() {
                 { stat: '24/7', label: 'Availability', color: PURPLE },
                 { stat: '10', label: 'Founding Spots', color: RED },
               ].map((s, i) => (
-                <div key={i} style={{ background: BG, borderRadius: 10, padding: '28px 16px', textAlign: 'center', border: `1px solid ${BORDER}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div key={i} style={{ background: WHITE, borderRadius: 10, padding: '28px 16px', textAlign: 'center', border: `1px solid ${BORDER}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                   <div style={{ fontSize: 32, fontWeight: 800, color: s.color, marginBottom: 6 }}>{s.stat}</div>
                   <div style={{ fontSize: 13, color: MUTED, fontWeight: 500 }}>{s.label}</div>
                 </div>
@@ -231,7 +258,7 @@ function PilotAITeamPage() {
               Start Your Free 14-Day Build
             </h2>
             <p style={{ color: '#94a3b8', fontSize: 16, lineHeight: 1.7, marginBottom: 20 }}>
-              In a 20-minute discovery call, we identify the highest-impact AI system for your business. Then we build it — free. You see it working before you decide anything.
+              In a 30-minute discovery call, we identify the highest-impact AI system for your business. Then we build it — free. You see it working before you decide anything.
             </p>
             <p style={{ color: GREEN, fontSize: 17, fontWeight: 600, lineHeight: 1.7, marginBottom: 32 }}>
               Only 10 founding client spots. 7 are claimed.
@@ -242,7 +269,7 @@ function PilotAITeamPage() {
               SEE WHAT WE'D BUILD FOR YOU
             </button>
             <p style={{ color: '#475569', fontSize: 13, marginTop: 14 }}>
-              Free 20-minute scoping session. Zero obligations.
+              Free 30-minute scoping session. Zero obligations.
             </p>
           </div>
         </section>
