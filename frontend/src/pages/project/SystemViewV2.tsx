@@ -5,7 +5,7 @@
  * Reuses existing APIs — no new backend endpoints
  * componentId sync via URL param + local state
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
@@ -101,6 +101,141 @@ function transformBPs(bps: any[]): SystemComponent[] {
 }
 
 // ---------------------------------------------------------------------------
+// Grouping Engine (deterministic, keyword-based)
+// ---------------------------------------------------------------------------
+
+interface ComponentGroup {
+  key: string;
+  title: string;
+  icon: string;
+  color: string;
+  items: SystemComponent[];
+  completion: number;
+}
+
+const FOUNDATION_KEYWORDS = /data|api|integrat|backend|service|database|model|auth|security|error|resilien|performance|monitor|observ/i;
+const USABILITY_KEYWORDS = /page|ui|management|dashboard|landing|contact|enroll|advisory|case.stud|alumni|campaign|lead|setting|detail|overview|success|cancel|freight|utility|champion/i;
+const INTELLIGENCE_KEYWORDS = /agent|automat|monitor|analytics|ai\b|intelligen|train|adopt|feedback|engag/i;
+
+export function groupComponents(components: SystemComponent[]): ComponentGroup[] {
+  const foundation: SystemComponent[] = [];
+  const usability: SystemComponent[] = [];
+  const intelligence: SystemComponent[] = [];
+
+  for (const c of components) {
+    const name = c.name.toLowerCase();
+    // Page BPs always go to Usability
+    if (c.isPageBP) { usability.push(c); continue; }
+    // Keyword matching with priority
+    if (INTELLIGENCE_KEYWORDS.test(name)) { intelligence.push(c); continue; }
+    if (FOUNDATION_KEYWORDS.test(name)) { foundation.push(c); continue; }
+    if (USABILITY_KEYWORDS.test(name)) { usability.push(c); continue; }
+    // Fallback: if it has backend layer → foundation, else usability
+    if (c.layers.backend === 'ready' || c.layers.backend === 'partial') { foundation.push(c); }
+    else { usability.push(c); }
+  }
+
+  const groups: ComponentGroup[] = [];
+  const calcCompletion = (items: SystemComponent[]) => items.length > 0 ? Math.round(items.reduce((s, c) => s + c.completion, 0) / items.length) : 0;
+
+  if (foundation.length > 0) groups.push({ key: 'foundation', title: 'Foundation', icon: 'bi-bricks', color: '#3b82f6', items: foundation, completion: calcCompletion(foundation) });
+  if (usability.length > 0) groups.push({ key: 'usability', title: 'Usability', icon: 'bi-layout-wtf', color: '#10b981', items: usability, completion: calcCompletion(usability) });
+  if (intelligence.length > 0) groups.push({ key: 'intelligence', title: 'Intelligence', icon: 'bi-cpu', color: '#8b5cf6', items: intelligence, completion: calcCompletion(intelligence) });
+
+  return groups;
+}
+
+export function getNextComponents(components: SystemComponent[], max: number = 3): Set<string> {
+  return new Set(
+    components
+      .filter(c => c.status !== 'complete')
+      .sort((a, b) => a.completion - b.completion)
+      .slice(0, max)
+      .map(c => c.id)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// System Map Tile
+// ---------------------------------------------------------------------------
+
+const LAYER_COLORS: Record<string, string> = { ready: '#10b981', partial: '#f59e0b', missing: '#e2e8f0', 'n/a': '#e2e8f0' };
+
+function SystemMapTile({ comp, isSelected, isNext, onClick }: { comp: SystemComponent; isSelected: boolean; isNext: boolean; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  const statusColor = comp.status === 'complete' ? '#10b981' : comp.status === 'in_progress' ? '#f59e0b' : '#ef4444';
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        padding: '10px 14px',
+        borderRadius: 10,
+        border: `2px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
+        background: isSelected ? '#eff6ff' : hovered ? '#f8fafc' : '#fff',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        minWidth: 150,
+        maxWidth: 220,
+        flex: '1 1 150px',
+        boxShadow: isSelected ? '0 2px 12px rgba(26,54,93,0.15)' : hovered ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+        transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+        position: 'relative' as const,
+      }}
+    >
+      {/* NEXT badge */}
+      {isNext && !isSelected && (
+        <div style={{ position: 'absolute', top: -6, right: -6, background: '#3b82f6', color: '#fff', fontSize: 8, fontWeight: 700, padding: '1px 6px', borderRadius: 4, letterSpacing: 0.5 }}>
+          NEXT
+        </div>
+      )}
+
+      {/* Name + status dot */}
+      <div className="d-flex align-items-center gap-2 mb-1">
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor, flexShrink: 0 }}></div>
+        <span className="fw-medium" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#8b5cf6', fontSize: 9 }}></i>}
+          {comp.name}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="d-flex align-items-center gap-2 mb-1">
+        <div className="progress flex-grow-1" style={{ height: 4, borderRadius: 2 }}>
+          <div className="progress-bar" style={{ width: `${comp.completion}%`, background: statusColor, borderRadius: 2, transition: 'width 0.4s ease' }}></div>
+        </div>
+        <span style={{ fontSize: 9, color: statusColor, fontWeight: 600, minWidth: 26, textAlign: 'right' as const }}>{comp.completion}%</span>
+      </div>
+
+      {/* Layer indicators */}
+      <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center gap-1" title="Backend">
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: LAYER_COLORS[comp.layers.backend] || '#e2e8f0' }}></div>
+          <span style={{ fontSize: 8, color: '#9ca3af' }}>B</span>
+        </div>
+        <div className="d-flex align-items-center gap-1" title="Frontend">
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: LAYER_COLORS[comp.layers.frontend] || '#e2e8f0' }}></div>
+          <span style={{ fontSize: 8, color: '#9ca3af' }}>F</span>
+        </div>
+        <div className="d-flex align-items-center gap-1" title="Agents">
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: LAYER_COLORS[comp.layers.agent] || '#e2e8f0' }}></div>
+          <span style={{ fontSize: 8, color: '#9ca3af' }}>A</span>
+        </div>
+      </div>
+
+      {/* Hover tooltip */}
+      {hovered && !isSelected && (comp.nextStep || comp.description) && (
+        <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--color-border)', fontSize: 9, color: '#64748b', lineHeight: 1.4 }}>
+          {comp.nextStep ? <><i className="bi bi-arrow-right me-1"></i>{comp.nextStep}</> : comp.description?.substring(0, 60)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // System View V2 Page
 // ---------------------------------------------------------------------------
 
@@ -156,12 +291,25 @@ export default function SystemViewV2() {
     return <div className="alert alert-danger">{error || 'Failed to load project'}</div>;
   }
 
+  const workAreaRef = useRef<HTMLDivElement>(null);
   const selectedComponent = selectedId ? components.find(c => c.id === selectedId) : null;
   const completedCount = components.filter(c => c.status === 'complete').length;
   const systemLayers = {
     backend: components.some(c => c.layers.backend === 'ready' || c.layers.backend === 'partial'),
     frontend: components.some(c => c.layers.frontend === 'ready' || c.layers.frontend === 'partial'),
     agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
+  };
+
+  // Memoized grouping + next badges
+  const groups = useMemo(() => groupComponents(components), [components]);
+  const nextIds = useMemo(() => getNextComponents(components), [components]);
+
+  const handleTileClick = (id: string) => {
+    const isDeselect = id === selectedId;
+    setSelectedId(isDeselect ? null : id);
+    if (!isDeselect) {
+      setTimeout(() => workAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
   };
 
   return (
@@ -221,47 +369,40 @@ export default function SystemViewV2() {
             </div>
           </div>
 
-          {/* Component grid — clickable nodes */}
-          <div className="d-flex flex-wrap gap-2">
-            {components.map(comp => {
-              const ss = STATUS_STYLES[comp.status];
-              const mc = MATURITY_COLORS[comp.maturityLevel] || '#9ca3af';
-              const isSelected = comp.id === selectedId;
-              return (
-                <div
-                  key={comp.id}
-                  onClick={() => setSelectedId(isSelected ? null : comp.id)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: `2px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                    background: isSelected ? '#eff6ff' : '#fff',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    minWidth: 120,
-                  }}
-                >
-                  <div className="d-flex align-items-center gap-2">
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: mc, flexShrink: 0 }}></div>
-                    <span className="fw-medium" style={{ fontSize: 11 }}>{comp.name}</span>
-                  </div>
-                  <div className="d-flex align-items-center gap-2 mt-1">
-                    <div className="progress flex-grow-1" style={{ height: 3, borderRadius: 2 }}>
-                      <div className="progress-bar" style={{ width: `${comp.completion}%`, background: mc, borderRadius: 2 }}></div>
-                    </div>
-                    <span style={{ fontSize: 9, color: ss.text }}>{comp.completion}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Grouped component tiles */}
+          {groups.length > 0 ? groups.map(group => (
+            <div key={group.key} className="mb-3">
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <i className={`bi ${group.icon}`} style={{ color: group.color, fontSize: 13 }}></i>
+                <span className="fw-semibold" style={{ fontSize: 12, color: group.color }}>{group.title}</span>
+                <span className="badge" style={{ background: `${group.color}20`, color: group.color, fontSize: 8 }}>{group.completion}%</span>
+                <span className="text-muted" style={{ fontSize: 9 }}>{group.items.length} components</span>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                {group.items.map(comp => (
+                  <SystemMapTile
+                    key={comp.id}
+                    comp={comp}
+                    isSelected={comp.id === selectedId}
+                    isNext={nextIds.has(comp.id)}
+                    onClick={() => handleTileClick(comp.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )) : (
+            <div className="text-center py-4" data-testid="system-map-empty">
+              <i className="bi bi-inbox d-block mb-2" style={{ fontSize: 24, color: '#9ca3af' }}></i>
+              <p className="text-muted mb-0" style={{ fontSize: 12 }}>No system components available</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 2: WORK AREA
           ═══════════════════════════════════════════════════════════════════ */}
-      <div className="card border-0 shadow-sm mb-3" data-testid="work-area-section" style={{ minHeight: 200 }}>
+      <div ref={workAreaRef} className="card border-0 shadow-sm mb-3" data-testid="work-area-section" style={{ minHeight: 200 }}>
         <div className="card-body p-4">
           <h6 className="fw-bold mb-3" style={{ fontSize: 14, color: 'var(--color-primary)' }}>
             <i className="bi bi-hammer me-2"></i>Work Area

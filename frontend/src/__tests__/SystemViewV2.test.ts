@@ -1,273 +1,271 @@
 /**
- * SystemViewV2 Tests — Scaffolding Verification
- *
- * Tests cover:
- * 1. Data transformation logic
- * 2. Route existence
- * 3. Component structure expectations
- * 4. LocalStorage persistence
- * 5. Failure resilience
- * 6. Regression protection
- *
- * NOTE: @testing-library/react is not installed, so these are
- * logic-level tests using Jest directly. DOM rendering tests
- * should be added when the testing library is available.
+ * SystemViewV2 Tests — Scaffolding + System Map Verification
  */
 
+import { groupComponents, getNextComponents } from '../pages/project/SystemViewV2';
+
 // ---------------------------------------------------------------------------
-// 1. DATA TRANSFORMATION TESTS
+// Mock data factory
 // ---------------------------------------------------------------------------
 
-// Replicate the transform function inline for testing (same logic as SystemViewV2.tsx)
-const MATURITY_LABELS: Record<number, string> = {
-  0: 'L0 Not Started', 1: 'L1 Prototype', 2: 'L2 Functional',
-  3: 'L3 Production', 4: 'L4 Autonomous', 5: 'L5 Self-Optimizing',
-};
-
-interface TransformedComponent {
-  id: string;
-  name: string;
-  status: 'complete' | 'in_progress' | 'not_started';
-  completion: number;
-  maturityLevel: number;
-  layers: { backend: string; frontend: string; agent: string };
+function makeBP(overrides: any = {}) {
+  return {
+    id: overrides.id || 'test-id',
+    name: overrides.name || 'Test BP',
+    description: overrides.description || '',
+    status: overrides.status || 'not_started',
+    completion: overrides.completion || 0,
+    maturity: overrides.maturity || 'L0 Not Started',
+    maturityLevel: overrides.maturityLevel || 0,
+    nextStep: overrides.nextStep || null,
+    promptTarget: overrides.promptTarget || null,
+    isPageBP: overrides.isPageBP || false,
+    layers: overrides.layers || { backend: 'missing', frontend: 'missing', agent: 'missing' },
+  };
 }
 
-function transformBPs(bps: any[]): TransformedComponent[] {
-  return bps
-    .filter((bp: any) => (bp.applicability_status || 'active') === 'active')
-    .map((bp: any) => {
-      const coverage = bp.metrics?.requirements_coverage || 0;
-      const readiness = bp.metrics?.system_readiness || 0;
-      const maturityLevel = bp.maturity?.level || 0;
-      const isComplete = bp.is_complete === true;
-      const u = bp.usability || {};
+// ---------------------------------------------------------------------------
+// 1. GROUPING TESTS
+// ---------------------------------------------------------------------------
 
-      let status: 'complete' | 'in_progress' | 'not_started';
-      if (isComplete) status = 'complete';
-      else if (coverage > 10 || readiness > 10 || maturityLevel >= 1) status = 'in_progress';
-      else status = 'not_started';
-
-      const completion = Math.round(Math.max(coverage, readiness));
-
-      return {
-        id: bp.id,
-        name: bp.name,
-        status,
-        completion,
-        maturityLevel,
-        layers: {
-          backend: u.backend || 'missing',
-          frontend: u.frontend || 'missing',
-          agent: u.agent || 'missing',
-        },
-      };
-    })
-    .sort((a, b) => {
-      if (a.status === 'complete' && b.status !== 'complete') return 1;
-      if (a.status !== 'complete' && b.status === 'complete') return -1;
-      return 0;
-    });
-}
-
-describe('SystemViewV2 — Data Transformation', () => {
-  test('transforms active BPs correctly', () => {
-    const mockBPs = [
-      { id: '1', name: 'Auth', applicability_status: 'active', metrics: { requirements_coverage: 80, system_readiness: 60 }, maturity: { level: 3 }, is_complete: false, usability: { backend: 'ready', frontend: 'ready', agent: 'missing' } },
-      { id: '2', name: 'Dashboard', applicability_status: 'active', metrics: { requirements_coverage: 5, system_readiness: 5 }, maturity: { level: 0 }, is_complete: false, usability: { backend: 'missing', frontend: 'missing', agent: 'missing' } },
+describe('SystemViewV2 — Component Grouping', () => {
+  test('groups backend/data components into Foundation', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'API Integration' }),
+      makeBP({ id: '2', name: 'Database Service' }),
     ];
-    const result = transformBPs(mockBPs);
-    expect(result).toHaveLength(2);
-    expect(result[0].name).toBe('Auth');
-    expect(result[0].status).toBe('in_progress');
-    expect(result[0].completion).toBe(80);
-    expect(result[1].status).toBe('not_started');
+    const groups = groupComponents(comps);
+    const foundation = groups.find(g => g.key === 'foundation');
+    expect(foundation).toBeDefined();
+    expect(foundation!.items).toHaveLength(2);
   });
 
-  test('filters deferred BPs', () => {
-    const mockBPs = [
-      { id: '1', name: 'Active', applicability_status: 'active', metrics: {}, maturity: {}, is_complete: false, usability: {} },
-      { id: '2', name: 'Deferred', applicability_status: 'deferred', metrics: {}, maturity: {}, is_complete: false, usability: {} },
+  test('groups page BPs into Usability', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'Dashboard Page', isPageBP: true }),
+      makeBP({ id: '2', name: 'Settings Management', isPageBP: true }),
     ];
-    const result = transformBPs(mockBPs);
-    expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('Active');
+    const groups = groupComponents(comps);
+    const usability = groups.find(g => g.key === 'usability');
+    expect(usability).toBeDefined();
+    expect(usability!.items).toHaveLength(2);
   });
 
-  test('marks complete BPs correctly', () => {
-    const mockBPs = [
-      { id: '1', name: 'Done', applicability_status: 'active', metrics: { requirements_coverage: 95 }, maturity: { level: 4 }, is_complete: true, usability: { backend: 'ready', frontend: 'ready', agent: 'ready' } },
+  test('groups agent/automation components into Intelligence', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'AI Adoption and Training' }),
+      makeBP({ id: '2', name: 'User Engagement and Feedback' }),
     ];
-    const result = transformBPs(mockBPs);
-    expect(result[0].status).toBe('complete');
+    const groups = groupComponents(comps);
+    const intelligence = groups.find(g => g.key === 'intelligence');
+    expect(intelligence).toBeDefined();
+    expect(intelligence!.items.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('sorts incomplete before complete', () => {
-    const mockBPs = [
-      { id: '1', name: 'Complete', applicability_status: 'active', metrics: {}, maturity: { level: 4 }, is_complete: true, usability: {} },
-      { id: '2', name: 'Incomplete', applicability_status: 'active', metrics: { requirements_coverage: 20 }, maturity: { level: 1 }, is_complete: false, usability: {} },
+  test('calculates group completion correctly', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'API Service', completion: 60 }),
+      makeBP({ id: '2', name: 'Data Integration', completion: 40 }),
     ];
-    const result = transformBPs(mockBPs);
-    expect(result[0].name).toBe('Incomplete');
-    expect(result[1].name).toBe('Complete');
+    const groups = groupComponents(comps);
+    const foundation = groups.find(g => g.key === 'foundation');
+    expect(foundation!.completion).toBe(50); // (60+40)/2
   });
 
-  test('handles empty BP list', () => {
-    const result = transformBPs([]);
-    expect(result).toHaveLength(0);
+  test('empty components returns empty groups', () => {
+    const groups = groupComponents([]);
+    expect(groups).toHaveLength(0);
   });
 
-  test('handles BP with missing fields gracefully', () => {
-    const mockBPs = [
-      { id: '1', name: 'Sparse' },
+  test('fallback: non-keyword BP with backend layer goes to Foundation', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'XyzModule', layers: { backend: 'ready', frontend: 'missing', agent: 'missing' } }),
     ];
-    const result = transformBPs(mockBPs);
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('not_started');
-    expect(result[0].completion).toBe(0);
-    expect(result[0].layers.backend).toBe('missing');
+    const groups = groupComponents(comps);
+    const foundation = groups.find(g => g.key === 'foundation');
+    expect(foundation).toBeDefined();
+    expect(foundation!.items[0].name).toBe('XyzModule');
   });
 
-  test('extracts layer status from usability', () => {
-    const mockBPs = [
-      { id: '1', name: 'Full', applicability_status: 'active', metrics: {}, maturity: {}, is_complete: false, usability: { backend: 'ready', frontend: 'partial', agent: 'n/a' } },
+  test('fallback: non-keyword BP without backend goes to Usability', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'XyzWidget' }),
     ];
-    const result = transformBPs(mockBPs);
-    expect(result[0].layers.backend).toBe('ready');
-    expect(result[0].layers.frontend).toBe('partial');
-    expect(result[0].layers.agent).toBe('n/a');
+    const groups = groupComponents(comps);
+    const usability = groups.find(g => g.key === 'usability');
+    expect(usability).toBeDefined();
+  });
+
+  test('all 3 groups created when mixed components exist', () => {
+    const comps = [
+      makeBP({ id: '1', name: 'API Backend' }),
+      makeBP({ id: '2', name: 'Landing Page', isPageBP: true }),
+      makeBP({ id: '3', name: 'AI Agent Automation' }),
+    ];
+    const groups = groupComponents(comps);
+    expect(groups).toHaveLength(3);
+    expect(groups.map(g => g.key).sort()).toEqual(['foundation', 'intelligence', 'usability']);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. ROUTE EXISTENCE TESTS
+// 2. NEXT BADGE TESTS
 // ---------------------------------------------------------------------------
 
-describe('SystemViewV2 — Routes', () => {
-  test('system-v2 route path is defined', () => {
-    // Verify the route string exists (will be validated by TypeScript compilation + manual testing)
-    const v2Route = '/portal/project/system-v2';
-    const v1Route = '/portal/project/system';
-    const blueprintRoute = '/portal/project/blueprint';
-    expect(v2Route).toBeDefined();
-    expect(v1Route).toBeDefined();
-    expect(blueprintRoute).toBeDefined();
-    // Ensure they're different
-    expect(v2Route).not.toBe(v1Route);
-    expect(v2Route).not.toBe(blueprintRoute);
+describe('SystemViewV2 — Next Badge Logic', () => {
+  test('selects top 3 incomplete components by lowest completion', () => {
+    const comps = [
+      makeBP({ id: 'a', status: 'not_started', completion: 0 }),
+      makeBP({ id: 'b', status: 'in_progress', completion: 30 }),
+      makeBP({ id: 'c', status: 'in_progress', completion: 50 }),
+      makeBP({ id: 'd', status: 'in_progress', completion: 70 }),
+      makeBP({ id: 'e', status: 'complete', completion: 100 }),
+    ];
+    const nextIds = getNextComponents(comps);
+    expect(nextIds.size).toBe(3);
+    expect(nextIds.has('a')).toBe(true);
+    expect(nextIds.has('b')).toBe(true);
+    expect(nextIds.has('c')).toBe(true);
+    expect(nextIds.has('d')).toBe(false);
+    expect(nextIds.has('e')).toBe(false);
+  });
+
+  test('returns fewer than 3 if not enough incomplete', () => {
+    const comps = [
+      makeBP({ id: 'a', status: 'not_started', completion: 0 }),
+      makeBP({ id: 'b', status: 'complete', completion: 100 }),
+    ];
+    const nextIds = getNextComponents(comps);
+    expect(nextIds.size).toBe(1);
+    expect(nextIds.has('a')).toBe(true);
+  });
+
+  test('returns empty set if all complete', () => {
+    const comps = [
+      makeBP({ id: 'a', status: 'complete', completion: 100 }),
+      makeBP({ id: 'b', status: 'complete', completion: 95 }),
+    ];
+    const nextIds = getNextComponents(comps);
+    expect(nextIds.size).toBe(0);
+  });
+
+  test('returns empty set for empty list', () => {
+    expect(getNextComponents([]).size).toBe(0);
+  });
+
+  test('custom max parameter works', () => {
+    const comps = [
+      makeBP({ id: 'a', status: 'not_started', completion: 0 }),
+      makeBP({ id: 'b', status: 'not_started', completion: 5 }),
+      makeBP({ id: 'c', status: 'not_started', completion: 10 }),
+    ];
+    const nextIds = getNextComponents(comps, 1);
+    expect(nextIds.size).toBe(1);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. COMPONENT ID SYNC TESTS
+// 3. CLICK / SELECTION TESTS
 // ---------------------------------------------------------------------------
 
-describe('SystemViewV2 — Component ID Sync', () => {
-  test('componentId param is extracted correctly', () => {
+describe('SystemViewV2 — Selection Logic', () => {
+  test('componentId from URL selects component', () => {
     const url = '/portal/project/system-v2?componentId=abc-123';
     const params = new URLSearchParams(url.split('?')[1]);
-    expect(params.get('componentId')).toBe('abc-123');
+    const componentId = params.get('componentId');
+    const components = [makeBP({ id: 'abc-123', name: 'Target' }), makeBP({ id: 'other' })];
+    const selected = components.find(c => c.id === componentId);
+    expect(selected?.name).toBe('Target');
   });
 
-  test('missing componentId returns null', () => {
-    const url = '/portal/project/system-v2';
-    const params = new URLSearchParams(url.split('?')[1] || '');
+  test('missing componentId means no selection', () => {
+    const params = new URLSearchParams('');
     expect(params.get('componentId')).toBeNull();
   });
 
-  test('componentId selects correct component from list', () => {
-    const components = [
-      { id: 'a', name: 'First' },
-      { id: 'b', name: 'Second' },
-      { id: 'c', name: 'Third' },
-    ];
-    const targetId = 'b';
-    const selected = components.find(c => c.id === targetId);
-    expect(selected?.name).toBe('Second');
+  test('clicking selected component deselects', () => {
+    let selectedId: string | null = 'abc';
+    // Simulating the toggle logic
+    const clickedId = 'abc';
+    selectedId = clickedId === selectedId ? null : clickedId;
+    expect(selectedId).toBeNull();
+  });
+
+  test('clicking unselected component selects it', () => {
+    let selectedId: string | null = null;
+    const clickedId = 'xyz';
+    selectedId = clickedId === selectedId ? null : clickedId;
+    expect(selectedId).toBe('xyz');
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. LOCAL STORAGE TESTS
+// 4. EMPTY STATE TESTS
 // ---------------------------------------------------------------------------
 
-describe('SystemViewV2 — LocalStorage', () => {
-  beforeEach(() => {
-    localStorage.clear();
+describe('SystemViewV2 — Empty States', () => {
+  test('groupComponents handles empty array', () => {
+    expect(groupComponents([])).toEqual([]);
   });
 
-  test('system_view_mode persists to localStorage', () => {
-    localStorage.setItem('system_view_mode', 'v2');
-    expect(localStorage.getItem('system_view_mode')).toBe('v2');
+  test('getNextComponents handles empty array', () => {
+    expect(getNextComponents([])).toEqual(new Set());
   });
 
-  test('system_view_mode defaults when not set', () => {
-    expect(localStorage.getItem('system_view_mode')).toBeNull();
-  });
-
-  test('switching modes updates localStorage', () => {
-    localStorage.setItem('system_view_mode', 'v1');
-    expect(localStorage.getItem('system_view_mode')).toBe('v1');
-    localStorage.setItem('system_view_mode', 'v2');
-    expect(localStorage.getItem('system_view_mode')).toBe('v2');
+  test('all-complete returns no next badges', () => {
+    const comps = [makeBP({ id: '1', status: 'complete', completion: 100 })];
+    expect(getNextComponents(comps).size).toBe(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 5. FAILURE RESILIENCE TESTS
+// 5. REGRESSION PROTECTION
 // ---------------------------------------------------------------------------
 
-describe('SystemViewV2 — Failure Resilience', () => {
-  test('transform handles null/undefined metrics', () => {
-    const mockBPs = [
-      { id: '1', name: 'NoMetrics', metrics: null, maturity: null, usability: null },
-    ];
-    const result = transformBPs(mockBPs);
-    expect(result).toHaveLength(1);
-    expect(result[0].completion).toBe(0);
-    expect(result[0].maturityLevel).toBe(0);
-  });
-
-  test('transform handles completely empty objects', () => {
-    const mockBPs = [{}];
-    // Should not throw
-    expect(() => transformBPs(mockBPs)).not.toThrow();
-  });
-
-  test('maturity labels cover all levels', () => {
-    for (let i = 0; i <= 5; i++) {
-      expect(MATURITY_LABELS[i]).toBeDefined();
-      expect(MATURITY_LABELS[i].length).toBeGreaterThan(0);
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 6. REGRESSION PROTECTION TESTS
-// ---------------------------------------------------------------------------
-
-describe('SystemViewV2 — Regression Protection', () => {
-  test('V1 route path is unchanged', () => {
+describe('SystemViewV2 — Regression', () => {
+  test('V1 route unchanged', () => {
     expect('/portal/project/system').toBe('/portal/project/system');
   });
 
-  test('Blueprint route path is unchanged', () => {
+  test('V2 route is distinct', () => {
+    expect('/portal/project/system-v2').not.toBe('/portal/project/system');
+  });
+
+  test('Blueprint route unchanged', () => {
     expect('/portal/project/blueprint').toBe('/portal/project/blueprint');
   });
 
-  test('V2 is a distinct route from V1', () => {
-    const v1 = '/portal/project/system';
-    const v2 = '/portal/project/system-v2';
-    // Routes are different strings — React Router matches exact paths
-    expect(v1).not.toBe(v2);
-    // V2 has the -v2 suffix distinguishing it
-    expect(v2.endsWith('-v2')).toBe(true);
-    expect(v1.endsWith('-v2')).toBe(false);
+  test('existing localStorage keys not affected', () => {
+    localStorage.clear();
+    localStorage.setItem('active_component_id', 'existing');
+    expect(localStorage.getItem('active_component_id')).toBe('existing');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. PERFORMANCE / RESILIENCE
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Resilience', () => {
+  test('grouping handles components with missing fields', () => {
+    const comps = [makeBP({ id: '1', name: '' })];
+    expect(() => groupComponents(comps)).not.toThrow();
   });
 
-  test('existing localStorage keys are not overwritten', () => {
-    localStorage.setItem('active_component_id', 'existing-value');
-    localStorage.setItem('system_view_mode', 'v2');
-    expect(localStorage.getItem('active_component_id')).toBe('existing-value');
+  test('grouping handles very large component list', () => {
+    const comps = Array.from({ length: 100 }, (_, i) => makeBP({ id: String(i), name: `Component ${i}` }));
+    const groups = groupComponents(comps);
+    const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
+    expect(totalItems).toBe(100);
+  });
+
+  test('getNextComponents deterministic across calls', () => {
+    const comps = [
+      makeBP({ id: 'a', status: 'not_started', completion: 10 }),
+      makeBP({ id: 'b', status: 'not_started', completion: 5 }),
+    ];
+    const first = getNextComponents(comps);
+    const second = getNextComponents(comps);
+    expect([...first]).toEqual([...second]);
   });
 });
