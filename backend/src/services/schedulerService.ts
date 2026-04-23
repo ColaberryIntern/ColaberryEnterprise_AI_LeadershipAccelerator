@@ -924,7 +924,14 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   // Resolve per-campaign sender email and inject tracking
   let senderEmail = env.emailFrom;
   let senderName = 'Colaberry Enterprise AI';
-  let emailBody = action.body;
+  // Clean up AI-generated URLs: strip trailing punctuation from colaberry URLs.
+  // The AI often writes "visit https://enterprise.colaberry.ai/pilot/zero-risk."
+  // which puts the period inside the URL, breaking the link.
+  let emailBody = (action.body || '')
+    // Fix URLs inside href attributes
+    .replace(/href="(https?:\/\/[^"]*colaberry\.ai[^"]*?)[.,;:!?)]+"/gi, 'href="$1"')
+    // Fix bare URLs (not inside href) — strip trailing punctuation
+    .replace(/(https?:\/\/(?:enterprise|advisor)\.colaberry\.ai\/[^\s"<>]*?)[.,;:!?)]+(?=[\s<"']|$)/gi, '$1');
   let campaignType = '';
 
   if (action.campaign_id) {
