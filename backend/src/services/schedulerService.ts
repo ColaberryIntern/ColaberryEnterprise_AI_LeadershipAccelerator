@@ -1728,6 +1728,17 @@ export function startScheduler(): void {
         for (const msg of r.data) {
           const lead = await Lead.findOne({ where: { email: msg.email.toLowerCase() } });
           if (!lead) continue;
+
+          // Look up the most recent sent email to this lead for campaign attribution
+          const sentEmail = await ScheduledEmail.findOne({
+            where: { lead_id: lead.id, status: 'sent' },
+            order: [['sent_at', 'DESC']],
+            attributes: ['id', 'campaign_id', 'step_index'],
+          });
+          const campaignId = sentEmail?.campaign_id || null;
+          const scheduledEmailId = sentEmail?.id || null;
+          const stepIndex = sentEmail?.step_index ?? null;
+
           if (msg.opens > 0) {
             const exists = await InteractionOutcome.findOne({
               where: { lead_id: lead.id, outcome: 'opened', created_at: { [Op.gte]: new Date(today) } },
@@ -1735,6 +1746,7 @@ export function startScheduler(): void {
             if (!exists) {
               await InteractionOutcome.create({
                 lead_id: lead.id, outcome: 'opened', channel: 'email',
+                campaign_id: campaignId, scheduled_email_id: scheduledEmailId, step_index: stepIndex,
                 metadata: { subject: msg.subject, backfilled: true, source: 'mandrill_poll' },
               } as any);
               opens++;
@@ -1747,6 +1759,7 @@ export function startScheduler(): void {
             if (!exists) {
               await InteractionOutcome.create({
                 lead_id: lead.id, outcome: 'clicked', channel: 'email',
+                campaign_id: campaignId, scheduled_email_id: scheduledEmailId, step_index: stepIndex,
                 metadata: { subject: msg.subject, backfilled: true, source: 'mandrill_poll' },
               } as any);
               clicks++;
