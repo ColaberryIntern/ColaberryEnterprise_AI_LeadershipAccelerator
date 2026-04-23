@@ -156,11 +156,9 @@ export function groupComponents(components: SystemComponent[]): ComponentGroup[]
   const discovered: SystemComponent[] = [];
 
   for (const c of components) {
-    // Discovered/unmapped go to their own group first
+    // Discovered/unmapped go to their own group (unless promoted)
     if (c.isDiscovered) { discovered.push(c); continue; }
     const name = c.name.toLowerCase();
-    // All auto-discovered page BPs go to discovered regardless of completion
-    if (c.isPageBP) { discovered.push(c); continue; }
     // Keyword matching with priority
     if (INTELLIGENCE_KEYWORDS.test(name)) { intelligence.push(c); continue; }
     if (FOUNDATION_KEYWORDS.test(name)) { foundation.push(c); continue; }
@@ -200,7 +198,7 @@ export function groupByBusinessDomain(components: SystemComponent[]): ComponentG
   const discovered: SystemComponent[] = [];
 
   for (const c of components) {
-    if (c.isDiscovered || (c.isPageBP && c.source === 'frontend_page')) { discovered.push(c); continue; }
+    if (c.isDiscovered) { discovered.push(c); continue; }
     const name = c.name.toLowerCase();
     if (BIZ_REVENUE.test(name)) { revenue.push(c); continue; }
     if (BIZ_INTELLIGENCE.test(name)) { intelligence.push(c); continue; }
@@ -995,7 +993,7 @@ function SystemViewV2Inner() {
                   const nameWords = selectedComponent.name.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
                   let bestMatch: { name: string; confidence: number } | null = null;
                   for (const c of visibleComponents) {
-                    if (c.isDiscovered || c.isPageBP) continue;
+                    if (c.isDiscovered) continue;
                     const cWords = c.name.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
                     const overlap = nameWords.filter((w: string) => cWords.some((cw: string) => cw.includes(w) || w.includes(cw)));
                     const conf = cWords.length > 0 ? Math.round((overlap.length / Math.max(nameWords.length, cWords.length)) * 100) : 0;
