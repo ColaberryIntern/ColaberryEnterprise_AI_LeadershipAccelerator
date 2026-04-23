@@ -2212,6 +2212,55 @@ router.post('/api/portal/project/business-processes/:id/validation-report', requ
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Execution Ticket Bridge: create/update tickets for build execution ────────
+router.post('/api/portal/project/execution-ticket', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { action, componentId, componentName, stepLabel, promptTarget, ticketId, result } = req.body;
+
+    if (action === 'create') {
+      // Create execution ticket
+      const { createBPOSTicket } = await import('../services/company/ticketOrchestrator');
+      const { getActiveCompany } = await import('../services/company/companyService');
+      const company = await getActiveCompany();
+      const companyId = company ? (company as any).id : null;
+      const ticket = await createBPOSTicket(companyId || 'default', componentName || 'Unknown', stepLabel || 'Build step', componentId || '');
+      // Move to in_progress
+      const { updateTicketStatus } = await import('../services/company/ticketOrchestrator');
+      await updateTicketStatus((ticket as any).id, 'in_progress', 'cory', 'bpos_orchestrator', `Prompt target: ${promptTarget || 'unknown'}`);
+      res.json({ ticket_id: (ticket as any).id, ticket_number: (ticket as any).ticket_number });
+    } else if (action === 'complete' && ticketId) {
+      const { updateTicketStatus, addTicketOutput } = await import('../services/company/ticketOrchestrator');
+      await addTicketOutput(ticketId, 'bpos_orchestrator', result || {});
+      await updateTicketStatus(ticketId, 'done', 'cory', 'bpos_orchestrator', 'Build validated successfully');
+      res.json({ status: 'done' });
+    } else if (action === 'fail' && ticketId) {
+      const { updateTicketStatus } = await import('../services/company/ticketOrchestrator');
+      await updateTicketStatus(ticketId, 'cancelled', 'cory', 'bpos_orchestrator', result?.error || 'Validation failed');
+      res.json({ status: 'cancelled' });
+    } else {
+      res.status(400).json({ error: 'Invalid action. Use create, complete, or fail.' });
+    }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Execution Activity Feed (portal-accessible) ────────
+router.get('/api/portal/project/execution-activity', requireParticipant, async (_req: Request, res: Response) => {
+  try {
+    const { sequelize: seq } = await import('../config/database');
+    const [activities] = await seq.query(`
+      SELECT ta.id, ta.ticket_id, ta.actor_type, ta.actor_id, ta.action,
+             ta.from_value, ta.to_value, ta.metadata, ta.created_at,
+             t.title as ticket_title, t.type as ticket_type, t.status as ticket_status
+      FROM ticket_activities ta
+      JOIN tickets t ON t.id = ta.ticket_id
+      WHERE t.type IN ('bpos_execution', 'company_directive', 'workforce_decision')
+      ORDER BY ta.created_at DESC
+      LIMIT 20
+    `);
+    res.json({ activities });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Accept autonomous suggestion: create requirements from a detected gap ────────
 router.post('/api/portal/project/business-processes/:id/accept-suggestion', requireParticipant, async (req: Request, res: Response) => {
   try {

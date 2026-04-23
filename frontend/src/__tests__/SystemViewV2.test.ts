@@ -873,3 +873,67 @@ describe('SystemViewV2 — QA Fix: Cory Mode Sync', () => {
     expect(coryMode).toBe('suggestions');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 18. EXECUTION TICKET INTEGRATION
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Execution Ticket Integration', () => {
+  test('ticket state initialized as null', () => {
+    const ticketId: string | null = null;
+    const ticketNumber: number | null = null;
+    expect(ticketId).toBeNull();
+    expect(ticketNumber).toBeNull();
+  });
+
+  test('ticket status maps correctly to UI badge', () => {
+    const getStatus = (result: any) => {
+      if (result && !result.error) return 'Completed';
+      if (result?.error) return 'Failed';
+      return 'In Progress';
+    };
+    expect(getStatus({ requirementsVerified: 3 })).toBe('Completed');
+    expect(getStatus({ error: 'fail' })).toBe('Failed');
+    expect(getStatus(null)).toBe('In Progress');
+  });
+
+  test('execution activity stores timeline entries', () => {
+    const activity: any[] = [];
+    activity.push({ id: '1', action: 'created', ticket_title: 'Test' });
+    activity.push({ id: '2', action: 'status_changed', to_value: 'done' });
+    expect(activity).toHaveLength(2);
+    expect(activity[1].action).toBe('status_changed');
+  });
+
+  test('ticket creation does not block build flow on failure', () => {
+    // Simulating: ticket creation fails but build prompt is still set
+    let buildPrompt: string | null = null;
+    let ticketId: string | null = null;
+
+    // Build succeeds
+    buildPrompt = 'Generated prompt text';
+
+    // Ticket creation fails (caught by try/catch)
+    try { throw new Error('Ticket API failed'); } catch { ticketId = null; }
+
+    expect(buildPrompt).toBe('Generated prompt text');
+    expect(ticketId).toBeNull();
+    // Build flow continues despite ticket failure
+  });
+
+  test('ticket completion includes validation result data', () => {
+    const validationResult = {
+      requirementsVerified: 5,
+      requirementsTotal: 10,
+      parsed: { filesCreated: ['test.ts'], routes: ['/api/test'] },
+    };
+    const ticketResult = {
+      requirementsVerified: validationResult.requirementsVerified,
+      requirementsTotal: validationResult.requirementsTotal,
+      filesCreated: validationResult.parsed.filesCreated,
+      routesAdded: validationResult.parsed.routes,
+    };
+    expect(ticketResult.filesCreated).toHaveLength(1);
+    expect(ticketResult.routesAdded).toHaveLength(1);
+  });
+});

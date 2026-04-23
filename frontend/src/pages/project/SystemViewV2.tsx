@@ -450,6 +450,11 @@ function SystemViewV2Inner() {
   const [execIndex, setExecIndex] = useState(0);
   const [execPaused, setExecPaused] = useState(false);
 
+  // Execution ticket tracking
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
+  const [activeTicketNumber, setActiveTicketNumber] = useState<number | null>(null);
+  const [executionActivity, setExecutionActivity] = useState<any[]>([]);
+
   // Sync URL param → state
   useEffect(() => {
     if (urlComponentId) setSelectedId(urlComponentId);
@@ -564,6 +569,8 @@ function SystemViewV2Inner() {
     setBuildGenerating(true);
     setBuildPrompt(null);
     setBuildResult(null);
+    setActiveTicketId(null);
+    setActiveTicketNumber(null);
     try {
       let target = comp.promptTarget;
       if (!target && compDetail) {
@@ -574,6 +581,19 @@ function SystemViewV2Inner() {
       const text = res.data?.prompt_text || '';
       setBuildPrompt(text);
       try { await navigator.clipboard.writeText(text); } catch {}
+
+      // Create execution ticket (best-effort, non-blocking)
+      try {
+        const ticketRes = await portalApi.post('/api/portal/project/execution-ticket', {
+          action: 'create',
+          componentId: comp.id,
+          componentName: comp.name,
+          stepLabel: comp.nextStep || `Build ${comp.name}`,
+          promptTarget: target || 'backend_improvement',
+        });
+        setActiveTicketId(ticketRes.data.ticket_id);
+        setActiveTicketNumber(ticketRes.data.ticket_number);
+      } catch {}
     } catch {} finally { setBuildGenerating(false); }
   };
 
@@ -583,14 +603,39 @@ function SystemViewV2Inner() {
     try {
       const res = await portalApi.post(`/api/portal/project/business-processes/${compId}/validation-report`, { reportText: buildReport.trim() });
       setBuildResult(res.data);
-      await loadData(); // refresh components list
-      // Refresh component detail to update gaps + metrics
+      await loadData();
       try {
         const detailRes = await portalApi.get(`/api/portal/project/business-processes/${compId}`);
         setCompDetail(detailRes.data);
       } catch {}
+
+      // Complete execution ticket (best-effort)
+      if (activeTicketId) {
+        try {
+          await portalApi.post('/api/portal/project/execution-ticket', {
+            action: 'complete',
+            ticketId: activeTicketId,
+            result: {
+              requirementsVerified: res.data.requirementsVerified || 0,
+              requirementsTotal: res.data.requirementsTotal || 0,
+              filesCreated: res.data.parsed?.filesCreated || [],
+              routesAdded: res.data.parsed?.routes || [],
+            },
+          });
+        } catch {}
+      }
     } catch (err: any) {
       setBuildResult({ error: err.response?.data?.error || 'Validation failed' });
+      // Fail execution ticket
+      if (activeTicketId) {
+        try {
+          await portalApi.post('/api/portal/project/execution-ticket', {
+            action: 'fail',
+            ticketId: activeTicketId,
+            result: { error: err.response?.data?.error || 'Validation failed' },
+          });
+        } catch {}
+      }
     } finally { setBuildValidating(false); }
   };
 
@@ -1024,6 +1069,17 @@ function SystemViewV2Inner() {
                         </div>
                       )}
                       {buildResult?.error && <div className="alert alert-danger py-2" style={{ fontSize: 11 }}>{buildResult.error}</div>}
+
+                      {/* Execution ticket indicator */}
+                      {activeTicketNumber && (
+                        <div className="mt-2 d-flex align-items-center gap-2" style={{ fontSize: 10, color: '#64748b' }}>
+                          <i className="bi bi-ticket-detailed"></i>
+                          <span>Ticket #{activeTicketNumber}</span>
+                          <span className="badge" style={{ background: buildResult && !buildResult.error ? '#10b98120' : buildResult?.error ? '#ef444420' : '#f59e0b20', color: buildResult && !buildResult.error ? '#059669' : buildResult?.error ? '#ef4444' : '#92400e', fontSize: 8 }}>
+                            {buildResult && !buildResult.error ? 'Completed' : buildResult?.error ? 'Failed' : 'In Progress'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1218,12 +1274,31 @@ function SystemViewV2Inner() {
                 </div>
               )}
 
-              {/* TAB: Trends */}
+              {/* TAB: Trends / Execution History */}
               {workTab === 'trends' && (
-                <div className="text-center py-4">
-                  <i className="bi bi-activity d-block mb-2" style={{ fontSize: 24, color: '#9ca3af' }}></i>
-                  <p className="fw-medium mb-1" style={{ fontSize: 12, color: 'var(--color-text)' }}>Trend data will appear as your system evolves</p>
-                  <p className="text-muted mb-0" style={{ fontSize: 10 }}>Build and validate components to start tracking coverage, readiness, and maturity over time.</p>
+                <div>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="fw-semibold small">Execution History</div>
+                    <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 9 }}
+                      onClick={() => portalApi.get('/api/portal/project/execution-activity').then((r: any) => setExecutionActivity(r.data.activities || [])).catch(() => {})}>
+                      <i className="bi bi-arrow-clockwise me-1"></i>Load
+                    </button>
+                  </div>
+                  {executionActivity.length > 0 ? executionActivity.map((a: any, i: number) => (
+                    <div key={a.id || i} className="d-flex gap-2 py-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: a.action === 'created' ? '#3b82f6' : a.action === 'status_changed' ? '#f59e0b' : '#10b981', marginTop: 4, flexShrink: 0 }}></div>
+                      <div>
+                        <span className="fw-medium">{a.ticket_title}</span>
+                        <span className="text-muted ms-1">({a.action}{a.to_value ? ` → ${a.to_value}` : ''})</span>
+                        <div className="text-muted" style={{ fontSize: 9 }}>{new Date(a.created_at).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="text-center py-3">
+                      <i className="bi bi-activity d-block mb-1" style={{ fontSize: 20, color: '#9ca3af' }}></i>
+                      <p className="text-muted mb-0" style={{ fontSize: 10 }}>Click "Load" to fetch execution history</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
