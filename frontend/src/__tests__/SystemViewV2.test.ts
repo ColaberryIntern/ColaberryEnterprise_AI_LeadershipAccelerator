@@ -46,16 +46,15 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(foundation!.items).toHaveLength(2);
   });
 
-  test('all page BPs go to Discovered regardless of completion', () => {
+  test('discovered page BPs go to Discovered group', () => {
     const comps = [
-      makeBP({ id: '1', name: 'Dashboard Page', isPageBP: true, completion: 40 }),
-      makeBP({ id: '2', name: 'Pricing Page', isPageBP: true, completion: 0 }),
+      makeBP({ id: '1', name: 'Dashboard Page', isPageBP: true, isDiscovered: true, completion: 40 }),
+      makeBP({ id: '2', name: 'Pricing Page', isPageBP: true, isDiscovered: true, completion: 0 }),
     ];
     const groups = groupComponents(comps);
     const discovered = groups.find(g => g.key === 'discovered');
     expect(discovered).toBeDefined();
     expect(discovered!.items).toHaveLength(2);
-    expect(groups.find(g => g.key === 'usability')).toBeUndefined();
   });
 
   test('groups agent/automation components into Intelligence', () => {
@@ -103,15 +102,15 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(usability).toBeDefined();
   });
 
-  test('page BPs with progress still go to Discovered, not Usability', () => {
+  test('promoted page BPs go to their matching group, not Discovered', () => {
     const comps = [
       makeBP({ id: '1', name: 'API Backend' }),
-      makeBP({ id: '2', name: 'Landing Page', isPageBP: true, completion: 30 }),
+      makeBP({ id: '2', name: 'Landing Page', isPageBP: true, isDiscovered: false, completion: 30 }),
       makeBP({ id: '3', name: 'AI Agent Automation' }),
     ];
     const groups = groupComponents(comps);
-    expect(groups).toHaveLength(3);
-    expect(groups.map(g => g.key).sort()).toEqual(['discovered', 'foundation', 'intelligence']);
+    // Landing Page is NOT discovered (promoted), so it goes to usability/fallback
+    expect(groups.find(g => g.key === 'discovered')).toBeUndefined();
   });
 
   test('discovered components go to Discovered group', () => {
@@ -140,17 +139,16 @@ describe('SystemViewV2 — Component Grouping', () => {
     expect(foundation!.items.some(c => c.isDiscovered)).toBe(false);
   });
 
-  test('page BPs and discovered components merge into single Discovered group', () => {
+  test('only isDiscovered components go to Discovered group', () => {
     const comps = [
       makeBP({ id: '1', name: 'API Backend' }),
-      makeBP({ id: '2', name: 'Landing Page', isPageBP: true, completion: 50 }),
+      makeBP({ id: '2', name: 'Landing Page', isPageBP: true, isDiscovered: false, completion: 50 }),
       makeBP({ id: '3', name: 'AI Agent Automation' }),
       makeBP({ id: '4', name: 'Repo Discovery', isDiscovered: true }),
     ];
     const groups = groupComponents(comps);
-    expect(groups).toHaveLength(3);
     const discovered = groups.find(g => g.key === 'discovered');
-    expect(discovered!.items).toHaveLength(2); // page BP + explicitly discovered
+    expect(discovered!.items).toHaveLength(1); // only explicitly discovered
   });
 
   test('discovered group appears last', () => {
@@ -703,8 +701,8 @@ describe('SystemViewV2 — Business Domain Grouping', () => {
     expect(groups.find(g => g.key === 'intelligence')).toBeDefined();
   });
 
-  test('page BPs go to Discovered', () => {
-    const comps = [makeBP({ id: '1', name: 'Landing Page', isPageBP: true, source: 'frontend_page' })];
+  test('discovered page BPs go to Discovered', () => {
+    const comps = [makeBP({ id: '1', name: 'Landing Page', isPageBP: true, isDiscovered: true, source: 'frontend_page' })];
     const groups = groupByBusinessDomain(comps);
     expect(groups.find(g => g.key === 'discovered')).toBeDefined();
   });
