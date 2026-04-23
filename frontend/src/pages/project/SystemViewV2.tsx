@@ -521,36 +521,10 @@ function SystemViewV2Inner() {
       .finally(() => setLoading(false));
   }, [loadData]);
 
-  // Render guards
-  if (loading) {
-    return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
-        <p className="text-muted mt-2" style={{ fontSize: 13 }}>Loading System View V2...</p>
-      </div>
-    );
-  }
-
-  if (error === 'no-project') return <ProjectSetupWizard onActivated={() => window.location.reload()} />;
-  if (project?.setup_status && !project.setup_status.activated) {
-    return <ProjectSetupWizard initialStatus={project.setup_status} onActivated={() => window.location.reload()} />;
-  }
-  if (error || !project) {
-    return <div className="alert alert-danger">{error || 'Failed to load project'}</div>;
-  }
-
-  const completedCount = components.filter(c => c.status === 'complete').length;
-  const systemLayers = {
-    backend: components.some(c => c.layers.backend === 'ready' || c.layers.backend === 'partial'),
-    frontend: components.some(c => c.layers.frontend === 'ready' || c.layers.frontend === 'partial'),
-    agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
-  };
-
-  // Merge page attachments + auto-detect page matches into components (memoized)
+  // Derived data (hooks MUST be before conditional returns)
   const enrichedComponents = useMemo(() => components.map(c => {
     const attached = pageAttachments[c.id] || [];
     const autoPages: UIPage[] = [];
-    // Auto-detect: match discovered page BPs to code BPs by name similarity with confidence
     if (!c.isPageBP && !c.isDiscovered) {
       const nameWords = c.name.toLowerCase().split(/\s+/).filter(w => w.length > 3);
       for (const d of components) {
@@ -571,10 +545,16 @@ function SystemViewV2Inner() {
   }), [components, pageAttachments, detachedPages, verifiedPages]);
   const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
   const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
+  const completedCount = components.filter(c => c.status === 'complete').length;
+  const systemLayers = {
+    backend: components.some(c => c.layers.backend === 'ready' || c.layers.backend === 'partial'),
+    frontend: components.some(c => c.layers.frontend === 'ready' || c.layers.frontend === 'partial'),
+    agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
+  };
   const groups = groupMode === 'business' ? groupByBusinessDomain(visibleComponents) : groupComponents(visibleComponents);
   const nextIds = getNextComponents(visibleComponents);
 
-  // Onboarding effects (must be after visibleComponents declaration)
+  // Onboarding effects
   useEffect(() => {
     if (onboardingStep === 1 && visibleComponents.length > 0) {
       const first = visibleComponents.find(c => c.status !== 'complete' && !c.isDiscovered);
@@ -584,6 +564,24 @@ function SystemViewV2Inner() {
   useEffect(() => {
     if (onboardingStep === 2 && hasCompletedFirstBuild) setOnboardingStep(3);
   }, [hasCompletedFirstBuild, onboardingStep]);
+
+  // Render guards
+  if (loading) {
+    return (
+      <div className="text-center py-5">
+        <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
+        <p className="text-muted mt-2" style={{ fontSize: 13 }}>Loading System View V2...</p>
+      </div>
+    );
+  }
+
+  if (error === 'no-project') return <ProjectSetupWizard onActivated={() => window.location.reload()} />;
+  if (project?.setup_status && !project.setup_status.activated) {
+    return <ProjectSetupWizard initialStatus={project.setup_status} onActivated={() => window.location.reload()} />;
+  }
+  if (error || !project) {
+    return <div className="alert alert-danger">{error || 'Failed to load project'}</div>;
+  }
 
   // Intelligence helper
   const getWhyMatters = (c: SystemComponent): string => {
