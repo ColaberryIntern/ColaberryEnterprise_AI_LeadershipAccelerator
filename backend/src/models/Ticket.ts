@@ -4,7 +4,8 @@ import { sequelize } from '../config/database';
 export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
 export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_action' | 'strategic'
-  | 'strategic_initiative' | 'ai_optimization' | 'agent_restructure' | 'agent_creation' | 'workflow_redesign' | 'system_automation';
+  | 'strategic_initiative' | 'ai_optimization' | 'agent_restructure' | 'agent_creation' | 'workflow_redesign' | 'system_automation'
+  | 'company_directive' | 'workforce_decision' | 'bpos_execution';
 export type TicketActorType = 'human' | 'cory' | 'agent';
 
 interface TicketAttributes {
@@ -23,6 +24,9 @@ interface TicketAttributes {
   parent_ticket_id?: string | null;
   entity_type?: string | null;
   entity_id?: string | null;
+  company_id?: string | null;
+  goal_id?: string | null;
+  directive_id?: string | null;
   metadata?: Record<string, any>;
   confidence?: number | null;
   estimated_effort?: string | null;
@@ -48,6 +52,9 @@ class Ticket extends Model<TicketAttributes> implements TicketAttributes {
   declare parent_ticket_id: string | null;
   declare entity_type: string | null;
   declare entity_id: string | null;
+  declare company_id: string | null;
+  declare goal_id: string | null;
+  declare directive_id: string | null;
   declare metadata: Record<string, any>;
   declare confidence: number | null;
   declare estimated_effort: string | null;
@@ -123,6 +130,18 @@ Ticket.init(
     },
     entity_id: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    company_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    goal_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    directive_id: {
+      type: DataTypes.UUID,
       allowNull: true,
     },
     metadata: {

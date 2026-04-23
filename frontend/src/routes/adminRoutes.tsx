@@ -38,6 +38,7 @@ import AdminGeneratorPage from '../pages/admin/AdminGeneratorPage';
 import AdminIngestLogsPage from '../pages/admin/AdminIngestLogsPage';
 import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
 import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
+import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
 const adminRoutes = (
   <>
     <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -79,6 +80,7 @@ const adminRoutes = (
         <Route path="/admin/ingest-logs" element={<AdminIngestLogsPage />} />
         <Route path="/admin/routing-rules" element={<AdminRoutingRulesPage />} />
         <Route path="/admin/autonomous" element={<AdminAutonomousPage />} />
+        <Route path="/admin/automation" element={<AdminAutomationPage />} />
       </Route>
     </Route>
   </>
