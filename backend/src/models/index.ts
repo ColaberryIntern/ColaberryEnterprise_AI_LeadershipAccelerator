@@ -48,6 +48,12 @@ import VariableDefinition from './VariableDefinition';
 import SessionChecklist from './SessionChecklist';
 import AuditLog from './AuditLog';
 import Department from './Department';
+import AiCompany from './AiCompany';
+import CompanyGoal from './CompanyGoal';
+import DepartmentKpi from './DepartmentKpi';
+import CompanyBudget from './CompanyBudget';
+import CompanyDirective from './CompanyDirective';
+import CompanyAuditLog from './CompanyAuditLog';
 import Initiative from './Initiative';
 import DepartmentEvent from './DepartmentEvent';
 import BlueprintSnapshot from './BlueprintSnapshot';
@@ -945,4 +951,22 @@ export {
   FormDefinition,
   RoutingRule,
   RawLeadPayload,
+  AiCompany,
+  CompanyGoal,
+  DepartmentKpi,
+  CompanyBudget,
+  CompanyDirective,
+  CompanyAuditLog,
 };
+
+// --- AI Company Layer associations ---
+AiCompany.hasMany(CompanyGoal, { foreignKey: 'company_id', as: 'goals' });
+CompanyGoal.belongsTo(AiCompany, { foreignKey: 'company_id', as: 'company' });
+AiCompany.hasMany(DepartmentKpi, { foreignKey: 'company_id', as: 'kpis' });
+DepartmentKpi.belongsTo(AiCompany, { foreignKey: 'company_id', as: 'company' });
+AiCompany.hasMany(CompanyBudget, { foreignKey: 'company_id', as: 'budgets' });
+CompanyBudget.belongsTo(AiCompany, { foreignKey: 'company_id', as: 'company' });
+AiCompany.hasMany(CompanyDirective, { foreignKey: 'company_id', as: 'directives' });
+CompanyDirective.belongsTo(AiCompany, { foreignKey: 'company_id', as: 'company' });
+AiCompany.hasMany(CompanyAuditLog, { foreignKey: 'company_id', as: 'auditLogs' });
+CompanyAuditLog.belongsTo(AiCompany, { foreignKey: 'company_id', as: 'company' });

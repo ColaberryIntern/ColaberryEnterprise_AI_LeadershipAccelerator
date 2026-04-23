@@ -112,6 +112,15 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'AutonomousRequirementExpansion', hardcodedSchedule: '3,18,33,48 * * * *', runner: async () => { const { runExpansionCycle } = await import('./autonomousRequirementExpansionService'); return runExpansionCycle(); }, label: 'Autonomous requirement expansion' },
   { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAutonomousCycle, label: 'Autonomous engine' },
   { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runCoryStrategicCycle, label: 'Cory Brain strategic cycle' },
+  { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '15,45 * * * *', runner: async () => {
+    const { isCompanyLayerEnabled } = await import('./company/companyToCoryAdapter');
+    if (!(await isCompanyLayerEnabled())) return;
+    const { getActiveCompany } = await import('./company/companyService');
+    const company = await getActiveCompany();
+    if (!company) return;
+    const { runCompanyStrategicCycle } = await import('./company/companyStrategyAgent');
+    return runCompanyStrategicCycle((company as any).id);
+  }, label: 'Company CEO strategic cycle' },
   { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
   { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1-5', runner: runWeeklyLeadEnrollment, label: 'Daily cold lead enrollment (Mon-Fri 9 AM CT, 20/day)' },
@@ -349,6 +358,13 @@ export async function startAIOpsScheduler(): Promise<void> {
   seedAdmissionsKnowledge().catch((err) => {
     console.error('[AI Ops] Failed to seed admissions knowledge:', err.message);
   });
+
+  // Seed AI Company layer (idempotent, behind feature flag)
+  import('./company/companySeedService').then(({ seedDefaultCompany }) => {
+    seedDefaultCompany().catch((err) => {
+      console.error('[AI Ops] Failed to seed company layer:', err.message);
+    });
+  }).catch(() => {});
 
   // Seed executive notification policy on startup (idempotent)
   import('./executiveAwarenessSeed').then(({ seedExecutiveNotificationPolicy }) => {
