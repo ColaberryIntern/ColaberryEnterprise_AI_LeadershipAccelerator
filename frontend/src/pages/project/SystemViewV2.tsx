@@ -290,15 +290,16 @@ const LAYER_COLORS: Record<string, string> = { ready: '#10b981', partial: '#f59e
 // Cory Panel — contextual AI assistant embedded in Work Area tabs
 // ---------------------------------------------------------------------------
 
-function CoryInlinePanel({ suggestions, coryInput, setCoryInput, coryResponse, coryAsking, onAsk, onApply, tabContext }: {
+function CoryInlinePanel({ suggestions, coryInput, setCoryInput, coryMessages, coryAsking, onAsk, onApply, tabContext, chatEndRef }: {
   suggestions: Array<{ title: string; explanation: string; action?: string }>;
   coryInput: string;
   setCoryInput: (v: string) => void;
-  coryResponse: string | null;
+  coryMessages: Array<{ role: 'user' | 'cory'; text: string }>;
   coryAsking: boolean;
   onAsk: () => void;
   onApply?: (action: string) => void;
   tabContext: string;
+  chatEndRef?: React.RefObject<HTMLDivElement>;
 }) {
   return (
     <div className="mt-3 p-3" style={{ background: '#f0f4ff', borderRadius: 8, borderLeft: '3px solid #3b82f6' }}>
@@ -308,7 +309,7 @@ function CoryInlinePanel({ suggestions, coryInput, setCoryInput, coryResponse, c
       </div>
 
       {/* Contextual suggestions */}
-      {suggestions.length > 0 && (
+      {suggestions.length > 0 && coryMessages.length === 0 && (
         <div className="mb-2">
           {suggestions.map((s, i) => (
             <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: '#fff', borderRadius: 6, fontSize: 10 }}>
@@ -325,19 +326,44 @@ function CoryInlinePanel({ suggestions, coryInput, setCoryInput, coryResponse, c
         </div>
       )}
 
-      {/* Cory response */}
-      {coryResponse && (
-        <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 6, fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-line' }}>
-          {coryResponse}
+      {/* Chat history */}
+      {coryMessages.length > 0 && (
+        <div className="mb-2" style={{ maxHeight: 250, overflowY: 'auto' }}>
+          {coryMessages.map((msg, i) => (
+            <div key={i} className={`d-flex ${msg.role === 'user' ? 'justify-content-end' : 'justify-content-start'} mb-2`}>
+              <div style={{
+                maxWidth: '85%',
+                padding: '8px 12px',
+                borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                background: msg.role === 'user' ? 'var(--color-primary)' : '#fff',
+                color: msg.role === 'user' ? '#fff' : 'var(--color-text)',
+                fontSize: 11,
+                lineHeight: 1.5,
+                whiteSpace: 'pre-line',
+              }}>
+                {msg.role === 'cory' && <div className="d-flex align-items-center gap-1 mb-1"><i className="bi bi-robot" style={{ fontSize: 9, color: '#3b82f6' }}></i><span style={{ fontSize: 9, color: '#3b82f6', fontWeight: 600 }}>Cory</span></div>}
+                {msg.text}
+              </div>
+            </div>
+          ))}
+          {coryAsking && (
+            <div className="d-flex justify-content-start mb-2">
+              <div style={{ padding: '8px 12px', borderRadius: '12px 12px 12px 2px', background: '#fff', fontSize: 11 }}>
+                <span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>
+                <span className="text-muted">Thinking...</span>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef as any}></div>
         </div>
       )}
 
-      {/* Ask Cory input */}
+      {/* Chat input */}
       <div className="d-flex gap-2">
         <input
           type="text"
           className="form-control form-control-sm"
-          placeholder="Ask Cory about this component..."
+          placeholder="Ask Cory anything about this component..."
           value={coryInput}
           onChange={e => setCoryInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && onAsk()}
@@ -345,7 +371,7 @@ function CoryInlinePanel({ suggestions, coryInput, setCoryInput, coryResponse, c
           style={{ fontSize: 10, borderColor: '#bfdbfe' }}
         />
         <button className="btn btn-sm btn-primary" style={{ fontSize: 10, whiteSpace: 'nowrap' }} disabled={!coryInput.trim() || coryAsking} onClick={onAsk}>
-          {coryAsking ? <span className="spinner-border spinner-border-sm"></span> : <><i className="bi bi-send me-1"></i>Ask</>}
+          {coryAsking ? <span className="spinner-border spinner-border-sm" style={{ width: 12, height: 12 }}></span> : <i className="bi bi-send"></i>}
         </button>
       </div>
     </div>
@@ -635,9 +661,11 @@ function SystemViewV2Inner() {
 
   // Ask Cory state (must be before render guards)
   const [coryInput, setCoryInput] = useState('');
-  const [coryResponse, setCoryResponse] = useState<string | null>(null);
+  const [coryMessages, setCoryMessages] = useState<Array<{ role: 'user' | 'cory'; text: string }>>([]);
   const [coryAsking, setCoryAsking] = useState(false);
   const [corySessionId, setCorySessionId] = useState<string | null>(null);
+  const coryResponse = coryMessages.length > 0 ? coryMessages[coryMessages.length - 1].text : null;
+  const coryEndRef = useRef<HTMLDivElement>(null);
 
   // Render guards
   if (loading) {
@@ -674,24 +702,27 @@ function SystemViewV2Inner() {
   };
 
   const handleAskCory = async () => {
-    if (!coryInput.trim() || !selectedComponent) return;
+    if (!coryInput.trim()) return;
+    const userMsg = coryInput.trim();
+    setCoryMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setCoryInput('');
     setCoryAsking(true);
-    setCoryResponse(null);
     try {
-      // Start session if needed
       let sid = corySessionId;
       if (!sid) {
         const startRes = await portalApi.post('/api/portal/project/architect/start');
         sid = startRes.data.session_id;
         setCorySessionId(sid);
       }
-      // Send message with component context
-      const context = `[Context: Component "${selectedComponent.name}" — ${selectedComponent.maturity}, ${selectedComponent.completion}% complete, Backend: ${selectedComponent.layers.backend}, Frontend: ${selectedComponent.layers.frontend}, Agents: ${selectedComponent.layers.agent}]\n\n${coryInput}`;
+      const context = selectedComponent
+        ? `[Context: Component "${selectedComponent.name}" — ${selectedComponent.maturity}, ${selectedComponent.completion}% complete, Backend: ${selectedComponent.layers.backend}, Frontend: ${selectedComponent.layers.frontend}, Agents: ${selectedComponent.layers.agent}]\n\n${userMsg}`
+        : userMsg;
       const res = await portalApi.post('/api/portal/project/architect/turn', { session_id: sid, input: context });
-      setCoryResponse(res.data.message || res.data.response || 'No response');
+      const reply = res.data.message || res.data.response || 'No response';
+      setCoryMessages(prev => [...prev, { role: 'cory', text: reply }]);
     } catch {
-      setCoryResponse('Unable to reach Cory right now. Try again.');
-    } finally { setCoryAsking(false); setCoryInput(''); }
+      setCoryMessages(prev => [...prev, { role: 'cory', text: 'Unable to reach Cory right now. Try again.' }]);
+    } finally { setCoryAsking(false); setTimeout(() => coryEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100); }
   };
 
   // Intelligence helper
@@ -1285,7 +1316,7 @@ function SystemViewV2Inner() {
                   <CoryInlinePanel
                     suggestions={getComponentSuggestions(selectedComponent, compDetail)}
                     coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryResponse={coryResponse} coryAsking={coryAsking}
+                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
                     onAsk={handleAskCory}
                     onApply={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}
                     tabContext="What I recommend"
@@ -1382,13 +1413,19 @@ function SystemViewV2Inner() {
                       )}
                     </div>
                   )}
-                  {/* Ask Cory in Build tab */}
+                  {/* Cory in Build tab — explains what to build */}
                   <CoryInlinePanel
-                    suggestions={[]}
+                    suggestions={(() => {
+                      const bs: Array<{ title: string; explanation: string }> = [];
+                      if (selectedComponent.nextStep) bs.push({ title: selectedComponent.nextStep, explanation: getWhyMatters(selectedComponent) });
+                      if (selectedComponent.coverageRaw < 50) bs.push({ title: `${100 - selectedComponent.coverageRaw}% of requirements still unmatched`, explanation: 'Building this step will match more requirements and increase coverage.' });
+                      if (selectedComponent.layers.backend === 'missing') bs.push({ title: 'Backend layer needed first', explanation: 'This component has no backend services. The build prompt will create them.' });
+                      return bs.slice(0, 2);
+                    })()}
                     coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryResponse={coryResponse} coryAsking={coryAsking}
+                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
                     onAsk={handleAskCory}
-                    tabContext="Build assistant"
+                    tabContext="What to build next"
                   />
                 </div>
               )}
@@ -1484,7 +1521,7 @@ function SystemViewV2Inner() {
                       return hs.slice(0, 2);
                     })()}
                     coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryResponse={coryResponse} coryAsking={coryAsking}
+                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
                     onAsk={handleAskCory}
                     tabContext="Health advisor"
                   />
