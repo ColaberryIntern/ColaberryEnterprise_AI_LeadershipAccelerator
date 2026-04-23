@@ -410,7 +410,7 @@ function SystemViewV2Inner() {
   const workAreaRef = useRef<HTMLDivElement>(null);
 
   // Work Area state
-  type WorkTab = 'overview' | 'build' | 'improve' | 'ui' | 'insights' | 'gaps' | 'trends';
+  type WorkTab = 'overview' | 'build' | 'improve' | 'health' | 'ui' | 'insights' | 'gaps' | 'trends';
   const [workTab, setWorkTab] = useState<WorkTab>('overview');
   const [compDetail, setCompDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -1044,7 +1044,7 @@ function SystemViewV2Inner() {
               <nav className="nav nav-tabs mb-3" style={{ fontSize: 12 }}>
                 {(isReporting
                   ? [{ key: 'overview' as WorkTab, icon: 'bi-eye', label: 'Overview' }, { key: 'insights' as WorkTab, icon: 'bi-graph-up', label: 'Insights' }, { key: 'gaps' as WorkTab, icon: 'bi-exclamation-triangle', label: 'Gaps' }, { key: 'trends' as WorkTab, icon: 'bi-activity', label: 'Trends' }]
-                  : [{ key: 'overview' as WorkTab, icon: 'bi-eye', label: 'Overview' }, { key: 'build' as WorkTab, icon: 'bi-hammer', label: 'Build' }, { key: 'improve' as WorkTab, icon: 'bi-graph-up-arrow', label: 'Improve' }]
+                  : [{ key: 'overview' as WorkTab, icon: 'bi-eye', label: 'Overview' }, { key: 'build' as WorkTab, icon: 'bi-hammer', label: 'Build' }, { key: 'health' as WorkTab, icon: 'bi-heart-pulse', label: 'Health' }, { key: 'improve' as WorkTab, icon: 'bi-graph-up-arrow', label: 'Improve' }]
                 ).map(t => (
                   <button key={t.key} className={`nav-link py-1 px-3 ${workTab === t.key ? 'active' : ''}`} style={{ fontSize: 11 }} onClick={() => setWorkTab(t.key)}>
                     <i className={`bi ${t.icon} me-1`}></i>{t.label}
@@ -1117,6 +1117,63 @@ function SystemViewV2Inner() {
                       <button className="btn btn-link btn-sm p-0 ms-2" style={{ fontSize: 10 }} onClick={() => setWorkTab('ui')}>Find Matching Page</button>
                     </div>
                   ) : null}
+
+                  {/* System Intelligence Summary */}
+                  {compDetail && (
+                    <div className="mt-3">
+                      <div className="fw-semibold small mb-2"><i className="bi bi-cpu me-1" style={{ color: 'var(--color-primary)' }}></i>System Intelligence</div>
+                      <div className="row g-2 mb-2">
+                        {[
+                          { label: 'Files', value: [...(compDetail.implementation_links?.backend || []), ...(compDetail.implementation_links?.frontend || []), ...(compDetail.implementation_links?.agents || [])].length },
+                          { label: 'Requirements', value: `${compDetail.metrics?.requirements_coverage || 0}%` },
+                          { label: 'Quality', value: `${compDetail.quality?.qualityTotal || compDetail.metrics?.quality_score || 0}%` },
+                          { label: 'Maturity', value: compDetail.maturity?.label || selectedComponent.maturity },
+                        ].map(k => (
+                          <div key={k.label} className="col-3">
+                            <div className="text-center p-1" style={{ background: 'var(--color-bg-alt)', borderRadius: 4 }}>
+                              <div className="fw-bold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>{k.value}</div>
+                              <div className="text-muted" style={{ fontSize: 8 }}>{k.label}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Architecture layers */}
+                      <div className="d-flex gap-1" style={{ fontSize: 9 }}>
+                        {[
+                          { label: 'Backend', count: (compDetail.implementation_links?.backend || []).length },
+                          { label: 'Frontend', count: (compDetail.implementation_links?.frontend || []).length },
+                          { label: 'Agents', count: (compDetail.implementation_links?.agents || []).length },
+                          { label: 'Models', count: (compDetail.implementation_links?.models || []).length },
+                        ].map(l => (
+                          <span key={l.label} className="badge" style={{ background: l.count > 0 ? '#10b98120' : '#e2e8f020', color: l.count > 0 ? '#059669' : '#9ca3af', fontSize: 8 }}>
+                            {l.label}: {l.count}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Execution History (last 5) */}
+                  {compDetail?.last_execution?.step && (
+                    <div className="mt-3">
+                      <div className="fw-semibold small mb-2"><i className="bi bi-clock-history me-1" style={{ color: '#f59e0b' }}></i>Last Execution</div>
+                      <div className="p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 10 }}>
+                        <div className="fw-medium">{compDetail.last_execution.step}</div>
+                        <div className="d-flex gap-2 text-muted" style={{ fontSize: 9 }}>
+                          <span>Target: {compDetail.last_execution.target || 'unknown'}</span>
+                          <span>Status: {compDetail.last_execution.status || 'unknown'}</span>
+                          {compDetail.last_execution.promised_at && <span>{new Date(compDetail.last_execution.promised_at).toLocaleDateString()}</span>}
+                        </div>
+                        {compDetail.last_execution.completed_steps?.length > 0 && (
+                          <div className="mt-1 d-flex flex-wrap gap-1">
+                            {compDetail.last_execution.completed_steps.map((s: string) => (
+                              <span key={s} className="badge" style={{ background: '#10b98120', color: '#059669', fontSize: 7 }}>{s.replace(/_/g, ' ')}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1125,7 +1182,17 @@ function SystemViewV2Inner() {
                 <div>
                   {!buildPrompt && !buildGenerating && (
                     <div>
-                      <p className="text-muted mb-3" style={{ fontSize: 11 }}>Generate a build prompt for this component. The prompt will be tailored to your codebase and copied to clipboard.</p>
+                      {/* What will be built */}
+                      {selectedComponent.nextStep && (
+                        <div className="p-3 mb-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+                            <i className="bi bi-arrow-right-circle me-1"></i>What will be built
+                          </div>
+                          <div style={{ fontSize: 11 }}>{selectedComponent.nextStep}</div>
+                          <div className="text-muted mt-1" style={{ fontSize: 10 }}>{getComponentPurpose(selectedComponent.name)}</div>
+                        </div>
+                      )}
+                      <p className="text-muted mb-3" style={{ fontSize: 11 }}>Generate a prompt tailored to your codebase and copied to clipboard.</p>
                       <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt(selectedComponent)}>
                         <i className="bi bi-terminal me-1"></i>Generate Build Prompt
                       </button>
@@ -1196,6 +1263,88 @@ function SystemViewV2Inner() {
                             </div>
                           )}
                         </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB: Health (gaps, quality, maturity) ── */}
+              {workTab === 'health' && (
+                <div>
+                  {/* Quality Dimensions */}
+                  {compDetail?.quality && (
+                    <div className="mb-3">
+                      <div className="fw-semibold small mb-2"><i className="bi bi-star me-1" style={{ color: '#f59e0b' }}></i>Quality Dimensions</div>
+                      <div className="row g-2">
+                        {[
+                          { label: 'Determinism', value: compDetail.quality.determinism || 0, max: 10, desc: 'Code-based logic vs LLM' },
+                          { label: 'Reliability', value: compDetail.quality.reliability || 0, max: 10, desc: 'Error handling + data persistence' },
+                          { label: 'UX Exposure', value: compDetail.quality.ux_exposure || 0, max: 10, desc: 'User interface coverage' },
+                          { label: 'Automation', value: compDetail.quality.automation || 0, max: 10, desc: 'Agent-driven operations' },
+                          { label: 'Observability', value: compDetail.quality.observability || 0, max: 10, desc: 'Monitoring + logging' },
+                          { label: 'Prod Readiness', value: compDetail.quality.production_readiness || 0, max: 10, desc: 'All layers present' },
+                        ].map(q => (
+                          <div key={q.label} className="col-6">
+                            <div className="d-flex justify-content-between" style={{ fontSize: 10 }}>
+                              <span className="text-muted">{q.label}</span>
+                              <span className="fw-semibold">{q.value}/{q.max}</span>
+                            </div>
+                            <div className="progress mb-1" style={{ height: 4, borderRadius: 2 }}>
+                              <div className="progress-bar" style={{ width: `${(q.value / q.max) * 100}%`, background: q.value >= 7 ? '#10b981' : q.value >= 4 ? '#f59e0b' : '#ef4444', borderRadius: 2 }}></div>
+                            </div>
+                            <div className="text-muted" style={{ fontSize: 8 }}>{q.desc}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Maturity Breakdown */}
+                  <div className="mb-3">
+                    <div className="fw-semibold small mb-2"><i className="bi bi-layers me-1" style={{ color: '#8b5cf6' }}></i>Maturity Level</div>
+                    <div className="d-flex align-items-center gap-3 mb-2">
+                      <span className="fw-bold" style={{ fontSize: 18, color: MATURITY_COLORS[selectedComponent.maturityLevel] }}>{selectedComponent.maturity}</span>
+                      <div className="flex-grow-1">
+                        <div className="progress" style={{ height: 8, borderRadius: 4 }}>
+                          <div className="progress-bar" style={{ width: `${(selectedComponent.maturityLevel / 5) * 100}%`, background: MATURITY_COLORS[selectedComponent.maturityLevel], borderRadius: 4 }}></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      {Object.entries(MATURITY_LABELS).map(([lvl, label]) => (
+                        <span key={lvl} className="badge" style={{ background: parseInt(lvl) <= selectedComponent.maturityLevel ? `${MATURITY_COLORS[parseInt(lvl)]}20` : '#f1f5f9', color: parseInt(lvl) <= selectedComponent.maturityLevel ? MATURITY_COLORS[parseInt(lvl)] : '#cbd5e1', fontSize: 8 }}>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Gaps */}
+                  {compDetail?.autonomy_gaps?.length > 0 && (
+                    <div>
+                      <div className="fw-semibold small mb-2"><i className="bi bi-exclamation-triangle me-1" style={{ color: '#ef4444' }}></i>Detected Gaps ({compDetail.autonomy_gaps.length})</div>
+                      {compDetail.autonomy_gaps.map((g: any) => (
+                        <div key={g.gap_id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 10 }}>
+                          <span className="badge" style={{ background: g.severity >= 7 ? '#ef444420' : g.severity >= 4 ? '#f59e0b20' : '#10b98120', color: g.severity >= 7 ? '#ef4444' : g.severity >= 4 ? '#f59e0b' : '#10b981', fontSize: 8 }}>{g.severity}/10</span>
+                          <div>
+                            <div className="fw-medium">{g.title}</div>
+                            <span className="badge mt-1" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 7 }}>{g.gap_type}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Missing layers as gaps */}
+                  {(!compDetail?.autonomy_gaps || compDetail.autonomy_gaps.length === 0) && (
+                    <div>
+                      <div className="fw-semibold small mb-2"><i className="bi bi-shield-check me-1" style={{ color: '#10b981' }}></i>Gap Analysis</div>
+                      {selectedComponent.layers.backend === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fef2f2', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-circle" style={{ color: '#ef4444' }}></i>Backend layer not detected</div>}
+                      {selectedComponent.layers.frontend === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fef2f2', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-circle" style={{ color: '#ef4444' }}></i>Frontend layer not detected</div>}
+                      {selectedComponent.layers.agent === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fffbeb', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b' }}></i>Agent layer not detected</div>}
+                      {selectedComponent.layers.backend !== 'missing' && selectedComponent.layers.frontend !== 'missing' && selectedComponent.layers.agent !== 'missing' && (
+                        <p className="text-muted mb-0" style={{ fontSize: 10 }}><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>All layers present — no critical gaps.</p>
                       )}
                     </div>
                   )}
