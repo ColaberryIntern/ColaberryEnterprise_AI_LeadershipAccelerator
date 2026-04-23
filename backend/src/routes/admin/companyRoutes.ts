@@ -8,21 +8,26 @@ import { Router, Request, Response } from 'express';
 
 const router = Router();
 
-// Feature flag guard middleware
-async function requireCompanyLayer(_req: Request, res: Response, next: Function) {
-  const { isCompanyLayerEnabled } = await import('../../services/company/companyToCoryAdapter');
-  if (!(await isCompanyLayerEnabled())) {
-    return res.status(404).json({ error: 'Company layer is not enabled' });
+// Feature flag guard — called per-route to avoid middleware leaking
+async function checkCompanyEnabled(res: Response): Promise<boolean> {
+  try {
+    const { isCompanyLayerEnabled } = await import('../../services/company/companyToCoryAdapter');
+    if (!(await isCompanyLayerEnabled())) {
+      res.status(404).json({ error: 'Company layer is not enabled' });
+      return false;
+    }
+    return true;
+  } catch {
+    res.status(404).json({ error: 'Company layer not available' });
+    return false;
   }
-  next();
 }
-
-router.use(requireCompanyLayer);
 
 // ─── Company ────────────────────────────────────────────────────────────────
 
 router.get('/api/admin/company', async (_req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
@@ -34,6 +39,7 @@ router.get('/api/admin/company', async (_req: Request, res: Response) => {
 
 router.get('/api/admin/company/goals', async (req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany, getCompanyGoals } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
@@ -44,6 +50,7 @@ router.get('/api/admin/company/goals', async (req: Request, res: Response) => {
 
 router.post('/api/admin/company/goals', async (req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany, createGoal, logAudit } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
@@ -55,8 +62,9 @@ router.post('/api/admin/company/goals', async (req: Request, res: Response) => {
 
 router.put('/api/admin/company/goals/:id', async (req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { updateGoal, logAudit, getActiveCompany } = await import('../../services/company/companyService');
-    const goal = await updateGoal(req.params.id as string as string, req.body);
+    const goal = await updateGoal(req.params.id as string, req.body);
     if (!goal) return res.status(404).json({ error: 'Goal not found' });
     const company = await getActiveCompany();
     if (company) await logAudit((company as any).id, 'goal_updated', 'MANUAL', { goal_id: req.params.id as string, changes: req.body });
@@ -68,6 +76,7 @@ router.put('/api/admin/company/goals/:id', async (req: Request, res: Response) =
 
 router.get('/api/admin/company/kpis', async (_req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany, getCompanyKPIs } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
@@ -79,6 +88,7 @@ router.get('/api/admin/company/kpis', async (_req: Request, res: Response) => {
 
 router.get('/api/admin/company/budgets', async (_req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany, getCompanyBudgets } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
@@ -90,6 +100,7 @@ router.get('/api/admin/company/budgets', async (_req: Request, res: Response) =>
 
 router.get('/api/admin/company/directives', async (req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany, getCompanyDirectives } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
@@ -99,6 +110,7 @@ router.get('/api/admin/company/directives', async (req: Request, res: Response) 
 
 router.post('/api/admin/company/directives/:id/approve', async (req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { updateDirectiveStatus, logAudit, getActiveCompany } = await import('../../services/company/companyService');
     const { transformDirectiveToCory } = await import('../../services/company/companyToCoryAdapter');
     const directive = await updateDirectiveStatus(req.params.id as string, 'approved');
@@ -113,6 +125,7 @@ router.post('/api/admin/company/directives/:id/approve', async (req: Request, re
 
 router.post('/api/admin/company/directives/:id/reject', async (req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { updateDirectiveStatus, logAudit, getActiveCompany } = await import('../../services/company/companyService');
     const directive = await updateDirectiveStatus(req.params.id as string, 'rejected', (req.body.reason as string));
     if (!directive) return res.status(404).json({ error: 'Directive not found' });
@@ -126,6 +139,7 @@ router.post('/api/admin/company/directives/:id/reject', async (req: Request, res
 
 router.get('/api/admin/company/audit', async (_req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany, getAuditLog } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
@@ -137,6 +151,7 @@ router.get('/api/admin/company/audit', async (_req: Request, res: Response) => {
 
 router.post('/api/admin/company/cycle', async (_req: Request, res: Response) => {
   try {
+    if (!(await checkCompanyEnabled(res))) return;
     const { getActiveCompany } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
