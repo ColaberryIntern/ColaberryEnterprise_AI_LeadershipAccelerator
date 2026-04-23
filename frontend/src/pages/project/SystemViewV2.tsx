@@ -531,7 +531,7 @@ function SystemViewV2Inner() {
     );
   }
 
-  if (error === 'no-project') return <ProjectSelectionScreen />;
+  if (error === 'no-project') return <ProjectSetupWizard onActivated={() => window.location.reload()} />;
   if (project?.setup_status && !project.setup_status.activated) {
     return <ProjectSetupWizard initialStatus={project.setup_status} onActivated={() => window.location.reload()} />;
   }
