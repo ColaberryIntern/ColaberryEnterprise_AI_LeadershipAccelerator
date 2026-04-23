@@ -433,6 +433,7 @@ function SystemViewV2Inner() {
   const [defineModal, setDefineModal] = useState<{ discoveredComp: SystemComponent } | null>(null);
   const [defineStep, setDefineStep] = useState<'confirm' | 'action' | 'select' | 'done'>('confirm');
   const [defineTarget, setDefineTarget] = useState<string | null>(null);
+  const [defineCustomUrl, setDefineCustomUrl] = useState('');
   const [verifiedPages, setVerifiedPagesRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_verified_pages') || '[]')); } catch { return new Set(); } });
   const setVerifiedPages = (fn: (prev: Set<string>) => Set<string>) => { setVerifiedPagesRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_verified_pages', JSON.stringify([...next])); return next; }); };
   const [detachedPages, setDetachedPagesRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_detached_pages') || '[]')); } catch { return new Set(); } });
@@ -1014,7 +1015,7 @@ function SystemViewV2Inner() {
                 <p className="text-muted mb-0" style={{ fontSize: 11 }}>This page was discovered in your repo but isn't linked to a system component.</p>
               </div>
               <div className="d-flex gap-2">
-                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal({ discoveredComp: selectedComponent }); setDefineStep('confirm'); setDefineTarget(null); }}>
+                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal({ discoveredComp: selectedComponent }); setDefineStep('confirm'); setDefineTarget(null); setDefineCustomUrl(selectedComponent.frontendRoute || ''); }}>
                   <i className="bi bi-plus-circle me-1"></i>Define Component
                 </button>
                 <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => { setIgnoredIds(prev => new Set([...prev, selectedComponent.id])); setSelectedId(null); }}>
@@ -1699,35 +1700,47 @@ function SystemViewV2Inner() {
                 <button className="btn-close" onClick={() => setDefineModal(null)}></button>
               </div>
               <div className="modal-body p-4">
-                {/* Step 1: Confirm page with preview */}
+                {/* Step 1: Confirm page with editable URL + preview */}
                 {defineStep === 'confirm' && (
                   <div>
-                    <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Is this the correct page?</p>
-                    <div className="p-3 mb-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
-                      <div className="fw-medium" style={{ fontSize: 12 }}>{defineModal.discoveredComp.name}</div>
-                      {defineModal.discoveredComp.frontendRoute && (
-                        <div className="text-muted mb-2" style={{ fontSize: 10, fontFamily: 'monospace' }}>{defineModal.discoveredComp.frontendRoute}</div>
-                      )}
+                    <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Verify the page URL and preview</p>
+                    <div className="fw-medium mb-2" style={{ fontSize: 12 }}>{defineModal.discoveredComp.name}</div>
+
+                    {/* Editable URL */}
+                    <div className="d-flex gap-2 mb-3">
+                      <div className="flex-grow-1">
+                        <label className="form-label" style={{ fontSize: 10, color: '#64748b' }}>Page URL</label>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          value={defineCustomUrl}
+                          onChange={e => setDefineCustomUrl(e.target.value)}
+                          placeholder="/utility-ai or https://enterprise.colaberry.ai/utility-ai"
+                          style={{ fontSize: 11, fontFamily: 'monospace' }}
+                        />
+                      </div>
                     </div>
+
                     {/* Live preview iframe */}
-                    {compDetail?.preview_url || defineModal.discoveredComp.frontendRoute ? (
+                    {defineCustomUrl ? (
                       <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
                         <iframe
-                          src={compDetail?.preview_url || undefined}
+                          key={defineCustomUrl}
+                          src={defineCustomUrl.startsWith('http') ? defineCustomUrl : `https://enterprise.colaberry.ai${defineCustomUrl.startsWith('/') ? '' : '/'}${defineCustomUrl}`}
                           title="Page Preview"
-                          style={{ width: '100%', height: 280, border: 'none', background: '#fff' }}
+                          style={{ width: '100%', height: 300, border: 'none', background: '#fff' }}
                           sandbox="allow-scripts allow-same-origin allow-forms"
                         />
                       </div>
                     ) : (
                       <div className="mb-3 p-3 text-center" style={{ background: '#f8fafc', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
                         <i className="bi bi-display d-block mb-1" style={{ fontSize: 20, color: '#9ca3af' }}></i>
-                        <p className="text-muted mb-0" style={{ fontSize: 10 }}>Preview not available — the preview stack may need to boot first.</p>
+                        <p className="text-muted mb-0" style={{ fontSize: 10 }}>Enter a URL above to see a preview</p>
                       </div>
                     )}
                     <div className="d-flex gap-2">
                       <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => setDefineStep('action')}>
-                        <i className="bi bi-check me-1"></i>Yes, this is correct
+                        <i className="bi bi-check me-1"></i>This looks correct
                       </button>
                       <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => setDefineModal(null)}>Cancel</button>
                     </div>
@@ -1771,7 +1784,7 @@ function SystemViewV2Inner() {
                     <div className="d-flex gap-2 mt-3">
                       <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} disabled={!defineTarget} onClick={() => {
                         if (!defineTarget) return;
-                        const page: UIPage = { name: defineModal.discoveredComp.name, route: defineModal.discoveredComp.frontendRoute || '/', source: 'discovered', verified: true, confidence: 100, bpId: defineModal.discoveredComp.id };
+                        const page: UIPage = { name: defineModal.discoveredComp.name, route: defineCustomUrl || defineModal.discoveredComp.frontendRoute || '/', source: 'discovered', verified: true, confidence: 100, bpId: defineModal.discoveredComp.id };
                         setPageAttachments(prev => ({ ...prev, [defineTarget]: [...(prev[defineTarget] || []), page] }));
                         setIgnoredIds(prev => new Set([...prev, defineModal.discoveredComp.id]));
                         setDefineStep('done');
