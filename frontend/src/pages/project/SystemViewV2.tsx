@@ -633,6 +633,12 @@ function SystemViewV2Inner() {
     if (onboardingStep === 2 && hasCompletedFirstBuild) setOnboardingStep(3);
   }, [hasCompletedFirstBuild, onboardingStep]);
 
+  // Ask Cory state (must be before render guards)
+  const [coryInput, setCoryInput] = useState('');
+  const [coryResponse, setCoryResponse] = useState<string | null>(null);
+  const [coryAsking, setCoryAsking] = useState(false);
+  const [corySessionId, setCorySessionId] = useState<string | null>(null);
+
   // Render guards
   if (loading) {
     return (
@@ -650,12 +656,6 @@ function SystemViewV2Inner() {
   if (error || !project) {
     return <div className="alert alert-danger">{error || 'Failed to load project'}</div>;
   }
-
-  // Ask Cory state
-  const [coryInput, setCoryInput] = useState('');
-  const [coryResponse, setCoryResponse] = useState<string | null>(null);
-  const [coryAsking, setCoryAsking] = useState(false);
-  const [corySessionId, setCorySessionId] = useState<string | null>(null);
 
   // Component-aware suggestions
   const getComponentSuggestions = (comp: SystemComponent | null, detail: any): Array<{ title: string; explanation: string; action?: string }> => {
