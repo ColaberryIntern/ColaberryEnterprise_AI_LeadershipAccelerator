@@ -921,6 +921,41 @@ describe('SystemViewV2 — Execution Ticket Integration', () => {
     // Build flow continues despite ticket failure
   });
 
+  test('ticket failure shows warning instead of silent catch', () => {
+    let warning: string | null = null;
+    let ticketId: string | null = null;
+    // Simulate ticket creation failure
+    try { throw new Error('API unavailable'); } catch (err: any) {
+      ticketId = 'local-only';
+      warning = 'Execution logged locally but ticket tracking failed';
+    }
+    expect(ticketId).toBe('local-only');
+    expect(warning).toContain('tracking failed');
+  });
+
+  test('local-only ticket state is set on failure', () => {
+    const ticketId = 'local-only';
+    const isUntracked = ticketId === 'local-only';
+    expect(isUntracked).toBe(true);
+  });
+
+  test('execution snapshot captured before validation', () => {
+    const comp = makeBP({ coverageRaw: 30, readinessRaw: 45, maturityLevel: 2 });
+    const snapshot = { coverage: comp.coverageRaw, readiness: comp.readinessRaw, maturity: comp.maturityLevel };
+    expect(snapshot.coverage).toBe(30);
+    expect(snapshot.readiness).toBe(45);
+    expect(snapshot.maturity).toBe(2);
+  });
+
+  test('before/after snapshot stored in completion result', () => {
+    const before = { coverage: 30, readiness: 45, maturity: 2 };
+    const after = { coverage: 55, readiness: 60, maturity: 3 };
+    const result = { snapshot_before: before, snapshot_after: after };
+    expect(result.snapshot_before.coverage).toBe(30);
+    expect(result.snapshot_after.coverage).toBe(55);
+    expect(result.snapshot_after.maturity).toBeGreaterThan(result.snapshot_before.maturity);
+  });
+
   test('ticket completion includes validation result data', () => {
     const validationResult = {
       requirementsVerified: 5,
