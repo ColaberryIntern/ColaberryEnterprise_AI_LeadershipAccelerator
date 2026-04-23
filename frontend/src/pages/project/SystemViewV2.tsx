@@ -437,6 +437,8 @@ function SystemViewV2Inner() {
   const setVerifiedPages = (fn: (prev: Set<string>) => Set<string>) => { setVerifiedPagesRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_verified_pages', JSON.stringify([...next])); return next; }); };
   const [detachedPages, setDetachedPagesRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_detached_pages') || '[]')); } catch { return new Set(); } });
   const setDetachedPages = (fn: (prev: Set<string>) => Set<string>) => { setDetachedPagesRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_detached_pages', JSON.stringify([...next])); return next; }); };
+  const [promotedIdsRaw, setPromotedIdsRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_promoted_ids') || '[]')); } catch { return new Set(); } });
+  const setPromotedIds = (fn: (prev: Set<string>) => Set<string>) => { setPromotedIdsRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_promoted_ids', JSON.stringify([...next])); return next; }); };
   const [groupMode, setGroupMode] = useState<'business' | 'technical'>('business');
   const [verifyModal, setVerifyModal] = useState<{ page: UIPage; compId: string } | null>(null);
   const [mergeModal, setMergeModal] = useState<{ page: UIPage; existingCompId: string; targetCompId: string } | null>(null);
@@ -541,8 +543,9 @@ function SystemViewV2Inner() {
     const allPages = [...c.ui.pages, ...attached, ...autoPages]
       .filter(p => !detachedPages.has(`${c.id}:${p.route}`))
       .map(p => ({ ...p, verified: p.verified || verifiedPages.has(`${c.id}:${p.route}`) }));
-    return { ...c, ui: { pages: allPages } };
-  }), [components, pageAttachments, detachedPages, verifiedPages]);
+    const promoted = promotedIdsRaw.has(c.id);
+    return { ...c, isDiscovered: promoted ? false : c.isDiscovered, ui: { pages: allPages } };
+  }), [components, pageAttachments, detachedPages, verifiedPages, promotedIdsRaw]);
   const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
   const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
   const completedCount = components.filter(c => c.status === 'complete').length;
@@ -1687,7 +1690,7 @@ function SystemViewV2Inner() {
           ═══════════════════════════════════════════════════════════════════ */}
       {defineModal && (
         <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={() => setDefineModal(null)}>
-          <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+          <div className="modal-dialog modal-dialog-centered modal-lg" onClick={e => e.stopPropagation()}>
             <div className="modal-content border-0 shadow-lg">
               <div className="modal-header py-2" style={{ borderBottom: '3px solid #8b5cf6' }}>
                 <h6 className="modal-title fw-bold" style={{ color: '#8b5cf6' }}>
@@ -1696,16 +1699,32 @@ function SystemViewV2Inner() {
                 <button className="btn-close" onClick={() => setDefineModal(null)}></button>
               </div>
               <div className="modal-body p-4">
-                {/* Step 1: Confirm page */}
+                {/* Step 1: Confirm page with preview */}
                 {defineStep === 'confirm' && (
                   <div>
                     <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Is this the correct page?</p>
                     <div className="p-3 mb-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
                       <div className="fw-medium" style={{ fontSize: 12 }}>{defineModal.discoveredComp.name}</div>
                       {defineModal.discoveredComp.frontendRoute && (
-                        <div className="text-muted" style={{ fontSize: 10, fontFamily: 'monospace' }}>{defineModal.discoveredComp.frontendRoute}</div>
+                        <div className="text-muted mb-2" style={{ fontSize: 10, fontFamily: 'monospace' }}>{defineModal.discoveredComp.frontendRoute}</div>
                       )}
                     </div>
+                    {/* Live preview iframe */}
+                    {compDetail?.preview_url || defineModal.discoveredComp.frontendRoute ? (
+                      <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                        <iframe
+                          src={compDetail?.preview_url || undefined}
+                          title="Page Preview"
+                          style={{ width: '100%', height: 280, border: 'none', background: '#fff' }}
+                          sandbox="allow-scripts allow-same-origin allow-forms"
+                        />
+                      </div>
+                    ) : (
+                      <div className="mb-3 p-3 text-center" style={{ background: '#f8fafc', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
+                        <i className="bi bi-display d-block mb-1" style={{ fontSize: 20, color: '#9ca3af' }}></i>
+                        <p className="text-muted mb-0" style={{ fontSize: 10 }}>Preview not available — the preview stack may need to boot first.</p>
+                      </div>
+                    )}
                     <div className="d-flex gap-2">
                       <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => setDefineStep('action')}>
                         <i className="bi bi-check me-1"></i>Yes, this is correct
@@ -1721,12 +1740,12 @@ function SystemViewV2Inner() {
                     <p className="fw-semibold mb-3" style={{ fontSize: 13 }}>What would you like to do?</p>
                     <div className="d-flex flex-column gap-2">
                       <button className="btn btn-outline-primary text-start p-3" style={{ fontSize: 12 }} onClick={() => {
-                        // Attach to itself as a standalone
-                        setIgnoredIds(prev => { const n = new Set(prev); n.delete(defineModal.discoveredComp.id); return n; });
+                        // Promote to business group (override isDiscovered)
+                        setPromotedIds(prev => new Set([...prev, defineModal.discoveredComp.id]));
                         setDefineStep('done');
                       }}>
                         <i className="bi bi-plus-lg me-2"></i><strong>Keep as Standalone Component</strong>
-                        <div className="text-muted" style={{ fontSize: 10 }}>Keep this page as its own system component</div>
+                        <div className="text-muted" style={{ fontSize: 10 }}>Move this page into the appropriate system group</div>
                       </button>
                       <button className="btn btn-outline-secondary text-start p-3" style={{ fontSize: 12 }} onClick={() => setDefineStep('select')}>
                         <i className="bi bi-link-45deg me-2"></i><strong>Attach to Existing Component</strong>
