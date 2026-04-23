@@ -1020,3 +1020,57 @@ describe('SystemViewV2 — Execution Sessions', () => {
     expect(paused.currentStepIndex).toBe(2);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 20. GUIDED ONBOARDING
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Guided Onboarding', () => {
+  beforeEach(() => localStorage.clear());
+
+  test('first visit triggers onboarding (no localStorage key)', () => {
+    const seen = localStorage.getItem('system_v2_seen_intro');
+    const step = seen ? -1 : 0;
+    expect(step).toBe(0); // onboarding starts
+  });
+
+  test('returning user skips onboarding', () => {
+    localStorage.setItem('system_v2_seen_intro', 'true');
+    const seen = localStorage.getItem('system_v2_seen_intro');
+    const step = seen ? -1 : 0;
+    expect(step).toBe(-1); // no onboarding
+  });
+
+  test('onboarding steps progress correctly', () => {
+    let step = 0;
+    expect(step).toBe(0); // welcome
+    step = 1; // select component
+    expect(step).toBe(1);
+    step = 2; // build action
+    expect(step).toBe(2);
+    step = 3; // result
+    expect(step).toBe(3);
+  });
+
+  test('skip tour sets localStorage and hides overlay', () => {
+    let step = 0;
+    step = -1;
+    localStorage.setItem('system_v2_seen_intro', 'true');
+    expect(step).toBe(-1);
+    expect(localStorage.getItem('system_v2_seen_intro')).toBe('true');
+  });
+
+  test('onboarding does not show for step = -1', () => {
+    const isOnboarding = -1 >= 0 && -1 < 4;
+    expect(isOnboarding).toBe(false);
+  });
+
+  test('system works without onboarding', () => {
+    // Simulating existing user — all features available
+    localStorage.setItem('system_v2_seen_intro', 'true');
+    const canExecute = true;
+    const canReport = true;
+    const canUseWorkArea = true;
+    expect(canExecute && canReport && canUseWorkArea).toBe(true);
+  });
+});

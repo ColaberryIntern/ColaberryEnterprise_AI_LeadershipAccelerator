@@ -456,6 +456,11 @@ function SystemViewV2Inner() {
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const setExecSession = (s: ExecSession | null) => { setExecSessionRaw(s); if (s) localStorage.setItem('system_v2_execution_session', JSON.stringify(s)); else localStorage.removeItem('system_v2_execution_session'); };
 
+  // Onboarding state
+  const [onboardingStep, setOnboardingStep] = useState<number>(() => localStorage.getItem('system_v2_seen_intro') ? -1 : 0);
+  const isOnboarding = onboardingStep >= 0 && onboardingStep < 4;
+  const hasCompletedFirstBuild = buildResult && !buildResult.error;
+
   // Execution ticket tracking
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
   const [activeTicketNumber, setActiveTicketNumber] = useState<number | null>(null);
@@ -568,6 +573,17 @@ function SystemViewV2Inner() {
   const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
   const groups = groupMode === 'business' ? groupByBusinessDomain(visibleComponents) : groupComponents(visibleComponents);
   const nextIds = getNextComponents(visibleComponents);
+
+  // Onboarding effects (must be after visibleComponents declaration)
+  useEffect(() => {
+    if (onboardingStep === 1 && visibleComponents.length > 0) {
+      const first = visibleComponents.find(c => c.status !== 'complete' && !c.isDiscovered);
+      if (first) { setSelectedId(first.id); setTimeout(() => workAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300); }
+    }
+  }, [onboardingStep, visibleComponents]);
+  useEffect(() => {
+    if (onboardingStep === 2 && hasCompletedFirstBuild) setOnboardingStep(3);
+  }, [hasCompletedFirstBuild, onboardingStep]);
 
   // Intelligence helper
   const getWhyMatters = (c: SystemComponent): string => {
@@ -1761,6 +1777,84 @@ function SystemViewV2Inner() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          GUIDED ONBOARDING OVERLAY
+          ═══════════════════════════════════════════════════════════════════ */}
+      {isOnboarding && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99990, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ maxWidth: 460, background: '#fff', borderRadius: 12, padding: 32, boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}>
+            {/* Step indicator */}
+            <div className="d-flex gap-1 mb-3 justify-content-center">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i <= onboardingStep ? 'var(--color-primary)' : '#e2e8f0' }}></div>
+              ))}
+            </div>
+
+            {onboardingStep === 0 && (
+              <div className="text-center">
+                <i className="bi bi-diagram-3 d-block mb-2" style={{ fontSize: 36, color: 'var(--color-primary)' }}></i>
+                <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>Welcome to Your AI System</h5>
+                <p className="text-muted mb-3" style={{ fontSize: 13 }}>
+                  This is your AI system map. Each block represents a capability your system can build — backend services, user interfaces, intelligent agents.
+                </p>
+                <div className="d-flex gap-2 justify-content-center">
+                  <button className="btn btn-primary btn-sm" style={{ fontSize: 12 }} onClick={() => setOnboardingStep(1)}>
+                    <i className="bi bi-arrow-right me-1"></i>Show Me
+                  </button>
+                  <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 10 }} onClick={() => { setOnboardingStep(-1); localStorage.setItem('system_v2_seen_intro', 'true'); }}>
+                    Skip Tour
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 1 && (
+              <div className="text-center">
+                <i className="bi bi-cursor-fill d-block mb-2" style={{ fontSize: 36, color: '#f59e0b' }}></i>
+                <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>Your Next Upgrade</h5>
+                <p className="text-muted mb-3" style={{ fontSize: 13 }}>
+                  We've selected the most impactful component to build next. The Work Area below now shows its details, layers, and recommended action.
+                </p>
+                <button className="btn btn-primary btn-sm" style={{ fontSize: 12 }} onClick={() => { setOnboardingStep(2); setWorkTab('build'); }}>
+                  <i className="bi bi-hammer me-1"></i>Let's Build
+                </button>
+              </div>
+            )}
+
+            {onboardingStep === 2 && (
+              <div className="text-center">
+                <i className="bi bi-terminal d-block mb-2" style={{ fontSize: 36, color: '#10b981' }}></i>
+                <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary)' }}>Generate Your First Prompt</h5>
+                <p className="text-muted mb-3" style={{ fontSize: 13 }}>
+                  Click <strong>"Generate Build Prompt"</strong> in the Build tab below. It creates a tailored prompt for Claude Code — copy it, run it, then paste the result back here.
+                </p>
+                <button className="btn btn-outline-primary btn-sm" style={{ fontSize: 12 }} onClick={() => { setOnboardingStep(-1); localStorage.setItem('system_v2_seen_intro', 'true'); }}>
+                  <i className="bi bi-check me-1"></i>Got It — Close Tour
+                </button>
+              </div>
+            )}
+
+            {onboardingStep === 3 && (
+              <div className="text-center">
+                <i className="bi bi-check-circle-fill d-block mb-2" style={{ fontSize: 36, color: '#10b981' }}></i>
+                <h5 className="fw-bold mb-2" style={{ color: '#059669' }}>You Just Upgraded Your System!</h5>
+                <p className="text-muted mb-3" style={{ fontSize: 13 }}>
+                  Your system improved. Coverage, maturity, and readiness have been recalculated. Every build step moves you closer to production readiness.
+                </p>
+                <div className="d-flex gap-2 justify-content-center">
+                  <button className="btn btn-primary btn-sm" style={{ fontSize: 12 }} onClick={() => { setOnboardingStep(-1); localStorage.setItem('system_v2_seen_intro', 'true'); }}>
+                    <i className="bi bi-hammer me-1"></i>Continue Building
+                  </button>
+                  <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 10 }} onClick={() => { setOnboardingStep(-1); localStorage.setItem('system_v2_seen_intro', 'true'); setSystemMode('reporting'); setWorkTab('overview'); setCoryMode('r-insights'); }}>
+                    Explore Insights
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
