@@ -114,7 +114,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
           agent: u.agent || 'missing',
         },
         ui: {
-          pages: isPageBP && bp.frontend_route ? [{
+          pages: bp.frontend_route ? [{
             name: bp.name,
             route: bp.frontend_route,
             source: 'mapped' as const,
