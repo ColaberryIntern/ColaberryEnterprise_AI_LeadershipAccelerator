@@ -37,7 +37,7 @@ router.get('/api/admin/company/goals', async (req: Request, res: Response) => {
     const { getActiveCompany, getCompanyGoals } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
-    const goals = await getCompanyGoals((company as any).id, req.query.status as string);
+    const goals = await getCompanyGoals((company as any).id, (req.query.status as string) || undefined);
     res.json(goals);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -93,7 +93,7 @@ router.get('/api/admin/company/directives', async (req: Request, res: Response) 
     const { getActiveCompany, getCompanyDirectives } = await import('../../services/company/companyService');
     const company = await getActiveCompany();
     if (!company) return res.status(404).json({ error: 'No active company' });
-    res.json(await getCompanyDirectives((company as any).id, req.query.status as string));
+    res.json(await getCompanyDirectives((company as any).id, (req.query.status as string) || undefined));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
