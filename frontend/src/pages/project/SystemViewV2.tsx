@@ -450,6 +450,12 @@ function SystemViewV2Inner() {
   const [execIndex, setExecIndex] = useState(0);
   const [execPaused, setExecPaused] = useState(false);
 
+  // Execution Session (persisted)
+  interface ExecSession { id: string; status: 'running' | 'paused' | 'completed'; steps: Array<{ id: string; title: string; componentId: string; promptTarget: string; ticketId?: string; ticketStatus?: string }>; currentStepIndex: number }
+  const [execSession, setExecSessionRaw] = useState<ExecSession | null>(() => { try { const s = localStorage.getItem('system_v2_execution_session'); return s ? JSON.parse(s) : null; } catch { return null; } });
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const setExecSession = (s: ExecSession | null) => { setExecSessionRaw(s); if (s) localStorage.setItem('system_v2_execution_session', JSON.stringify(s)); else localStorage.removeItem('system_v2_execution_session'); };
+
   // Execution ticket tracking
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null);
   const [activeTicketNumber, setActiveTicketNumber] = useState<number | null>(null);
@@ -483,6 +489,13 @@ function SystemViewV2Inner() {
     if (isReporting && !coryMode.startsWith('r-')) setCoryMode('r-insights');
     if (!isReporting && coryMode.startsWith('r-')) setCoryMode('suggestions');
   }, [isReporting, coryMode]);
+
+  // Resume detection: check for active session on load
+  useEffect(() => {
+    if (execSession && execSession.status === 'running' && !showResumePrompt && execQueue.length === 0) {
+      setShowResumePrompt(true);
+    }
+  }, []); // only on mount
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -730,9 +743,13 @@ function SystemViewV2Inner() {
     setTimeout(() => workAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
   };
 
-  // Execution queue
+  // Execution queue + session
   const handleStartExec = async () => {
     if (allPlanSteps.length === 0) return;
+    // Create session
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const session: ExecSession = { id: sessionId, status: 'running', steps: allPlanSteps.map(s => ({ ...s, ticketId: undefined, ticketStatus: undefined })), currentStepIndex: 0 };
+    setExecSession(session);
     setExecQueue(allPlanSteps);
     setExecIndex(0);
     setExecPaused(false);
@@ -741,37 +758,55 @@ function SystemViewV2Inner() {
     const first = allPlanSteps[0];
     setSelectedId(first.componentId);
     setWorkTab('build');
-    setBuildGenerating(true);
-    setBuildPrompt(null);
-    setBuildResult(null);
-    try {
-      const res = await portalApi.post(`/api/portal/project/business-processes/${first.componentId}/prompt`, { target: first.promptTarget });
-      const text = res.data?.prompt_text || '';
-      setBuildPrompt(text);
-      try { await navigator.clipboard.writeText(text); } catch {}
-    } catch {} finally { setBuildGenerating(false); }
+    await handleGeneratePrompt(visibleComponents.find(c => c.id === first.componentId) || visibleComponents[0]);
+  };
+
+  const handleResumeExec = () => {
+    if (!execSession) return;
+    setShowResumePrompt(false);
+    setExecQueue(execSession.steps);
+    setExecIndex(execSession.currentStepIndex);
+    setCoryMode('execute');
+    const step = execSession.steps[execSession.currentStepIndex];
+    if (step) {
+      setSelectedId(step.componentId);
+      setWorkTab('build');
+    }
+  };
+
+  const handleDiscardSession = () => {
+    setShowResumePrompt(false);
+    setExecSession(null);
   };
 
   const handleExecNext = async () => {
     const next = execIndex + 1;
-    if (next >= execQueue.length) { setExecQueue([]); setExecIndex(0); setCoryMode('suggestions'); await loadData(); return; }
+    if (next >= execQueue.length) {
+      setExecQueue([]); setExecIndex(0); setCoryMode('suggestions');
+      if (execSession) setExecSession({ ...execSession, status: 'completed', currentStepIndex: next });
+      setTimeout(() => setExecSession(null), 1000); // Clear after brief display
+      await loadData();
+      return;
+    }
     setExecIndex(next);
+    // Persist session progress
+    if (execSession) {
+      const updated = { ...execSession, currentStepIndex: next };
+      if (activeTicketId && activeTicketId !== 'local-only') {
+        updated.steps = updated.steps.map((s, i) => i === execIndex ? { ...s, ticketId: activeTicketId || undefined, ticketStatus: 'done' } : s);
+      }
+      setExecSession(updated);
+    }
     const step = execQueue[next];
     setSelectedId(step.componentId);
     setWorkTab('build');
-    setBuildPrompt(null);
-    setBuildReport('');
-    setBuildResult(null);
-    setBuildGenerating(true);
-    try {
-      const res = await portalApi.post(`/api/portal/project/business-processes/${step.componentId}/prompt`, { target: step.promptTarget });
-      const text = res.data?.prompt_text || '';
-      setBuildPrompt(text);
-      try { await navigator.clipboard.writeText(text); } catch {}
-    } catch {} finally { setBuildGenerating(false); }
+    await handleGeneratePrompt(visibleComponents.find(c => c.id === step.componentId) || visibleComponents[0]);
   };
 
-  const handleExecExit = () => { setExecQueue([]); setExecIndex(0); setExecPaused(false); setCoryMode('suggestions'); };
+  const handleExecExit = () => {
+    setExecQueue([]); setExecIndex(0); setExecPaused(false); setCoryMode('suggestions');
+    if (execSession) setExecSession({ ...execSession, status: 'paused' });
+  };
 
   const handleTileClick = (id: string) => {
     const isDeselect = id === selectedId;
@@ -820,6 +855,28 @@ function SystemViewV2Inner() {
           ═══════════════════════════════════════════════════════════════════ */}
       <div className="card border-0 shadow-sm mb-3" data-testid="system-map-section" style={{ minHeight: 280 }}>
         <div className="card-body p-4">
+          {/* Resume execution banner */}
+          {showResumePrompt && execSession && (
+            <div className="mb-3 p-3 d-flex align-items-center justify-content-between" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+              <div>
+                <div className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+                  <i className="bi bi-play-circle me-1"></i>Resume your previous execution?
+                </div>
+                <div className="text-muted" style={{ fontSize: 10 }}>
+                  Step {execSession.currentStepIndex + 1} of {execSession.steps.length} — {execSession.steps[execSession.currentStepIndex]?.title || 'Unknown'}
+                </div>
+              </div>
+              <div className="d-flex gap-2">
+                <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} onClick={handleResumeExec}>
+                  <i className="bi bi-play-fill me-1"></i>Resume
+                </button>
+                <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={handleDiscardSession}>
+                  <i className="bi bi-x me-1"></i>Discard
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Orientation header */}
           <div className="mb-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11, color: '#64748b' }}>
             <i className="bi bi-rocket-takeoff me-1" style={{ color: 'var(--color-primary)' }}></i>

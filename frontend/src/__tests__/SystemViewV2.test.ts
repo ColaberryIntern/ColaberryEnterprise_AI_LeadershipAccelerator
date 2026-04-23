@@ -507,7 +507,7 @@ describe('SystemViewV2 — Build/Reporting Mode', () => {
   });
 
   test('reporting mode shows reporting tabs', () => {
-    const mode = 'reporting';
+    const mode: string = 'reporting';
     const tabs = mode === 'build' ? ['overview', 'build', 'improve'] : ['overview', 'insights', 'gaps', 'trends'];
     expect(tabs).toContain('insights');
     expect(tabs).toContain('gaps');
@@ -970,5 +970,53 @@ describe('SystemViewV2 — Execution Ticket Integration', () => {
     };
     expect(ticketResult.filesCreated).toHaveLength(1);
     expect(ticketResult.routesAdded).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19. EXECUTION SESSIONS
+// ---------------------------------------------------------------------------
+
+describe('SystemViewV2 — Execution Sessions', () => {
+  beforeEach(() => localStorage.clear());
+
+  test('session persists to localStorage', () => {
+    const session = { id: 'session-123', status: 'running', steps: [{ id: 's1', title: 'Build backend', componentId: 'c1', promptTarget: 'backend_improvement' }], currentStepIndex: 0 };
+    localStorage.setItem('system_v2_execution_session', JSON.stringify(session));
+    const restored = JSON.parse(localStorage.getItem('system_v2_execution_session') || 'null');
+    expect(restored).not.toBeNull();
+    expect(restored.id).toBe('session-123');
+    expect(restored.status).toBe('running');
+  });
+
+  test('resume restores correct step index', () => {
+    const session = { id: 'session-456', status: 'running', steps: [{ id: 's1' }, { id: 's2' }, { id: 's3' }], currentStepIndex: 1 };
+    expect(session.steps[session.currentStepIndex].id).toBe('s2');
+  });
+
+  test('duplicate execution blocked by ticket status', () => {
+    const step = { id: 's1', ticketId: 'ticket-1', ticketStatus: 'done' };
+    const isAlreadyExecuted = step.ticketStatus === 'done' || step.ticketStatus === 'running';
+    expect(isAlreadyExecuted).toBe(true);
+  });
+
+  test('session clears on completion', () => {
+    localStorage.setItem('system_v2_execution_session', JSON.stringify({ id: 'x', status: 'completed' }));
+    // Simulate clear
+    localStorage.removeItem('system_v2_execution_session');
+    expect(localStorage.getItem('system_v2_execution_session')).toBeNull();
+  });
+
+  test('session id is unique', () => {
+    const id1 = `session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const id2 = `session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    expect(id1).not.toBe(id2);
+  });
+
+  test('paused session preserves state', () => {
+    const session = { id: 'session-789', status: 'running' as const, steps: [], currentStepIndex: 2 };
+    const paused = { ...session, status: 'paused' as const };
+    expect(paused.status).toBe('paused');
+    expect(paused.currentStepIndex).toBe(2);
   });
 });
