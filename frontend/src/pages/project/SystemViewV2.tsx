@@ -1573,7 +1573,7 @@ function SystemViewV2Inner() {
                   {/* Preview iframe */}
                   {previewUrl ? (
                     <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
-                      <iframe key={`preview-${safeIdx}`} src={previewUrl} title="Page Preview" style={{ width: '100%', height: 300, border: 'none', background: '#fff' }} sandbox="allow-scripts allow-same-origin allow-forms" />
+                      <iframe key={`preview-${safeIdx}`} src={previewUrl} title="Page Preview" style={{ width: '100%', height: 500, border: 'none', background: '#fff' }} sandbox="allow-scripts allow-same-origin allow-forms" />
                     </div>
                   ) : (
                     <div className="mb-3 p-3 text-center" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
@@ -1609,6 +1609,24 @@ function SystemViewV2Inner() {
                       ))}
                     </div>
                   )}
+                  {/* Cory in UI tab — UX suggestions */}
+                  <CoryInlinePanel
+                    suggestions={(() => {
+                      const us: Array<{ title: string; explanation: string }> = [];
+                      us.push({ title: 'Review page layout and hierarchy', explanation: 'Use the quick actions above to analyze layout, accessibility, and responsiveness.' });
+                      if (uiFeedback?.items?.filter((f: any) => f.status === 'open').length > 0) {
+                        us.push({ title: `${uiFeedback.items.filter((f: any) => f.status === 'open').length} open UI issues detected`, explanation: 'Run "Improve Layout" or "Fix UX Issues" to get specific fixes.' });
+                      }
+                      if (selectedComponent.completion < 80) {
+                        us.push({ title: 'Page may need more features', explanation: 'Coverage is low — the UI may be missing key functionality.' });
+                      }
+                      return us.slice(0, 3);
+                    })()}
+                    coryInput={coryInput} setCoryInput={setCoryInput}
+                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
+                    onAsk={handleAskCory}
+                    tabContext="UI advisor"
+                  />
                 </div>
                 );
               })()}
