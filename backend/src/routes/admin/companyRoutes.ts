@@ -56,10 +56,10 @@ router.post('/api/admin/company/goals', async (req: Request, res: Response) => {
 router.put('/api/admin/company/goals/:id', async (req: Request, res: Response) => {
   try {
     const { updateGoal, logAudit, getActiveCompany } = await import('../../services/company/companyService');
-    const goal = await updateGoal(req.params.id, req.body);
+    const goal = await updateGoal(req.params.id as string as string, req.body);
     if (!goal) return res.status(404).json({ error: 'Goal not found' });
     const company = await getActiveCompany();
-    if (company) await logAudit((company as any).id, 'goal_updated', 'MANUAL', { goal_id: req.params.id, changes: req.body });
+    if (company) await logAudit((company as any).id, 'goal_updated', 'MANUAL', { goal_id: req.params.id as string, changes: req.body });
     res.json(goal);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -101,12 +101,12 @@ router.post('/api/admin/company/directives/:id/approve', async (req: Request, re
   try {
     const { updateDirectiveStatus, logAudit, getActiveCompany } = await import('../../services/company/companyService');
     const { transformDirectiveToCory } = await import('../../services/company/companyToCoryAdapter');
-    const directive = await updateDirectiveStatus(req.params.id, 'approved');
+    const directive = await updateDirectiveStatus(req.params.id as string, 'approved');
     if (!directive) return res.status(404).json({ error: 'Directive not found' });
     // Transform to Cory decision
-    const result = await transformDirectiveToCory(req.params.id);
+    const result = await transformDirectiveToCory(req.params.id as string);
     const company = await getActiveCompany();
-    if (company) await logAudit((company as any).id, 'directive_approved', 'MANUAL', { directive_id: req.params.id, decision_id: result?.decisionId });
+    if (company) await logAudit((company as any).id, 'directive_approved', 'MANUAL', { directive_id: req.params.id as string, decision_id: result?.decisionId });
     res.json({ directive, cory_decision_id: result?.decisionId });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -114,10 +114,10 @@ router.post('/api/admin/company/directives/:id/approve', async (req: Request, re
 router.post('/api/admin/company/directives/:id/reject', async (req: Request, res: Response) => {
   try {
     const { updateDirectiveStatus, logAudit, getActiveCompany } = await import('../../services/company/companyService');
-    const directive = await updateDirectiveStatus(req.params.id, 'rejected', req.body.reason);
+    const directive = await updateDirectiveStatus(req.params.id as string, 'rejected', (req.body.reason as string));
     if (!directive) return res.status(404).json({ error: 'Directive not found' });
     const company = await getActiveCompany();
-    if (company) await logAudit((company as any).id, 'directive_rejected', 'MANUAL', { directive_id: req.params.id, reason: req.body.reason });
+    if (company) await logAudit((company as any).id, 'directive_rejected', 'MANUAL', { directive_id: req.params.id as string, reason: (req.body.reason as string) });
     res.json(directive);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
