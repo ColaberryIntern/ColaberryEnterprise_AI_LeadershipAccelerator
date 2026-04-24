@@ -955,7 +955,7 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
               </button>
             </>
           )}
-          <Link to="/portal/project/system" className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }}>
+          <Link to="/portal/project/system-v2" className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }}>
             <i className="bi bi-grid-3x3-gap me-1"></i>Full System View
           </Link>
         </div>
@@ -1133,16 +1133,19 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
             </div>
 
             {/* PHASE: idle — action buttons */}
-            {build.phase === 'idle' && (
+            {build.phase === 'idle' && (() => {
+              const primaryColor = recommended.promptTarget === 'agent_enhancement' ? '#8b5cf6' : recommended.promptTarget === 'frontend_exposure' ? '#10b981' : recommended.promptTarget === 'reliability_improvement' ? '#f59e0b' : '#3b82f6';
+              return (
               <div className="d-flex flex-wrap gap-2">
-                <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(recommended)}>
+                <button className="btn btn-sm" style={{ background: primaryColor, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(recommended)}>
                   <i className="bi bi-terminal me-1"></i>Generate Build Prompt
                 </button>
                 <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(recommended)}>
                   <i className="bi bi-book me-1"></i>Learn About This
                 </button>
               </div>
-            )}
+              );
+            })()}
 
             {/* PHASE: generating */}
             {build.phase === 'generating' && (
@@ -1371,24 +1374,20 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
                   {showUpNext && (
                     <div className="mt-2">
                       {upcomingSteps.map((step, i) => {
-                        const impactColors: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
-                        const ic = impactColors[step.impact] || impactColors.Medium;
+                        const stepColor = step.promptTarget === 'agent_enhancement' ? '#8b5cf6' : step.promptTarget === 'frontend_exposure' ? '#10b981' : step.promptTarget === 'reliability_improvement' ? '#f59e0b' : '#3b82f6';
                         const stepComp = components.find(c => c.id === step.componentId);
                         return (
-                          <div key={step.id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
-                            <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#e2e8f0', color: '#64748b', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                          <div key={step.id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${stepColor}` }}>
+                            <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${stepColor}20`, color: stepColor, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                             <div className="flex-grow-1">
-                              <div className="d-flex align-items-center gap-2">
-                                <span className="fw-medium" style={{ fontSize: 11 }}>{step.title}</span>
-                                <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 7 }}>{step.impact}</span>
-                              </div>
+                              <div className="fw-medium" style={{ fontSize: 11 }}>{step.title}</div>
                               <div className="text-muted" style={{ fontSize: 9 }}>{step.explanation}</div>
                             </div>
                             <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
                               <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => stepComp && handleLearnAbout(stepComp)}>
                                 <i className="bi bi-book"></i>
                               </button>
-                              <button className="btn btn-sm btn-primary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleApplyPlanStep(step)}>
+                              <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: stepColor, color: '#fff' }} onClick={() => handleApplyPlanStep(step)}>
                                 Build
                               </button>
                             </div>
@@ -1431,7 +1430,7 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
               System Components
               <span className="badge ms-2" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10 }}>{totalCount}</span>
             </h6>
-            <Link to="/portal/project/system#business-processes" className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }}>
+            <Link to="/portal/project/system-v2" className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }}>
               View details <i className="bi bi-arrow-right ms-1"></i>
             </Link>
           </div>
@@ -1477,7 +1476,7 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
 
       {/* Footer */}
       <div className="text-center mb-4">
-        <Link to="/portal/project/system" className="btn btn-outline-secondary btn-sm" style={{ fontSize: 11 }}>
+        <Link to="/portal/project/system-v2" className="btn btn-outline-secondary btn-sm" style={{ fontSize: 11 }}>
           <i className="bi bi-grid-3x3-gap me-1"></i>Open Full System View
         </Link>
       </div>

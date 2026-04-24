@@ -569,11 +569,14 @@ function SystemViewV2Inner() {
   const [executionSnapshot, setExecutionSnapshot] = useState<{ coverage: number; readiness: number; maturity: number } | null>(null);
   const [executionActivity, setExecutionActivity] = useState<any[]>([]);
 
-  // Sync URL param → state + scroll to work area + set tab from URL
+  // Sync URL param → state + set tab + force build mode from URL
   useEffect(() => {
     if (urlComponentId) {
       setSelectedId(urlComponentId);
-      if (urlTab && ['overview','build','improve','health','ui'].includes(urlTab)) setWorkTab(urlTab);
+      if (urlTab && ['overview','build','improve','health','ui'].includes(urlTab)) {
+        setWorkTab(urlTab);
+        setSystemMode('build'); // Force build mode when arriving via URL (not reporting)
+      }
       setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 200);
     }
   }, [urlComponentId, urlTab]);
