@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { getAdvisoryUrl } from '../services/utmService';
 import scenarios from '../config/demoScenarios.json';
+import { getDemoBackground } from '../config/demoBackgrounds';
 
 interface InlineDemoPlayerProps {
   /** Restrict to specific scenario IDs (e.g. ['saas','logistics']). Defaults to all 10. */
@@ -488,7 +489,9 @@ export default function InlineDemoPlayer({ allowedScenarios, trackContext, onDem
           style={{
             position: 'relative', cursor: 'pointer', borderRadius: 12, overflow: 'hidden',
             minHeight: 360, maxWidth: 800, margin: '0 auto',
-            background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+            // Industry-themed photo underneath a dark navy overlay for text contrast.
+            // If the image fails to load the gradient still holds the original look.
+            background: `linear-gradient(135deg, rgba(15,23,42,0.78) 0%, rgba(30,41,59,0.68) 50%, rgba(15,23,42,0.85) 100%), url("${getDemoBackground(scenario.id, scenario.industry)}") center/cover no-repeat, linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
             border: '1px solid #334155', transition: 'transform 0.2s',
           }}
