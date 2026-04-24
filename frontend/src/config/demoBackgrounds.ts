@@ -30,13 +30,13 @@ const BY_SCENARIO_ID: Record<string, string> = {
   education:     U('photo-1524178232363-1fb2b075b655'),   // classroom / corporate training
 
   // Utility verticals — each tied to its specific operation
-  'utility-outage':         U('photo-1548337138-e87d889cc369'),  // electric transformer / substation
+  'utility-outage':         U('photo-1509390144018-eeaf65052242'), // electrical substation with transformer
   'utility-storm':          U('photo-1605727216801-e27ce1d0cc28'), // lightning storm over grid
   'utility-metering':       U('photo-1658753145551-8f44e5811d21'), // smart electric meter hardware
-  'utility-vegetation':     U('photo-1473773508845-188df298d2d1'), // power lines through forest
+  'utility-vegetation':     U('photo-1682958896802-972591eb1b00'), // utility pole + lines through trees
   'utility-ratecase':       U('photo-1554224155-6726b3ff858f'),   // financial reports / spreadsheets
   'utility-memberservices': U('photo-1560264280-88b68371db39'),   // call center headset operator
-  'utility-fleet':          U('photo-1601584115197-04ecc0da31d7'), // utility service fleet
+  'utility-fleet':          U('photo-1574358902880-72f45d3102e0'), // lineworkers in bucket truck on power lines
   'utility-compliance':     U('photo-1589829545856-d10d557cf95f'), // legal / regulatory documents
 
   // Freight engines — each picks a different logistics angle
