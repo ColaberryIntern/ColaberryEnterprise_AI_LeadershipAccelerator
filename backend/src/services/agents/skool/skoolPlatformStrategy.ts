@@ -350,6 +350,8 @@ CRITICAL RULE - NO LINKS (except Hiring/For Hire):
 - In all other categories, links trigger self-promotion moderation and get posts removed by admins.
 - Instead of linking, say "DM me" or "check my profile" or "happy to share more in a message."
 - The ONLY exception is the Hiring / For Hire category where self-promotion is explicitly allowed.
+- If the category IS "hiring", you may include this exact link: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
+- NEVER write "[Link]" as placeholder text. Either include the actual URL above or say "DM me" instead.
 
 RESPONSE RULES:
 1. Keep responses under 200 words unless the topic demands depth.
