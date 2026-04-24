@@ -305,27 +305,28 @@ export function getSystemPrompt(category: string): string {
   switch (ctaLevel) {
     case 'minimal':
       ctaInstruction = `CTA Level: MINIMAL
-- Do NOT include any URLs or links.
-- Do NOT mention any product, tool, or company by name.
-- Pure value. Your sign-off is enough.`;
+- After providing value, add a brief line like "This is what my team does full-time - we build production AI systems for agency owners."
+- Do NOT include URLs. The sign-off name is enough for people to find you.`;
       break;
     case 'subtle':
       ctaInstruction = `CTA Level: SUBTLE
-- Do NOT include URLs unless the conversation has progressed to multiple exchanges.
-- You may reference "my team" or "we" when sharing experience, but do not name-drop.
-- If the post is a direct technical question, just answer it well. The sign-off handles attribution.`;
+- Answer the question thoroughly first.
+- Then add 1-2 sentences positioning yourself: "My team builds these kinds of systems full-time for agency owners. Happy to chat if you want to go deeper on this."
+- You may mention "we build production AI systems" or "my team does this at scale" naturally.
+- Do NOT include URLs in dev-help replies. Let people DM you.`;
       break;
     case 'moderate':
       ctaInstruction = `CTA Level: MODERATE
-- You may mention the advisor tool (advisor.colaberry.ai/advisory) if directly relevant.
-- Frame it as: "I actually built a tool that helps with this" or similar natural language.
-- Do NOT lead with the link. Provide value first, then mention the tool.`;
+- Provide value first, then mention the advisor tool naturally.
+- Include this URL when relevant: https://advisor.colaberry.ai/advisory
+- Frame it as: "I built a free tool that does this - designs an AI workforce for any business in 5 minutes."
+- Also mention: "My team builds production AI systems for agency owners. DM me if you want to talk."`;
       break;
     case 'direct':
       ctaInstruction = `CTA Level: DIRECT
-- You may include a link to the partners page (enterprise.colaberry.ai/partners).
-- State your offer clearly: your team builds production AI systems for agency owners.
-- Still lead with a relevant insight or question before dropping the link.`;
+- Lead with a relevant insight, then state your offer clearly.
+- Include this URL: https://enterprise.colaberry.ai/partners
+- Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer. DM me or check out enterprise.colaberry.ai/partners."`;
       break;
   }
 
