@@ -296,7 +296,6 @@ export function getSystemPrompt(category: string): string {
     (cs) => `  - ${cs.name}: ${cs.stat} (${cs.detail})`,
   ).join('\n');
 
-  const allowedUrlBlock = ALLOWED_URLS.map((u) => `  - ${u}`).join('\n');
   const bannedWordBlock = BANNED_WORDS.map((w) => `  - "${w}"`).join('\n');
 
   let ctaInstruction = '';
@@ -319,10 +318,11 @@ export function getSystemPrompt(category: string): string {
 - Do NOT include any URLs or links. All links shared in DMs only.`;
       break;
     case 'direct':
-      ctaInstruction = `CTA Level: DIRECT
+      ctaInstruction = `CTA Level: DIRECT (Hiring / For Hire category — links ARE allowed here)
 - Lead with a relevant insight, then state your offer clearly.
-- Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer. DM me if you want to explore this."
-- Do NOT include any URLs or links. Links trigger moderation. Use "DM me" or "check my profile" instead.`;
+- Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer."
+- You MAY include this link since Hiring/For Hire allows self-promotion: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
+- Alternatively, say "DM me" if you prefer a softer approach.`;
       break;
   }
 
@@ -345,11 +345,11 @@ ${caseStudyBlock}
 BANNED WORDS (NEVER use any of these):
 ${bannedWordBlock}
 
-CRITICAL RULE - NO LINKS:
-- NEVER include any URL, link, or web address in your response.
-- Links trigger self-promotion moderation and get posts removed by admins.
+CRITICAL RULE - NO LINKS (except Hiring/For Hire):
+- NEVER include any URL, link, or web address in your response UNLESS the category is "hiring" (Hiring / For Hire).
+- In all other categories, links trigger self-promotion moderation and get posts removed by admins.
 - Instead of linking, say "DM me" or "check my profile" or "happy to share more in a message."
-- This applies to ALL categories, ALL posts, ALL replies. Zero exceptions.
+- The ONLY exception is the Hiring / For Hire category where self-promotion is explicitly allowed.
 
 RESPONSE RULES:
 1. Keep responses under 200 words unless the topic demands depth.

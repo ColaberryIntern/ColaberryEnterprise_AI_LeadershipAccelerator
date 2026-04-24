@@ -95,10 +95,11 @@ export async function runSkoolQualityGate(): Promise<{
         score -= 30;
       }
 
-      // --- NO URLs allowed (links trigger self-promotion moderation) ---
-      const hasAnyUrl = /https?:\/\/|\.com\b|\.ai\b|\.io\b|\.org\b/i.test(body);
-      if (hasAnyUrl) {
-        reasons.push('Contains a URL or link - links trigger self-promotion moderation on Skool');
+      // --- NO URLs allowed EXCEPT in hiring category (links trigger self-promotion moderation) ---
+      const hasAnyUrl = /https?:\/\//i.test(body);
+      const isHiringCategory = response.category === 'hiring';
+      if (hasAnyUrl && !isHiringCategory) {
+        reasons.push('Contains a URL or link - links trigger self-promotion moderation on Skool (only allowed in hiring)');
         score -= 40; // Heavy penalty - should auto-reject
       }
 
