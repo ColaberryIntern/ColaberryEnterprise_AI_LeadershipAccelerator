@@ -1316,6 +1316,9 @@ function SystemViewV2Inner() {
                                     <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
                                     <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
                                   </div>
+                                  <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff', flexShrink: 0 }} onClick={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}>
+                                    Run
+                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -1631,6 +1634,9 @@ function SystemViewV2Inner() {
                                   <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
                                   <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
                                 </div>
+                                <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff', flexShrink: 0 }} onClick={() => handleGeneratePrompt(selectedComponent)}>
+                                  Run
+                                </button>
                               </div>
                             ))}
                           </div>
@@ -1706,6 +1712,9 @@ function SystemViewV2Inner() {
                                   <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
                                   <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
                                 </div>
+                                <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff', flexShrink: 0 }} onClick={() => s.color === '#3b82f6' ? setWorkTab('build') : handleGeneratePrompt(selectedComponent)}>
+                                  Run
+                                </button>
                               </div>
                             ))}
                           </div>
