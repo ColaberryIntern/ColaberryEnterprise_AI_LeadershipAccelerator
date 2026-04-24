@@ -248,7 +248,7 @@ async function extractPostsFromPage(page: Page): Promise<ExtractedPost[]> {
 
 async function signalExistsInDb(models: { SkoolSignal: any }, url: string): Promise<boolean> {
   try {
-    const existing = await models.SkoolSignal.findOne({ where: { url } });
+    const existing = await models.SkoolSignal.findOne({ where: { post_url: url } });
     return !!existing;
   } catch (err) {
     console.error(`${LOG_PREFIX} DB lookup failed for URL ${url}:`, err);
@@ -264,15 +264,14 @@ async function storeSignal(
 ): Promise<number | null> {
   try {
     const record = await models.SkoolSignal.create({
-      url: post.url,
-      title: post.title,
-      body: post.body,
-      author: post.author,
+      post_url: post.url,
+      post_title: post.title,
+      post_body_preview: post.body,
+      author_name: post.author,
       category,
       comment_count: post.commentCount,
       like_count: post.likeCount,
-      score,
-      posted_at: new Date(),
+      priority_score: score,
       detected_at: new Date(),
       status: 'new',
     });
