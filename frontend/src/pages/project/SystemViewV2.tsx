@@ -319,7 +319,9 @@ function CoryInlinePanel({ suggestions, coryInput, setCoryInput, coryMessages, c
                 <div className="text-muted">{s.explanation}</div>
               </div>
               {s.action && onApply && (
-                <button className="btn btn-sm btn-primary" style={{ fontSize: 8, padding: '1px 6px', flexShrink: 0 }} onClick={() => onApply(s.action!)}>Apply</button>
+                <button className="btn btn-sm btn-primary" style={{ fontSize: 9, padding: '2px 8px', flexShrink: 0 }} onClick={() => onApply(s.action!)}>
+                  <i className="bi bi-play-fill me-1" style={{ fontSize: 8 }}></i>Run
+                </button>
               )}
             </div>
           ))}
@@ -714,9 +716,12 @@ function SystemViewV2Inner() {
         sid = startRes.data.session_id;
         setCorySessionId(sid);
       }
-      const context = selectedComponent
-        ? `[Context: Component "${selectedComponent.name}" — ${selectedComponent.maturity}, ${selectedComponent.completion}% complete, Backend: ${selectedComponent.layers.backend}, Frontend: ${selectedComponent.layers.frontend}, Agents: ${selectedComponent.layers.agent}]\n\n${userMsg}`
-        : userMsg;
+      let context = userMsg;
+      if (selectedComponent) {
+        const compCtx = `[Context: Component "${selectedComponent.name}" — ${selectedComponent.maturity}, ${selectedComponent.completion}% complete, Backend: ${selectedComponent.layers.backend}, Frontend: ${selectedComponent.layers.frontend}, Agents: ${selectedComponent.layers.agent}]`;
+        const promptCtx = (workTab === 'build' && buildPrompt) ? `\n[Current Build Prompt (first 800 chars):\n${buildPrompt.substring(0, 800)}...]` : '';
+        context = `${compCtx}${promptCtx}\n\n${userMsg}`;
+      }
       const res = await portalApi.post('/api/portal/project/architect/turn', { session_id: sid, input: context });
       const reply = res.data.message || res.data.response || 'No response';
       setCoryMessages(prev => [...prev, { role: 'cory', text: reply }]);
@@ -1357,8 +1362,18 @@ function SystemViewV2Inner() {
                           <i className="bi bi-box-arrow-up-right me-1"></i>Open Claude
                         </a>
                       </div>
-                      <div className="mb-3 p-3" style={{ background: '#1e293b', borderRadius: 8, maxHeight: 200, overflowY: 'auto' }}>
-                        <pre style={{ color: '#e2e8f0', fontSize: 10, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>{buildPrompt}</pre>
+                      {/* Editable prompt — user can refine before copying */}
+                      <div className="mb-3">
+                        <div className="d-flex align-items-center justify-content-between mb-1">
+                          <span className="text-muted" style={{ fontSize: 9 }}><i className="bi bi-pencil me-1"></i>Edit the prompt below, then copy again</span>
+                        </div>
+                        <textarea
+                          className="form-control form-control-sm"
+                          rows={8}
+                          value={buildPrompt}
+                          onChange={e => setBuildPrompt(e.target.value)}
+                          style={{ fontFamily: 'monospace', fontSize: 10, background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 8, lineHeight: 1.5, resize: 'vertical' }}
+                        />
                       </div>
                       {!buildResult && (
                         <div>
@@ -1413,19 +1428,27 @@ function SystemViewV2Inner() {
                       )}
                     </div>
                   )}
-                  {/* Cory in Build tab — explains what to build */}
+                  {/* Cory in Build tab — explains what to build + refine prompt */}
                   <CoryInlinePanel
                     suggestions={(() => {
-                      const bs: Array<{ title: string; explanation: string }> = [];
-                      if (selectedComponent.nextStep) bs.push({ title: selectedComponent.nextStep, explanation: getWhyMatters(selectedComponent) });
-                      if (selectedComponent.coverageRaw < 50) bs.push({ title: `${100 - selectedComponent.coverageRaw}% of requirements still unmatched`, explanation: 'Building this step will match more requirements and increase coverage.' });
-                      if (selectedComponent.layers.backend === 'missing') bs.push({ title: 'Backend layer needed first', explanation: 'This component has no backend services. The build prompt will create them.' });
-                      return bs.slice(0, 2);
+                      const bs: Array<{ title: string; explanation: string; action?: string }> = [];
+                      if (!buildPrompt) {
+                        if (selectedComponent.nextStep) bs.push({ title: selectedComponent.nextStep, explanation: getWhyMatters(selectedComponent), action: 'generate' });
+                        if (selectedComponent.layers.backend === 'missing') bs.push({ title: 'Backend layer needed first', explanation: 'This component has no backend services. Generate a prompt to create them.', action: 'generate' });
+                      } else {
+                        bs.push({ title: 'Refine this prompt', explanation: 'Ask me to adjust the prompt — add constraints, change scope, or include specific code patterns.', action: 'refine' });
+                        if (selectedComponent.coverageRaw < 50) bs.push({ title: 'Paste Claude\'s response to update', explanation: 'If Claude gave you code, paste it below to validate or refine the next step.' });
+                      }
+                      return bs.slice(0, 3);
                     })()}
                     coryInput={coryInput} setCoryInput={setCoryInput}
                     coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
                     onAsk={handleAskCory}
-                    tabContext="What to build next"
+                    onApply={(action) => {
+                      if (action === 'generate') handleGeneratePrompt(selectedComponent);
+                      if (action === 'refine') setCoryInput('Refine this build prompt to ');
+                    }}
+                    tabContext={buildPrompt ? 'Prompt assistant' : 'What to build next'}
                   />
                 </div>
               )}
@@ -1609,22 +1632,32 @@ function SystemViewV2Inner() {
                       ))}
                     </div>
                   )}
-                  {/* Cory in UI tab — UX suggestions */}
+                  {/* Cory in UI tab — UX suggestions (clickable actions) */}
                   <CoryInlinePanel
                     suggestions={(() => {
-                      const us: Array<{ title: string; explanation: string }> = [];
-                      us.push({ title: 'Review page layout and hierarchy', explanation: 'Use the quick actions above to analyze layout, accessibility, and responsiveness.' });
+                      const us: Array<{ title: string; explanation: string; action?: string }> = [];
+                      us.push({ title: 'Improve page layout and hierarchy', explanation: 'Analyze and fix spacing, visual hierarchy, and component structure.', action: 'layout' });
+                      us.push({ title: 'Fix usability issues', explanation: 'Detect broken interactions, missing feedback, and accessibility gaps.', action: 'ux' });
                       if (uiFeedback?.items?.filter((f: any) => f.status === 'open').length > 0) {
-                        us.push({ title: `${uiFeedback.items.filter((f: any) => f.status === 'open').length} open UI issues detected`, explanation: 'Run "Improve Layout" or "Fix UX Issues" to get specific fixes.' });
+                        us.push({ title: `${uiFeedback.items.filter((f: any) => f.status === 'open').length} open UI issues — re-analyze`, explanation: 'Previous analysis found issues. Click to run a fresh scan.', action: 'rescan' });
                       }
                       if (selectedComponent.completion < 80) {
-                        us.push({ title: 'Page may need more features', explanation: 'Coverage is low — the UI may be missing key functionality.' });
+                        us.push({ title: 'Check mobile responsiveness', explanation: 'Coverage is low — ensure the UI works on all screen sizes.', action: 'mobile' });
                       }
                       return us.slice(0, 3);
                     })()}
                     coryInput={coryInput} setCoryInput={setCoryInput}
                     coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
                     onAsk={handleAskCory}
+                    onApply={(action) => {
+                      const feedbackMap: Record<string, string> = {
+                        layout: 'Improve the page layout, spacing, and visual hierarchy',
+                        ux: 'Find and fix usability issues and broken interactions',
+                        mobile: 'Make the layout responsive for mobile and tablet',
+                        rescan: 'Re-analyze all UI elements and find remaining issues',
+                      };
+                      handleUIAnalyze(selectedComponent.id, feedbackMap[action] || 'Analyze this page for improvements');
+                    }}
                     tabContext="UI advisor"
                   />
                 </div>

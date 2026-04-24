@@ -2218,16 +2218,36 @@ router.post('/api/portal/project/execution-ticket', requireParticipant, async (r
     const { action, componentId, componentName, stepLabel, promptTarget, ticketId, result } = req.body;
 
     if (action === 'create') {
-      // Create execution ticket
-      const { createBPOSTicket } = await import('../services/company/ticketOrchestrator');
-      const { getActiveCompany } = await import('../services/company/companyService');
-      const company = await getActiveCompany();
-      const companyId = company ? (company as any).id : null;
-      const ticket = await createBPOSTicket(companyId || 'default', componentName || 'Unknown', stepLabel || 'Build step', componentId || '');
-      // Move to in_progress
-      const { updateTicketStatus } = await import('../services/company/ticketOrchestrator');
-      await updateTicketStatus((ticket as any).id, 'in_progress', 'cory', 'bpos_orchestrator', `Prompt target: ${promptTarget || 'unknown'}`);
-      res.json({ ticket_id: (ticket as any).id, ticket_number: (ticket as any).ticket_number });
+      // Create execution ticket — try company-aware first, fallback to simple ticket
+      try {
+        const { createBPOSTicket } = await import('../services/company/ticketOrchestrator');
+        let companyId = 'default';
+        try {
+          const { getActiveCompany } = await import('../services/company/companyService');
+          const company = await getActiveCompany();
+          if (company) companyId = (company as any).id;
+        } catch { /* no active company — use default */ }
+        const ticket = await createBPOSTicket(companyId, componentName || 'Unknown', stepLabel || 'Build step', componentId || '');
+        const { updateTicketStatus } = await import('../services/company/ticketOrchestrator');
+        await updateTicketStatus((ticket as any).id, 'in_progress', 'cory', 'bpos_orchestrator', `Prompt target: ${promptTarget || 'unknown'}`);
+        res.json({ ticket_id: (ticket as any).id, ticket_number: (ticket as any).ticket_number });
+      } catch (innerErr: any) {
+        // Fallback: create a simple ticket directly if orchestrator fails (e.g., missing columns)
+        const { Ticket } = await import('../models');
+        const ticket = await (Ticket as any).create({
+          title: `[BPOS] ${componentName || 'Unknown'} — ${stepLabel || 'Build step'}`,
+          type: 'bpos_execution',
+          priority: 'medium',
+          status: 'in_progress',
+          source: 'bpos_engine',
+          created_by_type: 'cory',
+          created_by_id: 'bpos_orchestrator',
+          entity_type: 'capability',
+          entity_id: componentId || null,
+          metadata: { prompt_target: promptTarget, step_label: stepLabel, component_name: componentName },
+        });
+        res.json({ ticket_id: ticket.id, ticket_number: ticket.ticket_number });
+      }
     } else if (action === 'complete' && ticketId) {
       const { updateTicketStatus, addTicketOutput } = await import('../services/company/ticketOrchestrator');
       await addTicketOutput(ticketId, 'bpos_orchestrator', result || {});
