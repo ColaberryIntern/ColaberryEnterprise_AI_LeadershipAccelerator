@@ -80,7 +80,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
       const coverage = bp.metrics?.requirements_coverage || 0;
       const readiness = bp.metrics?.system_readiness || 0;
       const maturityLevel = bp.maturity?.level || 0;
-      const isComplete = bp.is_complete === true;
+      const isComplete = bp.is_complete === true || (coverage >= 90 && readiness >= 90);
       const isPageBP = bp.source === 'frontend_page' || bp.is_page_bp === true;
       const bpSource = bp.source || 'unknown';
       const hasExecPlan = (bp.execution_plan || []).length > 0;
