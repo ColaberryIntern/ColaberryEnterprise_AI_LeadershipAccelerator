@@ -251,18 +251,18 @@ export default function CEOCommandCenter() {
 
     const s = settled<CompanyStatus>(statusRes as any);
     if (s) { setStatus(s); setEnabled(!!s.enabled); }
-    const g = settled<CompanyGoal[]>(goalsRes as any);
-    if (g) setGoals(Array.isArray(g) ? g : []);
+    const g = settled<any[]>(goalsRes as any);
+    if (g) setGoals((Array.isArray(g) ? g : []).map((x: any) => ({ ...x, name: x.goal_name || x.name || '', unit: x.measurement_unit || x.unit || '%' })));
     const d = settled<CompanyDirective[]>(directivesRes as any);
     if (d) setDirectives(Array.isArray(d) ? d : []);
-    const k = settled<DepartmentKpi[]>(kpisRes as any);
-    if (k) setKpis(Array.isArray(k) ? k : []);
-    const b = settled<CompanyBudget[]>(budgetsRes as any);
-    if (b) setBudgets(Array.isArray(b) ? b : []);
-    const a = settled<CompanyAuditLog[]>(auditRes as any);
-    if (a) setAudit(Array.isArray(a) ? a : []);
-    const w = settled<WorkforceReport>(workforceRes as any);
-    if (w) setWorkforce(w);
+    const k = settled<any[]>(kpisRes as any);
+    if (k) setKpis((Array.isArray(k) ? k : []).map((x: any) => ({ ...x, department: x.department_name || x.department || '', unit: x.measurement_unit || x.unit || '%' })));
+    const b = settled<any[]>(budgetsRes as any);
+    if (b) setBudgets((Array.isArray(b) ? b : []).map((x: any) => ({ ...x, department: x.department_name || x.department || '', allocated: x.allocated_budget ?? x.allocated ?? 0, spent: x.spent_budget ?? x.spent ?? 0 })));
+    const a = settled<any[]>(auditRes as any);
+    if (a) setAudit((Array.isArray(a) ? a : []).map((x: any) => ({ ...x, event: x.event_type || x.event || '', detail: typeof x.detail === 'object' ? JSON.stringify(x.detail) : (x.detail || '') })));
+    const w = settled<any>(workforceRes as any);
+    if (w) setWorkforce({ total: w.total_agents ?? w.total ?? 0, healthy: w.healthy ?? 0, errored: w.errored ?? 0, idle: w.idle ?? 0, agents: [], insights: Array.isArray(w.insights) ? w.insights : [] });
     const dp = settled<Department[]>(deptRes as any);
     if (dp) setDepartments(Array.isArray(dp) ? dp : []);
     const t = settled<Ticket[]>(ticketsRes as any);
