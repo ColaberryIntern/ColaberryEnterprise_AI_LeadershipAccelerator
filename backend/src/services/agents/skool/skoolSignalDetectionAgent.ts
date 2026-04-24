@@ -93,27 +93,19 @@ async function loginToSkool(page: Page): Promise<boolean> {
   try {
     console.log(`${LOG_PREFIX} Navigating to login page...`);
     await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
+    await page.waitForTimeout(3000);
 
-    // Fill email
-    const emailInput = page.locator('input[type="email"], input[name="email"]').first();
-    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
-    await emailInput.fill(email);
-
-    // Fill password
-    const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
-    await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
-    await passwordInput.fill(password);
-
-    // Click login button
-    const loginButton = page.locator('button[type="submit"], button:has-text("Log in"), button:has-text("Sign in")').first();
-    await loginButton.click();
+    // Fill credentials using simple selectors (proven to work)
+    await page.fill('input[type=email]', email);
+    await page.fill('input[type=password]', password);
+    await page.click('button[type=submit]');
 
     // Wait for login to complete (Skool uses client-side routing)
     await page.waitForTimeout(5000);
 
     const currentUrl = page.url();
     if (currentUrl.includes('/login')) {
-      console.error(`${LOG_PREFIX} Still on login page after submit`);
+      console.error(`${LOG_PREFIX} Still on login page after submit. URL: ${currentUrl}`);
       return false;
     }
 
