@@ -677,11 +677,95 @@ export default function SystemBlueprint() {
     setBuild(prev => ({ ...prev, reportText: value, pasteDetected: isPaste || prev.pasteDetected }));
   };
 
-  const handleLearnAbout = (stepTitle: string, compName: string) => {
-    const prompt = `Explain what "${stepTitle}" means in the context of building an enterprise ${project?.industry || 'software'} system called "${project?.organization_name || 'my project'}". What are the key concepts, common implementation patterns, and what should I expect when building this? Keep it practical and under 500 words.`;
-    navigator.clipboard.writeText(prompt).catch(() => {});
-    window.open('https://chatgpt.com/', '_blank');
-    showToast('Prompt copied — paste it in ChatGPT to learn more');
+  const handleLearnAbout = async (comp: SystemComponent) => {
+    const projectContext = project?.project_variables?.system_prompt || project?.primary_business_problem || '';
+    // Fetch BP detail for rich context
+    let featureList = '';
+    let reqList = '';
+    let gapList = '';
+    let totalReqs = 0;
+    let featureCount = 0;
+    let gapCount = 0;
+    try {
+      const detail = await bpApi.getProcess(comp.id);
+      const d = detail.data || {};
+      const features = d.features || [];
+      const gaps = d.autonomy_gaps || [];
+      featureCount = features.length;
+      gapCount = gaps.length;
+      totalReqs = d.total_requirements || 0;
+      featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
+      reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
+      gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
+    } catch { /* proceed with what we have */ }
+
+    const learnPrompt = `You are operating in LEARN MODE.
+
+DO NOT write code. DO NOT give implementation instructions. DO NOT suggest building anything.
+Your ONLY job is to help the learner UNDERSTAND what this business process is, why it matters, and how it works.
+
+---
+
+You are a Technical Mentor helping someone deeply understand a business process before they build it.
+
+Assume the learner has NO prior knowledge of this system or the domain. Your job is to help them fully understand what this process is, why it matters, what it does, and how it works — so they can make informed decisions.
+
+---
+
+# PROJECT CONTEXT (THE BIGGER PICTURE)
+
+${projectContext || 'No project system prompt set yet.'}
+
+---
+
+BUSINESS PROCESS: ${comp.name}
+
+DESCRIPTION: ${comp.description || 'No description available.'}
+
+CURRENT STATE:
+- Backend: ${comp.layers.backend}
+- Frontend: ${comp.layers.frontend}
+- Agents: ${comp.layers.agent}
+- Completion: ${comp.completion}%
+- Maturity: ${comp.maturity}
+
+FEATURES THIS PROCESS NEEDS (${featureCount}):
+${featureList || 'None defined yet'}
+
+REQUIREMENTS (${totalReqs}):
+${reqList || 'None extracted yet'}
+
+CURRENT GAPS (${gapCount}):
+${gapList || 'No gaps detected'}
+
+---
+
+YOUR MISSION:
+
+Help the learner understand:
+1. What "${comp.name}" is in plain, non-technical language
+2. What business problem it solves and why it matters
+3. Each feature listed above — what it does and why it's needed
+4. The current gaps — what's missing and what that means
+5. How the different layers (backend, frontend, agents, database) work together
+6. What questions they should be asking before building
+
+RULES:
+- Explain ONE concept at a time
+- Use analogies and real-world examples
+- Ask comprehension questions before moving to the next concept
+- Never assume the learner already knows something
+- Focus purely on understanding — do NOT give coding instructions or tell them to build anything
+- If the learner asks a question, answer it thoroughly before continuing
+
+Begin by greeting the learner and explaining what "${comp.name}" is and why it matters for their business.`;
+
+    try { await navigator.clipboard.writeText(learnPrompt); } catch {
+      const ta = document.createElement('textarea'); ta.value = learnPrompt; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    window.open('https://chatgpt.com', '_blank');
+    showToast('Learn Mode prompt copied — paste in ChatGPT');
   };
 
   const handleValidate = async (comp: SystemComponent) => {
@@ -1044,7 +1128,7 @@ export default function SystemBlueprint() {
                 <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(recommended)}>
                   <i className="bi bi-terminal me-1"></i>Generate Build Prompt
                 </button>
-                <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(getStepTitle(recommended), recommended.name)}>
+                <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(recommended)}>
                   <i className="bi bi-book me-1"></i>Learn About This
                 </button>
               </div>
@@ -1291,7 +1375,7 @@ export default function SystemBlueprint() {
                               <div className="text-muted" style={{ fontSize: 9 }}>{step.explanation}</div>
                             </div>
                             <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
-                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(step.title, stepComp?.name || '')}>
+                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => stepComp && handleLearnAbout(stepComp)}>
                                 <i className="bi bi-book"></i>
                               </button>
                               <button className="btn btn-sm btn-primary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleApplyPlanStep(step)}>
