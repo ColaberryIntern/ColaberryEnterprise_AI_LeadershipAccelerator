@@ -336,6 +336,7 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
       const msg = `gmail_colaberry: ${error.message}`;
       console.error(`${LOG_PREFIX} ${msg}`);
       errors.push(msg);
+      try { await (await import('./smsAlertService')).alertSyncFailure('gmail_colaberry', 'sync', error.message); } catch { /* alert is non-critical */ }
     }
   } else {
     console.log(`${LOG_PREFIX} [gmail_colaberry] Skipped — not configured`);
@@ -353,6 +354,7 @@ export async function syncAllMailboxes(): Promise<{ synced: number; errors: stri
       const msg = `gmail_personal: ${error.message}`;
       console.error(`${LOG_PREFIX} ${msg}`);
       errors.push(msg);
+      try { await (await import('./smsAlertService')).alertSyncFailure('gmail_personal', 'sync', error.message); } catch { /* alert is non-critical */ }
     }
   } else {
     console.log(`${LOG_PREFIX} [gmail_personal] Skipped — not configured`);

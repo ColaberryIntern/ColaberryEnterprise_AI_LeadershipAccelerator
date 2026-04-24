@@ -107,4 +107,39 @@ export async function sendDailySummary(stats: {
   );
 }
 
+/**
+ * Alert when an InboxCOS sync or archive operation fails authentication.
+ * Throttled to once per day per provider+kind so a stuck token doesn't
+ * spam SMS every minute.
+ */
+const lastAuthAlertAt = new Map<string, number>();
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+export async function alertSyncFailure(
+  provider: string,
+  kind: 'sync' | 'archive',
+  errorMessage: string
+): Promise<void> {
+  const key = `${provider}:${kind}`;
+  const last = lastAuthAlertAt.get(key) || 0;
+  if (Date.now() - last < ONE_DAY_MS) return; // throttled
+
+  const isAuthError = /invalid_grant|invalid_credentials|unauthorized|expired/i.test(errorMessage);
+  if (!isAuthError && kind === 'sync') return; // only alert on auth-class sync errors; non-auth sync errors are usually transient
+
+  const providerLabel: Record<string, string> = {
+    gmail_colaberry: 'Colaberry Gmail',
+    gmail_personal:  'Personal Gmail',
+    hotmail:         'Hotmail',
+  };
+  const inbox = providerLabel[provider] || provider;
+  const action = kind === 'sync' ? 'sync' : 'auto-archive';
+  const reason = isAuthError ? 'auth token expired' : 'error';
+
+  const sent = await sendSms(
+    `Inbox COS ${action} failed (${inbox}): ${reason}. Re-run scripts/inbox-auth-helper.js.`
+  );
+  if (sent) lastAuthAlertAt.set(key, Date.now());
+}
+
 export { sendSms };

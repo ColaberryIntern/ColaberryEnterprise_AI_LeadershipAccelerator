@@ -82,6 +82,13 @@ export async function archiveEmail(email: ArchiveTarget): Promise<void> {
       console.error(`${LOG_PREFIX} Audit log also failed: ${auditErr.message}`);
     });
 
+    // Surface auth-class failures via SMS so a stuck token doesn't go silent.
+    // Throttled to once/day per provider+kind in alertSyncFailure().
+    try {
+      const { alertSyncFailure } = await import('./smsAlertService');
+      await alertSyncFailure(email.provider, 'archive', error.message);
+    } catch { /* alert is non-critical */ }
+
     // Do NOT rethrow — archive is non-critical
   }
 }
