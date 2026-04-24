@@ -487,9 +487,13 @@ function SystemViewV2Inner() {
   const [searchParams] = useSearchParams();
   const urlComponentId = searchParams.get('componentId');
 
-  // Global mode
+  // Global mode — force 'build' if URL has a build-mode tab param
   type SystemMode = 'build' | 'reporting';
-  const [systemMode, setSystemModeState] = useState<SystemMode>(() => (localStorage.getItem('system_mode') as SystemMode) || 'build');
+  const [systemMode, setSystemModeState] = useState<SystemMode>(() => {
+    const urlT = searchParams.get('tab');
+    if (urlT && ['overview','build','improve','health','ui'].includes(urlT)) return 'build';
+    return (localStorage.getItem('system_mode') as SystemMode) || 'build';
+  });
   const setSystemMode = (m: SystemMode) => { setSystemModeState(m); localStorage.setItem('system_mode', m); };
   const isReporting = systemMode === 'reporting';
 
@@ -1266,65 +1270,66 @@ function SystemViewV2Inner() {
                 )}
               </nav>
 
-              {/* ── TAB: Overview (unified Cory format + System Intelligence) ── */}
+              {/* ── TAB: Overview (Cory left + System Intelligence right) ── */}
               {workTab === 'overview' && (
-                <div>
-                  {/* Cory — What I Recommend */}
-                  <div className="d-flex align-items-center gap-2 mb-3">
-                    <i className="bi bi-robot" style={{ color: '#3b82f6', fontSize: 16 }}></i>
-                    <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: 'var(--color-primary)' }}>Cory — What I Recommend</h6>
+                <div className="row g-3">
+                  {/* Left: Cory recommendations */}
+                  <div className={compDetail ? 'col-lg-7' : 'col-12'}>
+                    <div className="d-flex align-items-center gap-2 mb-3">
+                      <i className="bi bi-robot" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+                      <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: 'var(--color-primary)' }}>Cory — What I Recommend</h6>
+                    </div>
+
+                    {(() => {
+                      const suggestions = getComponentSuggestions(selectedComponent, compDetail);
+                      const primary = suggestions[0];
+                      const upNext = suggestions.slice(1);
+                      return primary ? (
+                        <>
+                          <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {suggestions.length} for {selectedComponent.name}</div>
+                          <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
+                          <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
+
+                          <div className="d-flex flex-wrap gap-2 mb-3">
+                            <span className="badge" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{selectedComponent.completion}% complete</span>
+                            <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
+                          </div>
+
+                          <div className="d-flex flex-wrap gap-2 mb-3">
+                            <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); if (primary.action) handleGeneratePrompt(selectedComponent); }}>
+                              <i className="bi bi-terminal me-1"></i>{primary.action ? 'Generate Build Prompt' : 'Go to Build'}
+                            </button>
+                            <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
+                              <i className="bi bi-book me-1"></i>Learn About This
+                            </button>
+                          </div>
+
+                          {upNext.length > 0 && (
+                            <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                              <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
+                                <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also recommended ({upNext.length} more)
+                              </div>
+                              {upNext.map((s, i) => (
+                                <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                  <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                  <div className="flex-grow-1">
+                                    <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                    <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-muted" style={{ fontSize: 12 }}>This component is on track — no immediate recommendations.</p>
+                      );
+                    })()}
                   </div>
 
-                  {/* Primary + up-next with color coding */}
-                  {(() => {
-                    const suggestions = getComponentSuggestions(selectedComponent, compDetail);
-                    const primary = suggestions[0];
-                    const upNext = suggestions.slice(1);
-                    return primary ? (
-                      <>
-                        <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {suggestions.length} for {selectedComponent.name}</div>
-                        <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
-                        <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
-
-                        <div className="d-flex flex-wrap gap-2 mb-3">
-                          <span className="badge" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{selectedComponent.completion}% complete</span>
-                          <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
-                        </div>
-
-                        <div className="d-flex flex-wrap gap-2 mb-3">
-                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); if (primary.action) handleGeneratePrompt(selectedComponent); }}>
-                            <i className="bi bi-terminal me-1"></i>{primary.action ? 'Generate Build Prompt' : 'Go to Build'}
-                          </button>
-                          <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
-                            <i className="bi bi-book me-1"></i>Learn About This
-                          </button>
-                        </div>
-
-                        {upNext.length > 0 && (
-                          <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                            <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
-                              <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also recommended ({upNext.length} more)
-                            </div>
-                            {upNext.map((s, i) => (
-                              <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
-                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
-                                <div className="flex-grow-1">
-                                  <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
-                                  <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-muted" style={{ fontSize: 12 }}>This component is on track — no immediate recommendations.</p>
-                    );
-                  })()}
-
-                  {/* System Intelligence Panel */}
+                  {/* Right: System Intelligence */}
                   {compDetail && (
-                    <div className="mt-4">
+                    <div className="col-lg-5">
                       <SystemIntelligencePanel
                         links={compDetail.implementation_links || {}}
                         usability={compDetail.usability || {}}
