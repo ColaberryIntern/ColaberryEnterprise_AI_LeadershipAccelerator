@@ -36,15 +36,30 @@ export async function runSkoolContentResponse(): Promise<{ generated: number }> 
     return { generated };
   }
 
-  // Pull pending generate_reply and generate_post tasks
-  const tasks = await SkoolTask.findAll({
-    where: {
-      task_type: { [Op.in]: ['generate_reply', 'generate_post'] },
-      status: 'pending',
-    },
-    order: [['priority', 'DESC']],
-    limit: 5,
-  });
+  // Pull pending tasks distributed across categories (not all from one category).
+  // Use a round-robin approach: get 1 task per category, prioritized by score.
+  const categoryPriority = ['hiring', 'dev-help', 'leads-help', 'builds', 'introductions', 'announcements'];
+  const tasks: any[] = [];
+  for (const cat of categoryPriority) {
+    if (tasks.length >= 5) break;
+    const catTasks = await SkoolTask.findAll({
+      where: { task_type: { [Op.in]: ['generate_reply', 'generate_post'] }, status: 'pending' },
+      include: [{ model: SkoolSignal, as: 'signal', where: { category: cat }, required: true }],
+      order: [['priority', 'DESC']],
+      limit: 1,
+    });
+    tasks.push(...catTasks);
+  }
+  // Fill remaining slots with highest priority tasks from any category
+  if (tasks.length < 5) {
+    const taskIds = tasks.map((t: any) => t.id);
+    const more = await SkoolTask.findAll({
+      where: { task_type: { [Op.in]: ['generate_reply', 'generate_post'] }, status: 'pending', ...(taskIds.length > 0 ? { id: { [Op.notIn]: taskIds } } : {}) },
+      order: [['priority', 'DESC']],
+      limit: 5 - tasks.length,
+    });
+    tasks.push(...more);
+  }
 
   if (tasks.length === 0) {
     console.log('[Skool][ContentResponse] No pending tasks found');
