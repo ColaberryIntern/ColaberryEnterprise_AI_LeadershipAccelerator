@@ -1258,38 +1258,101 @@ export default function SystemBlueprint() {
                   <div className="alert alert-danger py-2" style={{ fontSize: 12 }}>{build.validationResult.error}</div>
                 ) : (
                   <div>
-                    <div className="p-4 mb-3 text-center celebration-card" style={{ background: 'linear-gradient(135deg, #10b98115, #3b82f615)', borderRadius: 12, border: '1px solid #10b98130' }}>
-                      <div style={{ fontSize: 32, marginBottom: 8 }}>
-                        <i className="bi bi-rocket-takeoff" style={{ color: '#10b981' }}></i>
+                    {/* Build Summary Header */}
+                    <div className="p-4 mb-3 celebration-card" style={{ background: 'linear-gradient(135deg, #10b98115, #3b82f615)', borderRadius: 12, border: '1px solid #10b98130' }}>
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 22 }}></i>
+                        <div>
+                          <h6 className="fw-bold mb-0" style={{ color: '#059669', fontSize: 16 }}>Build Validated</h6>
+                          <span style={{ fontSize: 11, color: '#64748b' }}>{getCelebrationSubtext(build.validationResult)}</span>
+                        </div>
+                        {build.validationResult.metrics_after && (
+                          <div className="ms-auto d-flex gap-3 text-center">
+                            <span><strong style={{ color: '#059669', fontSize: 16 }}>{build.validationResult.metrics_after.reqCoverage}%</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Coverage</span></span>
+                            <span><strong style={{ color: '#3b82f6', fontSize: 16 }}>L{build.validationResult.metrics_after.maturityLevel}</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Maturity</span></span>
+                            <span><strong style={{ color: '#8b5cf6', fontSize: 16 }}>{build.validationResult.metrics_after.readiness}%</strong><br /><span className="text-muted" style={{ fontSize: 9 }}>Readiness</span></span>
+                          </div>
+                        )}
                       </div>
-                      <h6 className="fw-bold mb-1" style={{ color: '#059669', fontSize: 18 }}>
-                        Your system just leveled up
-                      </h6>
-                      <p className="mb-1" style={{ fontSize: 12, color: '#64748b' }}>
-                        {getCelebrationSubtext(build.validationResult)}
-                      </p>
-                      <p className="mb-3" style={{ fontSize: 11, color: '#94a3b8' }}>
-                        You're now closer to a production-ready system.
-                      </p>
-                      {(() => {
-                        const improvements = getImprovements(build.validationResult, build.beforeMetrics);
-                        return improvements.length > 0 ? (
-                          <div className="d-flex flex-column align-items-center gap-1 mb-3" style={{ fontSize: 12 }}>
-                            {improvements.map((item, i) => (
-                              <span key={i} className="stagger-item" style={{ color: '#059669' }}><i className="bi bi-check2 me-1"></i>{item}</span>
+
+                      {/* Requirements matched */}
+                      <div className="mb-3 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                          <i className="bi bi-clipboard-check me-1"></i>Requirements Matched
+                        </div>
+                        <div style={{ fontSize: 12, color: '#059669' }}>
+                          <strong>{build.validationResult.requirementsVerified || 0}</strong> of {build.validationResult.requirementsTotal || 0} requirements now verified
+                        </div>
+                        {(() => {
+                          const improvements = getImprovements(build.validationResult, build.beforeMetrics);
+                          return improvements.length > 0 ? (
+                            <ul className="mb-0 mt-1 ps-3" style={{ fontSize: 11, color: '#475569' }}>
+                              {improvements.map((item, i) => <li key={i}>{item}</li>)}
+                            </ul>
+                          ) : null;
+                        })()}
+                      </div>
+
+                      {/* Files Created */}
+                      {build.validationResult.parsed?.filesCreated?.length > 0 && (
+                        <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                            <i className="bi bi-file-earmark-plus me-1" style={{ color: '#10b981' }}></i>Files Created ({build.validationResult.parsed.filesCreated.length})
+                          </div>
+                          <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
+                            {build.validationResult.parsed.filesCreated.map((f: string, i: number) => (
+                              <li key={i} style={{ fontFamily: 'monospace', fontSize: 10 }}>{f}</li>
                             ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Files Modified */}
+                      {build.validationResult.parsed?.filesModified?.length > 0 && (
+                        <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                            <i className="bi bi-pencil-square me-1" style={{ color: '#f59e0b' }}></i>Files Modified ({build.validationResult.parsed.filesModified.length})
                           </div>
-                        ) : (
-                          <div className="mb-3" style={{ fontSize: 12, color: '#059669' }}>
-                            <strong>{build.validationResult.requirementsVerified || 0}</strong> of {build.validationResult.requirementsTotal || 0} requirements verified
+                          <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
+                            {build.validationResult.parsed.filesModified.map((f: string, i: number) => (
+                              <li key={i} style={{ fontFamily: 'monospace', fontSize: 10 }}>{f}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* API Routes */}
+                      {build.validationResult.parsed?.routes?.length > 0 && (
+                        <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                            <i className="bi bi-signpost-2 me-1" style={{ color: '#3b82f6' }}></i>API Routes Added ({build.validationResult.parsed.routes.length})
                           </div>
-                        );
-                      })()}
-                      {build.validationResult.metrics_after && (
-                        <div className="d-flex justify-content-center gap-4" style={{ fontSize: 12 }}>
-                          <span><strong style={{ color: '#059669', fontSize: 18 }}>{build.validationResult.metrics_after.reqCoverage}%</strong><br /><span className="text-muted" style={{ fontSize: 10 }}>Coverage</span></span>
-                          <span><strong style={{ color: '#3b82f6', fontSize: 18 }}>L{build.validationResult.metrics_after.maturityLevel}</strong><br /><span className="text-muted" style={{ fontSize: 10 }}>Maturity</span></span>
-                          <span><strong style={{ color: '#8b5cf6', fontSize: 18 }}>{build.validationResult.metrics_after.readiness}%</strong><br /><span className="text-muted" style={{ fontSize: 10 }}>Readiness</span></span>
+                          <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
+                            {build.validationResult.parsed.routes.map((r: string, i: number) => (
+                              <li key={i} style={{ fontFamily: 'monospace', fontSize: 10 }}>{r}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Database Changes */}
+                      {build.validationResult.parsed?.database?.length > 0 && (
+                        <div className="mb-2 p-2" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                          <div className="fw-semibold mb-1" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                            <i className="bi bi-database me-1" style={{ color: '#8b5cf6' }}></i>Database Changes
+                          </div>
+                          <ul className="mb-0 ps-3" style={{ fontSize: 11, color: '#475569' }}>
+                            {build.validationResult.parsed.database.map((d: string, i: number) => (
+                              <li key={i}>{d}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* No parsed detail fallback */}
+                      {!build.validationResult.parsed?.filesCreated?.length && !build.validationResult.parsed?.routes?.length && !build.validationResult.parsed?.filesModified?.length && (
+                        <div className="p-2 text-muted" style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 11 }}>
+                          <i className="bi bi-info-circle me-1"></i>Tip: Paste a structured validation report with "Files Created:", "Routes:", and "Database:" sections for a detailed build breakdown.
                         </div>
                       )}
                     </div>

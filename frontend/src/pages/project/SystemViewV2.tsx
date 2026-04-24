@@ -1388,11 +1388,45 @@ function SystemViewV2Inner() {
                       )}
                       {buildResult && !buildResult.error && (
                         <div className="p-3" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
-                          <div className="fw-bold small mb-1" style={{ color: '#059669' }}><i className="bi bi-check-circle-fill me-1"></i>Build Validated</div>
-                          <div style={{ fontSize: 11 }}><strong>{buildResult.requirementsVerified || 0}</strong> of {buildResult.requirementsTotal || 0} requirements verified</div>
-                          <button className="btn btn-sm btn-outline-primary mt-2" style={{ fontSize: 10 }} onClick={() => { setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}>
-                            <i className="bi bi-arrow-repeat me-1"></i>Build Again
-                          </button>
+                          <div className="d-flex align-items-center justify-content-between mb-2">
+                            <div className="fw-bold small" style={{ color: '#059669' }}><i className="bi bi-check-circle-fill me-1"></i>Build Validated</div>
+                            <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => { setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}>
+                              <i className="bi bi-arrow-repeat me-1"></i>Build Again
+                            </button>
+                          </div>
+                          <div className="mb-2" style={{ fontSize: 11 }}><strong>{buildResult.requirementsVerified || 0}</strong> of {buildResult.requirementsTotal || 0} requirements verified</div>
+                          {buildResult.parsed?.filesCreated?.length > 0 && (
+                            <div className="mb-2">
+                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-file-earmark-plus me-1" style={{ color: '#10b981' }}></i>Files Created</div>
+                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                {buildResult.parsed.filesCreated.map((f: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{f}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          {buildResult.parsed?.filesModified?.length > 0 && (
+                            <div className="mb-2">
+                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-pencil-square me-1" style={{ color: '#f59e0b' }}></i>Files Modified</div>
+                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                {buildResult.parsed.filesModified.map((f: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{f}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          {buildResult.parsed?.routes?.length > 0 && (
+                            <div className="mb-2">
+                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-signpost-2 me-1" style={{ color: '#3b82f6' }}></i>API Routes</div>
+                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                {buildResult.parsed.routes.map((r: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{r}</li>)}
+                              </ul>
+                            </div>
+                          )}
+                          {buildResult.parsed?.database?.length > 0 && (
+                            <div className="mb-2">
+                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-database me-1" style={{ color: '#8b5cf6' }}></i>Database</div>
+                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                {buildResult.parsed.database.map((d: string, i: number) => <li key={i}>{d}</li>)}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       )}
                       {buildResult?.error && <div className="alert alert-danger py-2" style={{ fontSize: 11 }}>{buildResult.error}</div>}
