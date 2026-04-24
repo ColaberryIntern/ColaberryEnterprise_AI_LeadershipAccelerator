@@ -523,6 +523,9 @@ function SystemViewV2Inner() {
 
   // Build tab "up next" state
   const [showBuildUpNext, setShowBuildUpNext] = useState(false);
+  const [showOverviewUpNext, setShowOverviewUpNext] = useState(false);
+  const [showHealthUpNext, setShowHealthUpNext] = useState(false);
+  const [showImproveUpNext, setShowImproveUpNext] = useState(false);
 
   // UI feedback state
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
@@ -1305,22 +1308,32 @@ function SystemViewV2Inner() {
                           </div>
 
                           {upNext.length > 0 && (
-                            <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                              <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
-                                <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also recommended ({upNext.length} more)
-                              </div>
-                              {upNext.map((s, i) => (
-                                <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
-                                  <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
-                                  <div className="flex-grow-1">
-                                    <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
-                                    <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
-                                  </div>
-                                  <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff', flexShrink: 0 }} onClick={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}>
-                                    Run
-                                  </button>
+                            <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                              <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 w-100" style={{ fontSize: 12, color: '#64748b' }} onClick={() => setShowOverviewUpNext(!showOverviewUpNext)}>
+                                <i className={`bi ${showOverviewUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 10 }}></i>
+                                <span>Up next ({upNext.length} more step{upNext.length > 1 ? 's' : ''})</span>
+                              </button>
+                              {showOverviewUpNext && (
+                                <div className="mt-2">
+                                  {upNext.map((s, i) => (
+                                    <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                      <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                      <div className="flex-grow-1">
+                                        <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                        <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
+                                      </div>
+                                      <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
+                                          <i className="bi bi-book"></i>
+                                        </button>
+                                        <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}>
+                                          Run
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              )}
                             </div>
                           )}
                         </>
@@ -1623,22 +1636,32 @@ function SystemViewV2Inner() {
                         </div>
 
                         {upNext.length > 0 && (
-                          <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                            <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
-                              <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also needs attention ({upNext.length} more)
-                            </div>
-                            {upNext.map((s, i) => (
-                              <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
-                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
-                                <div className="flex-grow-1">
-                                  <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
-                                  <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
-                                </div>
-                                <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff', flexShrink: 0 }} onClick={() => handleGeneratePrompt(selectedComponent)}>
-                                  Run
-                                </button>
+                          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                            <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 w-100" style={{ fontSize: 12, color: '#64748b' }} onClick={() => setShowHealthUpNext(!showHealthUpNext)}>
+                              <i className={`bi ${showHealthUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 10 }}></i>
+                              <span>Up next ({upNext.length} more step{upNext.length > 1 ? 's' : ''})</span>
+                            </button>
+                            {showHealthUpNext && (
+                              <div className="mt-2">
+                                {upNext.map((s, i) => (
+                                  <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                    <div className="flex-grow-1">
+                                      <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                      <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
+                                    </div>
+                                    <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
+                                        <i className="bi bi-book"></i>
+                                      </button>
+                                      <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => handleGeneratePrompt(selectedComponent)}>
+                                        Run
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
                           </div>
                         )}
                       </>
@@ -1701,22 +1724,32 @@ function SystemViewV2Inner() {
                         </div>
 
                         {upNext.length > 0 && (
-                          <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                            <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
-                              <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also needs attention ({upNext.length} more)
-                            </div>
-                            {upNext.map((s, i) => (
-                              <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
-                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
-                                <div className="flex-grow-1">
-                                  <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
-                                  <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
-                                </div>
-                                <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff', flexShrink: 0 }} onClick={() => s.color === '#3b82f6' ? setWorkTab('build') : handleGeneratePrompt(selectedComponent)}>
-                                  Run
-                                </button>
+                          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                            <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 w-100" style={{ fontSize: 12, color: '#64748b' }} onClick={() => setShowImproveUpNext(!showImproveUpNext)}>
+                              <i className={`bi ${showImproveUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 10 }}></i>
+                              <span>Up next ({upNext.length} more step{upNext.length > 1 ? 's' : ''})</span>
+                            </button>
+                            {showImproveUpNext && (
+                              <div className="mt-2">
+                                {upNext.map((s, i) => (
+                                  <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                    <div className="flex-grow-1">
+                                      <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                      <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
+                                    </div>
+                                    <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
+                                        <i className="bi bi-book"></i>
+                                      </button>
+                                      <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => s.color === '#3b82f6' ? setWorkTab('build') : handleGeneratePrompt(selectedComponent)}>
+                                        Run
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
                           </div>
                         )}
                       </>
