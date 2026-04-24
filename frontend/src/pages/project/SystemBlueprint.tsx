@@ -1003,10 +1003,20 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
         <>
           <div className="card border-0 shadow-sm mb-4">
             <div className="card-body p-4">
-              <h5 className="fw-bold mb-2" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Your System Blueprint</h5>
-              <p className="text-muted mb-0" style={{ fontSize: 13, lineHeight: 1.7 }}>
-                {summaryText.length > 300 ? summaryText.substring(0, 300) + '...' : summaryText}
-              </p>
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <i className="bi bi-file-text" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
+                <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Your System Blueprint</h5>
+              </div>
+              {project.project_variables?.system_prompt ? (
+                <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)' }}>
+                  <div className="fw-medium mb-1" style={{ fontSize: 10, color: 'var(--color-primary)' }}>System Prompt</div>
+                  <p className="text-muted mb-0" style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+                    {project.project_variables.system_prompt}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-muted mb-0" style={{ fontSize: 13, lineHeight: 1.7 }}>{summaryText}</p>
+              )}
             </div>
           </div>
           <div className="card border-0 shadow-sm mb-4">

@@ -10,6 +10,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
+import SystemIntelligencePanel from '../../components/project/SystemIntelligencePanel';
 
 // ---------------------------------------------------------------------------
 // Types (reused from SystemBlueprint pattern)
@@ -699,37 +700,37 @@ function SystemViewV2Inner() {
   }
 
   // Component-aware suggestions
-  const getComponentSuggestions = (comp: SystemComponent | null, detail: any): Array<{ title: string; explanation: string; action?: string }> => {
+  const getComponentSuggestions = (comp: SystemComponent | null, detail: any): Array<{ title: string; explanation: string; action?: string; color: string }> => {
     if (!comp) return [];
-    const s: Array<{ title: string; explanation: string; action?: string }> = [];
+    const s: Array<{ title: string; explanation: string; action?: string; color: string }> = [];
     // Backend suggestions — highest priority when backend is weak
     if (comp.layers.backend === 'missing' && !comp.isPageBP) {
-      s.push({ title: `Build backend for ${comp.name}`, explanation: 'No backend logic detected. This component needs services, models, and API routes.', action: 'backend_improvement' });
+      s.push({ title: `Build backend for ${comp.name}`, explanation: 'No backend logic detected. This component needs services, models, and API routes.', action: 'backend_improvement', color: '#3b82f6' });
     } else if (comp.layers.backend === 'partial') {
-      s.push({ title: `Strengthen backend for ${comp.name}`, explanation: 'Backend is partially built — missing services, routes, or data models need completion.', action: 'backend_improvement' });
+      s.push({ title: `Strengthen backend for ${comp.name}`, explanation: 'Backend is partially built — missing services, routes, or data models need completion.', action: 'backend_improvement', color: '#3b82f6' });
     }
     // Requirements coverage
     if (comp.coverageRaw < 50) {
-      s.push({ title: `Implement requirements (${comp.coverageRaw}% covered)`, explanation: `${100 - comp.coverageRaw}% of requirements unmatched. Build the missing backend/frontend logic to close gaps.`, action: 'requirement_implementation' });
+      s.push({ title: `Implement requirements (${comp.coverageRaw}% covered)`, explanation: `${100 - comp.coverageRaw}% of requirements unmatched. Build the missing backend/frontend logic to close gaps.`, action: 'requirement_implementation', color: '#3b82f6' });
     }
     // Frontend — only suggest if backend is at least partial
     if (comp.layers.frontend === 'missing' && comp.layers.backend !== 'missing') {
-      s.push({ title: `Add user interface`, explanation: 'Backend exists but no UI. Users need a way to interact with this component.', action: 'frontend_exposure' });
+      s.push({ title: `Add user interface`, explanation: 'Backend exists but no UI. Users need a way to interact with this component.', action: 'frontend_exposure', color: '#10b981' });
     } else if (comp.layers.frontend === 'partial' && comp.layers.backend !== 'missing') {
-      s.push({ title: `Complete frontend for ${comp.name}`, explanation: 'Frontend is partially built — pages or components are missing.', action: 'frontend_exposure' });
+      s.push({ title: `Complete frontend for ${comp.name}`, explanation: 'Frontend is partially built — pages or components are missing.', action: 'frontend_exposure', color: '#10b981' });
     }
     // UI page connection
-    if (comp.ui.pages.length === 0 && comp.layers.frontend !== 'missing') s.push({ title: 'Connect a UI page', explanation: 'Frontend files exist but no page is linked for preview and feedback.' });
+    if (comp.ui.pages.length === 0 && comp.layers.frontend !== 'missing') s.push({ title: 'Connect a UI page', explanation: 'Frontend files exist but no page is linked for preview and feedback.', color: '#10b981' });
     // Agents — only when both backend and frontend are at least partial
     if (comp.layers.agent === 'missing' && comp.layers.backend !== 'missing' && comp.layers.frontend !== 'missing') {
-      s.push({ title: 'Add intelligent automation', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', action: 'agent_enhancement' });
+      s.push({ title: 'Add intelligent automation', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', action: 'agent_enhancement', color: '#8b5cf6' });
     }
     // Autonomy gaps from the detail data
     if (detail?.autonomy_gaps?.length > 0 && s.length < 3) {
       const topGap = detail.autonomy_gaps[0];
-      s.push({ title: topGap.title, explanation: topGap.description?.substring(0, 100) || 'Autonomy gap detected' });
+      s.push({ title: topGap.title, explanation: topGap.description?.substring(0, 100) || 'Autonomy gap detected', color: '#8b5cf6' });
     }
-    return s.slice(0, 3);
+    return s.slice(0, 5);
   };
 
   const handleAskCory = async () => {
@@ -1262,7 +1263,7 @@ function SystemViewV2Inner() {
                 )}
               </nav>
 
-              {/* ── TAB: Overview (unified Cory format) ── */}
+              {/* ── TAB: Overview (unified Cory format + System Intelligence) ── */}
               {workTab === 'overview' && (
                 <div>
                   {/* Cory — What I Recommend */}
@@ -1271,52 +1272,39 @@ function SystemViewV2Inner() {
                     <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: 'var(--color-primary)' }}>Cory — What I Recommend</h6>
                   </div>
 
-                  {/* Layer status overview */}
-                  <div className="d-flex gap-3 mb-3" style={{ fontSize: 11 }}>
-                    <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.backend] }}></div> Backend: <strong>{selectedComponent.layers.backend}</strong></span>
-                    <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.frontend] }}></div> Frontend: <strong>{selectedComponent.layers.frontend}</strong></span>
-                    <span className="d-flex align-items-center gap-1"><div style={{ width: 7, height: 7, borderRadius: '50%', background: LAYER_COLORS[selectedComponent.layers.agent] }}></div> Agents: <strong>{selectedComponent.layers.agent}</strong></span>
-                  </div>
-
-                  {/* Primary recommendation */}
+                  {/* Primary + up-next with color coding */}
                   {(() => {
                     const suggestions = getComponentSuggestions(selectedComponent, compDetail);
                     const primary = suggestions[0];
-                    const upNext = suggestions.slice(1, 3);
+                    const upNext = suggestions.slice(1);
                     return primary ? (
                       <>
-                        <h6 className="fw-bold mb-1" style={{ fontSize: 15, color: 'var(--color-text)' }}>{primary.title}</h6>
-                        <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>{primary.explanation}</p>
+                        <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {suggestions.length} for {selectedComponent.name}</div>
+                        <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
+                        <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
 
                         <div className="d-flex flex-wrap gap-2 mb-3">
-                          <span className="badge" style={{ background: selectedComponent.status === 'complete' ? '#10b98120' : '#f59e0b20', color: selectedComponent.status === 'complete' ? '#059669' : '#92400e', fontSize: 9 }}>{selectedComponent.completion}% complete</span>
+                          <span className="badge" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{selectedComponent.completion}% complete</span>
                           <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
                         </div>
 
                         <div className="d-flex flex-wrap gap-2 mb-3">
-                          {primary.action ? (
-                            <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}>
-                              <i className="bi bi-terminal me-1"></i>Generate Build Prompt
-                            </button>
-                          ) : (
-                            <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={() => setWorkTab('build')}>
-                              <i className="bi bi-hammer me-1"></i>Go to Build
-                            </button>
-                          )}
+                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); if (primary.action) handleGeneratePrompt(selectedComponent); }}>
+                            <i className="bi bi-terminal me-1"></i>{primary.action ? 'Generate Build Prompt' : 'Go to Build'}
+                          </button>
                           <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                             <i className="bi bi-book me-1"></i>Learn About This
                           </button>
                         </div>
 
-                        {/* Up next recommendations */}
                         {upNext.length > 0 && (
                           <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
                             <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
                               <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also recommended ({upNext.length} more)
                             </div>
                             {upNext.map((s, i) => (
-                              <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
-                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#e2e8f0', color: '#64748b', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                              <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                                 <div className="flex-grow-1">
                                   <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
                                   <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
@@ -1331,6 +1319,17 @@ function SystemViewV2Inner() {
                     );
                   })()}
 
+                  {/* System Intelligence Panel */}
+                  {compDetail && (
+                    <div className="mt-4">
+                      <SystemIntelligencePanel
+                        links={compDetail.implementation_links || {}}
+                        usability={compDetail.usability || {}}
+                        metrics={compDetail.metrics}
+                        repoUrl={null}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1643,44 +1642,44 @@ function SystemViewV2Inner() {
                   </div>
 
                   {(() => {
-                    const gaps = compDetail?.autonomy_gaps || [];
-                    const primary = gaps[0];
-                    const upNext = gaps.slice(1, 3);
-                    const hasBasics = selectedComponent.layers.backend !== 'missing' && selectedComponent.layers.frontend !== 'missing';
+                    // Build improvement steps — mix of prerequisites (blue) and autonomy gaps (purple)
+                    const improveSteps: Array<{ title: string; explanation: string; color: string; gapType?: string }> = [];
+                    const hasBackend = selectedComponent.layers.backend !== 'missing';
+                    const hasFrontend = selectedComponent.layers.frontend !== 'missing';
+
+                    // Prerequisites first (blue)
+                    if (!hasBackend) improveSteps.push({ title: 'Build backend services', explanation: 'Backend is missing — build services and routes before adding AI automation.', color: '#3b82f6' });
+                    if (hasBackend && !hasFrontend) improveSteps.push({ title: 'Add frontend layer', explanation: 'Frontend is missing — add a user interface before optimizing with AI.', color: '#10b981' });
+
+                    // Autonomy gaps (purple)
+                    (compDetail?.autonomy_gaps || []).slice(0, 4).forEach((g: any) => {
+                      improveSteps.push({ title: g.title, explanation: g.description?.substring(0, 150) || 'Autonomy gap — addressing this moves toward self-managing operation.', color: '#8b5cf6', gapType: g.gap_type });
+                    });
+
+                    // If no gaps, suggest agent enhancement
+                    if (improveSteps.length === 0 && selectedComponent.layers.agent === 'missing' && hasBackend && hasFrontend) {
+                      improveSteps.push({ title: 'Add intelligent automation agents', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', color: '#8b5cf6' });
+                    }
 
                     if (loadingDetail) return <div className="text-muted" style={{ fontSize: 11 }}><span className="spinner-border spinner-border-sm me-1"></span>Analyzing...</div>;
 
-                    if (!hasBasics) {
-                      return (
-                        <>
-                          <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>Build the basics first</h6>
-                          <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>
-                            {selectedComponent.layers.backend === 'missing' ? 'Backend is missing — build services and routes before adding AI automation.' : 'Frontend is missing — add a user interface before optimizing with AI.'}
-                          </p>
-                          <div className="d-flex flex-wrap gap-2">
-                            <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); }}>
-                              <i className="bi bi-hammer me-1"></i>Go to Build
-                            </button>
-                            <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
-                              <i className="bi bi-book me-1"></i>Learn About This
-                            </button>
-                          </div>
-                        </>
-                      );
-                    }
+                    const primary = improveSteps[0];
+                    const upNext = improveSteps.slice(1, 3);
 
-                    if (!primary) return <p className="text-muted" style={{ fontSize: 12 }}>No autonomy gaps detected — this component is well-positioned for AI enhancement.</p>;
+                    if (!primary) return <p className="text-muted" style={{ fontSize: 12 }}>No improvements needed — this component is well-positioned for autonomous operation.</p>;
 
                     return (
                       <>
-                        <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {Math.min(gaps.length, 3)} improvements for {selectedComponent.name}</div>
+                        <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {Math.min(improveSteps.length, 3)} for {selectedComponent.name}</div>
                         <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
-                        <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.description?.substring(0, 200) || 'Autonomy gap detected — addressing this will move toward self-managing operation.'}</p>
-                        <span className="badge mb-3" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 9 }}>{primary.gap_type}</span>
+                        <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
+
+                        {primary.gapType && <span className="badge mb-3" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{primary.gapType}</span>}
 
                         <div className="d-flex flex-wrap gap-2 mb-3">
-                          <button className="btn btn-sm" style={{ background: '#8b5cf6', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(selectedComponent)}>
-                            <i className="bi bi-terminal me-1"></i>Generate Improvement Prompt
+                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => primary.color === '#3b82f6' ? setWorkTab('build') : handleGeneratePrompt(selectedComponent)}>
+                            <i className={`bi ${primary.color === '#3b82f6' ? 'bi-hammer' : 'bi-terminal'} me-1`}></i>
+                            {primary.color === '#3b82f6' ? 'Go to Build' : 'Generate Improvement Prompt'}
                           </button>
                           <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                             <i className="bi bi-book me-1"></i>Learn About This
@@ -1690,14 +1689,14 @@ function SystemViewV2Inner() {
                         {upNext.length > 0 && (
                           <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
                             <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
-                              <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Up next ({upNext.length} more)
+                              <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also needs attention ({upNext.length} more)
                             </div>
-                            {upNext.map((g: any, i: number) => (
-                              <div key={g.gap_id || i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
-                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#8b5cf620', color: '#8b5cf6', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                            {upNext.map((s, i) => (
+                              <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                                 <div className="flex-grow-1">
-                                  <div className="fw-medium" style={{ fontSize: 11 }}>{g.title}</div>
-                                  <div className="text-muted" style={{ fontSize: 9 }}>{g.description?.substring(0, 100) || 'Autonomy improvement'}</div>
+                                  <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                  <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
                                 </div>
                               </div>
                             ))}
