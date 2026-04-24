@@ -285,10 +285,10 @@ export default function CEOCommandCenter() {
       api.get('/api/admin/company/directives'),
       api.get('/api/admin/company/audit'),
     ]);
-    const d = settled<CompanyDirective[]>(dRes as any);
+    const d = settled<any[]>(dRes as any);
     if (d) setDirectives(Array.isArray(d) ? d : []);
-    const a = settled<CompanyAuditLog[]>(aRes as any);
-    if (a) setAudit(Array.isArray(a) ? a : []);
+    const a = settled<any[]>(aRes as any);
+    if (a) setAudit((Array.isArray(a) ? a : []).map((x: any) => ({ ...x, event: x.event_type || x.event || '', detail: typeof x.detail === 'object' ? JSON.stringify(x.detail) : String(x.detail || '') })));
   }, []);
 
   useEffect(() => {
