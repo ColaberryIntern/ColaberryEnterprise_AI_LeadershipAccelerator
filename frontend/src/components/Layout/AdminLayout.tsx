@@ -36,6 +36,7 @@ const adminNavSections: NavSection[] = [
     { path: '/admin/projects', label: 'Projects', icon: 'rocket' },
   ]},
   { label: 'Intelligence', links: [
+    { path: '/admin/ceo', label: 'CEO Command', icon: 'rocket-takeoff' },
     { path: '/admin/intelligence', label: 'Intelligence OS', icon: 'cpu' },
     { path: '/admin/insights', label: 'Insights', icon: 'lightbulb' },
     { path: '/admin/governance', label: 'Governance', icon: 'shield-lock' },

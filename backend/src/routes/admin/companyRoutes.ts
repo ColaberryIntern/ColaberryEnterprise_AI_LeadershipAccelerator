@@ -161,4 +161,93 @@ router.post('/api/admin/company/cycle', async (_req: Request, res: Response) => 
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Toggle (NO feature-flag gate — this IS the toggle) ───────────────────
+
+router.get('/api/admin/company/status', async (_req: Request, res: Response) => {
+  try {
+    const { isCompanyLayerEnabled } = await import('../../services/company/companyToCoryAdapter');
+    const { getActiveCompany, getCompanyGoals, getCompanyDirectives } = await import('../../services/company/companyService');
+    const enabled = await isCompanyLayerEnabled();
+    const company = enabled ? await getActiveCompany() : null;
+    let summary = { goals: 0, directives: 0, agents: 0, tickets: 0 };
+    if (company) {
+      const { AiAgent, Ticket } = await import('../../models');
+      const goals = await getCompanyGoals((company as any).id, 'active');
+      const directives = await getCompanyDirectives((company as any).id, 'proposed');
+      const agentCount = await AiAgent.count({ where: { status: 'active' } });
+      const ticketCount = await Ticket.count({ where: { company_id: (company as any).id } });
+      summary = { goals: goals.length, directives: directives.length, agents: agentCount, tickets: ticketCount };
+    }
+    res.json({ enabled, company, summary });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/api/admin/company/toggle', async (_req: Request, res: Response) => {
+  try {
+    const { SystemSetting } = await import('../../models');
+    const setting = await SystemSetting.findOne({ where: { key: 'company_layer_enabled' } });
+    const currentValue = setting ? String(setting.getDataValue('value')) === 'true' : false;
+    const newValue = !currentValue;
+    if (setting) {
+      await setting.update({ value: String(newValue) });
+    } else {
+      await SystemSetting.create({ key: 'company_layer_enabled', value: String(newValue) } as any);
+    }
+    // Seed default company if enabling for the first time
+    if (newValue) {
+      try {
+        const { seedDefaultCompany } = await import('../../services/company/companySeedService');
+        await seedDefaultCompany();
+      } catch { /* seed may fail if already exists */ }
+    }
+    const { getActiveCompany } = await import('../../services/company/companyService');
+    const company = newValue ? await getActiveCompany() : null;
+    res.json({ enabled: newValue, company });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Workforce ────────────────────────────────────────────────────────────
+
+router.get('/api/admin/company/workforce', async (_req: Request, res: Response) => {
+  try {
+    if (!(await checkCompanyEnabled(res))) return;
+    const { getActiveCompany } = await import('../../services/company/companyService');
+    const company = await getActiveCompany();
+    if (!company) return res.status(404).json({ error: 'No active company' });
+    const { runWorkforceAnalysis } = await import('../../services/company/workforceIntelligenceEngine');
+    const report = await runWorkforceAnalysis((company as any).id);
+    res.json(report);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Tickets ──────────────────────────────────────────────────────────────
+
+router.get('/api/admin/company/tickets', async (_req: Request, res: Response) => {
+  try {
+    if (!(await checkCompanyEnabled(res))) return;
+    const { getActiveCompany } = await import('../../services/company/companyService');
+    const { Ticket } = await import('../../models');
+    const { Op } = await import('sequelize');
+    const company = await getActiveCompany();
+    if (!company) return res.status(404).json({ error: 'No active company' });
+    const tickets = await Ticket.findAll({
+      where: { company_id: (company as any).id, status: { [Op.notIn]: ['cancelled'] } },
+      order: [['created_at', 'DESC']],
+      limit: 50,
+    });
+    res.json(tickets);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Departments ──────────────────────────────────────────────────────────
+
+router.get('/api/admin/company/departments', async (_req: Request, res: Response) => {
+  try {
+    if (!(await checkCompanyEnabled(res))) return;
+    const { Department } = await import('../../models');
+    const departments = await Department.findAll({ order: [['name', 'ASC']] });
+    res.json(departments);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;

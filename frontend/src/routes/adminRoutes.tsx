@@ -39,6 +39,7 @@ import AdminIngestLogsPage from '../pages/admin/AdminIngestLogsPage';
 import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
 import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
 import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
+import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 const adminRoutes = (
   <>
     <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -81,6 +82,7 @@ const adminRoutes = (
         <Route path="/admin/routing-rules" element={<AdminRoutingRulesPage />} />
         <Route path="/admin/autonomous" element={<AdminAutonomousPage />} />
         <Route path="/admin/automation" element={<AdminAutomationPage />} />
+        <Route path="/admin/ceo" element={<CEOCommandCenter />} />
       </Route>
     </Route>
   </>

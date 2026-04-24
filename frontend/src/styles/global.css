@@ -786,3 +786,60 @@ a:hover {
     animation: none !important;
   }
 }
+
+/* ─── CEO Command Center ─────────────────────────────────────────────────── */
+
+@keyframes ceoFadeSlideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ceoPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+}
+
+@keyframes ceoGlowPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(56,161,105,0.3); }
+  50% { box-shadow: 0 0 20px rgba(56,161,105,0.6); }
+}
+
+@keyframes ceoAmberPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
+}
+
+@keyframes ceoSlideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.ceo-stagger-1 { animation: ceoFadeSlideUp 0.5s ease forwards; animation-delay: 0.05s; opacity: 0; }
+.ceo-stagger-2 { animation: ceoFadeSlideUp 0.5s ease forwards; animation-delay: 0.1s; opacity: 0; }
+.ceo-stagger-3 { animation: ceoFadeSlideUp 0.5s ease forwards; animation-delay: 0.15s; opacity: 0; }
+.ceo-stagger-4 { animation: ceoFadeSlideUp 0.5s ease forwards; animation-delay: 0.2s; opacity: 0; }
+.ceo-stagger-5 { animation: ceoFadeSlideUp 0.5s ease forwards; animation-delay: 0.25s; opacity: 0; }
+.ceo-stagger-6 { animation: ceoFadeSlideUp 0.5s ease forwards; animation-delay: 0.3s; opacity: 0; }
+.ceo-stagger-7 { animation: ceoFadeSlideUp 0.5s ease forwards; animation-delay: 0.35s; opacity: 0; }
+
+.ceo-toggle-track {
+  width: 52px; height: 28px; border-radius: 14px; cursor: pointer;
+  transition: background 0.3s; position: relative; display: inline-block;
+}
+.ceo-toggle-track.on { background: #38a169; }
+.ceo-toggle-track.off { background: #4a5568; }
+.ceo-toggle-thumb {
+  width: 22px; height: 22px; border-radius: 50%; background: white;
+  position: absolute; top: 3px; transition: left 0.3s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.ceo-toggle-track.on .ceo-toggle-thumb { left: 27px; }
+.ceo-toggle-track.off .ceo-toggle-thumb { left: 3px; }
+
+.ceo-card-glow:hover {
+  border-color: rgba(59,130,246,0.3) !important;
+  box-shadow: 0 0 20px rgba(59,130,246,0.08) !important;
+}
+
+.ceo-progress-ring-bg { stroke: rgba(255,255,255,0.08); }
+.ceo-progress-ring-fill { transition: stroke-dashoffset 1s ease; }

@@ -47,6 +47,8 @@ import { runSkoolContentResponse } from './agents/skool/skoolContentResponseAgen
 import { runSkoolQualityGate } from './agents/skool/skoolQualityGateAgent';
 import { runSkoolBrowserWorker } from './agents/skool/skoolBrowserWorkerAgent';
 import { runSkoolSupervisor } from './agents/skool/skoolSupervisorAgent';
+import { runWorkforceAnalysis } from './company/workforceIntelligenceEngine';
+import { runCompanyStrategicCycle } from './company/companyStrategyAgent';
 import { runOpenclawMarketSignalAgent } from './agents/openclaw/openclawMarketSignalAgent';
 import { runOpenclawConversationDetectionAgent } from './agents/openclaw/openclawConversationDetectionAgent';
 import { runEngagementMonitorAgent } from './agents/openclaw/openclawEngagementMonitorAgent';
@@ -612,6 +614,26 @@ export async function runSkoolBrowserWorkerAgent(): Promise<AgentExecutionResult
 
 export async function runSkoolSupervisorAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('SkoolSupervisor', wrapSkoolAgent(runSkoolSupervisor));
+}
+
+// ─── Company Layer Agents ──────────────────────────────────────────────────
+
+export async function runWorkforceIntelligenceAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('WorkforceIntelligence', wrapSkoolAgent(async () => {
+    const { getActiveCompany } = require('./company/companyService');
+    const company = await getActiveCompany();
+    if (!company) return { skipped: true, reason: 'no active company' };
+    return runWorkforceAnalysis(company.id);
+  }));
+}
+
+export async function runCompanyStrategicCycleAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('CompanyStrategicCycle', wrapSkoolAgent(async () => {
+    const { getActiveCompany } = require('./company/companyService');
+    const company = await getActiveCompany();
+    if (!company) return { skipped: true, reason: 'no active company' };
+    return runCompanyStrategicCycle(company.id);
+  }));
 }
 
 // ─── Strategy Architect Agents (16 departments) ──────────────────────────────

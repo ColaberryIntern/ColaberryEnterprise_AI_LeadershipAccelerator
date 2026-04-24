@@ -45,6 +45,8 @@ import {
   runSkoolQualityGateAgent,
   runSkoolBrowserWorkerAgent,
   runSkoolSupervisorAgent,
+  runWorkforceIntelligenceAgent,
+  runCompanyStrategicCycleAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -165,6 +167,10 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'SkoolContentResponse', hardcodedSchedule: '8,28,48 * * * *', runner: runSkoolContentResponseAgent, label: 'Skool content response' },
   { agentName: 'SkoolQualityGate', hardcodedSchedule: '11,31,51 * * * *', runner: runSkoolQualityGateAgent, label: 'Skool quality gate' },
   { agentName: 'SkoolBrowserWorker', hardcodedSchedule: '14,34,54 * * * *', runner: runSkoolBrowserWorkerAgent, label: 'Skool browser worker' },
+
+  // Company layer agents
+  { agentName: 'WorkforceIntelligence', hardcodedSchedule: '0 */6 * * *', runner: runWorkforceIntelligenceAgent, label: 'Workforce intelligence analysis' },
+  { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '0 */4 * * *', runner: runCompanyStrategicCycleAgent, label: 'Company strategic cycle (CEO Agent)' },
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },
