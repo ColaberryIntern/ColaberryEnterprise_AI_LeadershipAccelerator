@@ -281,72 +281,43 @@ interface CoryPhase {
   steps: CoryPlanStep[];
 }
 
-function generateCoryPlan(components: SystemComponent[], systemLayers: { backend: boolean; frontend: boolean; agents: boolean }): CoryPhase[] {
-  const phases: CoryPhase[] = [];
-  const incomplete = components.filter(c => c.status !== 'complete');
+function generateCoryPlan(components: SystemComponent[], _systemLayers: { backend: boolean; frontend: boolean; agents: boolean }): CoryPhase[] {
+  // Use each component's ACTUAL nextStep and promptTarget (computed by backend
+  // from execution history, coverage, and blocked steps) instead of guessing.
+  // This prevents suggesting already-completed work.
+  const incomplete = components
+    .filter(c => c.status !== 'complete' && c.completion < 80 && c.nextStep)
+    .sort((a, b) => {
+      // Priority: missing backend > missing frontend > low coverage > agents
+      const pri = (c: SystemComponent) => {
+        if (c.layers.backend === 'missing') return 0;
+        if (c.layers.backend === 'partial') return 1;
+        if (c.layers.frontend === 'missing') return 2;
+        if (c.completion < 30) return 3;
+        return 4;
+      };
+      return pri(a) - pri(b);
+    })
+    .slice(0, 5);
+
   if (incomplete.length === 0) return [];
 
-  // Phase 1: Foundation — backend, database, core requirements
-  const foundationSteps: CoryPlanStep[] = [];
-  if (!systemLayers.backend) {
-    const comp = incomplete[0];
-    foundationSteps.push({ id: 'plan-backend', title: 'Build backend services', explanation: 'Create API routes, services, and data processing logic.', impact: 'High', componentId: comp.id, promptTarget: 'backend_improvement', done: false });
-  }
-  const needsDb = incomplete.find(c => c.layers.backend === 'ready' && c.promptTarget === 'add_database');
-  if (needsDb) {
-    foundationSteps.push({ id: 'plan-database', title: 'Add database models', explanation: 'Set up persistent data storage for your system.', impact: 'High', componentId: needsDb.id, promptTarget: 'add_database', done: false });
-  }
-  const lowCov = incomplete.filter(c => c.completion < 50 && c.completion > 0).slice(0, 2);
-  for (const lc of lowCov) {
-    foundationSteps.push({ id: `plan-reqs-${lc.id}`, title: `Implement requirements for ${lc.name}`, explanation: `${lc.completion}% complete — fill critical functionality gaps.`, impact: 'High', componentId: lc.id, promptTarget: lc.promptTarget || 'requirement_implementation', done: false });
-  }
-  // Mark steps done if layer already exists
-  for (const s of foundationSteps) {
-    if (s.promptTarget === 'backend_improvement' && systemLayers.backend) s.done = true;
-  }
-  if (foundationSteps.length > 0) {
-    phases.push({ id: 'phase-foundation', title: 'Foundation', description: 'Core backend, data layer, and essential requirements', icon: 'bi-bricks', color: '#3b82f6', steps: foundationSteps });
-  }
+  // Single flat phase — steps are the actual next steps from the backend
+  const steps: CoryPlanStep[] = incomplete.map((c, i) => {
+    const target = c.promptTarget || 'backend_improvement';
+    const color = target === 'agent_enhancement' ? '#8b5cf6' : target === 'frontend_exposure' ? '#10b981' : target === 'reliability_improvement' ? '#f59e0b' : '#3b82f6';
+    return {
+      id: `plan-${c.id}`,
+      title: c.nextStep || `Build ${c.name}`,
+      explanation: `${c.completion}% complete — ${c.layers.backend === 'missing' ? 'needs backend' : c.layers.backend === 'partial' ? 'backend partial' : c.layers.frontend === 'missing' ? 'needs frontend' : 'fill gaps'}.`,
+      impact: (i === 0 ? 'High' : i <= 2 ? 'Medium' : 'Low') as 'High' | 'Medium' | 'Low',
+      componentId: c.id,
+      promptTarget: target,
+      done: false,
+    };
+  });
 
-  // Phase 2: Usability — frontend, UI improvements
-  const usabilitySteps: CoryPlanStep[] = [];
-  if (!systemLayers.frontend) {
-    const comp = incomplete.find(c => !c.isPageBP) || incomplete[0];
-    usabilitySteps.push({ id: 'plan-frontend', title: 'Create user interface', explanation: 'Build the frontend so users can interact with your system.', impact: 'High', componentId: comp.id, promptTarget: 'frontend_exposure', done: false });
-  }
-  const pageComps = incomplete.filter(c => c.isPageBP && c.completion < 80).slice(0, 2);
-  for (const pc of pageComps) {
-    usabilitySteps.push({ id: `plan-ui-${pc.id}`, title: `Improve ${pc.name}`, explanation: 'Enhance page layout, accessibility, and user experience.', impact: 'Medium', componentId: pc.id, promptTarget: 'frontend_exposure', done: false });
-  }
-  if (systemLayers.frontend) {
-    for (const s of usabilitySteps) { if (s.promptTarget === 'frontend_exposure' && s.id === 'plan-frontend') s.done = true; }
-  }
-  if (usabilitySteps.length > 0) {
-    phases.push({ id: 'phase-usability', title: 'Usability', description: 'User interface, UX improvements, and accessibility', icon: 'bi-layout-wtf', color: '#10b981', steps: usabilitySteps });
-  }
-
-  // Phase 3: Intelligence — agents, automation, monitoring
-  const intelligenceSteps: CoryPlanStep[] = [];
-  if (!systemLayers.agents && systemLayers.backend) {
-    const comp = incomplete[0];
-    intelligenceSteps.push({ id: 'plan-agents', title: 'Add AI agents', explanation: 'Enable autonomous operation with intelligent automation.', impact: 'Medium', componentId: comp.id, promptTarget: 'agent_enhancement', done: false });
-  }
-  const needsReliability = incomplete.find(c => c.promptTarget === 'improve_reliability');
-  if (needsReliability) {
-    intelligenceSteps.push({ id: 'plan-reliability', title: 'Improve reliability', explanation: 'Add error handling, retries, and graceful failure recovery.', impact: 'Medium', componentId: needsReliability.id, promptTarget: 'improve_reliability', done: false });
-  }
-  const needsMonitoring = incomplete.find(c => c.promptTarget === 'monitoring_gap');
-  if (needsMonitoring) {
-    intelligenceSteps.push({ id: 'plan-monitoring', title: 'Add monitoring', explanation: 'Track KPIs, detect anomalies, and alert on issues.', impact: 'Low', componentId: needsMonitoring.id, promptTarget: 'monitoring_gap', done: false });
-  }
-  if (systemLayers.agents) {
-    for (const s of intelligenceSteps) { if (s.id === 'plan-agents') s.done = true; }
-  }
-  if (intelligenceSteps.length > 0) {
-    phases.push({ id: 'phase-intelligence', title: 'Intelligence', description: 'Agents, automation, monitoring, and self-improvement', icon: 'bi-cpu', color: '#8b5cf6', steps: intelligenceSteps });
-  }
-
-  return phases;
+  return [{ id: 'phase-build', title: 'Build Plan', description: 'Next steps based on current system state', icon: 'bi-hammer', color: '#3b82f6', steps }];
 }
 
 function transformCapabilities(bps: any[]): SystemComponent[] {
@@ -778,7 +749,7 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
       setBuild(prev => ({ ...prev, phase: 'validated', validationResult: res.data }));
       await loadData();
     } catch (err: any) {
-      setBuild(prev => ({ ...prev, phase: 'waiting_for_execution', validationResult: { error: err.response?.data?.error || 'Validation failed' } }));
+      setBuild(prev => ({ ...prev, phase: 'validated', validationResult: { error: err.response?.data?.error || 'Validation failed' } }));
     }
   };
 
