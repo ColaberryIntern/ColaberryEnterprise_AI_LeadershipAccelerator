@@ -57,8 +57,8 @@ function AgencyPartnerPage() {
   return (
     <>
       <SEOHead
-        title="White-Label AI Build Partner for Agency Owners"
-        description="You sell AIOS. We build it. Enterprise-grade AI systems delivered in 14 days at wholesale pricing. White-label for your agency."
+        title="AI Delivery Team for Agency Owners"
+        description="You sell AIOS. We build and maintain it. Enterprise-grade AI systems delivered in 14 days. Your dedicated delivery team."
       />
 
       <div style={{ fontFamily: "'Inter', -apple-system, sans-serif", minHeight: '100vh' }}>
@@ -67,16 +67,16 @@ function AgencyPartnerPage() {
         <section style={{ background: `linear-gradient(135deg, ${HERO_BG} 0%, #1a2744 100%)`, padding: '80px 20px 70px', textAlign: 'center' }}>
           <div style={{ maxWidth: 900, margin: '0 auto' }}>
             <div style={{ display: 'inline-block', background: 'rgba(59,130,246,0.15)', borderRadius: 20, padding: '6px 18px', fontSize: 13, color: ACCENT, marginBottom: 24, fontWeight: 600 }}>
-              White-Label AI Build Partner
+              Your Dedicated AI Delivery Team
             </div>
             <h1 style={{ fontSize: 'clamp(36px, 5vw, 56px)', fontWeight: 800, lineHeight: 1.08, marginBottom: 20, color: '#fff' }}>
               You Sell AI.{' '}
               <span style={{ background: `linear-gradient(135deg, ${ACCENT}, ${PURPLE})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                We Build It.
+                We Deliver It.
               </span>
             </h1>
             <p style={{ fontSize: 'clamp(16px, 2.2vw, 20px)', color: '#94a3b8', lineHeight: 1.7, marginBottom: 36, maxWidth: 660, margin: '0 auto 36px' }}>
-              Enterprise-grade AI systems delivered in 14 days at wholesale pricing. You keep the client relationship. You set the margin. We white-label the build.
+              We build and maintain enterprise-grade AI systems for your clients. Upfront build fee + monthly retainer. You charge your own retainer on top and keep the spread. You keep selling. We keep delivering.
             </p>
             <button onClick={openBooking} style={{ ...btnPrimary, padding: '18px 48px', fontSize: 20 }}
               onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(59,130,246,0.4)'; }}
@@ -99,7 +99,7 @@ function AgencyPartnerPage() {
               {/* Without Us */}
               <div style={{ background: BG, borderRadius: 12, padding: '28px 24px', border: `2px solid #fecaca`, position: 'relative' }}>
                 <div style={{ position: 'absolute', top: -14, left: 24, background: '#fef2f2', color: '#dc2626', borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 700 }}>
-                  Without a Build Partner
+                  Without a Delivery Team
                 </div>
                 <div style={{ display: 'grid', gap: 14, marginTop: 8 }}>
                   {[
@@ -119,7 +119,7 @@ function AgencyPartnerPage() {
               {/* With Us */}
               <div style={{ background: HERO_BG, borderRadius: 12, padding: '28px 24px', border: `2px solid ${ACCENT}`, position: 'relative', boxShadow: `0 4px 24px rgba(59,130,246,0.15)` }}>
                 <div style={{ position: 'absolute', top: -14, left: 24, background: `linear-gradient(135deg, ${ACCENT}, ${PURPLE})`, color: '#fff', borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 700 }}>
-                  With Colaberry as Your Build Team
+                  With Colaberry as Your Delivery Team
                 </div>
                 <div style={{ display: 'grid', gap: 14, marginTop: 8 }}>
                   {[
@@ -177,8 +177,8 @@ function AgencyPartnerPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
               {[
                 { step: '1', title: 'You Close the Deal', desc: 'You run the sales process, do the audit, and close your client at your price. We never talk to your client unless you want us to.', color: ACCENT },
-                { step: '2', title: 'We Scope & Build', desc: 'You send us the requirements. We build the production AI system in 14 days at wholesale pricing. Full white-label.', color: PURPLE },
-                { step: '3', title: 'You Deliver Enterprise Quality', desc: 'Your client gets a system that actually works in production. They stay. They refer. You grow.', color: GREEN },
+                { step: '2', title: 'We Build the System', desc: 'You send us the requirements. We build the production AI system in 14 days. Upfront build fee scoped on the partner call.', color: PURPLE },
+                { step: '3', title: 'We Maintain on Retainer', desc: 'We continue working for your client on your behalf. Monthly retainer. You charge your own retainer on top and keep the spread. You go sell the next deal.', color: GREEN },
               ].map((s, i) => (
                 <div key={i} style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '32px 24px', border: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ width: 44, height: 44, borderRadius: '50%', background: s.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, margin: '0 auto 16px' }}>{s.step}</div>
@@ -188,7 +188,7 @@ function AgencyPartnerPage() {
               ))}
             </div>
             <div style={{ marginTop: 32, padding: '16px 24px', background: 'rgba(59,130,246,0.1)', borderRadius: 8, border: '1px solid rgba(59,130,246,0.3)', display: 'inline-block' }}>
-              <span style={{ color: ACCENT, fontWeight: 700, fontSize: 15 }}>White-label delivery. Wholesale pricing. You set your margin.</span>
+              <span style={{ color: ACCENT, fontWeight: 700, fontSize: 15 }}>Upfront build fee + monthly retainer. You charge your own retainer on top. You sell, we deliver.</span>
             </div>
           </div>
         </section>
