@@ -108,10 +108,16 @@ async function loginToSkool(page: Page): Promise<boolean> {
     const loginButton = page.locator('button[type="submit"], button:has-text("Log in"), button:has-text("Sign in")').first();
     await loginButton.click();
 
-    // Wait for navigation away from login page
-    await page.waitForURL((url) => !url.toString().includes('/login'), { timeout: 15000 });
+    // Wait for login to complete (Skool uses client-side routing)
+    await page.waitForTimeout(5000);
 
-    console.log(`${LOG_PREFIX} Login successful`);
+    const currentUrl = page.url();
+    if (currentUrl.includes('/login')) {
+      console.error(`${LOG_PREFIX} Still on login page after submit`);
+      return false;
+    }
+
+    console.log(`${LOG_PREFIX} Login successful: ${currentUrl}`);
     return true;
   } catch (err) {
     console.error(`${LOG_PREFIX} Login failed:`, err);
