@@ -40,6 +40,11 @@ import {
   runOpenclawInfraMonitor,
   runOpenclawTechResearch,
   runOpenclawLinkedInCommentMonitor,
+  runSkoolSignalDetectionAgent,
+  runSkoolContentResponseAgent,
+  runSkoolQualityGateAgent,
+  runSkoolBrowserWorkerAgent,
+  runSkoolSupervisorAgent,
   runExecutiveStrategyArchitect,
   runGovernanceStrategyArchitect,
   runStrategyFuturesArchitect,
@@ -153,6 +158,13 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'OpenclawInfrastructureMonitor', hardcodedSchedule: '*/5 * * * *', runner: runOpenclawInfraMonitor, label: 'OpenClaw infra monitor' },
   { agentName: 'OpenclawTechResearch', hardcodedSchedule: '0 6 * * *', runner: runOpenclawTechResearch, label: 'OpenClaw tech research' },
   { agentName: 'OpenclawLinkedInCommentMonitor', hardcodedSchedule: '0 8,12,16 * * 1-5', runner: runOpenclawLinkedInCommentMonitor, label: 'OpenClaw LinkedIn comment monitor' },
+
+  // Skool community engagement agents
+  { agentName: 'SkoolSupervisor', hardcodedSchedule: '*/5 * * * *', runner: runSkoolSupervisorAgent, label: 'Skool supervisor' },
+  { agentName: 'SkoolSignalDetection', hardcodedSchedule: '3,33 * * * *', runner: runSkoolSignalDetectionAgent, label: 'Skool signal detection' },
+  { agentName: 'SkoolContentResponse', hardcodedSchedule: '8,28,48 * * * *', runner: runSkoolContentResponseAgent, label: 'Skool content response' },
+  { agentName: 'SkoolQualityGate', hardcodedSchedule: '11,31,51 * * * *', runner: runSkoolQualityGateAgent, label: 'Skool quality gate' },
+  { agentName: 'SkoolBrowserWorker', hardcodedSchedule: '14,34,54 * * * *', runner: runSkoolBrowserWorkerAgent, label: 'Skool browser worker' },
 
   // Department Strategy Architects (every 6 hours, staggered)
   { agentName: 'ExecutiveStrategyArchitect', hardcodedSchedule: '0 */6 * * *', runner: runExecutiveStrategyArchitect, label: 'Executive strategy architect' },

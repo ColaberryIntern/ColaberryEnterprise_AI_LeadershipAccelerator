@@ -42,6 +42,11 @@ import { runAdmissionsCallbackAgent } from './agents/admissions/admissionsCallba
 import { runAdmissionsConversationTaskMonitor } from './agents/admissions/admissionsConversationTaskMonitor';
 import { runAdmissionsAssistantAgent } from './agents/admissions/admissionsAssistantAgent';
 import { runOpenclawSupervisorAgent } from './agents/openclaw/openclawSupervisorAgent';
+import { runSkoolSignalDetection } from './agents/skool/skoolSignalDetectionAgent';
+import { runSkoolContentResponse } from './agents/skool/skoolContentResponseAgent';
+import { runSkoolQualityGate } from './agents/skool/skoolQualityGateAgent';
+import { runSkoolBrowserWorker } from './agents/skool/skoolBrowserWorkerAgent';
+import { runSkoolSupervisor } from './agents/skool/skoolSupervisorAgent';
 import { runOpenclawMarketSignalAgent } from './agents/openclaw/openclawMarketSignalAgent';
 import { runOpenclawConversationDetectionAgent } from './agents/openclaw/openclawConversationDetectionAgent';
 import { runEngagementMonitorAgent } from './agents/openclaw/openclawEngagementMonitorAgent';
@@ -575,6 +580,28 @@ export async function runOpenclawQualityGate(): Promise<AgentExecutionResult | n
 
 export async function runOpenclawLinkedInCommentMonitor(): Promise<AgentExecutionResult | null> {
   return runAgent('OpenclawLinkedInCommentMonitorAgent', runLinkedInCommentMonitorAgent);
+}
+
+// ─── Skool Community Engagement Agents ─────────────────────────────────────
+
+export async function runSkoolSignalDetectionAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('SkoolSignalDetection', runSkoolSignalDetection);
+}
+
+export async function runSkoolContentResponseAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('SkoolContentResponse', runSkoolContentResponse);
+}
+
+export async function runSkoolQualityGateAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('SkoolQualityGate', runSkoolQualityGate);
+}
+
+export async function runSkoolBrowserWorkerAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('SkoolBrowserWorker', runSkoolBrowserWorker);
+}
+
+export async function runSkoolSupervisorAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('SkoolSupervisor', runSkoolSupervisor);
 }
 
 // ─── Strategy Architect Agents (16 departments) ──────────────────────────────

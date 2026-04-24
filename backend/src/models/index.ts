@@ -156,6 +156,12 @@ import UIElementFeedback from './UIElementFeedback';
 import PreviewStack from './PreviewStack';
 import PreviewEvent from './PreviewEvent';
 
+// Skool Autonomous Engagement models
+import SkoolSignal from './SkoolSignal';
+import SkoolResponse from './SkoolResponse';
+import SkoolTask from './SkoolTask';
+import SkoolEngagement from './SkoolEngagement';
+
 // Universal Lead Ingestion models
 import LeadSource from './LeadSource';
 import EntryPoint from './EntryPoint';
@@ -957,6 +963,10 @@ export {
   CompanyBudget,
   CompanyDirective,
   CompanyAuditLog,
+  SkoolSignal,
+  SkoolResponse,
+  SkoolTask,
+  SkoolEngagement,
 };
 
 // --- AI Company Layer associations ---
@@ -970,3 +980,16 @@ AiCompany.hasMany(CompanyDirective, { foreignKey: 'company_id', as: 'directives'
 CompanyDirective.belongsTo(AiCompany, { foreignKey: 'company_id', as: 'company' });
 AiCompany.hasMany(CompanyAuditLog, { foreignKey: 'company_id', as: 'auditLogs' });
 CompanyAuditLog.belongsTo(AiCompany, { foreignKey: 'company_id', as: 'company' });
+
+// --- Skool Autonomous Engagement associations ---
+SkoolSignal.hasMany(SkoolResponse, { foreignKey: 'signal_id', as: 'responses' });
+SkoolResponse.belongsTo(SkoolSignal, { foreignKey: 'signal_id', as: 'signal' });
+
+SkoolSignal.hasMany(SkoolTask, { foreignKey: 'signal_id', as: 'tasks' });
+SkoolTask.belongsTo(SkoolSignal, { foreignKey: 'signal_id', as: 'signal' });
+
+SkoolResponse.hasMany(SkoolTask, { foreignKey: 'response_id', as: 'tasks' });
+SkoolTask.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
+
+SkoolResponse.hasMany(SkoolEngagement, { foreignKey: 'response_id', as: 'engagements' });
+SkoolEngagement.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
