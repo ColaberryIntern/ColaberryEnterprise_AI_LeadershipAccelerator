@@ -691,12 +691,30 @@ function SystemViewV2Inner() {
   const getComponentSuggestions = (comp: SystemComponent | null, detail: any): Array<{ title: string; explanation: string; action?: string }> => {
     if (!comp) return [];
     const s: Array<{ title: string; explanation: string; action?: string }> = [];
-    if (comp.layers.backend === 'missing' && !comp.isPageBP) s.push({ title: `Build backend for ${comp.name}`, explanation: 'No backend logic detected. This component needs services and API routes.', action: 'backend_improvement' });
-    if (comp.coverageRaw < 30 && comp.coverageRaw > 0) s.push({ title: `Implement requirements (${comp.coverageRaw}% covered)`, explanation: 'Core requirements are unmatched. Fill critical functionality gaps.', action: 'requirement_implementation' });
-    if (comp.layers.frontend === 'missing' && comp.layers.backend !== 'missing') s.push({ title: `Add user interface`, explanation: 'Backend exists but no UI. Users need a way to interact.', action: 'frontend_exposure' });
+    // Backend suggestions — highest priority when backend is weak
+    if (comp.layers.backend === 'missing' && !comp.isPageBP) {
+      s.push({ title: `Build backend for ${comp.name}`, explanation: 'No backend logic detected. This component needs services, models, and API routes.', action: 'backend_improvement' });
+    } else if (comp.layers.backend === 'partial') {
+      s.push({ title: `Strengthen backend for ${comp.name}`, explanation: 'Backend is partially built — missing services, routes, or data models need completion.', action: 'backend_improvement' });
+    }
+    // Requirements coverage
+    if (comp.coverageRaw < 50) {
+      s.push({ title: `Implement requirements (${comp.coverageRaw}% covered)`, explanation: `${100 - comp.coverageRaw}% of requirements unmatched. Build the missing backend/frontend logic to close gaps.`, action: 'requirement_implementation' });
+    }
+    // Frontend — only suggest if backend is at least partial
+    if (comp.layers.frontend === 'missing' && comp.layers.backend !== 'missing') {
+      s.push({ title: `Add user interface`, explanation: 'Backend exists but no UI. Users need a way to interact with this component.', action: 'frontend_exposure' });
+    } else if (comp.layers.frontend === 'partial' && comp.layers.backend !== 'missing') {
+      s.push({ title: `Complete frontend for ${comp.name}`, explanation: 'Frontend is partially built — pages or components are missing.', action: 'frontend_exposure' });
+    }
+    // UI page connection
     if (comp.ui.pages.length === 0 && comp.layers.frontend !== 'missing') s.push({ title: 'Connect a UI page', explanation: 'Frontend files exist but no page is linked for preview and feedback.' });
-    if (comp.layers.agent === 'missing' && comp.layers.backend !== 'missing' && comp.layers.frontend !== 'missing') s.push({ title: 'Add intelligent automation', explanation: 'System works manually. Agents enable autonomous operation.', action: 'agent_enhancement' });
-    if (detail?.autonomy_gaps?.length > 0) {
+    // Agents — only when both backend and frontend are at least partial
+    if (comp.layers.agent === 'missing' && comp.layers.backend !== 'missing' && comp.layers.frontend !== 'missing') {
+      s.push({ title: 'Add intelligent automation', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', action: 'agent_enhancement' });
+    }
+    // Autonomy gaps from the detail data
+    if (detail?.autonomy_gaps?.length > 0 && s.length < 3) {
       const topGap = detail.autonomy_gaps[0];
       s.push({ title: topGap.title, explanation: topGap.description?.substring(0, 100) || 'Autonomy gap detected' });
     }
@@ -733,9 +751,11 @@ function SystemViewV2Inner() {
   // Intelligence helper
   const getWhyMatters = (c: SystemComponent): string => {
     const t = c.promptTarget;
-    if (t === 'backend_improvement' || (!systemLayers.backend && c.status === 'not_started')) return 'Your system currently has no backend logic. Without this, nothing can process data or handle user actions.';
-    if (t === 'frontend_exposure' || (systemLayers.backend && !systemLayers.frontend && !c.isPageBP)) return 'Your system has logic but no user interface. Users cannot interact with it yet.';
-    if (t === 'agent_enhancement' || (systemLayers.backend && systemLayers.frontend && !systemLayers.agents)) return 'Your system works, but lacks automation. Adding agents will allow it to operate independently.';
+    if (t === 'backend_improvement' || c.layers.backend === 'missing') return 'This component has no backend logic. Without services and routes, nothing can process data or handle user actions.';
+    if (c.layers.backend === 'partial') return 'Backend is partially built — key services, routes, or data models are missing. Completing them enables full functionality.';
+    if (t === 'frontend_exposure' || (c.layers.backend !== 'missing' && c.layers.frontend === 'missing' && !c.isPageBP)) return 'Backend exists but no user interface. Users cannot interact with this component yet.';
+    if (c.layers.frontend === 'partial') return 'Frontend is partially built — pages or components are missing. Completing them gives users full access.';
+    if (t === 'agent_enhancement' || (c.layers.backend !== 'missing' && c.layers.frontend !== 'missing' && c.layers.agent === 'missing')) return 'This component works but lacks automation. Adding agents will allow it to operate independently.';
     if (c.completion < 50) return 'Core capabilities are incomplete. This step fills critical gaps in your system functionality.';
     return `Completing this step advances "${c.name}" toward production readiness.`;
   };
@@ -1469,6 +1489,7 @@ function SystemViewV2Inner() {
                       if (!buildPrompt) {
                         if (selectedComponent.nextStep) bs.push({ title: selectedComponent.nextStep, explanation: getWhyMatters(selectedComponent), action: 'generate' });
                         if (selectedComponent.layers.backend === 'missing') bs.push({ title: 'Backend layer needed first', explanation: 'This component has no backend services. Generate a prompt to create them.', action: 'generate' });
+                        if (selectedComponent.layers.backend === 'partial') bs.push({ title: 'Complete backend services', explanation: 'Backend is partially built — missing routes, services, or models need to be added.', action: 'generate' });
                       } else {
                         bs.push({ title: 'Refine this prompt', explanation: 'Ask me to adjust the prompt — add constraints, change scope, or include specific code patterns.', action: 'refine' });
                         if (selectedComponent.coverageRaw < 50) bs.push({ title: 'Paste Claude\'s response to update', explanation: 'If Claude gave you code, paste it below to validate or refine the next step.' });
