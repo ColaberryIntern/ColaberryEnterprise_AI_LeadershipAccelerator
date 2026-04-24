@@ -568,10 +568,14 @@ function SystemViewV2Inner() {
   const [executionSnapshot, setExecutionSnapshot] = useState<{ coverage: number; readiness: number; maturity: number } | null>(null);
   const [executionActivity, setExecutionActivity] = useState<any[]>([]);
 
-  // Sync URL param → state
+  // Sync URL param → state + scroll to work area + set tab from URL
   useEffect(() => {
-    if (urlComponentId) setSelectedId(urlComponentId);
-  }, [urlComponentId]);
+    if (urlComponentId) {
+      setSelectedId(urlComponentId);
+      if (urlTab && ['overview','build','improve','health','ui'].includes(urlTab)) setWorkTab(urlTab);
+      setTimeout(() => workAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
+    }
+  }, [urlComponentId, urlTab]);
 
   // Fetch detail + reset work area when component changes
   useEffect(() => {
@@ -580,7 +584,9 @@ function SystemViewV2Inner() {
     setBuildReport('');
     setBuildResult(null);
     setUiFeedback(null);
-    setWorkTab('overview');
+    // Preserve URL tab on first load, reset to overview on subsequent selections
+    const preserveTab = urlTab && ['overview','build','improve','health','ui'].includes(urlTab) && selectedId === urlComponentId;
+    if (!preserveTab) setWorkTab('overview');
     if (!selectedId) return;
     setLoadingDetail(true);
     portalApi.get(`/api/portal/project/business-processes/${selectedId}`)
