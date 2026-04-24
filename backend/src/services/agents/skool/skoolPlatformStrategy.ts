@@ -97,9 +97,9 @@ export function containsBannedWord(content: string): string | null {
 // ─── Allowed URLs ────────────────────────────────────────────────────────────
 
 const ALLOWED_URLS: string[] = [
-  'https://enterprise.colaberry.ai/partners',
-  'https://enterprise.colaberry.ai/ai-workforce-designer',
-  'https://advisor.colaberry.ai/advisory',
+  'https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub',
+  'https://enterprise.colaberry.ai/ai-workforce-designer?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub',
+  'https://advisor.colaberry.ai/advisory/?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub',
 ];
 
 export function getAllowedUrls(): string[] {
@@ -318,14 +318,14 @@ export function getSystemPrompt(category: string): string {
     case 'moderate':
       ctaInstruction = `CTA Level: MODERATE
 - Provide value first, then mention the advisor tool naturally.
-- Include this URL when relevant: https://advisor.colaberry.ai/advisory
+- Include this URL when relevant: https://advisor.colaberry.ai/advisory/?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
 - Frame it as: "I built a free tool that does this - designs an AI workforce for any business in 5 minutes."
 - Also mention: "My team builds production AI systems for agency owners. DM me if you want to talk."`;
       break;
     case 'direct':
       ctaInstruction = `CTA Level: DIRECT
 - Lead with a relevant insight, then state your offer clearly.
-- Include this URL: https://enterprise.colaberry.ai/partners
+- Include this URL: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
 - Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer. DM me or check out enterprise.colaberry.ai/partners."`;
       break;
   }

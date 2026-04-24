@@ -15,6 +15,10 @@ export interface StrategyCallAttributes {
   notes: string | null;
   prep_token?: string;
   lead_id?: number | null;
+  page_origin?: string | null;
+  visitor_fingerprint?: string | null;
+  utm_source?: string | null;
+  utm_campaign?: string | null;
   created_at?: Date;
 }
 
@@ -32,6 +36,10 @@ class StrategyCall extends Model<StrategyCallAttributes> implements StrategyCall
   declare notes: string | null;
   declare prep_token: string;
   declare lead_id: number | null;
+  declare page_origin: string | null;
+  declare visitor_fingerprint: string | null;
+  declare utm_source: string | null;
+  declare utm_campaign: string | null;
   declare created_at: Date;
 }
 
@@ -94,6 +102,22 @@ StrategyCall.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       references: { model: 'leads', key: 'id' },
+    },
+    page_origin: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    visitor_fingerprint: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    utm_source: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    utm_campaign: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,

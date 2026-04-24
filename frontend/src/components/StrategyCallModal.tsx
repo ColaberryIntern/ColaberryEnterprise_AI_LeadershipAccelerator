@@ -171,6 +171,7 @@ export default function StrategyCallModal({
       });
 
       const visitorFp = localStorage.getItem('cb_visitor_fp');
+      const utmFields = getUTMPayloadFields();
       const res = await api.post('/api/calendar/book', {
         name: name.trim(),
         email: email.trim(),
@@ -178,13 +179,15 @@ export default function StrategyCallModal({
         phone: phone.trim(),
         slot_start: selectedSlot.start,
         timezone,
+        page_origin: pageOrigin || window.location.pathname,
         visitor_fingerprint: visitorFp || undefined,
+        utm_source: utmFields.utm_source || undefined,
+        utm_campaign: utmFields.utm_campaign || undefined,
       });
       setBookingResult(res.data.booking);
       setStep('success');
 
-      // Shadow lead for attribution (calendar/book doesn't accept UTM)
-      const utmFields = getUTMPayloadFields();
+      // Shadow lead for attribution
       api.post('/api/leads', {
         name: name.trim(),
         email: email.trim(),

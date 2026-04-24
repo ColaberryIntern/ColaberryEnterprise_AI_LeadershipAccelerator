@@ -72,6 +72,10 @@ export async function handleBookCall(
       google_event_id: booking.eventId,
       meet_link: booking.meetLink,
       status: 'scheduled',
+      page_origin: data.page_origin || null,
+      visitor_fingerprint: data.visitor_fingerprint || null,
+      utm_source: data.utm_source || null,
+      utm_campaign: data.utm_campaign || null,
     });
 
     // Find or create Lead by email
@@ -189,11 +193,11 @@ export async function handleBookCall(
     }
 
     // Resolve visitor identity if fingerprint provided
-    if (req.body.visitor_fingerprint && leadId) {
+    if (data.visitor_fingerprint && leadId) {
       try {
         const { Visitor } = require('../models');
         const { resolveIdentity } = require('../services/visitorTrackingService');
-        const visitor = await Visitor.findOne({ where: { fingerprint: req.body.visitor_fingerprint } });
+        const visitor = await Visitor.findOne({ where: { fingerprint: data.visitor_fingerprint } });
         if (visitor && !visitor.lead_id) {
           await resolveIdentity(visitor.id, leadId);
         }
