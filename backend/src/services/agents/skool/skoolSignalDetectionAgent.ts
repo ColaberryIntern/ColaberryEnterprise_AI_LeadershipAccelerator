@@ -168,8 +168,10 @@ async function extractPostsFromPage(page: Page): Promise<ExtractedPost[]> {
   const posts: ExtractedPost[] = [];
 
   try {
-    // Extract post data from the page. Skool renders posts in feed cards.
-    // We use multiple selectors to handle DOM variations.
+    // Extract post data using link-based detection (proven working pattern).
+    // Skool uses styled-components with hashed class names — CSS selectors are
+    // unreliable. Instead, find all links to /learn-ai/{slug} posts and extract
+    // context from their parent containers.
     const postData = await page.evaluate((maxBodyLength: number) => {
       const results: Array<{
         title: string;
@@ -180,53 +182,54 @@ async function extractPostsFromPage(page: Page): Promise<ExtractedPost[]> {
         likeCount: number;
       }> = [];
 
-      // Skool post containers - try multiple selectors
-      const postElements = document.querySelectorAll(
-        '[data-testid="post-card"], .post-card, article, [class*="PostCard"], [class*="post-item"]'
-      );
+      const allLinks = document.querySelectorAll('a[href*="/learn-ai/"]');
+      const seen = new Set<string>();
 
-      // If no specific post cards found, try a broader approach
-      const elements = postElements.length > 0
-        ? postElements
-        : document.querySelectorAll('[class*="feed"] > div > div');
+      allLinks.forEach((link) => {
+        const href = (link as HTMLAnchorElement).href || '';
+        const path = href.replace('https://www.skool.com', '');
+        // Must be a post URL: /learn-ai/{slug} (not /classroom, /about, etc.)
+        if (!path.startsWith('/learn-ai/')) return;
+        const slug = path.replace('/learn-ai/', '').split('?')[0];
+        if (!slug || slug.length < 5) return;
+        if (['classroom', 'calendar', 'members', 'about', 'leaderboards', 'map'].includes(slug)) return;
+        if (seen.has(slug)) return;
+        seen.add(slug);
 
-      elements.forEach((el) => {
-        try {
-          // Title: look for heading or strong text inside the post
-          const titleEl = el.querySelector('h2, h3, h4, [class*="title"], [class*="Title"], strong');
-          const title = titleEl?.textContent?.trim() || '';
+        const title = link.textContent?.trim() || '';
+        if (title.length < 10 || title === 'AI Automation Agency Hub') return;
+        // Skip "New comment X ago" links
+        if (title.startsWith('New comment') || title.startsWith('Last comment')) return;
 
-          // Body: look for paragraph or body text
-          const bodyEl = el.querySelector('p, [class*="body"], [class*="Body"], [class*="content"], [class*="Content"]');
-          let body = bodyEl?.textContent?.trim() || '';
-          if (body.length > maxBodyLength) {
-            body = body.substring(0, maxBodyLength);
-          }
-
-          // Author
-          const authorEl = el.querySelector('[class*="author"], [class*="Author"], [class*="user"], [class*="name"]');
-          const author = authorEl?.textContent?.trim() || 'Unknown';
-
-          // URL: look for a link to the post
-          const linkEl = el.querySelector('a[href*="/post/"], a[href*="/learn-ai/"]') as HTMLAnchorElement | null;
-          const url = linkEl?.href || '';
-
-          // Comment count
-          const commentEl = el.querySelector('[class*="comment"], [class*="Comment"], [class*="reply"], [class*="Reply"]');
-          const commentText = commentEl?.textContent?.trim() || '0';
-          const commentCount = parseInt(commentText.replace(/\D/g, ''), 10) || 0;
-
-          // Like count
-          const likeEl = el.querySelector('[class*="like"], [class*="Like"], [class*="upvote"], [class*="Upvote"]');
-          const likeText = likeEl?.textContent?.trim() || '0';
-          const likeCount = parseInt(likeText.replace(/\D/g, ''), 10) || 0;
-
-          if (title || body) {
-            results.push({ title, body, author, url, commentCount, likeCount });
-          }
-        } catch {
-          // Skip malformed elements
+        // Walk up to find post container
+        let container = link.parentElement;
+        for (let i = 0; i < 8 && container; i++) {
+          if (container.children.length >= 3 && container.clientHeight > 80) break;
+          container = container.parentElement;
         }
+
+        // Extract body from container
+        let body = container ? container.innerText.substring(0, maxBodyLength) : '';
+
+        // Find author (link with /@)
+        let author = 'Unknown';
+        if (container) {
+          const authorLink = container.querySelector('a[href*="/@"]');
+          if (authorLink) author = authorLink.textContent?.trim() || 'Unknown';
+        }
+
+        // Extract like/comment counts (numbers at end of post text)
+        let commentCount = 0;
+        let likeCount = 0;
+        if (container) {
+          const nums = container.innerText.match(/^(\d+)$/gm);
+          if (nums && nums.length >= 2) {
+            likeCount = parseInt(nums[nums.length - 2], 10) || 0;
+            commentCount = parseInt(nums[nums.length - 1], 10) || 0;
+          }
+        }
+
+        results.push({ title, body, author, url: href, commentCount, likeCount });
       });
 
       return results;
