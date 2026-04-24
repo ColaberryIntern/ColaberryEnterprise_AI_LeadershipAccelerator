@@ -518,8 +518,6 @@ export default function SystemBlueprint() {
 
   // Autonomous mode + Cory suggestions/plan
   const [autonomousMode, setAutonomousMode] = useState(false);
-  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
-  const [coryView, setCoryView] = useState<'plan' | 'suggestions'>('plan');
   const [completedPlanSteps, setCompletedPlanSteps] = useState<Set<string>>(new Set());
 
   // Execution queue state
@@ -527,6 +525,7 @@ export default function SystemBlueprint() {
   const [execIndex, setExecIndex] = useState(0);
   const [execPaused, setExecPaused] = useState(false);
   const isExecuting = execQueue.length > 0;
+  const [showUpNext, setShowUpNext] = useState(false);
 
   // Demo state
   const [demoActive, setDemoActive] = useState(false);
@@ -678,6 +677,13 @@ export default function SystemBlueprint() {
     setBuild(prev => ({ ...prev, reportText: value, pasteDetected: isPaste || prev.pasteDetected }));
   };
 
+  const handleLearnAbout = (stepTitle: string, compName: string) => {
+    const prompt = `Explain what "${stepTitle}" means in the context of building an enterprise ${project?.industry || 'software'} system called "${project?.organization_name || 'my project'}". What are the key concepts, common implementation patterns, and what should I expect when building this? Keep it practical and under 500 words.`;
+    navigator.clipboard.writeText(prompt).catch(() => {});
+    window.open('https://chatgpt.com/', '_blank');
+    showToast('Prompt copied — paste it in ChatGPT to learn more');
+  };
+
   const handleValidate = async (comp: SystemComponent) => {
     if (!build.reportText.trim() || demoActive) return;
     setBuild(prev => ({ ...prev, phase: 'validating' }));
@@ -743,9 +749,7 @@ export default function SystemBlueprint() {
     || project.selected_use_case
     || 'Your AI system is being built. Select components below to view details and generate implementation prompts.';
 
-  // Cory suggestions + plan (filtered by dismissals/completions)
-  const allSuggestions = generateCorySuggestions(components, systemLayers);
-  const corySuggestions = allSuggestions.filter(s => !dismissedSuggestions.has(s.id));
+  // Cory plan (filtered by completions)
   const coryPlan = generateCoryPlan(components, systemLayers).map(phase => ({
     ...phase,
     steps: phase.steps.map(s => ({ ...s, done: s.done || completedPlanSteps.has(s.id) })),
@@ -768,26 +772,6 @@ export default function SystemBlueprint() {
       prevReportLen.current = 0;
       // Mark step as completed when build flow starts
       setCompletedPlanSteps(prev => new Set([...prev, step.id]));
-    } catch {
-      showToast('Failed to generate prompt', '#ef4444');
-      setBuild(prev => ({ ...prev, phase: 'idle' }));
-    }
-  };
-
-  const handleApplySuggestion = async (suggestion: CorySuggestion) => {
-    const comp = components.find(c => c.id === suggestion.componentId);
-    if (!comp) return;
-    // Trigger the build flow with this component's prompt target
-    const beforeMetrics = { coverage: comp.completion, maturityLevel: comp.maturityLevel, readiness: comp.completion };
-    setBuild(prev => ({ ...prev, phase: 'generating', prompt: null, validationResult: null, beforeMetrics, pasteDetected: false }));
-    try {
-      const res = await bpApi.generatePrompt(suggestion.componentId, suggestion.promptTarget);
-      const promptText = res.data?.prompt_text || '';
-      await copyText(promptText);
-      showToast('Prompt copied — paste into Claude Code');
-      setBuild(prev => ({ ...prev, phase: 'waiting_for_execution', prompt: promptText }));
-      setShowPrompt(false);
-      prevReportLen.current = 0;
     } catch {
       showToast('Failed to generate prompt', '#ef4444');
       setBuild(prev => ({ ...prev, phase: 'idle' }));
@@ -954,135 +938,7 @@ export default function SystemBlueprint() {
         </>
       )}
 
-      {/* ── Cory Panel — Plan + Suggestions ── */}
-      {!isInFlow && (coryPlan.length > 0 || corySuggestions.length > 0) && !demoActive && (
-        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
-          <div className="card-body p-4">
-            {/* Header */}
-            <div className="d-flex align-items-center justify-content-between mb-1">
-              <div className="d-flex align-items-center gap-2">
-                <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 16 }}></i>
-                <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>
-                  Cory — Your AI System Architect
-                </h6>
-              </div>
-              {/* Plan / Suggestions toggle */}
-              <div className="btn-group" style={{ fontSize: 10 }}>
-                <button className={`btn btn-sm ${coryView === 'plan' ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '2px 10px' }} onClick={() => setCoryView('plan')}>
-                  <i className="bi bi-map me-1"></i>Plan
-                </button>
-                <button className={`btn btn-sm ${coryView === 'suggestions' ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '2px 10px' }} onClick={() => setCoryView('suggestions')}>
-                  <i className="bi bi-lightbulb me-1"></i>Suggestions
-                </button>
-              </div>
-            </div>
-            {autonomousMode && (
-              <div className="mb-2" style={{ fontSize: 10, color: '#8b5cf6' }}>
-                <i className="bi bi-lightning-fill me-1"></i>System is actively improving itself
-              </div>
-            )}
-
-            {/* ── Plan View ── */}
-            {coryView === 'plan' && coryPlan.length > 0 && (
-              <div>
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <p className="text-muted mb-0" style={{ fontSize: 11 }}>
-                    Recommended evolution plan — {totalPlanSteps - donePlanSteps} steps remaining
-                  </p>
-                </div>
-                {coryPlan.map((phase, pi) => {
-                  const incompleteSteps = phase.steps.filter(s => !s.done);
-                  const phaseProgress = phase.steps.length > 0 ? Math.round((phase.steps.filter(s => s.done).length / phase.steps.length) * 100) : 0;
-                  return (
-                    <div key={phase.id} className="mb-3">
-                      <div className="d-flex align-items-center gap-2 mb-2">
-                        <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 22, height: 22, background: phase.color, color: '#fff', fontSize: 10 }}>{pi + 1}</span>
-                        <div>
-                          <div className="d-flex align-items-center gap-2">
-                            <span className="fw-semibold" style={{ fontSize: 12 }}><i className={`bi ${phase.icon} me-1`}></i>{phase.title}</span>
-                            {phaseProgress > 0 && phaseProgress < 100 && <span className="badge" style={{ background: `${phase.color}20`, color: phase.color, fontSize: 8 }}>{phaseProgress}%</span>}
-                            {phaseProgress === 100 && <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 11 }}></i>}
-                          </div>
-                          <div className="text-muted" style={{ fontSize: 10 }}>{phase.description}</div>
-                        </div>
-                      </div>
-                      {phase.steps.map(step => {
-                        const impactColors: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
-                        const ic = impactColors[step.impact] || impactColors.Medium;
-                        return (
-                          <div key={step.id} className="d-flex align-items-start gap-2 mb-1 ms-4 p-2" style={{ background: step.done ? '#10b98110' : 'var(--color-bg-alt)', borderRadius: 6, opacity: step.done ? 0.6 : 1 }}>
-                            <i className={`bi ${step.done ? 'bi-check-circle-fill' : 'bi-circle'}`} style={{ color: step.done ? '#10b981' : '#9ca3af', fontSize: 12, marginTop: 1, flexShrink: 0 }}></i>
-                            <div className="flex-grow-1">
-                              <div className="d-flex align-items-center gap-2">
-                                <span className={`${step.done ? '' : 'fw-semibold'}`} style={{ fontSize: 11, textDecoration: step.done ? 'line-through' : 'none' }}>{step.title}</span>
-                                <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 7 }}>{step.impact}</span>
-                              </div>
-                              {!step.done && <div className="text-muted" style={{ fontSize: 9 }}>{step.explanation}</div>}
-                            </div>
-                            {!step.done && (
-                              <button className="btn btn-sm btn-primary" style={{ fontSize: 9, padding: '1px 7px', flexShrink: 0 }} onClick={() => handleApplyPlanStep(step)}>
-                                Apply
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {/* Apply Phase button */}
-                      {incompleteSteps.length > 1 && (
-                        <div className="ms-4 mt-1">
-                          <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 9 }} onClick={() => handleApplyPlanStep(incompleteSteps[0])}>
-                            <i className="bi bi-play-fill me-1"></i>Start Phase {pi + 1}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {coryView === 'plan' && coryPlan.length > 0 && totalPlanSteps - donePlanSteps > 0 && !isExecuting && (
-              <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                <button className="btn btn-sm w-100" style={{ background: autonomousMode ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={handleStartExecution}>
-                  <i className="bi bi-play-fill me-1"></i>Execute Plan ({totalPlanSteps - donePlanSteps} steps)
-                </button>
-              </div>
-            )}
-            {coryView === 'plan' && coryPlan.length === 0 && (
-              <p className="text-muted small mb-0"><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>All plan phases complete.</p>
-            )}
-
-            {/* ── Suggestions View ── */}
-            {coryView === 'suggestions' && (
-              <div>
-                <p className="text-muted mb-3" style={{ fontSize: 11 }}>
-                  {autonomousMode ? 'I\'ve analyzed your system and recommend these upgrades:' : 'Based on your system\'s current state, I suggest:'}
-                </p>
-                {corySuggestions.length > 0 ? corySuggestions.map(s => {
-                  const impactColors: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
-                  const ic = impactColors[s.impact] || impactColors.Medium;
-                  return (
-                    <div key={s.id} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
-                      <div className="flex-grow-1">
-                        <div className="d-flex align-items-center gap-2">
-                          <span className="fw-semibold" style={{ fontSize: 12 }}>{s.title}</span>
-                          <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 8 }}>{s.impact}</span>
-                        </div>
-                        <div className="text-muted" style={{ fontSize: 10 }}>{s.explanation}</div>
-                      </div>
-                      <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
-                        <button className="btn btn-sm btn-primary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => handleApplySuggestion(s)}>Apply</button>
-                        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setDismissedSuggestions(prev => new Set([...prev, s.id]))}>Dismiss</button>
-                      </div>
-                    </div>
-                  );
-                }) : (
-                  <p className="text-muted small mb-0">No suggestions at this time — your system is on track.</p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ── Cory — Unified Build Guide ── */}
 
       {/* ── Execution Mode Header ── */}
       {isExecuting && (
@@ -1137,37 +993,61 @@ export default function SystemBlueprint() {
         </div>
       )}
 
-      {/* ── Build Flow Card ── */}
+      {/* ── Cory — Unified Build Guide (merged Plan + Build Step) ── */}
       {recommended && (
-        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid var(--color-primary)' }}>
+        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
           <div className="card-body p-4">
-            <div className="d-flex align-items-center justify-content-between mb-2">
+            {/* Cory header */}
+            <div className="d-flex align-items-center justify-content-between mb-3">
               <div className="d-flex align-items-center gap-2">
-                <span style={{ fontSize: 10, color: 'var(--color-primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
-                  {isInFlow ? 'Build Flow' : 'Current Build Step'}
-                </span>
-                <span className="badge" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 9 }}>{recommended.name}</span>
+                <i className="bi bi-robot" style={{ color: autonomousMode ? '#8b5cf6' : '#3b82f6', fontSize: 16 }}></i>
+                <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: autonomousMode ? '#8b5cf6' : 'var(--color-primary)' }}>
+                  Cory — Your Next Step
+                </h6>
+                {autonomousMode && <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}><i className="bi bi-lightning-fill me-1"></i>Autonomous</span>}
               </div>
               {isInFlow && !demoActive && (
                 <button className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 10 }} onClick={handleStartNext}>
-                  <i className="bi bi-x-circle me-1"></i>Switch Step
+                  <i className="bi bi-arrow-left-right me-1"></i>Switch Step
                 </button>
               )}
             </div>
 
+            {/* Step indicator */}
+            {(() => {
+              const allSteps = coryPlan.flatMap(p => p.steps.filter(s => !s.done));
+              const stepNumber = allSteps.length > 0 ? 1 : 0;
+              const totalSteps = allSteps.length;
+              return totalSteps > 0 ? (
+                <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>
+                  Step {stepNumber} of {totalSteps} remaining
+                </div>
+              ) : null;
+            })()}
+
+            {/* Primary step: what to build */}
             <h6 className="fw-bold mb-1" style={{ color: 'var(--color-text)', fontSize: 15 }}>{getStepTitle(recommended)}</h6>
             <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>{getWhyThisMatters(recommended, systemLayers)}</p>
 
-            <div className="d-flex gap-2 mb-3">
+            {/* Layer status + completion badges */}
+            <div className="d-flex flex-wrap gap-2 mb-3">
               <span className="badge" style={{ background: STATUS_COLORS[recommended.status].bg, color: STATUS_COLORS[recommended.status].text, fontSize: 9 }}>{recommended.completion}% complete</span>
               <span className="badge" style={{ background: `${MATURITY_COLORS[recommended.maturityLevel]}20`, color: MATURITY_COLORS[recommended.maturityLevel], fontSize: 9 }}>{recommended.maturity}</span>
+              {recommended.layers.backend === 'partial' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}><i className="bi bi-exclamation-triangle me-1"></i>Backend partial</span>}
+              {recommended.layers.backend === 'missing' && <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 9 }}><i className="bi bi-x-circle me-1"></i>No backend</span>}
+              {recommended.layers.frontend === 'missing' && recommended.layers.backend !== 'missing' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>No frontend</span>}
             </div>
 
-            {/* PHASE: idle */}
+            {/* PHASE: idle — action buttons */}
             {build.phase === 'idle' && (
-              <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(recommended)}>
-                <i className="bi bi-terminal me-1"></i>Generate Build Prompt
-              </button>
+              <div className="d-flex flex-wrap gap-2">
+                <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(recommended)}>
+                  <i className="bi bi-terminal me-1"></i>Generate Build Prompt
+                </button>
+                <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(getStepTitle(recommended), recommended.name)}>
+                  <i className="bi bi-book me-1"></i>Learn About This
+                </button>
+              </div>
             )}
 
             {/* PHASE: generating */}
@@ -1383,15 +1263,57 @@ export default function SystemBlueprint() {
               </div>
             )}
 
-            {/* After this step (idle only) */}
-            {nextAfter && build.phase === 'idle' && (
-              <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                <div className="d-flex align-items-center gap-2" style={{ fontSize: 11, color: '#9ca3af' }}>
-                  <i className="bi bi-arrow-right-circle"></i>
-                  <span>After this: <strong style={{ color: 'var(--color-text-light)' }}>{getStepTitle(nextAfter)}</strong></span>
+            {/* Up next — collapsible remaining plan steps (idle only) */}
+            {build.phase === 'idle' && (() => {
+              const allSteps = coryPlan.flatMap(p => p.steps.filter(s => !s.done));
+              const upcomingSteps = allSteps.slice(1); // skip first (it's the current primary step)
+              if (upcomingSteps.length === 0) return null;
+              return (
+                <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 w-100" style={{ fontSize: 12, color: '#64748b' }} onClick={() => setShowUpNext(!showUpNext)}>
+                    <i className={`bi ${showUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 10 }}></i>
+                    <span>Up next ({upcomingSteps.length} more step{upcomingSteps.length > 1 ? 's' : ''})</span>
+                  </button>
+                  {showUpNext && (
+                    <div className="mt-2">
+                      {upcomingSteps.map((step, i) => {
+                        const impactColors: Record<string, { bg: string; text: string }> = { High: { bg: '#ef444420', text: '#ef4444' }, Medium: { bg: '#f59e0b20', text: '#92400e' }, Low: { bg: '#10b98120', text: '#059669' } };
+                        const ic = impactColors[step.impact] || impactColors.Medium;
+                        const stepComp = components.find(c => c.id === step.componentId);
+                        return (
+                          <div key={step.id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                            <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#e2e8f0', color: '#64748b', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                            <div className="flex-grow-1">
+                              <div className="d-flex align-items-center gap-2">
+                                <span className="fw-medium" style={{ fontSize: 11 }}>{step.title}</span>
+                                <span className="badge" style={{ background: ic.bg, color: ic.text, fontSize: 7 }}>{step.impact}</span>
+                              </div>
+                              <div className="text-muted" style={{ fontSize: 9 }}>{step.explanation}</div>
+                            </div>
+                            <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(step.title, stepComp?.name || '')}>
+                                <i className="bi bi-book"></i>
+                              </button>
+                              <button className="btn btn-sm btn-primary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleApplyPlanStep(step)}>
+                                Build
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Execute entire plan */}
+                  {!isExecuting && upcomingSteps.length > 0 && (
+                    <div className="mt-2">
+                      <button className="btn btn-sm w-100" style={{ background: autonomousMode ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 11 }} onClick={handleStartExecution}>
+                        <i className="bi bi-play-fill me-1"></i>Execute All ({upcomingSteps.length + 1} steps)
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}
