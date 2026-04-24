@@ -49,6 +49,7 @@ interface ProjectData {
   organization_name?: string;
   industry?: string;
   project_stage: string;
+  project_variables?: Record<string, any>;
   setup_status?: { requirements_loaded: boolean; claude_md_loaded: boolean; github_connected: boolean; activated: boolean } | null;
 }
 
@@ -503,7 +504,8 @@ function SystemViewV2Inner() {
 
   // Work Area state
   type WorkTab = 'overview' | 'build' | 'improve' | 'health' | 'ui' | 'insights' | 'gaps' | 'trends';
-  const [workTab, setWorkTab] = useState<WorkTab>('overview');
+  const urlTab = searchParams.get('tab') as WorkTab | null;
+  const [workTab, setWorkTab] = useState<WorkTab>(urlTab && ['overview','build','improve','health','ui'].includes(urlTab) ? urlTab : 'overview');
   const [compDetail, setCompDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
@@ -513,6 +515,9 @@ function SystemViewV2Inner() {
   const [buildReport, setBuildReport] = useState('');
   const [buildValidating, setBuildValidating] = useState(false);
   const [buildResult, setBuildResult] = useState<any>(null);
+
+  // Build tab "up next" state
+  const [showBuildUpNext, setShowBuildUpNext] = useState(false);
 
   // UI feedback state
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
@@ -854,6 +859,34 @@ function SystemViewV2Inner() {
         }
       }
     } finally { setBuildValidating(false); }
+  };
+
+  // Learn about a component — copies rich prompt to clipboard and opens ChatGPT
+  const handleLearnAbout = async (comp: SystemComponent) => {
+    const projectContext = project?.project_variables?.system_prompt || '';
+    let featureList = '';
+    let reqList = '';
+    let gapList = '';
+    let totalReqs = 0;
+    let featureCount = 0;
+    let gapCount = 0;
+    try {
+      const detail = compDetail && compDetail.id === comp.id ? compDetail : (await portalApi.get(`/api/portal/project/business-processes/${comp.id}`)).data;
+      const features = detail?.features || [];
+      const gaps = detail?.autonomy_gaps || [];
+      featureCount = features.length;
+      gapCount = gaps.length;
+      totalReqs = detail?.total_requirements || 0;
+      featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
+      reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
+      gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
+    } catch { /* proceed with basic info */ }
+    const learnPrompt = `You are operating in LEARN MODE.\n\nDO NOT write code. DO NOT give implementation instructions. DO NOT suggest building anything.\nYour ONLY job is to help the learner UNDERSTAND what this business process is, why it matters, and how it works.\n\n---\n\nYou are a Technical Mentor helping someone deeply understand a business process before they build it.\n\n---\n\n# PROJECT CONTEXT\n\n${projectContext || 'No project system prompt set yet.'}\n\n---\n\nBUSINESS PROCESS: ${comp.name}\n\nDESCRIPTION: ${comp.description || 'No description available.'}\n\nCURRENT STATE:\n- Backend: ${comp.layers.backend}\n- Frontend: ${comp.layers.frontend}\n- Agents: ${comp.layers.agent}\n- Completion: ${comp.completion}%\n- Maturity: ${comp.maturity}\n\nFEATURES (${featureCount}):\n${featureList || 'None defined yet'}\n\nREQUIREMENTS (${totalReqs}):\n${reqList || 'None extracted yet'}\n\nGAPS (${gapCount}):\n${gapList || 'No gaps detected'}\n\n---\n\nHelp the learner understand:\n1. What "${comp.name}" is in plain language\n2. What business problem it solves\n3. Each feature and why it's needed\n4. Current gaps and what they mean\n5. How layers work together\n\nRULES:\n- Explain ONE concept at a time\n- Use analogies and real-world examples\n- Never give coding instructions\n\nBegin by explaining what "${comp.name}" is and why it matters.`;
+    try { await navigator.clipboard.writeText(learnPrompt); } catch {
+      const ta = document.createElement('textarea'); ta.value = learnPrompt; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    window.open('https://chatgpt.com', '_blank');
   };
 
   // UI feedback handlers
@@ -1354,20 +1387,64 @@ function SystemViewV2Inner() {
                 <div>
                   {!buildPrompt && !buildGenerating && (
                     <div>
-                      {/* What will be built */}
-                      {selectedComponent.nextStep && (
-                        <div className="p-3 mb-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
-                          <div className="fw-semibold mb-1" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
-                            <i className="bi bi-arrow-right-circle me-1"></i>What will be built
-                          </div>
-                          <div style={{ fontSize: 11 }}>{selectedComponent.nextStep}</div>
-                          <div className="text-muted mt-1" style={{ fontSize: 10 }}>{getComponentPurpose(selectedComponent.name)}</div>
+                      {/* Cory — Your Next Step (unified view matching Blueprint) */}
+                      <div className="mb-3">
+                        {selectedComponent.nextStep && (
+                          <h6 className="fw-bold mb-1" style={{ fontSize: 14, color: 'var(--color-text)' }}>{selectedComponent.nextStep}</h6>
+                        )}
+                        <p className="mb-2" style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>{getWhyMatters(selectedComponent)}</p>
+                        {/* Layer status badges */}
+                        <div className="d-flex flex-wrap gap-2 mb-3">
+                          <span className="badge" style={{ background: selectedComponent.status === 'complete' ? '#10b98120' : selectedComponent.status === 'in_progress' ? '#f59e0b20' : '#e2e8f020', color: selectedComponent.status === 'complete' ? '#059669' : selectedComponent.status === 'in_progress' ? '#92400e' : '#9ca3af', fontSize: 9 }}>{selectedComponent.completion}% complete</span>
+                          <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
+                          {selectedComponent.layers.backend === 'partial' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}><i className="bi bi-exclamation-triangle me-1"></i>Backend partial</span>}
+                          {selectedComponent.layers.backend === 'missing' && <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 9 }}><i className="bi bi-x-circle me-1"></i>No backend</span>}
+                          {selectedComponent.layers.frontend === 'missing' && selectedComponent.layers.backend !== 'missing' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>No frontend</span>}
                         </div>
-                      )}
-                      <p className="text-muted mb-3" style={{ fontSize: 11 }}>Generate a prompt tailored to your codebase and copied to clipboard.</p>
-                      <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt(selectedComponent)}>
-                        <i className="bi bi-terminal me-1"></i>Generate Build Prompt
-                      </button>
+                        {/* Action buttons */}
+                        <div className="d-flex flex-wrap gap-2">
+                          <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 11 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt(selectedComponent)}>
+                            <i className="bi bi-terminal me-1"></i>Generate Build Prompt
+                          </button>
+                          <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 11 }} onClick={() => handleLearnAbout(selectedComponent)}>
+                            <i className="bi bi-book me-1"></i>Learn About This
+                          </button>
+                        </div>
+                      </div>
+                      {/* Up next — other components needing work */}
+                      {(() => {
+                        const otherIncomplete = visibleComponents.filter(c => c.status !== 'complete' && c.id !== selectedComponent.id).slice(0, 4);
+                        if (otherIncomplete.length === 0) return null;
+                        return (
+                          <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                            <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2" style={{ fontSize: 11, color: '#64748b' }} onClick={() => setShowBuildUpNext(!showBuildUpNext)}>
+                              <i className={`bi ${showBuildUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 9 }}></i>
+                              <span>Up next ({otherIncomplete.length} more component{otherIncomplete.length > 1 ? 's' : ''})</span>
+                            </button>
+                            {showBuildUpNext && (
+                              <div className="mt-2">
+                                {otherIncomplete.map((c, i) => (
+                                  <div key={c.id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#e2e8f0', color: '#64748b', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                    <div className="flex-grow-1">
+                                      <div className="fw-medium" style={{ fontSize: 11 }}>{c.nextStep || c.name}</div>
+                                      <div className="text-muted" style={{ fontSize: 9 }}>{c.completion}% complete — {c.layers.backend === 'missing' ? 'No backend' : c.layers.backend === 'partial' ? 'Backend partial' : c.layers.frontend === 'missing' ? 'No frontend' : `${c.maturity}`}</div>
+                                    </div>
+                                    <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(c)}>
+                                        <i className="bi bi-book"></i>
+                                      </button>
+                                      <button className="btn btn-sm btn-primary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => { setSelectedId(c.id); setWorkTab('build'); }}>
+                                        Build
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                   {buildGenerating && <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: 12 }}><span className="spinner-border spinner-border-sm"></span>Generating prompt...</div>}

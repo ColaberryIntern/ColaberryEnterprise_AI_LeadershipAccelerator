@@ -1433,7 +1433,7 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
               return (
                 <div key={comp.id} className="col-md-6 col-lg-4">
                   <div className="card border-0 shadow-sm h-100" style={{ borderTop: `3px solid ${isActive ? 'var(--color-primary)' : mc}`, outline: isActive ? '2px solid var(--color-primary)' : 'none', outlineOffset: -1, cursor: 'pointer' }}
-                    onClick={() => navigate(`/portal/project/system?componentId=${comp.id}#build`)}>
+                    onClick={() => navigate(`/portal/project/system-v2?componentId=${comp.id}&tab=build`)}>
                     <div className="card-body p-3">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div className="fw-semibold" style={{ fontSize: 13, color: 'var(--color-text)' }}>
