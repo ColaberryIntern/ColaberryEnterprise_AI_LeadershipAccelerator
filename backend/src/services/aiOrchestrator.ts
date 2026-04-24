@@ -74,7 +74,7 @@ import { runAdmissionsKnowledgeSyncAgent } from './agents/admissions/admissionsK
 import { runOfferRoutingAgent } from './agents/offerRoutingAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
-import type { AgentExecutionResult } from './agents/types';
+import type { AgentExecutionResult, AgentAction } from './agents/types';
 // Super agent executors
 import { executeCampaignOpsSuperAgent } from './agents/departments/superAgents/campaignOpsSuperAgent';
 import { executeLeadIntelligenceSuperAgent } from './agents/departments/superAgents/leadIntelligenceSuperAgent';
@@ -589,7 +589,8 @@ function wrapSkoolAgent(fn: () => Promise<any>): (_agentId: string, _config: Rec
   return async (_agentId, _config) => {
     const start = Date.now();
     const result = await fn();
-    return { campaigns: 0, actions: Object.values(result || {}).reduce((s: number, v: any) => s + (typeof v === 'number' ? v : 0), 0), errors: 0, durationMs: Date.now() - start };
+    const action: AgentAction = { campaign_id: null, action: 'skool_engagement', reason: JSON.stringify(result || {}), confidence: 1, before_state: null, after_state: result || {}, result: 'success', entity_type: 'engagement_event', entity_id: '' };
+    return { agent_name: _agentId, campaigns_processed: 0, actions_taken: [action], errors: [], duration_ms: Date.now() - start };
   };
 }
 
