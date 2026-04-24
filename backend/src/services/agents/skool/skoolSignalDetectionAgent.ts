@@ -58,8 +58,9 @@ interface SkoolTaskRecord {
 
 function getModels(): { SkoolSignal: any; SkoolTask: any } | null {
   try {
-    const SkoolSignal = require('../../models/SkoolSignal').default || require('../../models/SkoolSignal');
-    const SkoolTask = require('../../models/SkoolTask').default || require('../../models/SkoolTask');
+    const models = require('../../../models');
+    const SkoolSignal = models.SkoolSignal;
+    const SkoolTask = models.SkoolTask;
     return { SkoolSignal, SkoolTask };
   } catch (err) {
     console.error(`${LOG_PREFIX} Failed to load models - DB operations will be skipped:`, err);
