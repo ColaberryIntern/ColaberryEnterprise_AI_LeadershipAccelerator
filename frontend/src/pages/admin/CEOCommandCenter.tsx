@@ -349,9 +349,10 @@ export default function CEOCommandCenter() {
     if (!newGoal.name || !newGoal.target_value) return;
     try {
       await api.post('/api/admin/company/goals', {
-        name: newGoal.name,
+        goal_name: newGoal.name,
+        goal_type: 'custom',
         target_value: Number(newGoal.target_value),
-        unit: newGoal.unit || 'units',
+        measurement_unit: newGoal.unit || 'units',
         priority: newGoal.priority,
         deadline: newGoal.deadline || null,
       });
