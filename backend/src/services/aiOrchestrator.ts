@@ -584,24 +584,33 @@ export async function runOpenclawLinkedInCommentMonitor(): Promise<AgentExecutio
 
 // ─── Skool Community Engagement Agents ─────────────────────────────────────
 
+// Wrap Skool agents to match AgentExecutionResult interface
+function wrapSkoolAgent(fn: () => Promise<any>): (_agentId: string, _config: Record<string, any>) => Promise<AgentExecutionResult> {
+  return async (_agentId, _config) => {
+    const start = Date.now();
+    const result = await fn();
+    return { campaigns: 0, actions: Object.values(result || {}).reduce((s: number, v: any) => s + (typeof v === 'number' ? v : 0), 0), errors: 0, durationMs: Date.now() - start };
+  };
+}
+
 export async function runSkoolSignalDetectionAgent(): Promise<AgentExecutionResult | null> {
-  return runAgent('SkoolSignalDetection', runSkoolSignalDetection);
+  return runAgent('SkoolSignalDetection', wrapSkoolAgent(runSkoolSignalDetection));
 }
 
 export async function runSkoolContentResponseAgent(): Promise<AgentExecutionResult | null> {
-  return runAgent('SkoolContentResponse', runSkoolContentResponse);
+  return runAgent('SkoolContentResponse', wrapSkoolAgent(runSkoolContentResponse));
 }
 
 export async function runSkoolQualityGateAgent(): Promise<AgentExecutionResult | null> {
-  return runAgent('SkoolQualityGate', runSkoolQualityGate);
+  return runAgent('SkoolQualityGate', wrapSkoolAgent(runSkoolQualityGate));
 }
 
 export async function runSkoolBrowserWorkerAgent(): Promise<AgentExecutionResult | null> {
-  return runAgent('SkoolBrowserWorker', runSkoolBrowserWorker);
+  return runAgent('SkoolBrowserWorker', wrapSkoolAgent(runSkoolBrowserWorker));
 }
 
 export async function runSkoolSupervisorAgent(): Promise<AgentExecutionResult | null> {
-  return runAgent('SkoolSupervisor', runSkoolSupervisor);
+  return runAgent('SkoolSupervisor', wrapSkoolAgent(runSkoolSupervisor));
 }
 
 // ─── Strategy Architect Agents (16 departments) ──────────────────────────────

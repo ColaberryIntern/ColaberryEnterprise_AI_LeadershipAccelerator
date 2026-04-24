@@ -1,4 +1,5 @@
 import { Op } from 'sequelize';
+import { sequelize } from '../../../config/database';
 
 // Models loaded via require with try/catch since they may not be compiled yet
 let SkoolResponse: any;
@@ -181,7 +182,7 @@ export async function runSkoolBrowserWorker(): Promise<{
         await SkoolTask.update(
           {
             status: 'failed',
-            attempts: Op.col('attempts') as any,
+            attempts: sequelize.literal('"attempts" + 1') as any,
             error_message: err.message?.slice(0, 500),
           },
           {
