@@ -1387,8 +1387,8 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
                       })}
                     </div>
                   )}
-                  {/* Execute entire plan */}
-                  {!isExecuting && upcomingSteps.length > 0 && (
+                  {/* Execute all — inside collapsible */}
+                  {showUpNext && !isExecuting && (
                     <div className="mt-2">
                       <button className="btn btn-sm w-100" style={{ background: autonomousMode ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 11 }} onClick={handleStartExecution}>
                         <i className="bi bi-play-fill me-1"></i>Execute All ({upcomingSteps.length + 1} steps)
