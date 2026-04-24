@@ -573,7 +573,13 @@ function SystemViewV2Inner() {
     if (urlComponentId) {
       setSelectedId(urlComponentId);
       if (urlTab && ['overview','build','improve','health','ui'].includes(urlTab)) setWorkTab(urlTab);
-      setTimeout(() => workAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
+      setTimeout(() => {
+        const el = workAreaRef.current;
+        if (el) {
+          const y = el.getBoundingClientRect().top + window.scrollY - 80;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+      }, 500);
     }
   }, [urlComponentId, urlTab]);
 
@@ -1393,54 +1399,83 @@ function SystemViewV2Inner() {
                 <div>
                   {!buildPrompt && !buildGenerating && (
                     <div>
-                      {/* Cory — Your Next Step (unified view matching Blueprint) */}
-                      <div className="mb-3">
-                        {selectedComponent.nextStep && (
-                          <h6 className="fw-bold mb-1" style={{ fontSize: 14, color: 'var(--color-text)' }}>{selectedComponent.nextStep}</h6>
-                        )}
-                        <p className="mb-2" style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>{getWhyMatters(selectedComponent)}</p>
-                        {/* Layer status badges */}
-                        <div className="d-flex flex-wrap gap-2 mb-3">
-                          <span className="badge" style={{ background: selectedComponent.status === 'complete' ? '#10b98120' : selectedComponent.status === 'in_progress' ? '#f59e0b20' : '#e2e8f020', color: selectedComponent.status === 'complete' ? '#059669' : selectedComponent.status === 'in_progress' ? '#92400e' : '#9ca3af', fontSize: 9 }}>{selectedComponent.completion}% complete</span>
-                          <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
-                          {selectedComponent.layers.backend === 'partial' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}><i className="bi bi-exclamation-triangle me-1"></i>Backend partial</span>}
-                          {selectedComponent.layers.backend === 'missing' && <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 9 }}><i className="bi bi-x-circle me-1"></i>No backend</span>}
-                          {selectedComponent.layers.frontend === 'missing' && selectedComponent.layers.backend !== 'missing' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>No frontend</span>}
-                        </div>
-                        {/* Action buttons */}
-                        <div className="d-flex flex-wrap gap-2">
-                          <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 11 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt(selectedComponent)}>
-                            <i className="bi bi-terminal me-1"></i>Generate Build Prompt
-                          </button>
-                          <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 11 }} onClick={() => handleLearnAbout(selectedComponent)}>
-                            <i className="bi bi-book me-1"></i>Learn About This
-                          </button>
-                        </div>
+                      {/* Cory — Your Next Step (matches Blueprint exactly) */}
+                      <div className="d-flex align-items-center gap-2 mb-3">
+                        <i className="bi bi-robot" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+                        <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: 'var(--color-primary)' }}>Cory — Your Next Step</h6>
                       </div>
-                      {/* Up next — other components needing work */}
+
+                      {/* Step counter */}
                       {(() => {
-                        const otherIncomplete = visibleComponents.filter(c => c.status !== 'complete' && c.id !== selectedComponent.id).slice(0, 4);
-                        if (otherIncomplete.length === 0) return null;
+                        const execSteps = (compDetail?.execution_plan || []).filter((s: any) => !s.blocked);
+                        return execSteps.length > 0 ? (
+                          <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {Math.min(execSteps.length, 3)} for {selectedComponent.name}</div>
+                        ) : null;
+                      })()}
+
+                      {/* Primary step */}
+                      <h6 className="fw-bold mb-1" style={{ fontSize: 15, color: 'var(--color-text)' }}>{selectedComponent.nextStep || `Build ${selectedComponent.name}`}</h6>
+                      <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>{getWhyMatters(selectedComponent)}</p>
+
+                      {/* Layer status + completion badges */}
+                      <div className="d-flex flex-wrap gap-2 mb-3">
+                        <span className="badge" style={{ background: selectedComponent.status === 'complete' ? '#10b98120' : selectedComponent.status === 'in_progress' ? '#f59e0b20' : '#e2e8f020', color: selectedComponent.status === 'complete' ? '#059669' : selectedComponent.status === 'in_progress' ? '#92400e' : '#9ca3af', fontSize: 9 }}>{selectedComponent.completion}% complete</span>
+                        <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
+                        {selectedComponent.layers.backend === 'partial' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}><i className="bi bi-exclamation-triangle me-1"></i>Backend partial</span>}
+                        {selectedComponent.layers.backend === 'missing' && <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 9 }}><i className="bi bi-x-circle me-1"></i>No backend</span>}
+                        {selectedComponent.layers.frontend === 'missing' && selectedComponent.layers.backend !== 'missing' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>No frontend</span>}
+                        {selectedComponent.layers.frontend === 'partial' && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>Frontend partial</span>}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="d-flex flex-wrap gap-2">
+                        <button className="btn btn-primary btn-sm" style={{ fontWeight: 600, fontSize: 12 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt(selectedComponent)}>
+                          <i className="bi bi-terminal me-1"></i>Generate Build Prompt
+                        </button>
+                        <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
+                          <i className="bi bi-book me-1"></i>Learn About This
+                        </button>
+                      </div>
+
+                      {/* Up next — component-specific execution plan steps */}
+                      {(() => {
+                        const execSteps = (compDetail?.execution_plan || []).filter((s: any) => !s.blocked);
+                        const upcomingSteps = execSteps.slice(1, 3);
+                        if (upcomingSteps.length === 0) return null;
                         return (
-                          <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                            <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2" style={{ fontSize: 11, color: '#64748b' }} onClick={() => setShowBuildUpNext(!showBuildUpNext)}>
-                              <i className={`bi ${showBuildUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 9 }}></i>
-                              <span>Up next ({otherIncomplete.length} more component{otherIncomplete.length > 1 ? 's' : ''})</span>
+                          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                            <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 w-100" style={{ fontSize: 12, color: '#64748b' }} onClick={() => setShowBuildUpNext(!showBuildUpNext)}>
+                              <i className={`bi ${showBuildUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 10 }}></i>
+                              <span>Up next ({upcomingSteps.length} more step{upcomingSteps.length > 1 ? 's' : ''})</span>
                             </button>
                             {showBuildUpNext && (
                               <div className="mt-2">
-                                {otherIncomplete.map((c, i) => (
-                                  <div key={c.id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
+                                {upcomingSteps.map((step: any, i: number) => (
+                                  <div key={step.prompt_target + i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
                                     <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#e2e8f0', color: '#64748b', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                                     <div className="flex-grow-1">
-                                      <div className="fw-medium" style={{ fontSize: 11 }}>{c.nextStep || c.name}</div>
-                                      <div className="text-muted" style={{ fontSize: 9 }}>{c.completion}% complete — {c.layers.backend === 'missing' ? 'No backend' : c.layers.backend === 'partial' ? 'Backend partial' : c.layers.frontend === 'missing' ? 'No frontend' : `${c.maturity}`}</div>
+                                      <div className="fw-medium" style={{ fontSize: 11 }}>{step.label}</div>
+                                      <div className="text-muted" style={{ fontSize: 9 }}>
+                                        {step.prompt_target === 'backend_improvement' ? 'Build backend services and API routes' :
+                                         step.prompt_target === 'frontend_exposure' ? 'Create user interface components' :
+                                         step.prompt_target === 'agent_enhancement' ? 'Add intelligent automation agents' :
+                                         step.prompt_target === 'requirement_implementation' ? 'Implement remaining requirements' :
+                                         'Advance toward production readiness'}
+                                      </div>
                                     </div>
                                     <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
-                                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(c)}>
+                                      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
                                         <i className="bi bi-book"></i>
                                       </button>
-                                      <button className="btn btn-sm btn-primary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => { setSelectedId(c.id); setWorkTab('build'); }}>
+                                      <button className="btn btn-sm btn-primary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={async () => {
+                                        setBuildGenerating(true);
+                                        try {
+                                          const res = await portalApi.post(`/api/portal/project/business-processes/${selectedComponent.id}/prompt`, { target: step.prompt_target || 'backend_improvement' });
+                                          const text = res.data?.prompt_text || '';
+                                          setBuildPrompt(text);
+                                          try { await navigator.clipboard.writeText(text); } catch {}
+                                        } catch {} finally { setBuildGenerating(false); }
+                                      }}>
                                         Build
                                       </button>
                                     </div>
