@@ -1491,9 +1491,19 @@ function SystemViewV2Inner() {
                         <div className="p-3" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
                           <div className="d-flex align-items-center justify-content-between mb-2">
                             <div className="fw-bold small" style={{ color: '#059669' }}><i className="bi bi-check-circle-fill me-1"></i>Build Validated</div>
-                            <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={() => { setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}>
-                              <i className="bi bi-arrow-repeat me-1"></i>Build Again
-                            </button>
+                            <div className="d-flex gap-2">
+                              {(() => {
+                                const nextComp = visibleComponents.find(c => c.status !== 'complete' && c.id !== selectedComponent.id && c.completion < 80);
+                                return nextComp ? (
+                                  <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} onClick={() => { setSelectedId(nextComp.id); setWorkTab('build'); setBuildPrompt(null); setBuildReport(''); setBuildResult(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+                                    <i className="bi bi-arrow-right me-1"></i>Next: {nextComp.name.substring(0, 25)}{nextComp.name.length > 25 ? '...' : ''}
+                                  </button>
+                                ) : null;
+                              })()}
+                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => { setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}>
+                                <i className="bi bi-arrow-repeat me-1"></i>Build Again
+                              </button>
+                            </div>
                           </div>
                           <div className="mb-2" style={{ fontSize: 11 }}><strong>{buildResult.requirementsVerified || 0}</strong> of {buildResult.requirementsTotal || 0} requirements verified</div>
                           {buildResult.parsed?.filesCreated?.length > 0 && (

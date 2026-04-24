@@ -2160,6 +2160,13 @@ router.post('/api/portal/project/business-processes/:id/validation-report', requ
     const hierarchy = await getCapabilityHierarchy(project.id);
     const updatedCap = hierarchy.find((c: any) => c.id === req.params.id);
     const enriched = updatedCap ? enrichCapability(updatedCap) : null;
+    // Auto-mark as complete if coverage is high enough after validation
+    if (enriched && (enriched.metrics?.requirements_coverage >= 90 || (result.requirementsVerified > 0 && result.requirementsVerified >= result.requirementsTotal))) {
+      try {
+        const { Capability } = await import('../models');
+        await (Capability as any).update({ is_complete: true }, { where: { id: req.params.id } });
+      } catch (markErr: any) { console.warn('[Validation] Auto-complete mark failed:', markErr?.message); }
+    }
     res.json({
       ...result,
       parsed: {
