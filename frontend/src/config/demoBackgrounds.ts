@@ -32,7 +32,7 @@ const BY_SCENARIO_ID: Record<string, string> = {
   // Utility verticals — each tied to its specific operation
   'utility-outage':         U('photo-1548337138-e87d889cc369'),  // electric transformer / substation
   'utility-storm':          U('photo-1605727216801-e27ce1d0cc28'), // lightning storm over grid
-  'utility-metering':       U('photo-1581091226033-da5d85cb33ee'), // smart electric meter hardware
+  'utility-metering':       U('photo-1658753145551-8f44e5811d21'), // smart electric meter hardware
   'utility-vegetation':     U('photo-1473773508845-188df298d2d1'), // power lines through forest
   'utility-ratecase':       U('photo-1554224155-6726b3ff858f'),   // financial reports / spreadsheets
   'utility-memberservices': U('photo-1560264280-88b68371db39'),   // call center headset operator
