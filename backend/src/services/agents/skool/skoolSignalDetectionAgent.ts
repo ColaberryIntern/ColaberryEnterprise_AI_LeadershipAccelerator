@@ -92,7 +92,7 @@ async function loginToSkool(page: Page): Promise<boolean> {
 
   try {
     console.log(`${LOG_PREFIX} Navigating to login page...`);
-    await page.goto(LOGIN_URL, { waitUntil: 'networkidle', timeout: NAV_TIMEOUT_MS });
+    await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
 
     // Fill email
     const emailInput = page.locator('input[type="email"], input[name="email"]').first();
@@ -135,7 +135,7 @@ async function scrollToLoadPosts(page: Page, scrollCount: number = 3): Promise<v
 async function navigateToCategory(page: Page, category: string): Promise<boolean> {
   try {
     // Navigate to the community page
-    await page.goto(SKOOL_BASE_URL, { waitUntil: 'networkidle', timeout: NAV_TIMEOUT_MS });
+    await page.goto(SKOOL_BASE_URL, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
 
     // Look for the category filter/tab. Skool uses clickable category labels.
     // Try multiple selector strategies since Skool's DOM may change.
@@ -163,7 +163,7 @@ async function navigateToCategory(page: Page, category: string): Promise<boolean
 
     // Fallback: try URL-based category navigation
     const categoryUrl = `${SKOOL_BASE_URL}?c=${encodeURIComponent(category)}`;
-    await page.goto(categoryUrl, { waitUntil: 'networkidle', timeout: NAV_TIMEOUT_MS });
+    await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
     console.log(`${LOG_PREFIX} Navigated to category via URL: ${category}`);
     return true;
   } catch (err) {
