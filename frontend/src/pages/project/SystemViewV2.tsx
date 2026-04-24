@@ -1331,14 +1331,6 @@ function SystemViewV2Inner() {
                     );
                   })()}
 
-                  {/* Cory chat */}
-                  <CoryInlinePanel
-                    suggestions={[]}
-                    coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
-                    onAsk={handleAskCory}
-                    tabContext="Ask about this component"
-                  />
                 </div>
               )}
 
@@ -1399,8 +1391,8 @@ function SystemViewV2Inner() {
                             {showBuildUpNext && (
                               <div className="mt-2">
                                 {upcomingSteps.map((step: any, i: number) => (
-                                  <div key={step.prompt_target + i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
-                                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#e2e8f0', color: '#64748b', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                  <div key={step.prompt_target + i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${step.prompt_target === 'agent_enhancement' ? '#8b5cf6' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6'}` }}>
+                                    <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${step.prompt_target === 'agent_enhancement' ? '#8b5cf6' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6'}20`, color: step.prompt_target === 'agent_enhancement' ? '#8b5cf6' : step.prompt_target === 'frontend_exposure' ? '#10b981' : '#3b82f6', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                                     <div className="flex-grow-1">
                                       <div className="fw-medium" style={{ fontSize: 11 }}>{step.label}</div>
                                       <div className="text-muted" style={{ fontSize: 9 }}>
@@ -1548,127 +1540,97 @@ function SystemViewV2Inner() {
                       )}
                     </div>
                   )}
-                  {/* Cory in Build tab — explains what to build + refine prompt */}
-                  <CoryInlinePanel
-                    suggestions={(() => {
-                      const bs: Array<{ title: string; explanation: string; action?: string }> = [];
-                      if (!buildPrompt) {
-                        if (selectedComponent.nextStep) bs.push({ title: selectedComponent.nextStep, explanation: getWhyMatters(selectedComponent), action: 'generate' });
-                        if (selectedComponent.layers.backend === 'missing') bs.push({ title: 'Backend layer needed first', explanation: 'This component has no backend services. Generate a prompt to create them.', action: 'generate' });
-                        if (selectedComponent.layers.backend === 'partial') bs.push({ title: 'Complete backend services', explanation: 'Backend is partially built — missing routes, services, or models need to be added.', action: 'generate' });
-                      } else {
-                        bs.push({ title: 'Refine this prompt', explanation: 'Ask me to adjust the prompt — add constraints, change scope, or include specific code patterns.', action: 'refine' });
-                        if (selectedComponent.coverageRaw < 50) bs.push({ title: 'Paste Claude\'s response to update', explanation: 'If Claude gave you code, paste it below to validate or refine the next step.' });
-                      }
-                      return bs.slice(0, 3);
-                    })()}
-                    coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
-                    onAsk={handleAskCory}
-                    onApply={(action) => {
-                      if (action === 'generate') handleGeneratePrompt(selectedComponent);
-                      if (action === 'refine') setCoryInput('Refine this build prompt to ');
-                    }}
-                    tabContext={buildPrompt ? 'Prompt assistant' : 'What to build next'}
-                  />
                 </div>
               )}
 
-              {/* ── TAB: Health (gaps, quality, maturity) ── */}
+              {/* ── TAB: Health (unified Cory format — quality + gaps) ── */}
               {workTab === 'health' && (
                 <div>
-                  {/* Quality Dimensions */}
-                  {compDetail?.quality && (
-                    <div className="mb-3">
-                      <div className="fw-semibold small mb-2"><i className="bi bi-star me-1" style={{ color: '#f59e0b' }}></i>Quality Dimensions</div>
-                      <div className="row g-2">
-                        {[
-                          { label: 'Determinism', value: compDetail.quality.determinism || 0, max: 10, desc: 'Code-based logic vs LLM' },
-                          { label: 'Reliability', value: compDetail.quality.reliability || 0, max: 10, desc: 'Error handling + data persistence' },
-                          { label: 'UX Exposure', value: compDetail.quality.ux_exposure || 0, max: 10, desc: 'User interface coverage' },
-                          { label: 'Automation', value: compDetail.quality.automation || 0, max: 10, desc: 'Agent-driven operations' },
-                          { label: 'Observability', value: compDetail.quality.observability || 0, max: 10, desc: 'Monitoring + logging' },
-                          { label: 'Prod Readiness', value: compDetail.quality.production_readiness || 0, max: 10, desc: 'All layers present' },
-                        ].map(q => (
-                          <div key={q.label} className="col-6">
-                            <div className="d-flex justify-content-between" style={{ fontSize: 10 }}>
-                              <span className="text-muted">{q.label}</span>
-                              <span className="fw-semibold">{q.value}/{q.max}</span>
-                            </div>
-                            <div className="progress mb-1" style={{ height: 4, borderRadius: 2 }}>
-                              <div className="progress-bar" style={{ width: `${(q.value / q.max) * 100}%`, background: q.value >= 7 ? '#10b981' : q.value >= 4 ? '#f59e0b' : '#ef4444', borderRadius: 2 }}></div>
-                            </div>
-                            <div className="text-muted" style={{ fontSize: 8 }}>{q.desc}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Maturity Breakdown */}
-                  <div className="mb-3">
-                    <div className="fw-semibold small mb-2"><i className="bi bi-layers me-1" style={{ color: '#8b5cf6' }}></i>Maturity Level</div>
-                    <div className="d-flex align-items-center gap-3 mb-2">
-                      <span className="fw-bold" style={{ fontSize: 18, color: MATURITY_COLORS[selectedComponent.maturityLevel] }}>{selectedComponent.maturity}</span>
-                      <div className="flex-grow-1">
-                        <div className="progress" style={{ height: 8, borderRadius: 4 }}>
-                          <div className="progress-bar" style={{ width: `${(selectedComponent.maturityLevel / 5) * 100}%`, background: MATURITY_COLORS[selectedComponent.maturityLevel], borderRadius: 4 }}></div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="d-flex flex-wrap gap-1">
-                      {Object.entries(MATURITY_LABELS).map(([lvl, label]) => (
-                        <span key={lvl} className="badge" style={{ background: parseInt(lvl) <= selectedComponent.maturityLevel ? `${MATURITY_COLORS[parseInt(lvl)]}20` : '#f1f5f9', color: parseInt(lvl) <= selectedComponent.maturityLevel ? MATURITY_COLORS[parseInt(lvl)] : '#cbd5e1', fontSize: 8 }}>
-                          {label}
-                        </span>
-                      ))}
-                    </div>
+                  <div className="d-flex align-items-center gap-2 mb-3">
+                    <i className="bi bi-robot" style={{ color: '#f59e0b', fontSize: 16 }}></i>
+                    <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#92400e' }}>Cory — Health Check</h6>
                   </div>
 
-                  {/* Gaps */}
-                  {compDetail?.autonomy_gaps?.length > 0 && (
-                    <div>
-                      <div className="fw-semibold small mb-2"><i className="bi bi-exclamation-triangle me-1" style={{ color: '#ef4444' }}></i>Detected Gaps ({compDetail.autonomy_gaps.length})</div>
-                      {compDetail.autonomy_gaps.map((g: any) => (
-                        <div key={g.gap_id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 10 }}>
-                          <span className="badge" style={{ background: g.severity >= 7 ? '#ef444420' : g.severity >= 4 ? '#f59e0b20' : '#10b98120', color: g.severity >= 7 ? '#ef4444' : g.severity >= 4 ? '#f59e0b' : '#10b981', fontSize: 8 }}>{g.severity}/10</span>
-                          <div>
-                            <div className="fw-medium">{g.title}</div>
-                            <span className="badge mt-1" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 7 }}>{g.gap_type}</span>
+                  {/* Quality scores grid */}
+                  {compDetail?.quality && (
+                    <div className="row g-2 mb-3">
+                      {[
+                        { label: 'Determinism', value: compDetail.quality.determinism || 0, max: 10 },
+                        { label: 'Reliability', value: compDetail.quality.reliability || 0, max: 10 },
+                        { label: 'UX Exposure', value: compDetail.quality.ux_exposure || 0, max: 10 },
+                        { label: 'Automation', value: compDetail.quality.automation || 0, max: 10 },
+                        { label: 'Observability', value: compDetail.quality.observability || 0, max: 10 },
+                        { label: 'Prod Ready', value: compDetail.quality.production_readiness || 0, max: 10 },
+                      ].map(q => (
+                        <div key={q.label} className="col-4">
+                          <div className="text-center p-2" style={{ background: q.value >= 7 ? '#f0fdf420' : q.value >= 4 ? '#fffbeb' : '#fef2f2', borderRadius: 6, border: `1px solid ${q.value >= 7 ? '#10b98130' : q.value >= 4 ? '#f59e0b30' : '#ef444430'}` }}>
+                            <div className="fw-bold" style={{ fontSize: 16, color: q.value >= 7 ? '#059669' : q.value >= 4 ? '#92400e' : '#ef4444' }}>{q.value}/{q.max}</div>
+                            <div className="text-muted" style={{ fontSize: 9 }}>{q.label}</div>
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* Missing layers as gaps */}
-                  {(!compDetail?.autonomy_gaps || compDetail.autonomy_gaps.length === 0) && (
-                    <div>
-                      <div className="fw-semibold small mb-2"><i className="bi bi-shield-check me-1" style={{ color: '#10b981' }}></i>Gap Analysis</div>
-                      {selectedComponent.layers.backend === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fef2f2', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-circle" style={{ color: '#ef4444' }}></i>Backend layer not detected</div>}
-                      {selectedComponent.layers.frontend === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fef2f2', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-circle" style={{ color: '#ef4444' }}></i>Frontend layer not detected</div>}
-                      {selectedComponent.layers.agent === 'missing' && <div className="d-flex align-items-center gap-2 mb-1 p-2" style={{ background: '#fffbeb', borderRadius: 6, fontSize: 10 }}><i className="bi bi-exclamation-triangle" style={{ color: '#f59e0b' }}></i>Agent layer not detected</div>}
-                      {selectedComponent.layers.backend !== 'missing' && selectedComponent.layers.frontend !== 'missing' && selectedComponent.layers.agent !== 'missing' && (
-                        <p className="text-muted mb-0" style={{ fontSize: 10 }}><i className="bi bi-check-circle me-1" style={{ color: '#10b981' }}></i>All layers present — no critical gaps.</p>
-                      )}
-                    </div>
-                  )}
-                  {/* Ask Cory in Health tab */}
-                  <CoryInlinePanel
-                    suggestions={(() => {
-                      const hs: Array<{ title: string; explanation: string }> = [];
-                      if (compDetail?.quality) {
-                        if ((compDetail.quality.determinism || 0) < 3) hs.push({ title: 'Improve determinism', explanation: 'Move logic from LLM responses to deterministic code.' });
-                        if ((compDetail.quality.reliability || 0) < 3) hs.push({ title: 'Add error handling', explanation: 'Improve retry logic and graceful failure recovery.' });
-                        if ((compDetail.quality.observability || 0) === 0) hs.push({ title: 'Add monitoring', explanation: 'No observability detected — add logging and metrics.' });
-                      }
-                      return hs.slice(0, 2);
-                    })()}
-                    coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
-                    onAsk={handleAskCory}
-                    tabContext="Health advisor"
-                  />
+                  {/* Primary improvement recommendation */}
+                  {(() => {
+                    const healthSteps: Array<{ title: string; explanation: string; color: string }> = [];
+                    const q = compDetail?.quality;
+                    if (q) {
+                      if ((q.determinism || 0) < 3) healthSteps.push({ title: 'Improve determinism', explanation: 'Move logic from LLM responses to deterministic code paths for reliability.', color: '#3b82f6' });
+                      if ((q.reliability || 0) < 3) healthSteps.push({ title: 'Add error handling and retry logic', explanation: 'Improve graceful failure recovery and data persistence guarantees.', color: '#3b82f6' });
+                      if ((q.observability || 0) < 3) healthSteps.push({ title: 'Add monitoring and logging', explanation: 'No observability detected — add structured logging, metrics, and alerting.', color: '#3b82f6' });
+                      if ((q.ux_exposure || 0) < 3 && selectedComponent.layers.frontend !== 'missing') healthSteps.push({ title: 'Improve user interface coverage', explanation: 'Frontend exists but UX exposure is low — expand page functionality.', color: '#10b981' });
+                      if ((q.automation || 0) < 3 && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add automation agents', explanation: 'Manual operation detected — add agents for self-managing behavior.', color: '#8b5cf6' });
+                      if ((q.production_readiness || 0) < 5) healthSteps.push({ title: 'Improve production readiness', explanation: 'System is not production-ready — address missing layers and quality gaps.', color: '#f59e0b' });
+                    }
+                    // Add layer gaps
+                    if (selectedComponent.layers.backend === 'missing') healthSteps.unshift({ title: 'Build backend services', explanation: 'No backend layer detected — this is the most critical gap.', color: '#ef4444' });
+                    if (selectedComponent.layers.frontend === 'missing' && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add frontend layer', explanation: 'Backend exists but no user interface — users cannot interact.', color: '#ef4444' });
+                    // Add detected autonomy gaps
+                    (compDetail?.autonomy_gaps || []).slice(0, 2).forEach((g: any) => {
+                      if (!healthSteps.find(s => s.title === g.title)) healthSteps.push({ title: g.title, explanation: g.description?.substring(0, 120) || 'Detected gap', color: '#8b5cf6' });
+                    });
+
+                    const primary = healthSteps[0];
+                    const upNext = healthSteps.slice(1, 3);
+
+                    if (!primary) return <p className="text-muted" style={{ fontSize: 12 }}>All quality dimensions are healthy — no immediate improvements needed.</p>;
+
+                    return (
+                      <>
+                        <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Top improvement: 1 of {Math.min(healthSteps.length, 3)}</div>
+                        <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
+                        <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
+
+                        <div className="d-flex flex-wrap gap-2 mb-3">
+                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(selectedComponent)}>
+                            <i className="bi bi-terminal me-1"></i>Generate Fix Prompt
+                          </button>
+                          <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
+                            <i className="bi bi-book me-1"></i>Learn About This
+                          </button>
+                        </div>
+
+                        {upNext.length > 0 && (
+                          <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                            <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
+                              <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Also needs attention ({upNext.length} more)
+                            </div>
+                            {upNext.map((s, i) => (
+                              <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                <div className="flex-grow-1">
+                                  <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                  <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1745,13 +1707,6 @@ function SystemViewV2Inner() {
                     );
                   })()}
 
-                  <CoryInlinePanel
-                    suggestions={[]}
-                    coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
-                    onAsk={handleAskCory}
-                    tabContext="Ask about improvements"
-                  />
                 </div>
               )}
 
@@ -1847,13 +1802,6 @@ function SystemViewV2Inner() {
                     ))}
                   </div>
 
-                  <CoryInlinePanel
-                    suggestions={[]}
-                    coryInput={coryInput} setCoryInput={setCoryInput}
-                    coryMessages={coryMessages} coryAsking={coryAsking} chatEndRef={coryEndRef}
-                    onAsk={handleAskCory}
-                    tabContext="Ask about UI"
-                  />
                 </div>
                 );
               })()}
