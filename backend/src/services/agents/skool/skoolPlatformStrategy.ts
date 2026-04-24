@@ -96,11 +96,9 @@ export function containsBannedWord(content: string): string | null {
 
 // ─── Allowed URLs ────────────────────────────────────────────────────────────
 
-const ALLOWED_URLS: string[] = [
-  'https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub',
-  'https://enterprise.colaberry.ai/ai-workforce-designer?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub',
-  'https://advisor.colaberry.ai/advisory/?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub',
-];
+// NO URLs allowed in Skool posts — links trigger self-promotion moderation.
+// All CTAs should use "DM me" instead. Links shared only in private messages.
+const ALLOWED_URLS: string[] = [];
 
 export function getAllowedUrls(): string[] {
   return [...ALLOWED_URLS];
@@ -306,27 +304,25 @@ export function getSystemPrompt(category: string): string {
     case 'minimal':
       ctaInstruction = `CTA Level: MINIMAL
 - After providing value, add a brief line like "This is what my team does full-time - we build production AI systems for agency owners."
-- Do NOT include URLs. The sign-off name is enough for people to find you.`;
+- Do NOT include any URLs or links. The sign-off name is enough for people to find you.`;
       break;
     case 'subtle':
       ctaInstruction = `CTA Level: SUBTLE
 - Answer the question thoroughly first.
-- Then add 1-2 sentences positioning yourself: "My team builds these kinds of systems full-time for agency owners. Happy to chat if you want to go deeper on this."
-- You may mention "we build production AI systems" or "my team does this at scale" naturally.
-- Do NOT include URLs in dev-help replies. Let people DM you.`;
+- Then add 1-2 sentences positioning yourself: "My team builds these kinds of systems full-time for agency owners. DM me if you want to go deeper on this."
+- Do NOT include any URLs or links. Say "DM me" instead.`;
       break;
     case 'moderate':
       ctaInstruction = `CTA Level: MODERATE
-- Provide value first, then mention the advisor tool naturally.
-- Include this URL when relevant: https://advisor.colaberry.ai/advisory/?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
-- Frame it as: "I built a free tool that does this - designs an AI workforce for any business in 5 minutes."
-- Also mention: "My team builds production AI systems for agency owners. DM me if you want to talk."`;
+- Provide value first, then mention the tool naturally WITHOUT linking to it.
+- Say: "I actually built a free tool that designs an AI workforce for any business in 5 minutes. DM me if you want the link."
+- Do NOT include any URLs or links. All links shared in DMs only.`;
       break;
     case 'direct':
       ctaInstruction = `CTA Level: DIRECT
 - Lead with a relevant insight, then state your offer clearly.
-- Include this URL: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
-- Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer. DM me or check out enterprise.colaberry.ai/partners."`;
+- Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer. DM me if you want to explore this."
+- Do NOT include any URLs or links. Links trigger moderation. Use "DM me" or "check my profile" instead.`;
       break;
   }
 
@@ -346,11 +342,14 @@ ${ctaInstruction}
 CASE STUDIES (use ONLY these, never fabricate):
 ${caseStudyBlock}
 
-ALLOWED URLs (ONLY these may appear in your response):
-${allowedUrlBlock}
-
 BANNED WORDS (NEVER use any of these):
 ${bannedWordBlock}
+
+CRITICAL RULE - NO LINKS:
+- NEVER include any URL, link, or web address in your response.
+- Links trigger self-promotion moderation and get posts removed by admins.
+- Instead of linking, say "DM me" or "check my profile" or "happy to share more in a message."
+- This applies to ALL categories, ALL posts, ALL replies. Zero exceptions.
 
 RESPONSE RULES:
 1. Keep responses under 200 words unless the topic demands depth.
@@ -363,6 +362,7 @@ RESPONSE RULES:
 8. Do NOT start your response with "Hey" or "Hi there" or any generic greeting. Jump straight into the substance.
 9. Sign off with EXACTLY: "- Ali Muwwakkil"
    Do NOT change the name. Do NOT add titles or company names to the sign-off line.
+10. NEVER include http://, https://, .com, .ai, or any URL pattern. Use "DM me" instead.
 
 CATEGORY: ${category}
 CATEGORY DESCRIPTION: ${config?.description || 'General engagement'}

@@ -1,9 +1,6 @@
 import { Op } from 'sequelize';
 import {
   containsBannedWord,
-  findDisallowedUrls,
-  getAllowedUrls,
-  getBannedWords,
 } from './skoolPlatformStrategy';
 
 // Models loaded via require with try/catch since they may not be compiled yet
@@ -98,11 +95,11 @@ export async function runSkoolQualityGate(): Promise<{
         score -= 30;
       }
 
-      // --- URL compliance check ---
-      const disallowedUrls = findDisallowedUrls(body);
-      if (disallowedUrls.length > 0) {
-        reasons.push(`Contains disallowed URL(s): ${disallowedUrls.join(', ')}`);
-        score -= 25;
+      // --- NO URLs allowed (links trigger self-promotion moderation) ---
+      const hasAnyUrl = /https?:\/\/|\.com\b|\.ai\b|\.io\b|\.org\b/i.test(body);
+      if (hasAnyUrl) {
+        reasons.push('Contains a URL or link - links trigger self-promotion moderation on Skool');
+        score -= 40; // Heavy penalty - should auto-reject
       }
 
       // --- Genuine content check (not just a pitch) ---
