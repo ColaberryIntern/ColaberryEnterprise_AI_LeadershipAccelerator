@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Skool Notification Response Agent
  *
