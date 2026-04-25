@@ -73,7 +73,9 @@ export default function RequirementsBuilder() {
         if (state.originalIdea) setOriginalIdea(state.originalIdea);
         if (state.questions?.length > 0) setQuestions(state.questions);
         if (state.currentQ) setCurrentQ(state.currentQ);
-        if (state.phase && state.phase !== 'loading_questions') setPhase(state.phase);
+        // Only restore phase if idea was captured (prevents skipping idea-first flow)
+        if (state.originalIdea && state.phase && state.phase !== 'loading_questions') setPhase(state.phase);
+        else if (!state.originalIdea) { /* stay at 'idea' phase */ }
         if (state.generatedDoc) setGeneratedDoc(state.generatedDoc);
       }
     } catch {}
