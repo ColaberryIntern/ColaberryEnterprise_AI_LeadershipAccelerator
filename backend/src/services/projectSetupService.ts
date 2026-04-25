@@ -132,7 +132,7 @@ export async function activateProject(enrollmentId: string): Promise<{
   const status = project.setup_status;
   if (!status) throw new Error('Project has no setup status');
   if (!status.requirements_loaded) throw new Error('Requirements document not uploaded yet');
-  if (!status.claude_md_loaded) throw new Error('CLAUDE.md not provided yet');
+  // claude_md_loaded no longer required for activation (hidden from user flow)
   if (!status.github_connected) throw new Error('GitHub repository not connected yet');
 
   let requirementsCount = 0;
