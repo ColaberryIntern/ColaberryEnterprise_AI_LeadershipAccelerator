@@ -89,10 +89,16 @@ export function getBuildTasks(enriched: any, state: SystemState): CoryTask[] {
       ? (state.frontend_exists ? 'agents_frontend' : 'agents_backend')
       : isFrontend ? 'frontend' : 'backend';
 
+    // Title: component-specific, not generic step label
+    const stepLabel = step.label || 'Build';
+    const title = stepLabel.toLowerCase().includes(enriched.name?.toLowerCase() || '___')
+      ? stepLabel
+      : `${stepLabel} for ${enriched.name}`;
+
     tasks.push({
-      id: `build-${step.key || i}`,
-      title: step.label || `Build step ${i + 1}`,
-      description: step.fixes?.join(', ') || `Advance ${enriched.name} toward production readiness`,
+      id: `build-${step.key || i}-${enriched.id?.substring(0, 8)}`,
+      title,
+      description: `${state.backend_partial ? 'Backend partially built' : !state.backend_exists ? 'No backend detected' : state.coverage < 50 ? `${state.coverage}% coverage — gaps remain` : 'Advancing toward production readiness'}`,
       source: 'build',
       type: 'foundational',
       impact: Math.max(50, 100 - (i * 15)),
@@ -441,10 +447,6 @@ export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: str
     // Tag each task with component name for cross-BP context
     for (const task of componentTasks) {
       task.component_id = enriched.id;
-      // Prefix title with component name if not already included
-      if (!task.title.includes(enriched.name)) {
-        task.description = `[${enriched.name}] ${task.description}`;
-      }
     }
     allTasks.push(...componentTasks);
   }
