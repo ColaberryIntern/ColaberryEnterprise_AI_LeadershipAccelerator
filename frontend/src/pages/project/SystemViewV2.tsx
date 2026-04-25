@@ -6,7 +6,7 @@
  * componentId sync via URL param + local state
  */
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
@@ -485,6 +485,7 @@ class V2ErrorBoundary extends React.Component<{ children: React.ReactNode }, { e
 
 function SystemViewV2Inner() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const urlComponentId = searchParams.get('componentId');
 
   // Global mode — force 'build' if URL has a build-mode tab param
@@ -887,32 +888,9 @@ function SystemViewV2Inner() {
     } finally { setBuildValidating(false); }
   };
 
-  // Learn about a component — copies rich prompt to clipboard and opens ChatGPT
-  const handleLearnAbout = async (comp: SystemComponent) => {
-    const projectContext = project?.project_variables?.system_prompt || '';
-    let featureList = '';
-    let reqList = '';
-    let gapList = '';
-    let totalReqs = 0;
-    let featureCount = 0;
-    let gapCount = 0;
-    try {
-      const detail = compDetail && compDetail.id === comp.id ? compDetail : (await portalApi.get(`/api/portal/project/business-processes/${comp.id}`)).data;
-      const features = detail?.features || [];
-      const gaps = detail?.autonomy_gaps || [];
-      featureCount = features.length;
-      gapCount = gaps.length;
-      totalReqs = detail?.total_requirements || 0;
-      featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
-      reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
-      gapList = gaps.slice(0, 10).map((g: any) => `- [${g.gap_type}] ${g.text}`).join('\n');
-    } catch { /* proceed with basic info */ }
-    const learnPrompt = `You are operating in LEARN MODE.\n\nDO NOT write code. DO NOT give implementation instructions. DO NOT suggest building anything.\nYour ONLY job is to help the learner UNDERSTAND what this business process is, why it matters, and how it works.\n\n---\n\nYou are a Technical Mentor helping someone deeply understand a business process before they build it.\n\n---\n\n# PROJECT CONTEXT\n\n${projectContext || 'No project system prompt set yet.'}\n\n---\n\nBUSINESS PROCESS: ${comp.name}\n\nDESCRIPTION: ${comp.description || 'No description available.'}\n\nCURRENT STATE:\n- Backend: ${comp.layers.backend}\n- Frontend: ${comp.layers.frontend}\n- Agents: ${comp.layers.agent}\n- Completion: ${comp.completion}%\n- Maturity: ${comp.maturity}\n\nFEATURES (${featureCount}):\n${featureList || 'None defined yet'}\n\nREQUIREMENTS (${totalReqs}):\n${reqList || 'None extracted yet'}\n\nGAPS (${gapCount}):\n${gapList || 'No gaps detected'}\n\n---\n\nHelp the learner understand:\n1. What "${comp.name}" is in plain language\n2. What business problem it solves\n3. Each feature and why it's needed\n4. Current gaps and what they mean\n5. How layers work together\n\nRULES:\n- Explain ONE concept at a time\n- Use analogies and real-world examples\n- Never give coding instructions\n\nBegin by explaining what "${comp.name}" is and why it matters.`;
-    try { await navigator.clipboard.writeText(learnPrompt); } catch {
-      const ta = document.createElement('textarea'); ta.value = learnPrompt; ta.style.position = 'fixed'; ta.style.left = '-9999px';
-      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-    }
-    window.open('https://chatgpt.com', '_blank');
+  // Learn about a component — opens Cory fullscreen in Learn Mode
+  const handleLearnAbout = (comp: SystemComponent) => {
+    navigate(`/portal/project/cory?mode=learn&componentId=${comp.id}&stepName=${encodeURIComponent(comp.name)}`);
   };
 
   // UI feedback handlers

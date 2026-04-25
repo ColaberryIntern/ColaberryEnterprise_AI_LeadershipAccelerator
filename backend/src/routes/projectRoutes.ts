@@ -2928,6 +2928,116 @@ router.post('/api/portal/project/architect/turn', requireParticipant, async (req
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Cory Learn Mode: contextual BP explanation via AI ────────
+router.post('/api/portal/project/architect/learn', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { componentId, stepName } = req.body;
+    if (!componentId) { res.status(400).json({ error: 'componentId required' }); return; }
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    // Fetch enriched BP for context
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const cap = hierarchy.find((c: any) => c.id === componentId);
+    const enriched = cap ? enrichCapability(cap) : null;
+
+    // Build the learn prompt with full context
+    const projectContext = (project as any).project_variables?.system_prompt || (project as any).primary_business_problem || '';
+    const features = enriched?.features || [];
+    const featureList = features.map((f: any) => `- ${f.name}: ${f.description || 'No description'}`).join('\n');
+    const reqList = features.flatMap((f: any) => (f.requirements || []).map((r: any) => `- ${r.key}: ${r.text}`)).slice(0, 20).join('\n');
+    const u = enriched?.usability || {};
+    const m = enriched?.metrics || {};
+    const mat = enriched?.maturity || {};
+
+    const learnPrompt = `You are Cory, the AI System Architect. You are in LEARN MODE.
+
+Your job is to help the user deeply understand this business process before they build it.
+
+# PROJECT CONTEXT
+${projectContext || 'No project system prompt set yet.'}
+
+# BUSINESS PROCESS: ${enriched?.name || stepName || 'Unknown'}
+Description: ${enriched?.description || 'No description available.'}
+
+Current State:
+- Backend: ${u.backend || 'unknown'}
+- Frontend: ${u.frontend || 'unknown'}
+- Agents: ${u.agent || 'unknown'}
+- Coverage: ${m.requirements_coverage || 0}%
+- Readiness: ${m.system_readiness || 0}%
+- Maturity: L${mat.level || 0} ${mat.label || 'Not Started'}
+
+Features (${features.length}):
+${featureList || 'None defined yet'}
+
+Requirements:
+${reqList || 'None extracted yet'}
+
+---
+
+Respond with this EXACT structure:
+
+## What This Does
+[Explain what "${enriched?.name || stepName}" is in plain language]
+
+## Why It Matters
+[Explain the business value and what happens if this is skipped]
+
+## System Impact
+[How this connects to other components — backend, frontend, agents, database]
+
+## What Comes Next
+[What the user should do after understanding this — the natural next step]
+
+Keep it practical, structured, and non-generic. Use specifics from the context above.`;
+
+    // Create session and get AI response
+    const { v4: uuid } = await import('uuid');
+    const sessionId = uuid();
+    const { ArchitectSession } = await import('../models');
+
+    // Use OpenAI for the learn response
+    let response = '';
+    try {
+      const { default: OpenAI } = await import('openai');
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are Cory, an AI System Architect. You explain technical concepts clearly and practically. Always be structured and specific.' },
+          { role: 'user', content: learnPrompt },
+        ],
+        temperature: 0.4,
+        max_tokens: 1500,
+      });
+      response = completion.choices[0]?.message?.content || 'I can help you understand this component. What would you like to know?';
+    } catch (aiErr: any) {
+      console.warn('[CoryLearn] AI call failed:', aiErr?.message);
+      response = `## What This Does\n${enriched?.name || stepName} handles ${enriched?.description || 'core system functionality'}.\n\n## Why It Matters\nThis is a key part of your system that enables ${u.backend !== 'missing' ? 'data processing and business logic' : 'the foundation layer'}.\n\n## System Impact\nBackend: ${u.backend || 'unknown'} | Frontend: ${u.frontend || 'unknown'} | Coverage: ${m.requirements_coverage || 0}%\n\n## What Comes Next\nGenerate a build prompt to start implementing this component.`;
+    }
+
+    // Save session
+    await ArchitectSession.create({
+      id: sessionId,
+      project_id: project.id,
+      conversation_state: {
+        phase: 'learn',
+        messages: [
+          { role: 'system', content: learnPrompt },
+          { role: 'assistant', content: response },
+        ],
+        componentId,
+        stepName,
+      },
+      status: 'active',
+    } as any);
+
+    res.json({ session_id: sessionId, response, component_name: enriched?.name || stepName });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/api/portal/project/architect/sessions', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { getProjectByEnrollment } = await import('../services/projectService');

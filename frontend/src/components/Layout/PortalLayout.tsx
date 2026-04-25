@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { MentorContextProvider } from '../../contexts/MentorContext';
+import CoryAvatar from '../cory/CoryAvatar';
 
 function PortalLayout() {
   const { logout } = useParticipantAuth();
@@ -77,6 +78,7 @@ function PortalLayout() {
         <Outlet />
       </main>
 
+      <CoryAvatar />
     </div>
     </MentorContextProvider>
   );
