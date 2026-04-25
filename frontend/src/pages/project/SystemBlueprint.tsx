@@ -10,6 +10,7 @@ import portalApi from '../../utils/portalApi';
 import * as bpApi from '../../services/portalBusinessProcessApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
+import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -972,37 +973,37 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
         </div>
       </div>
 
-      {/* ── IDLE: Summary + Status ── */}
+      {/* ── IDLE: System Prompt + Architecture ── */}
       {!isInFlow && (
         <>
+          {/* System Prompt */}
           <div className="card border-0 shadow-sm mb-4">
             <div className="card-body p-4">
               <div className="d-flex align-items-center gap-2 mb-2">
                 <i className="bi bi-file-text" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
                 <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Your System Blueprint</h5>
               </div>
-              {project.project_variables?.system_prompt ? (
-                <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)' }}>
-                  <div className="fw-medium mb-1" style={{ fontSize: 10, color: 'var(--color-primary)' }}>System Prompt</div>
-                  <p className="text-muted mb-0" style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-                    {project.project_variables.system_prompt}
+              {(() => {
+                const prompt = project.project_variables?.system_prompt || project.primary_business_problem || project.selected_use_case;
+                return prompt ? (
+                  <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)' }}>
+                    <div className="fw-medium mb-1" style={{ fontSize: 10, color: 'var(--color-primary)' }}>System Prompt</div>
+                    <p className="text-muted mb-0" style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+                      {prompt}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-muted mb-0" style={{ fontSize: 13, lineHeight: 1.7 }}>
+                    You are building <strong>{project.organization_name || 'an AI system'}</strong>
+                    {project.industry && <> in the <strong>{project.industry}</strong> industry</>}.
+                    Select components below to view details and generate implementation prompts.
                   </p>
-                </div>
-              ) : (
-                <p className="text-muted mb-0" style={{ fontSize: 13, lineHeight: 1.7 }}>{summaryText}</p>
-              )}
+                );
+              })()}
             </div>
           </div>
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-body py-3 px-4">
-              <span className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>System Status</span>
-              <div className="d-flex gap-4 mt-2">
-                <LayerDot status={systemLayers.backend ? 'ready' : 'missing'} label="Backend" />
-                <LayerDot status={systemLayers.frontend ? 'ready' : 'missing'} label="Frontend" />
-                <LayerDot status={systemLayers.agents ? 'ready' : 'missing'} label="Agents" />
-              </div>
-            </div>
-          </div>
+          {/* System Architecture (from V1) */}
+          <SystemArchitectureCard />
         </>
       )}
 

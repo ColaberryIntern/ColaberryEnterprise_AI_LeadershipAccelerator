@@ -546,6 +546,8 @@ function SystemViewV2Inner() {
   const [promotedIdsRaw, setPromotedIdsRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_promoted_ids') || '[]')); } catch { return new Set(); } });
   const setPromotedIds = (fn: (prev: Set<string>) => Set<string>) => { setPromotedIdsRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_promoted_ids', JSON.stringify([...next])); return next; }); };
   const [groupMode, setGroupMode] = useState<'business' | 'technical'>('business');
+  type MapFilter = 'all' | 'backend' | 'frontend' | 'agents' | 'incomplete' | 'complete';
+  const [mapFilter, setMapFilter] = useState<MapFilter>('all');
   const [verifyModal, setVerifyModal] = useState<{ page: UIPage; compId: string } | null>(null);
   const [mergeModal, setMergeModal] = useState<{ page: UIPage; existingCompId: string; targetCompId: string } | null>(null);
 
@@ -669,7 +671,14 @@ function SystemViewV2Inner() {
     frontend: components.some(c => c.layers.frontend === 'ready' || c.layers.frontend === 'partial'),
     agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
   };
-  const groups = groupMode === 'business' ? groupByBusinessDomain(visibleComponents) : groupComponents(visibleComponents);
+  const filteredComponents = mapFilter === 'all' ? visibleComponents
+    : mapFilter === 'backend' ? visibleComponents.filter(c => c.layers.backend === 'ready' || c.layers.backend === 'partial')
+    : mapFilter === 'frontend' ? visibleComponents.filter(c => c.layers.frontend === 'ready' || c.layers.frontend === 'partial' || c.isPageBP)
+    : mapFilter === 'agents' ? visibleComponents.filter(c => c.layers.agent === 'ready')
+    : mapFilter === 'incomplete' ? visibleComponents.filter(c => c.status !== 'complete')
+    : mapFilter === 'complete' ? visibleComponents.filter(c => c.status === 'complete')
+    : visibleComponents;
+  const groups = groupMode === 'business' ? groupByBusinessDomain(filteredComponents) : groupComponents(filteredComponents);
   const nextIds = getNextComponents(visibleComponents);
 
   // Onboarding effects
@@ -1128,19 +1137,34 @@ function SystemViewV2Inner() {
                 <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10, color: groupMode === 'technical' ? 'var(--color-primary)' : '#9ca3af' }} onClick={() => setGroupMode('technical')}>Technical</button>
               </p>
             </div>
-            <div className="d-flex gap-2">
-              <div className="d-flex align-items-center gap-1" style={{ fontSize: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: systemLayers.backend ? '#10b981' : '#e2e8f0' }}></div>
-                <span className="text-muted">Backend</span>
-              </div>
-              <div className="d-flex align-items-center gap-1" style={{ fontSize: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: systemLayers.frontend ? '#10b981' : '#e2e8f0' }}></div>
-                <span className="text-muted">Frontend</span>
-              </div>
-              <div className="d-flex align-items-center gap-1" style={{ fontSize: 10 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: systemLayers.agents ? '#10b981' : '#e2e8f0' }}></div>
-                <span className="text-muted">Agents</span>
-              </div>
+            {/* Filter chips */}
+            <div className="d-flex gap-1 flex-wrap">
+              {([
+                { key: 'all', label: 'All', icon: 'bi-grid-3x3-gap', color: '#3b82f6' },
+                { key: 'backend', label: 'Backend', icon: 'bi-server', color: '#3b82f6' },
+                { key: 'frontend', label: 'Frontend', icon: 'bi-layout-wtf', color: '#10b981' },
+                { key: 'agents', label: 'Agents', icon: 'bi-cpu', color: '#8b5cf6' },
+                { key: 'incomplete', label: 'In Progress', icon: 'bi-hourglass-split', color: '#f59e0b' },
+                { key: 'complete', label: 'Complete', icon: 'bi-check-circle', color: '#059669' },
+              ] as Array<{ key: MapFilter; label: string; icon: string; color: string }>).map(f => (
+                <button
+                  key={f.key}
+                  className="btn btn-sm"
+                  style={{
+                    fontSize: 9,
+                    padding: '2px 8px',
+                    borderRadius: 12,
+                    background: mapFilter === f.key ? f.color : 'transparent',
+                    color: mapFilter === f.key ? '#fff' : '#9ca3af',
+                    border: `1px solid ${mapFilter === f.key ? f.color : '#e2e8f0'}`,
+                    fontWeight: mapFilter === f.key ? 600 : 400,
+                    transition: 'all 0.15s',
+                  }}
+                  onClick={() => setMapFilter(mapFilter === f.key ? 'all' : f.key)}
+                >
+                  <i className={`bi ${f.icon} me-1`} style={{ fontSize: 8 }}></i>{f.label}
+                </button>
+              ))}
             </div>
           </div>
 
