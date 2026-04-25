@@ -19,6 +19,7 @@ import ProjectArtifacts from '../pages/project/ProjectArtifacts';
 import ProjectPortfolio from '../pages/project/ProjectPortfolio';
 import ExecutiveDeliverable from '../pages/project/ExecutiveDeliverable';
 import CoryFullscreen from '../pages/project/CoryFullscreen';
+import RequirementsBuilder from '../pages/project/RequirementsBuilder';
 
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
@@ -41,6 +42,7 @@ const portalRoutes = (
         <Route path="/portal/project/portfolio" element={<ProjectPortfolio />} />
         <Route path="/portal/project/executive" element={<ExecutiveDeliverable />} />
         <Route path="/portal/project/cory" element={<CoryFullscreen />} />
+        <Route path="/portal/project/requirements-builder" element={<RequirementsBuilder />} />
       </Route>
     </Route>
   </Route>

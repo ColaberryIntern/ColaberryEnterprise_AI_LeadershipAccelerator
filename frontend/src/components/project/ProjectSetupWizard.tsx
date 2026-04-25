@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 
 interface SetupStatus {
@@ -153,6 +154,15 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           stepNumber={i + 1}
           isComplete={status[step.key]}
           onComplete={() => setStatus(prev => ({ ...prev, [step.key]: true }))}
+          extraAction={step.key === 'requirements_loaded' ? (
+            <button
+              className="btn btn-sm ms-2"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 11, borderRadius: 6, border: 'none' }}
+              onClick={() => window.location.href = '/portal/project/requirements-builder'}
+            >
+              <i className="bi bi-lightning-charge me-1"></i>Build with AI
+            </button>
+          ) : undefined}
         />
       ))}
 
@@ -223,11 +233,12 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
 // Individual Setup Step
 // ---------------------------------------------------------------------------
 
-function SetupStep({ step, stepNumber, isComplete, onComplete }: {
+function SetupStep({ step, stepNumber, isComplete, onComplete, extraAction }: {
   step: StepConfig;
   stepNumber: number;
   isComplete: boolean;
   onComplete: () => void;
+  extraAction?: React.ReactNode;
 }) {
   const [content, setContent] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
@@ -373,13 +384,16 @@ function SetupStep({ step, stepNumber, isComplete, onComplete }: {
 
             {error && <div className="text-danger small mt-1"><i className="bi bi-exclamation-circle me-1"></i>{error}</div>}
 
-            <button
-              className="btn btn-sm btn-primary mt-2"
-              onClick={handleSubmit}
-              disabled={saving || (step.inputType === 'github' ? !repoUrl.trim() : !content.trim())}
-            >
-              {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving...</> : <><i className="bi bi-check-lg me-1"></i>Save</>}
-            </button>
+            <div className="d-flex align-items-center mt-2">
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleSubmit}
+                disabled={saving || (step.inputType === 'github' ? !repoUrl.trim() : !content.trim())}
+              >
+                {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving...</> : <><i className="bi bi-check-lg me-1"></i>Save</>}
+              </button>
+              {extraAction}
+            </div>
           </div>
         )}
 
