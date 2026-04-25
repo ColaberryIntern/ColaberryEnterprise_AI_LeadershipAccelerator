@@ -155,13 +155,32 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           isComplete={status[step.key]}
           onComplete={() => setStatus(prev => ({ ...prev, [step.key]: true }))}
           extraAction={step.key === 'requirements_loaded' ? (
-            <button
-              className="btn btn-sm ms-2"
-              style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', fontWeight: 600, fontSize: 11, borderRadius: 6, border: 'none' }}
-              onClick={() => window.location.href = '/portal/project/requirements-builder'}
-            >
-              <i className="bi bi-lightning-charge me-1"></i>Build with AI
-            </button>
+            <div className="ms-auto">
+              <div className="text-center mb-1" style={{ fontSize: 9, color: '#8b5cf6', fontWeight: 600 }}>OR</div>
+              <button
+                className="btn"
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  borderRadius: 10,
+                  border: 'none',
+                  padding: '10px 20px',
+                  boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+                onClick={() => window.location.href = '/portal/project/requirements-builder'}
+              >
+                <i className="bi bi-lightning-charge-fill" style={{ fontSize: 16 }}></i>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ lineHeight: 1.2 }}>Build with AI</div>
+                  <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.85 }}>Let Cory generate your requirements</div>
+                </div>
+              </button>
+            </div>
           ) : undefined}
         />
       ))}
@@ -384,13 +403,14 @@ function SetupStep({ step, stepNumber, isComplete, onComplete, extraAction }: {
 
             {error && <div className="text-danger small mt-1"><i className="bi bi-exclamation-circle me-1"></i>{error}</div>}
 
-            <div className="d-flex align-items-center mt-2">
+            <div className="d-flex align-items-center justify-content-between mt-3">
               <button
                 className="btn btn-sm btn-primary"
                 onClick={handleSubmit}
                 disabled={saving || (step.inputType === 'github' ? !repoUrl.trim() : !content.trim())}
+                style={{ borderRadius: 8 }}
               >
-                {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving...</> : <><i className="bi bi-check-lg me-1"></i>Save</>}
+                {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving...</> : <><i className="bi bi-upload me-1"></i>Upload Document</>}
               </button>
               {extraAction}
             </div>
