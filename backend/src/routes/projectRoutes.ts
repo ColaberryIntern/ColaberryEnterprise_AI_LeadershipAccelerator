@@ -402,6 +402,55 @@ router.post('/api/portal/project/refresh', requireParticipant, async (req: Reque
  * POST /api/portal/project/requirements/generate
  * Start requirements document generation job.
  */
+// ─── AI Expansion Questions: generate idea-specific capability questions ────────
+router.post('/api/portal/project/requirements/expand-questions', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { idea } = req.body;
+    if (!idea || idea.trim().length < 20) { res.status(400).json({ error: 'Idea must be at least 20 characters' }); return; }
+
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You generate expansion questions for a software system idea. Output ONLY a JSON array of objects with "text" and "category" fields. Each question should be a capability the system COULD have, phrased to complete the sentence "Would you like your system to be able to...". Make questions SPECIFIC to the idea — never generic.' },
+        { role: 'user', content: `Generate 10 expansion questions for this project idea. Each question must be directly derived from what the user described — expand their vision, not replace it.
+
+USER'S IDEA:
+${idea.trim()}
+
+Return JSON array: [{"text": "question text completing 'Would you like your system to be able to...'", "category": "relevant category"}]
+
+Examples of GOOD questions for a "utility analytics dashboard":
+- "aggregate data from multiple utility providers in real-time?" (category: "Data Integration")
+- "detect consumption anomalies and alert operators automatically?" (category: "Anomaly Detection")
+- "generate automated reports for regulatory compliance?" (category: "Compliance")
+
+Examples of BAD (too generic) questions:
+- "predict user behavior?" — too vague
+- "integrate with third-party services?" — not specific to the idea` },
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
+      response_format: { type: 'json_object' },
+    });
+
+    const raw = completion.choices[0]?.message?.content || '{}';
+    let questions: Array<{ text: string; category: string }> = [];
+    try {
+      const parsed = JSON.parse(raw);
+      questions = Array.isArray(parsed) ? parsed : (parsed.questions || parsed.data || []);
+      questions = questions.filter(q => q.text && q.category && q.text.length > 10).slice(0, 12);
+    } catch { /* parsing failed */ }
+
+    res.json({ questions });
+  } catch (err: any) {
+    console.warn('[ExpandQuestions] Failed:', err?.message);
+    res.status(500).json({ error: 'Failed to generate questions', questions: [] });
+  }
+});
+
 router.post('/api/portal/project/requirements/generate', requireParticipant, async (req: Request, res: Response) => {
   try {
     const enrollmentId = req.participant!.sub;

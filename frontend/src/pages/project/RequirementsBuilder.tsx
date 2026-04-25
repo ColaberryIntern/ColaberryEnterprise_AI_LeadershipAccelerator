@@ -96,39 +96,11 @@ export default function RequirementsBuilder() {
     setError(null);
 
     try {
-      // Use architect endpoint to generate contextual questions
-      const startRes = await portalApi.post('/api/portal/project/architect/start');
-      const sid = startRes.data.session_id;
-      const prompt = `Based on this idea: "${originalIdea.trim()}"
-
-Generate exactly 10 yes/no expansion questions to help design the system. Each question should be specific to the idea, not generic.
-
-Format each as:
-CATEGORY: question text
-
-Categories should be relevant to the idea (e.g., Intelligence, Automation, Integration, Security, Analytics, UX, Data, Communication, Monitoring, Performance).
-
-Questions should follow: "Would you like your system to be able to..."`;
-
-      const res = await portalApi.post('/api/portal/project/architect/turn', { session_id: sid, input: prompt });
-      const response = res.data.message || res.data.response || '';
-
-      // Parse questions from response
-      const parsedQuestions: Array<{ text: string; category: string }> = [];
-      const lines = response.split('\n').filter((l: string) => l.trim());
-      for (const line of lines) {
-        const match = line.match(/^(?:\d+\.\s*)?(?:\*\*)?(\w[\w\s]*?)(?:\*\*)?:\s*(.+?)$/);
-        if (match) {
-          const cat = match[1].trim();
-          let q = match[2].trim().replace(/^["']|["']$/g, '').replace(/^\*\*|\*\*$/g, '');
-          // Remove "Would you like your system to be able to" prefix if present — we add it in the UI
-          q = q.replace(/^would you like (?:your )?system to (?:be able to )?/i, '');
-          if (q.length > 10) parsedQuestions.push({ text: q.charAt(0).toLowerCase() + q.slice(1), category: cat });
-        }
-      }
-
-      const finalQuestions = parsedQuestions.length >= 5 ? parsedQuestions.slice(0, 12) : FALLBACK_QUESTIONS;
-      setQuestions(finalQuestions.map(q => ({ ...q, answer: null })));
+      // Use dedicated expansion endpoint — generates idea-specific questions via LLM
+      const res = await portalApi.post('/api/portal/project/requirements/expand-questions', { idea: originalIdea.trim() });
+      const aiQuestions = res.data.questions || [];
+      const finalQuestions = aiQuestions.length >= 5 ? aiQuestions.slice(0, 12) : FALLBACK_QUESTIONS;
+      setQuestions(finalQuestions.map((q: any) => ({ text: q.text, category: q.category, answer: null })));
       setPhase('questions');
       setStage('questions');
       setProgress(15);
