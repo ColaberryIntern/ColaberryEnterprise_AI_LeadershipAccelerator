@@ -1531,12 +1531,18 @@ function enrichCapability(cap: any) {
         why_not,
       };
     })(),
-    implementation_links: {
-      backend: combinedBackendFiles.length > 0 ? combinedBackendFiles : repoTree.filter((f: string) => /\/(service|route|controller|handler)\b/i.test(f) && /\.(ts|js)$/.test(f)).slice(0, 15),
-      frontend: combinedFrontendFiles.length > 0 ? combinedFrontendFiles : repoTree.filter((f: string) => /\/(component|page|view)\b/i.test(f) && /\.(tsx|jsx)$/.test(f)).slice(0, 15),
-      agents: combinedAgentFiles, // no broad fallback — only show actually-matched agents per BP
-      models: combinedModelFiles.length > 0 ? combinedModelFiles : repoTree.filter((f: string) => /\/models?\//i.test(f) && /\.(ts|js)$/.test(f) && !/index|seed|migration/i.test(f)).slice(0, 10),
-    },
+    implementation_links: (() => {
+      // Merge keyword-matched files WITH explicitly-linked files from validation reports
+      const storedBackend: string[] = (cap as any).linked_backend_services || [];
+      const storedFrontend: string[] = (cap as any).linked_frontend_components || [];
+      const storedAgents: string[] = (cap as any).linked_agents || [];
+      return {
+        backend: [...new Set([...combinedBackendFiles, ...storedBackend])].slice(0, 20) || repoTree.filter((f: string) => /\/(service|route|controller|handler)\b/i.test(f) && /\.(ts|js)$/.test(f)).slice(0, 15),
+        frontend: [...new Set([...combinedFrontendFiles, ...storedFrontend])].slice(0, 20) || repoTree.filter((f: string) => /\/(component|page|view)\b/i.test(f) && /\.(tsx|jsx)$/.test(f)).slice(0, 15),
+        agents: [...new Set([...combinedAgentFiles, ...storedAgents])],
+        models: combinedModelFiles.length > 0 ? combinedModelFiles : repoTree.filter((f: string) => /\/models?\//i.test(f) && /\.(ts|js)$/.test(f) && !/index|seed|migration/i.test(f)).slice(0, 10),
+      };
+    })(),
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
     // Autonomous Enhancements — separate layer for system-generated requirements
     // Only populated when the BP has AUTO-* requirements (modes=['autonomous'])

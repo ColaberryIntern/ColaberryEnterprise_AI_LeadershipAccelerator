@@ -112,13 +112,44 @@ export async function applyReportToBP(
 
   let verified = 0;
 
+  // Classify files by layer for intelligent linking
+  const backendFiles: string[] = [];
+  const frontendFiles: string[] = [];
+  const agentFiles: string[] = [];
+  const modelFiles: string[] = [];
+
+  for (const f of allFiles) {
+    const lower = f.toLowerCase();
+    const name = (f.split('/').pop() || '').toLowerCase();
+    if (name.includes('agent') || lower.includes('/agents/') || lower.includes('/intelligence/')) {
+      agentFiles.push(f);
+    } else if (name.endsWith('.tsx') || name.endsWith('.jsx') || lower.includes('/component') || lower.includes('/page') || lower.includes('/frontend/')) {
+      frontendFiles.push(f);
+    } else if (lower.includes('/model') || lower.includes('/schema') || lower.includes('/entity') || lower.includes('/migration')) {
+      modelFiles.push(f);
+    } else if (lower.includes('/service') || lower.includes('/route') || lower.includes('/controller') || lower.includes('/handler') || lower.includes('/api/') || lower.includes('/backend/')) {
+      backendFiles.push(f);
+    } else {
+      // Default: if it's a .ts/.js file, assume backend
+      if (name.endsWith('.ts') || name.endsWith('.js') || name.endsWith('.py')) backendFiles.push(f);
+    }
+  }
+
   if (hasEvidence) {
-    // The user submitted a report with real evidence — mark ALL
-    // requirements as verified. The report itself is the proof.
+    // Mark requirements as verified with per-category file assignment
     for (const req of reqs) {
       if ((req as any).verified_by === 'manual') continue;
       (req as any).status = 'verified';
-      (req as any).github_file_paths = allFiles.slice(0, 5);
+      // Assign files by requirement category when possible
+      const reqText = ((req as any).requirement_text || (req as any).requirement_key || '').toLowerCase();
+      const isUIReq = /\b(ui|page|component|display|layout|form|button|screen|view)\b/.test(reqText);
+      const isAgentReq = /\b(agent|automat|monitor|schedule|autonomous|intelligence)\b/.test(reqText);
+      const isDataReq = /\b(model|database|table|schema|migration|persist|store)\b/.test(reqText);
+      const relevantFiles = isUIReq && frontendFiles.length > 0 ? frontendFiles
+        : isAgentReq && agentFiles.length > 0 ? agentFiles
+        : isDataReq && modelFiles.length > 0 ? modelFiles
+        : backendFiles.length > 0 ? backendFiles : allFiles;
+      (req as any).github_file_paths = relevantFiles.slice(0, 5);
       (req as any).confidence_score = 1.0;
       (req as any).verified_by = 'validation_report';
       await req.save();
@@ -126,10 +157,19 @@ export async function applyReportToBP(
     }
   }
 
-  // Save report on the capability for audit
+  // Save report on the capability for audit + store classified file links
   const cap = await Capability.findByPk(capabilityId);
   if (cap) {
     const prevExec = (cap as any).last_execution || {};
+
+    // Merge new files with any existing linked files (accumulative across builds)
+    const prevBackend = (cap as any).linked_backend_services || [];
+    const prevFrontend = (cap as any).linked_frontend_components || [];
+    const prevAgents = (cap as any).linked_agents || [];
+    (cap as any).linked_backend_services = [...new Set([...prevBackend, ...backendFiles, ...modelFiles])];
+    (cap as any).linked_frontend_components = [...new Set([...prevFrontend, ...frontendFiles])];
+    (cap as any).linked_agents = [...new Set([...prevAgents, ...agentFiles])];
+
     (cap as any).last_execution = {
       ...prevExec,
       validation_report: {
@@ -142,10 +182,14 @@ export async function applyReportToBP(
         commitSha: commitSha || null,
         appliedAt: new Date().toISOString(),
         requirementsVerified: verified,
+        classified: { backend: backendFiles, frontend: frontendFiles, agents: agentFiles, models: modelFiles },
       },
       completed_steps: [...new Set([...(prevExec.completed_steps || []), 'validation_report_applied'])],
     };
     (cap as any).changed('last_execution', true);
+    (cap as any).changed('linked_backend_services', true);
+    (cap as any).changed('linked_frontend_components', true);
+    (cap as any).changed('linked_agents', true);
     await cap.save();
   }
 
