@@ -1531,7 +1531,12 @@ function enrichCapability(cap: any) {
         why_not,
       };
     })(),
-    implementation_links: { backend: combinedBackendFiles, frontend: combinedFrontendFiles, agents: combinedAgentFiles, models: combinedModelFiles },
+    implementation_links: {
+      backend: combinedBackendFiles.length > 0 ? combinedBackendFiles : repoTree.filter((f: string) => /\/(service|route|controller|handler)\b/i.test(f) && /\.(ts|js)$/.test(f)).slice(0, 15),
+      frontend: combinedFrontendFiles.length > 0 ? combinedFrontendFiles : repoTree.filter((f: string) => /\/(component|page|view)\b/i.test(f) && /\.(tsx|jsx)$/.test(f)).slice(0, 15),
+      agents: combinedAgentFiles.length > 0 ? combinedAgentFiles : repoTree.filter((f: string) => /(agent|intelligence)\b/i.test(f) && /\.(ts|js)$/.test(f)).slice(0, 10),
+      models: combinedModelFiles.length > 0 ? combinedModelFiles : repoTree.filter((f: string) => /\/models?\//i.test(f) && /\.(ts|js)$/.test(f) && !/index|seed|migration/i.test(f)).slice(0, 10),
+    },
     vision: features.map((f: any) => f.description || f.name).filter(Boolean),
     // Autonomous Enhancements — separate layer for system-generated requirements
     // Only populated when the BP has AUTO-* requirements (modes=['autonomous'])
