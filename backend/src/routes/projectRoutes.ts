@@ -1763,6 +1763,23 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Cory Orchestrator: project-wide top tasks (for Blueprint) ────────
+router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+    const enriched = hierarchy.map(enrichCapability);
+    const { getProjectTopTasks } = require('../services/intelligence/coryOrchestrator');
+    const tasks = getProjectTopTasks(enriched, (project as any).target_mode || 'production');
+    // Attach component names for display
+    const nameMap = new Map(enriched.map((c: any) => [c.id, c.name]));
+    const tasksWithNames = tasks.map((t: any) => ({ ...t, component_name: nameMap.get(t.component_id) || 'Unknown' }));
+    res.json({ tasks: tasksWithNames, total_components: enriched.length, mode: (project as any).target_mode || 'production' });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/api/portal/project/business-processes/:id', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { getProjectByEnrollment } = await import('../services/projectService');

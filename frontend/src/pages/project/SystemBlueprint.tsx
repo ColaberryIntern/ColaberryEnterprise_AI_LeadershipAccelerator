@@ -490,6 +490,7 @@ export default function SystemBlueprint() {
   // Autonomous mode + Cory suggestions/plan
   const [autonomousMode, setAutonomousMode] = useState(false);
   const [completedPlanSteps, setCompletedPlanSteps] = useState<Set<string>>(new Set());
+  const [orchestratorTasks, setOrchestratorTasks] = useState<any[]>([]);
 
   // Execution queue state
   const [execQueue, setExecQueue] = useState<CoryPlanStep[]>([]);
@@ -513,10 +514,12 @@ export default function SystemBlueprint() {
       portalApi.get('/api/portal/project'),
       portalApi.get('/api/portal/project/business-processes'),
       portalApi.get('/api/portal/project/progress').catch(() => ({ data: null })),
-    ]).then(([projRes, bpRes, progRes]) => {
+      portalApi.get('/api/portal/project/cory-tasks').catch(() => ({ data: { tasks: [] } })),
+    ]).then(([projRes, bpRes, progRes, coryRes]) => {
       setProject(projRes.data);
       setComponents(transformCapabilities(bpRes.data || []));
       if (progRes.data) setProgress(progRes.data);
+      setOrchestratorTasks(coryRes.data?.tasks || []);
     });
   }, []);
 
@@ -1078,21 +1081,48 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
               )}
             </div>
 
-            {/* Step indicator */}
+            {/* Step indicator — from orchestrator or fallback */}
             {(() => {
-              const allSteps = coryPlan.flatMap(p => p.steps.filter(s => !s.done));
-              const stepNumber = allSteps.length > 0 ? 1 : 0;
-              const totalSteps = allSteps.length;
+              const ot = orchestratorTasks;
+              const totalSteps = ot.length > 0 ? ot.length : coryPlan.flatMap(p => p.steps.filter(s => !s.done)).length;
               return totalSteps > 0 ? (
                 <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>
-                  Step {stepNumber} of {totalSteps} remaining
+                  Step 1 of {totalSteps} remaining
+                  {ot.length > 0 && <span className="ms-2 badge" style={{ background: '#3b82f610', color: '#94a3b8', fontSize: 7 }}>Orchestrated</span>}
                 </div>
               ) : null;
             })()}
 
-            {/* Primary step: what to build */}
-            <h6 className="fw-bold mb-1" style={{ color: 'var(--color-text)', fontSize: 15 }}>{getStepTitle(recommended)}</h6>
-            <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>{getWhyThisMatters(recommended, systemLayers)}</p>
+            {/* Primary step: what to build — from orchestrator or recommended */}
+            {(() => {
+              const ot = orchestratorTasks;
+              const primary = ot.length > 0 ? ot[0] : null;
+              const SOURCE_LABELS: Record<string, { label: string; bg: string; color: string }> = {
+                build: { label: 'Build', bg: '#3b82f620', color: '#3b82f6' },
+                health: { label: 'Health', bg: '#f59e0b20', color: '#92400e' },
+                improve: { label: 'Improve', bg: '#8b5cf620', color: '#8b5cf6' },
+                ui: { label: 'UI', bg: '#10b98120', color: '#059669' },
+              };
+              return primary ? (
+                <>
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <h6 className="fw-bold mb-0" style={{ color: 'var(--color-text)', fontSize: 15 }}>{primary.title}</h6>
+                    {primary.source && SOURCE_LABELS[primary.source] && (
+                      <span className="badge" style={{ background: SOURCE_LABELS[primary.source].bg, color: SOURCE_LABELS[primary.source].color, fontSize: 8 }}>{SOURCE_LABELS[primary.source].label}</span>
+                    )}
+                  </div>
+                  <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>
+                    {primary.description}
+                    {primary.component_name && <span className="ms-1" style={{ fontStyle: 'normal', fontWeight: 500 }}>— {primary.component_name}</span>}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h6 className="fw-bold mb-1" style={{ color: 'var(--color-text)', fontSize: 15 }}>{getStepTitle(recommended)}</h6>
+                  <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>{getWhyThisMatters(recommended, systemLayers)}</p>
+                </>
+              );
+            })()}
 
             {/* Layer status + completion badges */}
             <div className="d-flex flex-wrap gap-2 mb-3">
@@ -1331,37 +1361,58 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
               </div>
             )}
 
-            {/* Up next — collapsible remaining plan steps (idle only) */}
+            {/* Up next — from orchestrator or fallback to coryPlan */}
             {build.phase === 'idle' && (() => {
-              const allSteps = coryPlan.flatMap(p => p.steps.filter(s => !s.done));
-              const upcomingSteps = allSteps.slice(1); // skip first (it's the current primary step)
-              if (upcomingSteps.length === 0) return null;
+              const ot = orchestratorTasks;
+              const SOURCE_LABELS: Record<string, { label: string; bg: string; color: string }> = {
+                build: { label: 'Build', bg: '#3b82f620', color: '#3b82f6' },
+                health: { label: 'Health', bg: '#f59e0b20', color: '#92400e' },
+                improve: { label: 'Improve', bg: '#8b5cf620', color: '#8b5cf6' },
+                ui: { label: 'UI', bg: '#10b98120', color: '#059669' },
+              };
+
+              // Use orchestrator tasks if available, otherwise fall back to coryPlan
+              const upcomingItems = ot.length > 1
+                ? ot.slice(1).map((t: any) => ({ id: t.id, title: t.title, explanation: t.description, color: t.color, source: t.source, componentId: t.component_id, componentName: t.component_name, promptTarget: t.prompt_target, blocked: t.blocked, trace: t.decision_trace }))
+                : coryPlan.flatMap(p => p.steps.filter(s => !s.done)).slice(1).map(s => ({ id: s.id, title: s.title, explanation: s.explanation, color: s.promptTarget === 'agent_enhancement' ? '#8b5cf6' : s.promptTarget === 'frontend_exposure' ? '#10b981' : '#3b82f6', source: 'build', componentId: s.componentId, componentName: components.find(c => c.id === s.componentId)?.name, promptTarget: s.promptTarget, blocked: false, trace: null }));
+
+              if (upcomingItems.length === 0) return null;
               return (
                 <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
                   <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 w-100" style={{ fontSize: 12, color: '#64748b' }} onClick={() => setShowUpNext(!showUpNext)}>
                     <i className={`bi ${showUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 10 }}></i>
-                    <span>Up next ({upcomingSteps.length} more step{upcomingSteps.length > 1 ? 's' : ''})</span>
+                    <span>Up next ({upcomingItems.length} more step{upcomingItems.length > 1 ? 's' : ''})</span>
                   </button>
                   {showUpNext && (
                     <div className="mt-2">
-                      {upcomingSteps.map((step, i) => {
-                        const stepColor = step.promptTarget === 'agent_enhancement' ? '#8b5cf6' : step.promptTarget === 'frontend_exposure' ? '#10b981' : step.promptTarget === 'reliability_improvement' ? '#f59e0b' : '#3b82f6';
-                        const stepComp = components.find(c => c.id === step.componentId);
+                      {upcomingItems.map((item: any, i: number) => {
+                        const stepComp = components.find(c => c.id === item.componentId);
                         return (
-                          <div key={step.id} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${stepColor}` }}>
-                            <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${stepColor}20`, color: stepColor, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                          <div key={item.id || i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: item.blocked ? '#fef2f210' : 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${item.color}`, opacity: item.blocked ? 0.6 : 1 }}>
+                            <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${item.color}20`, color: item.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                             <div className="flex-grow-1">
-                              <div className="fw-medium" style={{ fontSize: 11 }}>{step.title}</div>
-                              <div className="text-muted" style={{ fontSize: 9 }}>{step.explanation}</div>
+                              <div className="d-flex align-items-center gap-1 flex-wrap">
+                                <span className="fw-medium" style={{ fontSize: 11 }}>{item.title}</span>
+                                {item.source && SOURCE_LABELS[item.source] && <span className="badge" style={{ background: SOURCE_LABELS[item.source].bg, color: SOURCE_LABELS[item.source].color, fontSize: 7 }}>{SOURCE_LABELS[item.source].label}</span>}
+                                {item.blocked && <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 7 }}>Blocked</span>}
+                              </div>
+                              <div className="text-muted" style={{ fontSize: 9 }}>
+                                {item.componentName && <span className="fw-medium">{item.componentName} — </span>}
+                                {item.explanation}
+                              </div>
                             </div>
-                            <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
-                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => stepComp && handleLearnAbout(stepComp)}>
-                                <i className="bi bi-book"></i>
-                              </button>
-                              <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: stepColor, color: '#fff' }} onClick={() => handleApplyPlanStep(step)}>
-                                Build
-                              </button>
-                            </div>
+                            {!item.blocked && (
+                              <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => stepComp && handleLearnAbout(stepComp)}>
+                                  <i className="bi bi-book"></i>
+                                </button>
+                                <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: item.color, color: '#fff' }} onClick={() => {
+                                  if (stepComp) handleGeneratePrompt(stepComp);
+                                }}>
+                                  Build
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -1371,7 +1422,7 @@ Begin by greeting the learner and explaining what "${comp.name}" is and why it m
                   {showUpNext && !isExecuting && (
                     <div className="mt-2">
                       <button className="btn btn-sm w-100" style={{ background: autonomousMode ? '#8b5cf6' : 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: 11 }} onClick={handleStartExecution}>
-                        <i className="bi bi-play-fill me-1"></i>Execute All ({upcomingSteps.length + 1} steps)
+                        <i className="bi bi-play-fill me-1"></i>Execute All ({upcomingItems.length + 1} steps)
                       </button>
                     </div>
                   )}

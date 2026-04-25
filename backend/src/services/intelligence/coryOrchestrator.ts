@@ -424,3 +424,45 @@ export function getTopTasks(enriched: any, projectMode: string): CoryTask[] {
 
   return result;
 }
+
+// ─── PROJECT-WIDE ORCHESTRATOR (for Blueprint) ─────────────────────────────
+// Runs getTopTasks across ALL enriched capabilities and returns the global Top 5
+
+export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: string): CoryTask[] {
+  const allTasks: CoryTask[] = [];
+
+  for (const enriched of enrichedCapabilities) {
+    // Skip complete components
+    const coverage = enriched.metrics?.requirements_coverage || 0;
+    const readiness = enriched.metrics?.system_readiness || 0;
+    if (coverage >= 90 && readiness >= 90) continue;
+
+    const componentTasks = getTopTasks(enriched, projectMode);
+    // Tag each task with component name for cross-BP context
+    for (const task of componentTasks) {
+      task.component_id = enriched.id;
+      // Prefix title with component name if not already included
+      if (!task.title.includes(enriched.name)) {
+        task.description = `[${enriched.name}] ${task.description}`;
+      }
+    }
+    allTasks.push(...componentTasks);
+  }
+
+  // Global scoring: re-sort all tasks across all components
+  allTasks.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
+  // Deduplicate across components: avoid 5 "build backend" from different BPs
+  const seen = new Map<string, CoryTask>();
+  const result: CoryTask[] = [];
+  for (const task of allTasks) {
+    if (result.length >= 5) break;
+    // Key: one task per component (pick highest priority per BP)
+    const compKey = task.component_id || 'unknown';
+    if (seen.has(compKey)) continue; // only 1 task per component in global view
+    seen.set(compKey, task);
+    result.push(task);
+  }
+
+  return result;
+}
