@@ -47,6 +47,7 @@ import { runSkoolContentResponse } from './agents/skool/skoolContentResponseAgen
 import { runSkoolQualityGate } from './agents/skool/skoolQualityGateAgent';
 import { runSkoolBrowserWorker } from './agents/skool/skoolBrowserWorkerAgent';
 import { runSkoolSupervisor } from './agents/skool/skoolSupervisorAgent';
+import { runSkoolNotificationResponse } from './agents/skool/skoolNotificationResponseAgent';
 import { runWorkforceAnalysis } from './company/workforceIntelligenceEngine';
 import { runCompanyStrategicCycle } from './company/companyStrategyAgent';
 import { runOpenclawMarketSignalAgent } from './agents/openclaw/openclawMarketSignalAgent';
@@ -614,6 +615,10 @@ export async function runSkoolBrowserWorkerAgent(): Promise<AgentExecutionResult
 
 export async function runSkoolSupervisorAgent(): Promise<AgentExecutionResult | null> {
   return runAgent('SkoolSupervisor', wrapSkoolAgent(runSkoolSupervisor));
+}
+
+export async function runSkoolNotificationResponseAgent(): Promise<AgentExecutionResult | null> {
+  return runAgent('SkoolNotificationResponse', wrapSkoolAgent(runSkoolNotificationResponse));
 }
 
 // ─── Company Layer Agents ──────────────────────────────────────────────────
