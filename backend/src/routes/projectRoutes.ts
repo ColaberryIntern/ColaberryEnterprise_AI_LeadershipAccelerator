@@ -1897,6 +1897,17 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       flow: flowData?.flow || null,
       broken_connections: flowData?.broken_connections || [],
       agent_mappings: agentMappings,
+      // Cory Orchestrator — unified prioritized task queue
+      cory_tasks: (() => {
+        try {
+          const { getTopTasks } = require('../services/intelligence/coryOrchestrator');
+          const enrichedWithGaps = { ...enriched, autonomy_gaps: autonomyGaps };
+          return getTopTasks(enrichedWithGaps, (project as any).target_mode || 'production');
+        } catch (orchErr: any) {
+          console.warn('[CoryOrchestrator] Task generation failed:', orchErr?.message);
+          return [];
+        }
+      })(),
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

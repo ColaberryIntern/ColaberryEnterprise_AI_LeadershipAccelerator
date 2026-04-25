@@ -1276,36 +1276,75 @@ function SystemViewV2Inner() {
               {/* ── TAB: Overview (Cory left + System Intelligence right) ── */}
               {workTab === 'overview' && (
                 <div className="row g-3">
-                  {/* Left: Cory recommendations */}
+                  {/* Left: Cory recommendations (powered by Cory Orchestrator) */}
                   <div className={compDetail ? 'col-lg-7' : 'col-12'}>
                     <div className="d-flex align-items-center gap-2 mb-3">
                       <i className="bi bi-robot" style={{ color: '#3b82f6', fontSize: 16 }}></i>
-                      <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: 'var(--color-primary)' }}>Cory — What I Recommend</h6>
+                      <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: 'var(--color-primary)' }}>Cory — What You Should Do Next</h6>
                     </div>
 
                     {(() => {
-                      const suggestions = getComponentSuggestions(selectedComponent, compDetail);
-                      const primary = suggestions[0];
-                      const upNext = suggestions.slice(1);
+                      // Use orchestrator output if available, fall back to local suggestions
+                      const coryTasks: Array<{ id: string; title: string; description: string; source: string; color: string; prompt_target?: string; blocked?: boolean; block_reason?: string; priority?: number; decision_trace?: any }> = compDetail?.cory_tasks || [];
+                      const fallbackSuggestions = getComponentSuggestions(selectedComponent, compDetail);
+                      const tasks = coryTasks.length > 0
+                        ? coryTasks.map(t => ({ title: t.title, explanation: t.description, color: t.color, action: t.prompt_target, source: t.source, blocked: t.blocked, blockReason: t.block_reason, trace: t.decision_trace }))
+                        : fallbackSuggestions.map(s => ({ ...s, explanation: s.explanation, source: 'build' as string, blocked: false, blockReason: undefined, trace: undefined }));
+                      const primary = tasks[0];
+                      const upNext = tasks.slice(1);
+                      const SOURCE_LABELS: Record<string, { label: string; bg: string; color: string }> = {
+                        build: { label: 'Build', bg: '#3b82f620', color: '#3b82f6' },
+                        health: { label: 'Health', bg: '#f59e0b20', color: '#92400e' },
+                        improve: { label: 'Improve', bg: '#8b5cf620', color: '#8b5cf6' },
+                        ui: { label: 'UI', bg: '#10b98120', color: '#059669' },
+                      };
                       return primary ? (
                         <>
-                          <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {suggestions.length} for {selectedComponent.name}</div>
-                          <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
+                          <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>
+                            Step 1 of {tasks.length} for {selectedComponent.name}
+                            {coryTasks.length > 0 && <span className="ms-2 badge" style={{ background: '#3b82f610', color: '#94a3b8', fontSize: 7 }}>Orchestrated</span>}
+                          </div>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 15 }}>{primary.title}</h6>
+                            {primary.source && SOURCE_LABELS[primary.source] && (
+                              <span className="badge" style={{ background: SOURCE_LABELS[primary.source].bg, color: SOURCE_LABELS[primary.source].color, fontSize: 8 }}>{SOURCE_LABELS[primary.source].label}</span>
+                            )}
+                            {primary.blocked && <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 8 }}>Blocked</span>}
+                          </div>
                           <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
+                          {primary.blocked && primary.blockReason && (
+                            <div className="mb-2 p-2" style={{ background: '#fef2f2', borderRadius: 6, fontSize: 10, color: '#991b1b' }}>
+                              <i className="bi bi-exclamation-triangle me-1"></i>{primary.blockReason}
+                            </div>
+                          )}
 
                           <div className="d-flex flex-wrap gap-2 mb-3">
                             <span className="badge" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{selectedComponent.completion}% complete</span>
                             <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
                           </div>
 
-                          <div className="d-flex flex-wrap gap-2 mb-3">
-                            <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); if (primary.action) handleGeneratePrompt(selectedComponent); }}>
-                              <i className="bi bi-terminal me-1"></i>{primary.action ? 'Generate Build Prompt' : 'Go to Build'}
-                            </button>
-                            <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
-                              <i className="bi bi-book me-1"></i>Learn About This
-                            </button>
-                          </div>
+                          {!primary.blocked && (
+                            <div className="d-flex flex-wrap gap-2 mb-3">
+                              <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); if (primary.action) handleGeneratePrompt(selectedComponent); }}>
+                                <i className="bi bi-terminal me-1"></i>{primary.action ? 'Generate Build Prompt' : 'Go to Build'}
+                              </button>
+                              <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
+                                <i className="bi bi-book me-1"></i>Learn About This
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Decision trace (expandable) */}
+                          {primary.trace && (
+                            <details className="mb-3" style={{ fontSize: 9, color: '#94a3b8' }}>
+                              <summary style={{ cursor: 'pointer' }}><i className="bi bi-info-circle me-1"></i>Why this recommendation?</summary>
+                              <div className="mt-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 4, fontFamily: 'monospace' }}>
+                                <div>{primary.trace.reason}</div>
+                                <div className="mt-1">Coverage: {primary.trace.inputs?.coverage}% | Readiness: {primary.trace.inputs?.readiness}% | Mode: {primary.trace.inputs?.mode} | Layers: {primary.trace.inputs?.layer_status}</div>
+                                {primary.trace.scoring_breakdown && <div className="mt-1">Score: impact({primary.trace.scoring_breakdown.impact_score}) + urgency({primary.trace.scoring_breakdown.urgency_score}) + confidence({primary.trace.scoring_breakdown.confidence_score}) + blocking({primary.trace.scoring_breakdown.blocking_bonus}) + mode({primary.trace.scoring_breakdown.mode_weight}) = {primary.trace.scoring_breakdown.total}</div>}
+                              </div>
+                            </details>
+                          )}
 
                           {upNext.length > 0 && (
                             <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
@@ -1316,20 +1355,26 @@ function SystemViewV2Inner() {
                               {showOverviewUpNext && (
                                 <div className="mt-2">
                                   {upNext.map((s, i) => (
-                                    <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                    <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: s.blocked ? '#fef2f210' : 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}`, opacity: s.blocked ? 0.6 : 1 }}>
                                       <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
                                       <div className="flex-grow-1">
-                                        <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                        <div className="d-flex align-items-center gap-1">
+                                          <span className="fw-medium" style={{ fontSize: 11 }}>{s.title}</span>
+                                          {s.source && SOURCE_LABELS[s.source] && <span className="badge" style={{ background: SOURCE_LABELS[s.source].bg, color: SOURCE_LABELS[s.source].color, fontSize: 7 }}>{SOURCE_LABELS[s.source].label}</span>}
+                                          {s.blocked && <span className="badge" style={{ background: '#ef444420', color: '#ef4444', fontSize: 7 }}>Blocked</span>}
+                                        </div>
                                         <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
                                       </div>
-                                      <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
-                                        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
-                                          <i className="bi bi-book"></i>
-                                        </button>
-                                        <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}>
-                                          Run
-                                        </button>
-                                      </div>
+                                      {!s.blocked && (
+                                        <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                          <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
+                                            <i className="bi bi-book"></i>
+                                          </button>
+                                          <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}>
+                                            Run
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
