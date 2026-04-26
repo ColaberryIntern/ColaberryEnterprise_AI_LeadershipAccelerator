@@ -9,10 +9,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import portalApi from '../../utils/portalApi';
 import AgentNetworkGraph from '../../components/cory/AgentNetworkGraph';
 
-interface Agent { name: string; role: string; type: string }
-interface Department { name: string; description: string; color: string; agents: Agent[] }
-interface Capability { name: string; category: string; description: string }
-interface SimEvent { agent: string; department: string; action: string; type: string }
+interface Agent { name: string; role: string; type: string; responsibilities?: string[]; hitl_required?: boolean; hitl_reason?: string }
+interface Department { name: string; description: string; color: string; agents: Agent[]; manual_fte?: number; ai_replacement_pct?: number }
+interface Capability { name: string; category: string; description: string; impact?: string }
+interface SimEvent { agent: string; department: string; action: string; type: string; delay_ms?: number }
+interface SimScenario { name: string; description: string; events: SimEvent[] }
+interface ROI { manual_annual_cost: number; ai_annual_cost: number; annual_savings: number; efficiency_gain_pct: number; roi_pct: number; payback_months: number; manual_fte_needed: number; ai_fte_equivalent: number }
+interface HITLSummary { total_decisions: number; automated: number; human_required: number; human_oversight: number }
 
 // Scripted phases — run immediately, no data dependency
 const SCRIPTED_PHASES = [
@@ -63,9 +66,16 @@ export default function SystemBuildDemo() {
   // Preview data (loaded in background)
   const [departments, setDepartments] = useState<Department[]>([]);
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
-  const [simEvents, setSimEvents] = useState<SimEvent[]>([]);
+  const [simScenarios, setSimScenarios] = useState<SimScenario[]>([]);
+  const [roi, setRoi] = useState<ROI | null>(null);
+  const [hitlSummary, setHitlSummary] = useState<HITLSummary | null>(null);
   const [totalAgents, setTotalAgents] = useState(0);
   const [previewLoaded, setPreviewLoaded] = useState(false);
+  const [selectedScenario, setSelectedScenario] = useState(0);
+  const [simRunning, setSimRunning] = useState(false);
+  const [simEventIdx, setSimEventIdx] = useState(-1);
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const simTimerRef = useRef<any>(null);
 
   const pollRef = useRef<any>(null);
   const phaseTimerRef = useRef<any>(null);
@@ -88,10 +98,13 @@ export default function SystemBuildDemo() {
         const projRes = await portalApi.get('/api/portal/project');
         const previewIdea = projRes.data?.setup_status?.build_idea || projRes.data?.primary_business_problem || 'AI system';
         const previewRes = await portalApi.post('/api/portal/project/build-preview', { idea: previewIdea });
-        setDepartments(previewRes.data.departments || []);
-        setCapabilities(previewRes.data.capabilities || []);
-        setSimEvents(previewRes.data.simulation_events || []);
-        setTotalAgents(previewRes.data.total_agents || 0);
+        const d = previewRes.data;
+        setDepartments(d.departments || []);
+        setCapabilities(d.capabilities || []);
+        setSimScenarios(d.simulation_scenarios || []);
+        setRoi(d.roi || null);
+        setHitlSummary(d.hitl_summary || null);
+        setTotalAgents(d.total_agents || 0);
         setPreviewLoaded(true);
       } catch {}
     })();
@@ -260,68 +273,241 @@ export default function SystemBuildDemo() {
               </div>
             )}
 
-            {/* Interactive Agent Network Graph */}
-            {previewLoaded && departments.length > 0 && (
-              <div className="card border-0 shadow-sm mb-3">
-                <div className="card-body p-3">
-                  <div className="d-flex align-items-center justify-content-between mb-2">
-                    <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}>
-                      <i className="bi bi-diagram-3 me-2" style={{ color: '#3b82f6' }}></i>Your AI Organization
-                    </h6>
-                    <span className="text-muted" style={{ fontSize: 10 }}>{totalAgents} agents · {departments.length} depts</span>
-                  </div>
-                  <AgentNetworkGraph departments={departments} width={640} height={400} />
-                  <div className="d-flex flex-wrap gap-2 mt-2 pt-2" style={{ borderTop: '1px solid #f1f5f9' }}>
-                    {departments.map((dept, di) => (
-                      <div key={di} className="d-flex align-items-center gap-1">
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: dept.color }}></div>
-                        <span style={{ fontSize: 10, color: '#64748b' }}>{dept.name} ({dept.agents.length})</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Capabilities */}
-            {previewLoaded && capabilities.length > 0 && (
-              <div className="card border-0 shadow-sm mb-3">
-                <div className="card-body p-3">
-                  <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}><i className="bi bi-lightning-charge me-2" style={{ color: '#f59e0b' }}></i>System Capabilities</h6>
-                  <div className="row g-2">
-                    {capabilities.map((cap, i) => (
-                      <div key={i} className="col-6">
-                        <div className="p-2" style={{ background: '#f8fafc', borderRadius: 6 }}>
-                          <div className="fw-medium" style={{ fontSize: 11 }}>{cap.name}</div>
-                          <div className="text-muted" style={{ fontSize: 9 }}>{cap.description}</div>
+            {previewLoaded ? (
+              <>
+                {/* ROI Analysis */}
+                {roi && (
+                  <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #1a365d, #2b6cb0)', color: '#fff' }}>
+                    <div className="card-body p-4">
+                      <h6 className="fw-bold mb-3" style={{ fontSize: 14 }}><i className="bi bi-graph-up-arrow me-2"></i>Cost & ROI Analysis</h6>
+                      <div className="row g-3 mb-3">
+                        <div className="col-3 text-center">
+                          <div className="fw-bold" style={{ fontSize: 20, color: '#fbbf24' }}>${(roi.annual_savings / 1000).toFixed(0)}K</div>
+                          <div style={{ fontSize: 9, opacity: 0.8 }}>ANNUAL SAVINGS</div>
+                        </div>
+                        <div className="col-3 text-center">
+                          <div className="fw-bold" style={{ fontSize: 20, color: '#34d399' }}>{roi.roi_pct}%</div>
+                          <div style={{ fontSize: 9, opacity: 0.8 }}>ROI</div>
+                        </div>
+                        <div className="col-3 text-center">
+                          <div className="fw-bold" style={{ fontSize: 20, color: '#60a5fa' }}>{roi.efficiency_gain_pct}%</div>
+                          <div style={{ fontSize: 9, opacity: 0.8 }}>EFFICIENCY GAIN</div>
+                        </div>
+                        <div className="col-3 text-center">
+                          <div className="fw-bold" style={{ fontSize: 20, color: '#a78bfa' }}>{roi.payback_months}mo</div>
+                          <div style={{ fontSize: 9, opacity: 0.8 }}>PAYBACK</div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Simulation */}
-            {previewLoaded && simEvents.length > 0 && (
-              <div className="card border-0 shadow-sm">
-                <div className="card-body p-3">
-                  <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}><i className="bi bi-activity me-2" style={{ color: '#10b981' }}></i>System Preview</h6>
-                  {simEvents.map((evt, i) => (
-                    <div key={i} className="d-flex align-items-start gap-2 mb-2 p-2" style={{ background: '#f8fafc', borderRadius: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', marginTop: 6, flexShrink: 0 }}></div>
-                      <div>
-                        <div style={{ fontSize: 11 }}><strong>{evt.agent}</strong> <span className="text-muted">({evt.department})</span></div>
-                        <div style={{ fontSize: 10, color: '#64748b' }}>{evt.action}</div>
+                      <div className="row g-2">
+                        <div className="col-6">
+                          <div className="p-2" style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 8 }}>
+                            <div style={{ fontSize: 10, opacity: 0.7 }}>Manual Operation</div>
+                            <div className="fw-bold" style={{ fontSize: 14 }}>${(roi.manual_annual_cost / 1000).toFixed(0)}K/year</div>
+                            <div style={{ fontSize: 9, opacity: 0.6 }}>{roi.manual_fte_needed} full-time employees needed</div>
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <div className="p-2" style={{ background: 'rgba(16,185,129,0.2)', borderRadius: 8 }}>
+                            <div style={{ fontSize: 10, opacity: 0.7 }}>AI-Powered Operation</div>
+                            <div className="fw-bold" style={{ fontSize: 14, color: '#34d399' }}>${(roi.ai_annual_cost / 1000).toFixed(0)}K/year</div>
+                            <div style={{ fontSize: 9, opacity: 0.6 }}>{roi.ai_fte_equivalent} staff + {totalAgents} AI agents</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                )}
 
-            {/* Still loading preview */}
-            {!previewLoaded && (
+                {/* Interactive Agent Network Graph */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-body p-3">
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}><i className="bi bi-diagram-3 me-2" style={{ color: '#3b82f6' }}></i>Your AI Organization</h6>
+                      <span className="text-muted" style={{ fontSize: 10 }}>{totalAgents} agents · {departments.length} departments · Drag to explore</span>
+                    </div>
+                    <AgentNetworkGraph departments={departments} width={640} height={380} />
+                    <div className="d-flex flex-wrap gap-2 mt-2 pt-2" style={{ borderTop: '1px solid #f1f5f9' }}>
+                      {departments.map((dept, di) => (
+                        <div key={di} className="d-flex align-items-center gap-1">
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: dept.color }}></div>
+                          <span style={{ fontSize: 10, color: '#64748b' }}>{dept.name} ({dept.agents.length})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Department Details — expandable */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-body p-3">
+                    <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}><i className="bi bi-people me-2" style={{ color: '#8b5cf6' }}></i>Team Breakdown</h6>
+                    {departments.map((dept, di) => {
+                      const isExpanded = expandedDept === dept.name;
+                      return (
+                        <div key={di} className="mb-2">
+                          <div className="d-flex align-items-center gap-2 p-2" style={{ background: isExpanded ? `${dept.color}08` : '#f8fafc', borderRadius: 8, borderLeft: `3px solid ${dept.color}`, cursor: 'pointer' }}
+                            onClick={() => setExpandedDept(isExpanded ? null : dept.name)}>
+                            <i className={`bi bi-chevron-${isExpanded ? 'down' : 'right'}`} style={{ fontSize: 10, color: '#64748b' }}></i>
+                            <div className="flex-grow-1">
+                              <div className="fw-semibold" style={{ fontSize: 12 }}>{dept.name}</div>
+                              <div className="text-muted" style={{ fontSize: 10 }}>{dept.description}</div>
+                            </div>
+                            <div className="text-end" style={{ fontSize: 9 }}>
+                              <div style={{ color: dept.color }}>{dept.agents.length} agents</div>
+                              {dept.ai_replacement_pct && <div className="text-muted">Replaces {dept.manual_fte || '?'} FTEs ({dept.ai_replacement_pct}%)</div>}
+                            </div>
+                          </div>
+                          {isExpanded && (
+                            <div className="ms-3 mt-1">
+                              {dept.agents.map((agent, ai) => (
+                                <div key={ai} className="p-2 mb-1" style={{ background: '#fff', borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                                  <div className="d-flex align-items-center justify-content-between">
+                                    <div className="fw-medium" style={{ fontSize: 11, color: dept.color }}>{agent.name}</div>
+                                    <div className="d-flex gap-1">
+                                      {agent.hitl_required && <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 8 }}><i className="bi bi-person me-1"></i>HITL</span>}
+                                      <span className="badge" style={{ background: '#f1f5f9', color: '#64748b', fontSize: 8 }}>{agent.type}</span>
+                                    </div>
+                                  </div>
+                                  <div className="text-muted" style={{ fontSize: 10 }}>{agent.role}</div>
+                                  {agent.responsibilities && agent.responsibilities.length > 0 && (
+                                    <div className="mt-1">
+                                      {agent.responsibilities.map((r, ri) => (
+                                        <div key={ri} className="d-flex align-items-center gap-1" style={{ fontSize: 9, color: '#64748b' }}>
+                                          <i className="bi bi-check2" style={{ color: '#10b981', fontSize: 8 }}></i>{r}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {agent.hitl_required && agent.hitl_reason && (
+                                    <div className="mt-1 p-1" style={{ background: '#fef3c7', borderRadius: 4, fontSize: 9, color: '#92400e' }}>
+                                      <i className="bi bi-exclamation-triangle me-1"></i>{agent.hitl_reason}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Human-in-the-Loop */}
+                {hitlSummary && (
+                  <div className="card border-0 shadow-sm mb-3">
+                    <div className="card-body p-3">
+                      <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}><i className="bi bi-person-check me-2" style={{ color: '#f59e0b' }}></i>Human-in-the-Loop Requirements</h6>
+                      <div className="row g-2 mb-3">
+                        <div className="col-3 text-center">
+                          <div className="p-2" style={{ background: '#10b98115', borderRadius: 6 }}>
+                            <div className="fw-bold" style={{ fontSize: 16, color: '#059669' }}>{hitlSummary.automated}</div>
+                            <div style={{ fontSize: 9, color: '#64748b' }}>Automated</div>
+                          </div>
+                        </div>
+                        <div className="col-3 text-center">
+                          <div className="p-2" style={{ background: '#f59e0b15', borderRadius: 6 }}>
+                            <div className="fw-bold" style={{ fontSize: 16, color: '#92400e' }}>{hitlSummary.human_required}</div>
+                            <div style={{ fontSize: 9, color: '#64748b' }}>Need Human</div>
+                          </div>
+                        </div>
+                        <div className="col-3 text-center">
+                          <div className="p-2" style={{ background: '#3b82f615', borderRadius: 6 }}>
+                            <div className="fw-bold" style={{ fontSize: 16, color: '#3b82f6' }}>{100 - hitlSummary.human_oversight}%</div>
+                            <div style={{ fontSize: 9, color: '#64748b' }}>Autonomous</div>
+                          </div>
+                        </div>
+                        <div className="col-3 text-center">
+                          <div className="p-2" style={{ background: '#8b5cf615', borderRadius: 6 }}>
+                            <div className="fw-bold" style={{ fontSize: 16, color: '#8b5cf6' }}>{hitlSummary.human_oversight}%</div>
+                            <div style={{ fontSize: 9, color: '#64748b' }}>Oversight</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-2" style={{ background: '#fef3c7', borderRadius: 6, fontSize: 11, color: '#92400e' }}>
+                        <i className="bi bi-info-circle me-1"></i>
+                        {hitlSummary.human_required} agent{hitlSummary.human_required !== 1 ? 's' : ''} require human approval for critical decisions. All others operate autonomously with monitoring.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Capabilities */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-body p-3">
+                    <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}><i className="bi bi-lightning-charge me-2" style={{ color: '#f59e0b' }}></i>System Capabilities</h6>
+                    <div className="row g-2">
+                      {capabilities.map((cap, i) => (
+                        <div key={i} className="col-6">
+                          <div className="p-2" style={{ background: '#f8fafc', borderRadius: 6, borderLeft: `2px solid ${cap.impact === 'high' ? '#10b981' : cap.impact === 'medium' ? '#f59e0b' : '#94a3b8'}` }}>
+                            <div className="d-flex align-items-center gap-1">
+                              <span className="fw-medium" style={{ fontSize: 11 }}>{cap.name}</span>
+                              <span className="badge" style={{ background: cap.impact === 'high' ? '#10b98120' : '#f1f5f9', color: cap.impact === 'high' ? '#059669' : '#64748b', fontSize: 7 }}>{cap.impact}</span>
+                            </div>
+                            <div className="text-muted" style={{ fontSize: 9 }}>{cap.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Interactive Simulation */}
+                {simScenarios.length > 0 && (
+                  <div className="card border-0 shadow-sm mb-3">
+                    <div className="card-body p-3">
+                      <div className="d-flex align-items-center justify-content-between mb-3">
+                        <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}><i className="bi bi-play-circle me-2" style={{ color: '#10b981' }}></i>Live Simulation</h6>
+                        <button className="btn btn-sm" style={{ background: simRunning ? '#ef4444' : '#10b981', color: '#fff', fontSize: 10, borderRadius: 6, fontWeight: 600, border: 'none' }}
+                          onClick={() => {
+                            if (simRunning) { setSimRunning(false); setSimEventIdx(-1); if (simTimerRef.current) clearInterval(simTimerRef.current); return; }
+                            setSimRunning(true); setSimEventIdx(0);
+                            const events = simScenarios[selectedScenario]?.events || [];
+                            let idx = 0;
+                            simTimerRef.current = setInterval(() => {
+                              idx++;
+                              if (idx >= events.length) { clearInterval(simTimerRef.current); setSimRunning(false); return; }
+                              setSimEventIdx(idx);
+                            }, 2500);
+                          }}>
+                          <i className={`bi ${simRunning ? 'bi-stop-fill' : 'bi-play-fill'} me-1`}></i>{simRunning ? 'Stop' : 'Run Simulation'}
+                        </button>
+                      </div>
+                      {/* Scenario selector */}
+                      <div className="d-flex flex-wrap gap-1 mb-3">
+                        {simScenarios.map((sc, si) => (
+                          <button key={si} className="btn btn-sm" style={{
+                            fontSize: 10, borderRadius: 6, padding: '3px 10px',
+                            background: selectedScenario === si ? '#3b82f6' : '#f1f5f9',
+                            color: selectedScenario === si ? '#fff' : '#64748b',
+                            border: 'none', fontWeight: selectedScenario === si ? 600 : 400,
+                          }} onClick={() => { setSelectedScenario(si); setSimEventIdx(-1); setSimRunning(false); if (simTimerRef.current) clearInterval(simTimerRef.current); }}>
+                            {sc.name}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-muted mb-2" style={{ fontSize: 10 }}>{simScenarios[selectedScenario]?.description}</div>
+                      {/* Events */}
+                      {(simScenarios[selectedScenario]?.events || []).map((evt, ei) => (
+                        <div key={ei} className="d-flex align-items-start gap-2 mb-2 p-2" style={{
+                          background: ei <= simEventIdx ? '#f0fdf4' : '#f8fafc', borderRadius: 6,
+                          borderLeft: ei === simEventIdx ? '3px solid #10b981' : '3px solid transparent',
+                          opacity: simRunning && ei > simEventIdx ? 0.4 : 1,
+                          transition: 'all 0.3s',
+                        }}>
+                          {ei <= simEventIdx ? <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 12, marginTop: 2 }}></i>
+                            : <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #d1d5db', marginTop: 2 }}></div>}
+                          <div>
+                            <div style={{ fontSize: 11 }}><strong>{evt.agent}</strong> <span className="text-muted" style={{ fontSize: 9 }}>({evt.department})</span></div>
+                            <div style={{ fontSize: 10, color: '#64748b' }}>{evt.action}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
               <div className="text-center py-4">
                 <div className="spinner-border text-primary mb-2" style={{ width: 28, height: 28 }}></div>
                 <p className="text-muted" style={{ fontSize: 12 }}>Loading your AI organization preview...</p>
