@@ -70,13 +70,18 @@ export default function RequirementsBuilder() {
       const saved = localStorage.getItem('requirements_builder_state');
       if (saved) {
         const state = JSON.parse(saved);
-        if (state.originalIdea) setOriginalIdea(state.originalIdea);
-        if (state.questions?.length > 0) setQuestions(state.questions);
-        if (state.currentQ) setCurrentQ(state.currentQ);
-        // Only restore phase if idea was captured (prevents skipping idea-first flow)
-        if (state.originalIdea && state.phase && state.phase !== 'loading_questions') setPhase(state.phase);
-        else if (!state.originalIdea) { /* stay at 'idea' phase */ }
-        if (state.generatedDoc) setGeneratedDoc(state.generatedDoc);
+        // Validate saved state before restoring
+        const hasIdea = state.originalIdea && state.originalIdea.trim().length > 0;
+        const hasDoc = state.generatedDoc && state.generatedDoc.trim().length > 10;
+        const validPhase = state.phase && state.phase !== 'loading_questions' && state.phase !== 'generating';
+        // Don't restore review/complete if no doc was actually generated
+        const phaseNeedsDoc = state.phase === 'review' || state.phase === 'complete';
+
+        if (hasIdea) setOriginalIdea(state.originalIdea);
+        if (state.questions?.length > 0 && hasIdea) setQuestions(state.questions);
+        if (state.currentQ && hasIdea) setCurrentQ(state.currentQ);
+        if (hasIdea && validPhase && !(phaseNeedsDoc && !hasDoc)) setPhase(state.phase);
+        if (hasDoc) setGeneratedDoc(state.generatedDoc);
       }
     } catch {}
   }, []);
