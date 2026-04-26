@@ -11,6 +11,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import portalApi from '../../utils/portalApi';
+import AgentNetworkGraph from '../../components/cory/AgentNetworkGraph';
 
 interface Agent { name: string; role: string; type: string }
 interface Department { name: string; description: string; color: string; agents: Agent[] }
@@ -311,23 +312,25 @@ export default function SystemBuildDemo() {
               </div>
             )}
 
-            {/* AI Organization */}
+            {/* AI Organization — Interactive Network Graph */}
             <div className="card border-0 shadow-sm mb-3">
               <div className="card-body p-3">
-                <h6 className="fw-bold mb-3" style={{ fontSize: 13 }}>
-                  <i className="bi bi-diagram-3 me-2" style={{ color: '#3b82f6' }}></i>Your AI Organization
-                  <span className="text-muted ms-2" style={{ fontSize: 10, fontWeight: 400 }}>{totalAgents} agents</span>
-                </h6>
-                {departments.map((dept, di) => (
-                  <div key={di} className="mb-2 p-2" style={{ background: '#f8fafc', borderRadius: 8, borderLeft: `3px solid ${dept.color}` }}>
-                    <div className="fw-semibold" style={{ fontSize: 12 }}>{dept.name}</div>
-                    <div className="d-flex flex-wrap gap-1 mt-1">
-                      {dept.agents.map((a, ai) => (
-                        <span key={ai} className="badge" style={{ background: `${dept.color}15`, color: dept.color, fontSize: 9 }}>{a.name}</span>
-                      ))}
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <h6 className="fw-bold mb-0" style={{ fontSize: 13 }}>
+                    <i className="bi bi-diagram-3 me-2" style={{ color: '#3b82f6' }}></i>Your AI Organization
+                  </h6>
+                  <span className="text-muted" style={{ fontSize: 10 }}>{totalAgents} agents · {departments.length} departments</span>
+                </div>
+                <AgentNetworkGraph departments={departments} width={640} height={400} />
+                {/* Department legend */}
+                <div className="d-flex flex-wrap gap-2 mt-2 pt-2" style={{ borderTop: '1px solid #f1f5f9' }}>
+                  {departments.map((dept, di) => (
+                    <div key={di} className="d-flex align-items-center gap-1">
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: dept.color }}></div>
+                      <span style={{ fontSize: 10, color: '#64748b' }}>{dept.name} ({dept.agents.length})</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
 
