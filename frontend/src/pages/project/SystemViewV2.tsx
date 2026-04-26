@@ -625,7 +625,7 @@ function SystemViewV2Inner() {
   const loadData = useCallback(() => {
     return Promise.all([
       portalApi.get('/api/portal/project'),
-      portalApi.get('/api/portal/project/business-processes'),
+      portalApi.get('/api/portal/project/business-processes').catch(() => ({ data: [] })),
     ]).then(([projRes, bpRes]) => {
       setProject(projRes.data);
       setComponents(transformBPs(bpRes.data || []));

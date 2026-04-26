@@ -513,7 +513,7 @@ export default function SystemBlueprint() {
   const loadData = useCallback(() => {
     return Promise.all([
       portalApi.get('/api/portal/project'),
-      portalApi.get('/api/portal/project/business-processes'),
+      portalApi.get('/api/portal/project/business-processes').catch(() => ({ data: [] })),
       portalApi.get('/api/portal/project/progress').catch(() => ({ data: null })),
       portalApi.get('/api/portal/project/cory-tasks').catch(() => ({ data: { tasks: [] } })),
     ]).then(([projRes, bpRes, progRes, coryRes]) => {
