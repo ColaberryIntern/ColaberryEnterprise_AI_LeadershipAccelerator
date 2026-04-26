@@ -32,7 +32,14 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   const bodyLower = (email.body_text || '').toLowerCase();
   const headers = email.headers || {};
 
-  // --- 0. System Alert Emails → AUTOMATION ---
+  // --- 0a. Weekly/Daily Reports from Cory → INBOX (keep visible) ---
+  if (fromLower.includes('ali@colaberry.com') && (subjectLower.includes('weekly report') || subjectLower.includes('daily report') || subjectLower.includes('cory'))) {
+    const reason = 'Cory report email - keep in INBOX';
+    console.log(`${LOG_PREFIX} Cory report: ${reason}`);
+    return { matched: true, state: 'INBOX', reason, classified_by: 'hard_rule' };
+  }
+
+  // --- 0b. System Alert Emails → AUTOMATION ---
   if (fromLower.includes('ali@colaberry.com') && /^\[alert\]/i.test(email.subject || '')) {
     const reason = 'System-generated alert email (self-sent [Alert])';
     console.log(`${LOG_PREFIX} System alert: ${reason}`);

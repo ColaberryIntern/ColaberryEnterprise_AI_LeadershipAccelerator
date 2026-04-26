@@ -46,6 +46,7 @@ import {
   runSkoolBrowserWorkerAgent,
   runSkoolSupervisorAgent,
   runSkoolNotificationResponseAgent,
+  runWeeklyReportAgent,
   runWorkforceIntelligenceAgent,
   runCompanyStrategicCycleAgent,
   runExecutiveStrategyArchitect,
@@ -169,6 +170,9 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'SkoolQualityGate', hardcodedSchedule: '11,31,51 * * * *', runner: runSkoolQualityGateAgent, label: 'Skool quality gate' },
   { agentName: 'SkoolBrowserWorker', hardcodedSchedule: '14,34,54 * * * *', runner: runSkoolBrowserWorkerAgent, label: 'Skool browser worker' },
   { agentName: 'SkoolNotificationResponse', hardcodedSchedule: '0,30 * * * *', runner: runSkoolNotificationResponseAgent, label: 'Skool notification auto-reply' },
+
+  // Weekly report (Sunday 8 AM CT = 13:00 UTC)
+  { agentName: 'WeeklyReport', hardcodedSchedule: '0 13 * * 0', runner: runWeeklyReportAgent, label: 'Weekly report email to Ali' },
 
   // Company layer agents
   { agentName: 'WorkforceIntelligence', hardcodedSchedule: '0 */6 * * *', runner: runWorkforceIntelligenceAgent, label: 'Workforce intelligence analysis' },
