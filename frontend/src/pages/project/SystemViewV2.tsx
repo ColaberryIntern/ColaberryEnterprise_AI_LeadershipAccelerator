@@ -713,6 +713,10 @@ function SystemViewV2Inner() {
 
   if (error === 'no-project') return <ProjectSetupWizard onActivated={() => window.location.reload()} />;
   if (project?.setup_status && !project.setup_status.activated) {
+    if ((project.setup_status as any).architect_slug) {
+      window.location.href = '/portal/project/demo';
+      return <div className="text-center py-5"><div className="spinner-border text-primary"></div></div>;
+    }
     return <ProjectSetupWizard initialStatus={project.setup_status} onActivated={() => window.location.reload()} />;
   }
   if (error || !project) {

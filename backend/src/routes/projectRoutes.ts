@@ -403,6 +403,95 @@ router.post('/api/portal/project/refresh', requireParticipant, async (req: Reque
  * Start requirements document generation job.
  */
 // ─── AI Expansion Questions: generate idea-specific capability questions ────────
+// ─── Architect Build: start full requirements generation via advisor.colaberry.ai ────
+router.post('/api/portal/project/architect-build', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { idea, projectName, repoUrl, accessToken } = req.body;
+    if (!idea || !repoUrl) { res.status(400).json({ error: 'idea and repoUrl required' }); return; }
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+
+    // 1. Save GitHub connection
+    const { connectGitHub } = await import('../services/projectSetupService');
+    await connectGitHub(req.participant!.sub, repoUrl.trim(), accessToken?.trim() || undefined);
+
+    // 2. Start Architect build
+    const { startArchitectBuild } = await import('../services/architectProxyService');
+    const name = projectName || (project as any).organization_name || 'AI System';
+    const { slug } = await startArchitectBuild(name, idea);
+
+    // 3. Save build state
+    const currentStatus = (project as any).setup_status || {};
+    (project as any).setup_status = {
+      ...currentStatus,
+      github_connected: true,
+      architect_slug: slug,
+      build_started_at: new Date().toISOString(),
+      build_idea: idea,
+    };
+    (project as any).changed('setup_status', true);
+    await project.save();
+
+    res.json({ slug, status: 'building' });
+  } catch (err: any) {
+    console.error('[ArchitectBuild] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Architect Status: poll build progress ────
+router.get('/api/portal/project/architect-status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const slug = (project as any).setup_status?.architect_slug;
+    if (!slug) { res.json({ phase: 'not_started', progress: 0, complete: false, message: 'No build in progress' }); return; }
+
+    const { getArchitectStatus, getArchitectDocument } = await import('../services/architectProxyService');
+    const status = await getArchitectStatus(slug);
+
+    // If complete, fetch document and save to project
+    if (status.complete && !(project as any).setup_status?.requirements_loaded) {
+      try {
+        const document = await getArchitectDocument(slug);
+        if (document && document.length > 100) {
+          (project as any).requirements_document = document;
+          const currentStatus = (project as any).setup_status || {};
+          (project as any).setup_status = { ...currentStatus, requirements_loaded: true };
+          (project as any).changed('setup_status', true);
+          (project as any).changed('requirements_document', true);
+          await project.save();
+
+          // Auto-activate
+          try {
+            const { activateProject } = await import('../services/projectSetupService');
+            activateProject(req.participant!.sub).catch(e => console.warn('[ArchitectStatus] Activation error:', e.message));
+          } catch {}
+        }
+      } catch (docErr: any) {
+        console.warn('[ArchitectStatus] Document fetch error:', docErr.message);
+      }
+    }
+
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Build Preview: quick AI org preview from idea ────
+router.post('/api/portal/project/build-preview', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { idea } = req.body;
+    if (!idea) { res.status(400).json({ error: 'idea required' }); return; }
+    const { generateSystemPreview } = await import('../services/buildPreviewService');
+    const preview = await generateSystemPreview(idea);
+    res.json(preview);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/api/portal/project/requirements/expand-questions', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { idea } = req.body;
