@@ -144,17 +144,22 @@ export default function RequirementsBuilder() {
     try {
       const res = await portalApi.post('/api/portal/project/requirements/generate', {
         mode: 'professional',
-        additional_context: `ORIGINAL IDEA:\n${originalIdea}\n\nDESIRED CAPABILITIES:\n${capText}\n\nGenerate comprehensive requirements covering the original idea and all selected capabilities.`,
+        user_prompt: `ORIGINAL IDEA:\n${originalIdea}\n\nDESIRED CAPABILITIES:\n${capText}\n\nGenerate comprehensive requirements covering the original idea and all selected capabilities. The requirements document should be at least 6000 words and cover functional requirements, non-functional requirements, system architecture, data models, API specifications, and user interface requirements.`,
       });
       const jid = res.data.job_id;
+      if (!jid) { setError('No job ID returned — generation may not have started'); setPhase('questions'); return; }
       setJobId(jid);
+      setProgressMsg('Job started — generating your requirements document...');
 
+      let pollCount = 0;
       pollRef.current = setInterval(async () => {
+        pollCount++;
         try {
           const s = (await portalApi.get(`/api/portal/project/requirements/job/${jid}`)).data;
           if (s.status === 'completed') {
             clearInterval(pollRef.current);
-            setGeneratedDoc(s.result?.content || s.result?.document || '');
+            const doc = s.result?.content || s.result?.document || s.result || '';
+            setGeneratedDoc(typeof doc === 'string' ? doc : JSON.stringify(doc, null, 2));
             setPhase('review');
             setStage('review');
             setProgress(92);
@@ -163,12 +168,20 @@ export default function RequirementsBuilder() {
             setError(s.error || 'Generation failed');
             setPhase('questions');
           } else {
-            const pct = s.progress || 50;
-            setProgress(Math.min(pct, 89));
-            setProgressMsg(s.message || 'Generating requirements...');
+            const pct = s.progress || Math.min(42 + pollCount * 3, 89);
+            setProgress(pct);
+            setProgressMsg(s.message || `Generating requirements... (${Math.round(pct)}%)`);
             setStage(pct < 55 ? 'outline' : pct < 75 ? 'sections' : 'refinement');
           }
-        } catch {}
+        } catch (pollErr: any) {
+          console.warn('[RequirementsBuilder] Poll error:', pollErr?.message);
+        }
+        // Timeout after 10 minutes
+        if (pollCount > 200) {
+          clearInterval(pollRef.current);
+          setError('Generation timed out after 10 minutes. Please try again.');
+          setPhase('questions');
+        }
       }, 3000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to start generation');
