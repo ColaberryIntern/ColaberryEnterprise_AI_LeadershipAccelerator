@@ -45,25 +45,35 @@ function PortalLayout() {
             <span className="navbar-toggler-icon"></span>
           </button>
           <div className="collapse navbar-collapse" id="portalNav">
-            <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-              {navItems.map((item) => (
-                <li className="nav-item" key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    end
-                    className={({ isActive }) =>
-                      `nav-link ${isActive ? 'fw-semibold' : ''}`
-                    }
-                    style={({ isActive }) => ({
-                      color: isActive ? 'var(--color-primary)' : 'var(--color-text-light)',
-                    })}
-                  >
-                    <i className={`bi ${item.icon} me-1`}></i>
-                    {item.label}
-                  </NavLink>
+            {window.location.pathname.includes('/demo') ? (
+              <ul className="navbar-nav me-auto mb-2 mb-lg-0">
+                <li className="nav-item">
+                  <span className="nav-link" style={{ color: '#94a3b8', fontSize: 12 }}>
+                    <i className="bi bi-lock me-1"></i>Building your system...
+                  </span>
                 </li>
-              ))}
-            </ul>
+              </ul>
+            ) : (
+              <ul className="navbar-nav me-auto mb-2 mb-lg-0">
+                {navItems.map((item) => (
+                  <li className="nav-item" key={item.to}>
+                    <NavLink
+                      to={item.to}
+                      end
+                      className={({ isActive }) =>
+                        `nav-link ${isActive ? 'fw-semibold' : ''}`
+                      }
+                      style={({ isActive }) => ({
+                        color: isActive ? 'var(--color-primary)' : 'var(--color-text-light)',
+                      })}
+                    >
+                      <i className={`bi ${item.icon} me-1`}></i>
+                      {item.label}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            )}
             <button
               className="btn btn-outline-secondary btn-sm"
               onClick={handleLogout}
