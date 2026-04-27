@@ -942,10 +942,12 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         )}
 
         {/* 8: Enhancement Prompt Builder (execution steps + autonomy gaps combined) */}
-        <Section num={8} title="Enhancement Prompt Builder">
+        <Section num={8} title={p.next_action_kind === 'enhance' ? 'Improvement Options' : p.next_action_kind === 'done' ? 'Status' : 'Enhancement Prompt Builder'}>
           <EnhancementPromptBuilder
             executionPlan={p.execution_plan || []}
             autonomyGaps={p.autonomy_gaps || []}
+            enhancementPlan={p.enhancement_plan || []}
+            nextActionKind={p.next_action_kind}
             processId={processId}
             processName={p.name}
             onPreview={(type, label) => setPredictionAction({ type, label })}

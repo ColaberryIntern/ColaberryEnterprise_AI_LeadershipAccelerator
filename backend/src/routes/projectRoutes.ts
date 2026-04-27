@@ -1539,10 +1539,25 @@ function enrichCapability(cap: any) {
     verifiedCount: allReqsFlat.filter((r: any) => r.status === 'verified').length,
     totalRequirements: totalR,
   };
-  // Only use USER-DRIVEN completed steps (from copying prompts), NOT repo state
-  // The engine sanitizes these — invalid keys (old bugs) are ignored
+  // Compute the *authoritative* set of completed step keys.
+  // Prior versions trusted only `last_execution.completed_steps`, which is updated
+  // when the user copies a prompt — but it ignores work tracked via validation
+  // reports or layers that already exist in the repo. That drift caused the
+  // "next step" surfaces to keep recommending finished work. We now union three
+  // signals: explicit user completions, derived system-layer presence, and
+  // requirement coverage thresholds — the same signals the rest of the
+  // enrichment already uses.
   const lastExec = (cap as any).last_execution;
-  const completedSteps: string[] = lastExec?.completed_steps || [];
+  const explicitlyCompleted: string[] = lastExec?.completed_steps || [];
+  const completedSet = new Set<string>(explicitlyCompleted);
+  if (hasBackend || projectHasBackend) completedSet.add('build_backend');
+  if (hasFrontend || projectHasFrontend) completedSet.add('add_frontend');
+  if (hasAgents || projectHasAgents) completedSet.add('add_agents');
+  if ((combinedModelFiles.length > 0) || projectHasModels) completedSet.add('add_database');
+  if (reqCoverage >= 95) completedSet.add('implement_requirements');
+  if ((q.reliability || 0) >= 7) completedSet.add('improve_reliability');
+  if ((q.production_readiness || 0) >= 7) completedSet.add('optimize_performance');
+  const completedSteps: string[] = Array.from(completedSet);
   const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
   // Resolve effective mode: BP override > Campaign override > Project target_mode > 'production'
   const { resolveMode, getModeSource } = require('../intelligence/profiles/modeResolver');
@@ -1943,6 +1958,136 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// ---------------------------------------------------------------------------
+// Enhancement Plan
+// ---------------------------------------------------------------------------
+// When a BP has nothing left to BUILD (execution_plan empty + processComplete),
+// users still need a forward path. This helper turns the BP's quality scores,
+// autonomy gaps, and missing intelligence/automation signals into a list of
+// concrete enhancement options the four tabs can render uniformly.
+interface EnhancementOption {
+  key: string;
+  label: string;
+  description: string;
+  impact: string;
+  prompt_target: string;
+  category: 'agent' | 'observability' | 'reliability' | 'performance' | 'frontend' | 'backend' | 'autonomy_gap' | 'reporting' | 'intelligence';
+  source: 'autonomy_gap' | 'quality' | 'system';
+  severity: number;
+  gap_id?: string;
+  gap_type?: string;
+  suggested_agent?: any;
+}
+
+function buildEnhancementPlan(enriched: any, autonomyGaps: any[]): EnhancementOption[] {
+  const q = enriched.quality || {};
+  const u = enriched.usability || {};
+  const options: EnhancementOption[] = [];
+
+  for (const g of autonomyGaps) {
+    const target = g.suggested_category === 'agent'
+      ? 'agent_enhancement'
+      : g.suggested_category === 'frontend'
+        ? 'frontend_exposure'
+        : g.suggested_category === 'intelligence'
+          ? 'optimize_performance'
+          : 'backend_improvement';
+    options.push({
+      key: `gap-${g.gap_id}`,
+      label: g.title,
+      description: g.description || '',
+      impact: g.gap_type === 'intelligence'
+        ? '+intelligence, +automation'
+        : g.gap_type === 'reporting'
+          ? '+visibility, +stakeholder confidence'
+          : g.gap_type === 'optimization'
+            ? '+performance, +feedback loops'
+            : '+observability, +autonomy',
+      prompt_target: target,
+      category: 'autonomy_gap',
+      source: 'autonomy_gap',
+      severity: g.severity || 5,
+      gap_id: g.gap_id,
+      gap_type: g.gap_type,
+      suggested_agent: g.suggested_agent || null,
+    });
+  }
+
+  if ((q.observability || 0) < 7) {
+    options.push({
+      key: 'quality-observability',
+      label: 'Improve observability and monitoring',
+      description: `Observability score is ${q.observability || 0}/10. Stronger logging, metrics, and alerting catch issues before they cascade.`,
+      impact: '+monitoring, +reliability',
+      prompt_target: 'monitoring_gap',
+      category: 'observability',
+      source: 'quality',
+      severity: 10 - (q.observability || 0),
+    });
+  }
+  if ((q.reliability || 0) < 7) {
+    options.push({
+      key: 'quality-reliability',
+      label: 'Strengthen reliability and error handling',
+      description: `Reliability score is ${q.reliability || 0}/10. Add retries, validation at API boundaries, and graceful failure paths.`,
+      impact: '+stability, +production confidence',
+      prompt_target: 'improve_reliability',
+      category: 'reliability',
+      source: 'quality',
+      severity: 10 - (q.reliability || 0),
+    });
+  }
+  if ((q.production_readiness || 0) < 8) {
+    options.push({
+      key: 'quality-performance',
+      label: 'Optimize performance and scalability',
+      description: `Production readiness is ${q.production_readiness || 0}/10. Add caching, indexes, and pagination to handle real load.`,
+      impact: '+speed, +scale',
+      prompt_target: 'optimize_performance',
+      category: 'performance',
+      source: 'quality',
+      severity: 10 - (q.production_readiness || 0),
+    });
+  }
+  if ((q.automation || 0) < 7 && (u.backend === 'ready' || u.backend === 'partial')) {
+    options.push({
+      key: 'quality-automation',
+      label: 'Add automation agents',
+      description: `Automation score is ${q.automation || 0}/10. Backend exists — add agents to remove manual steps and enable self-managing operation.`,
+      impact: '+autonomy, +intelligence',
+      prompt_target: 'agent_enhancement',
+      category: 'agent',
+      source: 'quality',
+      severity: 10 - (q.automation || 0),
+    });
+  }
+  if ((q.determinism || 0) < 6) {
+    options.push({
+      key: 'quality-determinism',
+      label: 'Move logic from LLMs to deterministic code',
+      description: `Determinism score is ${q.determinism || 0}/10. Promote stable behaviour by replacing LLM calls with rules where possible.`,
+      impact: '+predictability, +cost reduction',
+      prompt_target: 'backend_improvement',
+      category: 'backend',
+      source: 'quality',
+      severity: 10 - (q.determinism || 0),
+    });
+  }
+
+  options.sort((a, b) => b.severity - a.severity);
+
+  // Dedupe by prompt_target+category — keep highest severity
+  const seen = new Set<string>();
+  const deduped: EnhancementOption[] = [];
+  for (const o of options) {
+    const dedupeKey = `${o.prompt_target}:${o.category}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    deduped.push(o);
+  }
+  return deduped.slice(0, 8);
+}
+
 router.get('/api/portal/project/business-processes/:id', requireParticipant, async (req: Request, res: Response) => {
   try {
     const { getProjectByEnrollment } = await import('../services/projectService');
@@ -2035,9 +2180,29 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
         .map(g => ({ gap_id: g.gap_id, gap_type: g.gap_type, title: g.title, description: g.description, severity: g.severity, suggested_category: g.suggested_category, suggested_agent: g.suggested_agent || null }));
     } catch { /* non-critical — gaps are supplementary */ }
 
+    // Defense-in-depth: filter out any execution_plan items that are tagged completed.
+    // The step generator already drops these, but we also strip them here so any
+    // legacy callers that bypass the generator stay consistent.
+    const pendingExecutionPlan = (enriched.execution_plan || []).filter(
+      (s: any) => !s.status || s.status === 'pending',
+    );
+    const enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps);
+    const isComplete = !!enriched.is_complete;
+    const nextActionKind: 'build' | 'enhance' | 'done' =
+      pendingExecutionPlan.length > 0
+        ? 'build'
+        : enhancementPlan.length > 0
+          ? 'enhance'
+          : isComplete
+            ? 'done'
+            : 'build';
+
     res.json({
       ...enriched,
+      execution_plan: pendingExecutionPlan,
       autonomy_gaps: autonomyGaps,
+      enhancement_plan: enhancementPlan,
+      next_action_kind: nextActionKind,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
       preview_url: (() => {
         const baseUrl = (project as any).portfolio_url;

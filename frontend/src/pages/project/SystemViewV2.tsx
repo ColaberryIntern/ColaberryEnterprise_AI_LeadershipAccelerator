@@ -473,6 +473,67 @@ function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: {
 // System View V2 Page
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Enhancement Card extraction
+// ---------------------------------------------------------------------------
+// When the BP detail endpoint reports next_action_kind === 'enhance', the four
+// tabs (Overview / Build / Health / Improve) all need to surface the same
+// list of improvement options instead of their own per-tab "next step"
+// composition (which can repeat already-completed work). This helper turns
+// the backend-supplied enhancement_plan into a primary card + up-next pair
+// that every tab renders identically.
+type EnhanceCardItem = {
+  title: string;
+  explanation: string;
+  color: string;
+  promptTarget: string;
+  gapType?: string;
+  severity: number;
+  source: string;
+};
+type EnhanceCardSet = {
+  isEnhance: boolean;
+  isDone: boolean;
+  primary: EnhanceCardItem | null;
+  upNext: EnhanceCardItem[];
+  items: EnhanceCardItem[];
+};
+
+function getEnhanceCards(compDetail: any): EnhanceCardSet {
+  const kind: string | undefined = compDetail?.next_action_kind;
+  const enhancements: any[] = compDetail?.enhancement_plan || [];
+  const empty: EnhanceCardSet = { isEnhance: false, isDone: false, primary: null, upNext: [], items: [] };
+
+  if (kind === 'done') return { ...empty, isDone: true };
+  if (kind !== 'enhance') return empty;
+  if (enhancements.length === 0) return { ...empty, isDone: true };
+
+  const colorFor = (e: any) => {
+    if (e.category === 'agent' || e.category === 'autonomy_gap' || e.category === 'intelligence') return '#8b5cf6';
+    if (e.category === 'frontend' || e.category === 'reporting') return '#10b981';
+    if (e.category === 'observability' || e.category === 'reliability' || e.category === 'performance') return '#f59e0b';
+    return '#3b82f6';
+  };
+
+  const items: EnhanceCardItem[] = enhancements.map((e: any) => ({
+    title: e.label,
+    explanation: e.description,
+    color: colorFor(e),
+    promptTarget: e.prompt_target,
+    gapType: e.gap_type,
+    severity: e.severity || 0,
+    source: e.source || 'system',
+  }));
+
+  return {
+    isEnhance: true,
+    isDone: false,
+    primary: items[0] || null,
+    upNext: items.slice(1, 3),
+    items,
+  };
+}
+
 // Error boundary for debugging
 class V2ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: string | null }> {
   state = { error: null as string | null };
@@ -1290,12 +1351,36 @@ function SystemViewV2Inner() {
                     </div>
 
                     {(() => {
-                      // Use orchestrator output if available, fall back to local suggestions
-                      const coryTasks: Array<{ id: string; title: string; description: string; source: string; color: string; prompt_target?: string; blocked?: boolean; block_reason?: string; priority?: number; decision_trace?: any }> = compDetail?.cory_tasks || [];
-                      const fallbackSuggestions = getComponentSuggestions(selectedComponent, compDetail);
-                      const tasks = coryTasks.length > 0
-                        ? coryTasks.map(t => ({ title: t.title, explanation: t.description, color: t.color, action: t.prompt_target, source: t.source, blocked: t.blocked, blockReason: t.block_reason, trace: t.decision_trace }))
-                        : fallbackSuggestions.map(s => ({ ...s, explanation: s.explanation, source: 'build' as string, blocked: false, blockReason: undefined, trace: undefined }));
+                      // When the backend reports the BP is in 'enhance' or 'done' mode,
+                      // bypass the orchestrator output (which can recommend already-built
+                      // categories) and surface the unified enhancement_plan instead. This
+                      // keeps every tab's "next step" pointing at NEW work.
+                      const enhanceCards = getEnhanceCards(compDetail);
+
+                      let tasks: Array<{ title: string; explanation: string; color: string; action?: string; source: string; blocked?: boolean; blockReason?: string; trace?: any }>;
+                      let usingOrchestrator = false;
+                      if (enhanceCards.isEnhance) {
+                        tasks = enhanceCards.items.map(item => ({
+                          title: item.title,
+                          explanation: item.explanation,
+                          color: item.color,
+                          action: item.promptTarget,
+                          source: 'improve',
+                          blocked: false,
+                          blockReason: undefined,
+                          trace: undefined,
+                        }));
+                      } else if (enhanceCards.isDone) {
+                        tasks = [];
+                      } else {
+                        // Build mode — use orchestrator output if available, fall back to local suggestions
+                        const coryTasks: Array<{ id: string; title: string; description: string; source: string; color: string; prompt_target?: string; blocked?: boolean; block_reason?: string; priority?: number; decision_trace?: any }> = compDetail?.cory_tasks || [];
+                        const fallbackSuggestions = getComponentSuggestions(selectedComponent, compDetail);
+                        usingOrchestrator = coryTasks.length > 0;
+                        tasks = usingOrchestrator
+                          ? coryTasks.map(t => ({ title: t.title, explanation: t.description, color: t.color, action: t.prompt_target, source: t.source, blocked: t.blocked, blockReason: t.block_reason, trace: t.decision_trace }))
+                          : fallbackSuggestions.map(s => ({ ...s, explanation: s.explanation, source: 'build' as string, blocked: false, blockReason: undefined, trace: undefined }));
+                      }
                       const primary = tasks[0];
                       const upNext = tasks.slice(1);
                       const SOURCE_LABELS: Record<string, { label: string; bg: string; color: string }> = {
@@ -1308,7 +1393,8 @@ function SystemViewV2Inner() {
                         <>
                           <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>
                             Step 1 of {tasks.length} for {selectedComponent.name}
-                            {coryTasks.length > 0 && <span className="ms-2 badge" style={{ background: '#3b82f610', color: '#94a3b8', fontSize: 7 }}>Orchestrated</span>}
+                            {usingOrchestrator && <span className="ms-2 badge" style={{ background: '#3b82f610', color: '#94a3b8', fontSize: 7 }}>Orchestrated</span>}
+                            {enhanceCards.isEnhance && <span className="ms-2 badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 7 }}>Improvement Mode</span>}
                           </div>
                           <div className="d-flex align-items-center gap-2 mb-1">
                             <h6 className="fw-bold mb-0" style={{ fontSize: 15 }}>{primary.title}</h6>
@@ -1331,8 +1417,11 @@ function SystemViewV2Inner() {
 
                           {!primary.blocked && (
                             <div className="d-flex flex-wrap gap-2 mb-3">
-                              <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => { setWorkTab('build'); if (primary.action) handleGeneratePrompt(selectedComponent); }}>
-                                <i className="bi bi-terminal me-1"></i>{primary.action ? 'Generate Build Prompt' : 'Go to Build'}
+                              <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => {
+                                setWorkTab('build');
+                                if (primary.action) handleGeneratePrompt({ ...selectedComponent, promptTarget: primary.action });
+                              }}>
+                                <i className={`bi ${enhanceCards.isEnhance ? 'bi-stars' : 'bi-terminal'} me-1`}></i>{enhanceCards.isEnhance ? 'Run Improvement' : (primary.action ? 'Generate Build Prompt' : 'Go to Build')}
                               </button>
                               <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                                 <i className="bi bi-book me-1"></i>Learn About This
@@ -1376,7 +1465,10 @@ function SystemViewV2Inner() {
                                           <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
                                             <i className="bi bi-book"></i>
                                           </button>
-                                          <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => { setWorkTab('build'); handleGeneratePrompt(selectedComponent); }}>
+                                          <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => {
+                                            setWorkTab('build');
+                                            handleGeneratePrompt(s.action ? { ...selectedComponent, promptTarget: s.action } : selectedComponent);
+                                          }}>
                                             Run
                                           </button>
                                         </div>
@@ -1388,6 +1480,14 @@ function SystemViewV2Inner() {
                             </div>
                           )}
                         </>
+                      ) : enhanceCards.isDone ? (
+                        <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#059669' }}>Fully built and improved</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>No enhancements pending for {selectedComponent.name}. Pick another BP from the grid above to keep moving forward.</p>
+                        </div>
                       ) : (
                         <p className="text-muted" style={{ fontSize: 12 }}>This component is on track — no immediate recommendations.</p>
                       );
@@ -1411,7 +1511,80 @@ function SystemViewV2Inner() {
               {/* ── TAB: Build ── */}
               {workTab === 'build' && (
                 <div>
-                  {!buildPrompt && !buildGenerating && (
+                  {!buildPrompt && !buildGenerating && (() => {
+                    // If the BP is in enhance/done mode, surface improvement options
+                    // here too. The user opened the Build tab expecting forward motion —
+                    // never re-show finished build steps.
+                    const enhanceCards = getEnhanceCards(compDetail);
+                    if (enhanceCards.isDone) {
+                      return (
+                        <div>
+                          <div className="d-flex align-items-center gap-2 mb-3">
+                            <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#059669' }}>Fully built and improved</h6>
+                          </div>
+                          <p className="text-muted" style={{ fontSize: 12 }}>No build or improvement work pending for {selectedComponent.name}. Pick another BP from the grid above to keep moving forward.</p>
+                        </div>
+                      );
+                    }
+                    if (enhanceCards.isEnhance && enhanceCards.primary) {
+                      const e = enhanceCards.primary;
+                      return (
+                        <div>
+                          <div className="d-flex align-items-center gap-2 mb-3">
+                            <i className="bi bi-rocket-takeoff" style={{ color: '#8b5cf6', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#8b5cf6' }}>Cory — Run Next Improvement</h6>
+                          </div>
+                          <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Improvement 1 of {Math.min(enhanceCards.items.length, 3)} for {selectedComponent.name}</div>
+                          <h6 className="fw-bold mb-1" style={{ fontSize: 15, color: 'var(--color-text)' }}>{e.title}</h6>
+                          <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>{e.explanation}</p>
+                          <div className="d-flex flex-wrap gap-2 mb-3">
+                            <span className="badge" style={{ background: `${e.color}20`, color: e.color, fontSize: 9 }}>{e.gapType || 'enhancement'}</span>
+                            <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>Severity: {e.severity}/10</span>
+                          </div>
+                          <div className="d-flex flex-wrap gap-2 mb-3">
+                            <button className="btn btn-sm" style={{ background: e.color, color: '#fff', fontWeight: 600, fontSize: 12 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt({ ...selectedComponent, promptTarget: e.promptTarget })}>
+                              <i className="bi bi-stars me-1"></i>Run Improvement
+                            </button>
+                            <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
+                              <i className="bi bi-book me-1"></i>Learn About This
+                            </button>
+                          </div>
+                          {enhanceCards.upNext.length > 0 && (
+                            <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                              <button className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-2 w-100" style={{ fontSize: 12, color: '#64748b' }} onClick={() => setShowBuildUpNext(!showBuildUpNext)}>
+                                <i className={`bi ${showBuildUpNext ? 'bi-chevron-down' : 'bi-chevron-right'}`} style={{ fontSize: 10 }}></i>
+                                <span>Up next ({enhanceCards.upNext.length} more improvement{enhanceCards.upNext.length > 1 ? 's' : ''})</span>
+                              </button>
+                              {showBuildUpNext && (
+                                <div className="mt-2">
+                                  {enhanceCards.upNext.map((s, i) => (
+                                    <div key={s.promptTarget + i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, borderLeft: `3px solid ${s.color}` }}>
+                                      <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: `${s.color}20`, color: s.color, fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
+                                      <div className="flex-grow-1">
+                                        <div className="fw-medium" style={{ fontSize: 11 }}>{s.title}</div>
+                                        <div className="text-muted" style={{ fontSize: 9 }}>{s.explanation}</div>
+                                      </div>
+                                      <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                                        <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
+                                          <i className="bi bi-book"></i>
+                                        </button>
+                                        <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => handleGeneratePrompt({ ...selectedComponent, promptTarget: s.promptTarget })}>
+                                          Run
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // Default build flow
+                    return (
                     <div>
                       {/* Cory — Your Next Step (matches Blueprint exactly) */}
                       <div className="d-flex align-items-center gap-2 mb-3">
@@ -1421,7 +1594,7 @@ function SystemViewV2Inner() {
 
                       {/* Step counter */}
                       {(() => {
-                        const execSteps = (compDetail?.execution_plan || []).filter((s: any) => !s.blocked);
+                        const execSteps = (compDetail?.execution_plan || []).filter((s: any) => !s.blocked && (!s.status || s.status === 'pending'));
                         return execSteps.length > 0 ? (
                           <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {Math.min(execSteps.length, 3)} for {selectedComponent.name}</div>
                         ) : null;
@@ -1501,7 +1674,8 @@ function SystemViewV2Inner() {
                         );
                       })()}
                     </div>
-                  )}
+                    );
+                  })()}
                   {buildGenerating && <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: 12 }}><span className="spinner-border spinner-border-sm"></span>Generating prompt...</div>}
                   {buildPrompt && (
                     <div>
@@ -1658,23 +1832,45 @@ function SystemViewV2Inner() {
 
                   {/* Primary improvement recommendation */}
                   {(() => {
-                    const healthSteps: Array<{ title: string; explanation: string; color: string }> = [];
-                    const q = compDetail?.quality;
-                    if (q) {
-                      if ((q.determinism || 0) < 3) healthSteps.push({ title: 'Improve determinism', explanation: 'Move logic from LLM responses to deterministic code paths for reliability.', color: '#3b82f6' });
-                      if ((q.reliability || 0) < 3) healthSteps.push({ title: 'Add error handling and retry logic', explanation: 'Improve graceful failure recovery and data persistence guarantees.', color: '#3b82f6' });
-                      if ((q.observability || 0) < 3) healthSteps.push({ title: 'Add monitoring and logging', explanation: 'No observability detected — add structured logging, metrics, and alerting.', color: '#3b82f6' });
-                      if ((q.ux_exposure || 0) < 3 && selectedComponent.layers.frontend !== 'missing') healthSteps.push({ title: 'Improve user interface coverage', explanation: 'Frontend exists but UX exposure is low — expand page functionality.', color: '#10b981' });
-                      if ((q.automation || 0) < 3 && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add automation agents', explanation: 'Manual operation detected — add agents for self-managing behavior.', color: '#8b5cf6' });
-                      if ((q.production_readiness || 0) < 5) healthSteps.push({ title: 'Improve production readiness', explanation: 'System is not production-ready — address missing layers and quality gaps.', color: '#f59e0b' });
+                    // When the BP is in 'enhance' or 'done' mode, surface the unified
+                    // enhancement_plan (which already excludes finished work) instead of
+                    // re-deriving from quality scores — those scores can flag generic
+                    // health items even after the user has fixed them.
+                    const enhanceCards = getEnhanceCards(compDetail);
+                    const healthSteps: Array<{ title: string; explanation: string; color: string; promptTarget?: string }> = [];
+
+                    if (enhanceCards.isDone) {
+                      return (
+                        <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#059669' }}>All quality dimensions are healthy</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.name} has nothing pending across reliability, observability, or performance. Pick another BP to keep moving forward.</p>
+                        </div>
+                      );
                     }
-                    // Add layer gaps
-                    if (selectedComponent.layers.backend === 'missing') healthSteps.unshift({ title: 'Build backend services', explanation: 'No backend layer detected — this is the most critical gap.', color: '#ef4444' });
-                    if (selectedComponent.layers.frontend === 'missing' && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add frontend layer', explanation: 'Backend exists but no user interface — users cannot interact.', color: '#ef4444' });
-                    // Add detected autonomy gaps
-                    (compDetail?.autonomy_gaps || []).slice(0, 2).forEach((g: any) => {
-                      if (!healthSteps.find(s => s.title === g.title)) healthSteps.push({ title: g.title, explanation: g.description?.substring(0, 120) || 'Detected gap', color: '#8b5cf6' });
-                    });
+
+                    if (enhanceCards.isEnhance) {
+                      for (const item of enhanceCards.items) {
+                        healthSteps.push({ title: item.title, explanation: item.explanation, color: item.color, promptTarget: item.promptTarget });
+                      }
+                    } else {
+                      const q = compDetail?.quality;
+                      if (q) {
+                        if ((q.determinism || 0) < 3) healthSteps.push({ title: 'Improve determinism', explanation: 'Move logic from LLM responses to deterministic code paths for reliability.', color: '#3b82f6', promptTarget: 'backend_improvement' });
+                        if ((q.reliability || 0) < 3) healthSteps.push({ title: 'Add error handling and retry logic', explanation: 'Improve graceful failure recovery and data persistence guarantees.', color: '#3b82f6', promptTarget: 'improve_reliability' });
+                        if ((q.observability || 0) < 3) healthSteps.push({ title: 'Add monitoring and logging', explanation: 'No observability detected — add structured logging, metrics, and alerting.', color: '#3b82f6', promptTarget: 'monitoring_gap' });
+                        if ((q.ux_exposure || 0) < 3 && selectedComponent.layers.frontend !== 'missing') healthSteps.push({ title: 'Improve user interface coverage', explanation: 'Frontend exists but UX exposure is low — expand page functionality.', color: '#10b981', promptTarget: 'frontend_exposure' });
+                        if ((q.automation || 0) < 3 && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add automation agents', explanation: 'Manual operation detected — add agents for self-managing behavior.', color: '#8b5cf6', promptTarget: 'agent_enhancement' });
+                        if ((q.production_readiness || 0) < 5) healthSteps.push({ title: 'Improve production readiness', explanation: 'System is not production-ready — address missing layers and quality gaps.', color: '#f59e0b', promptTarget: 'optimize_performance' });
+                      }
+                      if (selectedComponent.layers.backend === 'missing') healthSteps.unshift({ title: 'Build backend services', explanation: 'No backend layer detected — this is the most critical gap.', color: '#ef4444', promptTarget: 'backend_improvement' });
+                      if (selectedComponent.layers.frontend === 'missing' && selectedComponent.layers.backend !== 'missing') healthSteps.push({ title: 'Add frontend layer', explanation: 'Backend exists but no user interface — users cannot interact.', color: '#ef4444', promptTarget: 'frontend_exposure' });
+                      (compDetail?.autonomy_gaps || []).slice(0, 2).forEach((g: any) => {
+                        if (!healthSteps.find(s => s.title === g.title)) healthSteps.push({ title: g.title, explanation: g.description?.substring(0, 120) || 'Detected gap', color: '#8b5cf6' });
+                      });
+                    }
 
                     const primary = healthSteps[0];
                     const upNext = healthSteps.slice(1, 3);
@@ -1688,8 +1884,8 @@ function SystemViewV2Inner() {
                         <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
 
                         <div className="d-flex flex-wrap gap-2 mb-3">
-                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(selectedComponent)}>
-                            <i className="bi bi-terminal me-1"></i>Generate Fix Prompt
+                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(primary.promptTarget ? { ...selectedComponent, promptTarget: primary.promptTarget } : selectedComponent)}>
+                            <i className={`bi ${enhanceCards.isEnhance ? 'bi-stars' : 'bi-terminal'} me-1`}></i>{enhanceCards.isEnhance ? 'Run Improvement' : 'Generate Fix Prompt'}
                           </button>
                           <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                             <i className="bi bi-book me-1"></i>Learn About This
@@ -1715,7 +1911,7 @@ function SystemViewV2Inner() {
                                       <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
                                         <i className="bi bi-book"></i>
                                       </button>
-                                      <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => handleGeneratePrompt(selectedComponent)}>
+                                      <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => handleGeneratePrompt(s.promptTarget ? { ...selectedComponent, promptTarget: s.promptTarget } : selectedComponent)}>
                                         Run
                                       </button>
                                     </div>
@@ -1740,26 +1936,41 @@ function SystemViewV2Inner() {
                   </div>
 
                   {(() => {
-                    // Build improvement steps — mix of prerequisites (blue) and autonomy gaps (purple)
-                    const improveSteps: Array<{ title: string; explanation: string; color: string; gapType?: string }> = [];
-                    const hasBackend = selectedComponent.layers.backend !== 'missing';
-                    const hasFrontend = selectedComponent.layers.frontend !== 'missing';
+                    if (loadingDetail) return <div className="text-muted" style={{ fontSize: 11 }}><span className="spinner-border spinner-border-sm me-1"></span>Analyzing...</div>;
 
-                    // Prerequisites first (blue)
-                    if (!hasBackend) improveSteps.push({ title: 'Build backend services', explanation: 'Backend is missing — build services and routes before adding AI automation.', color: '#3b82f6' });
-                    if (hasBackend && !hasFrontend) improveSteps.push({ title: 'Add frontend layer', explanation: 'Frontend is missing — add a user interface before optimizing with AI.', color: '#10b981' });
-
-                    // Autonomy gaps (purple)
-                    (compDetail?.autonomy_gaps || []).slice(0, 4).forEach((g: any) => {
-                      improveSteps.push({ title: g.title, explanation: g.description?.substring(0, 150) || 'Autonomy gap — addressing this moves toward self-managing operation.', color: '#8b5cf6', gapType: g.gap_type });
-                    });
-
-                    // If no gaps, suggest agent enhancement
-                    if (improveSteps.length === 0 && selectedComponent.layers.agent === 'missing' && hasBackend && hasFrontend) {
-                      improveSteps.push({ title: 'Add intelligent automation agents', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', color: '#8b5cf6' });
+                    // Prefer the unified enhancement_plan when the BP is in 'enhance'
+                    // or 'done' mode — otherwise fall back to the local layer + gap mix.
+                    const enhanceCards = getEnhanceCards(compDetail);
+                    if (enhanceCards.isDone) {
+                      return (
+                        <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#059669' }}>Well-positioned for autonomous operation</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.name} has no improvements pending. Pick another BP to keep moving forward.</p>
+                        </div>
+                      );
                     }
 
-                    if (loadingDetail) return <div className="text-muted" style={{ fontSize: 11 }}><span className="spinner-border spinner-border-sm me-1"></span>Analyzing...</div>;
+                    const improveSteps: Array<{ title: string; explanation: string; color: string; gapType?: string; promptTarget?: string }> = [];
+
+                    if (enhanceCards.isEnhance) {
+                      for (const item of enhanceCards.items) {
+                        improveSteps.push({ title: item.title, explanation: item.explanation, color: item.color, gapType: item.gapType, promptTarget: item.promptTarget });
+                      }
+                    } else {
+                      const hasBackend = selectedComponent.layers.backend !== 'missing';
+                      const hasFrontend = selectedComponent.layers.frontend !== 'missing';
+                      if (!hasBackend) improveSteps.push({ title: 'Build backend services', explanation: 'Backend is missing — build services and routes before adding AI automation.', color: '#3b82f6', promptTarget: 'backend_improvement' });
+                      if (hasBackend && !hasFrontend) improveSteps.push({ title: 'Add frontend layer', explanation: 'Frontend is missing — add a user interface before optimizing with AI.', color: '#10b981', promptTarget: 'frontend_exposure' });
+                      (compDetail?.autonomy_gaps || []).slice(0, 4).forEach((g: any) => {
+                        improveSteps.push({ title: g.title, explanation: g.description?.substring(0, 150) || 'Autonomy gap — addressing this moves toward self-managing operation.', color: '#8b5cf6', gapType: g.gap_type, promptTarget: g.suggested_category === 'agent' ? 'agent_enhancement' : g.suggested_category === 'frontend' ? 'frontend_exposure' : 'backend_improvement' });
+                      });
+                      if (improveSteps.length === 0 && selectedComponent.layers.agent === 'missing' && hasBackend && hasFrontend) {
+                        improveSteps.push({ title: 'Add intelligent automation agents', explanation: 'System works manually. Agents enable autonomous, self-managing operation.', color: '#8b5cf6', promptTarget: 'agent_enhancement' });
+                      }
+                    }
 
                     const primary = improveSteps[0];
                     const upNext = improveSteps.slice(1, 3);
@@ -1775,9 +1986,9 @@ function SystemViewV2Inner() {
                         {primary.gapType && <span className="badge mb-3" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{primary.gapType}</span>}
 
                         <div className="d-flex flex-wrap gap-2 mb-3">
-                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => primary.color === '#3b82f6' ? setWorkTab('build') : handleGeneratePrompt(selectedComponent)}>
-                            <i className={`bi ${primary.color === '#3b82f6' ? 'bi-hammer' : 'bi-terminal'} me-1`}></i>
-                            {primary.color === '#3b82f6' ? 'Go to Build' : 'Generate Improvement Prompt'}
+                          <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => primary.color === '#3b82f6' && !enhanceCards.isEnhance ? setWorkTab('build') : handleGeneratePrompt(primary.promptTarget ? { ...selectedComponent, promptTarget: primary.promptTarget } : selectedComponent)}>
+                            <i className={`bi ${primary.color === '#3b82f6' && !enhanceCards.isEnhance ? 'bi-hammer' : 'bi-stars'} me-1`}></i>
+                            {primary.color === '#3b82f6' && !enhanceCards.isEnhance ? 'Go to Build' : enhanceCards.isEnhance ? 'Run Improvement' : 'Generate Improvement Prompt'}
                           </button>
                           <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                             <i className="bi bi-book me-1"></i>Learn About This
@@ -1803,7 +2014,7 @@ function SystemViewV2Inner() {
                                       <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
                                         <i className="bi bi-book"></i>
                                       </button>
-                                      <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => s.color === '#3b82f6' ? setWorkTab('build') : handleGeneratePrompt(selectedComponent)}>
+                                      <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => s.color === '#3b82f6' && !enhanceCards.isEnhance ? setWorkTab('build') : handleGeneratePrompt(s.promptTarget ? { ...selectedComponent, promptTarget: s.promptTarget } : selectedComponent)}>
                                         Run
                                       </button>
                                     </div>

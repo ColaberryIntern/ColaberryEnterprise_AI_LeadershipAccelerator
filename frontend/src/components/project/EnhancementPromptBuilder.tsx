@@ -12,6 +12,7 @@ interface ExecutionStep {
   depends_on: string;
   fixes: string[];
   enables: string[];
+  status?: 'pending' | 'completed';
 }
 
 interface AutonomyGap {
@@ -24,9 +25,27 @@ interface AutonomyGap {
   suggested_agent?: { name: string; description: string; type: string } | null;
 }
 
+interface EnhancementOption {
+  key: string;
+  label: string;
+  description: string;
+  impact: string;
+  prompt_target: string;
+  category: string;
+  source: 'autonomy_gap' | 'quality' | 'system';
+  severity: number;
+  gap_id?: string;
+  gap_type?: string;
+  suggested_agent?: { name: string; description: string; type: string } | null;
+}
+
+type NextActionKind = 'build' | 'enhance' | 'done';
+
 interface Props {
   executionPlan: ExecutionStep[];
   autonomyGaps: AutonomyGap[];
+  enhancementPlan?: EnhancementOption[];
+  nextActionKind?: NextActionKind;
   processId: string;
   processName: string;
   onPreview: (type: string, label: string) => void;
@@ -52,15 +71,20 @@ function showToast(msg: string, color: string = '#1a365d') {
   setTimeout(() => el.remove(), 3500);
 }
 
-export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, processId, processName, onPreview }: Props) {
+export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, enhancementPlan, nextActionKind, processId, processName, onPreview }: Props) {
   const [selectedSteps, setSelectedSteps] = useState<Set<string>>(new Set());
   const [selectedGaps, setSelectedGaps] = useState<Set<string>>(new Set());
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  const [selectedEnhancements, setSelectedEnhancements] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
 
-  const steps = executionPlan || [];
+  // Defense-in-depth: drop any step the backend forgot to filter as completed.
+  const steps = (executionPlan || []).filter(s => !s.status || s.status === 'pending');
   const gaps = autonomyGaps || [];
-  const totalSelected = selectedSteps.size + selectedGaps.size + selectedAgents.size;
+  const enhancements = enhancementPlan || [];
+  const isEnhanceMode = nextActionKind === 'enhance';
+  const isDoneMode = nextActionKind === 'done';
+  const totalSelected = selectedSteps.size + selectedGaps.size + selectedAgents.size + selectedEnhancements.size;
 
   const toggleStep = (key: string) => {
     setSelectedSteps(prev => {
@@ -86,7 +110,20 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
     });
   };
 
+  const toggleEnhancement = (key: string) => {
+    setSelectedEnhancements(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const selectAll = () => {
+    if (isEnhanceMode) {
+      setSelectedEnhancements(new Set(enhancements.map(e => e.key)));
+      setSelectedAgents(new Set(enhancements.filter(e => e.suggested_agent).map(e => e.suggested_agent!.name)));
+      return;
+    }
     setSelectedSteps(new Set(steps.filter(s => !s.blocked).map(s => s.prompt_target)));
     setSelectedGaps(new Set(gaps.map(g => g.gap_id)));
     setSelectedAgents(new Set(gaps.filter(g => g.suggested_agent).map(g => g.suggested_agent!.name)));
@@ -96,6 +133,7 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
     setSelectedSteps(new Set());
     setSelectedGaps(new Set());
     setSelectedAgents(new Set());
+    setSelectedEnhancements(new Set());
   };
 
   const handleGenerate = async () => {
@@ -106,9 +144,29 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
         .filter(g => selectedGaps.has(g.gap_id))
         .map(g => ({ gap_id: g.gap_id, gap_type: g.gap_type, title: g.title, description: g.description, suggested_agent: g.suggested_agent || null }));
 
+      // Enhancement options carry their own prompt_target — fold them in as
+      // execution_steps so the combined-prompt endpoint generates one prompt
+      // per target. Gap-sourced enhancements also push their gap_id into the
+      // autonomy_gaps payload so any agent suggestions stay attached.
+      const enhancementSteps: string[] = [];
+      const enhancementGapPayload: any[] = [];
+      for (const e of enhancements) {
+        if (!selectedEnhancements.has(e.key)) continue;
+        enhancementSteps.push(e.prompt_target);
+        if (e.gap_id) {
+          enhancementGapPayload.push({
+            gap_id: e.gap_id,
+            gap_type: e.gap_type || 'optimization',
+            title: e.label,
+            description: e.description,
+            suggested_agent: e.suggested_agent || null,
+          });
+        }
+      }
+
       const res = await bpApi.generateCombinedPrompt(processId, {
-        execution_steps: Array.from(selectedSteps),
-        autonomy_gaps: gapPayload,
+        execution_steps: Array.from(new Set([...selectedSteps, ...enhancementSteps])),
+        autonomy_gaps: [...gapPayload, ...enhancementGapPayload],
         include_agents: Array.from(selectedAgents),
       });
 
@@ -123,12 +181,104 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
     } finally { setGenerating(false); }
   };
 
-  const hasContent = steps.length > 0 || gaps.length > 0;
-  if (!hasContent) {
+  const hasContent = steps.length > 0 || gaps.length > 0 || enhancements.length > 0;
+  if (!hasContent || isDoneMode) {
     return (
       <div className="text-muted small">
         <i className="bi bi-check-circle me-1" style={{ color: 'var(--color-success)' }}></i>
-        No enhancements needed — system is fully built.
+        Fully built and improved — no enhancements pending. Pick another BP to keep moving forward.
+      </div>
+    );
+  }
+
+  // ── ENHANCE MODE ── BP has nothing left to build — surface improvement options.
+  if (isEnhanceMode) {
+    return (
+      <div>
+        <div className="d-flex align-items-center gap-2 mb-2">
+          <h6 className="fw-semibold mb-0" style={{ fontSize: 12, color: '#8b5cf6' }}>
+            <i className="bi bi-rocket-takeoff me-1"></i>Improvement Options
+          </h6>
+          <span className="badge" style={{ background: '#8b5cf6', color: '#fff', fontSize: 9 }}>{enhancements.length}</span>
+        </div>
+        <p className="text-muted mb-2" style={{ fontSize: 10 }}>
+          {processName} is built. Pick the improvements you want to run next — each generates a Claude Code prompt that takes the system further.
+        </p>
+        <div className="p-2" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
+          {enhancements.map(e => {
+            const isSelected = selectedEnhancements.has(e.key);
+            const agentSelected = e.suggested_agent ? selectedAgents.has(e.suggested_agent.name) : false;
+            return (
+              <div key={e.key} className="mb-2">
+                <div className="d-flex align-items-start gap-2 p-2" style={{ background: isSelected ? '#ede9fe' : '#fff', borderRadius: 6, border: '1px solid var(--color-border)' }}>
+                  <input
+                    type="checkbox"
+                    className="form-check-input mt-1"
+                    checked={isSelected}
+                    onChange={() => toggleEnhancement(e.key)}
+                    style={{ flexShrink: 0 }}
+                  />
+                  <i className={`bi ${e.gap_type ? GAP_TYPE_ICONS[e.gap_type] || 'bi-gear' : 'bi-stars'}`} style={{ color: '#8b5cf6', marginTop: 2, flexShrink: 0 }}></i>
+                  <div className="flex-grow-1">
+                    <div className="d-flex justify-content-between align-items-start">
+                      <span className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>{e.label}</span>
+                      <span className="badge ms-2" style={{ background: '#10b98120', color: 'var(--color-success)', fontSize: 9 }}>{e.impact}</span>
+                    </div>
+                    <div className="text-muted" style={{ fontSize: 10 }}>{e.description}</div>
+                    <div className="d-flex gap-1 mt-1">
+                      <span className="badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 8 }}>{e.gap_type || e.category}</span>
+                      <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 8 }}>Severity: {e.severity}/10</span>
+                      <button className="btn btn-sm btn-link p-0 ms-auto" style={{ fontSize: 9 }} onClick={() => onPreview(e.prompt_target, e.label)}>
+                        <i className="bi bi-eye me-1"></i>Preview
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {e.suggested_agent && (
+                  <div className="d-flex align-items-center gap-2 ms-4 mt-1 p-2" style={{ background: agentSelected ? '#dcfce7' : '#f0fdf4', borderRadius: 6, border: '1px dashed #86efac' }}>
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={agentSelected}
+                      onChange={() => toggleAgent(e.suggested_agent!.name)}
+                      style={{ flexShrink: 0 }}
+                    />
+                    <i className="bi bi-robot" style={{ color: 'var(--color-accent)', flexShrink: 0 }}></i>
+                    <div className="flex-grow-1">
+                      <div className="fw-medium" style={{ fontSize: 11 }}>{e.suggested_agent.name}</div>
+                      <div className="text-muted" style={{ fontSize: 10 }}>{e.suggested_agent.description}</div>
+                    </div>
+                    <span className="badge" style={{ background: '#10b98120', color: 'var(--color-accent)', fontSize: 8 }}>
+                      {AGENT_TYPE_LABELS[e.suggested_agent.type] || e.suggested_agent.type}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="d-flex align-items-center gap-2 pt-2 mt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
+          <span className="text-muted" style={{ fontSize: 11 }}>
+            <strong>{totalSelected}</strong> item{totalSelected !== 1 ? 's' : ''} selected
+          </span>
+          <button className="btn btn-sm btn-link text-muted p-0" style={{ fontSize: 10 }} onClick={selectAll}>Select All</button>
+          <span className="text-muted" style={{ fontSize: 10 }}>|</span>
+          <button className="btn btn-sm btn-link text-muted p-0" style={{ fontSize: 10 }} onClick={clearAll}>Clear</button>
+          <div className="flex-grow-1"></div>
+          <button
+            className="btn btn-sm"
+            style={{ background: '#8b5cf6', color: '#fff', fontWeight: 700, fontSize: 11 }}
+            disabled={totalSelected === 0 || generating}
+            onClick={handleGenerate}
+          >
+            {generating ? (
+              <><span className="spinner-border spinner-border-sm me-1"></span>Generating...</>
+            ) : (
+              <><i className="bi bi-stars me-1"></i>Run Improvement ({totalSelected})</>
+            )}
+          </button>
+        </div>
       </div>
     );
   }

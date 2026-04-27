@@ -26,6 +26,8 @@ export interface ExecutionStep {
   basedOn: string[];  // requirement texts that drove this step
   category: StepCategory;
   priorityScore: number;
+  /** Tag carried to the frontend so it can defensively filter out completed work. */
+  status: 'pending';
 }
 
 export type StepCategory = 'backend' | 'frontend' | 'agent' | 'data' | 'integration' | 'quality' | 'intelligence';
@@ -237,13 +239,10 @@ export function generateStepsFromRequirements(options: {
     };
     const stepKey = keyMap[category];
 
-    // System gaps (missing layers) override completed_steps — if the layer is actually missing,
-    // the step must show even if previously marked completed
-    const hasSystemGap = systemGaps.some(g =>
-      (g.key === 'SYS-BE' && category === 'backend') ||
-      (g.key === 'SYS-FE' && category === 'frontend')
-    );
-    if (completed.has(stepKey) && !hasSystemGap) continue;
+    // A completed step is a completed step. System gaps generate their own
+    // steps via the systemGaps loop above — they should never resurrect a
+    // finished requirement-level step.
+    if (completed.has(stepKey)) continue;
 
     // Skip "Build X" steps if the project already has that layer in the repo
     // This prevents recommending "Build Backend" when backend services already exist
@@ -273,6 +272,7 @@ export function generateStepsFromRequirements(options: {
         basedOn: reqs.slice(0, 5).map(r => r.requirement_text.substring(0, 80)),
         category,
         priorityScore: Math.round(65 * (multipliers[category] || 1) + reqs.length * 3),
+        status: 'pending',
       };
       if (!completed.has('implement_requirements')) steps.push(implStep);
       continue;
@@ -303,6 +303,7 @@ export function generateStepsFromRequirements(options: {
       basedOn: reqs.slice(0, 5).map(r => r.requirement_text.substring(0, 80)),
       category,
       priorityScore,
+      status: 'pending',
     });
   }
 
@@ -354,6 +355,7 @@ export function generateStepsFromRequirements(options: {
       basedOn: unfinished.slice(0, 5).map(r => r.requirement_text.substring(0, 80)),
       category: 'service' as StepCategory,
       priorityScore: 200,
+      status: 'pending',
     });
   }
 
