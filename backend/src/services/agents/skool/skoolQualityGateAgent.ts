@@ -95,12 +95,12 @@ export async function runSkoolQualityGate(): Promise<{
         score -= 30;
       }
 
-      // --- NO URLs allowed EXCEPT in hiring category (links trigger self-promotion moderation) ---
-      const hasAnyUrl = /https?:\/\//i.test(body);
-      const isHiringCategory = response.category === 'hiring';
-      if (hasAnyUrl && !isHiringCategory) {
-        reasons.push('Contains a URL or link - links trigger self-promotion moderation on Skool (only allowed in hiring)');
-        score -= 40; // Heavy penalty - should auto-reject
+      // --- NO URLs allowed in any category (links trigger self-promotion moderation) ---
+      // Even hiring posts get rejected by moderators when they contain "DM me or visit [URL]" patterns.
+      const hasAnyUrl = /https?:\/\/|\bcolaberry\.(ai|com)\b|\benterprise\.colaberry\b/i.test(body);
+      if (hasAnyUrl) {
+        reasons.push('Contains a URL or link - all links trigger self-promotion moderation on Skool, share via DM only');
+        score -= 50; // Heavy penalty - auto-reject
       }
 
       // --- Genuine content check (not just a pitch) ---

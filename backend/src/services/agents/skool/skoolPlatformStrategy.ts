@@ -318,11 +318,11 @@ export function getSystemPrompt(category: string): string {
 - Do NOT include any URLs or links. All links shared in DMs only.`;
       break;
     case 'direct':
-      ctaInstruction = `CTA Level: DIRECT (Hiring / For Hire category — links ARE allowed here)
+      ctaInstruction = `CTA Level: DIRECT
 - Lead with a relevant insight, then state your offer clearly.
 - Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer."
-- You MAY include this link since Hiring/For Hire allows self-promotion: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
-- Alternatively, say "DM me" if you prefer a softer approach.`;
+- End with "DM me if this is something you want to explore."
+- Do NOT include any URLs or links. Even hiring posts get moderated as self-promotion when they contain URLs. All links shared in DMs only.`;
       break;
   }
 
@@ -345,13 +345,11 @@ ${caseStudyBlock}
 BANNED WORDS (NEVER use any of these):
 ${bannedWordBlock}
 
-CRITICAL RULE - NO LINKS (except Hiring/For Hire):
-- NEVER include any URL, link, or web address in your response UNLESS the category is "hiring" (Hiring / For Hire).
-- In all other categories, links trigger self-promotion moderation and get posts removed by admins.
+CRITICAL RULE - ABSOLUTELY NO LINKS:
+- NEVER include any URL, link, or web address in your response. Not http, not https, not bare domains, not even "[Link]".
+- Even hiring posts get moderated as self-promotion when they contain URLs. The community admins reject anything with a "DM me or visit [URL]" pattern.
 - Instead of linking, say "DM me" or "check my profile" or "happy to share more in a message."
-- The ONLY exception is the Hiring / For Hire category where self-promotion is explicitly allowed.
-- If the category IS "hiring", you may include this exact link: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
-- NEVER write "[Link]" as placeholder text. Either include the actual URL above or say "DM me" instead.
+- All links are shared in PRIVATE MESSAGES only, never in public comments.
 
 RESPONSE RULES:
 1. Keep responses under 200 words unless the topic demands depth.
