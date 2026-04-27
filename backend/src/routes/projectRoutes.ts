@@ -1948,13 +1948,49 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
     const { getCapabilityHierarchy } = await import('../services/projectScopeService');
     const hierarchy = await getCapabilityHierarchy(project.id);
+
+    // Inject the same context the list and detail endpoints inject so project-level
+    // layer detection (projectHasBackend / projectHasFrontend / etc.) works here too.
+    // Without this, BPs with no per-BP file matches always look "no backend detected"
+    // and Cory keeps recommending "Build Backend Services" even when the project
+    // already has a backend.
+    let repoFileTree: string[] = [];
+    try {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) {
+        repoFileTree = conn.file_tree_json.tree
+          .filter((t: any) => t.type === 'blob')
+          .map((t: any) => t.path);
+      }
+    } catch { /* file tree is optional */ }
+    const { Capability: CapModel } = await import('../models');
+    const capModels = await CapModel.findAll({
+      where: { project_id: project.id },
+      attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'frontend_route', 'backend_context'],
+    });
+    const execMap = new Map(capModels.map((c: any) => [c.id, c]));
+    const projectMode = (project as any).target_mode || 'production';
+    hierarchy.forEach((cap: any) => {
+      cap._repoFileTree = repoFileTree;
+      cap._projectMode = projectMode;
+      const extra = execMap.get(cap.id);
+      if (extra) {
+        cap.last_execution = (extra as any).last_execution;
+        cap.mode_override = (extra as any).mode_override;
+        cap.applicability_status = (extra as any).applicability_status || 'active';
+        if ((extra as any).frontend_route) cap.frontend_route = (extra as any).frontend_route;
+        if ((extra as any).backend_context) cap.backend_context = (extra as any).backend_context;
+      }
+    });
+
     const enriched = hierarchy.map(enrichCapability);
     const { getProjectTopTasks } = require('../services/intelligence/coryOrchestrator');
-    const tasks = getProjectTopTasks(enriched, (project as any).target_mode || 'production');
+    const tasks = getProjectTopTasks(enriched, projectMode);
     // Attach component names for display
     const nameMap = new Map(enriched.map((c: any) => [c.id, c.name]));
     const tasksWithNames = tasks.map((t: any) => ({ ...t, component_name: nameMap.get(t.component_id) || 'Unknown' }));
-    res.json({ tasks: tasksWithNames, total_components: enriched.length, mode: (project as any).target_mode || 'production' });
+    res.json({ tasks: tasksWithNames, total_components: enriched.length, mode: projectMode });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
