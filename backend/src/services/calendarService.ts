@@ -31,6 +31,7 @@ export interface BookingInput {
   phone: string;
   slotStart: string;
   timezone: string;
+  pageOrigin?: string;
 }
 
 export interface BookingResult {
@@ -272,7 +273,8 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
       ...(env.googleCalendarOwnerEmail ? [{ email: env.googleCalendarOwnerEmail }] : []),
       { email: 'ali@colaberry.com' },
       { email: 'ram@colaberry.com' },
-      { email: 'dlahme@colaberry.com' },
+      // Only add David Lahme for utility page bookings
+      ...((data.pageOrigin || '').includes('utility') ? [{ email: 'dlahme@colaberry.com' }] : []),
     ],
     reminders: {
       useDefault: false,
