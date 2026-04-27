@@ -473,7 +473,12 @@ router.get('/api/portal/project/architect-status', requireParticipant, async (re
       }
     }
 
-    res.json(status);
+    const projectTitle = (project as any).organization_name || 'AI System';
+    const documentTitle = `${projectTitle} — Requirements Document`;
+    const documentFilename = `${projectTitle.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}.md`;
+    const requirementsLoaded = !!(project as any).setup_status?.requirements_loaded;
+
+    res.json({ ...status, documentTitle, documentFilename, requirementsLoaded });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

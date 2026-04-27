@@ -29,9 +29,11 @@ function slugify(name: string): string {
  * then continues driving phases in the background.
  */
 export async function startArchitectBuild(projectName: string, idea: string): Promise<{ slug: string }> {
-  // Use idea's first line or first 50 chars as project name (more descriptive than org name)
-  const ideaName = idea.split('\n')[0].substring(0, 80).replace(/[^\w\s-]/g, '').trim() || projectName;
-  const fullName = `${ideaName} - ${Date.now().toString(36)}`.substring(0, 100); // Add timestamp to avoid collisions
+  // Prefer the explicit project/organization name for the doc title.
+  // The Architect generates its own unique slug from this; collisions are deduped server-side.
+  const cleanName = (projectName || '').replace(/[^\w\s-]/g, '').trim();
+  const ideaName = idea.split('\n')[0].substring(0, 80).replace(/[^\w\s-]/g, '').trim();
+  const fullName = (cleanName || ideaName || 'AI System').substring(0, 100);
 
   // 1. Create project
   const createRes = await fetch(`${ARCHITECT_BASE}/projects/new`, {
@@ -157,12 +159,19 @@ export async function getArchitectStatus(slug: string): Promise<{
     if (!res.ok) return { phase: 'unknown', progress: 0, complete: false, chapters_done: 0, chapters_total: 0, message: 'Unable to reach build service' };
 
     const html = await res.text();
+    const finalUrl = res.url || '';
 
-    // Extract phase from page content
-    const phaseMatch = html.match(/current_phase['":\s]+['"](\w+)['"]/i)
-      || html.match(/Phase:\s*(\w[\w\s]*?)(?:<|"|')/i)
-      || html.match(/class="[^"]*phase[^"]*"[^>]*>([^<]+)/i);
-    let phase = phaseMatch ? phaseMatch[1].trim().toLowerCase().replace(/\s+/g, '_') : 'idea_intake';
+    // Definitive completion signal: Architect redirects completed projects to /<slug>/complete
+    let phase: string;
+    if (/\/complete\/?$/i.test(finalUrl)) {
+      phase = 'complete';
+    } else {
+      // Extract current phase from the active nav item (Architect's HTML structure)
+      const phaseMatch = html.match(/phase-nav-item\s+current[\s\S]{0,500}?phase-nav-label[^>]*>([^<]+)/i)
+        || html.match(/current_phase['":\s]+['"](\w+)['"]/i)
+        || html.match(/Phase:\s*(\w[\w\s]*?)(?:<|"|')/i);
+      phase = phaseMatch ? phaseMatch[1].trim().toLowerCase().replace(/\s+/g, '_') : 'idea_intake';
+    }
 
     // Normalize phase names
     if (phase.includes('idea') || phase.includes('intake')) phase = 'idea_intake';

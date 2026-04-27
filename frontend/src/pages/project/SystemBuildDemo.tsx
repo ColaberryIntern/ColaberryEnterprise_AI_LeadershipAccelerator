@@ -88,7 +88,12 @@ export default function SystemBuildDemo() {
         const proj = projRes.data;
         setIdea(proj?.setup_status?.build_idea || proj?.primary_business_problem || 'your AI system');
         setProjectName(proj?.organization_name || 'Your Project');
-        if (proj?.setup_status?.activated) { setBuildComplete(true); setShowFinalReveal(true); setProgress(100); }
+        // Skip the scripted animation if the build already finished — either fully activated
+        // or at least the requirements doc has been pulled down (covers cases where activation
+        // failed silently but the doc is real).
+        if (proj?.setup_status?.activated || proj?.setup_status?.requirements_loaded) {
+          setBuildComplete(true); setShowFinalReveal(true); setProgress(100);
+        }
       } catch {}
     })();
 

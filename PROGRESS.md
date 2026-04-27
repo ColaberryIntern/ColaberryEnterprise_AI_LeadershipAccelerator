@@ -208,6 +208,25 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Upcoming Work
 
+### Architect Build Status Bug Fixes (2026-04-27)
+- [x] Fixed `getArchitectStatus` regex matching wrong element — was capturing the parent `phase-nav` container instead of the active `phase-nav-item current` (caused `complete: true` to never be reported)
+- [x] Added definitive completion signal via redirect URL (`/<slug>/complete`)
+- [x] Removed timestamp suffix from Architect-side project name so the doc title equals the project title (was `"Project Name - mohivmqv — Build Guide"`, now `"Project Name — Build Guide"`)
+- [x] Added `documentTitle`, `documentFilename`, `requirementsLoaded` to `architect-status` response for any download UI
+- [x] SystemBuildDemo now also accepts `requirements_loaded` (not just `activated`) to skip the scripted animation on refresh — covers cases where activation fails silently but the doc was saved
+  - Note: All three user-visible symptoms (demo spins forever, refresh restarts the demo, doc filename includes timestamp) traced to the single regex bug and the timestamped naming. Pending production deploy after hours.
+
+### AI System Pilot Program (2026-04-22)
+- [x] seedPilotProgramCampaigns.ts — 3 sequences (12 AI-generated emails), 3 campaigns, 3 LandingPage records
+- [x] PilotZeroRiskPage.tsx — "Deploy a Real AI System in 14 Days" for skeptical executives
+- [x] PilotAITeamPage.tsx — "Replace a Junior Developer With an AI System" for cost-conscious operators
+- [x] PilotExclusivePage.tsx — "We're Building 10 AI-Driven Companies" for ambitious founders
+- [x] importPilotLeads.js — Apollo import script for 300 leads (100 per campaign)
+- [x] Routes registered in publicRoutes.tsx, seed integrated into seedAllCampaigns.ts
+- [ ] Deploy + seed + Apollo import + QA + activate campaigns
+
+---
+
 - [ ] Fix SMS encoding on T-Mobile gateway (vtext.com vs tmomail.net — needs user confirmation which worked)
 - [ ] LinkedIn content strategy: generate drafts for manual posting via Content Queue
 - [ ] Medium browser session refresh (or transition fully to manual posting)
