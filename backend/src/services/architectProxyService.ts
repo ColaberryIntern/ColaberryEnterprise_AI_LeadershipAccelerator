@@ -29,11 +29,15 @@ function slugify(name: string): string {
  * then continues driving phases in the background.
  */
 export async function startArchitectBuild(projectName: string, idea: string): Promise<{ slug: string }> {
+  // Use idea's first line or first 50 chars as project name (more descriptive than org name)
+  const ideaName = idea.split('\n')[0].substring(0, 80).replace(/[^\w\s-]/g, '').trim() || projectName;
+  const fullName = `${ideaName} - ${Date.now().toString(36)}`.substring(0, 100); // Add timestamp to avoid collisions
+
   // 1. Create project
   const createRes = await fetch(`${ARCHITECT_BASE}/projects/new`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `project_name=${encodeURIComponent(projectName)}&blueprint=standard`,
+    body: `project_name=${encodeURIComponent(fullName)}&blueprint=standard`,
     redirect: 'manual',
   });
 
@@ -64,7 +68,7 @@ export async function startArchitectBuild(projectName: string, idea: string): Pr
  * then 10-12 minutes for auto-build (phases 5-7).
  */
 async function drivePhases(slug: string, idea: string): Promise<void> {
-  const chat = async (message: string) => {
+  const chat = async (message: string): Promise<any> => {
     try {
       const res = await fetch(`${ARCHITECT_BASE}/projects/${slug}/api/chat`, {
         method: 'POST',
@@ -72,7 +76,7 @@ async function drivePhases(slug: string, idea: string): Promise<void> {
         body: JSON.stringify({ message }),
       });
       const data = await res.json().catch(() => ({}));
-      console.log(`[ArchitectProxy] Chat response for ${slug}: phase=${data.phase || 'unknown'}`);
+      console.log(`[ArchitectProxy] Chat for ${slug}: phase=${data.phase || data.current_phase || '?'}, msg=${(data.message || '').substring(0, 80)}`);
       return data;
     } catch (err: any) {
       console.warn(`[ArchitectProxy] Chat failed for ${slug}:`, err.message);
@@ -80,42 +84,63 @@ async function drivePhases(slug: string, idea: string): Promise<void> {
     }
   };
 
-  // Phase 1: Send the idea
-  console.log(`[ArchitectProxy] Sending idea to ${slug}`);
-  await chat(idea);
-  await sleep(2000);
+  const postEndpoint = async (path: string): Promise<any> => {
+    try {
+      const res = await fetch(`${ARCHITECT_BASE}/projects/${slug}/${path}`, { method: 'POST' });
+      const text = await res.text();
+      console.log(`[ArchitectProxy] POST ${path} for ${slug}: ${res.status} ${text.substring(0, 100)}`);
+      return { status: res.status, ok: res.ok };
+    } catch (err: any) {
+      console.warn(`[ArchitectProxy] POST ${path} failed:`, err.message);
+      return { status: 0, ok: false };
+    }
+  };
 
-  // Phase 2: Approve features (auto-select all)
-  console.log(`[ArchitectProxy] Approving features for ${slug}`);
-  try {
-    await fetch(`${ARCHITECT_BASE}/projects/${slug}/approve-features`, { method: 'POST' });
-  } catch {}
-  await sleep(2000);
+  // Phase 1: Send the idea via chat — this triggers idea_intake → feature_discovery
+  console.log(`[ArchitectProxy] Phase 1: Sending idea to ${slug}`);
+  let chatResult = await chat(idea);
 
-  // Phase 3: Generate outline
-  console.log(`[ArchitectProxy] Generating outline for ${slug}`);
-  try {
-    await fetch(`${ARCHITECT_BASE}/projects/${slug}/generate-outline`, { method: 'POST' });
-  } catch {}
+  // The chat engine may need multiple turns to advance through phases
+  // Keep sending confirmations until we get past feature_discovery
+  for (let i = 0; i < 5; i++) {
+    await sleep(3000);
+    const phase = chatResult?.phase || chatResult?.current_phase || '';
+    console.log(`[ArchitectProxy] Current phase for ${slug}: ${phase} (attempt ${i + 1})`);
+
+    if (phase === 'feature_discovery' || phase === 'outline_generation') break;
+
+    // Send a follow-up to advance
+    chatResult = await chat('yes, proceed with all suggested features');
+  }
+
+  // Phase 2: Auto-select features and approve
+  console.log(`[ArchitectProxy] Phase 2: Selecting features for ${slug}`);
+  await postEndpoint('api/select-features');
+  await sleep(2000);
+  await postEndpoint('approve-features');
   await sleep(3000);
 
-  // Phase 4: Approve outline
-  console.log(`[ArchitectProxy] Approving outline for ${slug}`);
-  try {
-    await fetch(`${ARCHITECT_BASE}/projects/${slug}/approve-outline`, { method: 'POST' });
-  } catch {}
-  await sleep(2000);
+  // Phase 3: Generate outline
+  console.log(`[ArchitectProxy] Phase 3: Generating outline for ${slug}`);
+  await postEndpoint('generate-outline');
+  // Wait for outline generation (can take 10-30 seconds)
+  await sleep(15000);
 
-  // Phase 5-7: Start auto-build
-  console.log(`[ArchitectProxy] Starting auto-build for ${slug}`);
-  try {
-    const buildRes = await fetch(`${ARCHITECT_BASE}/projects/${slug}/auto-build/start`, { method: 'POST' });
-    const buildData = await buildRes.json().catch(() => ({}));
-    console.log(`[ArchitectProxy] Auto-build started for ${slug}: ${JSON.stringify(buildData)}`);
-  } catch (err: any) {
-    console.warn(`[ArchitectProxy] Auto-build start failed for ${slug}:`, err.message);
-    // Try chat to advance
-    await chat('build');
+  // Phase 4: Approve outline
+  console.log(`[ArchitectProxy] Phase 4: Approving outline for ${slug}`);
+  await postEndpoint('approve-outline');
+  await sleep(5000);
+
+  // Phase 5-7: Start auto-build (may take 10+ minutes)
+  console.log(`[ArchitectProxy] Phase 5: Starting auto-build for ${slug}`);
+  const buildResult = await postEndpoint('auto-build/start');
+  if (!buildResult.ok) {
+    console.warn(`[ArchitectProxy] Auto-build failed, trying chat fallback for ${slug}`);
+    // Try chat to see what phase we're actually in
+    const statusChat = await chat('what phase are we in? please continue building');
+    console.log(`[ArchitectProxy] Chat fallback response: ${JSON.stringify(statusChat).substring(0, 200)}`);
+  } else {
+    console.log(`[ArchitectProxy] Auto-build successfully started for ${slug}`);
   }
 }
 

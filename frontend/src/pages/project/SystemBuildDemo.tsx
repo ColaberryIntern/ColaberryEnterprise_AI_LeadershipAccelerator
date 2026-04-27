@@ -208,13 +208,11 @@ export default function SystemBuildDemo() {
         {/* PROGRESSIVE PHASES */}
         {!showFinalReveal && (
           <div>
-            {SCRIPTED_PHASES.map((phase, pi) => {
+            {SCRIPTED_PHASES.slice(0, currentPhaseIdx + 1).reverse().map((phase) => {
+              const pi = SCRIPTED_PHASES.indexOf(phase);
               const revealed = revealedSteps[pi] || 0;
               const isActive = pi === currentPhaseIdx;
               const isDone = pi < currentPhaseIdx;
-              const isFuture = pi > currentPhaseIdx;
-
-              if (isFuture) return null;
 
               return (
                 <div key={phase.id} className="card border-0 shadow-sm mb-3" style={{ opacity: isDone ? 0.5 : 1, transition: 'opacity 0.5s', animation: isActive && pi > 0 ? 'fadeIn 0.4s ease' : 'none' }}>
