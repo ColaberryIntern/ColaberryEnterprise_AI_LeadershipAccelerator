@@ -50,14 +50,16 @@ export async function runSkoolBrowserWorker(): Promise<{
     return { posted, failed };
   }
 
-  // Check daily post count
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayCount = await SkoolResponse.count({
-    where: {
-      posted_at: { [Op.gte]: todayStart },
-    },
-  });
+  // Check daily post count using America/Chicago day boundary so the cap
+  // doesn't reset at server-local UTC midnight (which clipped CT evening posts
+  // into the "next day" bucket).
+  const [{ count: todayCountRaw }] = await sequelize.query(
+    `SELECT COUNT(*)::int AS count FROM skool_responses
+     WHERE posted_at IS NOT NULL
+       AND posted_at AT TIME ZONE 'America/Chicago' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Chicago')`,
+    { type: 'SELECT' as any }
+  ) as any;
+  const todayCount = Number(todayCountRaw) || 0;
 
   if (todayCount >= SKOOL_DAILY_LIMIT) {
     console.log(`[Skool][BrowserWorker] Daily limit reached (${todayCount}/${SKOOL_DAILY_LIMIT}), skipping run`);

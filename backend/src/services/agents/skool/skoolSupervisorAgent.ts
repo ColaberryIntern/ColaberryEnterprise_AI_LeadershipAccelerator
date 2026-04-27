@@ -1,4 +1,5 @@
 import { Op } from 'sequelize';
+import { sequelize } from '../../../config/database';
 
 // Models loaded via require with try/catch since they may not be compiled yet
 let SkoolTask: any;
@@ -75,15 +76,15 @@ export async function runSkoolSupervisor(): Promise<{ cleaned: number }> {
     console.error('[Skool][Supervisor] Error expiring old signals:', err.message);
   }
 
-  // 3. Check daily limit
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // 3. Check daily limit using America/Chicago day boundary
   try {
-    const todayCount = await SkoolResponse.count({
-      where: {
-        posted_at: { [Op.gte]: todayStart },
-      },
-    });
+    const [{ count: todayCountRaw }] = await sequelize.query(
+      `SELECT COUNT(*)::int AS count FROM skool_responses
+       WHERE posted_at IS NOT NULL
+         AND posted_at AT TIME ZONE 'America/Chicago' >= DATE_TRUNC('day', NOW() AT TIME ZONE 'America/Chicago')`,
+      { type: 'SELECT' as any }
+    ) as any;
+    const todayCount = Number(todayCountRaw) || 0;
     if (todayCount >= SKOOL_DAILY_LIMIT) {
       console.warn(`[Skool][Supervisor] WARNING: Daily post limit reached (${todayCount}/${SKOOL_DAILY_LIMIT})`);
     } else {
