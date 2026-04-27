@@ -208,6 +208,16 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Upcoming Work
 
+### BP "Next Step" Always Advances Forward (2026-04-27)
+- [x] `requirementToStepService.ts` — removed `!hasSystemGap` escape that re-emitted completed steps; tag every step `status: 'pending'`
+- [x] `projectRoutes.ts:enrichCapability` — union `last_execution.completed_steps` with derived signals (system-layer presence, coverage thresholds, quality scores) so completion stays in sync regardless of how a requirement was finished
+- [x] `projectRoutes.ts` BP detail endpoint — new `enhancement_plan` array + `next_action_kind: 'build'|'enhance'|'done'` field; defense-in-depth filter on `execution_plan` for any leftover completed entries
+- [x] `EnhancementPromptBuilder.tsx` — accepts `enhancementPlan` + `nextActionKind`, renders an enhance-mode list with "Run Improvement" CTA; defensive `status !== 'completed'` filter on execution steps
+- [x] `PortalBusinessProcessDetail.tsx` — forwards new fields to the builder; section title flips between Enhancement Prompt Builder / Improvement Options / Status
+- [x] `SystemViewV2.tsx` — added `getEnhanceCards` helper; Overview/Build/Health/Improve tabs now surface unified enhancement options when `next_action_kind === 'enhance'` and a "Fully built — pick another BP" empty state when `'done'`
+- [x] One-shot data backfill on ShipCES (`8047024f-…`) — recomputed `last_execution.completed_steps` for 59 of 72 capabilities so existing 100% BPs jump straight to enhance mode without waiting for the next user action
+  - Note: User reported CES project was stuck — every "next suggested step" was already completed, forcing the user to skip tasks to move forward. Root cause was three layers of stale completion tracking diverging.
+
 ### Architect Build Status Bug Fixes (2026-04-27)
 - [x] Fixed `getArchitectStatus` regex matching wrong element — was capturing the parent `phase-nav` container instead of the active `phase-nav-item current` (caused `complete: true` to never be reported)
 - [x] Added definitive completion signal via redirect URL (`/<slug>/complete`)
