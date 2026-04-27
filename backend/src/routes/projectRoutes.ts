@@ -450,26 +450,35 @@ router.get('/api/portal/project/architect-status', requireParticipant, async (re
     const { getArchitectStatus, getArchitectDocument } = await import('../services/architectProxyService');
     const status = await getArchitectStatus(slug);
 
-    // If complete, fetch document and save to project
-    if (status.complete && !(project as any).setup_status?.requirements_loaded) {
-      try {
-        const document = await getArchitectDocument(slug);
-        if (document && document.length > 100) {
-          (project as any).requirements_document = document;
-          const currentStatus = (project as any).setup_status || {};
-          (project as any).setup_status = { ...currentStatus, requirements_loaded: true };
-          (project as any).changed('setup_status', true);
-          (project as any).changed('requirements_document', true);
-          await project.save();
-
-          // Auto-activate
-          try {
-            const { activateProject } = await import('../services/projectSetupService');
-            activateProject(req.participant!.sub).catch(e => console.warn('[ArchitectStatus] Activation error:', e.message));
-          } catch {}
+    // If complete, fetch document and save to project (idempotent)
+    if (status.complete) {
+      const ss = (project as any).setup_status || {};
+      if (!ss.requirements_loaded) {
+        try {
+          const document = await getArchitectDocument(slug);
+          if (document && document.length > 100) {
+            (project as any).requirements_document = document;
+            (project as any).setup_status = { ...ss, requirements_loaded: true };
+            (project as any).changed('setup_status', true);
+            (project as any).changed('requirements_document', true);
+            await project.save();
+          } else {
+            console.warn('[ArchitectStatus] Doc fetch returned <100 chars; skipping save');
+          }
+        } catch (docErr: any) {
+          console.warn('[ArchitectStatus] Document fetch error:', docErr.message);
         }
-      } catch (docErr: any) {
-        console.warn('[ArchitectStatus] Document fetch error:', docErr.message);
+      }
+
+      // Run activation if requirements are loaded but project isn't activated yet.
+      // This is retry-safe — activateProject is idempotent on its data writes,
+      // and activation may have failed on a prior poll (network, GitHub, etc).
+      const refreshed = (project as any).setup_status || {};
+      if (refreshed.requirements_loaded && !refreshed.activated) {
+        try {
+          const { activateProject } = await import('../services/projectSetupService');
+          activateProject(req.participant!.sub).catch(e => console.warn('[ArchitectStatus] Activation error:', e.message));
+        } catch {}
       }
     }
 

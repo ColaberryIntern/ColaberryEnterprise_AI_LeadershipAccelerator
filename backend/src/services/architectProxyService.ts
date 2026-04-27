@@ -221,18 +221,32 @@ export async function getArchitectStatus(slug: string): Promise<{
  */
 export async function getArchitectDocument(slug: string): Promise<string> {
   try {
+    // Primary path: the Architect's final-assembly download endpoint
+    const directRes = await fetch(`${ARCHITECT_BASE}/projects/${slug}/final-assembly/download`);
+    if (directRes.ok) {
+      const text = await directRes.text();
+      if (text && text.length > 100) return text;
+    }
+
+    // Fallback: scrape the project page for any download/markdown link
     const res = await fetch(`${ARCHITECT_BASE}/projects/${slug}`);
     const html = await res.text();
 
-    const downloadMatch = html.match(/href="([^"]*Build_Guide[^"]*)"/i);
-    if (downloadMatch) {
-      const docRes = await fetch(`${ARCHITECT_BASE}${downloadMatch[1]}`);
-      if (docRes.ok) return await docRes.text();
+    const hrefMatch = html.match(/href="([^"]*final-assembly\/download[^"]*)"/i)
+      || html.match(/href="([^"]*Build_Guide[^"]*)"/i)
+      || html.match(/href="([^"]*\.md)"/i);
+    if (hrefMatch) {
+      const url = hrefMatch[1].startsWith('http') ? hrefMatch[1] : `${ARCHITECT_BASE}${hrefMatch[1]}`;
+      const docRes = await fetch(url);
+      if (docRes.ok) {
+        const text = await docRes.text();
+        if (text && text.length > 100) return text;
+      }
     }
 
-    const docRes = await fetch(`${ARCHITECT_BASE}/output/${slug}/`);
-    if (docRes.ok) {
-      const listing = await docRes.text();
+    const listingRes = await fetch(`${ARCHITECT_BASE}/output/${slug}/`);
+    if (listingRes.ok) {
+      const listing = await listingRes.text();
       const mdMatch = listing.match(/href="([^"]*\.md)"/i);
       if (mdMatch) {
         const mdRes = await fetch(`${ARCHITECT_BASE}/output/${slug}/${mdMatch[1]}`);
