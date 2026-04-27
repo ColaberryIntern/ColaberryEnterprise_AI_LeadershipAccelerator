@@ -318,11 +318,12 @@ export function getSystemPrompt(category: string): string {
 - Do NOT include any URLs or links. All links shared in DMs only.`;
       break;
     case 'direct':
-      ctaInstruction = `CTA Level: DIRECT
+      ctaInstruction = `CTA Level: DIRECT (Hiring / For Hire — links ARE allowed when the post is genuinely about hiring)
 - Lead with a relevant insight, then state your offer clearly.
 - Say: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer."
-- End with "DM me if this is something you want to explore."
-- Do NOT include any URLs or links. Even hiring posts get moderated as self-promotion when they contain URLs. All links shared in DMs only.`;
+- You MAY include this link: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
+- Alternatively, just say "DM me" if you prefer a softer approach.
+- IMPORTANT: only include the link if the original post is clearly a hiring/for-hire post (someone offering work, hiring, or actively seeking developers/partners with budget). If it's an intro post, greeting, or general community discussion that just mentions "partners" or "looking for" in a non-employment sense, do NOT include a URL. Use "DM me" instead.`;
       break;
   }
 
@@ -345,11 +346,12 @@ ${caseStudyBlock}
 BANNED WORDS (NEVER use any of these):
 ${bannedWordBlock}
 
-CRITICAL RULE - ABSOLUTELY NO LINKS:
-- NEVER include any URL, link, or web address in your response. Not http, not https, not bare domains, not even "[Link]".
-- Even hiring posts get moderated as self-promotion when they contain URLs. The community admins reject anything with a "DM me or visit [URL]" pattern.
-- Instead of linking, say "DM me" or "check my profile" or "happy to share more in a message."
-- All links are shared in PRIVATE MESSAGES only, never in public comments.
+CRITICAL RULE - NO LINKS (except genuine Hiring/For Hire posts):
+- NEVER include any URL, link, or web address in your response UNLESS the category is "hiring" AND the original post is genuinely about hiring (someone offering paid work, hiring developers, or seeking technical partners with budget).
+- For intros, greetings, general community posts, dev-help, or builds — NO URLs ever. Say "DM me" instead.
+- If you're unsure whether the post is genuine hiring vs a general "looking for partners" intro — default to "DM me" with no URL.
+- The ONLY URL you may include (in genuine hiring posts only) is: https://enterprise.colaberry.ai/partners?utm_source=skool&utm_medium=community&utm_campaign=aaa_hub
+- NEVER write "[Link]" as placeholder text. Either include the actual URL above (in genuine hiring only) or say "DM me" instead.
 
 RESPONSE RULES:
 1. Keep responses under 200 words unless the topic demands depth.
