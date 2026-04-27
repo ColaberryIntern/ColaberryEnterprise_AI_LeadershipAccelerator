@@ -494,6 +494,7 @@ type EnhanceCardItem = {
 type EnhanceCardSet = {
   isEnhance: boolean;
   isDone: boolean;
+  isRecategorize: boolean;
   primary: EnhanceCardItem | null;
   upNext: EnhanceCardItem[];
   items: EnhanceCardItem[];
@@ -502,8 +503,9 @@ type EnhanceCardSet = {
 function getEnhanceCards(compDetail: any): EnhanceCardSet {
   const kind: string | undefined = compDetail?.next_action_kind;
   const enhancements: any[] = compDetail?.enhancement_plan || [];
-  const empty: EnhanceCardSet = { isEnhance: false, isDone: false, primary: null, upNext: [], items: [] };
+  const empty: EnhanceCardSet = { isEnhance: false, isDone: false, isRecategorize: false, primary: null, upNext: [], items: [] };
 
+  if (kind === 'recategorize' || compDetail?.is_synthetic_bucket) return { ...empty, isRecategorize: true };
   if (kind === 'done') return { ...empty, isDone: true };
   if (kind !== 'enhance') return empty;
   if (enhancements.length === 0) return { ...empty, isDone: true };
@@ -528,6 +530,7 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
   return {
     isEnhance: true,
     isDone: false,
+    isRecategorize: false,
     primary: items[0] || null,
     upNext: items.slice(1, 3),
     items,
@@ -588,6 +591,37 @@ function SystemViewV2Inner() {
   const [showOverviewUpNext, setShowOverviewUpNext] = useState(false);
   const [showHealthUpNext, setShowHealthUpNext] = useState(false);
   const [showImproveUpNext, setShowImproveUpNext] = useState(false);
+
+  // Reclassify state — for the synthetic Uncategorized bucket
+  const [reclassifying, setReclassifying] = useState(false);
+  const handleReclassify = async () => {
+    if (reclassifying) return;
+    setReclassifying(true);
+    try {
+      await portalApi.post('/api/portal/project/business-processes/reclassify', {}, { timeout: 120000 });
+      // Reload data so the bucket disappears (or shrinks)
+      window.location.reload();
+    } catch {
+      setReclassifying(false);
+    }
+  };
+  const renderRecategorizeCard = (compName: string) => (
+    <div className="p-3" style={{ background: '#fffbeb', borderRadius: 8, border: '1px solid #f59e0b40' }}>
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <i className="bi bi-funnel-fill" style={{ color: '#f59e0b', fontSize: 16 }}></i>
+        <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#92400e' }}>Reclassify before building</h6>
+      </div>
+      <p className="mb-3" style={{ fontSize: 12, color: '#78350f' }}>
+        "{compName}" is a holding bucket for requirements that didn't cluster into a coherent business process.
+        It's not something to design or build directly. Run reclassify to redistribute these requirements into real BPs first.
+      </p>
+      <div className="d-flex gap-2">
+        <button className="btn btn-sm" style={{ background: '#f59e0b', color: '#fff', fontWeight: 600, fontSize: 12 }} disabled={reclassifying} onClick={handleReclassify}>
+          {reclassifying ? <><span className="spinner-border spinner-border-sm me-1"></span>Reclassifying…</> : <><i className="bi bi-shuffle me-1"></i>Reclassify Requirements</>}
+        </button>
+      </div>
+    </div>
+  );
 
   // UI feedback state
   const [uiAnalyzing, setUiAnalyzing] = useState(false);
@@ -1480,6 +1514,8 @@ function SystemViewV2Inner() {
                             </div>
                           )}
                         </>
+                      ) : enhanceCards.isRecategorize ? (
+                        renderRecategorizeCard(selectedComponent.name)
                       ) : enhanceCards.isDone ? (
                         <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
                           <div className="d-flex align-items-center gap-2 mb-1">
@@ -1512,10 +1548,22 @@ function SystemViewV2Inner() {
               {workTab === 'build' && (
                 <div>
                   {!buildPrompt && !buildGenerating && (() => {
-                    // If the BP is in enhance/done mode, surface improvement options
-                    // here too. The user opened the Build tab expecting forward motion —
-                    // never re-show finished build steps.
+                    // If the BP is in enhance/done/recategorize mode, surface the right
+                    // forward-motion card here too. The user opened the Build tab
+                    // expecting progress — never re-show finished build steps and never
+                    // try to "build" a synthetic holding bucket.
                     const enhanceCards = getEnhanceCards(compDetail);
+                    if (enhanceCards.isRecategorize) {
+                      return (
+                        <div>
+                          <div className="d-flex align-items-center gap-2 mb-3">
+                            <i className="bi bi-funnel-fill" style={{ color: '#f59e0b', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#92400e' }}>Reclassify Required</h6>
+                          </div>
+                          {renderRecategorizeCard(selectedComponent.name)}
+                        </div>
+                      );
+                    }
                     if (enhanceCards.isDone) {
                       return (
                         <div>
@@ -1839,6 +1887,9 @@ function SystemViewV2Inner() {
                     const enhanceCards = getEnhanceCards(compDetail);
                     const healthSteps: Array<{ title: string; explanation: string; color: string; promptTarget?: string }> = [];
 
+                    if (enhanceCards.isRecategorize) {
+                      return renderRecategorizeCard(selectedComponent.name);
+                    }
                     if (enhanceCards.isDone) {
                       return (
                         <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
@@ -1941,6 +1992,9 @@ function SystemViewV2Inner() {
                     // Prefer the unified enhancement_plan when the BP is in 'enhance'
                     // or 'done' mode — otherwise fall back to the local layer + gap mix.
                     const enhanceCards = getEnhanceCards(compDetail);
+                    if (enhanceCards.isRecategorize) {
+                      return renderRecategorizeCard(selectedComponent.name);
+                    }
                     if (enhanceCards.isDone) {
                       return (
                         <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>

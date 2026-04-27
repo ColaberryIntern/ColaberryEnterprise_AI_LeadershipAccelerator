@@ -2186,23 +2186,37 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const pendingExecutionPlan = (enriched.execution_plan || []).filter(
       (s: any) => !s.status || s.status === 'pending',
     );
-    const enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps);
     const isComplete = !!enriched.is_complete;
-    const nextActionKind: 'build' | 'enhance' | 'done' =
-      pendingExecutionPlan.length > 0
+    // The clusterer creates "Uncategorized Requirements" as a holding bucket
+    // for orphaned requirements. It's not a coherent BP — recommending a build
+    // for it produces nonsense prompts. Surface it as a reclassify-first
+    // action instead of build/enhance.
+    const synthName = (enriched.name || '').toLowerCase();
+    const isSyntheticBucket = synthName.includes('uncategorized') || synthName === 'miscellaneous' || synthName === 'other';
+
+    let enhancementPlan: any[];
+    let nextActionKind: 'build' | 'enhance' | 'done' | 'recategorize';
+    if (isSyntheticBucket) {
+      enhancementPlan = [];
+      nextActionKind = 'recategorize';
+    } else {
+      enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps);
+      nextActionKind = pendingExecutionPlan.length > 0
         ? 'build'
         : enhancementPlan.length > 0
           ? 'enhance'
           : isComplete
             ? 'done'
             : 'build';
+    }
 
     res.json({
       ...enriched,
-      execution_plan: pendingExecutionPlan,
-      autonomy_gaps: autonomyGaps,
+      execution_plan: isSyntheticBucket ? [] : pendingExecutionPlan,
+      autonomy_gaps: isSyntheticBucket ? [] : autonomyGaps,
       enhancement_plan: enhancementPlan,
       next_action_kind: nextActionKind,
+      is_synthetic_bucket: isSyntheticBucket,
       repo_url: (project as any).github_repo_url || (project as any).repo_url || null,
       preview_url: (() => {
         const baseUrl = (project as any).portfolio_url;

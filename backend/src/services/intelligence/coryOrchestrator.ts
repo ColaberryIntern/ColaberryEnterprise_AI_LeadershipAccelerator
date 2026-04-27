@@ -376,7 +376,19 @@ function deduplicateTasks(tasks: CoryTask[]): CoryTask[] {
 
 // ─── MAIN ORCHESTRATOR ─────────────────────────────────────────────────────
 
+/**
+ * "Uncategorized Requirements" is a synthetic bucket the clusterer creates
+ * for orphaned requirements. It is never a buildable BP — recommending build
+ * actions for it produces nonsensical prompts. Skip it everywhere a task
+ * surface would otherwise pick it up.
+ */
+function isSyntheticBucket(enriched: any): boolean {
+  const name = (enriched?.name || '').toLowerCase();
+  return name.includes('uncategorized') || name === 'miscellaneous' || name === 'other';
+}
+
 export function getTopTasks(enriched: any, projectMode: string): CoryTask[] {
+  if (isSyntheticBucket(enriched)) return [];
   const state = getSystemState(enriched, projectMode);
 
   // Step 1: Gather all tasks from adapters
@@ -438,6 +450,8 @@ export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: str
   const allTasks: CoryTask[] = [];
 
   for (const enriched of enrichedCapabilities) {
+    // Skip the synthetic Uncategorized bucket — it's not a real BP to build.
+    if (isSyntheticBucket(enriched)) continue;
     // Skip complete components
     const coverage = enriched.metrics?.requirements_coverage || 0;
     const readiness = enriched.metrics?.system_readiness || 0;
