@@ -96,49 +96,41 @@ async function drivePhases(slug: string, idea: string): Promise<void> {
     }
   };
 
-  // Phase 1: Send the idea via chat — this triggers idea_intake → feature_discovery
+  // Phase 1: Send the idea via chat — triggers idea_intake processing
   console.log(`[ArchitectProxy] Phase 1: Sending idea to ${slug}`);
-  let chatResult = await chat(idea);
+  await chat(idea);
+  // Wait for LLM to process the idea (profile_generator runs)
+  await sleep(10000);
 
-  // The chat engine may need multiple turns to advance through phases
-  // Keep sending confirmations until we get past feature_discovery
-  for (let i = 0; i < 5; i++) {
-    await sleep(3000);
-    const phase = chatResult?.phase || chatResult?.current_phase || '';
-    console.log(`[ArchitectProxy] Current phase for ${slug}: ${phase} (attempt ${i + 1})`);
-
-    if (phase === 'feature_discovery' || phase === 'outline_generation') break;
-
-    // Send a follow-up to advance
-    chatResult = await chat('yes, proceed with all suggested features');
-  }
-
-  // Phase 2: Auto-select features and approve
-  console.log(`[ArchitectProxy] Phase 2: Selecting features for ${slug}`);
-  await postEndpoint('api/select-features');
-  await sleep(2000);
-  await postEndpoint('approve-features');
-  await sleep(3000);
-
-  // Phase 3: Generate outline
-  console.log(`[ArchitectProxy] Phase 3: Generating outline for ${slug}`);
-  await postEndpoint('generate-outline');
-  // Wait for outline generation (can take 10-30 seconds)
-  await sleep(15000);
-
-  // Phase 4: Approve outline
-  console.log(`[ArchitectProxy] Phase 4: Approving outline for ${slug}`);
-  await postEndpoint('approve-outline');
+  // Send follow-up to advance past intake
+  console.log(`[ArchitectProxy] Phase 1b: Advancing past intake for ${slug}`);
+  await chat('proceed');
   await sleep(5000);
 
-  // Phase 5-7: Start auto-build (may take 10+ minutes)
+  // Phase 2: Approve all features
+  console.log(`[ArchitectProxy] Phase 2: Approving features for ${slug}`);
+  await postEndpoint('feature-discovery/approve');
+  await sleep(5000);
+
+  // Phase 3: Advance to outline generation, then generate outline
+  console.log(`[ArchitectProxy] Phase 3: Generating outline for ${slug}`);
+  await postEndpoint('outline-generation/advance');
+  await sleep(15000); // Outline generation takes 10-30s (LLM call)
+
+  // Phase 4: Lock the outline (approve)
+  console.log(`[ArchitectProxy] Phase 4: Locking outline for ${slug}`);
+  await postEndpoint('outline-approval/lock');
+  await sleep(5000);
+
+  // Phase 5-7: Start auto-build
   console.log(`[ArchitectProxy] Phase 5: Starting auto-build for ${slug}`);
   const buildResult = await postEndpoint('auto-build/start');
   if (!buildResult.ok) {
-    console.warn(`[ArchitectProxy] Auto-build failed, trying chat fallback for ${slug}`);
-    // Try chat to see what phase we're actually in
-    const statusChat = await chat('what phase are we in? please continue building');
-    console.log(`[ArchitectProxy] Chat fallback response: ${JSON.stringify(statusChat).substring(0, 200)}`);
+    console.warn(`[ArchitectProxy] Auto-build failed (${buildResult.status}), trying chapter-build advance`);
+    await postEndpoint('chapter-build/advance');
+    await sleep(3000);
+    const retryResult = await postEndpoint('auto-build/start');
+    console.log(`[ArchitectProxy] Auto-build retry: ${retryResult.ok ? 'SUCCESS' : 'FAILED'}`);
   } else {
     console.log(`[ArchitectProxy] Auto-build successfully started for ${slug}`);
   }
