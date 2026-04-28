@@ -403,6 +403,14 @@ function CoryInlinePanel({ suggestions, coryInput, setCoryInput, coryMessages, c
 function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: { comp: SystemComponent; isSelected: boolean; isNext: boolean; isReportingMode?: boolean; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
   const statusColor = comp.status === 'complete' ? '#10b981' : comp.status === 'in_progress' ? '#f59e0b' : '#ef4444';
+  // Completion-based color for the actual progress bar — "status" is a flag,
+  // completion is the number, and the bar should track the number. Keeps
+  // green from showing on a "Complete"-flagged BP whose actual completion is 0.
+  const compBarColor = comp.completion >= 100 ? '#10b981'
+    : comp.completion >= 70 ? '#22c55e'
+    : comp.completion >= 30 ? '#f59e0b'
+    : comp.completion > 0 ? '#ef4444'
+    : '#e2e8f0';
 
   return (
     <div
@@ -456,9 +464,9 @@ function SystemMapTile({ comp, isSelected, isNext, isReportingMode, onClick }: {
       {/* Progress bar */}
       <div className="d-flex align-items-center gap-2 mb-1">
         <div className="progress flex-grow-1" style={{ height: 4, borderRadius: 2 }}>
-          <div className="progress-bar" style={{ width: `${comp.completion}%`, background: statusColor, borderRadius: 2, transition: 'width 0.4s ease' }}></div>
+          <div className="progress-bar" style={{ width: `${comp.completion}%`, background: compBarColor, borderRadius: 2, transition: 'width 0.4s ease' }}></div>
         </div>
-        <span style={{ fontSize: 9, color: statusColor, fontWeight: 600, minWidth: 26, textAlign: 'right' as const }}>{comp.completion}%</span>
+        <span style={{ fontSize: 9, color: compBarColor, fontWeight: 600, minWidth: 26, textAlign: 'right' as const }}>{comp.completion}%</span>
       </div>
 
       {/* Layer indicators */}
@@ -1132,8 +1140,10 @@ function SystemViewV2Inner() {
     navigate(`/portal/project/cory?mode=learn&componentId=${comp.id}&stepName=${encodeURIComponent(comp.name)}`);
   };
 
-  // UI feedback handlers
-  const handleUIAnalyze = async (compId: string, feedback: string) => {
+  // UI feedback handlers. Now passes step_key so the backend stamps which
+  // of the 3 UI Advisor steps was just executed; the panel uses that to
+  // collapse the run step and surface the next unrun one.
+  const handleUIAnalyze = async (compId: string, feedback: string, stepKey?: 'layout_hierarchy' | 'usability' | 'mobile_responsiveness') => {
     setUiAnalyzing(true);
     try {
       const feFiles = (compDetail?.implementation_links?.frontend || []) as string[];
@@ -1142,9 +1152,15 @@ function SystemViewV2Inner() {
         return { element_id: `component-${i}`, type: 'component', tag: 'div', selector: name, text: name, depth: 0 };
       });
       await portalApi.post(`/api/portal/project/business-processes/${compId}/element-map`, { elements, route: compDetail?.frontend_route || '/' });
-      await portalApi.post(`/api/portal/project/business-processes/${compId}/analyze-page`, { user_feedback: feedback });
+      await portalApi.post(`/api/portal/project/business-processes/${compId}/analyze-page`, { user_feedback: feedback, step_key: stepKey });
       const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
       setUiFeedback(fbRes.data);
+      // Refresh BP detail so ui_element_map.steps lands in compDetail and the
+      // step row immediately collapses to "Last run · Re-run".
+      try {
+        const detailRes = await portalApi.get(`/api/portal/project/business-processes/${compId}`);
+        setCompDetail(detailRes.data);
+      } catch {}
     } catch {} finally { setUiAnalyzing(false); }
   };
 
@@ -2470,13 +2486,29 @@ function SystemViewV2Inner() {
                 const pages = selectedComponent.ui.pages;
                 const safeIdx = Math.min(selectedPageIdx, pages.length - 1);
                 const previewUrl = compDetail?.preview_url || undefined;
-                const uiActions = [
-                  { title: 'Improve page layout and hierarchy', explanation: 'Analyze spacing, visual hierarchy, and component structure.', feedback: 'Improve the page layout, spacing, and visual hierarchy' },
-                  { title: 'Fix usability issues', explanation: 'Detect broken interactions, missing feedback, and accessibility gaps.', feedback: 'Find and fix usability issues and broken interactions' },
-                  { title: 'Check mobile responsiveness', explanation: 'Ensure the UI works across all screen sizes and devices.', feedback: 'Make the layout responsive for mobile and tablet' },
+                type UIActionKey = 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
+                const uiActions: Array<{ key: UIActionKey; title: string; explanation: string; feedback: string }> = [
+                  { key: 'layout_hierarchy', title: 'Improve page layout and hierarchy', explanation: 'Analyze spacing, visual hierarchy, and component structure.', feedback: 'Improve the page layout, spacing, and visual hierarchy' },
+                  { key: 'usability', title: 'Fix usability issues', explanation: 'Detect broken interactions, missing feedback, and accessibility gaps.', feedback: 'Find and fix usability issues and broken interactions' },
+                  { key: 'mobile_responsiveness', title: 'Check mobile responsiveness', explanation: 'Ensure the UI works across all screen sizes and devices.', feedback: 'Make the layout responsive for mobile and tablet' },
                 ];
-                const primary = uiActions[0];
-                const upNext = uiActions.slice(1);
+                // Per-step run history. ui_element_map.steps[key] is either
+                // null/missing (not run) or { run_at, issues_found } (run).
+                const stepsRun: Record<string, { run_at?: string; issues_found?: number } | null> = (compDetail?.ui_element_map?.steps) || {};
+                const isRun = (k: UIActionKey) => !!stepsRun[k]?.run_at;
+                const allRun = uiActions.every(a => isRun(a.key));
+                const firstUnrunIdx = uiActions.findIndex(a => !isRun(a.key));
+                const primaryIdx = firstUnrunIdx === -1 ? 0 : firstUnrunIdx;
+                const primary = uiActions[primaryIdx];
+                const others = uiActions.filter((_, i) => i !== primaryIdx);
+                const relTime = (iso?: string): string => {
+                  if (!iso) return '';
+                  const sec = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+                  if (sec < 60) return 'just now';
+                  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+                  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+                  return `${Math.round(sec / 86400)}d ago`;
+                };
                 return (
                 <div>
                   {/* Cory header */}
@@ -2506,20 +2538,46 @@ function SystemViewV2Inner() {
                     </div>
                   )}
 
-                  {/* Primary recommendation */}
-                  <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step 1 of {uiActions.length} UI improvements</div>
-                  <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
-                  <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
-
-                  <div className="d-flex flex-wrap gap-2 mb-3">
-                    <button className="btn btn-sm" style={{ background: '#10b981', color: '#fff', fontWeight: 600, fontSize: 12 }} disabled={uiAnalyzing}
-                      onClick={() => handleUIAnalyze(selectedComponent.id, primary.feedback)}>
-                      <i className="bi bi-play-fill me-1"></i>{uiAnalyzing ? 'Analyzing...' : 'Run Analysis'}
-                    </button>
-                    <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
-                      <i className="bi bi-book me-1"></i>Learn About This
-                    </button>
-                  </div>
+                  {/* When all 3 steps have run, the primary surface flips to a
+                      "complete · re-run all" empty state instead of nagging
+                      with another Run Analysis button on already-done work. */}
+                  {allRun ? (
+                    <div className="mb-3 p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                        <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#059669' }}>Visual analysis complete</h6>
+                      </div>
+                      <p className="text-muted mb-2" style={{ fontSize: 11 }}>All 3 UI Advisor steps have run. Review the Detected Issues below or re-run any step to refresh.</p>
+                      <button className="btn btn-link btn-sm p-0" style={{ fontSize: 11 }} disabled={uiAnalyzing}
+                        onClick={async () => {
+                          for (const a of uiActions) {
+                            try { await bpApi.setUIStepStatus(selectedComponent.id, a.key, { clear: true }); } catch {}
+                          }
+                          try {
+                            const detailRes = await portalApi.get(`/api/portal/project/business-processes/${selectedComponent.id}`);
+                            setCompDetail(detailRes.data);
+                          } catch {}
+                        }}>
+                        <i className="bi bi-arrow-repeat me-1"></i>Reset all steps
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Primary recommendation = first unrun step */}
+                      <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Step {primaryIdx + 1} of {uiActions.length} UI improvements</div>
+                      <h6 className="fw-bold mb-1" style={{ fontSize: 15 }}>{primary.title}</h6>
+                      <p className="mb-2" style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic' }}>{primary.explanation}</p>
+                      <div className="d-flex flex-wrap gap-2 mb-3">
+                        <button className="btn btn-sm" style={{ background: '#10b981', color: '#fff', fontWeight: 600, fontSize: 12 }} disabled={uiAnalyzing}
+                          onClick={() => handleUIAnalyze(selectedComponent.id, primary.feedback, primary.key)}>
+                          <i className="bi bi-play-fill me-1"></i>{uiAnalyzing ? 'Analyzing...' : 'Run Analysis'}
+                        </button>
+                        <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
+                          <i className="bi bi-book me-1"></i>Learn About This
+                        </button>
+                      </div>
+                    </>
+                  )}
 
                   {/* Detected issues — each row is actionable: Fix kicks off a focused
                       Cory prompt scoped to that one issue; Dismiss removes it from view;
@@ -2575,25 +2633,43 @@ function SystemViewV2Inner() {
                     );
                   })()}
 
-                  {/* Up next UI actions */}
-                  <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                    <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
-                      <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Up next ({upNext.length} more)
-                    </div>
-                    {upNext.map((a, i) => (
-                      <div key={i} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6 }}>
-                        <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: '#10b98120', color: '#059669', fontSize: 9, flexShrink: 0, marginTop: 1 }}>{i + 2}</span>
-                        <div className="flex-grow-1">
-                          <div className="fw-medium" style={{ fontSize: 11 }}>{a.title}</div>
-                          <div className="text-muted" style={{ fontSize: 9 }}>{a.explanation}</div>
-                        </div>
-                        <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 6px', flexShrink: 0 }} disabled={uiAnalyzing}
-                          onClick={() => handleUIAnalyze(selectedComponent.id, a.feedback)}>
-                          Run
-                        </button>
+                  {/* Other steps row — combines unrun ones (Run button) and
+                      already-run ones (badge + Re-run link). Each step is in
+                      one of two states based on ui_element_map.steps so the
+                      user always knows what's been done. */}
+                  {!allRun && others.length > 0 && (
+                    <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                      <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
+                        <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Other steps ({others.length})
                       </div>
-                    ))}
-                  </div>
+                      {others.map((a) => {
+                        const numericIdx = uiActions.findIndex(u => u.key === a.key);
+                        const ran = isRun(a.key);
+                        const meta = stepsRun[a.key];
+                        return (
+                        <div key={a.key} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: ran ? '#f0fdf4' : 'var(--color-bg-alt)', borderRadius: 6 }}>
+                          <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: ran ? '#10b981' : '#10b98120', color: ran ? '#fff' : '#059669', fontSize: 9, flexShrink: 0, marginTop: 1 }}>
+                            {ran ? <i className="bi bi-check-lg" style={{ fontSize: 10 }}></i> : numericIdx + 1}
+                          </span>
+                          <div className="flex-grow-1">
+                            <div className="fw-medium" style={{ fontSize: 11 }}>{a.title}</div>
+                            <div className="text-muted" style={{ fontSize: 9 }}>
+                              {ran && meta?.run_at ? `Last run ${relTime(meta.run_at)} · ${meta.issues_found || 0} issue${meta.issues_found === 1 ? '' : 's'}` : a.explanation}
+                            </div>
+                          </div>
+                          <button
+                            className={`btn btn-sm ${ran ? 'btn-link text-muted' : 'btn-outline-success'}`}
+                            style={{ fontSize: ran ? 9 : 8, padding: '1px 6px', flexShrink: 0 }}
+                            disabled={uiAnalyzing}
+                            onClick={() => handleUIAnalyze(selectedComponent.id, a.feedback, a.key)}
+                          >
+                            {ran ? <><i className="bi bi-arrow-repeat me-1"></i>Re-run</> : 'Run'}
+                          </button>
+                        </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                 </div>
                 );

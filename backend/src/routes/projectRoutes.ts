@@ -4075,6 +4075,12 @@ router.get('/api/portal/project/business-processes/:id/backend-context', require
 const PAGE_CATEGORIES = ['layout', 'accessibility', 'responsiveness', 'interaction', 'content'] as const;
 type PageCategory = typeof PAGE_CATEGORIES[number];
 
+// Cory UI Advisor step identifiers — match the three steps rendered in the
+// SystemViewV2 UI tab (uiActions array). The frontend keys map 1:1, so the
+// backend can stamp ui_element_map.steps when each runs and the panel can
+// auto-advance from one to the next.
+const UI_STEP_KEYS = ['layout_hierarchy', 'usability', 'mobile_responsiveness'] as const;
+
 router.put('/api/portal/project/business-processes/:id/page-category', requireParticipant, async (req: Request, res: Response) => {
   try {
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
@@ -4197,12 +4203,55 @@ router.post('/api/portal/project/business-processes/:id/analyze-page', requirePa
         ruleIssueCount: ruleResult.total_issues,
       });
     }
+    // Stamp the UI Advisor step that was just run, so the frontend can
+    // collapse it to a "Last run X ago · Re-run" state and surface the next
+    // unrun step as the primary recommendation. Optional — backwards
+    // compatible with callers that don't send step_key.
+    const stepKey = req.body.step_key;
+    if (UI_STEP_KEYS.includes(stepKey)) {
+      const issuesFound = (ruleResult.new_issues || 0) + (llmResult.new_issues || 0);
+      const map = ((cap as any).ui_element_map || {}) as any;
+      const steps = map.steps || {};
+      steps[stepKey] = { run_at: new Date().toISOString(), issues_found: issuesFound };
+      (cap as any).ui_element_map = { ...map, steps };
+      (cap as any).changed('ui_element_map', true);
+      await cap.save();
+    }
     res.json({
       rules: ruleResult,
       llm: llmResult,
       total_new: ruleResult.new_issues + llmResult.new_issues,
       total_skipped: ruleResult.skipped_duplicates + llmResult.skipped_duplicates,
+      ui_steps: ((cap as any).ui_element_map || {}).steps || null,
     });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Manual override — lets the user mark a step done/cleared without running
+// the analyzer (e.g. they reviewed elsewhere and want to advance the wizard).
+router.put('/api/portal/project/business-processes/:id/ui-step-status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { step_key, run_at, issues_found, clear } = req.body || {};
+    if (!UI_STEP_KEYS.includes(step_key)) {
+      res.status(400).json({ error: `Invalid step_key. Must be one of: ${UI_STEP_KEYS.join(', ')}` });
+      return;
+    }
+    const map = ((cap as any).ui_element_map || {}) as any;
+    const steps = map.steps || {};
+    if (clear) {
+      steps[step_key] = null;
+    } else {
+      steps[step_key] = {
+        run_at: run_at || new Date().toISOString(),
+        issues_found: typeof issues_found === 'number' ? issues_found : 0,
+      };
+    }
+    (cap as any).ui_element_map = { ...map, steps };
+    (cap as any).changed('ui_element_map', true);
+    await cap.save();
+    res.json({ id: cap.id, steps });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

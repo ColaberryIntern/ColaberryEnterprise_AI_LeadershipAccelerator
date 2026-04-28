@@ -80,6 +80,17 @@ const MATURITY_COLORS: Record<number, string> = {
   0: '#9ca3af', 1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#10b981', 5: '#8b5cf6',
 };
 
+// Completion-based color for progress bars / percent text. Maturity color
+// belongs on the maturity badge — using it for the completion bar produced
+// red bars on 100%-complete L1 BPs which read like a fail state.
+function completionColor(pct: number): string {
+  if (pct >= 100) return '#10b981';   // green — done
+  if (pct >= 70)  return '#22c55e';   // light green — close
+  if (pct >= 30)  return '#f59e0b';   // amber — partial
+  if (pct > 0)    return '#ef4444';   // red — barely started
+  return '#e2e8f0';                   // gray — not started
+}
+
 const MATURITY_LABELS: Record<number, string> = {
   0: 'L0 Not Started', 1: 'L1 Prototype', 2: 'L2 Functional',
   3: 'L3 Production', 4: 'L4 Autonomous', 5: 'L5 Self-Optimizing',
@@ -725,6 +736,14 @@ export default function SystemBlueprint() {
   const completedCount = components.filter(c => c.status === 'complete').length;
   const totalCount = components.length;
   const overallCompletion = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  // Real-completion vs. status-flag-based completion. The "All Components
+  // Complete" banner uses fullyComplete because the auto-derived `is_complete`
+  // flag fires on Page BPs that haven't done visual review (0/5 categories)
+  // and other heuristic-complete BPs — so a banner gated on `status` lies
+  // about production readiness while real work remains.
+  const fullCompletionCount = components.filter(c => c.completion === 100).length;
+  const allFullyComplete = totalCount > 0 && fullCompletionCount === totalCount;
+  const avgCompletion = totalCount > 0 ? Math.round(components.reduce((sum, c) => sum + (c.completion || 0), 0) / totalCount) : 0;
   const readiness = progress?.productionReadinessScore || overallCompletion;
   const systemLevel = getSystemLevel(components.map(c => c.maturityLevel));
   const isInFlow = build.phase !== 'idle';
@@ -1413,8 +1432,9 @@ export default function SystemBlueprint() {
         </div>
       )}
 
-      {/* All complete */}
-      {!recommended && totalCount > 0 && (
+      {/* All complete — only when every BP's completion is actually 100%,
+          not just when the auto-`is_complete` heuristic fired. */}
+      {allFullyComplete && (
         <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #10b981' }}>
           <div className="card-body p-4 text-center">
             <i className="bi bi-trophy" style={{ fontSize: 32, color: '#10b981' }}></i>
@@ -1431,6 +1451,11 @@ export default function SystemBlueprint() {
             <h6 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 14 }}>
               System Components
               <span className="badge ms-2" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10 }}>{totalCount}</span>
+              {totalCount > 0 && (
+                <span className="ms-2 text-muted" style={{ fontSize: 11, fontWeight: 400 }}>
+                  · {fullCompletionCount} of {totalCount} at 100% · {avgCompletion}% avg completion
+                </span>
+              )}
             </h6>
             <div className="d-flex align-items-center gap-2">
               {(() => {
@@ -1465,6 +1490,7 @@ export default function SystemBlueprint() {
             {components.map(comp => {
               const ss = STATUS_COLORS[comp.status];
               const mc = MATURITY_COLORS[comp.maturityLevel] || '#9ca3af';
+              const cc = completionColor(comp.completion);
               const isActive = recommended?.id === comp.id;
               return (
                 <div key={comp.id} className="col-md-6 col-lg-4">
@@ -1485,10 +1511,10 @@ export default function SystemBlueprint() {
                       <div className="mb-2">
                         <div className="d-flex justify-content-between mb-1" style={{ fontSize: 10 }}>
                           <span className="text-muted">Completion</span>
-                          <span style={{ color: mc, fontWeight: 600 }}>{comp.completion}%</span>
+                          <span style={{ color: cc, fontWeight: 600 }}>{comp.completion}%</span>
                         </div>
                         <div className="progress" style={{ height: 4, borderRadius: 2 }}>
-                          <div className="progress-bar" style={{ width: `${comp.completion}%`, background: mc, borderRadius: 2 }} />
+                          <div className="progress-bar" style={{ width: `${comp.completion}%`, background: cc, borderRadius: 2 }} />
                         </div>
                       </div>
                       <div className="d-flex justify-content-between align-items-center">

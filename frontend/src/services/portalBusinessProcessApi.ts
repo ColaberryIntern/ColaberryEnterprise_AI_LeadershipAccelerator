@@ -16,6 +16,13 @@ export const bulkVerify = (minCoverage: number = 95) => portalApi.post('/api/por
 export type PageCategory = 'layout' | 'accessibility' | 'responsiveness' | 'interaction' | 'content';
 export const setPageCategory = (id: string, category: PageCategory, verified: boolean) =>
   portalApi.put(`/api/portal/project/business-processes/${id}/page-category`, { category, verified });
+export type UIStepKey = 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
+export const setUIStepStatus = (id: string, step_key: UIStepKey, opts?: { issues_found?: number; clear?: boolean }) =>
+  portalApi.put(`/api/portal/project/business-processes/${id}/ui-step-status`, {
+    step_key,
+    issues_found: opts?.issues_found ?? 0,
+    clear: opts?.clear ?? false,
+  });
 export const connectPage = (id: string, route: string) =>
   portalApi.put(`/api/portal/project/business-processes/${id}/connect-page`, { route });
 export const generateCombinedPrompt = (id: string, payload: { execution_steps: string[]; autonomy_gaps: any[]; include_agents: string[] }) => portalApi.post(`/api/portal/project/business-processes/${id}/combined-prompt`, payload);
