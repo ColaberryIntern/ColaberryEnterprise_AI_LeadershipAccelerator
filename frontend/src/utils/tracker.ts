@@ -73,7 +73,15 @@ function push(event_type: string, props: Record<string, unknown> = {}) {
       }
     }
   } catch { /* silent */ }
-  buffer.push({ event_type, timestamp: new Date().toISOString(), ...props });
+  // Backend API requires `page_url` and `page_path` on every event. Always include
+  // them automatically so individual event sites don't have to.
+  buffer.push({
+    event_type,
+    timestamp: new Date().toISOString(),
+    page_url: location.href,
+    page_path: location.pathname,
+    ...props,
+  });
 }
 
 // --- flush ------------------------------------------------------------------
