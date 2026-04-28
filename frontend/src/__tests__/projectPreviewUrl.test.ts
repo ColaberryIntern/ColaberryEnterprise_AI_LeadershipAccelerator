@@ -11,7 +11,19 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildPreviewUrl } from '../utils/projectPreviewUrl';
+import { buildPreviewUrl, willBeMixedContentBlocked } from '../utils/projectPreviewUrl';
+
+// Default JSDOM origin is http://localhost. For HTTPS-mixed-content tests we
+// swap window.location for a stub. JSDOM disallows redefining individual
+// properties on its real Location, but `window` itself accepts replacement.
+function withHttpsPortal<T>(run: () => T): T {
+  const original = window.location;
+  delete (window as any).location;
+  (window as any).location = { ...original, protocol: 'https:' };
+  try { return run(); } finally {
+    (window as any).location = original;
+  }
+}
 
 describe('buildPreviewUrl', () => {
   test('returns null when project has no preview base', () => {
@@ -20,8 +32,27 @@ describe('buildPreviewUrl', () => {
     expect(buildPreviewUrl({ direct_preview_url: '', portfolio_url: '' }, '/x')).toBeNull();
   });
 
-  test('uses direct_preview_url when present', () => {
-    const out = buildPreviewUrl({ direct_preview_url: 'http://95.216.199.47:8889' }, '/#/ops');
+  test('iframe context prefers portfolio_url to avoid mixed content', () => {
+    // Both direct (HTTP) and portfolio set, portal is HTTPS → must use portfolio
+    const out = withHttpsPortal(() => buildPreviewUrl(
+      { direct_preview_url: 'http://95.216.199.47:8889', portfolio_url: '/preview/shipces' },
+      '/#/ops',
+      'iframe',
+    ));
+    expect(out).toBe('/preview/shipces/#/ops');
+  });
+
+  test('iframe context falls back to direct when no portfolio_url', () => {
+    const out = buildPreviewUrl({ direct_preview_url: 'http://95.216.199.47:8889' }, '/#/ops', 'iframe');
+    expect(out).toBe('http://95.216.199.47:8889/#/ops');
+  });
+
+  test('newTab context prefers direct_preview_url even when portfolio is present', () => {
+    const out = buildPreviewUrl(
+      { direct_preview_url: 'http://95.216.199.47:8889', portfolio_url: '/preview/shipces' },
+      '/#/ops',
+      'newTab',
+    );
     expect(out).toBe('http://95.216.199.47:8889/#/ops');
   });
 
@@ -29,12 +60,13 @@ describe('buildPreviewUrl', () => {
     const out = buildPreviewUrl(
       { project_variables: { direct_preview_url: 'http://95.216.199.47:8889' } },
       '/#/ops',
+      'newTab',
     );
     expect(out).toBe('http://95.216.199.47:8889/#/ops');
   });
 
   test('falls back to portfolio_url when direct is missing', () => {
-    const out = buildPreviewUrl({ portfolio_url: '/preview/shipces' }, '/#/ops');
+    const out = buildPreviewUrl({ portfolio_url: '/preview/shipces' }, '/#/ops', 'iframe');
     expect(out).toBe('/preview/shipces/#/ops');
   });
 
@@ -47,12 +79,12 @@ describe('buildPreviewUrl', () => {
   });
 
   test('strips trailing slash on base before joining', () => {
-    const out = buildPreviewUrl({ direct_preview_url: 'http://95.216.199.47:8889/' }, '/ops');
+    const out = buildPreviewUrl({ direct_preview_url: 'http://95.216.199.47:8889/' }, '/ops', 'newTab');
     expect(out).toBe('http://95.216.199.47:8889/ops');
   });
 
   test('adds leading slash to route when missing', () => {
-    const out = buildPreviewUrl({ direct_preview_url: 'http://x.com' }, 'admin');
+    const out = buildPreviewUrl({ direct_preview_url: 'http://x.com' }, 'admin', 'newTab');
     expect(out).toBe('http://x.com/admin');
   });
 
@@ -63,6 +95,23 @@ describe('buildPreviewUrl', () => {
     );
     expect(out).not.toMatch(/enterprise\.colaberry\.ai/i);
     expect(out).not.toMatch(/colaberry\.ai/i);
+  });
+});
+
+describe('willBeMixedContentBlocked', () => {
+  test('true when portal is HTTPS and direct URL is HTTP', () => {
+    const out = withHttpsPortal(() => willBeMixedContentBlocked({ direct_preview_url: 'http://95.216.199.47:8889' }));
+    expect(out).toBe(true);
+  });
+
+  test('false when direct URL is HTTPS', () => {
+    const out = withHttpsPortal(() => willBeMixedContentBlocked({ direct_preview_url: 'https://shipces.example.com' }));
+    expect(out).toBe(false);
+  });
+
+  test('false when no project given', () => {
+    expect(willBeMixedContentBlocked(null)).toBe(false);
+    expect(willBeMixedContentBlocked(undefined)).toBe(false);
   });
 });
 

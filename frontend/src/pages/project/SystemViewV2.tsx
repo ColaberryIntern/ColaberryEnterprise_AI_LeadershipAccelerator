@@ -8,7 +8,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
-import { buildPreviewUrl } from '../../utils/projectPreviewUrl';
+import { buildPreviewUrl, willBeMixedContentBlocked } from '../../utils/projectPreviewUrl';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import SystemIntelligencePanel from '../../components/project/SystemIntelligencePanel';
@@ -2517,12 +2517,14 @@ function SystemViewV2Inner() {
                 {/* Step 1: Confirm page with editable URL + preview */}
                 {defineStep === 'confirm' && (() => {
                   const trimmedUrl = defineCustomUrl.trim();
-                  // Build the iframe URL against the *project's* preview base
-                  // (direct_preview_url for ShipCES = http://95.216.199.47:8889).
-                  // Never use the portal's host here — that's how Colaberry
-                  // pages used to leak into ShipCES previews.
-                  const previewSrc = buildPreviewUrl(project, trimmedUrl) || '';
+                  // Build the iframe URL against the *project's* preview base.
+                  // Use the proxy path for the iframe (avoids mixed-content
+                  // block when the portal is HTTPS and the project's direct
+                  // URL is HTTP) and the direct URL for "open in new tab".
+                  const previewSrc = buildPreviewUrl(project, trimmedUrl, 'iframe') || '';
+                  const newTabSrc = buildPreviewUrl(project, trimmedUrl, 'newTab') || '';
                   const noPreviewBase = trimmedUrl && !previewSrc;
+                  const mixedContentRisk = willBeMixedContentBlocked(project);
                   return (
                   <div>
                     <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Verify the page URL and preview</p>
@@ -2565,7 +2567,7 @@ function SystemViewV2Inner() {
                     </div>
 
                     {/* Always-rendered preview iframe — overlay placeholder when empty */}
-                    <div className="mb-3 position-relative" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)', background: '#fff', minHeight: 300 }}>
+                    <div className="mb-2 position-relative" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)', background: '#fff', minHeight: 300 }}>
                       {previewSrc ? (
                         <iframe
                           key={`${previewSrc}-${defineRefreshKey}`}
@@ -2583,6 +2585,29 @@ function SystemViewV2Inner() {
                         </div>
                       )}
                     </div>
+
+                    {/* "Open in new tab" — uses the direct URL so the user can
+                        verify even when the iframe is blocked (e.g. browser
+                        mixed-content policy on HTTPS portal + HTTP project app). */}
+                    {newTabSrc && (
+                      <div className="mb-3 d-flex align-items-center gap-2" style={{ fontSize: 11 }}>
+                        <a
+                          href={newTabSrc}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-sm btn-outline-primary"
+                          style={{ fontSize: 11 }}
+                        >
+                          <i className="bi bi-box-arrow-up-right me-1"></i>Open in new tab
+                        </a>
+                        {mixedContentRisk && (
+                          <span className="text-muted" style={{ fontSize: 10 }}>
+                            <i className="bi bi-shield-exclamation me-1"></i>
+                            iframe may be blank — your app runs on http and the portal is https. Use the new-tab button to verify.
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="d-flex gap-2 align-items-center">
                       <button
                         className="btn btn-sm btn-primary"
