@@ -8,7 +8,7 @@
 import Capability from '../models/Capability';
 import { analyzeProcessEvolution } from './agentEvolutionEngine';
 
-export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation' | 'add_database' | 'improve_reliability' | 'verify_requirements' | 'optimize_performance';
+export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation' | 'add_database' | 'improve_reliability' | 'verify_requirements' | 'optimize_performance' | 'ui_fix';
 
 export interface GeneratedPrompt {
   target: PromptTarget;
@@ -187,6 +187,24 @@ export async function generateImprovementPrompt(
       estimated_complexity: 'medium' as const,
       affected_files: [],
     }),
+
+    ui_fix: () => {
+      const issue = extraContext?.uiIssue || {};
+      const issueTitle = issue.title || 'UI issue';
+      const issueDesc = issue.description || '';
+      const issueSugg = issue.suggestion || '';
+      const issueSeverity = issue.severity || 'medium';
+      const issueElement = issue.element_id ? `\nElement: ${issue.element_id}` : '';
+      const pageRoute = issue.page_route || (process as any).frontend_route || '';
+      const pageContext = pageRoute ? `\nPage route: ${pageRoute}` : '';
+      return {
+        target: 'ui_fix' as PromptTarget,
+        title: `Fix: ${issueTitle}`,
+        prompt_text: `${preamble}${project}${codebase}# OBJECTIVE\n\nFix one specific UI issue on the "${process.name}" page. Scope is narrow on purpose — do not redesign the page, do not bundle other improvements.\n\n# THE ISSUE\n\nTitle: ${issueTitle}\nSeverity: ${issueSeverity}${issueElement}${pageContext}\n\n${issueDesc}\n\n${issueSugg ? `Suggested approach: ${issueSugg}\n` : ''}\n# WHAT TO DO\n\n1. Locate the page component for "${process.name}" in the frontend tree.\n2. Make the smallest change that resolves the issue described above.\n3. Preserve all other behavior on the page.\n4. Match existing component patterns and design tokens already in use.${constraints}${validation}`,
+        estimated_complexity: 'small' as const,
+        affected_files: [],
+      };
+    },
 
     requirement_implementation: () => {
       const reqList = extraContext?.unmappedRequirements || [];

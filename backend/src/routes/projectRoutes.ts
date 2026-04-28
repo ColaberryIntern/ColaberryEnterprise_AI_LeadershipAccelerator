@@ -2348,8 +2348,10 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     const isVerified = userStatus === 'verified';
     const isArchived = userStatus === 'archived';
 
+    const isPageBPEnriched = !!(enriched as any).is_page_bp || (enriched as any).source === 'frontend_page';
+
     let enhancementPlan: any[];
-    let nextActionKind: 'build' | 'enhance' | 'done' | 'recategorize' | 'verified' | 'archived';
+    let nextActionKind: 'build' | 'enhance' | 'polish' | 'done' | 'recategorize' | 'verified' | 'archived' | 'page_visual_review';
     if (isVerified) {
       // User has asserted this BP is built. Stop recommending anything.
       enhancementPlan = [];
@@ -2360,6 +2362,13 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     } else if (isSyntheticBucket) {
       enhancementPlan = [];
       nextActionKind = 'recategorize';
+    } else if (isPageBPEnriched && isComplete) {
+      // Page BP that auto-completed (frontend_route attached, etc.) but the
+      // user hasn't explicitly verified it yet. The right next step is the
+      // 5-category Visual Review, not generic "improve" recommendations —
+      // those only generate confusion ("Complete + 0% Simulation Capability").
+      enhancementPlan = [];
+      nextActionKind = 'page_visual_review';
     } else {
       // Read PROGRESS.md (if present) so we can drop enhancement suggestions
       // whose work is already documented as done. Per CLAUDE.md, PROGRESS.md
@@ -2371,13 +2380,20 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
         progressLedger = await getProgressLedger(req.participant!.sub);
       } catch { /* fall back to no ledger */ }
       enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps, progressLedger);
+      // Auto-complete BPs that aren't verified yet still get suggestions, but
+      // framed as optional polish — not as "you're missing this." Keeps the
+      // user's earlier guidance ("until marked complete I still want
+      // suggestions") while letting the frontend tone down the urgency.
+      const isPolish = isComplete && enhancementPlan.length > 0;
       nextActionKind = pendingExecutionPlan.length > 0
         ? 'build'
-        : enhancementPlan.length > 0
-          ? 'enhance'
-          : isComplete
-            ? 'done'
-            : 'build';
+        : isPolish
+          ? 'polish'
+          : enhancementPlan.length > 0
+            ? 'enhance'
+            : isComplete
+              ? 'done'
+              : 'build';
     }
 
     res.json({
@@ -2561,7 +2577,7 @@ router.post('/api/portal/project/business-processes/:id/evaluate', requirePartic
 
 router.post('/api/portal/project/business-processes/:id/prompt', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { target } = req.body;
+    const { target, uiIssue } = req.body;
     if (!target) { res.status(400).json({ error: 'target required' }); return; }
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
@@ -2571,7 +2587,9 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
 
     // For requirement_implementation, fetch unmapped requirements and pass as extra context
     let extraContext: any = undefined;
-    if (target === 'requirement_implementation') {
+    if (target === 'ui_fix') {
+      extraContext = { uiIssue: uiIssue || {} };
+    } else if (target === 'requirement_implementation') {
       // Fetch ALL requirements for this process — not just DB "unmatched" status.
       // Reason: process-level matching may have set status='matched' in DB,
       // but enrichCapability demotes them back to 'unmatched' in memory because

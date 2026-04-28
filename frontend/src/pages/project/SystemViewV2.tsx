@@ -510,6 +510,8 @@ type EnhanceCardItem = {
 };
 type EnhanceCardSet = {
   isEnhance: boolean;
+  isPolish: boolean;
+  isPageVisualReview: boolean;
   isDone: boolean;
   isRecategorize: boolean;
   isVerified: boolean;
@@ -523,14 +525,15 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
   const kind: string | undefined = compDetail?.next_action_kind;
   const userStatus: string | undefined = compDetail?.user_status;
   const enhancements: any[] = compDetail?.enhancement_plan || [];
-  const empty: EnhanceCardSet = { isEnhance: false, isDone: false, isRecategorize: false, isVerified: false, isArchived: false, primary: null, upNext: [], items: [] };
+  const empty: EnhanceCardSet = { isEnhance: false, isPolish: false, isPageVisualReview: false, isDone: false, isRecategorize: false, isVerified: false, isArchived: false, primary: null, upNext: [], items: [] };
 
   // User-asserted states win over heuristic ones.
   if (kind === 'verified' || userStatus === 'verified') return { ...empty, isVerified: true };
   if (kind === 'archived' || userStatus === 'archived') return { ...empty, isArchived: true };
   if (kind === 'recategorize' || compDetail?.is_synthetic_bucket) return { ...empty, isRecategorize: true };
+  if (kind === 'page_visual_review') return { ...empty, isPageVisualReview: true };
   if (kind === 'done') return { ...empty, isDone: true };
-  if (kind !== 'enhance') return empty;
+  if (kind !== 'enhance' && kind !== 'polish') return empty;
   if (enhancements.length === 0) return { ...empty, isDone: true };
 
   const colorFor = (e: any) => {
@@ -551,7 +554,9 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
   }));
 
   return {
-    isEnhance: true,
+    isEnhance: kind === 'enhance',
+    isPolish: kind === 'polish',
+    isPageVisualReview: false,
     isDone: false,
     isRecategorize: false,
     isVerified: false,
@@ -615,6 +620,7 @@ function SystemViewV2Inner() {
   const [showBuildUpNext, setShowBuildUpNext] = useState(false);
   const [showOverviewUpNext, setShowOverviewUpNext] = useState(false);
   const [showHealthUpNext, setShowHealthUpNext] = useState(false);
+  const [showAllIssues, setShowAllIssues] = useState(false);
   const [showImproveUpNext, setShowImproveUpNext] = useState(false);
 
   // Reclassify state — for the synthetic Uncategorized bucket
@@ -1067,6 +1073,61 @@ function SystemViewV2Inner() {
     } catch {} finally { setUiAnalyzing(false); }
   };
 
+  // Per-issue Fix: mark in_progress, generate a focused prompt, drop user
+  // into Build tab so they can paste into Claude Code. Single-issue scope —
+  // not a "run all 6 layout improvements at once" — so the resulting code
+  // change can be reviewed and the issue resolved discretely.
+  const handleFixIssue = async (compId: string, issue: any) => {
+    try {
+      await portalApi.put(`/api/portal/project/element-feedback/${issue.id}`, { status: 'in_progress' });
+    } catch { /* status is best-effort; prompt still works */ }
+    setBuildGenerating(true);
+    setBuildPrompt(null);
+    setBuildResult(null);
+    setActiveTicketId(null);
+    setActiveTicketNumber(null);
+    setTicketWarning(null);
+    try {
+      const res = await portalApi.post(`/api/portal/project/business-processes/${compId}/prompt`, {
+        target: 'ui_fix',
+        uiIssue: {
+          id: issue.id,
+          title: issue.title,
+          description: issue.description,
+          suggestion: issue.suggestion,
+          severity: issue.severity,
+          element_id: issue.element_id,
+          page_route: compDetail?.frontend_route || '',
+        },
+      });
+      const text = res.data?.prompt_text || '';
+      setBuildPrompt(text);
+      try { await navigator.clipboard.writeText(text); } catch {}
+      setWorkTab('build');
+      // Refresh feedback list so the in_progress badge shows
+      try {
+        const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
+        setUiFeedback(fbRes.data);
+      } catch {}
+    } catch {} finally { setBuildGenerating(false); }
+  };
+
+  const handleDismissIssue = async (compId: string, issueId: string) => {
+    try {
+      await portalApi.put(`/api/portal/project/element-feedback/${issueId}`, { status: 'dismissed' });
+      const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
+      setUiFeedback(fbRes.data);
+    } catch { /* non-critical */ }
+  };
+
+  const handleResolveIssue = async (compId: string, issueId: string) => {
+    try {
+      await portalApi.put(`/api/portal/project/element-feedback/${issueId}`, { status: 'resolved' });
+      const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
+      setUiFeedback(fbRes.data);
+    } catch { /* non-critical */ }
+  };
+
   // Cory suggestions (deterministic)
   const corySuggestions = (() => {
     const s: Array<{ id: string; title: string; explanation: string; impact: 'High' | 'Medium' | 'Low'; componentId: string; promptTarget: string }> = [];
@@ -1473,9 +1534,10 @@ function SystemViewV2Inner() {
                       // keeps every tab's "next step" pointing at NEW work.
                       const enhanceCards = getEnhanceCards(compDetail);
 
+                      const showsImprovements = enhanceCards.isEnhance || enhanceCards.isPolish;
                       let tasks: Array<{ title: string; explanation: string; color: string; action?: string; source: string; blocked?: boolean; blockReason?: string; trace?: any }>;
                       let usingOrchestrator = false;
-                      if (enhanceCards.isEnhance) {
+                      if (showsImprovements) {
                         tasks = enhanceCards.items.map(item => ({
                           title: item.title,
                           explanation: item.explanation,
@@ -1486,7 +1548,7 @@ function SystemViewV2Inner() {
                           blockReason: undefined,
                           trace: undefined,
                         }));
-                      } else if (enhanceCards.isDone) {
+                      } else if (enhanceCards.isDone || enhanceCards.isPageVisualReview) {
                         tasks = [];
                       } else {
                         // Build mode — use orchestrator output if available, fall back to local suggestions
@@ -1508,9 +1570,10 @@ function SystemViewV2Inner() {
                       return primary ? (
                         <>
                           <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>
-                            Step 1 of {tasks.length} for {selectedComponent.name}
+                            {enhanceCards.isPolish ? `Optional polish for ${selectedComponent.name}` : `Step 1 of ${tasks.length} for ${selectedComponent.name}`}
                             {usingOrchestrator && <span className="ms-2 badge" style={{ background: '#3b82f610', color: '#94a3b8', fontSize: 7 }}>Orchestrated</span>}
                             {enhanceCards.isEnhance && <span className="ms-2 badge" style={{ background: '#8b5cf620', color: '#8b5cf6', fontSize: 7 }}>Improvement Mode</span>}
+                            {enhanceCards.isPolish && <span className="ms-2 badge" style={{ background: '#94a3b820', color: '#64748b', fontSize: 7 }}>Optional</span>}
                           </div>
                           <div className="d-flex align-items-center gap-2 mb-1">
                             <h6 className="fw-bold mb-0" style={{ fontSize: 15 }}>{primary.title}</h6>
@@ -1527,7 +1590,12 @@ function SystemViewV2Inner() {
                           )}
 
                           <div className="d-flex flex-wrap gap-2 mb-3">
-                            <span className="badge" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{selectedComponent.completion}% complete</span>
+                            {/* The "% complete" badge is only meaningful while building. On
+                                an improvement/polish card it duplicated the BP header and
+                                produced contradictions like "Complete" + "0% complete". */}
+                            {!showsImprovements && (
+                              <span className="badge" style={{ background: `${primary.color}20`, color: primary.color, fontSize: 9 }}>{selectedComponent.completion}% complete</span>
+                            )}
                             <span className="badge" style={{ background: `${MATURITY_COLORS[selectedComponent.maturityLevel]}20`, color: MATURITY_COLORS[selectedComponent.maturityLevel], fontSize: 9 }}>{selectedComponent.maturity}</span>
                           </div>
 
@@ -1537,7 +1605,8 @@ function SystemViewV2Inner() {
                                 setWorkTab('build');
                                 if (primary.action) handleGeneratePrompt({ ...selectedComponent, promptTarget: primary.action });
                               }}>
-                                <i className={`bi ${enhanceCards.isEnhance ? 'bi-stars' : 'bi-terminal'} me-1`}></i>{enhanceCards.isEnhance ? 'Run Improvement' : (primary.action ? 'Generate Build Prompt' : 'Go to Build')}
+                                <i className={`bi ${showsImprovements ? 'bi-stars' : 'bi-terminal'} me-1`}></i>
+                                {enhanceCards.isPolish ? 'Apply Polish' : enhanceCards.isEnhance ? 'Run Improvement' : (primary.action ? 'Generate Build Prompt' : 'Go to Build')}
                               </button>
                               <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                                 <i className="bi bi-book me-1"></i>Learn About This
@@ -1600,6 +1669,17 @@ function SystemViewV2Inner() {
                         renderVerifiedCard(selectedComponent.name, selectedComponent.id, compDetail?.user_status_set_at)
                       ) : enhanceCards.isRecategorize ? (
                         renderRecategorizeCard(selectedComponent.name)
+                      ) : enhanceCards.isPageVisualReview ? (
+                        <div className="p-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #3b82f630' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-clipboard-check" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#1d4ed8' }}>Ready for visual review</h6>
+                          </div>
+                          <p className="text-muted mb-2" style={{ fontSize: 11 }}>{selectedComponent.name} renders. Walk through the 5 visual categories (Layout, Accessibility, Responsiveness, Interaction, Content) on the BP detail panel, then mark it verified.</p>
+                          <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => navigate(`/portal/project/business-processes/${selectedComponent.id}`)}>
+                            <i className="bi bi-arrow-right me-1"></i>Open Visual Review
+                          </button>
+                        </div>
                       ) : enhanceCards.isDone ? (
                         <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
                           <div className="d-flex align-items-center gap-2 mb-1">
@@ -1660,6 +1740,20 @@ function SystemViewV2Inner() {
                         </div>
                       );
                     }
+                    if (enhanceCards.isPageVisualReview) {
+                      return (
+                        <div>
+                          <div className="d-flex align-items-center gap-2 mb-3">
+                            <i className="bi bi-clipboard-check" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#1d4ed8' }}>Page is built — visual review next</h6>
+                          </div>
+                          <p className="text-muted mb-2" style={{ fontSize: 12 }}>Walk through the 5 visual categories on the BP detail page, then mark this page verified.</p>
+                          <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => navigate(`/portal/project/business-processes/${selectedComponent.id}`)}>
+                            <i className="bi bi-arrow-right me-1"></i>Open Visual Review
+                          </button>
+                        </div>
+                      );
+                    }
                     if (enhanceCards.isDone) {
                       return (
                         <div>
@@ -1671,15 +1765,16 @@ function SystemViewV2Inner() {
                         </div>
                       );
                     }
-                    if (enhanceCards.isEnhance && enhanceCards.primary) {
+                    if ((enhanceCards.isEnhance || enhanceCards.isPolish) && enhanceCards.primary) {
                       const e = enhanceCards.primary;
+                      const polishMode = enhanceCards.isPolish;
                       return (
                         <div>
                           <div className="d-flex align-items-center gap-2 mb-3">
-                            <i className="bi bi-rocket-takeoff" style={{ color: '#8b5cf6', fontSize: 16 }}></i>
-                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#8b5cf6' }}>Cory — Run Next Improvement</h6>
+                            <i className="bi bi-rocket-takeoff" style={{ color: polishMode ? '#64748b' : '#8b5cf6', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: polishMode ? '#64748b' : '#8b5cf6' }}>{polishMode ? 'Cory — Optional Polish' : 'Cory — Run Next Improvement'}</h6>
                           </div>
-                          <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>Improvement 1 of {Math.min(enhanceCards.items.length, 3)} for {selectedComponent.name}</div>
+                          <div className="mb-2" style={{ fontSize: 10, color: '#64748b' }}>{polishMode ? `Optional polish for ${selectedComponent.name}` : `Improvement 1 of ${Math.min(enhanceCards.items.length, 3)} for ${selectedComponent.name}`}</div>
                           <h6 className="fw-bold mb-1" style={{ fontSize: 15, color: 'var(--color-text)' }}>{e.title}</h6>
                           <p className="mb-2" style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, fontStyle: 'italic' }}>{e.explanation}</p>
                           <div className="d-flex flex-wrap gap-2 mb-3">
@@ -1688,7 +1783,7 @@ function SystemViewV2Inner() {
                           </div>
                           <div className="d-flex flex-wrap gap-2 mb-3">
                             <button className="btn btn-sm" style={{ background: e.color, color: '#fff', fontWeight: 600, fontSize: 12 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt({ ...selectedComponent, promptTarget: e.promptTarget })}>
-                              <i className="bi bi-stars me-1"></i>Run Improvement
+                              <i className="bi bi-stars me-1"></i>{polishMode ? 'Apply Polish' : 'Run Improvement'}
                             </button>
                             <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                               <i className="bi bi-book me-1"></i>Learn About This
@@ -1989,6 +2084,17 @@ function SystemViewV2Inner() {
                     if (enhanceCards.isRecategorize) {
                       return renderRecategorizeCard(selectedComponent.name);
                     }
+                    if (enhanceCards.isPageVisualReview) {
+                      return (
+                        <div className="p-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #3b82f630' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-clipboard-check" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#1d4ed8' }}>Page is built — visual review next</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>Health metrics don't apply to a static page. Walk through the visual review and mark it verified.</p>
+                        </div>
+                      );
+                    }
                     if (enhanceCards.isDone) {
                       return (
                         <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
@@ -2001,7 +2107,7 @@ function SystemViewV2Inner() {
                       );
                     }
 
-                    if (enhanceCards.isEnhance) {
+                    if (enhanceCards.isEnhance || enhanceCards.isPolish) {
                       for (const item of enhanceCards.items) {
                         healthSteps.push({ title: item.title, explanation: item.explanation, color: item.color, promptTarget: item.promptTarget });
                       }
@@ -2035,7 +2141,7 @@ function SystemViewV2Inner() {
 
                         <div className="d-flex flex-wrap gap-2 mb-3">
                           <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(primary.promptTarget ? { ...selectedComponent, promptTarget: primary.promptTarget } : selectedComponent)}>
-                            <i className={`bi ${enhanceCards.isEnhance ? 'bi-stars' : 'bi-terminal'} me-1`}></i>{enhanceCards.isEnhance ? 'Run Improvement' : 'Generate Fix Prompt'}
+                            <i className={`bi ${(enhanceCards.isEnhance || enhanceCards.isPolish) ? 'bi-stars' : 'bi-terminal'} me-1`}></i>{enhanceCards.isPolish ? 'Apply Polish' : enhanceCards.isEnhance ? 'Run Improvement' : 'Generate Fix Prompt'}
                           </button>
                           <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                             <i className="bi bi-book me-1"></i>Learn About This
@@ -2097,6 +2203,17 @@ function SystemViewV2Inner() {
                     if (enhanceCards.isRecategorize) {
                       return renderRecategorizeCard(selectedComponent.name);
                     }
+                    if (enhanceCards.isPageVisualReview) {
+                      return (
+                        <div className="p-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #3b82f630' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-clipboard-check" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#1d4ed8' }}>Page is built — visual review next</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>This is a Page BP. Autonomy improvements live on the underlying process, not the page itself. Mark visual review complete to move on.</p>
+                        </div>
+                      );
+                    }
                     if (enhanceCards.isDone) {
                       return (
                         <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
@@ -2111,7 +2228,7 @@ function SystemViewV2Inner() {
 
                     const improveSteps: Array<{ title: string; explanation: string; color: string; gapType?: string; promptTarget?: string }> = [];
 
-                    if (enhanceCards.isEnhance) {
+                    if (enhanceCards.isEnhance || enhanceCards.isPolish) {
                       for (const item of enhanceCards.items) {
                         improveSteps.push({ title: item.title, explanation: item.explanation, color: item.color, gapType: item.gapType, promptTarget: item.promptTarget });
                       }
@@ -2243,21 +2360,59 @@ function SystemViewV2Inner() {
                     </button>
                   </div>
 
-                  {/* Detected issues */}
-                  {uiFeedback?.items?.length > 0 && (
+                  {/* Detected issues — each row is actionable: Fix kicks off a focused
+                      Cory prompt scoped to that one issue; Dismiss removes it from view;
+                      Resolve marks it done after the fix has been applied. The same task
+                      pattern as the Up Next steps below — no more static report. */}
+                  {uiFeedback?.items?.length > 0 && (() => {
+                    const visible = uiFeedback.items.filter((f: any) => f.status !== 'dismissed' && f.status !== 'resolved');
+                    if (visible.length === 0) return null;
+                    const shown = showAllIssues ? visible : visible.slice(0, 5);
+                    return (
                     <div className="mb-3">
-                      <div className="fw-semibold small mb-2">Detected Issues ({uiFeedback.items.filter((f: any) => f.status !== 'dismissed').length})</div>
-                      {uiFeedback.items.filter((f: any) => f.status !== 'dismissed').slice(0, 5).map((f: any) => (
-                        <div key={f.id} className="d-flex gap-2 align-items-start py-1 mb-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
-                          <span className="badge" style={{ fontSize: 8, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981' }}>{f.severity}</span>
+                      <div className="fw-semibold small mb-2">Detected Issues ({visible.length})</div>
+                      {shown.map((f: any) => (
+                        <div key={f.id} className="d-flex gap-2 align-items-start py-2 mb-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
+                          <span className="badge" style={{ fontSize: 8, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981', flexShrink: 0 }}>{f.severity}</span>
                           <div className="flex-grow-1">
-                            <div className="fw-medium">{f.title}</div>
-                            {f.suggestion && <div className="text-muted" style={{ fontSize: 9 }}>{f.suggestion.substring(0, 80)}</div>}
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="fw-medium">{f.title}</span>
+                              {f.status === 'in_progress' && (
+                                <span className="badge" style={{ fontSize: 7, background: '#3b82f620', color: '#3b82f6' }}>In Progress</span>
+                              )}
+                            </div>
+                            {f.suggestion && <div className="text-muted" style={{ fontSize: 9 }}>{f.suggestion.substring(0, 120)}</div>}
+                          </div>
+                          <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                            {f.status === 'in_progress' ? (
+                              <button className="btn btn-sm btn-success" style={{ fontSize: 8, padding: '1px 6px' }} disabled={buildGenerating}
+                                onClick={() => handleResolveIssue(selectedComponent.id, f.id)}
+                                title="Mark resolved">
+                                <i className="bi bi-check-lg"></i> Done
+                              </button>
+                            ) : (
+                              <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 6px' }} disabled={buildGenerating}
+                                onClick={() => handleFixIssue(selectedComponent.id, f)}
+                                title="Generate a focused fix prompt and open the Build tab">
+                                <i className="bi bi-stars"></i> Fix
+                              </button>
+                            )}
+                            <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }}
+                              onClick={() => handleDismissIssue(selectedComponent.id, f.id)}
+                              title="Dismiss this issue">
+                              <i className="bi bi-x"></i>
+                            </button>
                           </div>
                         </div>
                       ))}
+                      {visible.length > 5 && (
+                        <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10 }} onClick={() => setShowAllIssues(!showAllIssues)}>
+                          {showAllIssues ? 'Show first 5' : `Show all ${visible.length}`}
+                        </button>
+                      )}
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Up next UI actions */}
                   <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>

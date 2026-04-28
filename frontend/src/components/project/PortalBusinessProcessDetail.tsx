@@ -1078,7 +1078,13 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
         )}
 
         {/* {Number}: Enhancement Prompt Builder (execution steps + autonomy gaps combined) */}
-        <Section num={(p.is_page_bp || p.source === 'frontend_page') && p.page_visual_review ? 9 : 8} title={p.next_action_kind === 'enhance' ? 'Improvement Options' : p.next_action_kind === 'done' ? 'Status' : 'Enhancement Prompt Builder'}>
+        <Section num={(p.is_page_bp || p.source === 'frontend_page') && p.page_visual_review ? 9 : 8} title={
+          p.next_action_kind === 'enhance' ? 'Improvement Options'
+          : p.next_action_kind === 'polish' ? 'Optional Improvements'
+          : p.next_action_kind === 'page_visual_review' ? 'Status'
+          : p.next_action_kind === 'done' ? 'Status'
+          : 'Enhancement Prompt Builder'
+        }>
           {p.user_status === 'verified' ? (
             <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98140' }}>
               <div className="d-flex align-items-center gap-2 mb-1">

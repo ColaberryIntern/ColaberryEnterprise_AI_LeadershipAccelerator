@@ -35,6 +35,8 @@ export interface DetectedGap {
 interface EnrichedBP {
   id: string;
   name: string;
+  source?: string;
+  is_page_bp?: boolean;
   quality?: Record<string, number>;
   metrics?: Record<string, number>;
   maturity?: { level: number };
@@ -48,6 +50,18 @@ interface EnrichedBP {
   total_requirements?: number;
   matched_requirements?: number;
   features?: Array<{ requirements?: Array<{ requirement_text?: string; status?: string }> }>;
+}
+
+type BPKind = 'page' | 'process';
+
+/**
+ * A Page BP is a UI surface — it renders pages. It does not run business
+ * processes, so capability-style gaps (simulation, pattern detection, smart
+ * recommendations, KPI scoring, decision audit logs) don't apply to it.
+ * Visual review and user-event tracking are the page-applicable concerns.
+ */
+function bpKind(bp: EnrichedBP): BPKind {
+  return bp.is_page_bp || bp.source === 'frontend_page' ? 'page' : 'process';
 }
 
 function getReqTexts(bp: EnrichedBP): string[] {
@@ -69,7 +83,7 @@ function hasFileMatching(repoTree: string[], patterns: RegExp[]): boolean {
 // Behavior Gaps — missing user/system tracking
 // ---------------------------------------------------------------------------
 
-function detectBehaviorGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>): DetectedGap[] {
+function detectBehaviorGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>, kind: BPKind): DetectedGap[] {
   const gaps: DetectedGap[] = [];
   const q = bp.quality || {};
   const signals: string[] = [];
@@ -95,6 +109,10 @@ function detectBehaviorGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys
       });
     }
   }
+
+  // Decision-audit logging is a process concern. Pages render UI; they don't
+  // make logged decisions. Skip for Page BPs.
+  if (kind === 'page') return gaps.slice(0, 3);
 
   const decisionSignals: string[] = [];
   if (!hasReqMatching(bp, ['decision log', 'decision audit', 'decision track', 'action log']))
@@ -125,7 +143,11 @@ function detectBehaviorGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys
 // Intelligence Gaps — missing AI/ML capabilities
 // ---------------------------------------------------------------------------
 
-function detectIntelligenceGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>): DetectedGap[] {
+function detectIntelligenceGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>, kind: BPKind): DetectedGap[] {
+  // Pages don't recommend, detect patterns, or simulate. Intelligence gaps
+  // belong on the underlying process / agent BP, not the page that displays
+  // its output.
+  if (kind === 'page') return [];
   const gaps: DetectedGap[] = [];
   const q = bp.quality || {};
 
@@ -184,7 +206,10 @@ function detectIntelligenceGaps(bp: EnrichedBP, repoTree: string[], existingAuto
 // Optimization Gaps — missing feedback, performance scoring
 // ---------------------------------------------------------------------------
 
-function detectOptimizationGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>): DetectedGap[] {
+function detectOptimizationGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>, kind: BPKind): DetectedGap[] {
+  // Performance scoring / feedback loops belong on the service the page
+  // talks to, not the page itself.
+  if (kind === 'page') return [];
   const gaps: DetectedGap[] = [];
   const q = bp.quality || {};
 
@@ -229,7 +254,9 @@ function detectOptimizationGaps(bp: EnrichedBP, repoTree: string[], existingAuto
 // Reporting Gaps — missing dashboards, visibility
 // ---------------------------------------------------------------------------
 
-function detectReportingGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>): DetectedGap[] {
+function detectReportingGaps(bp: EnrichedBP, repoTree: string[], existingAutoKeys: Set<string>, kind: BPKind): DetectedGap[] {
+  // Pages don't get "add a dashboard" gaps — they ARE the dashboard.
+  if (kind === 'page') return [];
   const gaps: DetectedGap[] = [];
   const q = bp.quality || {};
 
@@ -284,11 +311,12 @@ export function detectGaps(
   existingAutoKeys: Set<string>,
   addressedGapIds?: Set<string>,
 ): DetectedGap[] {
+  const kind = bpKind(enrichedBP);
   const allGaps = [
-    ...detectBehaviorGaps(enrichedBP, repoFileTree, existingAutoKeys),
-    ...detectIntelligenceGaps(enrichedBP, repoFileTree, existingAutoKeys),
-    ...detectOptimizationGaps(enrichedBP, repoFileTree, existingAutoKeys),
-    ...detectReportingGaps(enrichedBP, repoFileTree, existingAutoKeys),
+    ...detectBehaviorGaps(enrichedBP, repoFileTree, existingAutoKeys, kind),
+    ...detectIntelligenceGaps(enrichedBP, repoFileTree, existingAutoKeys, kind),
+    ...detectOptimizationGaps(enrichedBP, repoFileTree, existingAutoKeys, kind),
+    ...detectReportingGaps(enrichedBP, repoFileTree, existingAutoKeys, kind),
   ];
   // Suppress gaps that build history shows are already addressed
   if (addressedGapIds && addressedGapIds.size > 0) {

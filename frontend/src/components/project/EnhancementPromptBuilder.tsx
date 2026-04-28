@@ -39,7 +39,7 @@ interface EnhancementOption {
   suggested_agent?: { name: string; description: string; type: string } | null;
 }
 
-type NextActionKind = 'build' | 'enhance' | 'done';
+type NextActionKind = 'build' | 'enhance' | 'polish' | 'done' | 'page_visual_review';
 
 interface Props {
   executionPlan: ExecutionStep[];
@@ -82,7 +82,9 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
   const steps = (executionPlan || []).filter(s => !s.status || s.status === 'pending');
   const gaps = autonomyGaps || [];
   const enhancements = enhancementPlan || [];
-  const isEnhanceMode = nextActionKind === 'enhance';
+  const isEnhanceMode = nextActionKind === 'enhance' || nextActionKind === 'polish';
+  const isPolishMode = nextActionKind === 'polish';
+  const isPageVisualReviewMode = nextActionKind === 'page_visual_review';
   const isDoneMode = nextActionKind === 'done';
   const totalSelected = selectedSteps.size + selectedGaps.size + selectedAgents.size + selectedEnhancements.size;
 
@@ -182,6 +184,19 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
   };
 
   const hasContent = steps.length > 0 || gaps.length > 0 || enhancements.length > 0;
+  if (isPageVisualReviewMode) {
+    return (
+      <div className="p-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #3b82f630' }}>
+        <div className="d-flex align-items-center gap-2 mb-1">
+          <i className="bi bi-clipboard-check" style={{ color: '#3b82f6', fontSize: 16 }}></i>
+          <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#1d4ed8' }}>Ready for visual review</h6>
+        </div>
+        <p className="text-muted mb-0" style={{ fontSize: 11 }}>
+          {processName} renders. Walk through the 5 visual categories above (Layout, Accessibility, Responsiveness, Interaction, Content) and mark this page verified — no code recommendations needed.
+        </p>
+      </div>
+    );
+  }
   if (!hasContent || isDoneMode) {
     return (
       <div className="text-muted small">
@@ -191,18 +206,24 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
     );
   }
 
-  // ── ENHANCE MODE ── BP has nothing left to build — surface improvement options.
+  // ── ENHANCE / POLISH MODE ── BP has nothing left to build — surface
+  // improvement options. Polish mode (auto-complete BPs not yet user-verified)
+  // uses softer copy so the user doesn't read this as "you're missing something."
   if (isEnhanceMode) {
+    const headerColor = isPolishMode ? '#64748b' : '#8b5cf6';
     return (
       <div>
         <div className="d-flex align-items-center gap-2 mb-2">
-          <h6 className="fw-semibold mb-0" style={{ fontSize: 12, color: '#8b5cf6' }}>
-            <i className="bi bi-rocket-takeoff me-1"></i>Improvement Options
+          <h6 className="fw-semibold mb-0" style={{ fontSize: 12, color: headerColor }}>
+            <i className={`bi ${isPolishMode ? 'bi-stars' : 'bi-rocket-takeoff'} me-1`}></i>{isPolishMode ? 'Optional Improvements' : 'Improvement Options'}
           </h6>
-          <span className="badge" style={{ background: '#8b5cf6', color: '#fff', fontSize: 9 }}>{enhancements.length}</span>
+          <span className="badge" style={{ background: headerColor, color: '#fff', fontSize: 9 }}>{enhancements.length}</span>
+          {isPolishMode && <span className="badge" style={{ background: '#94a3b820', color: '#64748b', fontSize: 9 }}>Optional</span>}
         </div>
         <p className="text-muted mb-2" style={{ fontSize: 10 }}>
-          {processName} is built. Pick the improvements you want to run next — each generates a Claude Code prompt that takes the system further.
+          {isPolishMode
+            ? `${processName} looks built — these are optional refinements you can pick up if you have time.`
+            : `${processName} is built. Pick the improvements you want to run next — each generates a Claude Code prompt that takes the system further.`}
         </p>
         <div className="p-2" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf620' }}>
           {enhancements.map(e => {
@@ -268,14 +289,14 @@ export default function EnhancementPromptBuilder({ executionPlan, autonomyGaps, 
           <div className="flex-grow-1"></div>
           <button
             className="btn btn-sm"
-            style={{ background: '#8b5cf6', color: '#fff', fontWeight: 700, fontSize: 11 }}
+            style={{ background: isPolishMode ? '#64748b' : '#8b5cf6', color: '#fff', fontWeight: 700, fontSize: 11 }}
             disabled={totalSelected === 0 || generating}
             onClick={handleGenerate}
           >
             {generating ? (
               <><span className="spinner-border spinner-border-sm me-1"></span>Generating...</>
             ) : (
-              <><i className="bi bi-stars me-1"></i>Run Improvement ({totalSelected})</>
+              <><i className="bi bi-stars me-1"></i>{isPolishMode ? 'Apply Polish' : 'Run Improvement'} ({totalSelected})</>
             )}
           </button>
         </div>
