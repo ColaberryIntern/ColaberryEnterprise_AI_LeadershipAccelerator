@@ -684,6 +684,11 @@ function SystemViewV2Inner() {
   const [defineStep, setDefineStep] = useState<'confirm' | 'action' | 'select' | 'done'>('confirm');
   const [defineTarget, setDefineTarget] = useState<string | null>(null);
   const [defineCustomUrl, setDefineCustomUrl] = useState('');
+  // iframe refresh: incremented on click of the Refresh button so the iframe
+  // re-mounts even when the URL string didn't change. Persist-on-approve
+  // sets defineSaving while the connect-page PUT is in flight.
+  const [defineRefreshKey, setDefineRefreshKey] = useState(0);
+  const [defineSaving, setDefineSaving] = useState(false);
   const [verifiedPages, setVerifiedPagesRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_verified_pages') || '[]')); } catch { return new Set(); } });
   const setVerifiedPages = (fn: (prev: Set<string>) => Set<string>) => { setVerifiedPagesRaw(prev => { const next = fn(prev); localStorage.setItem('system_v2_verified_pages', JSON.stringify([...next])); return next; }); };
   const [detachedPages, setDetachedPagesRaw] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem('system_v2_detached_pages') || '[]')); } catch { return new Set(); } });
@@ -1382,7 +1387,29 @@ function SystemViewV2Inner() {
                 <p className="text-muted mb-0" style={{ fontSize: 11 }}>This page was discovered in your repo but isn't linked to a system component.</p>
               </div>
               <div className="d-flex gap-2">
-                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal({ discoveredComp: selectedComponent }); setDefineStep('confirm'); setDefineTarget(null); setDefineCustomUrl(selectedComponent.frontendRoute || ''); }}>
+                <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => {
+                  setDefineModal({ discoveredComp: selectedComponent });
+                  setDefineStep('confirm');
+                  setDefineTarget(null);
+                  // Smart URL default: explicit frontend_route → token-match an
+                  // existing component's known route → otherwise a slug guess.
+                  // The user can edit the URL before approving either way.
+                  const explicit = selectedComponent.frontendRoute || '';
+                  if (explicit) {
+                    setDefineCustomUrl(explicit);
+                  } else {
+                    const slug = selectedComponent.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                    const slugTokens = slug.split('-').filter((t: string) => t.length >= 3);
+                    const matched = components
+                      .map(c => c.frontendRoute)
+                      .filter((r): r is string => !!r)
+                      .find(r => {
+                        const rl = r.toLowerCase();
+                        return slugTokens.some(t => rl.includes(t));
+                      });
+                    setDefineCustomUrl(matched || `/${slug}`);
+                  }
+                }}>
                   <i className="bi bi-plus-circle me-1"></i>Define Component
                 </button>
                 <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => { setIgnoredIds(prev => new Set([...prev, selectedComponent.id])); setSelectedId(null); }}>
@@ -2483,51 +2510,91 @@ function SystemViewV2Inner() {
               </div>
               <div className="modal-body p-4">
                 {/* Step 1: Confirm page with editable URL + preview */}
-                {defineStep === 'confirm' && (
+                {defineStep === 'confirm' && (() => {
+                  const trimmedUrl = defineCustomUrl.trim();
+                  const previewSrc = trimmedUrl ? (trimmedUrl.startsWith('http') ? trimmedUrl : `https://enterprise.colaberry.ai${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`) : '';
+                  return (
                   <div>
                     <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Verify the page URL and preview</p>
                     <div className="fw-medium mb-2" style={{ fontSize: 12 }}>{defineModal.discoveredComp.name}</div>
 
-                    {/* Editable URL */}
-                    <div className="d-flex gap-2 mb-3">
-                      <div className="flex-grow-1">
-                        <label className="form-label" style={{ fontSize: 10, color: '#64748b' }}>Page URL</label>
+                    {/* Editable URL with refresh button */}
+                    <div className="mb-3">
+                      <label className="form-label" style={{ fontSize: 10, color: '#64748b' }}>Page URL</label>
+                      <div className="d-flex gap-2">
                         <input
                           type="text"
-                          className="form-control form-control-sm"
+                          className="form-control form-control-sm flex-grow-1"
                           value={defineCustomUrl}
                           onChange={e => setDefineCustomUrl(e.target.value)}
                           placeholder="/utility-ai or https://enterprise.colaberry.ai/utility-ai"
                           style={{ fontSize: 11, fontFamily: 'monospace' }}
                         />
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary"
+                          style={{ fontSize: 11 }}
+                          title="Refresh preview"
+                          disabled={!trimmedUrl}
+                          onClick={() => setDefineRefreshKey(k => k + 1)}
+                        >
+                          <i className="bi bi-arrow-clockwise"></i>
+                        </button>
                       </div>
+                      {!trimmedUrl && (
+                        <div className="text-muted mt-1" style={{ fontSize: 10 }}>
+                          <i className="bi bi-info-circle me-1"></i>Enter a path (like <code>/ops</code>) or a full URL to load the preview.
+                        </div>
+                      )}
                     </div>
 
-                    {/* Live preview iframe */}
-                    {defineCustomUrl ? (
-                      <div className="mb-3" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
+                    {/* Always-rendered preview iframe — overlay placeholder when empty */}
+                    <div className="mb-3 position-relative" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)', background: '#fff', minHeight: 300 }}>
+                      {trimmedUrl ? (
                         <iframe
-                          key={defineCustomUrl}
-                          src={defineCustomUrl.startsWith('http') ? defineCustomUrl : `https://enterprise.colaberry.ai${defineCustomUrl.startsWith('/') ? '' : '/'}${defineCustomUrl}`}
+                          key={`${previewSrc}-${defineRefreshKey}`}
+                          src={previewSrc}
                           title="Page Preview"
-                          style={{ width: '100%', height: 300, border: 'none', background: '#fff' }}
+                          style={{ width: '100%', height: 300, border: 'none', background: '#fff', display: 'block' }}
                           sandbox="allow-scripts allow-same-origin allow-forms"
                         />
-                      </div>
-                    ) : (
-                      <div className="mb-3 p-3 text-center" style={{ background: '#f8fafc', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
-                        <i className="bi bi-display d-block mb-1" style={{ fontSize: 20, color: '#9ca3af' }}></i>
-                        <p className="text-muted mb-0" style={{ fontSize: 10 }}>Enter a URL above to see a preview</p>
-                      </div>
-                    )}
-                    <div className="d-flex gap-2">
-                      <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => setDefineStep('action')}>
-                        <i className="bi bi-check me-1"></i>This looks correct
+                      ) : (
+                        <div className="d-flex flex-column align-items-center justify-content-center" style={{ height: 300, background: '#f8fafc' }}>
+                          <i className="bi bi-display mb-2" style={{ fontSize: 28, color: '#9ca3af' }}></i>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>Enter a URL above to see a preview</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="d-flex gap-2 align-items-center">
+                      <button
+                        className="btn btn-sm btn-primary"
+                        style={{ fontSize: 11 }}
+                        disabled={!trimmedUrl || defineSaving}
+                        title={!trimmedUrl ? 'Enter a URL first' : 'Save this route to the BP and continue'}
+                        onClick={async () => {
+                          if (!trimmedUrl) return;
+                          setDefineSaving(true);
+                          try {
+                            // Persist the route to the BP via connect-page so the
+                            // BP's frontend_route reflects what the user just
+                            // visually approved. Best-effort — even if this
+                            // fails (e.g. the BP doesn't own its own route yet)
+                            // we still let the user proceed; the localStorage
+                            // attachment cache below will hold the choice.
+                            await portalApi.put(`/api/portal/project/business-processes/${defineModal.discoveredComp.id}/connect-page`, { route: trimmedUrl }).catch(() => { /* best-effort */ });
+                          } finally {
+                            setDefineSaving(false);
+                            setDefineStep('action');
+                          }
+                        }}
+                      >
+                        {defineSaving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving…</> : <><i className="bi bi-check me-1"></i>This looks correct</>}
                       </button>
                       <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} onClick={() => setDefineModal(null)}>Cancel</button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* Step 2: Choose action */}
                 {defineStep === 'action' && (

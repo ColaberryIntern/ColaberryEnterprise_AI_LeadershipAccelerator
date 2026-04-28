@@ -1613,10 +1613,23 @@ function enrichCapability(cap: any) {
   // Detect page BP early for completion logic
   const isPageBP = cap.source === 'frontend_page';
 
+  // Page BP visual review: 5 user-asserted categories rolled up into a 0-100%
+  // score. See PUT /business-processes/:id/page-category. The same flag also
+  // overrides the displayed completion percentage for Page BPs below — they
+  // don't have requirements to track coverage against, so the user's review
+  // ticks ARE the progress signal.
+  const PAGE_CATEGORIES = ['layout', 'accessibility', 'responsiveness', 'interaction', 'content'];
+  const pageCategoryScores = ((cap as any).ui_element_map?.category_scores) || {};
+  const pageCategoriesVerified = PAGE_CATEGORIES.filter(k => pageCategoryScores[k]?.verified).length;
+  const pageVisualCompletionPct = Math.round((pageCategoriesVerified / PAGE_CATEGORIES.length) * 100);
+
   // Mode-aware completion: requires BOTH maturity threshold AND coverage/quality thresholds
   const meetsMaturity = maturityLevel >= (profile.completion_maturity_threshold || 3);
-  // Page BPs: complete when they have a frontend_route (page exists and is connected)
-  const isPageBPComplete = isPageBP && !!(cap as any).frontend_route && totalR === 0;
+  // Page BPs: complete when frontend_route exists AND either (a) all visual
+  // review categories verified, or (b) totalR === 0 (legacy auto-discovered
+  // pages with no review yet — keep them complete enough to not gate the
+  // grid).
+  const isPageBPComplete = isPageBP && !!(cap as any).frontend_route && (pageCategoriesVerified === PAGE_CATEGORIES.length || totalR === 0);
   const processComplete = isPageBPComplete || (meetsMaturity && isProcessComplete(systemState, profile.completion_thresholds));
 
   // Requirement-driven execution plan (primary), with old plan as fallback
@@ -1677,8 +1690,23 @@ function enrichCapability(cap: any) {
     auto_matched_requirements: allReqsFlat.filter((r: any) => r.status === 'matched').length,
     partial_requirements: allReqsFlat.filter((r: any) => r.status === 'partial').length,
     unmatched_requirements: allReqsFlat.filter((r: any) => r.status === 'unmatched' || r.status === 'not_started').length,
-    completion_pct: reqCoverage, // override hierarchy's value
-    metrics: { requirements_coverage: reqCoverage, system_readiness: readiness, quality_score: qualityTotal },
+    // Page BPs use visual-review tick count as their displayed completion.
+    // Non-Page BPs use requirement coverage as before. user_status='verified'
+    // overrides everything (handled in is_complete below).
+    completion_pct: isPageBP ? pageVisualCompletionPct : reqCoverage,
+    metrics: {
+      requirements_coverage: isPageBP ? pageVisualCompletionPct : reqCoverage,
+      system_readiness: readiness,
+      quality_score: qualityTotal,
+    },
+    // Page BP review state — surfaced for the new Visual Review section in the BP detail UI.
+    page_visual_review: isPageBP ? {
+      categories: PAGE_CATEGORIES,
+      scores: pageCategoryScores,
+      verified_count: pageCategoriesVerified,
+      total: PAGE_CATEGORIES.length,
+      completion_pct: pageVisualCompletionPct,
+    } : null,
     // Process-level confidence: weighted average of requirement confidence scores
     confidence: (() => {
       const scored = allReqsFlat.filter((r: any) => r.confidence_score > 0);
@@ -4014,6 +4042,49 @@ router.get('/api/portal/project/business-processes/:id/backend-context', require
     await cap.save();
 
     res.json(ctx);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Page Visual Review: per-category user-asserted completion ────────
+// Page BPs (auto-discovered from frontend routes) don't have requirements
+// to track coverage against, so they always show 0% until the user clicks
+// Mark Verified. This endpoint lets the user tick off five visual-review
+// categories independently — each one rolls into the BP's displayed
+// completion (verified / 5 * 100). Stored in ui_element_map.category_scores.
+const PAGE_CATEGORIES = ['layout', 'accessibility', 'responsiveness', 'interaction', 'content'] as const;
+type PageCategory = typeof PAGE_CATEGORIES[number];
+
+router.put('/api/portal/project/business-processes/:id/page-category', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { category, verified } = req.body || {};
+    if (!PAGE_CATEGORIES.includes(category)) {
+      res.status(400).json({ error: `Invalid category. Must be one of: ${PAGE_CATEGORIES.join(', ')}` });
+      return;
+    }
+    if (typeof verified !== 'boolean') {
+      res.status(400).json({ error: 'verified must be a boolean' });
+      return;
+    }
+    const map = ((cap as any).ui_element_map || {}) as any;
+    const scores = map.category_scores || {};
+    scores[category as PageCategory] = verified
+      ? { verified: true, set_at: new Date().toISOString(), set_by: req.participant!.sub }
+      : { verified: false };
+    (cap as any).ui_element_map = { ...map, category_scores: scores };
+    (cap as any).changed('ui_element_map', true);
+    await cap.save();
+    const verifiedCount = Object.values(scores).filter((s: any) => s?.verified).length;
+    res.json({
+      id: cap.id,
+      category,
+      verified,
+      category_scores: scores,
+      verified_count: verifiedCount,
+      total_categories: PAGE_CATEGORIES.length,
+      page_completion_pct: Math.round((verifiedCount / PAGE_CATEGORIES.length) * 100),
+    });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

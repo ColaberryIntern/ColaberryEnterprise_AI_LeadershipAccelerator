@@ -36,6 +36,126 @@ function showToast(msg: string) {
   setTimeout(() => el.remove(), 3000);
 }
 
+const VISUAL_REVIEW_CATEGORIES: Array<{ key: 'layout' | 'accessibility' | 'responsiveness' | 'interaction' | 'content'; label: string; icon: string; description: string }> = [
+  { key: 'layout',         label: 'Layout',         icon: 'bi-layout-text-window',  description: 'Visual structure, spacing, hierarchy' },
+  { key: 'accessibility',  label: 'Accessibility',  icon: 'bi-universal-access',    description: 'WCAG, ARIA, contrast, keyboard nav' },
+  { key: 'responsiveness', label: 'Responsiveness', icon: 'bi-phone',               description: 'Mobile / tablet / desktop fit' },
+  { key: 'interaction',    label: 'Interaction',    icon: 'bi-mouse',               description: 'Feedback, loading states, error states' },
+  { key: 'content',        label: 'Content',        icon: 'bi-text-paragraph',      description: 'Copy clarity, density, scannability' },
+];
+
+interface PageVisualReviewProps {
+  processId: string;
+  processName: string;
+  review: {
+    categories: string[];
+    scores: Record<string, { verified: boolean; set_at?: string; set_by?: string }>;
+    verified_count: number;
+    total: number;
+    completion_pct: number;
+  };
+  previewUrl: string | null;
+  onUpdate: () => void;
+}
+
+function PageVisualReview({ processId, processName, review, previewUrl, onUpdate }: PageVisualReviewProps) {
+  const [scores, setScores] = useState(review.scores || {});
+  const [pending, setPending] = useState<string | null>(null);
+  const verifiedCount = VISUAL_REVIEW_CATEGORIES.filter(c => scores[c.key]?.verified).length;
+  const completionPct = Math.round((verifiedCount / VISUAL_REVIEW_CATEGORIES.length) * 100);
+
+  const toggle = async (key: 'layout' | 'accessibility' | 'responsiveness' | 'interaction' | 'content') => {
+    if (pending) return;
+    const next = !scores[key]?.verified;
+    setPending(key);
+    // Optimistic update
+    setScores(prev => ({ ...prev, [key]: next ? { verified: true, set_at: new Date().toISOString() } : { verified: false } }));
+    try {
+      await import('../../services/portalBusinessProcessApi').then(m => m.setPageCategory(processId, key, next));
+      onUpdate();
+    } catch {
+      // Roll back
+      setScores(prev => ({ ...prev, [key]: { verified: !next } }));
+      showToast('Failed to update — try again');
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const barColor = completionPct >= 100 ? '#10b981' : completionPct >= 60 ? '#3b82f6' : completionPct >= 20 ? '#f59e0b' : '#9ca3af';
+
+  return (
+    <div>
+      <p className="text-muted mb-3" style={{ fontSize: 11 }}>
+        Tick each dimension once you've reviewed "{processName}" against it. The grid completion percentage updates as you go.
+      </p>
+
+      {/* Header progress bar */}
+      <div className="mb-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 8 }}>
+        <div className="d-flex justify-content-between align-items-center mb-1" style={{ fontSize: 11 }}>
+          <span className="fw-semibold" style={{ color: 'var(--color-primary)' }}>Visual review progress</span>
+          <span style={{ color: barColor, fontWeight: 600 }}>{verifiedCount} / {VISUAL_REVIEW_CATEGORIES.length} verified · {completionPct}%</span>
+        </div>
+        <div className="progress" style={{ height: 6 }}>
+          <div className="progress-bar" style={{ width: `${completionPct}%`, background: barColor, transition: 'width 0.4s ease' }} />
+        </div>
+      </div>
+
+      {/* Optional preview link */}
+      {previewUrl && (
+        <div className="mb-3" style={{ fontSize: 11 }}>
+          <i className="bi bi-eye me-1" style={{ color: 'var(--color-primary)' }}></i>
+          Preview: <a href={previewUrl} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace' }}>{previewUrl}</a>
+        </div>
+      )}
+
+      {/* Category checklist */}
+      <div>
+        {VISUAL_REVIEW_CATEGORIES.map(cat => {
+          const verified = !!scores[cat.key]?.verified;
+          const setAt = scores[cat.key]?.set_at;
+          return (
+            <div
+              key={cat.key}
+              className="d-flex align-items-start gap-2 p-2 mb-2"
+              style={{ background: verified ? '#f0fdf4' : '#fff', borderRadius: 8, border: `1px solid ${verified ? '#10b98140' : 'var(--color-border)'}`, cursor: pending ? 'wait' : 'pointer' }}
+              onClick={() => !pending && toggle(cat.key)}
+            >
+              <input
+                type="checkbox"
+                className="form-check-input mt-1"
+                checked={verified}
+                disabled={pending !== null}
+                onChange={() => { /* handled by row click */ }}
+                style={{ flexShrink: 0, cursor: 'pointer' }}
+              />
+              <i className={`bi ${cat.icon} me-1`} style={{ color: verified ? '#10b981' : 'var(--color-primary)', fontSize: 16, marginTop: 1 }}></i>
+              <div className="flex-grow-1">
+                <div className="fw-semibold" style={{ fontSize: 12, color: verified ? '#065f46' : 'var(--color-text)' }}>
+                  {cat.label}
+                  {pending === cat.key && <span className="spinner-border spinner-border-sm ms-2" style={{ width: 10, height: 10 }}></span>}
+                </div>
+                <div className="text-muted" style={{ fontSize: 10 }}>{cat.description}</div>
+                {verified && setAt && (
+                  <div className="text-muted mt-1" style={{ fontSize: 9 }}>
+                    <i className="bi bi-check2-circle me-1" style={{ color: '#10b981' }}></i>
+                    Verified {new Date(setAt).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 text-muted" style={{ fontSize: 10 }}>
+        <i className="bi bi-info-circle me-1"></i>
+        Verifying all five doesn't auto-mark this BP. You still control that via <strong>Mark as Verified</strong> below.
+      </div>
+    </div>
+  );
+}
+
 export default function PortalBusinessProcessDetail({ processId, onClose, onUpdate }: Props) {
   const [p, setP] = useState<any>(null);
   const [expandedReqs, setExpandedReqs] = useState<Set<string>>(new Set());
@@ -943,8 +1063,22 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
           </Section>
         )}
 
-        {/* 8: Enhancement Prompt Builder (execution steps + autonomy gaps combined) */}
-        <Section num={8} title={p.next_action_kind === 'enhance' ? 'Improvement Options' : p.next_action_kind === 'done' ? 'Status' : 'Enhancement Prompt Builder'}>
+        {/* Visual Review (Page BPs only) — five user-asserted UX dimensions
+            that roll up into the Page BP's displayed completion percentage. */}
+        {(p.is_page_bp || p.source === 'frontend_page') && p.page_visual_review && (
+          <Section num={8} title="Visual Review">
+            <PageVisualReview
+              processId={processId}
+              processName={p.name}
+              review={p.page_visual_review}
+              previewUrl={p.direct_preview_url || p.preview_url || null}
+              onUpdate={load}
+            />
+          </Section>
+        )}
+
+        {/* {Number}: Enhancement Prompt Builder (execution steps + autonomy gaps combined) */}
+        <Section num={(p.is_page_bp || p.source === 'frontend_page') && p.page_visual_review ? 9 : 8} title={p.next_action_kind === 'enhance' ? 'Improvement Options' : p.next_action_kind === 'done' ? 'Status' : 'Enhancement Prompt Builder'}>
           {p.user_status === 'verified' ? (
             <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98140' }}>
               <div className="d-flex align-items-center gap-2 mb-1">
