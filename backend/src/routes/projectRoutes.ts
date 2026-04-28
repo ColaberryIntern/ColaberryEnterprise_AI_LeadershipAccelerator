@@ -1555,8 +1555,20 @@ function enrichCapability(cap: any) {
   if (hasAgents || projectHasAgents) completedSet.add('add_agents');
   if ((combinedModelFiles.length > 0) || projectHasModels) completedSet.add('add_database');
   if (reqCoverage >= 95) completedSet.add('implement_requirements');
-  if ((q.reliability || 0) >= 7) completedSet.add('improve_reliability');
-  if ((q.production_readiness || 0) >= 7) completedSet.add('optimize_performance');
+  // Quality thresholds are intentionally lenient — these flag the gross
+  // absence of a layer, not perfectionist scores. A 6/10 reliability score
+  // on a production system isn't a "build step", it's a polish item that
+  // belongs in the enhancement plan if anywhere.
+  if ((q.reliability || 0) >= 4) completedSet.add('improve_reliability');
+  if ((q.production_readiness || 0) >= 5) completedSet.add('optimize_performance');
+
+  // Architectural-choice rule: if the project has a real backend stack
+  // (backend + agents) but zero frontend files, that's a deliberate
+  // microservices/headless architecture. Stop pushing per-BP "Add Frontend"
+  // build steps — they're not actionable. The user can still add a frontend
+  // explicitly via the page-attach flow if they want one.
+  const projectIsHeadless = projectHasBackend && projectHasAgents && !projectHasFrontend;
+  if (projectIsHeadless) completedSet.add('add_frontend');
   const completedSteps: string[] = Array.from(completedSet);
   const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
   // Resolve effective mode: BP override > Campaign override > Project target_mode > 'production'
