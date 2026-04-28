@@ -1630,7 +1630,15 @@ function enrichCapability(cap: any) {
     });
     // If requirement-driven plan is empty but process isn't complete, fall back to old engine
     if (executionPlan.length === 0 && !processComplete) {
-      executionPlan = generateExecutionPlan(systemState, completedSteps, profileOptions);
+      const fallback = generateExecutionPlan(systemState, completedSteps, profileOptions);
+      // Drop the catch-all "verify_requirements" fallback when coverage is already high.
+      // It produces "Verify Requirement Coverage for X" recommendations on every
+      // 100%-coverage BP whose maturity is gated by an unrelated layer (e.g., frontend
+      // in a headless project). These steps are noise — the user sees the same
+      // recommendation copy on dozens of BPs in a row, with no way out short of
+      // running each prompt. When coverage is high, surface enhancement options
+      // and the Mark Verified action instead.
+      executionPlan = fallback.filter((s: any) => !(s.key === 'verify_requirements' && reqCoverage >= 95));
     }
   } catch (planErr: any) {
     // Fallback: use old hardcoded plan engine if new one fails
@@ -3695,6 +3703,77 @@ router.put('/api/portal/project/business-processes/:id/user-status', requirePart
       id: cap.id,
       user_status: (cap as any).user_status,
       user_status_set_at: (cap as any).user_status_set_at,
+    });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Bulk Verify: mark all BPs at/above a coverage threshold as verified ────────
+// Used when the user has many high-coverage BPs that they've already built
+// (Claude Code reported COMPLETE on a prior run) and doesn't want to click
+// Mark Verified on each one. Body: { min_coverage?: number = 95 }.
+router.post('/api/portal/project/business-processes/bulk-verify', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const minCoverage = typeof req.body?.min_coverage === 'number' ? req.body.min_coverage : 95;
+
+    const { getCapabilityHierarchy } = await import('../services/projectScopeService');
+    const hierarchy = await getCapabilityHierarchy(project.id);
+
+    // Inject the same context the list endpoint injects so enrichCapability can
+    // compute coverage correctly.
+    let repoFileTree: string[] = [];
+    try {
+      const { getConnection } = await import('../services/githubService');
+      const conn = await getConnection(req.participant!.sub);
+      if (conn?.file_tree_json?.tree) repoFileTree = conn.file_tree_json.tree.filter((t: any) => t.type === 'blob').map((t: any) => t.path);
+    } catch { /* ok */ }
+    const { Capability: CapModel } = await import('../models');
+    const capModels = await CapModel.findAll({
+      where: { project_id: project.id },
+      attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'frontend_route', 'backend_context', 'user_status'],
+    });
+    const execMap = new Map(capModels.map((c: any) => [c.id, c]));
+    const projectMode = (project as any).target_mode || 'production';
+
+    const eligibleIds: string[] = [];
+    for (const cap of hierarchy as any[]) {
+      cap._repoFileTree = repoFileTree;
+      cap._projectMode = projectMode;
+      const extra = execMap.get(cap.id);
+      if (extra) {
+        cap.last_execution = (extra as any).last_execution;
+        cap.mode_override = (extra as any).mode_override;
+        cap.applicability_status = (extra as any).applicability_status || 'active';
+        cap.user_status = (extra as any).user_status || 'in_progress';
+      }
+      // Skip BPs that are already resolved or are the synthetic bucket.
+      if (cap.user_status === 'verified' || cap.user_status === 'archived') continue;
+      const synthName = (cap.name || '').toLowerCase();
+      if (synthName.includes('uncategorized') || synthName === 'miscellaneous' || synthName === 'other') continue;
+
+      const enriched = enrichCapability(cap);
+      const coverage = enriched.metrics?.requirements_coverage || 0;
+      if (coverage >= minCoverage) eligibleIds.push(cap.id);
+    }
+
+    if (eligibleIds.length === 0) {
+      res.json({ verified: 0, message: `No BPs at or above ${minCoverage}% coverage are pending verification.` });
+      return;
+    }
+
+    const now = new Date();
+    const setBy = req.participant!.sub;
+    await CapModel.update(
+      { user_status: 'verified', user_status_set_at: now, user_status_set_by: setBy } as any,
+      { where: { id: eligibleIds } as any },
+    );
+
+    res.json({
+      verified: eligibleIds.length,
+      min_coverage: minCoverage,
+      ids: eligibleIds,
+      message: `Marked ${eligibleIds.length} BP${eligibleIds.length === 1 ? '' : 's'} at or above ${minCoverage}% coverage as verified.`,
     });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

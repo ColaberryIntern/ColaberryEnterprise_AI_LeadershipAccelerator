@@ -1432,9 +1432,34 @@ export default function SystemBlueprint() {
               System Components
               <span className="badge ms-2" style={{ background: 'var(--color-primary)', color: '#fff', fontSize: 10 }}>{totalCount}</span>
             </h6>
-            <Link to="/portal/project/system-v2" className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }}>
-              View details <i className="bi bi-arrow-right ms-1"></i>
-            </Link>
+            <div className="d-flex align-items-center gap-2">
+              {(() => {
+                const eligibleCount = components.filter(c => c.userStatus !== 'verified' && c.userStatus !== 'archived' && c.completion >= 95).length;
+                if (eligibleCount === 0) return null;
+                return (
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#10b981', color: '#fff', fontWeight: 600, fontSize: 11 }}
+                    title="One-click mark all 100%-coverage BPs as verified. Use when Claude Code already reported COMPLETE on prior runs."
+                    onClick={async () => {
+                      if (!window.confirm(`Mark all ${eligibleCount} BP${eligibleCount === 1 ? '' : 's'} at ≥95% coverage as verified?\n\nUse this when Claude Code has already reported Status: COMPLETE on these BPs in prior sessions. They'll stop appearing in Cory's recommendations. You can unmark any of them later.`)) return;
+                      try {
+                        const r = await bpApi.bulkVerify(95);
+                        showToast(r.data?.message || `Marked ${r.data?.verified || 0} BPs verified`, '#059669');
+                        setTimeout(() => window.location.reload(), 600);
+                      } catch (err: any) {
+                        showToast(err?.response?.data?.error || 'Bulk verify failed', '#ef4444');
+                      }
+                    }}
+                  >
+                    <i className="bi bi-patch-check-fill me-1"></i>Mark {eligibleCount} 100%-built BP{eligibleCount === 1 ? '' : 's'} Verified
+                  </button>
+                );
+              })()}
+              <Link to="/portal/project/system-v2" className="btn btn-link btn-sm text-muted p-0" style={{ fontSize: 11 }}>
+                View details <i className="bi bi-arrow-right ms-1"></i>
+              </Link>
+            </div>
           </div>
           <div className="row g-3 mb-4">
             {components.map(comp => {
