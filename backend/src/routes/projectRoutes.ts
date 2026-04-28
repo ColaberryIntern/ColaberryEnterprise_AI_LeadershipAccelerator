@@ -1571,13 +1571,14 @@ function enrichCapability(cap: any) {
   if ((q.reliability || 0) >= 4) completedSet.add('improve_reliability');
   if ((q.production_readiness || 0) >= 5) completedSet.add('optimize_performance');
 
-  // Architectural-choice rule: if the project has a real backend stack
-  // (backend + agents) but zero frontend files, that's a deliberate
-  // microservices/headless architecture. Stop pushing per-BP "Add Frontend"
-  // build steps — they're not actionable. The user can still add a frontend
-  // explicitly via the page-attach flow if they want one.
-  const projectIsHeadless = projectHasBackend && projectHasAgents && !projectHasFrontend;
-  if (projectIsHeadless) completedSet.add('add_frontend');
+  // Note: an earlier version of this code marked `add_frontend` as completed
+  // for projects that had backend + agents but no frontend files, on the
+  // assumption that those were intentional microservices-only architectures.
+  // That assumption was wrong — those projects often *want* a frontend, they
+  // just haven't built one yet. Suppressing the recommendation hid the
+  // single most useful next step (Build Frontend UI) and pushed advanced
+  // backend work like agent enhancements ahead of it. If a user genuinely
+  // doesn't want a frontend, they can mark each BP Verified or Archive it.
   const completedSteps: string[] = Array.from(completedSet);
   const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
   // Resolve effective mode: BP override > Campaign override > Project target_mode > 'production'
