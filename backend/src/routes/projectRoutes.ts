@@ -2604,12 +2604,27 @@ router.post('/api/portal/project/business-processes/:id/validation-report', requ
     const hierarchy = await getCapabilityHierarchy(project.id);
     const updatedCap = hierarchy.find((c: any) => c.id === req.params.id);
     const enriched = updatedCap ? enrichCapability(updatedCap) : null;
-    // Auto-mark as complete if coverage is high enough after validation
-    if (enriched && (enriched.metrics?.requirements_coverage >= 90 || (result.requirementsVerified > 0 && result.requirementsVerified >= result.requirementsTotal))) {
+
+    // Auto-mark as user-verified when Claude Code reports Status: COMPLETE.
+    // The user's contract for "verified" is: Claude Code COMPLETE + tests pass.
+    // Submitting a validation report is itself an assertion that both happened,
+    // so this closes the loop without forcing the user to also click Section 9's
+    // Mark Verified button. Coverage check kept as a fallback for legacy reports
+    // that don't include a status line.
+    const reportStatus = (parsed.status || '').toUpperCase();
+    const reportSaysComplete = /COMPLETE/.test(reportStatus) && !/INCOMPLETE|PARTIAL|FAILED/.test(reportStatus);
+    const coverageHigh = !!enriched && (enriched.metrics?.requirements_coverage >= 90);
+    const allReqsVerified = result.requirementsVerified > 0 && result.requirementsVerified >= result.requirementsTotal;
+    if (reportSaysComplete || coverageHigh || allReqsVerified) {
       try {
-        const { Capability } = await import('../models');
-        await (Capability as any).update({ is_complete: true }, { where: { id: req.params.id } });
-      } catch (markErr: any) { console.warn('[Validation] Auto-complete mark failed:', markErr?.message); }
+        await (cap as any).update({
+          user_status: 'verified',
+          user_status_set_at: new Date(),
+          user_status_set_by: req.participant!.sub,
+        });
+      } catch (markErr: any) {
+        console.warn('[Validation] Auto-mark verified failed:', markErr?.message);
+      }
     }
     res.json({
       ...result,

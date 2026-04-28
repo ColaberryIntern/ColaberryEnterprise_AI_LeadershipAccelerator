@@ -507,6 +507,11 @@ export default function SystemBlueprint() {
   const [execPaused, setExecPaused] = useState(false);
   const isExecuting = execQueue.length > 0;
   const [showUpNext, setShowUpNext] = useState(false);
+  // Brief processing-screen state shown right after Execute All. Hides the
+  // grid + recommendation card and renders a centered prep view, then
+  // transitions into the per-step build flow.
+  const [execPreparing, setExecPreparing] = useState(false);
+  const [execPreparingTotal, setExecPreparingTotal] = useState(0);
 
   // Demo state
   const [demoActive, setDemoActive] = useState(false);
@@ -771,9 +776,18 @@ export default function SystemBlueprint() {
   const handleStartExecution = async () => {
     const allIncomplete = coryPlan.flatMap(p => p.steps.filter(s => !s.done));
     if (allIncomplete.length === 0) return;
+    // Show a brief processing screen so the user has clear feedback that the
+    // queue is starting — same pattern as the per-task build flow's intro.
+    setExecPreparingTotal(allIncomplete.length);
+    setExecPreparing(true);
     setExecQueue(allIncomplete);
     setExecIndex(0);
     setExecPaused(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Hold the prep screen for ~1.4s so the user reads "Preparing N steps",
+    // then transition into the per-step build flow.
+    await new Promise<void>(resolve => setTimeout(resolve, 1400));
+    setExecPreparing(false);
     await handleApplyPlanStep(allIncomplete[0]);
   };
 
@@ -935,10 +949,32 @@ export default function SystemBlueprint() {
         </>
       )}
 
+      {/* ── Execute-All Preparing screen ── shown briefly between click and the per-step build flow */}
+      {execPreparing && (
+        <div className="card border-0 shadow-sm mb-4" style={{ background: 'linear-gradient(135deg, #1a365d, #8b5cf6)', color: '#fff' }}>
+          <div className="card-body py-5 px-4 text-center">
+            <div className="mb-3">
+              <i className="bi bi-lightning-charge-fill" style={{ fontSize: 40, color: '#fbbf24', filter: 'drop-shadow(0 0 12px #fbbf2466)' }}></i>
+            </div>
+            <h4 className="fw-bold mb-2" style={{ color: '#fff' }}>Starting execution</h4>
+            <p className="mb-3" style={{ fontSize: 14, opacity: 0.9 }}>
+              Preparing <strong>{execPreparingTotal}</strong> step{execPreparingTotal === 1 ? '' : 's'}. Cory will walk you through them one at a time —
+              run each prompt in Claude Code, paste the response back, and the next one queues up automatically.
+            </p>
+            <div className="progress mx-auto" style={{ height: 6, borderRadius: 3, maxWidth: 320, background: 'rgba(255,255,255,0.2)' }}>
+              <div className="progress-bar progress-bar-striped progress-bar-animated" style={{ background: '#fbbf24', borderRadius: 3 }}></div>
+            </div>
+            <div className="mt-3" style={{ fontSize: 11, opacity: 0.75 }}>
+              <i className="bi bi-info-circle me-1"></i>You can pause or exit at any time from the header above.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Cory — Unified Build Guide ── */}
 
       {/* ── Execution Mode Header ── */}
-      {isExecuting && (
+      {isExecuting && !execPreparing && (
         <div className="card border-0 shadow-sm mb-3" style={{ background: 'linear-gradient(135deg, #1a365d08, #8b5cf608)', border: '1px solid #8b5cf620' }}>
           <div className="card-body py-3 px-4">
             <div className="d-flex align-items-center justify-content-between">
@@ -991,7 +1027,7 @@ export default function SystemBlueprint() {
       )}
 
       {/* ── Cory — Unified Build Guide (merged Plan + Build Step) ── */}
-      {recommended && (
+      {recommended && !execPreparing && (
         <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: `4px solid ${autonomousMode ? '#8b5cf6' : '#3b82f6'}` }}>
           <div className="card-body p-4">
             {/* Cory header */}
@@ -1105,12 +1141,27 @@ export default function SystemBlueprint() {
                   {TARGET_DESCRIPTIONS[recommended.promptTarget || ''] || 'This will implement the next component of your system.'}
                 </div>
 
-                <div className="d-flex align-items-center gap-2 mb-2">
+                <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
                   <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => setShowPrompt(!showPrompt)}>
                     <i className={`bi bi-chevron-${showPrompt ? 'up' : 'down'} me-1`}></i>{showPrompt ? 'Hide Prompt' : 'Show Prompt'}
                   </button>
                   <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 10 }} onClick={handleCopyPrompt}>
                     <i className="bi bi-clipboard me-1"></i>Copy Again
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#10b981', color: '#fff', fontSize: 10, fontWeight: 600 }}
+                    title="Skip this prompt — mark this BP verified directly. Use when Claude Code already confirmed COMPLETE in a prior session."
+                    onClick={async () => {
+                      if (!recommended?.id) return;
+                      if (!window.confirm(`Mark "${recommended.name}" as already verified?\n\nUse this when Claude Code has already reported Status: COMPLETE on a prior run. Cory will move to the next BP.`)) return;
+                      try {
+                        await bpApi.setUserStatus(recommended.id, 'verified');
+                        window.location.reload();
+                      } catch { /* surface failure quietly */ }
+                    }}
+                  >
+                    <i className="bi bi-patch-check-fill me-1"></i>Already Done — Mark Verified
                   </button>
                 </div>
 
