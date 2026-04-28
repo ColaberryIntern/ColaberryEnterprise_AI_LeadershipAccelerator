@@ -95,11 +95,10 @@ export async function runSkoolQualityGate(): Promise<{
         score -= 30;
       }
 
-      // --- URLs allowed ONLY in 'hiring' category, blocked everywhere else ---
+      // --- NO URLs in any reply (verified by analyzing community: no member except owner includes URLs) ---
       const hasAnyUrl = /https?:\/\/|\bcolaberry\.(ai|com)\b|\benterprise\.colaberry\b/i.test(body);
-      const isHiring = response.category === 'hiring';
-      if (hasAnyUrl && !isHiring) {
-        reasons.push('Contains URL outside hiring category - links trigger self-promotion moderation, share via DM only');
+      if (hasAnyUrl) {
+        reasons.push('Contains URL - community norm verified: no member except owner posts URLs in replies, "DM me" only');
         score -= 50; // Heavy penalty - auto-reject
       }
 
