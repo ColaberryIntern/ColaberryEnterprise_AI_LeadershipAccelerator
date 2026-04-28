@@ -42,6 +42,7 @@ import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
 import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 const adminRoutes = (
   <>
+    <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
     <Route path="/admin/login" element={<AdminLoginPage />} />
     <Route element={<ProtectedRoute />}>
       <Route element={<AdminLayout />}>
