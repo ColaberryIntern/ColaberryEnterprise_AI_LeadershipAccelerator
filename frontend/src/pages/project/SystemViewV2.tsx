@@ -11,6 +11,7 @@ import portalApi from '../../utils/portalApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import SystemIntelligencePanel from '../../components/project/SystemIntelligencePanel';
+import ProjectModeSelector from '../../components/project/ProjectModeSelector';
 
 // ---------------------------------------------------------------------------
 // Types (reused from SystemBlueprint pattern)
@@ -1201,6 +1202,7 @@ function SystemViewV2Inner() {
           </div>
         </div>
         <div className="d-flex gap-2 align-items-center">
+          <ProjectModeSelector variant="compact" />
           <div className="btn-group">
             <button className={`btn btn-sm ${!isReporting ? 'btn-primary' : 'btn-outline-secondary'}`} style={{ fontSize: 10, padding: '3px 10px' }} onClick={() => { setSystemMode('build'); setWorkTab('overview'); setCoryMode('suggestions'); }}>
               <i className="bi bi-hammer me-1"></i>Build

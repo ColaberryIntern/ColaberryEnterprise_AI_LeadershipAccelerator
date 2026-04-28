@@ -13,6 +13,7 @@ import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import CapabilityGrid from '../../components/project/CapabilityGrid';
 import RepoComponentsPanel from '../../components/project/RepoComponentsPanel';
 import PortalBusinessProcessesTab from '../../components/project/PortalBusinessProcessesTab';
+import ProjectModeSelector from '../../components/project/ProjectModeSelector';
 import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
 
 // Execution Overview — capability grid + repo analysis
@@ -748,84 +749,9 @@ function AddBusinessProcessCard({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Project Mode Selector — set project-wide target mode
-// ---------------------------------------------------------------------------
-function ProjectModeSelector({ onModeChange }: { onModeChange?: () => void }) {
-  const [mode, setMode] = useState<string>('production');
-  const [saving, setSaving] = useState(false);
-  const [lastResult, setLastResult] = useState<any>(null);
-
-  useEffect(() => {
-    portalApi.get('/api/portal/project/business-processes')
-      .then(res => {
-        const procs = res.data || [];
-        if (procs.length > 0 && procs[0].effective_mode) setMode(procs[0].effective_mode);
-      }).catch(() => {});
-  }, []);
-
-  const handleChange = async (newMode: string) => {
-    if (newMode === mode) return;
-    setSaving(true);
-    setLastResult(null);
-    try {
-      const r = await portalApi.put('/api/portal/project/target-mode', { mode: newMode, cascade: true });
-      setMode(newMode);
-      setLastResult(r.data);
-      setTimeout(() => setLastResult(null), 6000);
-      if (onModeChange) onModeChange();
-    } catch {} finally { setSaving(false); }
-  };
-
-  const modes = [
-    { value: 'mvp', label: 'MVP', desc: 'L2 · 60% coverage · Fast iteration', icon: 'bi-lightning' },
-    { value: 'production', label: 'Production', desc: 'L3 · 90% coverage · Standard quality', icon: 'bi-server' },
-    { value: 'enterprise', label: 'Enterprise', desc: 'L4 · 95% coverage · Strict validation', icon: 'bi-building' },
-    { value: 'autonomous', label: 'Autonomous', desc: 'L5 · 98% coverage · Full self-operation', icon: 'bi-robot' },
-  ];
-
-  return (
-    <div className="card border-0 shadow-sm mb-3">
-      <div className="card-body p-3">
-        <div className="d-flex justify-content-between align-items-center mb-2">
-          <div>
-            <span className="fw-semibold small" style={{ color: 'var(--color-primary)' }}>
-              <i className="bi bi-sliders me-2"></i>Project Target Mode
-            </span>
-            <span className="text-muted ms-2" style={{ fontSize: 10 }}>Changes completion criteria, quality gates, and priorities for all processes</span>
-          </div>
-        </div>
-        <div className="d-flex gap-2">
-          {modes.map(m => {
-            const active = mode === m.value;
-            return (
-              <button
-                key={m.value}
-                className={`btn btn-sm flex-fill ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
-                style={{ fontSize: 10, padding: '6px 8px', lineHeight: 1.3 }}
-                onClick={() => handleChange(m.value)}
-                disabled={saving}
-                title={m.desc}
-              >
-                <i className={`bi ${m.icon} me-1`}></i>{m.label}
-                {active && <i className="bi bi-check-lg ms-1"></i>}
-              </button>
-            );
-          })}
-        </div>
-        {lastResult && (
-          <div className="mt-2 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 10 }}>
-            <i className="bi bi-check-circle me-1" style={{ color: 'var(--color-accent)' }}></i>
-            Switched to <strong>{lastResult.profile}</strong>
-            {lastResult.overrides_cleared > 0 && <> · {lastResult.overrides_cleared} process overrides cleared</>}
-            {' '}· Requires {lastResult.completion_thresholds?.reqCoverage}% coverage, L{lastResult.maturity_required} maturity
-            {' '}· All processes re-prioritized by gap to completion
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// ProjectModeSelector lives in ../../components/project/ProjectModeSelector.tsx
+// — imported at the top of this file so Blueprint and System View can use the
+// same component.
 
 // ---------------------------------------------------------------------------
 // Readiness KPI Bar — compact version of ReadinessTab for Overview

@@ -11,6 +11,7 @@ import * as bpApi from '../../services/portalBusinessProcessApi';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
+import ProjectModeSelector from '../../components/project/ProjectModeSelector';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -842,6 +843,7 @@ export default function SystemBlueprint() {
         <div className="d-flex gap-2 align-items-center">
           {!demoActive && !isInFlow && (
             <>
+              <ProjectModeSelector variant="compact" />
               <div className="d-flex align-items-center gap-1" style={{ fontSize: 10 }}>
                 <span className="text-muted" style={{ fontWeight: autonomousMode ? 400 : 600 }}>Manual</span>
                 <div className="form-check form-switch mb-0" style={{ minHeight: 0 }}>

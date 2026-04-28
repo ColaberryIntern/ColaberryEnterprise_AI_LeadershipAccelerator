@@ -13,6 +13,7 @@
  */
 import React, { useState, useCallback, useRef } from 'react';
 import portalApi from '../../utils/portalApi';
+import { PROJECT_MODES, ProjectMode } from './ProjectModeSelector';
 
 interface SetupStatus {
   requirements_loaded: boolean;
@@ -63,7 +64,20 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
   const [progressMsg, setProgressMsg] = useState('');
   const [progressBatch, setProgressBatch] = useState<{ batch: number; total: number } | null>(null);
   const [activationResult, setActivationResult] = useState<any>(null);
+  // Target tier — sets what "100% complete" will mean across the project.
+  // Default Production: backend + frontend + models, 90% coverage. Higher
+  // tiers (Enterprise, Autonomous) add layers and don't gate the lower ones —
+  // those become enhancement suggestions after 100%.
+  const [targetMode, setTargetMode] = useState<ProjectMode>('production');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persist the chosen target_mode before kicking off activation/build so
+  // enrichCapability uses the right thresholds from the very first BP read.
+  const persistTargetMode = async () => {
+    try {
+      await portalApi.put('/api/portal/project/target-mode', { mode: targetMode, cascade: true });
+    } catch { /* non-blocking — model default is already 'production' */ }
+  };
 
   const handleFileRead = useCallback((file: File) => {
     const reader = new FileReader();
@@ -152,6 +166,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
     if (!repoUrl.trim()) return;
     setSaving(true); setError(null);
     try {
+      await persistTargetMode();
       const refinedIdea = buildRefinedIdea();
       const res = await portalApi.post('/api/portal/project/architect-build', {
         idea: refinedIdea,
@@ -169,6 +184,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
   const handleActivate = async () => {
     setStep('activating'); setError(null); setProgressMsg('Starting activation...');
     try {
+      await persistTargetMode();
       await portalApi.post('/api/portal/project/setup/activate');
       let pollCount = 0;
       const pollInterval = setInterval(async () => {
@@ -339,6 +355,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           <h6 className="fw-bold mb-3" style={{ fontSize: 16 }}><i className="bi bi-github me-2"></i>Connect GitHub Repository</h6>
           <input type="text" className="form-control mb-2" placeholder="https://github.com/your-org/your-repo" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
           <input type="password" className="form-control mb-3" placeholder="Access token (for private repos)" value={accessToken} onChange={e => setAccessToken(e.target.value)} />
+          {renderTargetTierPicker(targetMode, setTargetMode)}
           {error && <div className="alert alert-danger small py-2 mb-3">{error}</div>}
           <button className="btn w-100 py-3" style={{ background: repoUrl.trim() ? '#10b981' : '#e2e8f0', color: repoUrl.trim() ? '#fff' : '#9ca3af', fontWeight: 600, fontSize: 15, borderRadius: 12, border: 'none' }} onClick={handleConnectGithub} disabled={saving || !repoUrl.trim()}>
             {saving ? <><span className="spinner-border spinner-border-sm me-2"></span>Connecting...</> : <><i className="bi bi-lightning-charge me-2"></i>Connect & Activate</>}
@@ -354,6 +371,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           <p className="text-muted mb-3" style={{ fontSize: 12 }}>We'll connect your repo and start building your AI system.</p>
           <input type="text" className="form-control mb-2" placeholder="https://github.com/your-org/your-repo" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
           <input type="password" className="form-control mb-3" placeholder="Access token (for private repos)" value={accessToken} onChange={e => setAccessToken(e.target.value)} />
+          {renderTargetTierPicker(targetMode, setTargetMode)}
           {error && <div className="alert alert-danger small py-2 mb-3">{error}</div>}
           <button className="btn w-100 py-3" style={{ background: repoUrl.trim() ? 'linear-gradient(135deg, #3b82f6, #8b5cf6)' : '#e2e8f0', color: repoUrl.trim() ? '#fff' : '#9ca3af', fontWeight: 700, fontSize: 15, borderRadius: 12, border: 'none', boxShadow: repoUrl.trim() ? '0 4px 15px rgba(99, 102, 241, 0.3)' : 'none' }}
             onClick={handleStartBuild} disabled={saving || !repoUrl.trim()}>
@@ -385,6 +403,48 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
           <h4 className="fw-bold mb-2" style={{ color: '#059669' }}>Project Activated!</h4>
         </div></div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Inline picker shown on the GitHub steps. Lets the user pick what tier
+ * "100% complete" should mean. Default is Production. Higher tiers become
+ * enhancement suggestions after 100% rather than gating the lower tiers.
+ */
+function renderTargetTierPicker(
+  targetMode: ProjectMode,
+  setTargetMode: (m: ProjectMode) => void,
+) {
+  return (
+    <div className="mb-3">
+      <div className="d-flex align-items-center gap-2 mb-1">
+        <span className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
+          <i className="bi bi-sliders me-1"></i>Target tier
+        </span>
+        <span className="text-muted" style={{ fontSize: 10 }}>What "100% complete" means for this project</span>
+      </div>
+      <div className="d-flex gap-1">
+        {PROJECT_MODES.map(m => {
+          const active = targetMode === m.value;
+          return (
+            <button
+              key={m.value}
+              type="button"
+              className={`btn btn-sm flex-fill ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
+              style={{ fontSize: 10, padding: '6px 4px', lineHeight: 1.2 }}
+              onClick={() => setTargetMode(m.value)}
+              title={m.desc}
+            >
+              <i className={`bi ${m.icon} me-1`}></i>{m.label}
+              {active && <i className="bi bi-check-lg ms-1"></i>}
+            </button>
+          );
+        })}
+      </div>
+      <div className="text-muted mt-1" style={{ fontSize: 10 }}>
+        {PROJECT_MODES.find(m => m.value === targetMode)?.desc}. You can change this later from the Blueprint header.
+      </div>
     </div>
   );
 }
