@@ -27,3 +27,5 @@ export const connectPage = (id: string, route: string) =>
   portalApi.put(`/api/portal/project/business-processes/${id}/connect-page`, { route });
 export const generateCombinedPrompt = (id: string, payload: { execution_steps: string[]; autonomy_gaps: any[]; include_agents: string[] }) => portalApi.post(`/api/portal/project/business-processes/${id}/combined-prompt`, payload);
 export const getExecutionIntelligence = () => portalApi.get('/api/portal/project/execution-intelligence');
+export const getSystemPromptDraft = () => portalApi.get('/api/portal/project/system-prompt/draft');
+export const saveSystemPrompt = (system_prompt: string) => portalApi.put('/api/portal/project/system-prompt', { system_prompt });

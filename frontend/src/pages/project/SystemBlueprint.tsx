@@ -534,6 +534,15 @@ export default function SystemBlueprint() {
   const [completedPlanSteps, setCompletedPlanSteps] = useState<Set<string>>(new Set());
   const [orchestratorTasks, setOrchestratorTasks] = useState<any[]>([]);
 
+  // System Prompt edit state — read view stays compact, textarea expands
+  // optionally via Maximize so the page layout doesn't grow.
+  const [promptEditing, setPromptEditing] = useState(false);
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [promptMaximized, setPromptMaximized] = useState(false);
+  const [promptDraftText, setPromptDraftText] = useState('');
+  const [autoDerivedDraft, setAutoDerivedDraft] = useState<string | null>(null);
+  const [promptSaving, setPromptSaving] = useState(false);
+
   // Execution queue state
   const [execQueue, setExecQueue] = useState<CoryPlanStep[]>([]);
   const [execIndex, setExecIndex] = useState(0);
@@ -578,6 +587,19 @@ export default function SystemBlueprint() {
       })
       .finally(() => setLoading(false));
   }, [loadData]);
+
+  // Lazy-fetch the auto-derived system prompt draft once we have a project.
+  // Only blocks the read-mode "no saved prompt" path — for projects that
+  // already have a saved system_prompt, we skip the fetch.
+  useEffect(() => {
+    if (!project) return;
+    const stored = (project.project_variables?.system_prompt || '').trim();
+    if (stored) return;
+    if (autoDerivedDraft !== null) return;
+    bpApi.getSystemPromptDraft()
+      .then((r: any) => setAutoDerivedDraft(r.data?.draft || ''))
+      .catch(() => setAutoDerivedDraft(''));
+  }, [project, autoDerivedDraft]);
 
   // Auto-scroll to results
   useEffect(() => {
@@ -977,26 +999,150 @@ export default function SystemBlueprint() {
       {/* ── IDLE: System Prompt + Architecture ── */}
       {!isInFlow && (
         <>
-          {/* System Prompt */}
+          {/* System Prompt — read mode is compact (180px max), Expand grows the
+              read pane in place to 600px, Edit opens an inline textarea at the
+              same starting height; Maximize floats the textarea over the page
+              as a lightbox so the rest of the layout doesn't shift. */}
           <div className="card border-0 shadow-sm mb-4">
             <div className="card-body p-4">
-              <div className="d-flex align-items-center gap-2 mb-2">
-                <i className="bi bi-file-text" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
-                <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Your System Blueprint</h5>
+              <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
+                <div className="d-flex align-items-center gap-2">
+                  <i className="bi bi-file-text" style={{ color: 'var(--color-primary)', fontSize: 14 }}></i>
+                  <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Your System Blueprint</h5>
+                </div>
+                {!promptEditing && (() => {
+                  const storedNow = (project.project_variables?.system_prompt || '').trim();
+                  return (
+                    <div className="d-flex align-items-center gap-2">
+                      <button className="btn btn-link btn-sm p-0 text-muted" style={{ fontSize: 11 }}
+                        onClick={() => setPromptExpanded(v => !v)}>
+                        <i className={`bi ${promptExpanded ? 'bi-arrows-collapse' : 'bi-arrows-expand'} me-1`}></i>
+                        {promptExpanded ? 'Collapse' : 'Expand'}
+                      </button>
+                      <button className="btn btn-outline-primary btn-sm" style={{ fontSize: 11 }}
+                        onClick={() => {
+                          const seed = storedNow || autoDerivedDraft || `You are building ${deriveSystemSummary(components)}.`;
+                          setPromptDraftText(seed);
+                          setPromptEditing(true);
+                        }}>
+                        <i className="bi bi-pencil-square me-1"></i>Edit
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
-              {(() => {
-                const stored = project.project_variables?.system_prompt || project.primary_business_problem || project.selected_use_case;
-                const derivedSummary = deriveSystemSummary(components);
-                const prompt = stored || `You are building ${derivedSummary}.`;
+
+              {!promptEditing && (() => {
+                const stored = (project.project_variables?.system_prompt || '').trim();
+                const usingDraft = !stored;
+                const fallback = `You are building ${deriveSystemSummary(components)}.`;
+                const text = stored
+                  || (autoDerivedDraft != null ? (autoDerivedDraft || fallback) : '');
+                const loadingDraft = !stored && autoDerivedDraft === null;
                 return (
                   <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)' }}>
-                    <div className="fw-medium mb-1" style={{ fontSize: 10, color: 'var(--color-primary)' }}>
-                      {stored ? 'System Prompt' : 'System Summary (auto-derived)'}
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="fw-medium" style={{ fontSize: 10, color: 'var(--color-primary)' }}>
+                        {stored ? 'System Prompt' : 'System Prompt (auto-derived from your requirements)'}
+                      </div>
+                      {usingDraft && text && (
+                        <button className="btn btn-sm btn-success" style={{ fontSize: 10, padding: '2px 8px' }}
+                          disabled={promptSaving}
+                          onClick={async () => {
+                            setPromptSaving(true);
+                            try {
+                              await bpApi.saveSystemPrompt(text);
+                              await loadData();
+                            } catch {} finally { setPromptSaving(false); }
+                          }}>
+                          <i className="bi bi-check2 me-1"></i>{promptSaving ? 'Saving…' : 'Save as System Prompt'}
+                        </button>
+                      )}
                     </div>
-                    <p className="text-muted mb-0" style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-                      {prompt}
-                    </p>
+                    {loadingDraft ? (
+                      <div className="text-muted" style={{ fontSize: 11 }}>
+                        <span className="spinner-border spinner-border-sm me-2"></span>Generating from your requirements…
+                      </div>
+                    ) : (
+                      <div style={{ maxHeight: promptExpanded ? 600 : 180, overflowY: 'auto', fontSize: 12, lineHeight: 1.7, color: '#475569', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                        {text}
+                      </div>
+                    )}
                   </div>
+                );
+              })()}
+
+              {promptEditing && (() => {
+                const stored = (project.project_variables?.system_prompt || '').trim();
+                const overlayStyle: React.CSSProperties = promptMaximized
+                  ? { position: 'fixed', inset: '4%', zIndex: 9999, background: '#fff', borderRadius: 12, boxShadow: '0 25px 80px rgba(0,0,0,0.35)', padding: 24, display: 'flex', flexDirection: 'column' }
+                  : { background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)', padding: 12 };
+                return (
+                  <>
+                    {promptMaximized && (
+                      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 9998 }} onClick={() => setPromptMaximized(false)} />
+                    )}
+                    <div style={overlayStyle}>
+                      <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                        <div className="fw-medium" style={{ fontSize: 11, color: 'var(--color-primary)' }}>
+                          <i className="bi bi-pencil-square me-1"></i>Editing System Prompt {promptMaximized && <span className="text-muted ms-2">(Maximized)</span>}
+                        </div>
+                        <div className="d-flex gap-2 flex-wrap">
+                          <button className="btn btn-link btn-sm p-0 text-muted" style={{ fontSize: 11 }}
+                            onClick={() => setPromptMaximized(v => !v)}>
+                            <i className={`bi ${promptMaximized ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'} me-1`}></i>
+                            {promptMaximized ? 'Exit Maximize' : 'Maximize'}
+                          </button>
+                          <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 11 }}
+                            disabled={promptSaving}
+                            onClick={async () => {
+                              if (promptDraftText.trim() && promptDraftText.trim() !== stored.trim()) {
+                                if (!window.confirm('Replace your current edits with a freshly built draft from the requirements?')) return;
+                              }
+                              try {
+                                const r: any = await bpApi.getSystemPromptDraft();
+                                setPromptDraftText(r.data?.draft || '');
+                                setAutoDerivedDraft(r.data?.draft || '');
+                              } catch {}
+                            }}>
+                            <i className="bi bi-arrow-clockwise me-1"></i>Regenerate from Requirements
+                          </button>
+                          <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 11 }}
+                            disabled={promptSaving}
+                            onClick={() => { setPromptEditing(false); setPromptMaximized(false); setPromptDraftText(''); }}>
+                            Cancel
+                          </button>
+                          <button className="btn btn-primary btn-sm" style={{ fontSize: 11, fontWeight: 600 }}
+                            disabled={promptSaving}
+                            onClick={async () => {
+                              setPromptSaving(true);
+                              try {
+                                await bpApi.saveSystemPrompt(promptDraftText);
+                                await loadData();
+                                setPromptEditing(false);
+                                setPromptMaximized(false);
+                                setPromptDraftText('');
+                              } catch {} finally { setPromptSaving(false); }
+                            }}>
+                            {promptSaving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving…</> : <><i className="bi bi-check2 me-1"></i>Save</>}
+                          </button>
+                        </div>
+                      </div>
+                      <textarea
+                        className="form-control"
+                        rows={promptMaximized ? 28 : 8}
+                        style={{ fontSize: 12, lineHeight: 1.6, fontFamily: 'inherit', flex: promptMaximized ? 1 : undefined, resize: promptMaximized ? 'none' : 'vertical' }}
+                        value={promptDraftText}
+                        onChange={(e) => setPromptDraftText(e.target.value)}
+                        placeholder="Describe what you're building. Markdown headings render as plain text; the saved prompt feeds Cory's recommendations and Claude Code prompts."
+                      />
+                      {!promptMaximized && (
+                        <div className="text-muted mt-1" style={{ fontSize: 10 }}>
+                          Click <strong>Maximize</strong> to edit the full prompt without growing the page.
+                        </div>
+                      )}
+                    </div>
+                  </>
                 );
               })()}
             </div>

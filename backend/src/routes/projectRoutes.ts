@@ -4550,4 +4550,21 @@ router.put('/api/portal/project/system-prompt', requireParticipant, async (req: 
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
+// Auto-derived multi-section system prompt built from project metadata,
+// requirements, capabilities, and stakeholders. Returned as a string the
+// frontend can show as a draft, regenerate, edit, and save via PUT
+// /system-prompt above. The caller decides when to save — we never
+// auto-overwrite the stored value.
+router.get('/api/portal/project/system-prompt/draft', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { getProjectByEnrollment } = await import('../services/projectService');
+    const project = await getProjectByEnrollment(req.participant!.sub);
+    if (!project) { res.status(404).json({ error: 'No project found' }); return; }
+    const { buildBlueprintSystemPrompt } = await import('../services/systemPromptBuilder');
+    const draft = await buildBlueprintSystemPrompt(req.participant!.sub);
+    const saved = ((project as any).project_variables || {}).system_prompt || '';
+    res.json({ draft, has_saved: !!saved.trim() });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
 export default router;
