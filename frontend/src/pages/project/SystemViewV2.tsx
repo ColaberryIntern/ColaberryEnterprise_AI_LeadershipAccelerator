@@ -632,6 +632,11 @@ function SystemViewV2Inner() {
   const [showAllIssues, setShowAllIssues] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const validatedPanelRef = useRef<HTMLDivElement | null>(null);
+  // Escape hatch for verified BPs: when the user has done another build
+  // session on an already-verified BP and wants to paste the validation
+  // report, this toggles the build pane on without unverifying. Backend
+  // /validation-report only writes metrics — user_status stays 'verified'.
+  const [recordExtraBuild, setRecordExtraBuild] = useState(false);
   const [showImproveUpNext, setShowImproveUpNext] = useState(false);
 
   // Reclassify state — for the synthetic Uncategorized bucket
@@ -777,6 +782,7 @@ function SystemViewV2Inner() {
     setTicketWarning(null);
     setExecutionSnapshot(null);
     setShowAllIssues(false);
+    setRecordExtraBuild(false);
     // Preserve URL tab on first load, reset to overview on subsequent selections
     const preserveTab = urlTab && ['overview','build','improve','health','ui'].includes(urlTab) && selectedId === urlComponentId;
     if (!preserveTab) setWorkTab('overview');
@@ -1826,7 +1832,7 @@ function SystemViewV2Inner() {
                     // try to "build" a synthetic holding bucket, and never recommend
                     // anything for a BP they've marked verified.
                     const enhanceCards = getEnhanceCards(compDetail);
-                    if (enhanceCards.isVerified) {
+                    if (enhanceCards.isVerified && !recordExtraBuild) {
                       return (
                         <div>
                           <div className="d-flex align-items-center gap-2 mb-3">
@@ -1834,6 +1840,24 @@ function SystemViewV2Inner() {
                             <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#065f46' }}>Verified — no build needed</h6>
                           </div>
                           {renderVerifiedCard(selectedComponent.name, selectedComponent.id, compDetail?.user_status_set_at)}
+                          {/* Escape hatch: user did another build cycle on a verified BP
+                              and needs to paste that validation report somewhere. Surface
+                              the build pane on demand without flipping user_status. */}
+                          <div className="mt-3 p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px dashed var(--color-border)' }}>
+                            <div className="d-flex align-items-start gap-2">
+                              <i className="bi bi-arrow-clockwise" style={{ color: '#3b82f6', marginTop: 2 }}></i>
+                              <div className="flex-grow-1">
+                                <div className="fw-semibold" style={{ fontSize: 12 }}>Did you run another Claude Code session on this BP?</div>
+                                <div className="text-muted" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                                  Paste the new validation report below to record the latest files / routes / metrics. Your <strong>Verified</strong> status stays — this just appends to the build history.
+                                </div>
+                              </div>
+                              <button className="btn btn-sm btn-outline-primary" style={{ fontSize: 11, flexShrink: 0 }}
+                                onClick={() => setRecordExtraBuild(true)}>
+                                <i className="bi bi-clipboard-plus me-1"></i>Record Another Build
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       );
                     }
@@ -1933,6 +1957,14 @@ function SystemViewV2Inner() {
                     // Default build flow
                     return (
                     <div>
+                      {recordExtraBuild && enhanceCards.isVerified && (
+                        <div className="mb-3 p-2 d-flex align-items-center justify-content-between" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 11 }}>
+                          <span><i className="bi bi-info-circle me-1" style={{ color: '#3b82f6' }}></i>Recording an additional build for a <strong>Verified</strong> BP. Pasting a validation report won't change verified status.</span>
+                          <button className="btn btn-link btn-sm p-0 text-muted" style={{ fontSize: 10 }} onClick={() => { setRecordExtraBuild(false); setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}>
+                            <i className="bi bi-x me-1"></i>Back to Verified view
+                          </button>
+                        </div>
+                      )}
                       {/* Cory — Your Next Step (matches Blueprint exactly) */}
                       <div className="d-flex align-items-center gap-2 mb-3">
                         <i className="bi bi-robot" style={{ color: '#3b82f6', fontSize: 16 }}></i>
@@ -2024,6 +2056,25 @@ function SystemViewV2Inner() {
                     );
                   })()}
                   {buildGenerating && <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: 12 }}><span className="spinner-border spinner-border-sm"></span>Generating prompt...</div>}
+                  {recordExtraBuild && !buildPrompt && !buildResult && (
+                    <div className="mt-3">
+                      <label className="form-label fw-medium" style={{ fontSize: 11 }}>
+                        <i className="bi bi-clipboard-check me-1"></i>Paste your Claude Code validation report
+                      </label>
+                      <textarea
+                        className="form-control form-control-sm"
+                        rows={8}
+                        value={buildReport}
+                        onChange={e => setBuildReport(e.target.value)}
+                        placeholder={`VALIDATION REPORT\n\nFiles Created:\n- ...\n\nFiles Modified:\n- ...\n\nRoutes:\n- ...\n\nStatus: COMPLETE`}
+                        style={{ fontFamily: 'monospace', fontSize: 10 }}
+                      />
+                      <button className="btn btn-sm mt-2" style={{ background: '#10b981', color: '#fff', fontWeight: 600, fontSize: 11 }}
+                        disabled={!buildReport.trim() || buildValidating} onClick={() => handleValidateBuild(selectedComponent.id)}>
+                        {buildValidating ? <><span className="spinner-border spinner-border-sm me-1"></span>Validating...</> : <><i className="bi bi-check-circle me-1"></i>Validate Build</>}
+                      </button>
+                    </div>
+                  )}
                   {buildPrompt && (
                     <div>
                       <div className="d-flex align-items-center gap-2 mb-2">
