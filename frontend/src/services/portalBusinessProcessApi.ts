@@ -11,5 +11,6 @@ export const syncProcess = (id: string, report: string) => portalApi.post(`/api/
 export const resyncProcess = (id: string) => portalApi.post(`/api/portal/project/business-processes/${id}/resync`);
 export const reclassifyRequirements = () => portalApi.post('/api/portal/project/business-processes/reclassify', {}, { timeout: 120000 });
 export const setLifecycle = (id: string, status: string) => portalApi.put(`/api/portal/project/business-processes/${id}/lifecycle`, { status });
+export const setUserStatus = (id: string, status: 'in_progress' | 'verified' | 'archived') => portalApi.put(`/api/portal/project/business-processes/${id}/user-status`, { status });
 export const generateCombinedPrompt = (id: string, payload: { execution_steps: string[]; autonomy_gaps: any[]; include_agents: string[] }) => portalApi.post(`/api/portal/project/business-processes/${id}/combined-prompt`, payload);
 export const getExecutionIntelligence = () => portalApi.get('/api/portal/project/execution-intelligence');

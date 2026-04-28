@@ -35,6 +35,19 @@ export interface CapabilityAttributes {
   frontend_route?: string;
   ui_element_map?: Record<string, any>;
   backend_context?: Record<string, any>;
+  /**
+   * User-asserted state for this BP. Authoritative.
+   *   'in_progress' (default) — system continues to recommend next steps from heuristics.
+   *   'verified'              — user clicked Mark Verified after Claude Code reported
+   *                             Status: COMPLETE and tests passed. All recommendation
+   *                             surfaces treat this BP as done.
+   *   'archived'              — hidden from active recommendations and the grid.
+   *                             Used for synthetic/Uncategorized buckets the user
+   *                             doesn't want to see.
+   */
+  user_status?: 'in_progress' | 'verified' | 'archived';
+  user_status_set_at?: Date | null;
+  user_status_set_by?: string | null;
 }
 
 class Capability extends Model<CapabilityAttributes> implements CapabilityAttributes {
@@ -61,6 +74,9 @@ class Capability extends Model<CapabilityAttributes> implements CapabilityAttrib
   declare last_evaluated_at: Date;
   declare lifecycle_status: string;
   declare frontend_route: string;
+  declare user_status: 'in_progress' | 'verified' | 'archived';
+  declare user_status_set_at: Date | null;
+  declare user_status_set_by: string | null;
 }
 
 Capability.init(
@@ -98,6 +114,11 @@ Capability.init(
     frontend_route: { type: DataTypes.STRING(200), allowNull: true },  // e.g. "/admin/campaigns"
     ui_element_map: { type: DataTypes.JSONB, allowNull: true },  // cached page element structure
     backend_context: { type: DataTypes.JSONB, allowNull: true },  // cached backend stack: routes, models, agents
+    // Canonical user-asserted state — see CapabilityAttributes.user_status doc above.
+    // sequelize.sync({ alter: true }) on startup will create this column.
+    user_status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'in_progress' },
+    user_status_set_at: { type: DataTypes.DATE, allowNull: true },
+    user_status_set_by: { type: DataTypes.STRING(255), allowNull: true },
   },
   {
     sequelize, tableName: 'capabilities', timestamps: true, underscored: true,

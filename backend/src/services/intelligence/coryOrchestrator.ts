@@ -387,8 +387,18 @@ function isSyntheticBucket(enriched: any): boolean {
   return name.includes('uncategorized') || name === 'miscellaneous' || name === 'other';
 }
 
+/**
+ * The user has manually asserted this BP is verified or archived. The
+ * orchestrator must not generate any tasks for it — that's the contract
+ * of the Mark Verified button.
+ */
+function isUserResolved(enriched: any): boolean {
+  const status = enriched?.user_status;
+  return status === 'verified' || status === 'archived';
+}
+
 export function getTopTasks(enriched: any, projectMode: string): CoryTask[] {
-  if (isSyntheticBucket(enriched)) return [];
+  if (isSyntheticBucket(enriched) || isUserResolved(enriched)) return [];
   const state = getSystemState(enriched, projectMode);
 
   // Step 1: Gather all tasks from adapters
@@ -450,8 +460,8 @@ export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: str
   const allTasks: CoryTask[] = [];
 
   for (const enriched of enrichedCapabilities) {
-    // Skip the synthetic Uncategorized bucket — it's not a real BP to build.
-    if (isSyntheticBucket(enriched)) continue;
+    // Skip the synthetic Uncategorized bucket and any BP the user has resolved.
+    if (isSyntheticBucket(enriched) || isUserResolved(enriched)) continue;
     // Skip complete components
     const coverage = enriched.metrics?.requirements_coverage || 0;
     const readiness = enriched.metrics?.system_readiness || 0;

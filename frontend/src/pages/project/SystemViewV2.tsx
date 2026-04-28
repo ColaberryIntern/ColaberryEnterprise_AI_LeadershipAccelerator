@@ -43,6 +43,7 @@ interface SystemComponent {
   readinessRaw: number;
   layers: { backend: string; frontend: string; agent: string };
   ui: { pages: UIPage[] };
+  userStatus?: 'in_progress' | 'verified' | 'archived';
 }
 
 interface ProjectData {
@@ -75,12 +76,18 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
 
 function transformBPs(bps: any[]): SystemComponent[] {
   return bps
-    .filter((bp: any) => (bp.applicability_status || 'active') === 'active')
+    // Filter out archived BPs entirely — they're hidden from the active view.
+    .filter((bp: any) => (bp.applicability_status || 'active') === 'active' && bp.user_status !== 'archived')
     .map((bp: any) => {
       const coverage = bp.metrics?.requirements_coverage || 0;
       const readiness = bp.metrics?.system_readiness || 0;
       const maturityLevel = bp.maturity?.level || 0;
-      const isComplete = bp.is_complete === true || (coverage >= 90 && readiness >= 90);
+      // Canonical completion check: trust the backend's is_complete (which now
+      // honors user_status === 'verified'). Stop second-guessing it on the
+      // frontend with parallel coverage/readiness OR-gates — that's what
+      // produced the "100% complete + no backend" contradiction.
+      const userVerified = bp.user_status === 'verified';
+      const isComplete = userVerified || bp.is_complete === true;
       const isPageBP = bp.source === 'frontend_page' || bp.is_page_bp === true;
       const bpSource = bp.source || 'unknown';
       const hasExecPlan = (bp.execution_plan || []).length > 0;
@@ -88,10 +95,13 @@ function transformBPs(bps: any[]): SystemComponent[] {
 
       let status: 'complete' | 'in_progress' | 'not_started';
       if (isComplete) status = 'complete';
-      else if (coverage > 10 || readiness > 10 || maturityLevel >= 1) status = 'in_progress';
+      else if (coverage > 0 || maturityLevel >= 1) status = 'in_progress';
       else status = 'not_started';
 
-      const completion = Math.round(Math.max(coverage, readiness));
+      // Completion percent: actual requirement coverage. Don't inflate with
+      // file-tree-derived readiness — that produced 100% badges on BPs with
+      // 0% real coverage.
+      const completion = userVerified ? 100 : Math.round(coverage);
       const firstStep = (bp.execution_plan || []).find((s: any) => !s.blocked);
 
       return {
@@ -125,6 +135,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
             bpId: bp.id,
           }] : [],
         },
+        userStatus: (bp.user_status || 'in_progress') as 'in_progress' | 'verified' | 'archived',
       };
     })
     .sort((a, b) => {
@@ -495,6 +506,8 @@ type EnhanceCardSet = {
   isEnhance: boolean;
   isDone: boolean;
   isRecategorize: boolean;
+  isVerified: boolean;
+  isArchived: boolean;
   primary: EnhanceCardItem | null;
   upNext: EnhanceCardItem[];
   items: EnhanceCardItem[];
@@ -502,9 +515,13 @@ type EnhanceCardSet = {
 
 function getEnhanceCards(compDetail: any): EnhanceCardSet {
   const kind: string | undefined = compDetail?.next_action_kind;
+  const userStatus: string | undefined = compDetail?.user_status;
   const enhancements: any[] = compDetail?.enhancement_plan || [];
-  const empty: EnhanceCardSet = { isEnhance: false, isDone: false, isRecategorize: false, primary: null, upNext: [], items: [] };
+  const empty: EnhanceCardSet = { isEnhance: false, isDone: false, isRecategorize: false, isVerified: false, isArchived: false, primary: null, upNext: [], items: [] };
 
+  // User-asserted states win over heuristic ones.
+  if (kind === 'verified' || userStatus === 'verified') return { ...empty, isVerified: true };
+  if (kind === 'archived' || userStatus === 'archived') return { ...empty, isArchived: true };
   if (kind === 'recategorize' || compDetail?.is_synthetic_bucket) return { ...empty, isRecategorize: true };
   if (kind === 'done') return { ...empty, isDone: true };
   if (kind !== 'enhance') return empty;
@@ -531,6 +548,8 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
     isEnhance: true,
     isDone: false,
     isRecategorize: false,
+    isVerified: false,
+    isArchived: false,
     primary: items[0] || null,
     upNext: items.slice(1, 3),
     items,
@@ -620,6 +639,35 @@ function SystemViewV2Inner() {
           {reclassifying ? <><span className="spinner-border spinner-border-sm me-1"></span>Reclassifying…</> : <><i className="bi bi-shuffle me-1"></i>Reclassify Requirements</>}
         </button>
       </div>
+    </div>
+  );
+
+  // Verified empty state — user has asserted this BP is built and tested.
+  // Recommendation surfaces show this card and an Unmark button instead of next-step prompts.
+  const [unmarkingVerified, setUnmarkingVerified] = useState(false);
+  const handleUnmarkVerified = async (bpId: string) => {
+    if (unmarkingVerified) return;
+    setUnmarkingVerified(true);
+    try {
+      await portalApi.put(`/api/portal/project/business-processes/${bpId}/user-status`, { status: 'in_progress' });
+      window.location.reload();
+    } catch {
+      setUnmarkingVerified(false);
+    }
+  };
+  const renderVerifiedCard = (compName: string, bpId: string, setAt?: string | null) => (
+    <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98140' }}>
+      <div className="d-flex align-items-center gap-2 mb-2">
+        <i className="bi bi-patch-check-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+        <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#065f46' }}>Verified</h6>
+      </div>
+      <p className="mb-3" style={{ fontSize: 12, color: '#047857' }}>
+        You've marked "{compName}" as built and tested. No recommendations will surface for this BP until you unmark it.
+        {setAt && <span className="d-block mt-1 text-muted" style={{ fontSize: 10 }}>Marked {new Date(setAt).toLocaleString()}</span>}
+      </p>
+      <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 11 }} disabled={unmarkingVerified} onClick={() => handleUnmarkVerified(bpId)}>
+        {unmarkingVerified ? <><span className="spinner-border spinner-border-sm me-1"></span>Unmarking…</> : <><i className="bi bi-arrow-counterclockwise me-1"></i>Unmark as Verified</>}
+      </button>
     </div>
   );
 
@@ -1514,6 +1562,8 @@ function SystemViewV2Inner() {
                             </div>
                           )}
                         </>
+                      ) : enhanceCards.isVerified ? (
+                        renderVerifiedCard(selectedComponent.name, selectedComponent.id, compDetail?.user_status_set_at)
                       ) : enhanceCards.isRecategorize ? (
                         renderRecategorizeCard(selectedComponent.name)
                       ) : enhanceCards.isDone ? (
@@ -1548,11 +1598,23 @@ function SystemViewV2Inner() {
               {workTab === 'build' && (
                 <div>
                   {!buildPrompt && !buildGenerating && (() => {
-                    // If the BP is in enhance/done/recategorize mode, surface the right
-                    // forward-motion card here too. The user opened the Build tab
-                    // expecting progress — never re-show finished build steps and never
-                    // try to "build" a synthetic holding bucket.
+                    // If the BP is in enhance/done/recategorize/verified mode, surface
+                    // the right forward-motion card here too. The user opened the Build
+                    // tab expecting progress — never re-show finished build steps, never
+                    // try to "build" a synthetic holding bucket, and never recommend
+                    // anything for a BP they've marked verified.
                     const enhanceCards = getEnhanceCards(compDetail);
+                    if (enhanceCards.isVerified) {
+                      return (
+                        <div>
+                          <div className="d-flex align-items-center gap-2 mb-3">
+                            <i className="bi bi-patch-check-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#065f46' }}>Verified — no build needed</h6>
+                          </div>
+                          {renderVerifiedCard(selectedComponent.name, selectedComponent.id, compDetail?.user_status_set_at)}
+                        </div>
+                      );
+                    }
                     if (enhanceCards.isRecategorize) {
                       return (
                         <div>
@@ -1887,6 +1949,9 @@ function SystemViewV2Inner() {
                     const enhanceCards = getEnhanceCards(compDetail);
                     const healthSteps: Array<{ title: string; explanation: string; color: string; promptTarget?: string }> = [];
 
+                    if (enhanceCards.isVerified) {
+                      return renderVerifiedCard(selectedComponent.name, selectedComponent.id, compDetail?.user_status_set_at);
+                    }
                     if (enhanceCards.isRecategorize) {
                       return renderRecategorizeCard(selectedComponent.name);
                     }
@@ -1992,6 +2057,9 @@ function SystemViewV2Inner() {
                     // Prefer the unified enhancement_plan when the BP is in 'enhance'
                     // or 'done' mode — otherwise fall back to the local layer + gap mix.
                     const enhanceCards = getEnhanceCards(compDetail);
+                    if (enhanceCards.isVerified) {
+                      return renderVerifiedCard(selectedComponent.name, selectedComponent.id, compDetail?.user_status_set_at);
+                    }
                     if (enhanceCards.isRecategorize) {
                       return renderRecategorizeCard(selectedComponent.name);
                     }

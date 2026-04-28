@@ -1686,8 +1686,18 @@ function enrichCapability(cap: any) {
     },
     gap_count: allGaps.length,
     gaps: allGaps,
-    is_complete: processComplete,
-    execution_plan: executionPlan,
+    // user_status is the canonical user-asserted state. When 'verified', the BP
+    // is done from the user's perspective regardless of what the heuristics say.
+    // When 'archived', it's hidden from active surfaces (orchestrator skips it,
+    // grid filters it out).
+    user_status: (cap as any).user_status || 'in_progress',
+    user_status_set_at: (cap as any).user_status_set_at || null,
+    // is_complete is true when EITHER the user marked it verified OR the heuristic
+    // process-complete check passes. The user's assertion always wins.
+    is_complete: ((cap as any).user_status === 'verified') || processComplete,
+    // Drop the execution_plan entirely when the user has marked the BP verified —
+    // there is no "next build step" for completed work.
+    execution_plan: ((cap as any).user_status === 'verified') ? [] : executionPlan,
     // Use backend_context (from actual source code reading) as the source of truth
     // when available, falling back to keyword-matched file detection.
     usability: (() => {
@@ -1763,8 +1773,8 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
     } catch {}
     // Inject last_execution from Capability models (hierarchy doesn't include JSONB fields)
     const { Capability: CapabilityModel } = await import('../models');
-    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context'] });
-    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context }]));
+    const capModels = await CapabilityModel.findAll({ where: { project_id: project.id }, attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'modes', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at'] });
+    const execMap = new Map(capModels.map((c: any) => [c.id, { last_execution: c.last_execution, mode_override: c.mode_override, applicability_status: c.applicability_status, execution_profile: c.execution_profile, strategy_template: c.strategy_template, modes: c.modes, frontend_route: c.frontend_route, backend_context: c.backend_context, user_status: c.user_status, user_status_set_at: c.user_status_set_at }]));
     const projectMode = (project as any).target_mode || 'production';
     // Load campaign mode overrides for capabilities that have linked campaigns
     let campaignModeMap = new Map<string, string>();
@@ -1808,6 +1818,8 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         cap.strategy_template = extra.strategy_template || 'default';
         if ((extra as any).frontend_route) cap.frontend_route = (extra as any).frontend_route;
         if ((extra as any).backend_context) cap.backend_context = (extra as any).backend_context;
+        cap.user_status = (extra as any).user_status || 'in_progress';
+        cap.user_status_set_at = (extra as any).user_status_set_at || null;
       }
     });
 
@@ -1979,7 +1991,7 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
     const { Capability: CapModel } = await import('../models');
     const capModels = await CapModel.findAll({
       where: { project_id: project.id },
-      attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'frontend_route', 'backend_context'],
+      attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'frontend_route', 'backend_context', 'user_status', 'user_status_set_at'],
     });
     const execMap = new Map(capModels.map((c: any) => [c.id, c]));
     const projectMode = (project as any).target_mode || 'production';
@@ -1993,6 +2005,8 @@ router.get('/api/portal/project/cory-tasks', requireParticipant, async (req: Req
         cap.applicability_status = (extra as any).applicability_status || 'active';
         if ((extra as any).frontend_route) cap.frontend_route = (extra as any).frontend_route;
         if ((extra as any).backend_context) cap.backend_context = (extra as any).backend_context;
+        cap.user_status = (extra as any).user_status || 'in_progress';
+        cap.user_status_set_at = (extra as any).user_status_set_at || null;
       }
     });
 
@@ -2147,13 +2161,15 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     // Inject Capability model fields not in hierarchy (JSONB + mode fields)
     const { Capability: CapExec } = await import('../models');
-    const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template'] });
+    const capExec = await CapExec.findByPk(req.params.id as string, { attributes: ['id', 'last_execution', 'mode_override', 'applicability_status', 'execution_profile', 'strategy_template', 'user_status', 'user_status_set_at'] });
     if (capExec) {
       (cap as any).last_execution = (capExec as any).last_execution;
       (cap as any).mode_override = (capExec as any).mode_override;
       (cap as any).applicability_status = (capExec as any).applicability_status || 'active';
       (cap as any).execution_profile = (capExec as any).execution_profile || 'production';
       (cap as any).strategy_template = (capExec as any).strategy_template || 'default';
+      (cap as any).user_status = (capExec as any).user_status || 'in_progress';
+      (cap as any).user_status_set_at = (capExec as any).user_status_set_at || null;
     }
     (cap as any)._projectMode = (project as any).target_mode || 'production';
     // Inject repo file tree for agent detection
@@ -2241,10 +2257,20 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     // action instead of build/enhance.
     const synthName = (enriched.name || '').toLowerCase();
     const isSyntheticBucket = synthName.includes('uncategorized') || synthName === 'miscellaneous' || synthName === 'other';
+    const userStatus = (enriched as any).user_status || 'in_progress';
+    const isVerified = userStatus === 'verified';
+    const isArchived = userStatus === 'archived';
 
     let enhancementPlan: any[];
-    let nextActionKind: 'build' | 'enhance' | 'done' | 'recategorize';
-    if (isSyntheticBucket) {
+    let nextActionKind: 'build' | 'enhance' | 'done' | 'recategorize' | 'verified' | 'archived';
+    if (isVerified) {
+      // User has asserted this BP is built. Stop recommending anything.
+      enhancementPlan = [];
+      nextActionKind = 'verified';
+    } else if (isArchived) {
+      enhancementPlan = [];
+      nextActionKind = 'archived';
+    } else if (isSyntheticBucket) {
       enhancementPlan = [];
       nextActionKind = 'recategorize';
     } else {
@@ -2260,8 +2286,8 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
 
     res.json({
       ...enriched,
-      execution_plan: isSyntheticBucket ? [] : pendingExecutionPlan,
-      autonomy_gaps: isSyntheticBucket ? [] : autonomyGaps,
+      execution_plan: (isSyntheticBucket || isVerified || isArchived) ? [] : pendingExecutionPlan,
+      autonomy_gaps: (isSyntheticBucket || isVerified || isArchived) ? [] : autonomyGaps,
       enhancement_plan: enhancementPlan,
       next_action_kind: nextActionKind,
       is_synthetic_bucket: isSyntheticBucket,
@@ -3629,6 +3655,32 @@ router.put('/api/portal/project/business-processes/:id/mode', requireParticipant
     }
     await cap.save();
     res.json({ mode_override: (cap as any).mode_override, applicability_status: (cap as any).applicability_status });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── User Status: canonical user-asserted state for a BP ────────
+// One of 'in_progress' | 'verified' | 'archived'. When 'verified', every
+// recommendation surface treats the BP as done. When 'archived', it is hidden
+// from active recommendations and the grid. This is the user's escape hatch
+// from the heuristic state-inference engine.
+router.put('/api/portal/project/business-processes/:id/user-status', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const { status } = req.body;
+    if (!['in_progress', 'verified', 'archived'].includes(status)) {
+      res.status(400).json({ error: `Invalid status: ${status}. Must be in_progress, verified, or archived.` });
+      return;
+    }
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    (cap as any).user_status = status;
+    (cap as any).user_status_set_at = new Date();
+    (cap as any).user_status_set_by = req.participant!.sub;
+    await cap.save();
+    res.json({
+      id: cap.id,
+      user_status: (cap as any).user_status,
+      user_status_set_at: (cap as any).user_status_set_at,
+    });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

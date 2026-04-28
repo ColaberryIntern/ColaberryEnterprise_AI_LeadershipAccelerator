@@ -62,6 +62,8 @@ export default function PortalBusinessProcessDetail({ processId, onClose, onUpda
   const [analyzingPage, setAnalyzingPage] = useState(false);
   const [projectRoutes, setProjectRoutes] = useState<string[]>([]);
   const [previewStatus, setPreviewStatus] = useState<{ status: string; failure_reason?: string | null } | null>(null);
+  const [verifyModal, setVerifyModal] = useState<null | 'confirm' | 'submitting' | 'done'>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const load = () => { bpApi.getProcess(processId).then(r => setP(r.data)).catch(() => {}); };
 
@@ -943,16 +945,125 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
 
         {/* 8: Enhancement Prompt Builder (execution steps + autonomy gaps combined) */}
         <Section num={8} title={p.next_action_kind === 'enhance' ? 'Improvement Options' : p.next_action_kind === 'done' ? 'Status' : 'Enhancement Prompt Builder'}>
-          <EnhancementPromptBuilder
-            executionPlan={p.execution_plan || []}
-            autonomyGaps={p.autonomy_gaps || []}
-            enhancementPlan={p.enhancement_plan || []}
-            nextActionKind={p.next_action_kind}
-            processId={processId}
-            processName={p.name}
-            onPreview={(type, label) => setPredictionAction({ type, label })}
-          />
+          {p.user_status === 'verified' ? (
+            <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98140' }}>
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <i className="bi bi-patch-check-fill" style={{ color: '#10b981', fontSize: 16 }}></i>
+                <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#065f46' }}>Verified by you</h6>
+              </div>
+              <p className="text-muted mb-2" style={{ fontSize: 11 }}>
+                You marked "{p.name}" as built and tested{p.user_status_set_at ? ` on ${new Date(p.user_status_set_at).toLocaleString()}` : ''}.
+                No recommendations will surface until you unmark it.
+              </p>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                style={{ fontSize: 11 }}
+                onClick={async () => {
+                  try { await bpApi.setUserStatus(processId, 'in_progress'); load(); onUpdate(); }
+                  catch { /* keep state */ }
+                }}
+              >
+                <i className="bi bi-arrow-counterclockwise me-1"></i>Unmark as Verified
+              </button>
+            </div>
+          ) : (
+            <EnhancementPromptBuilder
+              executionPlan={p.execution_plan || []}
+              autonomyGaps={p.autonomy_gaps || []}
+              enhancementPlan={p.enhancement_plan || []}
+              nextActionKind={p.next_action_kind}
+              processId={processId}
+              processName={p.name}
+              onPreview={(type, label) => setPredictionAction({ type, label })}
+            />
+          )}
         </Section>
+
+        {/* 9: Mark as Verified — user-asserted state escape hatch */}
+        {p.user_status !== 'verified' && (
+          <Section num={9} title="Mark this BP as Verified">
+            <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, border: '1px solid var(--color-border)' }}>
+              <p className="mb-2" style={{ fontSize: 12, color: 'var(--color-text)' }}>
+                Click below when Claude Code has reported <code>Status: COMPLETE</code> AND your tests pass.
+                The system will stop recommending build steps for this BP and treat it as done across every tab.
+              </p>
+              <p className="text-muted mb-3" style={{ fontSize: 11 }}>
+                You can unmark it later if you find more work needed.
+              </p>
+              <button
+                className="btn btn-sm"
+                style={{ background: '#10b981', color: '#fff', fontWeight: 600, fontSize: 12 }}
+                onClick={() => { setVerifyError(null); setVerifyModal('confirm'); }}
+              >
+                <i className="bi bi-patch-check me-1"></i>Mark as Verified
+              </button>
+              <button
+                className="btn btn-sm btn-outline-secondary ms-2"
+                style={{ fontSize: 12 }}
+                onClick={async () => {
+                  if (!window.confirm(`Archive "${p.name}"? It will be hidden from the active grid and recommendations. You can unhide it later via the same button.`)) return;
+                  try { await bpApi.setUserStatus(processId, 'archived'); onClose(); onUpdate(); }
+                  catch { /* keep state */ }
+                }}
+              >
+                <i className="bi bi-archive me-1"></i>Archive
+              </button>
+            </div>
+          </Section>
+        )}
+
+        {/* Mark Verified confirmation modal */}
+        {verifyModal && (
+          <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true" onClick={() => verifyModal !== 'submitting' && setVerifyModal(null)}>
+            <div className="modal-dialog modal-dialog-centered" onClick={e => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header py-2" style={{ borderBottom: '3px solid #10b981' }}>
+                  <h6 className="modal-title fw-bold" style={{ color: 'var(--color-primary)' }}>
+                    <i className="bi bi-patch-check-fill me-2" style={{ color: '#10b981' }}></i>Confirm Verified
+                  </h6>
+                  {verifyModal !== 'submitting' && <button className="btn-close" onClick={() => setVerifyModal(null)}></button>}
+                </div>
+                <div className="modal-body">
+                  <p className="mb-2" style={{ fontSize: 13 }}>
+                    By marking <strong>{p.name}</strong> as verified, you're asserting:
+                  </p>
+                  <ul className="mb-3" style={{ fontSize: 12, color: 'var(--color-text)' }}>
+                    <li>Claude Code reported <code>Status: COMPLETE</code> on the latest run</li>
+                    <li>Your tests pass for this BP</li>
+                  </ul>
+                  <p className="text-muted mb-2" style={{ fontSize: 11 }}>
+                    This stops every recommendation surface from suggesting work for this BP. You can unmark it later.
+                  </p>
+                  {verifyError && <div className="alert alert-danger py-2 mb-0" style={{ fontSize: 11 }}>{verifyError}</div>}
+                </div>
+                <div className="modal-footer py-2">
+                  <button className="btn btn-sm btn-outline-secondary" disabled={verifyModal === 'submitting'} onClick={() => setVerifyModal(null)}>Cancel</button>
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#10b981', color: '#fff', fontWeight: 600 }}
+                    disabled={verifyModal === 'submitting'}
+                    onClick={async () => {
+                      setVerifyModal('submitting');
+                      setVerifyError(null);
+                      try {
+                        await bpApi.setUserStatus(processId, 'verified');
+                        setVerifyModal('done');
+                        load();
+                        onUpdate();
+                        setTimeout(() => setVerifyModal(null), 800);
+                      } catch (err: any) {
+                        setVerifyError(err?.response?.data?.error || 'Failed to mark verified');
+                        setVerifyModal('confirm');
+                      }
+                    }}
+                  >
+                    {verifyModal === 'submitting' ? <><span className="spinner-border spinner-border-sm me-1"></span>Marking…</> : verifyModal === 'done' ? <><i className="bi bi-check2 me-1"></i>Verified</> : <><i className="bi bi-patch-check me-1"></i>Yes, Mark Verified</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         </>)}
 
         {/* Resync Results Modal */}

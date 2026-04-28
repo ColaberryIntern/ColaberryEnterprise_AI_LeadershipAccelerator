@@ -46,6 +46,7 @@ interface SystemComponent {
   isPageBP: boolean;
   priority: number;
   layers: { backend: string; frontend: string; agent: string };
+  userStatus?: 'in_progress' | 'verified' | 'archived';
 }
 
 interface ProgressData {
@@ -323,19 +324,24 @@ function generateCoryPlan(components: SystemComponent[], _systemLayers: { backen
 
 function transformCapabilities(bps: any[]): SystemComponent[] {
   return bps
-    .filter((bp: any) => (bp.applicability_status || 'active') === 'active')
+    // Hide archived BPs from the Blueprint view — same rule as SystemViewV2.
+    .filter((bp: any) => (bp.applicability_status || 'active') === 'active' && bp.user_status !== 'archived')
     .map((bp: any) => {
       const coverage = bp.metrics?.requirements_coverage || 0;
       const readiness = bp.metrics?.system_readiness || 0;
       const maturityLevel = bp.maturity?.level || 0;
-      const isComplete = bp.is_complete === true || (coverage >= 90 && readiness >= 90);
+      // Trust the backend's is_complete (now honors user_status='verified').
+      // Drop the parallel coverage>=90 && readiness>=90 OR-gate that produced
+      // "100% complete + no backend" contradictions.
+      const userVerified = bp.user_status === 'verified';
+      const isComplete = userVerified || bp.is_complete === true;
       const isPageBP = bp.source === 'frontend_page' || bp.is_page_bp === true;
       const u = bp.usability || {};
       let status: 'complete' | 'in_progress' | 'not_started';
       if (isComplete) status = 'complete';
-      else if (coverage > 10 || readiness > 10 || maturityLevel >= 1) status = 'in_progress';
+      else if (coverage > 0 || maturityLevel >= 1) status = 'in_progress';
       else status = 'not_started';
-      const completion = Math.round(Math.max(coverage, readiness));
+      const completion = userVerified ? 100 : Math.round(coverage);
       const firstStep = (bp.execution_plan || []).find((s: any) => !s.blocked);
       return {
         id: bp.id, name: bp.name, description: bp.description || '', status, completion,
@@ -343,6 +349,7 @@ function transformCapabilities(bps: any[]): SystemComponent[] {
         nextStep: firstStep?.label || null, promptTarget: firstStep?.prompt_target || null,
         isPageBP, priority: bp.priority_rank || 999,
         layers: { backend: u.backend || 'missing', frontend: u.frontend || 'missing', agent: u.agent || 'missing' },
+        userStatus: (bp.user_status || 'in_progress') as 'in_progress' | 'verified' | 'archived',
       };
     })
     .sort((a, b) => {
@@ -1389,10 +1396,13 @@ export default function SystemBlueprint() {
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div className="fw-semibold" style={{ fontSize: 13, color: 'var(--color-text)' }}>
                           {comp.isPageBP && <i className="bi bi-layout-wtf me-1" style={{ color: '#8b5cf6', fontSize: 11 }}></i>}
+                          {comp.userStatus === 'verified' && <i className="bi bi-patch-check-fill me-1" style={{ color: '#10b981', fontSize: 12 }} title="Verified by you"></i>}
                           {comp.name}
                           {isActive && <i className="bi bi-arrow-left ms-1" style={{ color: 'var(--color-primary)', fontSize: 10 }}></i>}
                         </div>
-                        <span className="badge" style={{ background: ss.bg, color: ss.text, fontSize: 9 }}>{ss.label}</span>
+                        {comp.userStatus === 'verified'
+                          ? <span className="badge" style={{ background: '#10b98120', color: '#065f46', fontSize: 9 }}>Verified</span>
+                          : <span className="badge" style={{ background: ss.bg, color: ss.text, fontSize: 9 }}>{ss.label}</span>}
                       </div>
                       <div className="mb-2">
                         <div className="d-flex justify-content-between mb-1" style={{ fontSize: 10 }}>
