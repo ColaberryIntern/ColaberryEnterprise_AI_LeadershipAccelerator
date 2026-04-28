@@ -1465,6 +1465,12 @@ function enrichCapability(cap: any) {
   const projectHasFrontend = repoTree.some((f: string) => /\/(component|page|view|screen|layout)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f));
   const projectHasAgents = repoTree.some((f: string) => /(agent|intelligence|automation|worker|bot)\b/i.test(f) && /\.(ts|js|py)$/.test(f));
   const projectHasModels = repoTree.some((f: string) => /\/(model|schema|entity|migration)\b/i.test(f) && /\.(ts|js|py|go|rs|java)$/.test(f));
+  // Observability detection: scan for monitoring/logging/metrics/tracing files.
+  // Without this, q.observability stays at 0 forever and the orchestrator
+  // surfaces "Add Monitoring & Logging" as the top recommendation on every BP
+  // even when the repo clearly has it. Same approach as the other layers.
+  const projectObservabilityCount = repoTree.filter((f: string) => /(monitor|metric|log|telemet|trace|observ|alert)\b/i.test(f) && /\.(ts|tsx|js|jsx|py|go|rs|java)$/.test(f)).length;
+  const projectHasObservability = projectObservabilityCount > 0;
   // Count project-level files per layer for quality scoring (when per-BP matches are empty)
   const projectBackendCount = repoTree.filter((f: string) => /\/(service|route|controller|handler|gateway|api)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f)).length;
   const projectFrontendCount = repoTree.filter((f: string) => /\/(component|page|view|screen)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f)).length;
@@ -1490,7 +1496,10 @@ function enrichCapability(cap: any) {
   const q = {
     determinism: effectiveBackend ? Math.min(10, 5 + effectiveBackendCount) : (reqCoverage > 50 ? 2 : 0),
     reliability: effectiveModels ? Math.min(10, 4 + effectiveModelCount) : (effectiveBackend ? 2 : 0),
-    observability: 0,
+    // Observability now reads the repo. 5 baseline + half the file count, capped at 10.
+    // Was hardcoded to 0 — produced "Add Monitoring & Logging" recommendations on every BP
+    // even for projects with monitoring/logging clearly in place.
+    observability: projectHasObservability ? Math.min(10, 5 + Math.floor(projectObservabilityCount / 2)) : 0,
     ux_exposure: effectiveFrontend ? Math.min(10, 6 + effectiveFrontendCount) : 0,
     automation: effectiveAgents ? Math.min(10, 6 + effectiveAgentCount) : (reqCoverage > 70 ? 1 : 0),
     production_readiness: Math.min(10, (effectiveBackend ? 3 : 0) + (effectiveFrontend ? 3 : 0) + (effectiveAgents ? 2 : 0) + (effectiveModels ? 2 : 0)),
@@ -2049,7 +2058,11 @@ interface EnhancementOption {
   suggested_agent?: any;
 }
 
-function buildEnhancementPlan(enriched: any, autonomyGaps: any[]): EnhancementOption[] {
+function buildEnhancementPlan(
+  enriched: any,
+  autonomyGaps: any[],
+  progressLedger?: { found: boolean; completed: string[] },
+): EnhancementOption[] {
   const q = enriched.quality || {};
   const u = enriched.usability || {};
   const options: EnhancementOption[] = [];
@@ -2144,12 +2157,39 @@ function buildEnhancementPlan(enriched: any, autonomyGaps: any[]): EnhancementOp
     });
   }
 
-  options.sort((a, b) => b.severity - a.severity);
+  // Filter out items the user has already documented as done in PROGRESS.md.
+  // Loose token-overlap match — we don't want to drop a real suggestion just
+  // because of a coincidental word, but if 60%+ of the tokens line up with a
+  // checked item, it's almost certainly the same work.
+  let filtered = options;
+  if (progressLedger?.found) {
+    const STOPWORDS = new Set(['the', 'and', 'for', 'with', 'add', 'build', 'create', 'improve', 'a', 'an', 'to', 'of', 'in', 'on', 'this']);
+    filtered = options.filter(o => {
+      const labelTokens = (o.label || '').toLowerCase().split(/\W+/).filter(t => t.length >= 3 && !STOPWORDS.has(t));
+      if (labelTokens.length === 0) return true;
+      for (const line of progressLedger.completed) {
+        const matches = labelTokens.filter(t => line.includes(t)).length;
+        if (matches / labelTokens.length >= 0.6) return false; // covered → drop
+      }
+      return true;
+    });
+  }
+
+  // Sort by severity, but break ties so autonomy_gap items (the real
+  // intelligence/automation/observability work the user is moving toward)
+  // beat heuristic-driven quality items at similar severity. Once observability
+  // is detected from the repo, this surfaces Pattern Detection, Simulation,
+  // Decision Logging, etc. as primary suggestions on already-built BPs.
+  const sourceRank = (s: string): number => s === 'autonomy_gap' ? 2 : s === 'system' ? 1 : 0;
+  filtered.sort((a, b) => {
+    if (b.severity !== a.severity) return b.severity - a.severity;
+    return sourceRank(b.source) - sourceRank(a.source);
+  });
 
   // Dedupe by prompt_target+category — keep highest severity
   const seen = new Set<string>();
   const deduped: EnhancementOption[] = [];
-  for (const o of options) {
+  for (const o of filtered) {
     const dedupeKey = `${o.prompt_target}:${o.category}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
@@ -2282,7 +2322,16 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
       enhancementPlan = [];
       nextActionKind = 'recategorize';
     } else {
-      enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps);
+      // Read PROGRESS.md (if present) so we can drop enhancement suggestions
+      // whose work is already documented as done. Per CLAUDE.md, PROGRESS.md
+      // is the canonical ledger of completed work — using it closes the gap
+      // between repo-file heuristics and the user's actual progress notes.
+      let progressLedger: { found: boolean; completed: string[] } | undefined;
+      try {
+        const { getProgressLedger } = await import('../services/progressMdService');
+        progressLedger = await getProgressLedger(req.participant!.sub);
+      } catch { /* fall back to no ledger */ }
+      enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps, progressLedger);
       nextActionKind = pendingExecutionPlan.length > 0
         ? 'build'
         : enhancementPlan.length > 0
