@@ -1461,21 +1461,27 @@ function enrichCapability(cap: any) {
   // Project-level layer detection from full repo file tree.
   // Patterns are broad to recognize diverse architectures (monolith, microservices,
   // Next.js, Python/Django, Go, etc.) — not just the Accelerator's own layout.
-  const projectHasBackend = repoTree.some((f: string) => /\/(service|route|controller|handler|gateway|api|server|resolver)\b/i.test(f) && /\.(ts|js|py|go|rs|java)$/.test(f));
-  const projectHasFrontend = repoTree.some((f: string) => /\/(component|page|view|screen|layout)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f));
-  const projectHasAgents = repoTree.some((f: string) => /(agent|intelligence|automation|worker|bot)\b/i.test(f) && /\.(ts|js|py)$/.test(f));
-  const projectHasModels = repoTree.some((f: string) => /\/(model|schema|entity|migration)\b/i.test(f) && /\.(ts|js|py|go|rs|java)$/.test(f));
+  // Layer detection regexes accept plural directory names too.
+  // The earlier `\b` after a singular term failed on `/components/`, `/services/`,
+  // `/routes/`, `/models/` etc. because `\b` doesn't fire between "t" and "s".
+  // ShipCES has `services/web/src/components/Login.tsx` and the old regex still
+  // returned projectHasFrontend=false. The `s?\b` form matches both singular
+  // and plural cleanly.
+  const projectHasBackend = repoTree.some((f: string) => /\/(services?|routes?|controllers?|handlers?|gateways?|apis?|servers?|resolvers?)\b/i.test(f) && /\.(ts|js|py|go|rs|java)$/.test(f));
+  const projectHasFrontend = repoTree.some((f: string) => /\/(components?|pages?|views?|screens?|layouts?)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f));
+  const projectHasAgents = repoTree.some((f: string) => /(agents?|intelligence|automation|workers?|bots?)\b/i.test(f) && /\.(ts|js|py)$/.test(f));
+  const projectHasModels = repoTree.some((f: string) => /\/(models?|schemas?|entit(y|ies)|migrations?)\b/i.test(f) && /\.(ts|js|py|go|rs|java)$/.test(f));
   // Observability detection: scan for monitoring/logging/metrics/tracing files.
   // Without this, q.observability stays at 0 forever and the orchestrator
   // surfaces "Add Monitoring & Logging" as the top recommendation on every BP
   // even when the repo clearly has it. Same approach as the other layers.
-  const projectObservabilityCount = repoTree.filter((f: string) => /(monitor|metric|log|telemet|trace|observ|alert)\b/i.test(f) && /\.(ts|tsx|js|jsx|py|go|rs|java)$/.test(f)).length;
+  const projectObservabilityCount = repoTree.filter((f: string) => /(monitors?|metrics?|logs?|logger|telemetr(y|ies)|tracer?|trac(e|ing)|observ|alerts?)\b/i.test(f) && /\.(ts|tsx|js|jsx|py|go|rs|java)$/.test(f)).length;
   const projectHasObservability = projectObservabilityCount > 0;
   // Count project-level files per layer for quality scoring (when per-BP matches are empty)
-  const projectBackendCount = repoTree.filter((f: string) => /\/(service|route|controller|handler|gateway|api)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f)).length;
-  const projectFrontendCount = repoTree.filter((f: string) => /\/(component|page|view|screen)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f)).length;
-  const projectAgentCount = repoTree.filter((f: string) => /(agent|intelligence|automation)\b/i.test(f) && /\.(ts|js|py)$/.test(f)).length;
-  const projectModelCount = repoTree.filter((f: string) => /\/(model|schema|entity)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f)).length;
+  const projectBackendCount = repoTree.filter((f: string) => /\/(services?|routes?|controllers?|handlers?|gateways?|apis?)\b/i.test(f) && /\.(ts|js|py|go)$/.test(f)).length;
+  const projectFrontendCount = repoTree.filter((f: string) => /\/(components?|pages?|views?|screens?)\b/i.test(f) && /\.(tsx|jsx|vue|svelte)$/.test(f)).length;
+  const projectAgentCount = repoTree.filter((f: string) => /(agents?|intelligence|automation)\b/i.test(f) && /\.(ts|js|py)$/.test(f)).length;
+  const projectModelCount = repoTree.filter((f: string) => /\/(models?|schemas?|entit(y|ies))\b/i.test(f) && /\.(ts|js|py|go)$/.test(f)).length;
 
   // Effective layer detection: per-BP files || project-level detection
   const effectiveBackend = hasBackend || projectHasBackend;
@@ -1571,14 +1577,15 @@ function enrichCapability(cap: any) {
   if ((q.reliability || 0) >= 4) completedSet.add('improve_reliability');
   if ((q.production_readiness || 0) >= 5) completedSet.add('optimize_performance');
 
-  // Note: an earlier version of this code marked `add_frontend` as completed
-  // for projects that had backend + agents but no frontend files, on the
-  // assumption that those were intentional microservices-only architectures.
-  // That assumption was wrong — those projects often *want* a frontend, they
-  // just haven't built one yet. Suppressing the recommendation hid the
-  // single most useful next step (Build Frontend UI) and pushed advanced
-  // backend work like agent enhancements ahead of it. If a user genuinely
-  // doesn't want a frontend, they can mark each BP Verified or Archive it.
+  // Page BPs (source = 'frontend_page') were auto-discovered from a route in
+  // the user's repo — they ARE the frontend implementation. Recommending
+  // "Create Frontend UI" for them is nonsense. Mark frontend-related steps
+  // as completed for these so the engine offers backend wiring or
+  // enhancements instead.
+  const capIsPageBP = (cap as any).source === 'frontend_page' || !!(cap as any).frontend_route;
+  if (capIsPageBP) {
+    completedSet.add('add_frontend');
+  }
   const completedSteps: string[] = Array.from(completedSet);
   const { generateExecutionPlan, isProcessComplete } = require('../intelligence/nextBestActionEngine');
   // Resolve effective mode: BP override > Campaign override > Project target_mode > 'production'
