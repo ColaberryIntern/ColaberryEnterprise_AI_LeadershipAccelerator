@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import { buildPreviewUrl } from '../../utils/projectPreviewUrl';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
 import SystemIntelligencePanel from '../../components/project/SystemIntelligencePanel';
@@ -52,6 +53,10 @@ interface ProjectData {
   organization_name?: string;
   industry?: string;
   project_stage: string;
+  // Project's preview locations — used by buildPreviewUrl() to point any
+  // iframe at the *project's* running app, never the portal's domain.
+  portfolio_url?: string | null;
+  direct_preview_url?: string | null;
   project_variables?: Record<string, any>;
   setup_status?: { requirements_loaded: boolean; claude_md_loaded: boolean; github_connected: boolean; activated: boolean } | null;
 }
@@ -2512,7 +2517,12 @@ function SystemViewV2Inner() {
                 {/* Step 1: Confirm page with editable URL + preview */}
                 {defineStep === 'confirm' && (() => {
                   const trimmedUrl = defineCustomUrl.trim();
-                  const previewSrc = trimmedUrl ? (trimmedUrl.startsWith('http') ? trimmedUrl : `https://enterprise.colaberry.ai${trimmedUrl.startsWith('/') ? '' : '/'}${trimmedUrl}`) : '';
+                  // Build the iframe URL against the *project's* preview base
+                  // (direct_preview_url for ShipCES = http://95.216.199.47:8889).
+                  // Never use the portal's host here — that's how Colaberry
+                  // pages used to leak into ShipCES previews.
+                  const previewSrc = buildPreviewUrl(project, trimmedUrl) || '';
+                  const noPreviewBase = trimmedUrl && !previewSrc;
                   return (
                   <div>
                     <p className="fw-semibold mb-2" style={{ fontSize: 13 }}>Verify the page URL and preview</p>
@@ -2527,7 +2537,7 @@ function SystemViewV2Inner() {
                           className="form-control form-control-sm flex-grow-1"
                           value={defineCustomUrl}
                           onChange={e => setDefineCustomUrl(e.target.value)}
-                          placeholder="/utility-ai or https://enterprise.colaberry.ai/utility-ai"
+                          placeholder="/ops or http://your-app/ops"
                           style={{ fontSize: 11, fontFamily: 'monospace' }}
                         />
                         <button
@@ -2546,11 +2556,17 @@ function SystemViewV2Inner() {
                           <i className="bi bi-info-circle me-1"></i>Enter a path (like <code>/ops</code>) or a full URL to load the preview.
                         </div>
                       )}
+                      {noPreviewBase && (
+                        <div className="alert alert-warning py-2 mt-2 mb-0" style={{ fontSize: 11 }}>
+                          <i className="bi bi-exclamation-triangle me-1"></i>
+                          This project has no preview URL configured yet. Enter a full <code>http(s)://...</code> URL above, or add <code>direct_preview_url</code> to the project's variables so relative paths can resolve.
+                        </div>
+                      )}
                     </div>
 
                     {/* Always-rendered preview iframe — overlay placeholder when empty */}
                     <div className="mb-3 position-relative" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--color-border)', background: '#fff', minHeight: 300 }}>
-                      {trimmedUrl ? (
+                      {previewSrc ? (
                         <iframe
                           key={`${previewSrc}-${defineRefreshKey}`}
                           src={previewSrc}
@@ -2561,7 +2577,9 @@ function SystemViewV2Inner() {
                       ) : (
                         <div className="d-flex flex-column align-items-center justify-content-center" style={{ height: 300, background: '#f8fafc' }}>
                           <i className="bi bi-display mb-2" style={{ fontSize: 28, color: '#9ca3af' }}></i>
-                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>Enter a URL above to see a preview</p>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>
+                            {trimmedUrl ? 'No preview base configured for this project' : 'Enter a URL above to see a preview'}
+                          </p>
                         </div>
                       )}
                     </div>
