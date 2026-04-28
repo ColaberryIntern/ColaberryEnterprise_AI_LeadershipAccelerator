@@ -735,7 +735,12 @@ export default function SystemBlueprint() {
   const nextAfter = components.filter(c => c.status !== 'complete')[1] || null;
   const completedCount = components.filter(c => c.status === 'complete').length;
   const totalCount = components.length;
-  const overallCompletion = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  // Don't ratio the status-flag count — that's "BPs auto-flagged complete /
+  // total" and inflates wildly when the heuristic fires on Page BPs at 0/5
+  // visual review (showed 49% on a project where most BPs are at 0%
+  // completion). The honest "overall" is the average of real completion
+  // numbers across all BPs.
+  const overallCompletion = totalCount > 0 ? Math.round(components.reduce((sum, c) => sum + (c.completion || 0), 0) / totalCount) : 0;
   // Real-completion vs. status-flag-based completion. The "All Components
   // Complete" banner uses fullyComplete because the auto-derived `is_complete`
   // flag fires on Page BPs that haven't done visual review (0/5 categories)
@@ -743,7 +748,8 @@ export default function SystemBlueprint() {
   // about production readiness while real work remains.
   const fullCompletionCount = components.filter(c => c.completion === 100).length;
   const allFullyComplete = totalCount > 0 && fullCompletionCount === totalCount;
-  const avgCompletion = totalCount > 0 ? Math.round(components.reduce((sum, c) => sum + (c.completion || 0), 0) / totalCount) : 0;
+  // overallCompletion already does this math now — reuse it.
+  const avgCompletion = overallCompletion;
   const readiness = progress?.productionReadinessScore || overallCompletion;
   const systemLevel = getSystemLevel(components.map(c => c.maturityLevel));
   const isInFlow = build.phase !== 'idle';
@@ -928,7 +934,7 @@ export default function SystemBlueprint() {
             <div className="progress-bar" style={{ width: `${readiness}%`, background: readiness >= 70 ? '#10b981' : readiness >= 40 ? '#f59e0b' : '#ef4444', borderRadius: 4, transition: 'width 0.6s ease' }} />
           </div>
           <div className="d-flex justify-content-between mt-2" style={{ fontSize: 11, color: '#9ca3af' }}>
-            <span>{completedCount} of {totalCount} components complete</span>
+            <span>{fullCompletionCount} of {totalCount} components at 100%</span>
             <span>{progress?.requirementsCompletionPct || 0}% requirements matched</span>
           </div>
         </div>
