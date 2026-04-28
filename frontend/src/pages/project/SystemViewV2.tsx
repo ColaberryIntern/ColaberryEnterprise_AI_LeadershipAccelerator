@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import * as bpApi from '../../services/portalBusinessProcessApi';
 import { buildPreviewUrl, willBeMixedContentBlocked } from '../../utils/projectPreviewUrl';
 import ProjectSetupWizard from '../../components/project/ProjectSetupWizard';
 import ProjectSelectionScreen from '../../components/project/ProjectSelectionScreen';
@@ -621,6 +622,8 @@ function SystemViewV2Inner() {
   const [showOverviewUpNext, setShowOverviewUpNext] = useState(false);
   const [showHealthUpNext, setShowHealthUpNext] = useState(false);
   const [showAllIssues, setShowAllIssues] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const validatedPanelRef = useRef<HTMLDivElement | null>(null);
   const [showImproveUpNext, setShowImproveUpNext] = useState(false);
 
   // Reclassify state — for the synthetic Uncategorized bucket
@@ -722,7 +725,7 @@ function SystemViewV2Inner() {
   const [execPaused, setExecPaused] = useState(false);
 
   // Execution Session (persisted)
-  interface ExecSession { id: string; status: 'running' | 'paused' | 'completed'; steps: Array<{ id: string; title: string; componentId: string; promptTarget: string; ticketId?: string; ticketStatus?: string }>; currentStepIndex: number }
+  interface ExecSession { id: string; status: 'running' | 'paused' | 'completed'; steps: Array<{ id: string; title: string; componentId: string; promptTarget: string; ticketId?: string; ticketStatus?: string }>; currentStepIndex: number; triggeredBy?: { componentId: string; componentName: string } }
   const [execSession, setExecSessionRaw] = useState<ExecSession | null>(() => { try { const s = localStorage.getItem('system_v2_execution_session'); return s ? JSON.parse(s) : null; } catch { return null; } });
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const setExecSession = (s: ExecSession | null) => { setExecSessionRaw(s); if (s) localStorage.setItem('system_v2_execution_session', JSON.stringify(s)); else localStorage.removeItem('system_v2_execution_session'); };
@@ -758,6 +761,14 @@ function SystemViewV2Inner() {
     setBuildReport('');
     setBuildResult(null);
     setUiFeedback(null);
+    // Drop stale ticket / snapshot indicators from a different BP — otherwise
+    // a freshly opened BP shows "Ticket #213 Completed" that belongs to the
+    // previous BP, which is misleading.
+    setActiveTicketId(null);
+    setActiveTicketNumber(null);
+    setTicketWarning(null);
+    setExecutionSnapshot(null);
+    setShowAllIssues(false);
     // Preserve URL tab on first load, reset to overview on subsequent selections
     const preserveTab = urlTab && ['overview','build','improve','health','ui'].includes(urlTab) && selectedId === urlComponentId;
     if (!preserveTab) setWorkTab('overview');
@@ -775,12 +786,29 @@ function SystemViewV2Inner() {
     if (!isReporting && coryMode.startsWith('r-')) setCoryMode('suggestions');
   }, [isReporting, coryMode]);
 
-  // Resume detection: check for active session on load
+  // Resume detection: check for active session on load. Only auto-prompt
+  // when the session belongs to the BP currently selected (or has no
+  // trigger info — legacy session). This avoids the confusing "Resume
+  // Implement Incident Response" banner showing up when the user is
+  // working on Agents Page.
   useEffect(() => {
-    if (execSession && execSession.status === 'running' && !showResumePrompt && execQueue.length === 0) {
+    if (!execSession || execSession.status !== 'running' || showResumePrompt || execQueue.length > 0) return;
+    const noTrigger = !execSession.triggeredBy;
+    const matchesCurrent = execSession.triggeredBy?.componentId === selectedId;
+    const noBPSelected = !selectedId;
+    if (noTrigger || matchesCurrent || noBPSelected) {
       setShowResumePrompt(true);
     }
   }, []); // only on mount
+
+  // Auto-scroll the validated panel into view when a successful build result
+  // lands. Without this the green panel + action row sit below the fold,
+  // hidden by the prompt textarea, and the user thinks they're stuck.
+  useEffect(() => {
+    if (buildResult && !buildResult.error && validatedPanelRef.current) {
+      validatedPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [buildResult]);
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -1015,6 +1043,14 @@ function SystemViewV2Inner() {
         console.warn('[V2] Detail refresh failed:', detailErr?.message);
       }
 
+      // If the active session was triggered by this BP, the work is done —
+      // clear it so the Resume banner doesn't keep nagging the user about
+      // a session whose first step they just validated.
+      if (execSession?.triggeredBy?.componentId === compId) {
+        setExecSession(null);
+        setShowResumePrompt(false);
+      }
+
       // Complete execution ticket with before/after snapshot
       if (activeTicketId && activeTicketId !== 'local-only') {
         try {
@@ -1050,6 +1086,45 @@ function SystemViewV2Inner() {
         }
       }
     } finally { setBuildValidating(false); }
+  };
+
+  // Mark Verified from the Build tab post-validation panel. Single-click
+  // path that used to require navigating to the BP detail page. After flip,
+  // refresh detail + list, clear build state, switch to overview so the
+  // verified BP shows its new state.
+  const handleMarkVerifiedFromBuild = async (compId: string) => {
+    setVerifying(true);
+    try {
+      await bpApi.setUserStatus(compId, 'verified');
+      await loadData();
+      try {
+        const detailRes = await portalApi.get(`/api/portal/project/business-processes/${compId}`);
+        setCompDetail(detailRes.data);
+      } catch {}
+      setBuildPrompt(null);
+      setBuildReport('');
+      setBuildResult(null);
+      setActiveTicketId(null);
+      setActiveTicketNumber(null);
+      setExecutionSnapshot(null);
+      setWorkTab('overview');
+    } catch { /* keep state, user can retry */ } finally { setVerifying(false); }
+  };
+
+  // Continue Building: generate next prompt for the SAME BP using the next
+  // pending step in execution_plan. Resets the build form so the prompt is
+  // fresh; user pastes a new validation report when done.
+  const handleContinueBuilding = (compId: string) => {
+    if (!compDetail) return;
+    const remaining = (compDetail.execution_plan || []).filter((s: any) => !s.status || s.status === 'pending');
+    const next = remaining.find((s: any) => !s.blocked) || remaining[0];
+    if (!next) return;
+    const comp = visibleComponents.find(c => c.id === compId);
+    if (!comp) return;
+    setBuildPrompt(null);
+    setBuildReport('');
+    setBuildResult(null);
+    handleGeneratePrompt({ ...comp, promptTarget: next.prompt_target });
   };
 
   // Learn about a component — opens Cory fullscreen in Learn Mode
@@ -1185,7 +1260,15 @@ function SystemViewV2Inner() {
     if (allPlanSteps.length === 0) return;
     // Create session
     const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    const session: ExecSession = { id: sessionId, status: 'running', steps: allPlanSteps.map(s => ({ ...s, ticketId: undefined, ticketStatus: undefined })), currentStepIndex: 0 };
+    const firstStep = allPlanSteps[0];
+    const triggerComp = visibleComponents.find(c => c.id === firstStep.componentId);
+    const session: ExecSession = {
+      id: sessionId,
+      status: 'running',
+      steps: allPlanSteps.map(s => ({ ...s, ticketId: undefined, ticketStatus: undefined })),
+      currentStepIndex: 0,
+      triggeredBy: triggerComp ? { componentId: triggerComp.id, componentName: triggerComp.name } : undefined,
+    };
     setExecSession(session);
     setExecQueue(allPlanSteps);
     setExecIndex(0);
@@ -1296,8 +1379,15 @@ function SystemViewV2Inner() {
           ═══════════════════════════════════════════════════════════════════ */}
       <div className="card border-0 shadow-sm mb-3" data-testid="system-map-section" style={{ minHeight: 280, order: selectedId ? 2 : 1 }}>
         <div className="card-body p-4">
-          {/* Resume execution banner */}
-          {showResumePrompt && execSession && (
+          {/* Resume execution banner. Hidden when the saved session was
+              triggered by a BP other than the one currently selected — that
+              banner used to compete with the active BP's "What now" CTAs and
+              point users at unrelated work. */}
+          {showResumePrompt && execSession && (() => {
+            const triggerComp = execSession.triggeredBy;
+            const orphanedHere = !!(triggerComp && selectedId && triggerComp.componentId !== selectedId);
+            if (orphanedHere) return null;
+            return (
             <div className="mb-3 p-3 d-flex align-items-center justify-content-between" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
               <div>
                 <div className="fw-semibold" style={{ fontSize: 12, color: 'var(--color-primary)' }}>
@@ -1305,6 +1395,7 @@ function SystemViewV2Inner() {
                 </div>
                 <div className="text-muted" style={{ fontSize: 10 }}>
                   Step {execSession.currentStepIndex + 1} of {execSession.steps.length} — {execSession.steps[execSession.currentStepIndex]?.title || 'Unknown'}
+                  {triggerComp && <span className="ms-2">· started on {triggerComp.componentName}</span>}
                 </div>
               </div>
               <div className="d-flex gap-2">
@@ -1316,7 +1407,8 @@ function SystemViewV2Inner() {
                 </button>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* Orientation header */}
           <div className="mb-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11, color: '#64748b' }}>
@@ -1951,59 +2043,128 @@ function SystemViewV2Inner() {
                           </button>
                         </div>
                       )}
-                      {buildResult && !buildResult.error && (
-                        <div className="p-3" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
-                          <div className="d-flex align-items-center justify-content-between mb-2">
-                            <div className="fw-bold small" style={{ color: '#059669' }}><i className="bi bi-check-circle-fill me-1"></i>Build Validated</div>
-                            <div className="d-flex gap-2">
-                              {(() => {
-                                const nextComp = visibleComponents.find(c => c.status !== 'complete' && c.id !== selectedComponent.id && c.completion < 80);
-                                return nextComp ? (
-                                  <button className="btn btn-sm btn-primary" style={{ fontSize: 10 }} onClick={() => { setSelectedId(nextComp.id); setWorkTab('build'); setBuildPrompt(null); setBuildReport(''); setBuildResult(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-                                    <i className="bi bi-arrow-right me-1"></i>Next: {nextComp.name.substring(0, 25)}{nextComp.name.length > 25 ? '...' : ''}
-                                  </button>
-                                ) : null;
-                              })()}
-                              <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 10 }} onClick={() => { setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}>
-                                <i className="bi bi-arrow-repeat me-1"></i>Build Again
-                              </button>
+                      {buildResult && !buildResult.error && (() => {
+                        const remainingSteps = (compDetail?.execution_plan || []).filter((s: any) => (!s.status || s.status === 'pending') && !s.blocked);
+                        const hasMoreInThisBP = remainingSteps.length > 0;
+                        const nextComp = visibleComponents.find(c => c.status !== 'complete' && c.id !== selectedComponent.id && c.completion < 80);
+                        const filesCreated = buildResult.parsed?.filesCreated?.length || 0;
+                        const filesModified = buildResult.parsed?.filesModified?.length || 0;
+                        const routesAdded = buildResult.parsed?.routes?.length || 0;
+                        const dbChanges = buildResult.parsed?.database?.length || 0;
+                        const totalArtifacts = filesCreated + filesModified + routesAdded + dbChanges;
+                        const isPageBPSelected = selectedComponent.isPageBP;
+                        return (
+                        <div ref={validatedPanelRef} className="p-3" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
+                          {/* Headline + verification count — top-left, always visible */}
+                          <div className="d-flex align-items-center gap-2 mb-2">
+                            <i className="bi bi-check-circle-fill" style={{ color: '#059669', fontSize: 18 }}></i>
+                            <div>
+                              <div className="fw-bold" style={{ color: '#059669', fontSize: 14 }}>Build Validated</div>
+                              <div className="text-muted" style={{ fontSize: 11 }}>
+                                <strong>{buildResult.requirementsVerified || 0}</strong> of {buildResult.requirementsTotal || 0} requirements verified · {totalArtifacts} {totalArtifacts === 1 ? 'change' : 'changes'} recorded
+                              </div>
                             </div>
                           </div>
-                          <div className="mb-2" style={{ fontSize: 11 }}><strong>{buildResult.requirementsVerified || 0}</strong> of {buildResult.requirementsTotal || 0} requirements verified</div>
-                          {buildResult.parsed?.filesCreated?.length > 0 && (
-                            <div className="mb-2">
-                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-file-earmark-plus me-1" style={{ color: '#10b981' }}></i>Files Created</div>
-                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
-                                {buildResult.parsed.filesCreated.map((f: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{f}</li>)}
-                              </ul>
+
+                          {/* Forward-action row: three differentiated paths so the user
+                              never has to hunt for "what now" after a successful build. */}
+                          <div className="d-flex flex-wrap gap-2 mb-3">
+                            <button
+                              className="btn"
+                              style={{ background: '#10b981', color: '#fff', fontWeight: 700, fontSize: 13, padding: '8px 16px' }}
+                              disabled={verifying}
+                              onClick={() => handleMarkVerifiedFromBuild(selectedComponent.id)}
+                              title="Mark this BP as verified — stops recommending build steps"
+                            >
+                              {verifying ? <><span className="spinner-border spinner-border-sm me-1"></span>Marking...</> : <><i className="bi bi-patch-check-fill me-1"></i>Mark Verified</>}
+                            </button>
+                            {hasMoreInThisBP && (
+                              <button
+                                className="btn btn-outline-success"
+                                style={{ fontSize: 12, padding: '8px 14px' }}
+                                disabled={buildGenerating || verifying}
+                                onClick={() => handleContinueBuilding(selectedComponent.id)}
+                                title={`Generate next prompt for ${selectedComponent.name}`}
+                              >
+                                <i className="bi bi-arrow-down-circle me-1"></i>Continue Building
+                              </button>
+                            )}
+                            {nextComp && (
+                              <button
+                                className="btn btn-outline-primary"
+                                style={{ fontSize: 12, padding: '8px 14px' }}
+                                disabled={verifying}
+                                onClick={() => { setSelectedId(nextComp.id); setWorkTab('build'); setBuildPrompt(null); setBuildReport(''); setBuildResult(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                title={`Open the next BP: ${nextComp.name}`}
+                              >
+                                <i className="bi bi-arrow-right me-1"></i>Next BP: {nextComp.name.substring(0, 22)}{nextComp.name.length > 22 ? '...' : ''}
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-link btn-sm text-muted ms-auto"
+                              style={{ fontSize: 11 }}
+                              onClick={() => { setBuildPrompt(null); setBuildReport(''); setBuildResult(null); }}
+                            >
+                              <i className="bi bi-arrow-repeat me-1"></i>Build Again
+                            </button>
+                          </div>
+
+                          {/* Page BP nudge: visual review is the right gate before
+                              clicking Verified, since requirements coverage for a
+                              page is the 5-category check, not file presence. */}
+                          {isPageBPSelected && (
+                            <div className="mb-3 p-2" style={{ background: '#eff6ff', borderRadius: 6, fontSize: 11, color: '#1d4ed8' }}>
+                              <i className="bi bi-info-circle me-1"></i>
+                              This is a Page BP. Walk through the 5 visual categories on the <button className="btn btn-link p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => navigate(`/portal/project/business-processes/${selectedComponent.id}`)}>BP detail page</button> before marking verified.
                             </div>
                           )}
-                          {buildResult.parsed?.filesModified?.length > 0 && (
-                            <div className="mb-2">
-                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-pencil-square me-1" style={{ color: '#f59e0b' }}></i>Files Modified</div>
-                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
-                                {buildResult.parsed.filesModified.map((f: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{f}</li>)}
-                              </ul>
-                            </div>
-                          )}
-                          {buildResult.parsed?.routes?.length > 0 && (
-                            <div className="mb-2">
-                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-signpost-2 me-1" style={{ color: '#3b82f6' }}></i>API Routes</div>
-                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
-                                {buildResult.parsed.routes.map((r: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{r}</li>)}
-                              </ul>
-                            </div>
-                          )}
-                          {buildResult.parsed?.database?.length > 0 && (
-                            <div className="mb-2">
-                              <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-database me-1" style={{ color: '#8b5cf6' }}></i>Database</div>
-                              <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
-                                {buildResult.parsed.database.map((d: string, i: number) => <li key={i}>{d}</li>)}
-                              </ul>
-                            </div>
+
+                          {/* File list collapsed by default so the action row stays
+                              above the fold. The audit trail is one click away. */}
+                          {totalArtifacts > 0 && (
+                            <details>
+                              <summary style={{ cursor: 'pointer', fontSize: 11, color: '#64748b' }}>
+                                <i className="bi bi-list-ul me-1"></i>View what changed ({totalArtifacts} {totalArtifacts === 1 ? 'item' : 'items'})
+                              </summary>
+                              <div className="mt-2">
+                                {buildResult.parsed?.filesCreated?.length > 0 && (
+                                  <div className="mb-2">
+                                    <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-file-earmark-plus me-1" style={{ color: '#10b981' }}></i>Files Created</div>
+                                    <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                      {buildResult.parsed.filesCreated.map((f: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{f}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                {buildResult.parsed?.filesModified?.length > 0 && (
+                                  <div className="mb-2">
+                                    <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-pencil-square me-1" style={{ color: '#f59e0b' }}></i>Files Modified</div>
+                                    <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                      {buildResult.parsed.filesModified.map((f: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{f}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                {buildResult.parsed?.routes?.length > 0 && (
+                                  <div className="mb-2">
+                                    <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-signpost-2 me-1" style={{ color: '#3b82f6' }}></i>API Routes</div>
+                                    <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                      {buildResult.parsed.routes.map((r: string, i: number) => <li key={i} style={{ fontFamily: 'monospace' }}>{r}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                                {buildResult.parsed?.database?.length > 0 && (
+                                  <div className="mb-2">
+                                    <div className="fw-semibold" style={{ fontSize: 10, color: 'var(--color-primary)' }}><i className="bi bi-database me-1" style={{ color: '#8b5cf6' }}></i>Database</div>
+                                    <ul className="mb-0 ps-3" style={{ fontSize: 10, color: '#475569' }}>
+                                      {buildResult.parsed.database.map((d: string, i: number) => <li key={i}>{d}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            </details>
                           )}
                         </div>
-                      )}
+                        );
+                      })()}
                       {buildResult?.error && <div className="alert alert-danger py-2" style={{ fontSize: 11 }}>{buildResult.error}</div>}
 
                       {/* Execution ticket indicator */}
