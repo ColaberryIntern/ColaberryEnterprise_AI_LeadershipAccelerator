@@ -13,6 +13,28 @@ import ProjectSelectionScreen from '../../components/project/ProjectSelectionScr
 import SystemArchitectureCard from '../../components/project/SystemArchitectureCard';
 import ProjectModeSelector from '../../components/project/ProjectModeSelector';
 
+// Auto-derived "an AI-powered X platform" summary built from component
+// names. Used as a fallback when the project's stored system_prompt is
+// empty so the Blueprint never falls back to the bare "You are building
+// <org_name>" generic line. Mirrors the helper at SystemViewV2.tsx:275.
+function deriveSystemSummary(comps: Array<{ name: string; isDiscovered?: boolean; isPageBP?: boolean }>): string {
+  const mapped = comps.filter(c => !c.isDiscovered && !c.isPageBP);
+  if (mapped.length === 0) return 'an AI-powered system';
+  const domains = new Set<string>();
+  for (const c of mapped) {
+    const n = c.name.toLowerCase();
+    if (/lead|pipeline|campaign|sales|revenue/i.test(n)) domains.add('lead generation');
+    if (/train|adopt|learn|curriculum/i.test(n)) domains.add('training');
+    if (/monitor|analytics|report/i.test(n)) domains.add('analytics');
+    if (/automat|workflow|agent/i.test(n)) domains.add('automation');
+    if (/engag|feedback|user/i.test(n)) domains.add('user engagement');
+    if (/content|market/i.test(n)) domains.add('content delivery');
+  }
+  const list = [...domains].slice(0, 3);
+  if (list.length === 0) return 'an AI-powered enterprise system';
+  return `an AI-powered ${list.join(', ')} platform`;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -731,8 +753,14 @@ export default function SystemBlueprint() {
   // Derived data
   // ---------------------------------------------------------------------------
 
-  const recommended = components.find(c => c.status !== 'complete');
-  const nextAfter = components.filter(c => c.status !== 'complete')[1] || null;
+  // Use real completion (< 100%) rather than the status flag — the auto-
+  // derived `is_complete` heuristic flips status to 'complete' on Page BPs
+  // at 0/5 visual review, so a status-based filter hides Cory's next step
+  // even when 11 BPs are clearly unfinished. We still want to surface the
+  // next thing to work on whenever any BP is below 100%.
+  const incompleteByCompletion = components.filter(c => (c.completion || 0) < 100);
+  const recommended = incompleteByCompletion[0];
+  const nextAfter = incompleteByCompletion[1] || null;
   const completedCount = components.filter(c => c.status === 'complete').length;
   const totalCount = components.length;
   // Don't ratio the status-flag count — that's "BPs auto-flagged complete /
@@ -750,7 +778,13 @@ export default function SystemBlueprint() {
   const allFullyComplete = totalCount > 0 && fullCompletionCount === totalCount;
   // overallCompletion already does this math now — reuse it.
   const avgCompletion = overallCompletion;
-  const readiness = progress?.productionReadinessScore || overallCompletion;
+  // The Blueprint page is BP-focused — its readiness number must agree
+  // with the BP grid below. The backend's productionReadinessScore is a
+  // weighted composite of artifact submissions / GitHub health / portfolio
+  // grades / workflow stage and routinely diverges from BP completion
+  // (showed 49% on a project with 86% avg BP completion). Use the BP
+  // average directly so the bar and the grid tell the same story.
+  const readiness = overallCompletion;
   const systemLevel = getSystemLevel(components.map(c => c.maturityLevel));
   const isInFlow = build.phase !== 'idle';
 
@@ -951,20 +985,18 @@ export default function SystemBlueprint() {
                 <h5 className="fw-bold mb-0" style={{ color: 'var(--color-primary)', fontSize: 16 }}>Your System Blueprint</h5>
               </div>
               {(() => {
-                const prompt = project.project_variables?.system_prompt || project.primary_business_problem || project.selected_use_case;
-                return prompt ? (
+                const stored = project.project_variables?.system_prompt || project.primary_business_problem || project.selected_use_case;
+                const derivedSummary = deriveSystemSummary(components);
+                const prompt = stored || `You are building ${derivedSummary}.`;
+                return (
                   <div className="p-3" style={{ background: 'var(--color-bg-alt)', borderRadius: 8, borderLeft: '3px solid var(--color-primary)' }}>
-                    <div className="fw-medium mb-1" style={{ fontSize: 10, color: 'var(--color-primary)' }}>System Prompt</div>
+                    <div className="fw-medium mb-1" style={{ fontSize: 10, color: 'var(--color-primary)' }}>
+                      {stored ? 'System Prompt' : 'System Summary (auto-derived)'}
+                    </div>
                     <p className="text-muted mb-0" style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
                       {prompt}
                     </p>
                   </div>
-                ) : (
-                  <p className="text-muted mb-0" style={{ fontSize: 13, lineHeight: 1.7 }}>
-                    You are building <strong>{project.organization_name || 'an AI system'}</strong>
-                    {project.industry && <> in the <strong>{project.industry}</strong> industry</>}.
-                    Select components below to view details and generate implementation prompts.
-                  </p>
                 );
               })()}
             </div>
