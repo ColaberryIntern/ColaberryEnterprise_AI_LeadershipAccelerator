@@ -2096,11 +2096,120 @@ interface EnhancementOption {
   suggested_agent?: any;
 }
 
+/**
+ * Page-BP-specific recommendation builder.
+ *
+ * Page BPs are pages that already exist in the user's repo (auto-discovered).
+ * The user's playbook for them is: enhance visual capabilities (UI Advisor),
+ * expose more of the underlying services on the page, attach monitoring
+ * agents, and tighten agent logic. NOT generic "strengthen reliability"
+ * suggestions — those belong to the underlying service.
+ */
+function buildPageBPEnhancementPlan(
+  enriched: any,
+  attachableBackend: string[],
+  attachableAgents: Array<{ name: string; category?: string | null; description?: string | null }>,
+): EnhancementOption[] {
+  const out: EnhancementOption[] = [];
+  const pageName = enriched.name || 'this page';
+  const linkedAgents: string[] = enriched.linked_agents || [];
+
+  // 1. Visual capabilities — only when a UI step is still unrun
+  const stepsRun = enriched.ui_element_map?.steps || {};
+  const UI_KEYS = ['layout_hierarchy', 'usability', 'mobile_responsiveness'];
+  const hasUnrunStep = UI_KEYS.some(k => !stepsRun[k]?.run_at);
+  if (hasUnrunStep) {
+    out.push({
+      key: 'page-ui-advisor',
+      label: 'Run the UI Advisor',
+      description: `Let Cory analyze ${pageName} for layout, usability, and mobile responsiveness issues. Each step generates concrete fixes you can apply.`,
+      impact: '+visual quality, +accessibility',
+      prompt_target: 'frontend_exposure',
+      category: 'frontend',
+      source: 'system',
+      severity: 7,
+    });
+  }
+
+  // 2. Expose more backend — one option for the top attachable service
+  if (attachableBackend.length > 0) {
+    const top = attachableBackend[0];
+    const fileName = top.split('/').pop() || top;
+    out.push({
+      key: `page-expose-${fileName}`,
+      label: `Surface more of ${fileName} on ${pageName}`,
+      description: `${fileName} is part of this page's backend surface but only some of its data / actions are exposed in the UI. Pull more fields, add a drill-down, or wire an action that's currently backend-only.`,
+      impact: '+data depth, +user agency',
+      prompt_target: 'frontend_exposure',
+      category: 'frontend',
+      source: 'system',
+      severity: 6,
+    });
+  }
+
+  // 3. Attach monitoring agent — when no agents are linked yet
+  if (linkedAgents.length === 0) {
+    if (attachableAgents.length > 0) {
+      const top = attachableAgents[0];
+      out.push({
+        key: `page-attach-agent-${top.name}`,
+        label: `Attach ${top.name} to monitor ${pageName}`,
+        description: `${top.name}${top.description ? ` — ${top.description}` : ''} matches this page's domain. Attaching it lets the agent observe interactions and surface insights / suggestions back to the user.`,
+        impact: '+monitoring, +autonomous insight',
+        prompt_target: 'agent_enhancement',
+        category: 'agent',
+        source: 'system',
+        severity: 6,
+        suggested_agent: { name: top.name, description: top.description || `Monitoring agent for ${pageName}.`, type: 'monitoring' },
+      });
+    } else {
+      out.push({
+        key: 'page-add-monitoring-agent',
+        label: `Add a monitoring agent for ${pageName}`,
+        description: `${pageName} has no agents attached. Add one that watches user interactions and surfaces patterns / suggestions back to the user.`,
+        impact: '+monitoring, +autonomous insight',
+        prompt_target: 'agent_enhancement',
+        category: 'agent',
+        source: 'system',
+        severity: 5,
+        suggested_agent: { name: `${pageName} Monitor`, description: `Observes user interactions on ${pageName} and reports anomalies, drop-offs, and improvement opportunities.`, type: 'monitoring' },
+      });
+    }
+  }
+
+  // 4. Enhance agent logic — for each linked agent (capped to top 2)
+  for (const agentName of linkedAgents.slice(0, 2)) {
+    out.push({
+      key: `page-enhance-agent-${agentName}`,
+      label: `Tighten suggestions from ${agentName}`,
+      description: `${agentName} is attached to ${pageName}. Improve its decision logic — add more signals, raise its confidence threshold, or expand the categories of suggestions it surfaces.`,
+      impact: '+suggestion quality, +autonomy',
+      prompt_target: 'agent_enhancement',
+      category: 'agent',
+      source: 'system',
+      severity: 5,
+    });
+  }
+
+  return out;
+}
+
 function buildEnhancementPlan(
   enriched: any,
   autonomyGaps: any[],
   progressLedger?: { found: boolean; completed: string[] },
+  pageBPSurface?: { attachable_backend: string[]; attachable_agents: Array<{ name: string; category?: string | null; description?: string | null }> },
 ): EnhancementOption[] {
+  // Page BPs get a focused, page-shaped recommendation list. Skip the
+  // quality-score branches below — those are for service / process BPs and
+  // produce noise like "Strengthen reliability and error handling" on a
+  // page that isn't responsible for the underlying API.
+  const isPageBP = enriched.is_page_bp || enriched.source === 'frontend_page';
+  if (isPageBP) {
+    const surface = pageBPSurface || { attachable_backend: [], attachable_agents: [] };
+    return buildPageBPEnhancementPlan(enriched, surface.attachable_backend, surface.attachable_agents).slice(0, 8);
+  }
+
   const q = enriched.quality || {};
   const u = enriched.usability || {};
   const options: EnhancementOption[] = [];
@@ -2331,6 +2440,50 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
         .map(g => ({ gap_id: g.gap_id, gap_type: g.gap_type, title: g.title, description: g.description, severity: g.severity, suggested_category: g.suggested_category, suggested_agent: g.suggested_agent || null }));
     } catch { /* non-critical — gaps are supplementary */ }
 
+    // Page BP discovery audit — for Page BPs, build a wider "attachable surface"
+    // set (services that could be exposed on the page, agents that could
+    // monitor it). Used by the Page-BP-specific recommendation builder so
+    // the user gets "Surface more of <X>" / "Add monitoring agent <Y>"
+    // instead of generic backend reliability suggestions.
+    const isPageBPCap = (enriched as any).is_page_bp || (enriched as any).source === 'frontend_page';
+    let attachableSurface: { attachable_backend: string[]; attachable_agents: any[] } = { attachable_backend: [], attachable_agents: [] };
+    if (isPageBPCap) {
+      try {
+        const { discoverPageBPSurface } = await import('../services/intelligence/pageBPSurface');
+        const { AiAgent } = await import('../models');
+        const projectAgents = await AiAgent.findAll({
+          attributes: ['agent_name', 'category', 'description'],
+        });
+        const repoTree = (cap as any)._repoFileTree || [];
+        const linkedBackend = (enriched as any).implementation_links?.backend || [];
+        const linkedAgents = (cap as any).linked_agents || [];
+        attachableSurface = discoverPageBPSurface(
+          { name: (enriched as any).name, frontend_route: (cap as any).frontend_route },
+          repoTree,
+          projectAgents.map((a: any) => ({ agent_name: a.agent_name, category: a.category, description: a.description })),
+          linkedBackend,
+          linkedAgents,
+        );
+      } catch { /* non-critical — discovery is best-effort */ }
+    }
+
+    // Debug surface — lets the user inspect what the page-BP surface
+    // discovery found without us shipping new UI for it. ?debug=page-bp-discovery
+    if (req.query.debug === 'page-bp-discovery') {
+      res.json({
+        bp_id: enriched.id,
+        name: (enriched as any).name,
+        is_page_bp: isPageBPCap,
+        frontend_route: (cap as any).frontend_route || null,
+        currently_linked: {
+          backend: (enriched as any).implementation_links?.backend || [],
+          agents: (cap as any).linked_agents || [],
+        },
+        attachable: attachableSurface,
+      });
+      return;
+    }
+
     // Defense-in-depth: filter out any execution_plan items that are tagged completed.
     // The step generator already drops these, but we also strip them here so any
     // legacy callers that bypass the generator stay consistent.
@@ -2379,7 +2532,7 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
         const { getProgressLedger } = await import('../services/progressMdService');
         progressLedger = await getProgressLedger(req.participant!.sub);
       } catch { /* fall back to no ledger */ }
-      enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps, progressLedger);
+      enhancementPlan = buildEnhancementPlan(enriched, autonomyGaps, progressLedger, attachableSurface);
       // Auto-complete BPs that aren't verified yet still get suggestions, but
       // framed as optional polish — not as "you're missing this." Keeps the
       // user's earlier guidance ("until marked complete I still want
@@ -4152,11 +4305,13 @@ router.post('/api/portal/project/business-processes/:id/analyze-page', requirePa
     const elementMap = (cap as any).ui_element_map;
     if (!elementMap?.elements?.length) { res.status(400).json({ error: 'No element map. Send element-map first.' }); return; }
     const { analyzePageElements, augmentWithLLM } = await import('../services/uiFeedbackEngine');
+    const stepKeyForRows = UI_STEP_KEYS.includes(req.body.step_key) ? req.body.step_key : undefined;
     const ruleResult = await analyzePageElements({
       capabilityId: cap.id, projectId: project.id,
       pageRoute: elementMap.page_route || (cap as any).frontend_route || '/',
       elements: elementMap.elements,
       targetElementId: req.body.element_id,
+      stepKey: stepKeyForRows,
     });
     // LLM augment if rules found few issues or user gave feedback
     let llmResult = { total_issues: 0, new_issues: 0, skipped_duplicates: 0, issues: [] as any[] };
@@ -4201,6 +4356,7 @@ router.post('/api/portal/project/business-processes/:id/analyze-page', requirePa
         elements: elementMap.elements,
         userFeedback: req.body.user_feedback ? (req.body.user_feedback + (backendPrompt ? '\n\n' + backendPrompt : '')) : backendPrompt || undefined,
         ruleIssueCount: ruleResult.total_issues,
+        stepKey: stepKeyForRows,
       });
     }
     // Stamp the UI Advisor step that was just run, so the frontend can

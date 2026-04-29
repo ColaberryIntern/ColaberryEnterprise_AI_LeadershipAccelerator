@@ -23,6 +23,7 @@ interface UIElementFeedbackAttributes {
   execution_status?: string;
   source?: string;
   confidence?: number;
+  source_step?: string;
 }
 
 class UIElementFeedback extends Model<UIElementFeedbackAttributes> implements UIElementFeedbackAttributes {
@@ -47,6 +48,7 @@ class UIElementFeedback extends Model<UIElementFeedbackAttributes> implements UI
   declare execution_status: string;
   declare source: string;
   declare confidence: number;
+  declare source_step: string;
 }
 
 UIElementFeedback.init(
@@ -72,6 +74,12 @@ UIElementFeedback.init(
     execution_status: { type: DataTypes.STRING(20), allowNull: true },
     source: { type: DataTypes.STRING(20), defaultValue: 'rule' },
     confidence: { type: DataTypes.FLOAT, defaultValue: 1.0 },
+    // The UI Advisor step that triggered this feedback row.
+    // 'layout_hierarchy' | 'usability' | 'mobile_responsiveness'.
+    // Nullable so pre-existing rows (created before this column shipped)
+    // continue to work — the frontend treats them as "untagged" and groups
+    // them in a separate section.
+    source_step: { type: DataTypes.STRING(40), allowNull: true },
   },
   {
     sequelize,

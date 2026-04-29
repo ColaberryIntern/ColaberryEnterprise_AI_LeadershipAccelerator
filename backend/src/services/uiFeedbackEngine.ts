@@ -149,8 +149,9 @@ export async function analyzePageElements(options: {
   pageRoute: string;
   elements: UIElement[];
   targetElementId?: string;  // if set, only analyze this element
+  stepKey?: string;          // 'layout_hierarchy' | 'usability' | 'mobile_responsiveness'
 }): Promise<EngineResult> {
-  const { capabilityId, projectId, pageRoute, elements, targetElementId } = options;
+  const { capabilityId, projectId, pageRoute, elements, targetElementId, stepKey } = options;
   const ctx = buildPageContext(elements, pageRoute);
   const result: EngineResult = { total_issues: 0, new_issues: 0, skipped_duplicates: 0, issues: [] };
 
@@ -178,6 +179,7 @@ export async function analyzePageElements(options: {
           severity: rule.severity,
           source: 'rule',
           confidence: 1.0,
+          sourceStep: stepKey,
         };
         const { isNew } = await createFeedback(input);
         result.total_issues++;
@@ -207,6 +209,7 @@ export async function analyzePageElements(options: {
           severity: rule.severity,
           source: 'rule',
           confidence: 1.0,
+          sourceStep: stepKey,
         };
         const { isNew } = await createFeedback(input);
         result.total_issues++;
@@ -229,8 +232,9 @@ export async function augmentWithLLM(options: {
   elements: UIElement[];
   userFeedback?: string;
   ruleIssueCount: number;
+  stepKey?: string;
 }): Promise<EngineResult> {
-  const { capabilityId, projectId, pageRoute, elements, userFeedback, ruleIssueCount } = options;
+  const { capabilityId, projectId, pageRoute, elements, userFeedback, ruleIssueCount, stepKey } = options;
 
   // Only augment if rules found few issues OR user gave specific feedback
   if (ruleIssueCount >= 3 && !userFeedback) {
@@ -294,6 +298,7 @@ Respond: {"issues": [{"element_id": "...", "issue_type": "...", "title": "...", 
         severity: issue.severity || 'medium',
         source: 'llm',
         confidence: 0.8,
+        sourceStep: stepKey,
       };
       const { isNew } = await createFeedback(input);
       result.total_issues++;

@@ -37,6 +37,7 @@ export interface CreateFeedbackInput {
   prompt?: string;
   source?: string;
   confidence?: number;
+  sourceStep?: string;
 }
 
 /**
@@ -74,6 +75,7 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<{ item
     prompt: input.prompt,
     source: input.source || 'rule',
     confidence: input.confidence ?? 1.0,
+    source_step: input.sourceStep,
   });
 
   return { item, isNew: true };

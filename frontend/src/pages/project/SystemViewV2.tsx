@@ -514,9 +514,34 @@ type EnhanceCardItem = {
   color: string;
   promptTarget: string;
   gapType?: string;
+  category?: string;
   severity: number;
   source: string;
 };
+
+// Per-tab category routing. The backend's enhancement_plan items carry a
+// `category` field — we use it here to scope each tab to its concern. A
+// "Strengthen reliability" item (category=reliability) is a Health concern
+// only; it shouldn't echo on Build or Improve. Empty results in any tab
+// fall through to a tab-specific empty state.
+const TAB_CATEGORIES: Record<'build' | 'health' | 'improve', string[]> = {
+  build:   ['backend', 'frontend', 'database', 'requirement', 'autonomy_gap'],
+  health:  ['observability', 'reliability', 'performance', 'monitoring'],
+  improve: ['agent', 'intelligence', 'autonomy_gap', 'reporting'],
+};
+function filterByTab(items: EnhanceCardItem[], tab: 'build' | 'health' | 'improve'): EnhanceCardItem[] {
+  const allowed = new Set(TAB_CATEGORIES[tab]);
+  return items.filter(i => i.category && allowed.has(String(i.category)));
+}
+
+// Returns a new EnhanceCardSet with items / primary / upNext narrowed to the
+// given tab's category set. Non-enhance card sets pass through unchanged so
+// verified / archived / page_visual_review states still render their cards.
+function deriveTabCards(cards: EnhanceCardSet, tab: 'build' | 'health' | 'improve'): EnhanceCardSet {
+  if (!cards.isEnhance && !cards.isPolish) return cards;
+  const filtered = filterByTab(cards.items, tab);
+  return { ...cards, items: filtered, primary: filtered[0] || null, upNext: filtered.slice(1, 3) };
+}
 type EnhanceCardSet = {
   isEnhance: boolean;
   isPolish: boolean;
@@ -558,6 +583,7 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
     color: colorFor(e),
     promptTarget: e.prompt_target,
     gapType: e.gap_type,
+    category: e.category,
     severity: e.severity || 0,
     source: e.source || 'system',
   }));
@@ -630,6 +656,8 @@ function SystemViewV2Inner() {
   const [showOverviewUpNext, setShowOverviewUpNext] = useState(false);
   const [showHealthUpNext, setShowHealthUpNext] = useState(false);
   const [showAllIssues, setShowAllIssues] = useState(false);
+  const [expandedUIStep, setExpandedUIStep] = useState<string | null>(null);
+  const [showUntaggedIssues, setShowUntaggedIssues] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const validatedPanelRef = useRef<HTMLDivElement | null>(null);
   // Escape hatch for verified BPs: when the user has done another build
@@ -782,6 +810,8 @@ function SystemViewV2Inner() {
     setTicketWarning(null);
     setExecutionSnapshot(null);
     setShowAllIssues(false);
+    setExpandedUIStep(null);
+    setShowUntaggedIssues(false);
     setRecordExtraBuild(false);
     // Preserve URL tab on first load, reset to overview on subsequent selections
     const preserveTab = urlTab && ['overview','build','improve','health','ui'].includes(urlTab) && selectedId === urlComponentId;
@@ -823,6 +853,24 @@ function SystemViewV2Inner() {
       validatedPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [buildResult]);
+
+  // Lazy-fetch UI feedback when a BP detail loads, so the Detected Issues
+  // panel shows previously generated issues without forcing the user to
+  // re-run analysis. Skipped when the BP has no route AND no prior step
+  // run state, since there's nothing to load. Only fires once per BP —
+  // the existing setUiFeedback(null) on selectedId change ensures we
+  // don't carry one BP's feedback into another.
+  useEffect(() => {
+    if (!selectedId || !compDetail) return;
+    const hasRoute = !!compDetail.frontend_route;
+    const stepsObj = compDetail.ui_element_map?.steps || {};
+    const hasSteps = Object.values(stepsObj).some((v: any) => v && v.run_at);
+    if (!hasRoute && !hasSteps) return;
+    if (uiFeedback) return;
+    portalApi.get(`/api/portal/project/business-processes/${selectedId}/element-feedback`)
+      .then((r: any) => setUiFeedback(r.data))
+      .catch(() => {});
+  }, [selectedId, compDetail, uiFeedback]);
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -1844,8 +1892,12 @@ function SystemViewV2Inner() {
                     // tab expecting progress — never re-show finished build steps, never
                     // try to "build" a synthetic holding bucket, and never recommend
                     // anything for a BP they've marked verified.
-                    const enhanceCards = getEnhanceCards(compDetail);
-                    if (enhanceCards.isVerified && !recordExtraBuild) {
+                    const baseCards = getEnhanceCards(compDetail);
+                    // Tab-scope: Build only surfaces backend / frontend / db /
+                    // requirement / autonomy_gap items. A reliability item, for
+                    // example, lands on the Health tab; here we'd return null.
+                    const enhanceCards = deriveTabCards(baseCards, 'build');
+                    if (baseCards.isVerified && !recordExtraBuild) {
                       return (
                         <div>
                           <div className="d-flex align-items-center gap-2 mb-3">
@@ -1907,6 +1959,24 @@ function SystemViewV2Inner() {
                             <h6 className="fw-bold mb-0" style={{ fontSize: 14, color: '#059669' }}>Fully built and improved</h6>
                           </div>
                           <p className="text-muted" style={{ fontSize: 12 }}>No build or improvement work pending for {selectedComponent.name}. Pick another BP from the grid above to keep moving forward.</p>
+                        </div>
+                      );
+                    }
+                    // Empty state when Build's category filter eliminated all
+                    // recommendations (e.g. a Page BP whose only items are agent
+                    // / reliability — both belong on other tabs). Render a tab-
+                    // specific empty card and stop; don't fall through to the
+                    // default flow which would surface generic suggestions.
+                    if ((baseCards.isEnhance || baseCards.isPolish) && !enhanceCards.primary) {
+                      return (
+                        <div className="p-3" style={{ background: '#f8fafc', borderRadius: 8, border: '1px solid var(--color-border)' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-check2-circle" style={{ color: '#64748b', fontSize: 14 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#475569' }}>No build upgrades available</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>
+                            {selectedComponent.name} doesn't have backend / frontend / requirement work pending right now. Check the <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('improve')}>Improve</button> or <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('health')}>Health</button> tabs for other recommendations.
+                          </p>
                         </div>
                       );
                     }
@@ -2315,8 +2385,11 @@ function SystemViewV2Inner() {
                     // When the BP is in 'enhance' or 'done' mode, surface the unified
                     // enhancement_plan (which already excludes finished work) instead of
                     // re-deriving from quality scores — those scores can flag generic
-                    // health items even after the user has fixed them.
-                    const enhanceCards = getEnhanceCards(compDetail);
+                    // health items even after the user has fixed them. Filter to
+                    // health-tab categories so a backend-build item doesn't surface here.
+                    const baseCards = getEnhanceCards(compDetail);
+                    const enhanceCards = deriveTabCards(baseCards, 'health');
+                    const isPageBP = !!selectedComponent.isPageBP;
                     const healthSteps: Array<{ title: string; explanation: string; color: string; promptTarget?: string }> = [];
 
                     if (enhanceCards.isVerified) {
@@ -2344,6 +2417,41 @@ function SystemViewV2Inner() {
                             <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#059669' }}>All quality dimensions are healthy</h6>
                           </div>
                           <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.name} has nothing pending across reliability, observability, or performance. Pick another BP to keep moving forward.</p>
+                        </div>
+                      );
+                    }
+
+                    // Page BPs don't have meaningful Health concerns — health
+                    // metrics live on the underlying service. Show a nudge that
+                    // points the user there instead of pretending we have
+                    // recommendations on the page itself.
+                    if (isPageBP && (baseCards.isEnhance || baseCards.isPolish) && enhanceCards.items.length === 0) {
+                      const backendFiles = (compDetail?.implementation_links?.backend || []) as string[];
+                      const primaryService = backendFiles[0];
+                      return (
+                        <div className="p-3" style={{ background: '#eff6ff', borderRadius: 8, border: '1px solid #3b82f630' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-info-circle" style={{ color: '#3b82f6', fontSize: 14 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#1d4ed8' }}>No health concerns for a Page BP</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>
+                            Reliability / observability / performance work belongs to the underlying service
+                            {primaryService && <> — <code style={{ fontSize: 10 }}>{primaryService}</code></>}.
+                            Visual quality lives on the <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('ui')}>UI tab</button>.
+                          </p>
+                        </div>
+                      );
+                    }
+                    // Generic empty-state for non-Page BPs whose enhancement plan
+                    // has no health-category items.
+                    if ((baseCards.isEnhance || baseCards.isPolish) && enhanceCards.items.length === 0) {
+                      return (
+                        <div className="p-3" style={{ background: '#f0fdf4', borderRadius: 8, border: '1px solid #10b98130' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: 14 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#059669' }}>No health concerns detected</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.name} looks healthy across reliability, observability, and performance. Check the <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('build')}>Build</button> or <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('improve')}>Improve</button> tab for other recommendations.</p>
                         </div>
                       );
                     }
@@ -2437,7 +2545,9 @@ function SystemViewV2Inner() {
 
                     // Prefer the unified enhancement_plan when the BP is in 'enhance'
                     // or 'done' mode — otherwise fall back to the local layer + gap mix.
-                    const enhanceCards = getEnhanceCards(compDetail);
+                    // Filter to improve-tab categories so build/health items don't surface here.
+                    const baseCards = getEnhanceCards(compDetail);
+                    const enhanceCards = deriveTabCards(baseCards, 'improve');
                     if (enhanceCards.isVerified) {
                       return renderVerifiedCard(selectedComponent.name, selectedComponent.id, compDetail?.user_status_set_at);
                     }
@@ -2463,6 +2573,21 @@ function SystemViewV2Inner() {
                             <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#059669' }}>Well-positioned for autonomous operation</h6>
                           </div>
                           <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.name} has no improvements pending. Pick another BP to keep moving forward.</p>
+                        </div>
+                      );
+                    }
+
+                    // Empty state when Improve's category filter eliminated all
+                    // recommendations (e.g. a BP whose only items are build /
+                    // reliability work — those belong on other tabs).
+                    if ((baseCards.isEnhance || baseCards.isPolish) && enhanceCards.items.length === 0) {
+                      return (
+                        <div className="p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #8b5cf630' }}>
+                          <div className="d-flex align-items-center gap-2 mb-1">
+                            <i className="bi bi-stars" style={{ color: '#8b5cf6', fontSize: 14 }}></i>
+                            <h6 className="fw-bold mb-0" style={{ fontSize: 13, color: '#7c3aed' }}>No autonomy improvements queued</h6>
+                          </div>
+                          <p className="text-muted mb-0" style={{ fontSize: 11 }}>{selectedComponent.name} has nothing pending in the agent / intelligence / autonomy track right now. Check the <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('build')}>Build</button> or <button className="btn btn-link btn-sm p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => setWorkTab('health')}>Health</button> tab for other recommendations.</p>
                         </div>
                       );
                     }
@@ -2643,97 +2768,137 @@ function SystemViewV2Inner() {
                     </>
                   )}
 
-                  {/* Detected issues — each row is actionable: Fix kicks off a focused
-                      Cory prompt scoped to that one issue; Dismiss removes it from view;
-                      Resolve marks it done after the fix has been applied. The same task
-                      pattern as the Up Next steps below — no more static report. */}
-                  {uiFeedback?.items?.length > 0 && (() => {
-                    const visible = uiFeedback.items.filter((f: any) => f.status !== 'dismissed' && f.status !== 'resolved');
-                    if (visible.length === 0) return null;
-                    const shown = showAllIssues ? visible : visible.slice(0, 5);
-                    return (
-                    <div className="mb-3">
-                      <div className="fw-semibold small mb-2">Detected Issues ({visible.length})</div>
-                      {shown.map((f: any) => (
-                        <div key={f.id} className="d-flex gap-2 align-items-start py-2 mb-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
-                          <span className="badge" style={{ fontSize: 8, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981', flexShrink: 0 }}>{f.severity}</span>
-                          <div className="flex-grow-1">
-                            <div className="d-flex align-items-center gap-2">
-                              <span className="fw-medium">{f.title}</span>
-                              {f.status === 'in_progress' && (
-                                <span className="badge" style={{ fontSize: 7, background: '#3b82f620', color: '#3b82f6' }}>In Progress</span>
-                              )}
-                            </div>
-                            {f.suggestion && <div className="text-muted" style={{ fontSize: 9 }}>{f.suggestion.substring(0, 120)}</div>}
+                  {/* Step timeline — every step is a row showing run state + count.
+                      Expanding a row reveals the issues that step generated (filtered
+                      by source_step so each step owns its own issues). The user can
+                      Fix / Resolve / Dismiss inside the expanded panel; the standalone
+                      Detected Issues block went away because issues now live with the
+                      step that produced them. */}
+                  {(() => {
+                    const allItems = (uiFeedback?.items || []) as any[];
+                    const activeItems = allItems.filter(f => f.status !== 'dismissed' && f.status !== 'resolved');
+                    const issuesByStep: Record<string, any[]> = {};
+                    const untagged: any[] = [];
+                    for (const f of activeItems) {
+                      if (f.source_step && uiActions.some(a => a.key === f.source_step)) {
+                        (issuesByStep[f.source_step] = issuesByStep[f.source_step] || []).push(f);
+                      } else {
+                        untagged.push(f);
+                      }
+                    }
+                    const renderIssue = (f: any) => (
+                      <div key={f.id} className="d-flex gap-2 align-items-start py-2 mb-1" style={{ borderBottom: '1px solid var(--color-border)', fontSize: 10 }}>
+                        <span className="badge" style={{ fontSize: 8, background: f.severity === 'high' ? '#ef444420' : f.severity === 'medium' ? '#f59e0b20' : '#10b98120', color: f.severity === 'high' ? '#ef4444' : f.severity === 'medium' ? '#f59e0b' : '#10b981', flexShrink: 0 }}>{f.severity}</span>
+                        <div className="flex-grow-1">
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="fw-medium">{f.title}</span>
+                            {f.status === 'in_progress' && (<span className="badge" style={{ fontSize: 7, background: '#3b82f620', color: '#3b82f6' }}>In Progress</span>)}
                           </div>
-                          <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
-                            {f.status === 'in_progress' ? (
-                              <button className="btn btn-sm btn-success" style={{ fontSize: 8, padding: '1px 6px' }} disabled={buildGenerating}
-                                onClick={() => handleResolveIssue(selectedComponent.id, f.id)}
-                                title="Mark resolved">
-                                <i className="bi bi-check-lg"></i> Done
-                              </button>
-                            ) : (
-                              <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 6px' }} disabled={buildGenerating}
-                                onClick={() => handleFixIssue(selectedComponent.id, f)}
-                                title="Generate a focused fix prompt and open the Build tab">
-                                <i className="bi bi-stars"></i> Fix
-                              </button>
-                            )}
-                            <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }}
-                              onClick={() => handleDismissIssue(selectedComponent.id, f.id)}
-                              title="Dismiss this issue">
-                              <i className="bi bi-x"></i>
-                            </button>
-                          </div>
+                          {f.suggestion && <div className="text-muted" style={{ fontSize: 9 }}>{f.suggestion.substring(0, 140)}</div>}
                         </div>
-                      ))}
-                      {visible.length > 5 && (
-                        <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10 }} onClick={() => setShowAllIssues(!showAllIssues)}>
-                          {showAllIssues ? 'Show first 5' : `Show all ${visible.length}`}
-                        </button>
+                        <div className="d-flex gap-1" style={{ flexShrink: 0 }}>
+                          {f.status === 'in_progress' ? (
+                            <button className="btn btn-sm btn-success" style={{ fontSize: 8, padding: '1px 6px' }} disabled={buildGenerating}
+                              onClick={() => handleResolveIssue(selectedComponent.id, f.id)} title="Mark resolved">
+                              <i className="bi bi-check-lg"></i> Done
+                            </button>
+                          ) : (
+                            <button className="btn btn-sm btn-outline-success" style={{ fontSize: 8, padding: '1px 6px' }} disabled={buildGenerating}
+                              onClick={() => handleFixIssue(selectedComponent.id, f)} title="Generate a focused fix prompt">
+                              <i className="bi bi-stars"></i> Fix
+                            </button>
+                          )}
+                          <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }}
+                            onClick={() => handleDismissIssue(selectedComponent.id, f.id)} title="Dismiss this issue">
+                            <i className="bi bi-x"></i>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                    return (
+                    <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                      <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
+                        <i className="bi bi-list-ol me-1" style={{ fontSize: 11 }}></i>Step status
+                      </div>
+                      {uiActions.map((a) => {
+                        const numericIdx = uiActions.findIndex(u => u.key === a.key);
+                        const ran = isRun(a.key);
+                        const meta = stepsRun[a.key];
+                        const stepIssues = issuesByStep[a.key] || [];
+                        const issueCount = stepIssues.length;
+                        const expanded = expandedUIStep === a.key;
+                        return (
+                          <div key={a.key} className="mb-1" style={{ background: ran ? '#f0fdf4' : 'var(--color-bg-alt)', borderRadius: 6, border: ran ? '1px solid #10b98130' : '1px solid var(--color-border)' }}>
+                            <div className="d-flex align-items-start gap-2 p-2">
+                              <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: ran ? '#10b981' : '#10b98120', color: ran ? '#fff' : '#059669', fontSize: 9, flexShrink: 0, marginTop: 1 }}>
+                                {ran ? <i className="bi bi-check-lg" style={{ fontSize: 10 }}></i> : numericIdx + 1}
+                              </span>
+                              <div className="flex-grow-1">
+                                <div className="fw-medium" style={{ fontSize: 11 }}>{a.title}</div>
+                                <div className="text-muted" style={{ fontSize: 9 }}>
+                                  {ran && meta?.run_at ? `Last run ${relTime(meta.run_at)} · ${issueCount} issue${issueCount === 1 ? '' : 's'} open${(meta.issues_found || 0) !== issueCount ? ` · ${meta.issues_found} found this run` : ''}` : a.explanation}
+                                </div>
+                              </div>
+                              <div className="d-flex align-items-center gap-1" style={{ flexShrink: 0 }}>
+                                {ran && issueCount > 0 && (
+                                  <button className="btn btn-sm btn-link p-0 text-muted" style={{ fontSize: 10 }}
+                                    onClick={() => setExpandedUIStep(expanded ? null : a.key)}
+                                    title={expanded ? 'Collapse issues' : 'Show issues'}>
+                                    <i className={`bi ${expanded ? 'bi-chevron-up' : 'bi-chevron-down'}`}></i>
+                                  </button>
+                                )}
+                                <button
+                                  className={`btn btn-sm ${ran ? 'btn-link text-muted' : 'btn-outline-success'}`}
+                                  style={{ fontSize: ran ? 9 : 8, padding: '1px 6px' }}
+                                  disabled={uiAnalyzing}
+                                  onClick={() => handleUIAnalyze(selectedComponent.id, a.feedback, a.key)}
+                                >
+                                  {ran ? <><i className="bi bi-arrow-repeat me-1"></i>Re-run</> : 'Run'}
+                                </button>
+                              </div>
+                            </div>
+                            {expanded && issueCount > 0 && (
+                              <div className="px-3 pb-2" style={{ borderTop: '1px solid var(--color-border)' }}>
+                                {stepIssues.slice(0, showAllIssues ? stepIssues.length : 5).map(renderIssue)}
+                                {stepIssues.length > 5 && (
+                                  <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10 }} onClick={() => setShowAllIssues(!showAllIssues)}>
+                                    {showAllIssues ? 'Show first 5' : `Show all ${stepIssues.length}`}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Untagged issues — rows that pre-date the per-step tagging
+                          column. Surfaced separately so the timeline above stays
+                          honest. Goes away once these legacy rows are resolved /
+                          dismissed. */}
+                      {untagged.length > 0 && (
+                        <div className="mt-3" style={{ background: '#fffbeb', borderRadius: 6, border: '1px solid #fde68a' }}>
+                          <div className="d-flex align-items-center justify-content-between p-2" style={{ cursor: 'pointer' }}
+                            onClick={() => setShowUntaggedIssues(!showUntaggedIssues)}>
+                            <div className="d-flex align-items-center gap-2">
+                              <i className="bi bi-archive" style={{ color: '#92400e', fontSize: 11 }}></i>
+                              <span className="fw-medium" style={{ fontSize: 11, color: '#92400e' }}>
+                                Other detected issues ({untagged.length})
+                              </span>
+                              <span className="text-muted" style={{ fontSize: 9 }}>From earlier runs (no step tag)</span>
+                            </div>
+                            <i className={`bi ${showUntaggedIssues ? 'bi-chevron-up' : 'bi-chevron-down'}`} style={{ color: '#92400e', fontSize: 11 }}></i>
+                          </div>
+                          {showUntaggedIssues && (
+                            <div className="px-3 pb-2" style={{ borderTop: '1px solid #fde68a' }}>
+                              {untagged.slice(0, 5).map(renderIssue)}
+                              {untagged.length > 5 && <div className="text-muted" style={{ fontSize: 10 }}>…and {untagged.length - 5} more.</div>}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                     );
                   })()}
-
-                  {/* Other steps row — combines unrun ones (Run button) and
-                      already-run ones (badge + Re-run link). Each step is in
-                      one of two states based on ui_element_map.steps so the
-                      user always knows what's been done. */}
-                  {!allRun && others.length > 0 && (
-                    <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                      <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
-                        <i className="bi bi-chevron-right me-1" style={{ fontSize: 10 }}></i>Other steps ({others.length})
-                      </div>
-                      {others.map((a) => {
-                        const numericIdx = uiActions.findIndex(u => u.key === a.key);
-                        const ran = isRun(a.key);
-                        const meta = stepsRun[a.key];
-                        return (
-                        <div key={a.key} className="d-flex align-items-start gap-2 mb-1 p-2" style={{ background: ran ? '#f0fdf4' : 'var(--color-bg-alt)', borderRadius: 6 }}>
-                          <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: ran ? '#10b981' : '#10b98120', color: ran ? '#fff' : '#059669', fontSize: 9, flexShrink: 0, marginTop: 1 }}>
-                            {ran ? <i className="bi bi-check-lg" style={{ fontSize: 10 }}></i> : numericIdx + 1}
-                          </span>
-                          <div className="flex-grow-1">
-                            <div className="fw-medium" style={{ fontSize: 11 }}>{a.title}</div>
-                            <div className="text-muted" style={{ fontSize: 9 }}>
-                              {ran && meta?.run_at ? `Last run ${relTime(meta.run_at)} · ${meta.issues_found || 0} issue${meta.issues_found === 1 ? '' : 's'}` : a.explanation}
-                            </div>
-                          </div>
-                          <button
-                            className={`btn btn-sm ${ran ? 'btn-link text-muted' : 'btn-outline-success'}`}
-                            style={{ fontSize: ran ? 9 : 8, padding: '1px 6px', flexShrink: 0 }}
-                            disabled={uiAnalyzing}
-                            onClick={() => handleUIAnalyze(selectedComponent.id, a.feedback, a.key)}
-                          >
-                            {ran ? <><i className="bi bi-arrow-repeat me-1"></i>Re-run</> : 'Run'}
-                          </button>
-                        </div>
-                        );
-                      })}
-                    </div>
-                  )}
 
                 </div>
                 );
