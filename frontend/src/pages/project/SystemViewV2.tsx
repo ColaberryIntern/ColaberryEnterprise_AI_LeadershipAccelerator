@@ -40,6 +40,7 @@ interface SystemComponent {
   promptTarget: string | null;
   isPageBP: boolean;
   isDiscovered: boolean;
+  isPendingDefinition?: boolean;
   source: string;
   frontendRoute: string | null;
   coverageRaw: number;
@@ -81,9 +82,17 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   not_started: { bg: '#e2e8f020', text: '#9ca3af', label: 'Not Started' },
 };
 
+function isUndefinedPageBPRow(bp: any): boolean {
+  const isPage = bp.source === 'frontend_page' || bp.is_page_bp === true;
+  if (!isPage) return false;
+  return !bp.ui_element_map?.user_defined_at;
+}
+
 function transformBPs(bps: any[]): SystemComponent[] {
   return bps
-    // Filter out archived BPs entirely — they're hidden from the active view.
+    // Filter out archived BPs entirely. Undefined Page BPs stay in the array
+    // (so direct URL selection still works) but get flagged as
+    // isPendingDefinition; the grid + Cory recommendations skip them.
     .filter((bp: any) => (bp.applicability_status || 'active') === 'active' && bp.user_status !== 'archived')
     .map((bp: any) => {
       const coverage = bp.metrics?.requirements_coverage || 0;
@@ -111,6 +120,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
       const completion = userVerified ? 100 : Math.round(coverage);
       const firstStep = (bp.execution_plan || []).find((s: any) => !s.blocked);
 
+      const isPendingDefinition = isUndefinedPageBPRow(bp);
       return {
         id: bp.id,
         name: bp.name,
@@ -122,6 +132,7 @@ function transformBPs(bps: any[]): SystemComponent[] {
         nextStep: firstStep?.label || null,
         promptTarget: firstStep?.prompt_target || null,
         isPageBP,
+        isPendingDefinition,
         isDiscovered: bpSource === 'repo_discovered' || (isPageBP && bpSource === 'frontend_page') || (!hasExecPlan && !isComplete && completion === 0 && maturityLevel === 0 && !isPageBP && bpSource !== 'auto'),
         source: bpSource,
         frontendRoute: bp.frontend_route || null,
@@ -629,6 +640,11 @@ function SystemViewV2Inner() {
 
   const [project, setProject] = useState<ProjectData | null>(null);
   const [components, setComponents] = useState<SystemComponent[]>([]);
+  // Auto-discovered Page BPs that the user hasn't mapped yet. Surfaced as a
+  // small banner above the components grid; never enter the main components
+  // pool (so Cory doesn't recommend "Build <undefined-page>" before the user
+  // has even told us what the page is).
+  const [pendingDefinitionPages, setPendingDefinitionPages] = useState<Array<{ id: string; name: string; route: string }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(urlComponentId || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -878,7 +894,15 @@ function SystemViewV2Inner() {
       portalApi.get('/api/portal/project/business-processes').catch(() => ({ data: [] })),
     ]).then(([projRes, bpRes]) => {
       setProject(projRes.data);
-      setComponents(transformBPs(bpRes.data || []));
+      const transformed = transformBPs(bpRes.data || []);
+      setComponents(transformed);
+      // Pending-definition list reads from the transformed components so
+      // it stays in sync with what the rest of the page sees.
+      setPendingDefinitionPages(
+        transformed
+          .filter(c => c.isPendingDefinition)
+          .map(c => ({ id: c.id, name: c.name, route: c.frontendRoute || '' })),
+      );
     });
   }, []);
 
@@ -914,7 +938,10 @@ function SystemViewV2Inner() {
     const promoted = promotedIdsRaw.has(c.id);
     return { ...c, isDiscovered: promoted ? false : c.isDiscovered, ui: { pages: allPages } };
   }), [components, pageAttachments, detachedPages, verifiedPages, promotedIdsRaw]);
-  const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id));
+  // Hide pending-definition Page BPs from the grid + Cory recommendations.
+  // They surface in the dedicated banner above the grid until the user maps
+  // them, then they re-enter visibleComponents on the next load.
+  const visibleComponents = enrichedComponents.filter(c => !ignoredIds.has(c.id) && !c.isPendingDefinition);
   const selectedComponent = selectedId ? enrichedComponents.find(c => c.id === selectedId) : null;
   const completedCount = components.filter(c => c.status === 'complete').length;
   const systemLayers = {
@@ -1492,6 +1519,42 @@ function SystemViewV2Inner() {
             </div>
             );
           })()}
+
+          {/* Pages awaiting definition — undefined Page BPs are kept out of
+              the components grid (so Cory doesn't recommend "Build <unknown
+              page>") but the user still needs a way to map them. Banner
+              links straight into the BP detail, which renders the
+              Discovered / Unmapped view with the Define Component flow. */}
+          {pendingDefinitionPages.length > 0 && (
+            <div className="mb-3 p-3" style={{ background: '#faf5ff', borderRadius: 8, border: '1px solid #a855f730' }}>
+              <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                <div>
+                  <div className="fw-semibold" style={{ fontSize: 12, color: '#7c3aed' }}>
+                    <i className="bi bi-search me-1"></i>{pendingDefinitionPages.length} page{pendingDefinitionPages.length === 1 ? '' : 's'} auto-discovered from your repo · awaiting definition
+                  </div>
+                  <div className="text-muted" style={{ fontSize: 10 }}>
+                    These pages exist in your repo but aren't yet mapped to a system component. Define each one to add it to your system.
+                  </div>
+                </div>
+                <div className="d-flex flex-wrap gap-1" style={{ maxWidth: 600 }}>
+                  {pendingDefinitionPages.slice(0, 6).map(p => (
+                    <button
+                      key={p.id}
+                      className="btn btn-sm btn-outline-primary"
+                      style={{ fontSize: 10, padding: '2px 8px' }}
+                      onClick={() => { setSelectedId(p.id); setTimeout(() => workAreaRef.current?.scrollIntoView({ behavior: 'smooth' }), 100); }}
+                      title={p.route ? `Define ${p.name} (${p.route})` : `Define ${p.name}`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                  {pendingDefinitionPages.length > 6 && (
+                    <span className="text-muted align-self-center" style={{ fontSize: 10 }}>+{pendingDefinitionPages.length - 6} more</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Orientation header */}
           <div className="mb-3 p-2" style={{ background: 'var(--color-bg-alt)', borderRadius: 6, fontSize: 11, color: '#64748b' }}>

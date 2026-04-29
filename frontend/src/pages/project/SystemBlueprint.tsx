@@ -358,8 +358,19 @@ function generateCoryPlan(components: SystemComponent[], _systemLayers: { backen
 
 function transformCapabilities(bps: any[]): SystemComponent[] {
   return bps
-    // Hide archived BPs from the Blueprint view — same rule as SystemViewV2.
-    .filter((bp: any) => (bp.applicability_status || 'active') === 'active' && bp.user_status !== 'archived')
+    // Hide archived BPs entirely. Undefined Page BPs (auto-discovered, not yet
+    // mapped) are also dropped from the Blueprint pool so Cory doesn't
+    // recommend "Build <unknown page>" — the user has to define them first.
+    // V2 surfaces them in a dedicated banner; on Blueprint they're simply
+    // hidden until mapped.
+    .filter((bp: any) => {
+      if ((bp.applicability_status || 'active') !== 'active') return false;
+      if (bp.user_status === 'archived') return false;
+      const isPage = bp.source === 'frontend_page' || bp.is_page_bp === true;
+      const isUserDefined = !!bp.ui_element_map?.user_defined_at;
+      if (isPage && !isUserDefined) return false;
+      return true;
+    })
     .map((bp: any) => {
       const coverage = bp.metrics?.requirements_coverage || 0;
       const readiness = bp.metrics?.system_readiness || 0;
