@@ -82,6 +82,34 @@ export async function createFeedback(input: CreateFeedbackInput): Promise<{ item
 }
 
 /**
+ * Bulk-resolve every UIElementFeedback row that's currently in_progress for
+ * a capability. Used by the validate-build flow: when the user pastes a
+ * successful Claude Code response, anything they were actively fixing
+ * graduates to resolved. Returns the resolved IDs grouped by source_step
+ * so the caller can stamp ui_element_map.steps[*].last_resolved_at.
+ */
+export async function bulkResolveInProgress(
+  capabilityId: string,
+  resolvedBy?: string,
+): Promise<{ resolved: number; bySourceStep: Record<string, number> }> {
+  const items = await UIElementFeedback.findAll({
+    where: { capability_id: capabilityId, status: 'in_progress' },
+  });
+  if (items.length === 0) return { resolved: 0, bySourceStep: {} };
+  const now = new Date();
+  const bySourceStep: Record<string, number> = {};
+  await Promise.all(items.map(async (it: any) => {
+    it.status = 'resolved';
+    it.resolved_at = now;
+    if (resolvedBy) it.resolved_by = resolvedBy;
+    await it.save();
+    const step = it.source_step || 'untagged';
+    bySourceStep[step] = (bySourceStep[step] || 0) + 1;
+  }));
+  return { resolved: items.length, bySourceStep };
+}
+
+/**
  * Get all feedback for a capability, optionally filtered.
  */
 export async function getFeedback(capabilityId: string, options?: {

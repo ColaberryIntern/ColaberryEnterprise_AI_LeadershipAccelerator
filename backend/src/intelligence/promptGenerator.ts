@@ -8,7 +8,7 @@
 import Capability from '../models/Capability';
 import { analyzeProcessEvolution } from './agentEvolutionEngine';
 
-export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation' | 'add_database' | 'improve_reliability' | 'verify_requirements' | 'optimize_performance' | 'ui_fix' | 'ui_advisor_step';
+export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation' | 'add_database' | 'improve_reliability' | 'verify_requirements' | 'optimize_performance' | 'ui_fix' | 'ui_fix_bulk' | 'ui_advisor_step';
 
 export interface GeneratedPrompt {
   target: PromptTarget;
@@ -200,6 +200,31 @@ export async function generateImprovementPrompt(
         title: `Run the UI Advisor on ${process.name}`,
         prompt_text: `This recommendation is run inside the portal, not in Claude Code. Open the UI tab on "${process.name}"${stepKey ? ` and run the "${stepKey.replace(/_/g, ' ')}" step` : ''}; the analyzer surfaces concrete issues you can Fix one-by-one.`,
         estimated_complexity: 'small' as const,
+        affected_files: [],
+      };
+    },
+
+    ui_fix_bulk: () => {
+      // Multi-issue prompt — one Claude Code session covers every open
+      // issue from a UI Advisor run. Used by the "Generate prompt for
+      // these N issues" CTA on the UI tab. Same scope rules as ui_fix
+      // (don't redesign the page, smallest change per issue) but
+      // bundled so the user runs one prompt instead of N.
+      const issues = (extraContext?.uiIssues || []) as any[];
+      const stepKey = (extraContext?.stepKey || '') as string;
+      const stepLabel = stepKey ? stepKey.replace(/_/g, ' ') : 'UI improvements';
+      const pageRoute = (process as any).frontend_route || '';
+      const issuesSection = issues.map((i: any, idx: number) => {
+        const sev = i.severity || 'medium';
+        const elem = i.element_id ? ` [${i.element_id}]` : '';
+        const sugg = i.suggestion ? `\n   Suggested: ${i.suggestion}` : '';
+        return `${idx + 1}. **${i.title}** (${sev})${elem}\n   ${i.description || ''}${sugg}`;
+      }).join('\n\n');
+      return {
+        target: 'ui_fix_bulk' as PromptTarget,
+        title: `Fix ${issues.length} ${stepLabel} issue${issues.length === 1 ? '' : 's'} on ${process.name}`,
+        prompt_text: `${preamble}${project}${codebase}# OBJECTIVE\n\nFix the ${issues.length} ${stepLabel} issue${issues.length === 1 ? '' : 's'} listed below on the "${process.name}" page${pageRoute ? ` (${pageRoute})` : ''}.\n\n# SCOPE\n\nDo NOT redesign the page. Make the smallest change per issue that resolves it. Preserve all other behavior.\n\n# THE ISSUES\n\n${issuesSection}\n\n# WHAT TO DO\n\n1. Locate the page component for "${process.name}" in the frontend tree.\n2. For each issue, apply the smallest change that resolves it.\n3. Match existing component patterns and design tokens already in use.\n4. Run any tests that touch this page.${constraints}${validation}`,
+        estimated_complexity: 'medium' as const,
         affected_files: [],
       };
     },

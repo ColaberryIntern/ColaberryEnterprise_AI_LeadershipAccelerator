@@ -907,6 +907,50 @@ function SystemViewV2Inner() {
     }
   }, [buildResult]);
 
+  // Track the latest UI Advisor run timestamp. Used to (a) auto-expand the
+  // step row that just finished so the issues are visible without
+  // chevron-hunting, and (b) surface a transient "Analysis complete" inline
+  // message at the top of the Step Status section.
+  const [lastUIRun, setLastUIRun] = useState<{ stepKey: string; ranAt: number } | null>(null);
+  useEffect(() => {
+    const steps = compDetail?.ui_element_map?.steps;
+    if (!steps) return;
+    let latestKey: string | null = null;
+    let latestMs = 0;
+    for (const key of Object.keys(steps)) {
+      const ra = steps[key]?.run_at;
+      if (!ra) continue;
+      const ms = new Date(ra).getTime();
+      if (ms > latestMs) { latestMs = ms; latestKey = key; }
+    }
+    if (!latestKey) return;
+    // Only auto-expand for runs that happened in the last 90 seconds — older
+    // runs are just history and shouldn't override the user's chosen
+    // collapse state when they navigate back to the tab later.
+    const fresh = Date.now() - latestMs < 90_000;
+    if (fresh) {
+      setExpandedUIStep(latestKey);
+      setLastUIRun({ stepKey: latestKey, ranAt: latestMs });
+    } else {
+      // First-load case: pick the step with the most open issues so the
+      // user sees the work pending instead of a clean-looking row.
+      if (expandedUIStep === null && uiFeedback?.items?.length) {
+        const counts: Record<string, number> = {};
+        for (const f of uiFeedback.items as any[]) {
+          if (f.status === 'dismissed' || f.status === 'resolved') continue;
+          if (!f.source_step) continue;
+          counts[f.source_step] = (counts[f.source_step] || 0) + 1;
+        }
+        let topKey: string | null = null;
+        let topCount = 0;
+        for (const k of Object.keys(counts)) {
+          if (counts[k] > topCount) { topCount = counts[k]; topKey = k; }
+        }
+        if (topKey) setExpandedUIStep(topKey);
+      }
+    }
+  }, [compDetail, uiFeedback]);
+
   // Lazy-fetch UI feedback when a BP detail loads, so the Detected Issues
   // panel shows previously generated issues without forcing the user to
   // re-run analysis. Skipped when the BP has no route AND no prior step
@@ -1198,6 +1242,16 @@ function SystemViewV2Inner() {
     try {
       const res = await portalApi.post(`/api/portal/project/business-processes/${compId}/validation-report`, { reportText: buildReport.trim() });
       setBuildResult(res.data);
+      // Successful validation closes the loop on any UIElementFeedback rows
+      // the user marked in_progress (via Fix or "Generate prompt for these
+      // N issues"). The contract: "if your validation passed, the issues
+      // you were fixing are resolved." Step rows then flip from amber
+      // (work pending) to green (all resolved) automatically.
+      try { await bpApi.bulkResolveFeedback(compId); } catch {}
+      try {
+        const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
+        setUiFeedback(fbRes.data);
+      } catch {}
       await loadData();
       try {
         const detailRes = await portalApi.get(`/api/portal/project/business-processes/${compId}`);
@@ -1372,6 +1426,49 @@ function SystemViewV2Inner() {
       const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
       setUiFeedback(fbRes.data);
     } catch { /* non-critical */ }
+  };
+
+  // Generate one combined Claude Code prompt covering every open issue for
+  // a UI Advisor step. Replaces the "click Fix on each issue one at a time"
+  // grind with a single click. All affected issues flip to in_progress;
+  // the Build tab opens with the prompt + paste-validation textarea ready.
+  const handleFixAllStepIssues = async (compId: string, stepKey: string, issues: any[]) => {
+    if (!issues || issues.length === 0) return;
+    setBuildGenerating(true);
+    setBuildPrompt(null);
+    setBuildResult(null);
+    setActiveTicketId(null);
+    setActiveTicketNumber(null);
+    setTicketWarning(null);
+    try {
+      // Mark each issue in_progress (best-effort)
+      await Promise.all(
+        issues.map(i =>
+          portalApi.put(`/api/portal/project/element-feedback/${i.id}`, { status: 'in_progress' }).catch(() => null),
+        ),
+      );
+      const res = await portalApi.post(`/api/portal/project/business-processes/${compId}/prompt`, {
+        target: 'ui_fix_bulk',
+        stepKey,
+        uiIssues: issues.map(i => ({
+          id: i.id,
+          title: i.title,
+          description: i.description,
+          suggestion: i.suggestion,
+          severity: i.severity,
+          element_id: i.element_id,
+        })),
+      });
+      const text = res.data?.prompt_text || '';
+      setBuildPrompt(text);
+      try { await navigator.clipboard.writeText(text); } catch {}
+      setWorkTab('build');
+      // Refresh feedback so In Progress badges show on the issues
+      try {
+        const fbRes = await portalApi.get(`/api/portal/project/business-processes/${compId}/element-feedback`);
+        setUiFeedback(fbRes.data);
+      } catch {}
+    } catch {} finally { setBuildGenerating(false); }
   };
 
   // Cory suggestions (deterministic)
@@ -2949,6 +3046,24 @@ function SystemViewV2Inner() {
                       <div className="mb-2" style={{ fontSize: 12, color: '#64748b' }}>
                         <i className="bi bi-list-ol me-1" style={{ fontSize: 11 }}></i>Step status
                       </div>
+                      {/* Transient post-run message — tells the user what just
+                          happened ("Analysis complete · 6 issues found") for
+                          ~30 seconds after a run. Closes the gap between
+                          clicking Run Analysis and seeing a green check on
+                          the step row, which previously felt silent. */}
+                      {lastUIRun && Date.now() - lastUIRun.ranAt < 30_000 && (() => {
+                        const stepLabel = (uiActions.find(x => x.key === lastUIRun.stepKey)?.title) || 'UI Advisor';
+                        const stepIssuesNow = (issuesByStep[lastUIRun.stepKey] || []).filter((f: any) => f.status !== 'in_progress').length;
+                        return (
+                          <div className="mb-2 p-2 d-flex align-items-center gap-2" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 11 }}>
+                            <i className="bi bi-check-circle-fill" style={{ color: '#3b82f6' }}></i>
+                            <span style={{ color: '#1e40af' }}>
+                              <strong>Analysis complete</strong> · "{stepLabel}" found {stepIssuesNow} open issue{stepIssuesNow === 1 ? '' : 's'}.
+                              {stepIssuesNow > 0 && ' Fix them one at a time below or click "Generate prompt for these N" to bundle into one Claude Code session.'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       {uiActions.map((a) => {
                         const numericIdx = uiActions.findIndex(u => u.key === a.key);
                         const ran = isRun(a.key);
@@ -2956,17 +3071,44 @@ function SystemViewV2Inner() {
                         const stepIssues = issuesByStep[a.key] || [];
                         const issueCount = stepIssues.length;
                         const expanded = expandedUIStep === a.key;
+                        // Three visual states: not-run (gray), ran-with-open-
+                        // issues (amber — work pending), ran-all-resolved
+                        // (green check — actually done). The user kept reading
+                        // the green check on a step with 6 open issues as
+                        // "complete" — wrong icon for the state.
+                        const ranWithOpen = ran && issueCount > 0;
+                        const ranAllResolved = ran && issueCount === 0;
+                        const rowBg = ranAllResolved ? '#f0fdf4' : ranWithOpen ? '#fffbeb' : 'var(--color-bg-alt)';
+                        const rowBorder = ranAllResolved ? '1px solid #10b98130' : ranWithOpen ? '1px solid #fde68a' : '1px solid var(--color-border)';
+                        const iconBg = ranAllResolved ? '#10b981' : ranWithOpen ? '#f59e0b' : '#10b98120';
+                        const iconColor = ran ? '#fff' : '#059669';
+                        const iconClass = ranAllResolved ? 'bi-check-lg' : ranWithOpen ? 'bi-search-heart' : '';
                         return (
-                          <div key={a.key} className="mb-1" style={{ background: ran ? '#f0fdf4' : 'var(--color-bg-alt)', borderRadius: 6, border: ran ? '1px solid #10b98130' : '1px solid var(--color-border)' }}>
+                          <div key={a.key} className="mb-1" style={{ background: rowBg, borderRadius: 6, border: rowBorder }}>
                             <div className="d-flex align-items-start gap-2 p-2">
-                              <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: ran ? '#10b981' : '#10b98120', color: ran ? '#fff' : '#059669', fontSize: 9, flexShrink: 0, marginTop: 1 }}>
-                                {ran ? <i className="bi bi-check-lg" style={{ fontSize: 10 }}></i> : numericIdx + 1}
+                              <span className="badge rounded-circle d-flex align-items-center justify-content-center" style={{ width: 18, height: 18, background: iconBg, color: iconColor, fontSize: 9, flexShrink: 0, marginTop: 1 }}>
+                                {ran ? <i className={`bi ${iconClass}`} style={{ fontSize: 10 }}></i> : numericIdx + 1}
                               </span>
                               <div className="flex-grow-1">
                                 <div className="fw-medium" style={{ fontSize: 11 }}>{a.title}</div>
                                 <div className="text-muted" style={{ fontSize: 9 }}>
-                                  {ran && meta?.run_at ? `Last run ${relTime(meta.run_at)} · ${issueCount} issue${issueCount === 1 ? '' : 's'} open${(meta.issues_found || 0) !== issueCount ? ` · ${meta.issues_found} found this run` : ''}` : a.explanation}
+                                  {ranAllResolved && meta?.run_at && `Last run ${relTime(meta.run_at)} · all issues resolved`}
+                                  {ranWithOpen && meta?.run_at && (
+                                    <>Last run {relTime(meta.run_at)} · <strong style={{ color: '#92400e' }}>{issueCount} issue{issueCount === 1 ? '' : 's'} to fix</strong>{(meta.issues_found || 0) !== issueCount ? ` (${meta.issues_found} found this run)` : ''}</>
+                                  )}
+                                  {!ran && a.explanation}
                                 </div>
+                                {/* Transient "✓ X resolved from last build" — only
+                                    when the bulk-resolve happened in the last 2 min.
+                                    Tells the user their last validation did something
+                                    visible here, even though they may have switched
+                                    away mid-flow. */}
+                                {(meta as any)?.last_resolved_at && Date.now() - new Date((meta as any).last_resolved_at).getTime() < 120_000 && (
+                                  <div style={{ fontSize: 9, color: '#059669', marginTop: 2 }}>
+                                    <i className="bi bi-check-circle-fill me-1"></i>
+                                    {(meta as any).last_resolved_count || 0} issue{((meta as any).last_resolved_count || 0) === 1 ? '' : 's'} resolved from your last build
+                                  </div>
+                                )}
                               </div>
                               <div className="d-flex align-items-center gap-1" style={{ flexShrink: 0 }}>
                                 {ran && issueCount > 0 && (
@@ -2988,6 +3130,27 @@ function SystemViewV2Inner() {
                             </div>
                             {expanded && issueCount > 0 && (
                               <div className="px-3 pb-2" style={{ borderTop: '1px solid var(--color-border)' }}>
+                                {/* Bulk-fix CTA — generates one Claude Code prompt
+                                    covering every open issue for this step and
+                                    drops the user on the Build tab to validate.
+                                    Per-issue Fix buttons stay below for users who
+                                    want to fix one at a time. */}
+                                {(() => {
+                                  const openIssues = stepIssues.filter((f: any) => f.status !== 'in_progress');
+                                  if (openIssues.length === 0) return null;
+                                  return (
+                                    <div className="d-flex align-items-center justify-content-between gap-2 py-2 mb-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                      <div className="text-muted" style={{ fontSize: 10 }}>
+                                        Generate one prompt that covers all {openIssues.length} open issue{openIssues.length === 1 ? '' : 's'} below. Paste the response in Build to mark them resolved.
+                                      </div>
+                                      <button className="btn btn-sm btn-primary" style={{ fontSize: 10, fontWeight: 600 }}
+                                        disabled={buildGenerating}
+                                        onClick={() => handleFixAllStepIssues(selectedComponent.id, a.key, openIssues)}>
+                                        <i className="bi bi-stars me-1"></i>Generate prompt for these {openIssues.length}
+                                      </button>
+                                    </div>
+                                  );
+                                })()}
                                 {stepIssues.slice(0, showAllIssues ? stepIssues.length : 5).map(renderIssue)}
                                 {stepIssues.length > 5 && (
                                   <button className="btn btn-link btn-sm p-0" style={{ fontSize: 10 }} onClick={() => setShowAllIssues(!showAllIssues)}>

@@ -2764,7 +2764,7 @@ router.post('/api/portal/project/business-processes/:id/evaluate', requirePartic
 
 router.post('/api/portal/project/business-processes/:id/prompt', requireParticipant, async (req: Request, res: Response) => {
   try {
-    const { target, uiIssue } = req.body;
+    const { target, uiIssue, uiIssues, stepKey } = req.body;
     if (!target) { res.status(400).json({ error: 'target required' }); return; }
     const project = await getParticipantProject(req.participant!.sub);
     if (!project) { res.status(404).json({ error: 'No project found' }); return; }
@@ -2776,6 +2776,8 @@ router.post('/api/portal/project/business-processes/:id/prompt', requireParticip
     let extraContext: any = undefined;
     if (target === 'ui_fix') {
       extraContext = { uiIssue: uiIssue || {} };
+    } else if (target === 'ui_fix_bulk') {
+      extraContext = { uiIssues: uiIssues || [], stepKey: stepKey || '' };
     } else if (target === 'requirement_implementation') {
       // Fetch ALL requirements for this process — not just DB "unmatched" status.
       // Reason: process-level matching may have set status='matched' in DB,
@@ -4464,6 +4466,36 @@ router.put('/api/portal/project/business-processes/:id/ui-step-status', requireP
     (cap as any).changed('ui_element_map', true);
     await cap.save();
     res.json({ id: cap.id, steps });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// Bulk-resolve: flips every in_progress UIElementFeedback for a BP to
+// resolved and stamps ui_element_map.steps[*].last_resolved_at so the
+// frontend can surface a transient "X issues resolved from your last build"
+// indicator on the affected step rows. Called from the validate-build
+// flow on successful validation — the contract is "if you marked issues
+// in_progress and your validation passed, those issues are fixed."
+router.put('/api/portal/project/business-processes/:id/element-feedback/bulk-resolve', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
+    if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
+    const { bulkResolveInProgress } = await import('../services/uiFeedbackStore');
+    const out = await bulkResolveInProgress(cap.id, req.participant!.sub);
+    if (out.resolved > 0) {
+      const map = ((cap as any).ui_element_map || {}) as any;
+      const steps = map.steps || {};
+      const nowIso = new Date().toISOString();
+      for (const stepKey of Object.keys(out.bySourceStep)) {
+        if (stepKey === 'untagged') continue;
+        if (!steps[stepKey]) steps[stepKey] = {};
+        steps[stepKey].last_resolved_at = nowIso;
+        steps[stepKey].last_resolved_count = out.bySourceStep[stepKey];
+      }
+      (cap as any).ui_element_map = { ...map, steps };
+      (cap as any).changed('ui_element_map', true);
+      await cap.save();
+    }
+    res.json({ resolved: out.resolved, bySourceStep: out.bySourceStep });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

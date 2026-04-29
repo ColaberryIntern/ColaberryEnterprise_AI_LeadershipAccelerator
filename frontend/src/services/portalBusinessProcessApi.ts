@@ -29,3 +29,5 @@ export const generateCombinedPrompt = (id: string, payload: { execution_steps: s
 export const getExecutionIntelligence = () => portalApi.get('/api/portal/project/execution-intelligence');
 export const getSystemPromptDraft = () => portalApi.get('/api/portal/project/system-prompt/draft');
 export const saveSystemPrompt = (system_prompt: string) => portalApi.put('/api/portal/project/system-prompt', { system_prompt });
+export const bulkResolveFeedback = (id: string) =>
+  portalApi.put(`/api/portal/project/business-processes/${id}/element-feedback/bulk-resolve`, {});
