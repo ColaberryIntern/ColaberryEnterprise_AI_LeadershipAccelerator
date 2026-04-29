@@ -397,8 +397,21 @@ function isUserResolved(enriched: any): boolean {
   return status === 'verified' || status === 'archived';
 }
 
+/**
+ * applicability_status === 'inactive' means the BP no longer applies to
+ * this project (e.g. a stock template BP that doesn't fit — like a "Login"
+ * page on a project with no auth). The frontend BP grid hides these via
+ * transformBPs; the orchestrator must too, otherwise a hidden BP can
+ * surface as Cory's Next Step ("Improve page layout — Login" on a project
+ * with no Login page).
+ */
+function isInactive(enriched: any): boolean {
+  const s = enriched?.applicability_status;
+  return s && s !== 'active';
+}
+
 export function getTopTasks(enriched: any, projectMode: string): CoryTask[] {
-  if (isSyntheticBucket(enriched) || isUserResolved(enriched)) return [];
+  if (isSyntheticBucket(enriched) || isUserResolved(enriched) || isInactive(enriched)) return [];
   const state = getSystemState(enriched, projectMode);
 
   // Step 1: Gather all tasks from adapters
@@ -460,8 +473,10 @@ export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: str
   const allTasks: CoryTask[] = [];
 
   for (const enriched of enrichedCapabilities) {
-    // Skip the synthetic Uncategorized bucket and any BP the user has resolved.
-    if (isSyntheticBucket(enriched) || isUserResolved(enriched)) continue;
+    // Skip the synthetic Uncategorized bucket, any BP the user has resolved,
+    // and any BP marked inactive (so hidden-from-grid BPs can't surface as
+    // Cory's Next Step).
+    if (isSyntheticBucket(enriched) || isUserResolved(enriched) || isInactive(enriched)) continue;
     // Skip complete components
     const coverage = enriched.metrics?.requirements_coverage || 0;
     const readiness = enriched.metrics?.system_readiness || 0;
