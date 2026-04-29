@@ -874,12 +874,25 @@ function SystemViewV2Inner() {
     frontend: components.some(c => c.layers.frontend === 'ready' || c.layers.frontend === 'partial'),
     agents: components.some(c => c.layers.agent === 'ready' || c.layers.agent === 'partial'),
   };
+  // Filter chip semantics — each chip narrows by what kind of BP it is or
+  // its actual completion percentage, not by the project-level layer
+  // heuristics (which fire 'ready' for most BPs because the repo has a
+  // backend, and made every filter except Agents look identical to All).
+  // Backend / Frontend / Agents are name-keyword matched, mirroring the
+  // same regexes the grouping engine already uses, so the filter view
+  // and the group view stay coherent. Progress filters use the real
+  // completion percentage (matching the BP card's "% complete") rather
+  // than the auto-derived `status` flag.
+  const lc = (c: { name: string }) => c.name.toLowerCase();
   const filteredComponents = mapFilter === 'all' ? visibleComponents
-    : mapFilter === 'backend' ? visibleComponents.filter(c => c.layers.backend === 'ready' || c.layers.backend === 'partial')
-    : mapFilter === 'frontend' ? visibleComponents.filter(c => c.layers.frontend === 'ready' || c.layers.frontend === 'partial' || c.isPageBP)
-    : mapFilter === 'agents' ? visibleComponents.filter(c => c.layers.agent === 'ready')
-    : mapFilter === 'incomplete' ? visibleComponents.filter(c => c.status !== 'complete')
-    : mapFilter === 'complete' ? visibleComponents.filter(c => c.status === 'complete')
+    : mapFilter === 'backend' ? visibleComponents.filter(c =>
+        !c.isPageBP && (FOUNDATION_KEYWORDS.test(lc(c)) || (c.layers.backend === 'ready' && !INTELLIGENCE_KEYWORDS.test(lc(c)) && !USABILITY_KEYWORDS.test(lc(c)))))
+    : mapFilter === 'frontend' ? visibleComponents.filter(c =>
+        c.isPageBP || USABILITY_KEYWORDS.test(lc(c)) || (c.layers.frontend === 'ready' && !FOUNDATION_KEYWORDS.test(lc(c)) && !INTELLIGENCE_KEYWORDS.test(lc(c))))
+    : mapFilter === 'agents' ? visibleComponents.filter(c =>
+        INTELLIGENCE_KEYWORDS.test(lc(c)) || c.layers.agent === 'ready' || c.layers.agent === 'partial')
+    : mapFilter === 'incomplete' ? visibleComponents.filter(c => (c.completion || 0) < 100)
+    : mapFilter === 'complete' ? visibleComponents.filter(c => (c.completion || 0) >= 100)
     : visibleComponents;
   const groups = groupMode === 'business' ? groupByBusinessDomain(filteredComponents) : groupComponents(filteredComponents);
   const nextIds = getNextComponents(visibleComponents);
