@@ -824,29 +824,12 @@ function SystemViewV2Inner() {
     }
   }, [urlComponentId, urlTab]);
 
-  // Auto-run a UI Advisor step when arriving via deep-link
-  // (?tab=ui&autorun=<step_key>). Used by Blueprint's "Run UI Advisor"
-  // button: the user clicks on Blueprint, lands on this page's UI tab,
-  // and the analyzer fires immediately for the specific step. Fires once
-  // — the autorunFiredRef guards re-runs on re-renders.
+  // autorun is read here so the effect (defined further down, after
+  // handleUIAnalyze) doesn't forward-reference the const arrow function —
+  // some production minifiers (Terser) misorder that pattern and throw
+  // TDZ at runtime. The actual effect lives near handleUIAnalyze.
   const autorunStepKey = searchParams.get('autorun');
   const autorunFiredRef = useRef(false);
-  useEffect(() => {
-    if (!autorunStepKey) return;
-    if (autorunFiredRef.current) return;
-    if (!compDetail || !selectedId) return;
-    if (compDetail.id !== selectedId) return;
-    const VALID = ['layout_hierarchy', 'usability', 'mobile_responsiveness'];
-    if (!VALID.includes(autorunStepKey)) return;
-    autorunFiredRef.current = true;
-    setWorkTab('ui');
-    const FEEDBACK: Record<string, string> = {
-      layout_hierarchy: 'Improve the page layout, spacing, and visual hierarchy',
-      usability: 'Find and fix usability issues and broken interactions',
-      mobile_responsiveness: 'Make the layout responsive for mobile and tablet',
-    };
-    handleUIAnalyze(selectedId, FEEDBACK[autorunStepKey] || '', autorunStepKey as any);
-  }, [autorunStepKey, compDetail, selectedId]);
 
   // Fetch detail + reset work area when component changes
   useEffect(() => {
@@ -1372,6 +1355,29 @@ function SystemViewV2Inner() {
       } catch {}
     } catch {} finally { setUiAnalyzing(false); }
   };
+
+  // Auto-run a UI Advisor step when arriving via deep-link
+  // (?tab=ui&autorun=<step_key>). Used by Blueprint's "Run UI Advisor"
+  // button: the user clicks on Blueprint, lands on this page's UI tab,
+  // and the analyzer fires immediately for the specific step. Declared
+  // *after* handleUIAnalyze so Terser doesn't forward-reference and
+  // produce a TDZ in the production bundle.
+  useEffect(() => {
+    if (!autorunStepKey) return;
+    if (autorunFiredRef.current) return;
+    if (!compDetail || !selectedId) return;
+    if (compDetail.id !== selectedId) return;
+    const VALID = ['layout_hierarchy', 'usability', 'mobile_responsiveness'];
+    if (!VALID.includes(autorunStepKey)) return;
+    autorunFiredRef.current = true;
+    setWorkTab('ui');
+    const FEEDBACK: Record<string, string> = {
+      layout_hierarchy: 'Improve the page layout, spacing, and visual hierarchy',
+      usability: 'Find and fix usability issues and broken interactions',
+      mobile_responsiveness: 'Make the layout responsive for mobile and tablet',
+    };
+    handleUIAnalyze(selectedId, FEEDBACK[autorunStepKey] || '', autorunStepKey as any);
+  }, [autorunStepKey, compDetail, selectedId]);
 
   // Per-issue Fix: mark in_progress, generate a focused prompt, drop user
   // into Build tab so they can paste into Claude Code. Single-issue scope —
