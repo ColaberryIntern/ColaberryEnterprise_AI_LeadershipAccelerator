@@ -2196,13 +2196,22 @@ function SystemViewV2Inner() {
                       {buildResult && !buildResult.error && (() => {
                         const remainingSteps = (compDetail?.execution_plan || []).filter((s: any) => (!s.status || s.status === 'pending') && !s.blocked);
                         const hasMoreInThisBP = remainingSteps.length > 0;
-                        const nextComp = visibleComponents.find(c => c.status !== 'complete' && c.id !== selectedComponent.id && c.completion < 80);
+                        // Find the next BP the user should work on. Filter on the
+                        // canonical "real progress" signals — userStatus and
+                        // completion — rather than the heuristic `status` flag,
+                        // which auto-flags Page BPs at 0% as complete and would
+                        // hide the Next BP button on most Page BP builds.
+                        const nextComp = visibleComponents.find(c =>
+                          c.id !== selectedComponent.id
+                          && c.userStatus !== 'verified'
+                          && c.userStatus !== 'archived'
+                          && (c.completion || 0) < 100,
+                        );
                         const filesCreated = buildResult.parsed?.filesCreated?.length || 0;
                         const filesModified = buildResult.parsed?.filesModified?.length || 0;
                         const routesAdded = buildResult.parsed?.routes?.length || 0;
                         const dbChanges = buildResult.parsed?.database?.length || 0;
                         const totalArtifacts = filesCreated + filesModified + routesAdded + dbChanges;
-                        const isPageBPSelected = selectedComponent.isPageBP;
                         return (
                         <div ref={validatedPanelRef} className="p-3" style={{ background: '#10b98115', borderRadius: 8, border: '1px solid #10b98130' }}>
                           {/* Headline + verification count — top-left, always visible */}
@@ -2259,22 +2268,13 @@ function SystemViewV2Inner() {
                             </button>
                           </div>
 
-                          {/* Page BP nudge: visual review is the right gate before
-                              clicking Verified, since requirements coverage for a
-                              page is the 5-category check, not file presence. */}
-                          {isPageBPSelected && (
-                            <div className="mb-3 p-2" style={{ background: '#eff6ff', borderRadius: 6, fontSize: 11, color: '#1d4ed8' }}>
-                              <i className="bi bi-info-circle me-1"></i>
-                              This is a Page BP. Walk through the 5 visual categories on the <button className="btn btn-link p-0 align-baseline" style={{ fontSize: 11 }} onClick={() => navigate(`/portal/project/business-processes/${selectedComponent.id}`)}>BP detail page</button> before marking verified.
-                            </div>
-                          )}
-
-                          {/* File list collapsed by default so the action row stays
-                              above the fold. The audit trail is one click away. */}
+                          {/* File list expanded by default — same flow as a regular
+                              BP build. The audit trail is the first thing the user
+                              wants to see after a successful validation. */}
                           {totalArtifacts > 0 && (
-                            <details>
+                            <details open>
                               <summary style={{ cursor: 'pointer', fontSize: 11, color: '#64748b' }}>
-                                <i className="bi bi-list-ul me-1"></i>View what changed ({totalArtifacts} {totalArtifacts === 1 ? 'item' : 'items'})
+                                <i className="bi bi-list-ul me-1"></i>What changed ({totalArtifacts} {totalArtifacts === 1 ? 'item' : 'items'})
                               </summary>
                               <div className="mt-2">
                                 {buildResult.parsed?.filesCreated?.length > 0 && (
