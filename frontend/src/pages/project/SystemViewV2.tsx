@@ -3548,6 +3548,11 @@ function SystemViewV2Inner() {
                             // we still let the user proceed; the localStorage
                             // attachment cache below will hold the choice.
                             await portalApi.put(`/api/portal/project/business-processes/${defineModal.discoveredComp.id}/connect-page`, { route: trimmedUrl }).catch(() => { /* best-effort */ });
+                            // Refresh so the "X pages aren't yet mapped" banner
+                            // drops the page we just defined. The backend
+                            // stamped user_defined_at, so the next loadData
+                            // call recomputes pendingDefinitionPages without it.
+                            await loadData().catch(() => {});
                           } finally {
                             setDefineSaving(false);
                             setDefineStep('action');
@@ -3617,7 +3622,7 @@ function SystemViewV2Inner() {
                     <i className="bi bi-check-circle-fill d-block mb-2" style={{ fontSize: 28, color: '#10b981' }}></i>
                     <p className="fw-semibold mb-1" style={{ fontSize: 13 }}>Component defined</p>
                     <p className="text-muted mb-3" style={{ fontSize: 11 }}>The page has been mapped to your system.</p>
-                    <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { setDefineModal(null); setSelectedId(null); }}>Close</button>
+                    <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={() => { window.location.reload(); }}>Close</button>
                   </div>
                 )}
               </div>
