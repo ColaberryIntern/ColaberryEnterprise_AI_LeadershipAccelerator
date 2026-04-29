@@ -8,7 +8,7 @@
 import Capability from '../models/Capability';
 import { analyzeProcessEvolution } from './agentEvolutionEngine';
 
-export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation' | 'add_database' | 'improve_reliability' | 'verify_requirements' | 'optimize_performance' | 'ui_fix';
+export type PromptTarget = 'backend_improvement' | 'frontend_exposure' | 'agent_enhancement' | 'hitl_adjustment' | 'autonomy_upgrade' | 'monitoring_gap' | 'requirement_implementation' | 'add_database' | 'improve_reliability' | 'verify_requirements' | 'optimize_performance' | 'ui_fix' | 'ui_advisor_step';
 
 export interface GeneratedPrompt {
   target: PromptTarget;
@@ -187,6 +187,22 @@ export async function generateImprovementPrompt(
       estimated_complexity: 'medium' as const,
       affected_files: [],
     }),
+
+    ui_advisor_step: () => {
+      // Safety net only — the frontend short-circuits this target to switch
+      // to the UI tab and call handleUIAnalyze for the specific step. If a
+      // caller bypasses the frontend (curl, agent script), they get a
+      // polite redirect message rather than a generic "build the UI" prompt
+      // that doesn't match what the recommendation label promised.
+      const stepKey = (extraContext?.uiStepKey || '') as string;
+      return {
+        target: 'ui_advisor_step' as PromptTarget,
+        title: `Run the UI Advisor on ${process.name}`,
+        prompt_text: `This recommendation is run inside the portal, not in Claude Code. Open the UI tab on "${process.name}"${stepKey ? ` and run the "${stepKey.replace(/_/g, ' ')}" step` : ''}; the analyzer surfaces concrete issues you can Fix one-by-one.`,
+        estimated_complexity: 'small' as const,
+        affected_files: [],
+      };
+    },
 
     ui_fix: () => {
       const issue = extraContext?.uiIssue || {};

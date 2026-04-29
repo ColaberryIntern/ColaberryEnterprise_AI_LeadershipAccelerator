@@ -2094,6 +2094,11 @@ interface EnhancementOption {
   gap_id?: string;
   gap_type?: string;
   suggested_agent?: any;
+  // For prompt_target='ui_advisor_step' — which UI Advisor step the
+  // recommendation targets. The frontend uses this to short-circuit the
+  // Run button to handleUIAnalyze on the UI tab instead of generating a
+  // generic Claude Code prompt.
+  ui_step_key?: 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
 }
 
 /**
@@ -2114,20 +2119,35 @@ function buildPageBPEnhancementPlan(
   const pageName = enriched.name || 'this page';
   const linkedAgents: string[] = enriched.linked_agents || [];
 
-  // 1. Visual capabilities — only when a UI step is still unrun
+  // 1. Visual capabilities — one item per unrun UI step. Mirrors the
+  // labels and step keys the orchestrator uses (getUITasks) and the UI
+  // tab uses (uiActions). Same wording across surfaces means the user
+  // sees identical recommendations on Blueprint, Overview, Build, and
+  // the UI tab itself — no more "Improve page layout" on Blueprint vs.
+  // "Run the UI Advisor" on the BP detail.
   const stepsRun = enriched.ui_element_map?.steps || {};
-  const UI_KEYS = ['layout_hierarchy', 'usability', 'mobile_responsiveness'];
-  const hasUnrunStep = UI_KEYS.some(k => !stepsRun[k]?.run_at);
-  if (hasUnrunStep) {
+  const UI_STEPS: Array<{
+    key: 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
+    title: string;
+    desc: string;
+    severity: number;
+  }> = [
+    { key: 'layout_hierarchy',     title: 'Improve page layout and hierarchy', desc: 'Analyze spacing, visual hierarchy, and component structure.', severity: 7 },
+    { key: 'usability',            title: 'Fix usability issues',              desc: 'Detect broken interactions, missing feedback, and accessibility gaps.', severity: 6 },
+    { key: 'mobile_responsiveness', title: 'Check mobile responsiveness',       desc: 'Ensure the UI works across all screen sizes and devices.', severity: 5 },
+  ];
+  for (const s of UI_STEPS) {
+    if (stepsRun[s.key]?.run_at) continue;
     out.push({
-      key: 'page-ui-advisor',
-      label: 'Run the UI Advisor',
-      description: `Let Cory analyze ${pageName} for layout, usability, and mobile responsiveness issues. Each step generates concrete fixes you can apply.`,
+      key: `page-ui-step-${s.key}`,
+      label: s.title,
+      description: `${s.desc} — ${pageName}. Click Run to open the UI tab and analyze the page.`,
       impact: '+visual quality, +accessibility',
-      prompt_target: 'frontend_exposure',
+      prompt_target: 'ui_advisor_step',
       category: 'frontend',
       source: 'system',
-      severity: 7,
+      severity: s.severity,
+      ui_step_key: s.key,
     });
   }
 

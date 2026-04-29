@@ -261,17 +261,30 @@ export function getUITasks(enriched: any, state: SystemState): CoryTask[] {
   const tasks: CoryTask[] = [];
   if (!state.frontend_exists) return tasks;
 
-  const uiActions: Array<{ id: string; title: string; desc: string; feedback: string; impact: number }> = [
-    { id: 'ui-layout', title: 'Improve page layout and hierarchy', desc: 'Analyze spacing, visual hierarchy, and component structure.', feedback: 'Improve the page layout, spacing, and visual hierarchy', impact: 60 },
-    { id: 'ui-ux', title: 'Fix usability issues', desc: 'Detect broken interactions, missing feedback, and accessibility gaps.', feedback: 'Find and fix usability issues and broken interactions', impact: 55 },
-    { id: 'ui-responsive', title: 'Check mobile responsiveness', desc: 'Ensure the UI works across all screen sizes and devices.', feedback: 'Make the layout responsive for mobile and tablet', impact: 45 },
+  const uiActions: Array<{
+    id: string;
+    stepKey: 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
+    title: string;
+    desc: string;
+    feedback: string;
+    impact: number;
+  }> = [
+    { id: 'ui-layout',     stepKey: 'layout_hierarchy',     title: 'Improve page layout and hierarchy', desc: 'Analyze spacing, visual hierarchy, and component structure.', feedback: 'Improve the page layout, spacing, and visual hierarchy', impact: 60 },
+    { id: 'ui-ux',         stepKey: 'usability',            title: 'Fix usability issues',              desc: 'Detect broken interactions, missing feedback, and accessibility gaps.', feedback: 'Find and fix usability issues and broken interactions', impact: 55 },
+    { id: 'ui-responsive', stepKey: 'mobile_responsiveness', title: 'Check mobile responsiveness',       desc: 'Ensure the UI works across all screen sizes and devices.', feedback: 'Make the layout responsive for mobile and tablet', impact: 45 },
   ];
 
+  // Skip steps the user has already run — `ui_element_map.steps[key].run_at`
+  // is stamped by the analyze-page endpoint. Without this, "Improve page
+  // layout and hierarchy" stays Top 1 forever even after analysis.
+  const stepsRun: Record<string, { run_at?: string }> = (enriched.ui_element_map?.steps) || {};
+
   for (const action of uiActions) {
+    if (stepsRun[action.stepKey]?.run_at) continue;
     tasks.push({
       id: action.id,
       title: action.title,
-      description: action.desc,
+      description: `${action.desc} Click Run to open the UI tab and analyze the page.`,
       source: 'ui',
       type: 'experience',
       impact: action.impact,
@@ -283,7 +296,8 @@ export function getUITasks(enriched: any, state: SystemState): CoryTask[] {
       system_layer: 'frontend',
       mode_relevance: { mvp: 40, production: 60, enterprise: 50, autonomous: 30 },
       color: '#10b981',
-      prompt_target: 'frontend_exposure',
+      prompt_target: 'ui_advisor_step',
+      ui_step_key: action.stepKey,
       component_id: enriched.id,
       decision_trace: makeTrace(
         `Frontend exists — UI quality can be improved. ${action.desc}`,

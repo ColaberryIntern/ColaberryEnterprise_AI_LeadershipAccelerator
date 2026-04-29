@@ -29,6 +29,10 @@ export interface CoryTask {
   prompt_target?: string;
   component_id?: string;
   priority?: number;    // computed by scoring engine
+  // Set when prompt_target='ui_advisor_step'. Names which UI Advisor step
+  // the task targets so the frontend can route a click to handleUIAnalyze
+  // for that specific step instead of generating a generic Claude Code prompt.
+  ui_step_key?: 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
   decision_trace: DecisionTrace;
 }
 

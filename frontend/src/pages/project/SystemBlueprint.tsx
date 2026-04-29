@@ -693,18 +693,26 @@ export default function SystemBlueprint() {
   // Build actions (real mode only)
   // ---------------------------------------------------------------------------
 
-  const handleGeneratePrompt = async (comp: SystemComponent) => {
+  const handleGeneratePrompt = async (comp: SystemComponent, opts?: { promptTarget?: string; uiStepKey?: string }) => {
     if (demoActive) return;
+    const target = opts?.promptTarget || comp.promptTarget;
+    // ui_advisor_step recommendations don't generate Claude Code prompts —
+    // they run the UI Advisor inside the portal. Deep-link to the BP's V2
+    // page with the autorun param so the analyzer fires on mount.
+    if (target === 'ui_advisor_step' && opts?.uiStepKey) {
+      navigate(`/portal/project/system-v2?componentId=${comp.id}&tab=ui&autorun=${opts.uiStepKey}`);
+      return;
+    }
     const beforeMetrics = { coverage: comp.completion, maturityLevel: comp.maturityLevel, readiness: comp.completion };
     setBuild(prev => ({ ...prev, phase: 'generating', prompt: null, validationResult: null, beforeMetrics, pasteDetected: false }));
     try {
-      let target = comp.promptTarget;
-      if (!target) {
+      let promptTarget = target;
+      if (!promptTarget) {
         const detail = await bpApi.getProcess(comp.id);
         const firstStep = (detail.data?.execution_plan || []).find((s: any) => !s.blocked);
-        target = firstStep?.prompt_target || 'backend_improvement';
+        promptTarget = firstStep?.prompt_target || 'backend_improvement';
       }
-      const res = await bpApi.generatePrompt(comp.id, target || 'backend_improvement');
+      const res = await bpApi.generatePrompt(comp.id, promptTarget || 'backend_improvement');
       const promptText = res.data?.prompt_text || '';
       await copyText(promptText);
       showToast('Prompt copied — paste into Claude Code');
@@ -1314,13 +1322,26 @@ export default function SystemBlueprint() {
 
             {/* PHASE: idle — action buttons */}
             {build.phase === 'idle' && (() => {
-              const primaryColor = recommended.promptTarget === 'agent_enhancement' ? '#8b5cf6' : recommended.promptTarget === 'frontend_exposure' ? '#10b981' : recommended.promptTarget === 'reliability_improvement' ? '#f59e0b' : '#3b82f6';
+              // Inherit the prompt_target / ui_step_key from the orchestrator's
+              // top task — that's what the user just read in the recommendation.
+              // Without this the button would fall back to recommended.promptTarget
+              // which is the BP's first execution_plan step, not the UI Advisor
+              // step the label promised.
+              const primaryTask = orchestratorTasks[0];
+              const primaryTarget = primaryTask?.prompt_target || recommended.promptTarget;
+              const primaryStepKey = primaryTask?.ui_step_key;
+              const isUIAdvisor = primaryTarget === 'ui_advisor_step';
+              const primaryColor = primaryTarget === 'agent_enhancement' ? '#8b5cf6' : primaryTarget === 'frontend_exposure' ? '#10b981' : primaryTarget === 'reliability_improvement' ? '#f59e0b' : isUIAdvisor ? '#10b981' : '#3b82f6';
+              const buttonComp = primaryTask?.component_id && primaryTask.component_id !== recommended.id
+                ? components.find(c => c.id === primaryTask.component_id) || recommended
+                : recommended;
               return (
               <div className="d-flex flex-wrap gap-2">
-                <button className="btn btn-sm" style={{ background: primaryColor, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(recommended)}>
-                  <i className="bi bi-terminal me-1"></i>Generate Build Prompt
+                <button className="btn btn-sm" style={{ background: primaryColor, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => handleGeneratePrompt(buttonComp, { promptTarget: primaryTarget, uiStepKey: primaryStepKey })}>
+                  <i className={`bi ${isUIAdvisor ? 'bi-magic' : 'bi-terminal'} me-1`}></i>
+                  {isUIAdvisor ? 'Run UI Advisor' : 'Generate Build Prompt'}
                 </button>
-                <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(recommended)}>
+                <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(buttonComp)}>
                   <i className="bi bi-book me-1"></i>Learn About This
                 </button>
               </div>

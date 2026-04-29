@@ -528,6 +528,10 @@ type EnhanceCardItem = {
   category?: string;
   severity: number;
   source: string;
+  // For prompt_target='ui_advisor_step' — the frontend Run handler reads
+  // this to switch to the UI tab and run the specific step instead of
+  // generating a Claude Code prompt.
+  uiStepKey?: 'layout_hierarchy' | 'usability' | 'mobile_responsiveness';
 };
 
 // Per-tab category routing. The backend's enhancement_plan items carry a
@@ -605,6 +609,7 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
     category: e.category,
     severity: e.severity || 0,
     source: e.source || 'system',
+    uiStepKey: e.ui_step_key,
   }));
 
   return {
@@ -818,6 +823,30 @@ function SystemViewV2Inner() {
       setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 200);
     }
   }, [urlComponentId, urlTab]);
+
+  // Auto-run a UI Advisor step when arriving via deep-link
+  // (?tab=ui&autorun=<step_key>). Used by Blueprint's "Run UI Advisor"
+  // button: the user clicks on Blueprint, lands on this page's UI tab,
+  // and the analyzer fires immediately for the specific step. Fires once
+  // — the autorunFiredRef guards re-runs on re-renders.
+  const autorunStepKey = searchParams.get('autorun');
+  const autorunFiredRef = useRef(false);
+  useEffect(() => {
+    if (!autorunStepKey) return;
+    if (autorunFiredRef.current) return;
+    if (!compDetail || !selectedId) return;
+    if (compDetail.id !== selectedId) return;
+    const VALID = ['layout_hierarchy', 'usability', 'mobile_responsiveness'];
+    if (!VALID.includes(autorunStepKey)) return;
+    autorunFiredRef.current = true;
+    setWorkTab('ui');
+    const FEEDBACK: Record<string, string> = {
+      layout_hierarchy: 'Improve the page layout, spacing, and visual hierarchy',
+      usability: 'Find and fix usability issues and broken interactions',
+      mobile_responsiveness: 'Make the layout responsive for mobile and tablet',
+    };
+    handleUIAnalyze(selectedId, FEEDBACK[autorunStepKey] || '', autorunStepKey as any);
+  }, [autorunStepKey, compDetail, selectedId]);
 
   // Fetch detail + reset work area when component changes
   useEffect(() => {
@@ -1092,6 +1121,30 @@ function SystemViewV2Inner() {
     if (t === 'agent_enhancement' || (c.layers.backend !== 'missing' && c.layers.frontend !== 'missing' && c.layers.agent === 'missing')) return 'This component works but lacks automation. Adding agents will allow it to operate independently.';
     if (c.completion < 50) return 'Core capabilities are incomplete. This step fills critical gaps in your system functionality.';
     return `Completing this step advances "${c.name}" toward production readiness.`;
+  };
+
+  // Single entry point for all "Run this recommendation" buttons. Routes
+  // ui_advisor_step items to the UI tab + handleUIAnalyze (so the click
+  // actually runs the analysis the label promised) and falls through to
+  // the prompt-generation flow for everything else. Keeps the Blueprint,
+  // Overview, Build, and Improve surfaces all calling the same handler.
+  const handleRunRecommendation = async (item: EnhanceCardItem) => {
+    if (!selectedComponent) return;
+    if (item.promptTarget === 'ui_advisor_step' && item.uiStepKey) {
+      setWorkTab('ui');
+      // Map step_key back to the analyzer's user_feedback string (matches
+      // uiActions in the UI tab) so the LLM augmentation gets the right
+      // hint when rule-based finds < 3 issues.
+      const FEEDBACK: Record<string, string> = {
+        layout_hierarchy: 'Improve the page layout, spacing, and visual hierarchy',
+        usability: 'Find and fix usability issues and broken interactions',
+        mobile_responsiveness: 'Make the layout responsive for mobile and tablet',
+      };
+      const feedback = FEEDBACK[item.uiStepKey] || item.explanation || '';
+      await handleUIAnalyze(selectedComponent.id, feedback, item.uiStepKey as any);
+      return;
+    }
+    handleGeneratePrompt({ ...selectedComponent, promptTarget: item.promptTarget });
   };
 
   // Build handlers
@@ -1781,7 +1834,7 @@ function SystemViewV2Inner() {
                       const enhanceCards = getEnhanceCards(compDetail);
 
                       const showsImprovements = enhanceCards.isEnhance || enhanceCards.isPolish;
-                      let tasks: Array<{ title: string; explanation: string; color: string; action?: string; source: string; blocked?: boolean; blockReason?: string; trace?: any }>;
+                      let tasks: Array<{ title: string; explanation: string; color: string; action?: string; uiStepKey?: string; source: string; blocked?: boolean; blockReason?: string; trace?: any }>;
                       let usingOrchestrator = false;
                       if (showsImprovements) {
                         tasks = enhanceCards.items.map(item => ({
@@ -1789,6 +1842,7 @@ function SystemViewV2Inner() {
                           explanation: item.explanation,
                           color: item.color,
                           action: item.promptTarget,
+                          uiStepKey: item.uiStepKey,
                           source: 'improve',
                           blocked: false,
                           blockReason: undefined,
@@ -1798,11 +1852,11 @@ function SystemViewV2Inner() {
                         tasks = [];
                       } else {
                         // Build mode — use orchestrator output if available, fall back to local suggestions
-                        const coryTasks: Array<{ id: string; title: string; description: string; source: string; color: string; prompt_target?: string; blocked?: boolean; block_reason?: string; priority?: number; decision_trace?: any }> = compDetail?.cory_tasks || [];
+                        const coryTasks: Array<{ id: string; title: string; description: string; source: string; color: string; prompt_target?: string; ui_step_key?: string; blocked?: boolean; block_reason?: string; priority?: number; decision_trace?: any }> = compDetail?.cory_tasks || [];
                         const fallbackSuggestions = getComponentSuggestions(selectedComponent, compDetail);
                         usingOrchestrator = coryTasks.length > 0;
                         tasks = usingOrchestrator
-                          ? coryTasks.map(t => ({ title: t.title, explanation: t.description, color: t.color, action: t.prompt_target, source: t.source, blocked: t.blocked, blockReason: t.block_reason, trace: t.decision_trace }))
+                          ? coryTasks.map(t => ({ title: t.title, explanation: t.description, color: t.color, action: t.prompt_target, uiStepKey: t.ui_step_key, source: t.source, blocked: t.blocked, blockReason: t.block_reason, trace: t.decision_trace }))
                           : fallbackSuggestions.map(s => ({ ...s, explanation: s.explanation, source: 'build' as string, blocked: false, blockReason: undefined, trace: undefined }));
                       }
                       const primary = tasks[0];
@@ -1848,11 +1902,15 @@ function SystemViewV2Inner() {
                           {!primary.blocked && (
                             <div className="d-flex flex-wrap gap-2 mb-3">
                               <button className="btn btn-sm" style={{ background: primary.color, color: '#fff', fontWeight: 600, fontSize: 12 }} onClick={() => {
+                                if (primary.action === 'ui_advisor_step' && primary.uiStepKey) {
+                                  handleRunRecommendation({ title: primary.title, explanation: primary.explanation, color: primary.color, promptTarget: primary.action, uiStepKey: primary.uiStepKey as any, severity: 0, source: primary.source });
+                                  return;
+                                }
                                 setWorkTab('build');
                                 if (primary.action) handleGeneratePrompt({ ...selectedComponent, promptTarget: primary.action });
                               }}>
                                 <i className={`bi ${showsImprovements ? 'bi-stars' : 'bi-terminal'} me-1`}></i>
-                                {enhanceCards.isPolish ? 'Apply Polish' : enhanceCards.isEnhance ? 'Run Improvement' : (primary.action ? 'Generate Build Prompt' : 'Go to Build')}
+                                {primary.action === 'ui_advisor_step' ? 'Run Analysis' : enhanceCards.isPolish ? 'Apply Polish' : enhanceCards.isEnhance ? 'Run Improvement' : (primary.action ? 'Generate Build Prompt' : 'Go to Build')}
                               </button>
                               <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                                 <i className="bi bi-book me-1"></i>Learn About This
@@ -2068,8 +2126,8 @@ function SystemViewV2Inner() {
                             <span className="badge" style={{ background: '#f59e0b20', color: '#92400e', fontSize: 9 }}>Severity: {e.severity}/10</span>
                           </div>
                           <div className="d-flex flex-wrap gap-2 mb-3">
-                            <button className="btn btn-sm" style={{ background: e.color, color: '#fff', fontWeight: 600, fontSize: 12 }} disabled={buildGenerating} onClick={() => handleGeneratePrompt({ ...selectedComponent, promptTarget: e.promptTarget })}>
-                              <i className="bi bi-stars me-1"></i>{polishMode ? 'Apply Polish' : 'Run Improvement'}
+                            <button className="btn btn-sm" style={{ background: e.color, color: '#fff', fontWeight: 600, fontSize: 12 }} disabled={buildGenerating} onClick={() => handleRunRecommendation(e)}>
+                              <i className="bi bi-stars me-1"></i>{e.promptTarget === 'ui_advisor_step' ? 'Run Analysis' : polishMode ? 'Apply Polish' : 'Run Improvement'}
                             </button>
                             <button className="btn btn-outline-secondary btn-sm" style={{ fontSize: 12 }} onClick={() => handleLearnAbout(selectedComponent)}>
                               <i className="bi bi-book me-1"></i>Learn About This
@@ -2094,7 +2152,7 @@ function SystemViewV2Inner() {
                                         <button className="btn btn-sm btn-outline-secondary" style={{ fontSize: 8, padding: '1px 6px' }} onClick={() => handleLearnAbout(selectedComponent)}>
                                           <i className="bi bi-book"></i>
                                         </button>
-                                        <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => handleGeneratePrompt({ ...selectedComponent, promptTarget: s.promptTarget })}>
+                                        <button className="btn btn-sm" style={{ fontSize: 8, padding: '1px 6px', background: s.color, color: '#fff' }} onClick={() => handleRunRecommendation(s)}>
                                           Run
                                         </button>
                                       </div>
