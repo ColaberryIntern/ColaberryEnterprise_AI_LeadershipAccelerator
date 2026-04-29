@@ -137,19 +137,25 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
     return `${idea.trim()}\n\nDesired Capabilities:\n${caps}`;
   };
 
-  // Upload requirements
+  // Upload requirements + connect GitHub in one step, then activate.
+  // Both fields are collected on the same screen so the user provides
+  // their requirements doc and repo together when they choose
+  // "I already have a Requirements document".
   const handleUploadRequirements = async () => {
-    if (!reqContent.trim()) return;
+    if (!reqContent.trim() || !repoUrl.trim()) return;
     setSaving(true); setError(null);
     try {
       await portalApi.post('/api/portal/project/setup/requirements', { content: reqContent.trim() });
       setStatus(prev => ({ ...prev, requirements_loaded: true }));
-      setStep('github');
+      await portalApi.post('/api/portal/project/setup/github', { repo_url: repoUrl.trim(), access_token: accessToken.trim() || undefined });
+      setStatus(prev => ({ ...prev, github_connected: true }));
+      handleActivate();
     } catch (err: any) { setError(err.response?.data?.error || 'Failed to save'); }
     finally { setSaving(false); }
   };
 
-  // Connect GitHub (upload path → activate)
+  // Connect GitHub (legacy path — used when requirements were already
+  // saved in a prior session and only the repo is missing).
   const handleConnectGithub = async () => {
     if (!repoUrl.trim()) return;
     setSaving(true); setError(null);
@@ -324,7 +330,7 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
         </div>
       )}
 
-      {/* UPLOAD */}
+      {/* UPLOAD — requirements doc + GitHub repo on the same screen */}
       {step === 'upload' && (
         <div className="card border-0 shadow-sm">
           <div className="card-body p-4">
@@ -336,11 +342,18 @@ export default function ProjectSetupWizard({ initialStatus, onActivated }: Props
               <span className="text-muted" style={{ fontSize: 12 }}>Drag a file here or click to browse</span>
               <input ref={fileInputRef} type="file" accept=".md,.txt,.markdown" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) handleFileRead(e.target.files[0]); }} />
             </div>
-            <textarea className="form-control mb-3" rows={6} placeholder="Or paste your requirements document here..." value={reqContent} onChange={e => setReqContent(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+            <textarea className="form-control mb-4" rows={6} placeholder="Or paste your requirements document here..." value={reqContent} onChange={e => setReqContent(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+
+            <h6 className="fw-bold mb-2" style={{ fontSize: 16 }}><i className="bi bi-github me-2"></i>Connect GitHub Repository</h6>
+            <p className="text-muted mb-2" style={{ fontSize: 12 }}>We'll read this repo to discover existing code as Business Processes.</p>
+            <input type="text" className="form-control mb-2" placeholder="https://github.com/your-org/your-repo" value={repoUrl} onChange={e => setRepoUrl(e.target.value)} />
+            <input type="password" className="form-control mb-3" placeholder="Access token (for private repos)" value={accessToken} onChange={e => setAccessToken(e.target.value)} />
+            {renderTargetTierPicker(targetMode, setTargetMode)}
+
             {error && <div className="alert alert-danger small py-2 mb-3">{error}</div>}
             <div className="d-flex justify-content-between">
               <button className="btn btn-outline-secondary btn-sm" onClick={() => setStep('decision')}><i className="bi bi-arrow-left me-1"></i>Back</button>
-              <button className="btn btn-primary" style={{ fontWeight: 600 }} onClick={handleUploadRequirements} disabled={saving || !reqContent.trim()}>
+              <button className="btn btn-primary" style={{ fontWeight: 600 }} onClick={handleUploadRequirements} disabled={saving || !reqContent.trim() || !repoUrl.trim()}>
                 {saving ? <><span className="spinner-border spinner-border-sm me-1"></span>Saving...</> : <>Continue <i className="bi bi-arrow-right ms-1"></i></>}
               </button>
             </div>
