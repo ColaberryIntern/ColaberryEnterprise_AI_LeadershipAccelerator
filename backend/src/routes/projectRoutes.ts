@@ -2506,9 +2506,23 @@ router.get('/api/portal/project/business-processes/:id', requireParticipant, asy
     let enhancementPlan: any[];
     let nextActionKind: 'build' | 'enhance' | 'polish' | 'done' | 'recategorize' | 'verified' | 'archived' | 'page_visual_review';
     if (isVerified) {
-      // User has asserted this BP is built. Stop recommending anything.
-      enhancementPlan = [];
-      nextActionKind = 'verified';
+      if (isPageBPEnriched) {
+        // Verified Page BPs keep getting visual + autonomy recommendations —
+        // verifying a page means "I confirm this is real," not "I'm done with
+        // it." Visual polish, exposing more backend, and attaching agents
+        // remain ongoing work. Only when the page has nothing left in the
+        // playbook do we fall back to the verified card.
+        enhancementPlan = buildPageBPEnhancementPlan(
+          enriched,
+          attachableSurface.attachable_backend,
+          attachableSurface.attachable_agents,
+        );
+        nextActionKind = enhancementPlan.length > 0 ? 'enhance' : 'verified';
+      } else {
+        // Non-Page BPs: verified means done. Stop recommending.
+        enhancementPlan = [];
+        nextActionKind = 'verified';
+      }
     } else if (isArchived) {
       enhancementPlan = [];
       nextActionKind = 'archived';
@@ -3957,6 +3971,18 @@ router.put('/api/portal/project/business-processes/:id/user-status', requirePart
     (cap as any).user_status = status;
     (cap as any).user_status_set_at = new Date();
     (cap as any).user_status_set_by = req.participant!.sub;
+    // Verifying a Page BP implies the user has confirmed what the page is —
+    // stamp ui_element_map.user_defined_at so the awaiting-definition banner
+    // drops it. Avoids the Define-then-Verify two-click ritual when the auto-
+    // discovered mapping was already correct.
+    if (status === 'verified' && ((cap as any).source === 'frontend_page' || (cap as any).is_page_bp)) {
+      const ui = ((cap as any).ui_element_map || {}) as any;
+      if (!ui.user_defined_at) {
+        ui.user_defined_at = new Date().toISOString();
+        (cap as any).ui_element_map = ui;
+        (cap as any).changed('ui_element_map', true);
+      }
+    }
     await cap.save();
     res.json({
       id: cap.id,
@@ -4274,7 +4300,17 @@ router.post('/api/portal/project/business-processes/:id/element-map', requirePar
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { elements, route } = req.body;
-    (cap as any).ui_element_map = { page_route: route, scanned_at: new Date().toISOString(), elements: elements || [] };
+    // Merge instead of replacing — the JSONB column also carries
+    // user_defined_at, steps, and category_scores that survive across UI
+    // analysis runs. Replacing the whole object silently wiped the user's
+    // mapping confirmation and visual review state on every Run.
+    const existing = ((cap as any).ui_element_map || {}) as any;
+    (cap as any).ui_element_map = {
+      ...existing,
+      page_route: route,
+      scanned_at: new Date().toISOString(),
+      elements: elements || [],
+    };
     (cap as any).changed('ui_element_map', true);
     await cap.save();
     res.json({ stored: (elements || []).length });

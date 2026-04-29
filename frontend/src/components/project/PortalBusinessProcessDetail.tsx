@@ -1093,7 +1093,9 @@ Begin by greeting the learner and explaining what "${p.name}" is and why it matt
               </div>
               <p className="text-muted mb-2" style={{ fontSize: 11 }}>
                 You marked "{p.name}" as built and tested{p.user_status_set_at ? ` on ${new Date(p.user_status_set_at).toLocaleString()}` : ''}.
-                No recommendations will surface until you unmark it.
+                {(p.is_page_bp || p.source === 'frontend_page')
+                  ? ' Visual + autonomy improvements continue to surface below — verifying confirms the page exists, not that the page is finished.'
+                  : ' No recommendations will surface until you unmark it.'}
               </p>
               <button
                 className="btn btn-sm btn-outline-secondary"

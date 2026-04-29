@@ -572,8 +572,16 @@ function getEnhanceCards(compDetail: any): EnhanceCardSet {
   const enhancements: any[] = compDetail?.enhancement_plan || [];
   const empty: EnhanceCardSet = { isEnhance: false, isPolish: false, isPageVisualReview: false, isDone: false, isRecategorize: false, isVerified: false, isArchived: false, primary: null, upNext: [], items: [] };
 
-  // User-asserted states win over heuristic ones.
-  if (kind === 'verified' || userStatus === 'verified') return { ...empty, isVerified: true };
+  // Backend's next_action_kind is canonical. For verified BPs that the
+  // backend chose to keep recommending (e.g. verified Page BPs that still
+  // have visual + autonomy work), it returns 'enhance' even though
+  // userStatus='verified'. Honor that — don't short-circuit to the
+  // verified card just because user_status is set.
+  if (kind === 'enhance' || kind === 'polish') {
+    // Fall through to the enhancement render path below.
+  } else if (kind === 'verified' || userStatus === 'verified') {
+    return { ...empty, isVerified: true };
+  }
   if (kind === 'archived' || userStatus === 'archived') return { ...empty, isArchived: true };
   if (kind === 'recategorize' || compDetail?.is_synthetic_bucket) return { ...empty, isRecategorize: true };
   if (kind === 'page_visual_review') return { ...empty, isPageVisualReview: true };
@@ -1530,10 +1538,10 @@ function SystemViewV2Inner() {
               <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
                 <div>
                   <div className="fw-semibold" style={{ fontSize: 12, color: '#7c3aed' }}>
-                    <i className="bi bi-search me-1"></i>{pendingDefinitionPages.length} page{pendingDefinitionPages.length === 1 ? '' : 's'} auto-discovered from your repo · awaiting definition
+                    <i className="bi bi-search me-1"></i>{pendingDefinitionPages.length} page{pendingDefinitionPages.length === 1 ? '' : 's'} from your repo aren't yet mapped to a system component
                   </div>
                   <div className="text-muted" style={{ fontSize: 10 }}>
-                    These pages exist in your repo but aren't yet mapped to a system component. Define each one to add it to your system.
+                    Click one to confirm what it is — once mapped, the system starts analyzing the page and recommending visual + autonomy improvements.
                   </div>
                 </div>
                 <div className="d-flex flex-wrap gap-1" style={{ maxWidth: 600 }}>
