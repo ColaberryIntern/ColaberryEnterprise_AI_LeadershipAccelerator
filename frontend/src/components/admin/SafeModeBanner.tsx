@@ -8,7 +8,7 @@ export default function SafeModeBanner() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('admin_token');
       const res = await fetch('/api/admin/system/safe-mode', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -30,7 +30,7 @@ export default function SafeModeBanner() {
   const handleDisable = async () => {
     setDisabling(true);
     try {
-      const token = localStorage.getItem('adminToken');
+      const token = localStorage.getItem('admin_token');
       const res = await fetch('/api/admin/system/safe-mode', {
         method: 'POST',
         headers: {
