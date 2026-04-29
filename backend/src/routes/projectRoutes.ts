@@ -4284,14 +4284,21 @@ router.post('/api/portal/project/discover-pages', requireParticipant, async (req
 });
 
 // ─── Connect Page to BP: attach a route to an existing BP ────────
+// Stamps ui_element_map.user_defined_at so the orchestrator stops treating
+// this Page BP as "unmapped / doesn't exist yet" — until this stamp lands,
+// auto-discovered Page BPs don't surface as Cory recommendations.
 router.put('/api/portal/project/business-processes/:id/connect-page', requireParticipant, async (req: Request, res: Response) => {
   try {
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { route } = req.body;
     (cap as any).frontend_route = route || null;
+    const ui = ((cap as any).ui_element_map || {}) as any;
+    ui.user_defined_at = new Date().toISOString();
+    (cap as any).ui_element_map = ui;
+    (cap as any).changed('ui_element_map', true);
     await cap.save();
-    res.json({ id: cap.id, name: cap.name, frontend_route: route });
+    res.json({ id: cap.id, name: cap.name, frontend_route: route, user_defined_at: ui.user_defined_at });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

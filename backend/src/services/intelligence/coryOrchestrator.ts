@@ -410,8 +410,24 @@ function isInactive(enriched: any): boolean {
   return s && s !== 'active';
 }
 
+/**
+ * Auto-discovered Page BPs (source='frontend_page') start their life as
+ * "Unmapped UI Layer" cards in the BP detail view. Until the user clicks
+ * through Define Component to confirm what the page is, the BP shouldn't
+ * generate Cory tasks — surfacing recommendations on a page that hasn't
+ * even been mapped to a system component is noise. The connect-page
+ * endpoint stamps ui_element_map.user_defined_at when the user accepts;
+ * we treat any Page BP without that stamp as "doesn't exist yet."
+ */
+function isUndefinedPageBP(enriched: any): boolean {
+  const isPage = enriched?.source === 'frontend_page' || enriched?.is_page_bp === true;
+  if (!isPage) return false;
+  const stamped = !!enriched?.ui_element_map?.user_defined_at;
+  return !stamped;
+}
+
 export function getTopTasks(enriched: any, projectMode: string): CoryTask[] {
-  if (isSyntheticBucket(enriched) || isUserResolved(enriched) || isInactive(enriched)) return [];
+  if (isSyntheticBucket(enriched) || isUserResolved(enriched) || isInactive(enriched) || isUndefinedPageBP(enriched)) return [];
   const state = getSystemState(enriched, projectMode);
 
   // Step 1: Gather all tasks from adapters
@@ -474,9 +490,11 @@ export function getProjectTopTasks(enrichedCapabilities: any[], projectMode: str
 
   for (const enriched of enrichedCapabilities) {
     // Skip the synthetic Uncategorized bucket, any BP the user has resolved,
-    // and any BP marked inactive (so hidden-from-grid BPs can't surface as
-    // Cory's Next Step).
-    if (isSyntheticBucket(enriched) || isUserResolved(enriched) || isInactive(enriched)) continue;
+    // any BP marked inactive (so hidden-from-grid BPs can't surface), and
+    // any auto-discovered Page BP the user hasn't confirmed via Define
+    // Component yet (unmapped pages are invisible to the recommender —
+    // until they're mapped, they "don't exist" for task purposes).
+    if (isSyntheticBucket(enriched) || isUserResolved(enriched) || isInactive(enriched) || isUndefinedPageBP(enriched)) continue;
     // Skip complete components
     const coverage = enriched.metrics?.requirements_coverage || 0;
     const readiness = enriched.metrics?.system_readiness || 0;
