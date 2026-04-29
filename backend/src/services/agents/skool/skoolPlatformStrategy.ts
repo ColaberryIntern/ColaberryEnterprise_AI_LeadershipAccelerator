@@ -301,28 +301,35 @@ export function getSystemPrompt(category: string): string {
   let ctaInstruction = '';
   switch (ctaLevel) {
     case 'minimal':
-      ctaInstruction = `CTA Level: MINIMAL
-- After providing value, add a brief line like "This is what my team does full-time - we build production AI systems for agency owners."
-- Do NOT include any URLs or links. The sign-off name is enough for people to find you.`;
+      ctaInstruction = `CTA Level: MINIMAL — PURE HELP ONLY, NO PROMOTION
+- This is a community help/intro post. Answer the question and stop.
+- Do NOT mention "my team", "we", "I've built", or anything that hints at services you offer.
+- Do NOT add a "DM me" CTA. Do NOT include any URLs or links.
+- The sign-off "- Ali Muwwakkil" is the only identification. People who want to find you can click your profile.
+- Moderators flag any promotional layer in dev-help, intros, builds, or announcements.`;
       break;
     case 'subtle':
-      ctaInstruction = `CTA Level: SUBTLE
-- Answer the question thoroughly first.
-- Then add 1-2 sentences positioning yourself: "My team builds these kinds of systems full-time for agency owners. DM me if you want to go deeper on this."
-- Do NOT include any URLs or links. Say "DM me" instead.`;
+      ctaInstruction = `CTA Level: SUBTLE — TECHNICAL HELP ONLY, NO PROMOTION
+- This is a dev-help / technical question. Provide a thorough, useful technical answer.
+- Do NOT mention "my team specializes in...", "we build...", "DM me", or any team/service framing.
+- A self-promotional line at the end (e.g. "My team specializes in building these systems. DM me if you want to dive deeper.") will get the comment moderated as self-promotion. Verified — this is exactly what got us flagged.
+- Just answer the question well, sign off "- Ali Muwwakkil", and stop.
+- Do NOT include any URLs or links.`;
       break;
     case 'moderate':
-      ctaInstruction = `CTA Level: MODERATE
-- Provide value first, then mention the tool naturally WITHOUT linking to it.
-- Say: "I actually built a free tool that designs an AI workforce for any business in 5 minutes. DM me if you want the link."
-- Do NOT include any URLs or links. All links shared in DMs only.`;
+      ctaInstruction = `CTA Level: MODERATE — HELPFUL FIRST, LIGHT PERSONAL TOUCH
+- This is a leads-help post. Provide genuine advice based on your experience.
+- You may share a brief first-person experience ("I've worked on a similar workflow and one thing that helped was...") — keep it as personal experience, not a team pitch.
+- Do NOT use "my team specializes in" or pitch services. Do NOT include "DM me" CTAs. Do NOT include URLs.
+- End with "- Ali Muwwakkil" sign-off only.`;
       break;
     case 'direct':
-      ctaInstruction = `CTA Level: DIRECT
-- Lead with a relevant insight specific to the post (mention the author's situation by name).
-- State your offer clearly: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer."
+      ctaInstruction = `CTA Level: DIRECT — HIRING POSTS ONLY
+- This is a hiring/for-hire post where the author is explicitly looking for someone to build or partner.
+- You can pitch directly here: "My team is the delivery side for agency owners. You close the deal, we build and maintain the system on retainer."
 - End with "DM me if you want to explore this."
-- Do NOT include any URLs or links. Even in Hiring/For Hire posts, the community norm is "DM me" — other members pitch themselves heavily but never include URLs in replies. Links in replies read as low-effort self-promo regardless of category.`;
+- Do NOT include URLs — community norm is "DM me" only, even in hiring posts.
+- Lead with something specific to the author's situation (their stated goal, the kind of build they need) before the pitch.`;
       break;
   }
 

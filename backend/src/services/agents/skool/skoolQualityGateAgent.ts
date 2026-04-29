@@ -102,6 +102,25 @@ export async function runSkoolQualityGate(): Promise<{
         score -= 50; // Heavy penalty - auto-reject
       }
 
+      // --- Block "my team specializes" / pitch language in non-hiring categories ---
+      // Verified: moderators flag self-promo language in dev-help/builds/intros even without URLs.
+      const isHiringCategory = response.category === 'hiring';
+      if (!isHiringCategory) {
+        const pitchPatterns = [
+          /\bmy team\b/i,
+          /\bwe\s+(build|specialize|offer|deliver|provide)\b/i,
+          /\bDM me\b/i,
+          /\bdive deeper\b/i,
+          /\bhappy to (chat|share|discuss|connect)\b/i,
+          /\bteam (specializes|builds|offers)\b/i,
+        ];
+        const matched = pitchPatterns.find(p => p.test(body));
+        if (matched) {
+          reasons.push(`Contains pitch language (${matched.toString()}) outside hiring category - moderators flag this as self-promotion`);
+          score -= 50; // Heavy penalty - auto-reject
+        }
+      }
+
       // --- Genuine content check (not just a pitch) ---
       // Look for question-answering language, insights, or substance
       const lowerBody = body.toLowerCase();
